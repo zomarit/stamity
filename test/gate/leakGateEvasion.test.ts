@@ -625,28 +625,15 @@ describe("leak-gate — credential shapes", () => {
     expect(scratch.run().status, scratch.run().stderr).toBe(0);
   });
 
-  it("exempts the scanner's own corpus by PATH, and says so", () => {
-    // A shape scanner cannot scan its own definitions without reporting every
-    // one of them. The exemption is by path and is printed — there is no in-file
-    // opt-out marker, because that would be an exemption by CONTENT written by
-    // whoever is committing the credential.
-    const scratch = new Scratch();
-    scratch.write("src/mcp/secretScan.ts", `const example = "ghp_${"A".repeat(36)}"\n`);
-
-    const result = scratch.run();
-
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain("not scanned (rule github-token allowlisted)");
-    expect(result.stdout).toContain("src/mcp/secretScan.ts");
-  });
-
-  // TEST CHANGE, justified (REQ-PLUGIN-033): no test path is a shape fixture any more, so the
-  // per-rule exemption this case pins is re-pinned onto the one exempt file, the scanner's source.
-  // The property is the same: exempt from the credential shapes, scanned for every other rule.
-  it("still scans the scanner's own source for every rule outside the credential shapes", () => {
-    // Per rule, not per file. `src/mcp/secretScan.ts` holds the example shapes it
-    // defines and is exempt from those alone — the exemption does not license it
-    // to carry a reserved name, and a shape fixture under test/ is exempt from nothing.
+  // TEST CHANGE, justified: the scanner's source holds only regex sources, which no shape matches,
+  // so it is exempt from nothing (REQ-PLUGIN-033), and no test path is a shape fixture any more.
+  // This case replaces the two that pinned the old exemptions: "exempts the scanner's own corpus
+  // by PATH" (the scanner path passed with a forge token in it) and "still scans the scanner's own
+  // source for every rule outside the credential shapes" (the per-rule exemption on that path).
+  it("holds the scanner's own source and the old fixture path to every credential shape", () => {
+    // An example credential pasted beside a pattern ships in the public tree, so the file that
+    // defines the shapes is read for them like any other. There is no in-file opt-out marker
+    // either: that would be an exemption by CONTENT written by whoever commits the credential.
     const scratch = new Scratch();
     const scanner = scratch.write(
       "src/mcp/secretScan.ts",
@@ -657,12 +644,14 @@ describe("leak-gate — credential shapes", () => {
     const result = scratch.run();
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toMatch(new RegExp(`${scanner.replaceAll(".", "\\.")}:3:\\d+\\s+\\[candidate-name-a\\]`));
-    // The shapes it IS exempt from stay exempt, and the exemption is printed.
-    expect(result.stderr).not.toContain("github-token]");
-    expect(result.stderr).toContain("not scanned (rule pem-private-key allowlisted)");
-    // The old fixture path carries no exemption: its header is a hit like any other.
-    expect(result.stderr).toMatch(new RegExp(`${fixture.replaceAll(".", "\\.")}:1:\\d+\\s+\\[pem-private-key\\]`));
+    const at = (path: string, line: number, rule: string): RegExp =>
+      new RegExp(`${path.replaceAll(".", "\\.")}:${line}:\\d+\\s+\\[${rule}\\]`);
+    expect(result.stderr).toMatch(at(scanner, 1, "pem-private-key"));
+    expect(result.stderr).toMatch(at(scanner, 2, "github-token"));
+    expect(result.stderr).toMatch(at(scanner, 3, "candidate-name-a"));
+    expect(result.stderr).toMatch(at(fixture, 1, "pem-private-key"));
+    // No credential rule prints an exemption, because none has one.
+    expect(`${result.stdout}${result.stderr}`).not.toMatch(/rule (?:pem-private-key|github-token) allowlisted/);
   });
 });
 

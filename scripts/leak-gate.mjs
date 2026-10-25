@@ -457,17 +457,20 @@ export function normalizeWithMap(text, { preserveCase = false } = {}) {
 const PREDECESSOR_ALLOWLIST = ['src/migration/', 'test/migration/', 'docs/migration.md', 'dist/cli.js', 'dist/index.js', 'dist/src.js']
 
 /**
- * The file that DEFINES credential shapes, and therefore carries example ones.
+ * Files exempt from every credential shape. Empty is the steady state, the scanner's own source
+ * included.
  *
- * A shape scanner cannot scan its own corpus of shapes without reporting every one of them. Its
- * test suite is not on this list: it assembles every example at run time, as every suite does. The
- * exemption is by PATH and is printed with the files it dropped, which is the only exemption form
- * this gate has ever allowed — no file is exempt for what its bytes say or what it is called. In
- * particular there is no in-file opt-out marker and there will not be one: a comment that turns
- * the scanner off is an exemption by CONTENT, which is the mistake this gate was rebuilt twice to
- * stop making, and it is writable by whoever is committing the credential.
+ * `src/mcp/secretScan.ts` defines the shapes as regex sources, and no shape matches its own
+ * source text, so it needs no exemption and is held to every rule: an example credential pasted
+ * beside a pattern is a hit like any other. Its test suite assembles every example at run time,
+ * as every suite does. An exemption, if one is ever needed, is by PATH and is printed with the
+ * files it dropped, which is the only exemption form this gate has ever allowed — no file is
+ * exempt for what its bytes say or what it is called. In particular there is no in-file opt-out
+ * marker and there will not be one: a comment that turns the scanner off is an exemption by
+ * CONTENT, which is the mistake this gate was rebuilt twice to stop making, and it is writable by
+ * whoever is committing the credential.
  */
-const SECRET_SCANNER_SOURCES = ['src/mcp/secretScan.ts']
+const SECRET_SCANNER_SOURCES = []
 
 /**
  * Files exempt from one credential shape only, `{ [ruleId]: paths }`; each entry prints on every run.
@@ -585,7 +588,7 @@ const SECRET_RULES = [
   { id: 'credentialed-connection-string', source: '\\b(?:postgres(?:ql)?|mysql|mongodb(?:\\+srv)?|redis|amqps?)://[^:@/\\s]+:[^@/\\s]+@', flags: 'gi' },
 ].map((rule) => secretRule(rule.id, rule.source, rule.flags))
 
-/** One credential rule, exempt from the scanner's own corpus plus this shape's known canaries. */
+/** One credential rule, exempt from the paths both exemption lists name (both empty today). */
 function secretRule(id, source, flags) {
   return { id, source, flags, allow: [...SECRET_SCANNER_SOURCES, ...(SHAPE_FIXTURES[id] ?? [])] }
 }

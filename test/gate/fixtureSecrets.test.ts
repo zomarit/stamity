@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
-import { lstatSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { SECRET_PATTERNS } from "../../src/mcp/secretScan.ts";
@@ -18,11 +18,12 @@ import { RULES } from "../../scripts/leak-gate.mjs";
  * assemble each example at run time (`["AKIA", "..."].join("")`, a URL split at its `@`), which
  * leaves the value a test sees byte-identical and leaves no credential shape in the source.
  *
- * This guard keeps it that way. It reads with the gate's own credential rules, each with its
- * trailing boundary dropped, so a near-miss the gate's bounded shape lets through (a token two
- * characters too long) is still caught here; and with one more matcher, a URL whose userinfo holds
- * a `user:password` pair. There is no exemption for `test/`: the remedy for a hit is run-time
- * assembly. A hit prints `path:line rule` and never the matched text, since the text is the
+ * This guard keeps it that way, over `test/`, `scripts/`, `src/` and `.github/`. It reads with the
+ * gate's own credential rules, each with its trailing boundary dropped, so a near-miss the gate's
+ * bounded shape lets through (a token two characters too long) is still caught here; and with one
+ * more matcher, a URL whose userinfo holds a `user:password` pair. A path is skipped for a rule
+ * only where that gate rule's own `allow` skips it, and no rule allows one today: the remedy for a
+ * hit is run-time assembly. A hit prints `path:line rule` and never the matched text, since the text is the
  * credential shape the guard exists to keep out of logs as well as the tree. This file holds no
  * literal of any shape for the same reason: every probe below is assembled.
  */
@@ -47,15 +48,25 @@ const CREDENTIAL_IDS = [
 /** The trailing boundaries a credential rule may end with; the empty tail is a rule with none. */
 const TAILS = ["\\b", "(?![A-Za-z0-9])"];
 
-/** A URL whose userinfo carries a `user:password` pair; `${TOKEN}` and `<user>` spellings are not one. */
+/** The trees the guard reads: every root REQ-PLUGIN-033 names. */
+const GUARDED_ROOTS = ["test", "scripts", "src", ".github"] as const;
+
+/**
+ * A URL whose userinfo carries a `user:password` pair. Either half takes the unreserved and
+ * sub-delimiter characters, `$ & ' ( )` included, and the password a further `:`. A `$` that opens
+ * a `${…}` template is no character of a value, so `${TOKEN}` and `${{ secrets.X }}` are not a
+ * pair, and neither is a `<user>` placeholder.
+ */
 const USERINFO_URL: Matcher = {
   rule: "userinfo-url",
-  pattern: /[a-z][a-z0-9+.-]*:\/\/[A-Za-z0-9._~%!*+,;=-]+:[A-Za-z0-9._~%!*+,;=-]+@/i,
+  pattern: /[a-z][a-z0-9+.-]*:\/\/(?:[A-Za-z0-9._~%!*+,;=&'()-]|\$(?!\{))+:(?:[A-Za-z0-9._~%!*+,;=&'():-]|\$(?!\{))+@/i,
 };
 
 interface Matcher {
   rule: string;
   pattern: RegExp;
+  /** Paths this matcher does not read: the gate rule's own `allow` matchers, never a second list. */
+  allow?: readonly ((path: string) => boolean)[];
 }
 
 interface Hit {
@@ -67,6 +78,7 @@ interface Hit {
 interface GateRule {
   id: string;
   pattern: RegExp;
+  allow: readonly ((path: string) => boolean)[];
 }
 
 const gateRules = RULES as readonly GateRule[];
@@ -83,16 +95,20 @@ function unbounded(source: string): { source: string; tail: string } {
   return { source: source.slice(0, source.length - tail.length), tail };
 }
 
-/** One matcher per credential rule, unbounded, and stateless (no `g`), so `test` never carries an index. */
+/**
+ * One matcher per credential rule, unbounded, and stateless (no `g`), so `test` never carries an
+ * index. Each skips exactly the paths its gate rule's `allow` accepts.
+ */
 const CREDENTIAL_MATCHERS: Matcher[] = CREDENTIAL_IDS.map((id) => {
-  const { pattern } = gateRule(id);
-  return { rule: id, pattern: new RegExp(unbounded(pattern.source).source, pattern.flags.replace("g", "")) };
+  const { pattern, allow } = gateRule(id);
+  return { rule: id, pattern: new RegExp(unbounded(pattern.source).source, pattern.flags.replace("g", "")), allow };
 });
 
 /**
  * Every line of every named file that a matcher reads, as `{ path, line, rule }`, never the text.
  * A file holding a NUL byte is skipped (a binary or non-UTF-8 file: the leak gate's decoders read
- * it), and so is a path that is no regular file, or no file at all by the time it is read.
+ * it), and so is a path that is no regular file, or no file at all by the time it is read. Any
+ * other read error throws, naming the path, so no file passes unread.
  */
 function scanFiles(root: string, relPaths: readonly string[], matchers: readonly Matcher[]): Hit[] {
   const hits: Hit[] = [];
@@ -102,15 +118,18 @@ function scanFiles(root: string, relPaths: readonly string[], matchers: readonly
     try {
       if (!lstatSync(full).isFile()) continue;
       bytes = readFileSync(full);
-    } catch {
-      continue;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") continue;
+      throw new Error(`the fixture guard could not read ${path} (${code ?? String(error)})`, { cause: error });
     }
     if (bytes.includes(0)) continue;
+    const reading = matchers.filter(({ allow = [] }) => !allow.some((allowed) => allowed(path)));
     bytes
       .toString("utf8")
       .split(/\r?\n/)
       .forEach((text, index) => {
-        for (const { rule, pattern } of matchers) {
+        for (const { rule, pattern } of reading) {
           if (pattern.test(text)) hits.push({ path, line: index + 1, rule });
         }
       });
@@ -118,15 +137,18 @@ function scanFiles(root: string, relPaths: readonly string[], matchers: readonly
   return hits;
 }
 
-/** This checkout's files under the given roots: tracked, plus untracked ones git does not ignore. */
-function treeFiles(...roots: string[]): string[] {
+/** A checkout's files under the given roots: tracked, plus untracked ones git does not ignore. */
+function treeFiles(root: string, roots: readonly string[]): string[] {
   const listed = execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ...roots], {
-    cwd: REPO_ROOT,
+    cwd: root,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
   return [...new Set(listed.split("\0").filter(Boolean))];
 }
+
+/** Every credential-shape line under the guarded roots of a checkout. */
+const credentialHits = (root: string): Hit[] => scanFiles(root, treeFiles(root, GUARDED_ROOTS), CREDENTIAL_MATCHERS);
 
 const where = (hit: Hit): string => `${hit.path}:${hit.line} ${hit.rule}`;
 
@@ -180,16 +202,39 @@ describe("fixture secrets (REQ-PLUGIN-033)", () => {
     expect(new RegExp(bounded.source, bounded.flags.replace("g", "")).test(tooLong)).toBe(false);
   });
 
-  it("finds no credential shape written out anywhere under test/", () => {
-    const hits = scanFiles(REPO_ROOT, treeFiles("test"), CREDENTIAL_MATCHERS);
+  it("finds no credential shape written out anywhere under test/, scripts/, src/ or .github/", () => {
     expect(
-      hits.map(where),
-      "a fixture spells a credential shape: assemble it at run time (a join the shape cannot span)",
+      credentialHits(REPO_ROOT).map(where),
+      "a file spells a credential shape: assemble it at run time (a join the shape cannot span)",
     ).toEqual([]);
   });
 
+  it("reads a near-miss under every guarded root, the scanner's own source included, and skips what the gate allows", () => {
+    scratch = mkdtempSync(join(tmpdir(), "fixture-secrets-"));
+    execFileSync("git", ["init", "-q"], { cwd: scratch });
+    const tooLong = CANARIES["github-token"] ?? "";
+    const planted = ["scripts/probe.mjs", ".github/workflows/probe.yml", "src/mcp/secretScan.ts", "test/probe.test.ts"];
+    for (const path of planted) {
+      mkdirSync(dirname(join(scratch, path)), { recursive: true });
+      writeFileSync(join(scratch, path), `token: "${tooLong}"\n`);
+    }
+    // A root the requirement does not name is not read.
+    writeFileSync(join(scratch, "notes.md"), `token: "${tooLong}"\n`);
+
+    const hits = credentialHits(scratch);
+
+    expect(hits.map(where).toSorted()).toEqual(planted.map((path) => `${path}:1 github-token`).toSorted());
+    // The exemption is the gate's own: each matcher carries its rule's `allow`, never a copy.
+    for (const matcher of CREDENTIAL_MATCHERS) expect(matcher.allow, matcher.rule).toBe(gateRule(matcher.rule).allow);
+    const exempt: Matcher = { ...USERINFO_URL, allow: [(path) => path === "exempt.ts"] };
+    const url = ["https://u:p", "@h/x"].join("");
+    writeFileSync(join(scratch, "exempt.ts"), `const url = "${url}"\n`);
+    writeFileSync(join(scratch, "kept.ts"), `const url = "${url}"\n`);
+    expect(scanFiles(scratch, ["exempt.ts", "kept.ts"], [exempt]).map(where)).toEqual(["kept.ts:1 userinfo-url"]);
+  });
+
   it("finds no URL carrying a user:password pair under test/, scripts/, src/ or .github/", () => {
-    const hits = scanFiles(REPO_ROOT, treeFiles("test", "scripts", "src", ".github"), [USERINFO_URL]);
+    const hits = scanFiles(REPO_ROOT, treeFiles(REPO_ROOT, GUARDED_ROOTS), [USERINFO_URL]);
     expect(hits.map(where), "a URL spells its userinfo: split it at the `@`, or write a placeholder").toEqual([]);
   });
 
@@ -198,16 +243,39 @@ describe("fixture secrets (REQ-PLUGIN-033)", () => {
     const url = ["https://u:p", "@h/x"].join("");
     writeFileSync(join(scratch, "pair.ts"), `const a = 1\nconst url = "${url}"\n`);
     writeFileSync(join(scratch, "template.ts"), ["const url = `https://$", "{TOKEN}@h/x`\n"].join(""));
+    writeFileSync(join(scratch, "secrets.yml"), ["url: https://x:$", "{{ secrets.X }}@h/x\n"].join(""));
     writeFileSync(join(scratch, "placeholder.md"), "Set it to `https://<user>:<token>@h/x`.\n");
     writeFileSync(join(scratch, "binary.bin"), Buffer.concat([Buffer.from([0x00]), Buffer.from(url)]));
 
     const hits = scanFiles(
       scratch,
-      ["pair.ts", "template.ts", "placeholder.md", "binary.bin", "missing.ts"],
+      ["pair.ts", "template.ts", "secrets.yml", "placeholder.md", "binary.bin", "missing.ts"],
       [USERINFO_URL],
     );
 
     expect(hits).toEqual([{ path: "pair.ts", line: 2, rule: "userinfo-url" }]);
     expect(where(hits[0] as Hit)).not.toContain(url);
+  });
+
+  it("reads a password holding a URL sub-delimiter or a second colon as a pair, one probe per character", () => {
+    // A generated password often holds one of these; each is legal in userinfo.
+    const missed = ["$", "&", "'", "(", ")", ":"].filter((character) => {
+      const probe = ["https://u:p", character, "w", "@h/x"].join("");
+      return !USERINFO_URL.pattern.test(`const url = "${probe}"`);
+    });
+    expect(missed, "a password character the matcher does not read").toEqual([]);
+  });
+
+  it.skipIf(process.platform === "win32")("names a file it cannot read rather than passing over it", () => {
+    // A regular file where a directory should be: the read fails with ENOTDIR, standing in for the
+    // EACCES or EIO of an unreadable file with no chmod that root would defeat. Windows does not
+    // reliably report ENOTDIR for this path. A path that is gone (ENOENT) is still skipped.
+    scratch = mkdtempSync(join(tmpdir(), "fixture-secrets-"));
+    writeFileSync(join(scratch, "plain.ts"), "const a = 1\n");
+
+    expect(() => scanFiles(scratch as string, ["plain.ts/child.ts"], [USERINFO_URL])).toThrow(
+      /could not read plain\.ts\/child\.ts \(ENOTDIR\)/,
+    );
+    expect(scanFiles(scratch, ["gone.ts"], [USERINFO_URL])).toEqual([]);
   });
 });

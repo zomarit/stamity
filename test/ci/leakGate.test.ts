@@ -66,9 +66,10 @@ function expectPrintsExemptions(summary: string): void {
   expect(summary).toContain("not scanned (rule predecessor-project allowlisted)");
   expect(summary).toContain("src/migration/");
   // Per rule, not per file: the migration module is exempt from the predecessor name and from
-  // nothing else, and the scanner's own corpus is exempt from the credential shapes only.
-  expect(summary).toContain("not scanned (rule github-token allowlisted)");
-  expect(summary).toContain("src/mcp/secretScan.ts");
+  // nothing else.
+  // TEST CHANGE, justified: the scanner's own source holds only regex sources, which no shape
+  // matches, so it lost its credential exemption (REQ-PLUGIN-033) and no credential rule prints one.
+  for (const { id } of SECRET_PATTERNS) expect(summary, id).not.toContain(`rule ${id} allowlisted`);
   expect(summary).not.toMatch(/rule predecessor-project allowlisted\)[^\n]*secretScan/);
 }
 
