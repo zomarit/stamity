@@ -156,6 +156,10 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
     are the evidence of record.
   - A record head rewritten to `Mode: attended` skips the configuration window's compare and the pre-flight record,
     and lifts the land verb's own `--approved` refusal.
+- **The leak gate holds every file to the credential shapes.** It used to exempt some test fixtures and its own
+  scanner source from them; it now exempts no file. The test fixtures build their example credentials at run time, and
+  a new guard, `test/gate/fixtureSecrets.test.ts`, keeps credential-shaped literals and `user:password` URLs out of
+  `test/`, `scripts/`, `src/` and `.github/`.
 
 ### Added
 
@@ -234,6 +238,16 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   `merge waits on:` line. It works under an app installation token and through version-manager shims. Every `gh` call
   starts at the filesystem root, so a `gh` pinned only in the repository's own version config (a project
   `.tool-versions` or `mise.toml`) no longer resolves there, and the verb refuses.
+- **`stamity upgrade --to <version>` moves a setup to the release that runs it.** It runs that release's `sync` and
+  moves the `package.json` pin, an exact, `^` or `~` spec, and leaves any other spec with a note; `--dry-run` previews
+  both. It refuses, writing nothing: a `--to` that is not the running release, printing the pinned call to run instead
+  (`sync` for a release below 1.17.0, which has no `upgrade`); a repository with no setup; a downgrade without
+  `--allow-downgrade`; a move to another major without `--allow-major`; and an autonomy setting looser than the guard
+  on disk without `--loosen`, the same gate `sync` holds. A `sync` that refuses a file leaves the pin where it was.
+  The update banner now compares with the repository's pin (`devDependencies`, then `dependencies`, then the
+  manifest's `generatedBy`) and names `upgrade --to <version>`, or `sync` below 1.17.0. It checks only when stderr is a
+  terminal and the run is not `--json`. `STAMITY_NO_UPDATE_CHECK` takes `1`, `true` or `yes` in any case, and the
+  check's stamp file is named after the package, so a fork and the canonical package keep separate stamps.
 
 ### Changed
 
@@ -386,6 +400,16 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   [`docs/configuration.md`](docs/configuration.md) said mode `autonomous` lets an agent mark a pull request ready and
   create a local tag unasked; they now add that it lets `run land` merge and fast-forward the run's own pull request
   on the evidence, and that mode `ask` asks for all of these.
+- **`add` keeps an override of a pack's own artifact on a re-add.** Re-adding an installed pack one of whose artifacts
+  you overrode under `.stamity/overrides/` was refused as an id clash; now the override stays on top, as `sync` reads
+  it. An id that only the new version brings is still refused.
+- **A setup without Codex no longer writes the nine touchpoint `agents/openai.yaml` companions.** The next `sync`
+  deletes each one an earlier release wrote whose bytes are still as written, and keeps and names one you edited.
+- **The QA tools name the code they packed and the agent that was asked.** `cloud-check.mjs setup` refuses a checkout
+  with uncommitted edits to tracked files, or with an untracked or ignored file under `content/`, `packs/` or `fork/`,
+  the folders the build copies whole, so the commit it prints is the code it packed. `hook-runs.mjs --ask` reads a
+  run where only a helper's call was asked as not run, and reads a main session id the guard would not accept as a
+  change.
 
 ## [1.16.0] - 2026-10-20
 
