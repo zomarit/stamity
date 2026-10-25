@@ -380,7 +380,8 @@ describe("the budgets of the cases given one of their own", () => {
   const LOADED_CASES: Readonly<Record<string, number>> = {
     "test/ci/testScheduling.test.ts": 1,
     "test/cli/commands/syncMcpOwnership.test.ts": 1,
-    "test/hooks/personOnlyGuard.test.ts": 1,
+    // TEST CHANGE, justified (review/20): the loose-tags case joins the guard matrix case.
+    "test/hooks/personOnlyGuard.test.ts": 2,
     "test/merge/reclaimMcpPreserve.test.ts": 2,
   };
 

@@ -688,7 +688,10 @@ describe("the local tags past their ceilings (pr/95)", () => {
     for (const command of NO_TAGS) expect(decide(tool, guard, command).deny, command).toBe(false);
   });
 
-  it.each(TOOLS)("%s: refuses a refspec push past 10,001 loose tags, naming the code, and no call that reads none", async (tool) => {
+  // TEST CHANGE, justified (ledger row 2026-10-25_autonomy-distribution-02/review/20, no spec id): the case writes
+  // 10,001 loose tags and spawns the guard over them; it ran past the 20 s default under load (40.7 s and 31.7 s) and
+  // passed alone, so it has the loaded cases' budget; every assertion is unchanged.
+  it.each(TOOLS)("%s: refuses a refspec push past 10,001 loose tags, naming the code, and no call that reads none", { timeout: loadedCaseTimeout() }, async (tool) => {
     const guard = await placeGuard(tool);
     const dir = getRepo().path(".git", "refs", "tags");
     mkdirSync(dir, { recursive: true });
