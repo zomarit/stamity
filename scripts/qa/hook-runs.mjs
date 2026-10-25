@@ -552,6 +552,13 @@ export const ASK_HELPER_FIELDS = Object.freeze([
 ])
 
 /**
+ * The session id shape the guard accepts, restated from `COPILOT_SESSION_ID_PATTERN` (`src/hooks/scripts.ts`), since
+ * this tool imports nothing from the engine; `test/qa/hookRuns.test.ts` holds the two equal by reading that source. An
+ * id that fails it is no id to the guard, which then refuses every ask on Copilot (review/169).
+ */
+export const ASK_SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
+
+/**
  * The three facts Copilot CLI's ask rests on (REQ-FLOW-123), measured on 1.0.98 on 2026-10-19
  * (`.stamity/runs/2026-10-18_cloud-runs-2/reports/w4-measure-r1.md`, F1 to F3). The guard asks only for a
  * call with no helper field whose session id Copilot's session start recorded, so a release where any of
@@ -697,10 +704,17 @@ function askHookConfig(client, command) {
  * it answered ask on a shell call naming the marker. Then a created marker is `ran` (the command ran
  * after the ask) and no marker is `held`. Without that line the row is `not-run`, a marker included:
  * a marker no shell ask preceded came by a route the hook did not see, so it says nothing about the
- * ask.
+ * ask. A line whose `keys` (Copilot's log) hold an {@link ASK_HELPER_FIELDS} member is a helper's call,
+ * whose ask says nothing about the main agent's, so it is not counted (review/168); a line with no
+ * `keys` (Claude Code's, Cursor's) is read as before.
  */
 export function verdictForAsk({ markerCreated, observations }) {
-  const asked = observations.some((row) => row?.marked === true && row?.shell === true)
+  const markedShell = observations.filter((row) => row?.marked === true && row?.shell === true)
+  const isHelper = (row) => Array.isArray(row.keys) && ASK_HELPER_FIELDS.some((field) => row.keys.includes(field))
+  const asked = markedShell.some((row) => !isHelper(row))
+  if (!asked && markedShell.length > 0) {
+    return { status: 'not-run', reason: "only a helper's call was asked, so the main agent's answer to the ask was not measured" }
+  }
   if (asked && markerCreated) {
     return { status: 'ran', reason: 'the hook answered ask on the marked shell call and the command ran anyway' }
   }
@@ -739,7 +753,8 @@ export function copilotFacts(observations) {
     (row.sessionId === null || typeof row.sessionId === 'string')
   const rows = observations.filter(isRow)
   const unreadable = observations.length - rows.length
-  const idOf = (row) => (row.sessionId === '' ? null : row.sessionId)
+  const idOf = (row) => (row.sessionId !== null && ASK_SESSION_ID_PATTERN.test(row.sessionId) ? row.sessionId : null)
+  const misshapen = (row) => row.sessionId !== null && row.sessionId !== '' && idOf(row) === null
   const helperFields = (row) => ASK_HELPER_FIELDS.filter((field) => row.keys.includes(field))
   const starts = rows.filter((row) => row.event === 'sessionStart')
   const calls = rows.filter((row) => row.event === 'preToolUse')
@@ -747,6 +762,7 @@ export function copilotFacts(observations) {
   const fieldsNamed = (list) => [...new Set(list.flatMap(helperFields))].join(', ')
 
   const fact1 = (() => {
+    if (starts.some(misshapen)) return ['changed', 'the session id no longer has the shape the guard accepts']
     if (mainIds.size === 0) return ['not-observed', 'no sessionStart recorded a main session id']
     const mainCalls = calls.filter((row) => mainIds.has(idOf(row)))
     if (mainCalls.length === 0) return ['not-observed', 'no main-session call was recorded']
@@ -777,7 +793,7 @@ export function copilotFacts(observations) {
     }
     if (starts.length > 1) return ['changed', `sessionStart fired ${starts.length} times`]
     const id = idOf(starts[0])
-    if (id === null) return ['changed', 'sessionStart carried no session id']
+    if (id === null) return ['changed', 'sessionStart carried no session id the guard accepts']
     if (calls.some((row) => helperFields(row).length > 0 && idOf(row) === id)) return ['changed', "sessionStart carried a helper call's session id"]
     return ['held', 'sessionStart fired once']
   })()

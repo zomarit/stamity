@@ -1,9 +1,12 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { PERSON_ONLY_GUARD_FILE, planCoreHookScripts } from "../../src/hooks/scripts.ts";
+import { type Tool, TOOLS } from "../../src/types/core.ts";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
-import { ASK_HELPER_FIELDS, CLIENT_RUNNERS, PROMPT, WINDOWS_PROBE_LIMIT, binaryVersion, copilotFacts, exitDescription, runClient, verdictFor } from "../../scripts/qa/hook-runs.mjs";
+import { ASK_CLASS_CLIENTS, ASK_HELPER_FIELDS, ASK_SESSION_ID_PATTERN, CLIENT_RUNNERS, PROMPT, WINDOWS_PROBE_LIMIT, binaryVersion, copilotFacts, exitDescription, runClient, verdictFor, verdictForAsk } from "../../scripts/qa/hook-runs.mjs";
 
 /**
  * W6: `cursor` and `copilot` used to carry a constant, never-probed "not on PATH" reason. This
@@ -650,5 +653,146 @@ describe("ASK_HELPER_FIELDS — the guard's helper fields, restated", () => {
     const guard = [...(literal?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((match) => match[1]);
     expect(guard.length).toBeGreaterThan(0);
     expect((ASK_HELPER_FIELDS as string[]).toSorted()).toEqual(guard.toSorted());
+  });
+});
+
+/**
+ * review/169: the tool restates the guard's session-id rule, as it does the helper fields, and holds the two equal by
+ * reading the guard's source text. A main session id the guard would not accept is a moved fact, never a quiet
+ * not-observed: the guard then refuses every ask on Copilot, and the row must say why.
+ */
+describe("ASK_SESSION_ID_PATTERN — the guard's session id rule, restated (review/169)", () => {
+  it("equals COPILOT_SESSION_ID_PATTERN in src/hooks/scripts.ts", () => {
+    const source = readFileSync(join(import.meta.dirname, "../../src/hooks/scripts.ts"), "utf8");
+    const literal = /const COPILOT_SESSION_ID_PATTERN = \/(.+)\/;\n/.exec(source);
+    expect(literal, "COPILOT_SESSION_ID_PATTERN is no longer a regex literal in src/hooks/scripts.ts").not.toBeNull();
+    expect((ASK_SESSION_ID_PATTERN as RegExp).source).toBe(literal?.[1]);
+    expect((ASK_SESSION_ID_PATTERN as RegExp).flags).toBe("");
+  });
+
+  it("reads fact 1 changed when the main session id fails the guard's shape, and held one fact away", () => {
+    const keys = ["sessionId", "timestamp", "cwd", "toolName", "toolArgs"];
+    const log = (id: string) => [
+      { event: "sessionStart", keys: ["sessionId", "timestamp", "cwd", "source", "initialPrompt"], sessionId: id },
+      { event: "preToolUse", keys, sessionId: id, marked: true, shell: true },
+      { event: "preToolUse", keys: [...keys, "agentId", "agentType", "parentAgentId"], sessionId: "05f04540-helper", marked: false, shell: true },
+    ];
+    const good = copilotFacts(log("8177e220-main")) as { status: string; detail: string }[];
+    expect(good[0]?.status).toBe("held");
+    const bad = copilotFacts(log("bad id!")) as { status: string; detail: string }[];
+    expect(bad[0]?.status).toBe("changed");
+    expect(bad[0]?.detail).toContain("the session id no longer has the shape the guard accepts");
+    // No id value is echoed into the evidence.
+    expect(JSON.stringify(bad)).not.toContain("bad id!");
+  });
+});
+
+/**
+ * review/168: on Copilot the guard asks only for the main agent's call, so the ask the row measures is a marked shell
+ * call carrying no helper field. A helper's marked call that the hook answered ask on says nothing about the main
+ * agent's answer, so it is no measurement; a row with no `keys` (Claude Code's and Cursor's logs) is read as before.
+ */
+describe("verdictForAsk — a helper's ask is not the main agent's (review/168)", () => {
+  const keys = ["sessionId", "timestamp", "cwd", "toolName", "toolArgs"];
+  const main = { event: "preToolUse", keys, sessionId: "8177e220-main", marked: true, shell: true };
+  const helper = { ...main, keys: [...keys, "agentId", "agentType", "parentAgentId"], sessionId: "05f04540-helper" };
+
+  it("reads a helper-only ask not-run, marker or none, and the main agent's ask one fact away as before", () => {
+    for (const markerCreated of [false, true]) {
+      const verdict = verdictForAsk({ markerCreated, observations: [helper] }) as { status: string; reason: string };
+      expect(verdict.status, `marker ${markerCreated}`).toBe("not-run");
+      expect(verdict.reason).toContain("only a helper's call was asked");
+    }
+    expect((verdictForAsk({ markerCreated: false, observations: [helper, main] }) as { status: string }).status).toBe("held");
+    expect((verdictForAsk({ markerCreated: true, observations: [helper, main] }) as { status: string }).status).toBe("ran");
+  });
+
+  it("reads each helper field alone as a helper's call", () => {
+    for (const field of ASK_HELPER_FIELDS as string[]) {
+      const row = { ...main, keys: [...keys, field] };
+      expect((verdictForAsk({ markerCreated: false, observations: [row] }) as { status: string }).status, field).toBe("not-run");
+    }
+  });
+
+  it("applies no helper filter to a row with no keys", () => {
+    expect((verdictForAsk({ markerCreated: false, observations: [{ marked: true, shell: true }] }) as { status: string }).status).toBe("held");
+  });
+});
+
+/**
+ * review/43: `ASK_CLASS_CLIENTS` restates which clients the guard asks on, since this tool imports nothing from the
+ * engine. This case renders each client's person-only guard as emission does and runs it the way
+ * `test/hooks/personOnlyGuard.test.ts`'s `placeGuard` and `run` do (a scratch repository on `feat/x`, the default
+ * setting, a fresh process, the payload on stdin), on the raw merge, which asks in every mode. Copilot asks only for a
+ * session its session start recorded, so its case seeds that record under the common git directory with the payload's
+ * id, as `test/hooks/personOnlyCopilotAsk.test.ts` does. The clients whose output asks then equal the list, and every
+ * other client refuses, so a guard that answered nothing cannot pass.
+ */
+describe("ASK_CLASS_CLIENTS — the clients the guard asks on (review/43)", () => {
+  const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
+  const POLICY = "../../agent-tool-policies.json";
+  const MERGE = "gh pr merge 1";
+  const MAIN = "8177e220-4c1d-4b52-9b7e-1f0a6d3c2e11";
+
+  /** The guard for one client in a fresh scratch repository on `feat/x`, and the repository. */
+  function placeGuard(tool: Tool): { guard: string; repo: string } {
+    const guard = (planCoreHookScripts(POLICY, tool, { ...CLI_PIN, personOnlyGuard: true }) as { fileName: string; content: string }[]).find(
+      (script) => script.fileName === PERSON_ONLY_GUARD_FILE,
+    );
+    if (guard === undefined) throw new Error(`the ${tool} plan carried no person-only guard`);
+    const repo = mkdtempSync(join(tmpdir(), "stamity-qa-ask-class-"));
+    temps.push(repo);
+    mkdirSync(join(repo, ".git"), { recursive: true });
+    writeFileSync(join(repo, ".git", "HEAD"), "ref: refs/heads/feat/x\n");
+    const at = join(repo, ".stamity", "generated", "hooks", tool);
+    mkdirSync(at, { recursive: true });
+    writeFileSync(join(at, guard.fileName), guard.content);
+    if (tool === "copilot") {
+      mkdirSync(join(repo, ".git", "stamity"), { recursive: true });
+      writeFileSync(join(repo, ".git", "stamity", "copilot-main-sessions"), `${MAIN}\n`);
+    }
+    return { guard: join(at, guard.fileName), repo };
+  }
+
+  /** A shell call as each client hands it to the guard, as `personOnlyGuard.test.ts`'s `payload` builds it. */
+  function payload(tool: Tool, command: string, repo: string): string {
+    if (tool === "cursor") return JSON.stringify({ hook_event_name: "beforeShellExecution", command, cwd: repo });
+    if (tool === "copilot") {
+      return JSON.stringify({ sessionId: MAIN, session_id: MAIN, toolName: "bash", tool_name: "Bash", tool_input: { command }, hook_event_name: "PreToolUse" });
+    }
+    return JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command } });
+  }
+
+  /** Runs the guard as a client does, with the variables it reads under the test's control (`personOnlyGuard.test.ts`'s `run`). */
+  function run(guard: string, input: string): ReturnType<typeof spawnSync> {
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    for (const name of ["STAMITY_UNATTENDED", "STAMITY_REPO_ROOT", "GH_REPO", "GH_HOST", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_SYSTEM", "XDG_CONFIG_HOME"]) {
+      delete env[name];
+    }
+    env["GIT_CONFIG_GLOBAL"] = "/dev/null";
+    env["GIT_CONFIG_NOSYSTEM"] = "1";
+    return spawnSync(process.execPath, [guard], { input, encoding: "utf8", env });
+  }
+
+  /** Whether the output asks (`permissionDecision: "ask"`, top level or Claude Code's `hookSpecificOutput`), refuses, or neither. */
+  function answer(result: ReturnType<typeof spawnSync>): "ask" | "refuse" | "none" {
+    const stdout = String(result.stdout).trim();
+    if (stdout === "") return result.status === 2 ? "refuse" : "none";
+    const out = JSON.parse(stdout) as { permissionDecision?: string; permission?: string; hookSpecificOutput?: { permissionDecision?: string } };
+    const decision = out.hookSpecificOutput?.permissionDecision ?? out.permissionDecision ?? out.permission;
+    if (decision === "ask") return "ask";
+    return decision === "deny" ? "refuse" : "none";
+  }
+
+  it("asks on exactly the clients the list names, and every other client refuses", () => {
+    const answers = Object.fromEntries(
+      TOOLS.map((tool) => {
+        const { guard, repo } = placeGuard(tool);
+        return [tool, answer(run(guard, payload(tool, MERGE, repo)))];
+      }),
+    );
+    const asking = TOOLS.filter((tool) => answers[tool] === "ask");
+    expect(asking.toSorted()).toEqual((ASK_CLASS_CLIENTS as string[]).toSorted());
+    for (const tool of TOOLS.filter((name) => !asking.includes(name))) expect(answers[tool], tool).toBe("refuse");
   });
 });

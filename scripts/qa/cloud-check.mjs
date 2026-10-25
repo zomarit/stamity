@@ -485,6 +485,18 @@ export function realGit(cwd, args) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
 }
 
+/**
+ * HEAD's short sha, the one the start lines name as the packed candidate, or a refusal when a tracked file holds an
+ * uncommitted edit: the build packs the working tree, so a sha printed over edits names code the run never ran.
+ * Untracked files are left out, since the candidate is packed from tracked files (review/31).
+ */
+export function candidateHead(repoRoot, git) {
+  if (git(repoRoot, ['status', '--porcelain', '--untracked-files=no']).trim() !== '') {
+    throw new Error('the checkout has uncommitted edits; commit or stash them so the evidence names the code the run ran')
+  }
+  return git(repoRoot, ['rev-parse', '--short', 'HEAD']).trim()
+}
+
 /** The client's start surface, as the start line names it. */
 const START_SURFACE = {
   claude: "Claude Code's cloud (a new cloud session on the repository)",
@@ -496,8 +508,9 @@ const START_SURFACE = {
  * Build, create and push one scratch repository per client, and print how to start each run.
  *
  * Refuses a `--dir` inside this checkout before any call: a fixture tree there would be walked by
- * every later gate run. The fixture is built with `STAMITY_NO_CLIENT_PROBE=1`, so no client starts
- * on this machine. This checkout is built (`npm run build`) and packed once (`npm pack`) and committed into each
+ * every later gate run. Refuses a checkout whose tracked files hold uncommitted edits too, before any
+ * call or build ({@link candidateHead}): the sha it prints must name the code it packed. The fixture
+ * is built with `STAMITY_NO_CLIENT_PROBE=1`, so no client starts on this machine. This checkout is built (`npm run build`) and packed once (`npm pack`) and committed into each
  * scratch repository as a `file:` devDependency with its lockfile (`npm install
  * --package-lock-only`, a registry read). The only writes outside the scratch folder are the
  * repository's creation (one REST POST) and one push of `main` and the baseline tag, never forced:
@@ -524,6 +537,7 @@ export async function setup({
   if (!isOutsideRoot(repoRoot, parent)) {
     throw new Error(`--dir ${parent} is inside this repository; a scratch repository lives outside every checkout.`)
   }
+  const head = candidateHead(repoRoot, git)
   mkdirSync(parent, { recursive: true })
 
   const user = await rest({ method: 'GET', path: '/user' })
@@ -532,7 +546,7 @@ export async function setup({
   }
   const login = user.json.login
   const createPath = login === owner ? '/user/repos' : `/orgs/${owner}/repos`
-  const candidate = { ...packCandidate({ repoRoot, dest: parent, npm }), head: git(repoRoot, ['rev-parse', '--short', 'HEAD']).trim() }
+  const candidate = { ...packCandidate({ repoRoot, dest: parent, npm }), head }
 
   const started = now()
   const date = started.toISOString().slice(0, 10)

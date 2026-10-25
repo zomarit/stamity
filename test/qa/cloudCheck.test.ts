@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { parse } from "yaml";
 import { MORNING_REFUSED as ENGINE_MORNING_REFUSED, MORNING_SECTIONS as ENGINE_MORNING_SECTIONS } from "../../src/runs/morning.ts";
 import { runMarker } from "../../src/runs/pullRequest.ts";
 import { ensureDistBuilt } from "../support/distBuild.ts";
@@ -391,6 +392,17 @@ function bareFixture({ tool, baseDir }: { tool: string; baseDir: string }) {
   return { dir };
 }
 
+/**
+ * The setup cases pack this checkout, which may hold a contributor's uncommitted edits while the suite runs, and
+ * `setup` now refuses a dirty checkout (review/31). Stub reason: the checkout's own state is not the case under test,
+ * so `git status` in this checkout answers clean; every other call goes to `git` as given. The refusal itself is
+ * proven on temp repositories in "candidateHead" below.
+ */
+const overCleanCheckout =
+  (git: (cwd: string, args: string[]) => string) =>
+  (cwd: string, args: string[]): string =>
+    resolve(cwd) === REPO_ROOT && args[0] === "status" ? "" : git(cwd, args);
+
 describe("setup — a real fixture, REST and the push replaced", () => {
   const temps: string[] = [];
   beforeAll(async () => {
@@ -424,13 +436,15 @@ describe("setup — a real fixture, REST and the push replaced", () => {
       const network: string[][] = [];
       // Real git for every local step; `remote` and `push` are recorded instead of run. Mock reason:
       // network and accounts — a push needs the operator's credentials and a real repository.
-      const git = (cwd: string, args: string[]) => {
+      // TEST CHANGE, justified (review/31, REQ-PROVE-041): setup reads this checkout's status before it packs, so the
+      // case runs over a checkout read as clean (`overCleanCheckout`), whatever edits the contributor holds.
+      const git = overCleanCheckout((cwd: string, args: string[]) => {
         if (args[0] === "push" || args[0] === "remote") {
           network.push(args);
           return "";
         }
         return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-      };
+      });
       const printed: string[] = [];
       const { npm, calls: npmCalls } = fakeNpm();
       const result = await cloud.setup({
@@ -531,8 +545,10 @@ describe("setup — a real fixture, REST and the push replaced", () => {
       }
       return rest(request);
     };
-    const git = (cwd: string, args: string[]) =>
-      args[0] === "push" || args[0] === "remote" ? "" : execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    // TEST CHANGE, justified (review/31, REQ-PROVE-041): this checkout's status is read as clean, as above.
+    const git = overCleanCheckout((cwd: string, args: string[]) =>
+      args[0] === "push" || args[0] === "remote" ? "" : execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }),
+    );
     let message = "";
     try {
       await cloud.setup({
@@ -562,8 +578,10 @@ describe("setup — a real fixture, REST and the push replaced", () => {
       "GET /user": { status: 200, json: { login: "qa-member" } },
       "POST /orgs/qa-org/repos": { status: 201, json: { full_name: made, clone_url: `https://github.com/${made}.git` } },
     });
-    const git = (cwd: string, args: string[]) =>
-      args[0] === "push" || args[0] === "remote" ? "" : execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    // TEST CHANGE, justified (review/31, REQ-PROVE-041): this checkout's status is read as clean, as above.
+    const git = overCleanCheckout((cwd: string, args: string[]) =>
+      args[0] === "push" || args[0] === "remote" ? "" : execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }),
+    );
     const printed: string[] = [];
     await cloud.setup({
       owner: "qa-org",
@@ -590,6 +608,73 @@ describe("setup — a real fixture, REST and the push replaced", () => {
     };
     expect(() => cloud.packCandidate({ repoRoot: REPO_ROOT, dest: tmpdir(), npm })).toThrow("npm run build exited 1");
     expect(calls).toEqual([["run", "build"]]);
+  });
+});
+
+/**
+ * review/31: the short sha `setup` prints names the code it packed, so a checkout with uncommitted edits to a tracked
+ * file is refused, before any REST call or build. Real git over temp repositories throughout.
+ */
+describe("candidateHead — the sha the evidence names (review/31)", () => {
+  const temps: string[] = [];
+  afterEach(() => {
+    for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+  const DIRTY = "the checkout has uncommitted edits; commit or stash them so the evidence names the code the run ran";
+
+  /** A temp repository with one committed file, `scratch-seed.txt`. */
+  function repository(): string {
+    const base = mkdtempSync(join(tmpdir(), "stamity-cloud-check-head-"));
+    temps.push(base);
+    return bareFixture({ tool: "head", baseDir: base }).dir;
+  }
+
+  it("returns HEAD's short sha on a clean checkout, and on one holding only untracked files", () => {
+    const dir = repository();
+    const short = execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
+    expect(cloud.candidateHead(dir, cloud.realGit)).toMatch(/^[0-9a-f]{7,}$/);
+    expect(cloud.candidateHead(dir, cloud.realGit)).toBe(short);
+    // The candidate is packed from tracked files, so an untracked one leaves the evidence true.
+    writeFileSync(join(dir, "untracked.txt"), "scratch\n");
+    expect(cloud.candidateHead(dir, cloud.realGit)).toBe(short);
+  });
+
+  it("throws on a modified tracked file, and on a staged one", () => {
+    const dir = repository();
+    writeFileSync(join(dir, "scratch-seed.txt"), "edited\n");
+    expect(() => cloud.candidateHead(dir, cloud.realGit)).toThrow(DIRTY);
+    execFileSync("git", ["add", "scratch-seed.txt"], { cwd: dir });
+    expect(() => cloud.candidateHead(dir, cloud.realGit)).toThrow(DIRTY);
+  });
+
+  it("refuses setup over a dirty checkout before any REST call or build", async () => {
+    const repoRoot = repository();
+    writeFileSync(join(repoRoot, "scratch-seed.txt"), "edited\n");
+    const dir = mkdtempSync(join(tmpdir(), "stamity-cloud-check-setup-"));
+    temps.push(dir);
+    const { rest, calls } = fakeRest({ "GET /user": { status: 200, json: { login: "qa-owner" } } });
+    const { npm, calls: npmCalls } = fakeNpm();
+    await expect(cloud.setup({ owner: "qa-owner", clients: ["claude"], dir, rest, npm, repoRoot, print: () => {} })).rejects.toThrow(DIRTY);
+    expect(calls).toEqual([]);
+    expect(npmCalls).toEqual([]);
+  });
+});
+
+/**
+ * build/21: the nightly release-prep job writes the scratch repository's plan and contract at this tool's paths
+ * (`check.PLAN_PATH`, `check.CONTRACT_PATH`), and its drive step names both in the prompt as literals. This holds the
+ * literals equal to the exports, so a path moved on one side alone turns it red.
+ */
+describe("the nightly release-prep prompt names this tool's paths (build/21)", () => {
+  it("drives /st-work on PLAN_PATH with (run contract: CONTRACT_PATH)", () => {
+    const workflow = parse(readFileSync(join(REPO_ROOT, ".github", "workflows", "nightly.yml"), "utf8")) as {
+      jobs: Record<string, { steps: { name?: string; run?: string }[] }>;
+    };
+    const steps = workflow.jobs["release-prep-unattended"]?.steps ?? [];
+    expect(steps.some((step) => step.run?.includes("check.PLAN_PATH") && step.run.includes("check.CONTRACT_PATH"))).toBe(true);
+    const drive = steps.find((step) => step.name === "Drive (claude)")?.run ?? "";
+    expect(drive).toContain(`/st-work --unattended ${cloud.PLAN_PATH as string}`);
+    expect(drive).toContain(`(run contract: ${cloud.CONTRACT_PATH as string})`);
   });
 });
 
