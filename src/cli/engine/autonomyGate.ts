@@ -331,7 +331,11 @@ async function baselineLegs(rootDir: string, planned: readonly string[]): Promis
       if (recorded === null) {
         legs.push({ source: "the files the setup committed at `HEAD` owns, which could not be read", setting: UNREADABLE });
       } else if (recorded) {
-        legs.push({ source: "no guard copy found on disk or at `HEAD` beside the setup committed there (read as `ask`)", setting: ASK });
+        // What the gate found, not more (review/92): a copy at another client's path may be on disk, uncommitted.
+        legs.push({
+          source: "no guard copy found at `HEAD` or on disk where this write puts one, though the setup committed at `HEAD` records one (read as `ask`)",
+          setting: ASK,
+        });
       }
     }
   }

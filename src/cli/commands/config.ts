@@ -969,7 +969,8 @@ export const KEY_SPECS: readonly ConfigKeySpec[] = [
     key: "autonomy.mode",
     hint:
       `one of ${AUTONOMY_MODES.join(" | ")} — autonomous lets an agent mark a pull request ready ` +
-      `and create a local tag unasked; ask asks for both, as 1.16.0 did`,
+      `and create a local tag unasked, and lets \`run land\` merge and fast-forward the run's own pull ` +
+      `request on the evidence; ask asks for all of these, as 1.16.0 did for the first two`,
     choices: AUTONOMY_MODES,
     read: (manifest) => manifest.autonomy?.mode ?? null,
     resolve: (manifest) => resolveAutonomy(manifest).mode,

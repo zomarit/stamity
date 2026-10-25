@@ -5888,4 +5888,46 @@ describe("check — autonomy-deploying", () => {
       ].join("\n"),
     });
   });
+
+  // Close fix round 1 (review/29, review/30).
+  it("counts an environment whose name YAML reads as a number or a boolean, as a string or as { name } (review/29)", async () => {
+    const verdict = await rowAt({
+      ".github/workflows/year.yml": "on:\n  push:\n    branches: [main]\njobs:\n  ship:\n    runs-on: x\n    environment: 2025\n",
+      ".github/workflows/named.yml": "on:\n  push:\n    branches: [main]\njobs:\n  ship:\n    runs-on: x\n    environment: { name: true }\n",
+    });
+
+    // Red on a744ccb2: neither job counted, so the row passed with "no workflow this row read deploys on a push".
+    expect(verdict.status).toBe("warn");
+    expect(verdict.detail.split("\n").filter((line) => line.startsWith(".github/"))).toEqual([
+      ".github/workflows/named.yml: job ship names an environment and runs on a push to main",
+      ".github/workflows/year.yml: job ship names an environment and runs on a push to main",
+    ]);
+  });
+
+  it("warns `not evaluated` on a deploy reached through a trigger the row does not evaluate, never passing (review/30)", async () => {
+    const verdict = await rowAt(
+      {
+        ".github/workflows/created.yml": `on: create\n${ENV_JOB}`,
+        ".github/workflows/queued.yml": `on:\n  merge_group:\n  push:\n    branches: [main]\n${ENV_JOB}`,
+        ".github/workflows/both.yml": `on: [create, merge_group]\n${ENV_JOB}`,
+        ".github/workflows/manual.yml": `on:\n  workflow_dispatch:\n  schedule:\n    - cron: "0 0 * * *"\n${ENV_JOB}`,
+        ".github/workflows/test.yml": "on: create\njobs:\n  test:\n    runs-on: x\n",
+      },
+      { deployingBranches: ["main"] },
+    );
+
+    // Red on a744ccb2: the row passed over create and merge_group without a word.
+    expect(verdict).toEqual({
+      id: "autonomy-deploying",
+      status: "warn",
+      detail: [
+        "not evaluated: .github/workflows/both.yml deploys on triggers this row does not evaluate " +
+          "(create, merge_group); name the branches it deploys from in autonomy.deployingBranches",
+        "not evaluated: .github/workflows/created.yml deploys on a trigger this row does not evaluate " +
+          "(create); name the branches it deploys from in autonomy.deployingBranches",
+        "not evaluated: .github/workflows/queued.yml deploys on a trigger this row does not evaluate " +
+          "(merge_group); name the branches it deploys from in autonomy.deployingBranches",
+      ].join("\n"),
+    });
+  });
 });

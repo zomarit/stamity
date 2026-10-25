@@ -500,9 +500,28 @@ describe("assertNotLoosened — the refusal names the leg that decided (review/5
     await put(root, ".stamity/manifest.json", manifestText());
     await commitAll(root, skip);
     const why = await refusalWhy(root);
-    expect(why).toContain("no guard copy found on disk or at `HEAD`");
+    // TEST CHANGE, justified: REQ-FLOW-138 — the fallback's text says what the gate found, no more (review/92).
+    expect(why).toContain("no guard copy found at `HEAD` or on disk where this write puts one");
     expect(why).not.toContain(CLAUDE_COPY);
     expect(why).not.toContain("the guard on disk");
+  });
+
+  it("says only what it found when another client's copy is on disk but no copy is committed (review/92)", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, ".stamity/manifest.json", manifestText());
+    await commitAll(root, skip);
+    // A repository that never commits its copies, switching every client: the old client's copy is still on disk.
+    const codex = `${HOOKS_GENERATED_DIR}/codex/${PERSON_ONLY_GUARD_FILE}`;
+    await put(root, codex, guardText());
+    const refusal = await assertNotLoosened(root, setting(), { loosen: false, copies: CLAUDE_ONLY }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(refusal).toBeInstanceOf(EngineError);
+    const why = (refusal as EngineError).why ?? "";
+    // Red on a744ccb2: the text said no guard copy was found on disk, beside the one there.
+    expect(why).not.toContain("no guard copy found on disk");
+    expect(why).toContain("no guard copy found at `HEAD` or on disk where this write puts one, though the setup committed at `HEAD` records one");
   });
 });
 

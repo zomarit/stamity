@@ -1999,6 +1999,30 @@ function hasTrigger(on: unknown, event: string): boolean {
 }
 
 /**
+ * The triggers the row reads or may pass over: the four it evaluates; a
+ * `workflow_call`, whose callers it reads; a `workflow_dispatch`, which is
+ * the guard's `workflow-dispatch` act (REQ-FLOW-140); and a `schedule`, which
+ * no agent act fires.
+ */
+const KNOWN_TRIGGERS = new Set([
+  "push",
+  "workflow_run",
+  "pull_request",
+  "pull_request_target",
+  "workflow_call",
+  "workflow_dispatch",
+  "schedule",
+]);
+
+/** The triggers of a workflow's `on:` outside {@link KNOWN_TRIGGERS} (`create`, `merge_group`, …), sanitized (review/30). */
+function otherTriggers(on: unknown): string[] {
+  // A list member that is not a string names no event GitHub runs the workflow on.
+  const events: unknown[] = typeof on === "string" ? [on] : Array.isArray(on) ? on : isPlainObject(on) ? Object.keys(on) : [];
+  const others = events.filter((event): event is string => typeof event === "string" && !KNOWN_TRIGGERS.has(event));
+  return [...new Set(others)].map((event) => sanitizeLabel(event));
+}
+
+/**
  * The branches a workflow's `on:` runs it for on a push, as `check` names them
  * (REQ-FLOW-139). A `branches` list names the default branch when it matches
  * it, plus each other branch or `*`/`**` pattern it lists; an entry
@@ -2096,10 +2120,15 @@ function filterCovered(entry: string, patterns: readonly string[]): boolean {
   return patterns.some((pattern) => globCovers(globTokens(foldBranch(pattern)), inner));
 }
 
-/** Whether a job names a deployment environment, as a string or as `{ name }`. */
+/**
+ * Whether a job names a deployment environment, as a string or as `{ name }`.
+ * A name the YAML reader made a number or a boolean (an unquoted `2025`) is
+ * still a name GitHub deploys to (review/29).
+ */
 function namesEnvironment(job: Record<string, unknown>): boolean {
   const environment = job["environment"];
   const name = isPlainObject(environment) ? environment["name"] : environment;
+  if (typeof name === "number" || typeof name === "boolean") return true;
   return typeof name === "string" && name.trim() !== "";
 }
 
@@ -2187,7 +2216,8 @@ const ASSUMED_DEFAULT = "the default branch is assumed to be main: no refs/remot
  * It warns `not evaluated` on a file it cannot read or parse, on a branch
  * filter it cannot read ({@link unreadableFilter}), on a deploy reached
  * through a `workflow_run`, `pull_request` or `pull_request_target`
- * trigger (any `types`), on a call to a workflow in another
+ * trigger (any `types`) or a trigger outside {@link KNOWN_TRIGGERS}
+ * (`create`, `merge_group`, …), on a call to a workflow in another
  * repository, and on a local call it cannot follow. It passes
  * with no manifest, with no workflows folder, and when every branch it read
  * is covered, claiming only what it read.
@@ -2253,10 +2283,17 @@ export async function checkAutonomyDeploying(
     const on = workflow["on"];
     const onRun = hasTrigger(on, "workflow_run");
     const onPullRequest = hasTrigger(on, "pull_request") || hasTrigger(on, "pull_request_target");
-    if (!hasTrigger(on, "push") && !onRun && !onPullRequest) continue;
+    const others = otherTriggers(on);
+    if (!hasTrigger(on, "push") && !onRun && !onPullRequest && others.length === 0) continue;
     const reach = environmentJobs(name, workflows, [name], display);
     notEvaluated.push(...reach.problems);
     if (reach.jobs.length === 0) continue;
+    if (others.length > 0) {
+      notEvaluated.push(
+        `${display} deploys on ${others.length === 1 ? "a trigger" : "triggers"} this row does not evaluate ` +
+          `(${others.join(", ")}); name the branches it deploys from in autonomy.deployingBranches`,
+      );
+    }
     if (onRun) {
       notEvaluated.push(
         `${display} deploys on a workflow_run trigger, which this row does not follow; ` +
