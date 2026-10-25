@@ -5435,8 +5435,12 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
       "other than the charter, the rule files and the agent, command, skill, prompt and chat-mode definitions under each client's folder",
       "the instructions every later session follows among them, and the review loop is their only reader",
       "The ledger it checks is a file the run itself writes and commits, so an empty or rewritten ledger passes: the review loop and the whole-branch review are the evidence of record",
-      "while on Cursor and Codex, whose hook payloads name no agent, no call can be shown to be the main thread's, so they are refused in every mode, as 1.16.0 refused them. `stamity run land` alone on its line runs on every client",
-      "Unattended, of these acts only the raw ready mark is refused: a local tag and an unnamed workflow dispatch run there too",
+      // TEST CHANGE, justified (plan 022 file 1, unit a16-security-pages, fix round 2, the lens's two wording points;
+      // REQ-FLOW-145): 1.16.0 refused only the ready mark and a local tag on Cursor and Codex (the dispatch and
+      // remote-write rules are this release's), and unattended a tag and a dispatch run only where the payload names
+      // the agent, so both pins move to the wording that says so.
+      "while on Cursor and Codex, whose hook payloads name no agent, no call can be shown to be the main thread's, so they are refused in every mode (1.16.0 refused the ready mark and a local tag there too, and the dispatch and remote-write rules are new in this release). `stamity run land` alone on its line runs on every client",
+      "Unattended, of these acts only the raw ready mark is refused on Claude Code and Copilot CLI: a local tag and an unnamed workflow dispatch run there too, while Cursor and Codex refuse all three in every mode",
       "is refused for a sub-agent, and on Cursor and Codex in every mode",
       "a local tag and a workflow dispatch the setting does not name run unasked; Cursor and Codex refuse those three in every mode",
     ]) {
@@ -5477,7 +5481,10 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
     expect(mapping).toContain(`other than ${phrase}, which land on the evidence with the review loop their only reader`);
     expect(mapping).toContain("The ledger is a file the run itself writes and commits, so an empty or rewritten one passes");
     expect(mapping).toContain("on Claude Code and Copilot CLI and never for a sub-agent, while Cursor and Codex, whose payloads name no agent, refuse them and a remote write in every mode");
-    expect(mapping).toContain("and of the acts the setting runs only the raw ready mark: a local tag and an unnamed workflow dispatch run there too");
+    // TEST CHANGE, justified (fix round 2, the lens's second wording point; REQ-FLOW-145): unattended, a tag and a
+    // dispatch run on Claude Code and Copilot CLI only, so the pin carries the clients.
+    expect(mapping).toContain("and of the acts the setting runs only the raw ready mark: a local tag and an unnamed workflow dispatch run there too on Claude Code and Copilot CLI, Cursor and Codex refusing them in every mode");
+    expect(flowed(read(SECURITY)), "SECURITY.md says again 1.16.0 refused every one of them").not.toContain("as 1.16.0 refused them");
     expect(mapping, "the mapping says again an unattended run refuses every person-only act").not.toContain("it refuses every person-only act on every client and also");
     expect(flowed(read(CLOUD))).toContain("Cursor and Codex refuse them in every mode, since their hook payloads name no agent");
   });

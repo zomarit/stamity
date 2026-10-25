@@ -43,7 +43,8 @@ set to any value but empty, `false` or `0`. A cloud's own marker means "cloud", 
   mark, a local tag and a workflow dispatch run unasked on Claude Code's and Copilot CLI's main
   thread, and never for a sub-agent. Cursor and Codex refuse them in every mode, since their hook
   payloads name no agent and no call can be shown to be the main thread's. In a run nobody watches a
-  raw ready mark stays refused, while a local tag and an unnamed dispatch run, so name
+  raw ready mark stays refused, while on Claude Code and Copilot CLI a local tag and an unnamed
+  dispatch run, so name
   `workflow-dispatch` in `autonomy.deployingActs` if a dispatchable workflow releases or deploys. The
   run's own merge goes only through `run land`, which runs on every client. Everything else on the ask list still asks: a raw merge, a
   push of a tag or of the default branch, a release, a publish, a secret or protection write, an
