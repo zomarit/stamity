@@ -1,6 +1,6 @@
 ---
 id: packs
-# A design document, authored from docs/plans/018-packs-rebuilt-01.md on 2026-10-21 at the Prove phase of run 2026-10-20_packs-rebuilt, by its unit u18-spec-docs against the integration head 936350cb, amended from docs/plans/018-packs-rebuilt-02.md on 2026-10-22 in run 2026-10-21_packs-rebuilt-02, by its unit u18-spec against the integration head 67c36a63, and excluded from the site build.
+# A design document, authored from docs/plans/018-packs-rebuilt-01.md on 2026-10-21 at the Prove phase of run 2026-10-20_packs-rebuilt, by its unit u18-spec-docs against the integration head 936350cb, amended from docs/plans/018-packs-rebuilt-02.md on 2026-10-22 in run 2026-10-21_packs-rebuilt-02, by its unit u18-spec against the integration head 67c36a63, amended from docs/plans/022-autonomy-distribution-01.md on 2026-10-25 in run 2026-10-25_autonomy-distribution-02, read at 864d0111, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: design
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the packs reference carries it, or a decision row cuts the surface
@@ -35,6 +35,14 @@ sign-off in that run's record declared a clause the delta is silent on, a line h
 in that text (`review/17`, `build/3`) is that run's own. Every citation in that text reads at the integration head
 `67c36a63`; the units' lane commits got new shas when the integration lane picked them, and the integration branch was
 rebased once onto `main`, so a citation names the unit and the file, never a lane commit.
+
+The text dated 2026-10-25 under REQ-PACK-018, REQ-PACK-019 and REQ-PACK-021 comes from the `## Spec delta` of
+`docs/plans/022-autonomy-distribution-01.md` (Package 20's first file, run `2026-10-23_autonomy-distribution-01`),
+which fixed the two findings the review bot left open on pull request #124 and run 53's Ready-line row. That run reached
+`main` as pull request #125 without this merge; pass `spec1` of run `2026-10-25_autonomy-distribution-02` made it
+afterwards. A bullet headed "Amended 2026-10-25" says what moved and what it read; every citation in it reads at
+`864d0111`, `main` after #125, and a ledger id there (`review/2`) is that run's own. The status line stays as it is:
+the cut flips it.
 
 ## Intent
 
@@ -583,6 +591,13 @@ check open and a quoted sign-off, beside a location or `not named`. The output n
   each waived blocking check, an Attest one included, and rewrites both files", "carries a CRA column as information,
   never as a finding of law"); the adversarial case `production-review-compliant-and-legal-ask`, the four seeded cases
   and their two twins (REQ-PACK-024).
+- **Amended 2026-10-25** (plan 022 file 1, unit `a12-production-pack-fixes`; read at `864d0111`). The Ready line reads
+  `Ready: YES | NO (open: <check id>, …) | not signed — approval of record: <location | not named>`, so a `NO` names
+  its open blocking checks on the line itself, in both copies: the intro's (`packs/production/commands/st-production-review.md:17`)
+  and the Ready line section's (`:229`). It read `Ready: YES | NO | not signed — approval of record: <location | not
+  named>`, as the first paragraph above quotes it; the value rules are unchanged. Proof: `test/packs/production.test.ts`
+  (the Ready line re-pinned); the six production-review cases and the gatherer case re-copy the line
+  (`evals/cases-v6/`, plan 022 file 1, unit `a17-eval-batch` checking them).
 - **Source:** `packs/production/commands/st-production-review.md`.
 
 ### REQ-PACK-019 — `st-release` writes the change record and stops before every irreversible step
@@ -617,6 +632,20 @@ until `DEPLOY` is.
   `--verify-tag`; no stop opens while the approver reads `not named` or equals the requester, nor `DEPLOY` without a
   rollback path (`:174-196`; `review/31`, `review/53`, `review/58`). Silence, an empty answer or a mismatched token
   holds, and a run with nobody watching ends held (`:19-36`).
+- **Amended 2026-10-25** (plan 022 file 1, unit `a12-production-pack-fixes` with its fix round for `review/2`; read at
+  `864d0111`; the review bot's open finding on pull request #124 at the change-set row). The record gains an `Outcome`
+  row, written `held`: "`held` when written; `deployed` or `released` only once every opened command exited 0 or the
+  person confirms the step they ran, rewritten after Step 8"
+  (`packs/production/skills/st-release/SKILL.md:156`). Running a command personally stays an acceptable answer; the run
+  then asks once whether it succeeded and rewrites `Outcome` to `deployed` or `released` on yes, `held` otherwise
+  (`:195-196`); anything else keeps it `held`. A deploy's change set starts at the service's last record whose
+  `Outcome` reads `deployed` (`:58`); a record with no `Outcome` row reads as not deployed, and a `held` record newer
+  than the last `deployed` one is asked about once before the base is picked, a yes rewriting it to `deployed` and
+  silence keeping it `held` (`:60-64`), so a held or failed attempt never becomes a base. So the As built bullet's "a
+  deploy's change set reads the service's own last deploy record" reads as its last `deployed` one, and "with neither an
+  earlier tag nor such a record" as "no earlier deployed record or tag". The body stays at its 200-line cap, the lines
+  reflowed to pay for the row. Proof: `test/packs/productionRelease.test.ts` (`RECORD_FIELDS` holding `Outcome`, the
+  change-set row reading only a `deployed` record, the cap at 200).
 - **Proof:** `test/packs/productionRelease.test.ts` (among its cases, "carries the skill head, explicit-only, with no
   spawn", "ships the core companion form, hiding the skill from Codex's model", "holds the sentence that keeps the
   readiness review a warning", "writes the record at its path, one row per field REQ-PACK-019 names", "names an absent
@@ -682,6 +711,15 @@ evidence cannot run, each criterion only a render decides reads `not measured`.
   "takes an optional caller suffix, and /st-ui-review passes `ui-review`"; "carries the pack identity, the release
   version, the four clients and an honest footprint"); the golden case `ui-review-findings-cite-measured-values` and the
   adversarial case `ui-review-reports-never-edits`.
+- **Amended 2026-10-25** (plan 022 file 1, unit `a13-frontend-pack-fix`; read at `864d0111`; the review bot's open
+  finding on pull request #124). Frame stops on a working tree with changes outside the pack's own `.stamity/` paths,
+  naming them, and returns `BLOCKED_DEPENDENCY`: "A working tree with changes outside `.stamity/` stops the run with
+  `BLOCKED_DEPENDENCY`, naming them; commit or stash, then run again." (`packs/frontend/commands/st-ui-review.md:52-54`).
+  The design-quality agent reads each file "at the head the clean tree builds" (`:64`), so the source review at `HEAD`
+  and the browser bundle measure the same tree. Only `.stamity/` writes, the skills' own evidence and inventory among
+  them, leave the tree clean for this check. Frame grew by one line and step 2 was rewrapped one line shorter, so no
+  later line moved and no eval range shifted.
+  Proof: `test/packs/frontend.test.ts` (the `/st-ui-review` describe's case for the dirty-tree stop).
 - **Source:** `packs/frontend/commands/st-ui-review.md`, `packs/frontend/skills/st-browser-evidence/SKILL.md`.
 
 ### REQ-PACK-022 — The detector's inventory keeps a status, merges an alias source and proposes a minimal set

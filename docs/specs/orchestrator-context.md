@@ -1,6 +1,6 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, and excluded from the site build.
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, and excluded from the site build.
 # The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.16.0
@@ -107,6 +107,12 @@ The paragraph and criterion dated 2026-10-22 under REQ-CTX-017 come from the spe
 `docs/plans/018-packs-rebuilt-02.md` (plan 018 file 2, run `2026-10-21_packs-rebuilt-02`), merged by its unit
 `u18-spec` and read at the integration head `67c36a63`; they cite the unit that built them, `u3-frontend-set`, by its
 id. They are not in a release yet.
+
+The paragraph dated 2026-10-25 under REQ-CTX-017, and the amendment of that day inside its third criterion, come from
+the spec delta of `docs/plans/022-autonomy-distribution-01.md` (plan 022 file 1, run
+`2026-10-23_autonomy-distribution-01`, unit `a10-codex-readonly-roles`). That run reached `main` as pull request #125
+without this merge; pass `spec1` of run `2026-10-25_autonomy-distribution-02` made it afterwards, reading at
+`864d0111`. No criterion is added, so the count below holds. They are not in a release yet.
 
 The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 
@@ -1182,6 +1188,17 @@ returns `BLOCKED_DEPENDENCY` (`content/agents/stamity-design-quality.md:159-173`
   and no other verdict body names a whole-surface brief (`test/corpus/agents/verdictReturns.test.ts`, "design-quality
   also takes a whole-surface brief, a commit with the surface's paths"; added 2026-10-22).
 
+Amended 2026-10-25 (plan 022 file 1, unit `a10-codex-readonly-roles`, with its measurement on the installed codex-cli
+0.155.1; read at `864d0111`). The "As built" paragraph's "on Codex the grant is prose inside the `read-only` sandbox"
+reads "on Codex the grant is prose, and a spawned role runs in the parent turn's sandbox, which its file's
+`sandbox_mode` does not override" (REQ-FLOW-150 in `docs/specs/everyday-flows.md`): measured on that Codex, a role whose
+file sets `sandbox_mode = "read-only"`, spawned under a `workspace-write` parent, wrote through its shell and its patch
+tool, so a verdict role's read-only, and its read-only git, are prompt-level there (`CODEX_FACTS`,
+`src/adapters/codex.ts:366-373`; `ADAPTER_ALLOWLIST_COVERAGE`, `src/tools/translator.ts:351-357`, whose parity row
+dropped "inside the `read-only` sandbox"). The grant, the guard, the prose and the brief are unchanged.
+- As built: the delta also named a place "under REQ-CTX-020", the line it cited as `:1919` of this file before this
+  merge; that line is REQ-CTX-017's third criterion, amended in place below, and REQ-CTX-020 names no sandbox.
+
 **Expand/contract:** the grant is additive, and rollback is a re-sync at the prior version. The consumer is the policy
 document, whose schema id is unchanged (`src/tools/allowlist.ts`). A guard suite proves the grant stays read-only.
 
@@ -1916,7 +1933,9 @@ frozen files.").
   no subject and stays as the record).
 - GIVEN sync for Cursor, Copilot and Codex THEN each client's capability disclosure states what it
   does for read-only git — Cursor's `readonly: true`, no `execute` for a Copilot verdict role,
-  Codex's prose inside the `read-only` sandbox — as the parity row declares.
+  Codex's prose, a spawned role running in the parent turn's sandbox — as the parity row declares
+  (amended 2026-10-25, plan 022 file 1, unit `a10-codex-readonly-roles`; it read "Codex's prose inside the `read-only`
+  sandbox").
 - GIVEN `content/commands/st-work.md` WHEN the Verdict dispatch bullet is read THEN it names the
   diff range, the plan path and unit id, the report path, the ledger ids for a re-review and the
   patch file with no git grant, and says the brief never carries the implementer's or fixer's

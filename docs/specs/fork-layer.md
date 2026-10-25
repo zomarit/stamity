@@ -1,6 +1,6 @@
 ---
 id: fork-layer
-# A design document, authored outside the spec command, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-14_cli-native on 2026-10-14, and excluded from the site build.
+# A design document, authored outside the spec command, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-14_cli-native on 2026-10-14, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.15.0
 obsolete_when: the enterprise-forks guide and the customization page stop carrying the fork layer's behaviour, or a decision cuts the surface
@@ -31,6 +31,13 @@ registry fork's pinned calls). Each is the text as it stood there at `c96c7146`,
 place and marked "(route clause dropped 1.15.0)", then a paragraph headed "Amended 2026-10-14" that states what
 1.15.0 holds. That text cites the tree at `d590a266`, the integration head the deletion landed on, and shipped with
 1.15.0, which set `status: shipped-with-1.15.0`. REQ-FORK-010 and REQ-FORK-011 lose their APM halves the same day.
+
+REQ-PLUGIN-031 and REQ-PLUGIN-050 come from the spec delta of `docs/plans/022-autonomy-distribution-01.md` (plan 022
+file 1, run `2026-10-23_autonomy-distribution-01`, unit `a11-release-workflows`), which replaces plan 016's file 1
+for them; REQ-PLUGIN-031 is one of the ids `docs/specs/plugin-lifecycle.md` held for plan 016's later files, and
+REQ-PLUGIN-050 is reduced from plan 016's text. That run reached `main` as pull request #125 without this merge; pass
+`spec1` of run `2026-10-25_autonomy-distribution-02` made it afterwards, and every `path:line` in that text reads at
+`864d0111`, `main` after #125. A ledger id in that text (`review/11`) is that run's own. It is not in a release yet.
 
 ## Intent
 
@@ -383,6 +390,55 @@ publish (`:567-602`). The guide's section is `docs/enterprise-forks.md:751-861`.
   change.
 - **Proof:** `test/ci/forkReleaseWorkflow.test.ts`, and the closed lists in `test/ci/workflow.test.ts` that admit
   `fork-release.yml`'s publish job.
+
+### REQ-PLUGIN-031 — A fork release publishes its suffixed version under an explicit npm dist-tag
+
+Added 2026-10-25 (plan 022 file 1, unit `a11-release-workflows`).
+
+Given an armed fork's publish, When npm runs, Then the call is `npm publish "./$TARBALL" --registry "$REGISTRY" --tag
+"$DIST_TAG"`, with `DIST_TAG: latest` set once at workflow level, read by the gates rehearsal, the publish and the
+rehearsal report alike (`.github/workflows/fork-release.yml:75-78`, `:579`; `dry-run-summary` names the dist-tag,
+`:654`). `latest` is the tag the CLI's update notice reads (`probeRegistry`, `src/cli/notice/updateNotice.ts:265-273`).
+npm 11 refuses to publish a prerelease, which a fork's suffixed version (`1.10.0-acme.1`) is, without `--tag`
+(`fork-release.yml:45-47`).
+
+- **As built:** the delta cited the npm measurement as "measured on 11.21.0, `docs/plans/016-fork-distribution-01.md:1342`";
+  that line is a table rule of the unit's cell, so the version measured is not restated here, and the claim rests on
+  the workflow's own header. A variable dist-tag channel (plan 016's `STAMITY_RELEASE_DIST_TAG`) is on plan 022 file 1's
+  drop list, revisited when a fork asks for a second channel. The guide says the publish names `latest` and why
+  (`docs/enterprise-forks.md`, "Tag a release").
+- GIVEN the stub-npm publish run THEN it records `publish ./<tgz> --registry <GH Packages> --tag latest` (added
+  2026-10-25; `test/ci/forkReleaseWorkflow.test.ts`).
+- **Proof:** `test/ci/forkReleaseWorkflow.test.ts`, `test/ci/workflow.test.ts`, `test/docsPages.test.ts` (the fork
+  guide's re-attestation).
+- **Source:** `.github/workflows/fork-release.yml`.
+
+### REQ-PLUGIN-050 — A fork release is rehearsed before its approval
+
+Added 2026-10-25 (plan 022 file 1, unit `a11-release-workflows` and its fix round for `review/11`; reduced from plan
+016's text).
+
+Given any armed run (a tag push, a real dispatch or a rehearsal), When `gates` has packed the tarball, Then it runs
+`npm publish "./$TARBALL" --dry-run --registry "$REGISTRY" --tag "$DIST_TAG"` with `contents: read` and no secret, so
+npm's refusal stops the run before the `fork-release` approval ("Rehearse the registry publish",
+`.github/workflows/fork-release.yml:341-382`). The guide tells a fork to rehearse by dispatch, `dry_run` left at true,
+before it pushes the tag (`docs/enterprise-forks.md:796-800`). Plan 016's `distribution.commit` and `release.json`
+clauses and its changelog clauses are dropped: 1.15.0 deleted their surface (`fork-release.yml:1-3`).
+
+- **As built, where the delta differed:** the step first requires npm 11 or newer, the npm the publish job runs, and
+  exits 1 naming the version where it is older; it prints `npm <version>; dist-tag <tag>`; npm's tag-rule refusal
+  ("must specify a tag") and any error but an authentication refusal fail the step; an authentication refusal (`E401`,
+  `E403`, `ENEEDAUTH`) passes with a warning that the dist-tag rule was not reached, since what npm does with a
+  tokenless dry run against a registry that wants a token was not measured (`review/11`, a declared default: the
+  measurement needs a person, the guard asking before any publish line, `--dry-run` included). So the delta's "npm's
+  refusal stops the run" holds for every refusal but that one. A dry run uploads nothing.
+- GIVEN `gates` THEN exactly one `npm publish` line, after "Pack tarball", carrying `--dry-run`, `--registry "$REGISTRY"`
+  and `--tag "$DIST_TAG"`, with `contents: read` and no `secrets.`; GIVEN a parsed copy with `--dry-run` dropped THEN the
+  closed list in `test/ci/workflow.test.ts` fails; GIVEN a stub npm answering `10.9.8`, or failing the publish for a
+  reason other than authentication, THEN the step exits 1 (added 2026-10-25; `test/ci/forkReleaseWorkflow.test.ts`,
+  `test/ci/workflow.test.ts`).
+- **Proof:** `test/ci/forkReleaseWorkflow.test.ts`, `test/ci/workflow.test.ts`.
+- **Source:** `.github/workflows/fork-release.yml`, `docs/enterprise-forks.md`.
 
 ### REQ-PLUGIN-028 — One command sets a fork's identity
 

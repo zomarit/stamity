@@ -1,6 +1,6 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.16.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
@@ -161,6 +161,20 @@ is silent on, a line headed "As built" adds it. Every `path:line` in that text r
 commits new shas. Where that text rewrote a sentence in place, the sentence says "amended 2026-10-22" and quotes what
 it read. That text is not in a release yet; it ships with the next minor after 1.16.0, with REQ-FLOW-125 to
 REQ-FLOW-128.
+
+REQ-FLOW-131 to REQ-FLOW-134, REQ-FLOW-137 to REQ-FLOW-145 and REQ-FLOW-150, and the text dated 2026-10-25 under
+REQ-FLOW-019, REQ-FLOW-036, REQ-FLOW-082, REQ-FLOW-102, REQ-FLOW-104, REQ-FLOW-120, REQ-FLOW-121 and REQ-FLOW-123, come
+from the spec delta of `docs/plans/022-autonomy-distribution-01.md` (plan 022 file 1, Package 20, run
+`2026-10-23_autonomy-distribution-01`), each entry read with every "Amended at …" block of the plan's unit cells that
+restates it. That run reached `main` as pull request #125 (`f9abc9c6..ed85f02e`) without this merge; pass `spec1` of
+run `2026-10-25_autonomy-distribution-02` (plan 022 file 2) made it afterwards, reading the landed code. Every
+`path:line` in that text reads at `864d0111`, `main` after #125 and two dependency bumps that change only the two
+lockfiles. Where a delta entry and the code differ, a declared default taken late in the build among them, the text
+states the code, and a line headed "As built" says what moved. Citations into `src/hooks/personOnly.ts`,
+`src/hooks/scripts.ts` and the other modules that run rewrote by hundreds of lines name the file and the symbol, as
+before, but for a rule table or a short block cited by its lines. A ledger id in that text (`review/158`, `build/9`) is
+that run's own. This merge allocates none of REQ-FLOW-135, REQ-FLOW-136 and REQ-FLOW-146 to REQ-FLOW-149. That text
+is not in a release yet; it ships with the next minor after 1.16.0.
 
 ## Intent
 
@@ -634,6 +648,24 @@ sign-off or `not signed` (`content/commands/st-work.md:318-319`).
     (`withBlastRadius` and `blastRadiusSection`, `src/runs/morning.ts`; `screenedBlastRadius`, `src/cli/commands/run.ts`).
   - Proof: `test/cli/commands/runCheckpoint.test.ts` (the attended one-liner, then the section, then the marker; the
     exact-body pin of a record without the section unchanged), `test/runs/morning.test.ts`.
+- **Amended 2026-10-25** (plan 022 file 1, unit `a8-unattended-and-close` and its fix rounds, with the whole-branch
+  review's; read at `864d0111`). Item 3's close walk has no commit part: its parts are the rows the qa skill leaves for
+  the person (at most three) and the spec delta merge, the leftovers joining as a third, and "the commit is no ask, in
+  any mode"; `Default if no response: those rows not signed and the delta unmerged`, and "A person's own answer not to
+  commit is honoured: nothing is committed or pushed." (`content/commands/st-work.md:297-303`). After the last round,
+  unless the person answered not to commit, the close runs `stamity run start` (on the default branch), then
+  `stamity run checkpoint --run <run-id> --pr --title … --paths …`, then, when that JSON's `pr` is not null,
+  `stamity run land --run <run-id> --ready --wait 8 --json` alone on its line, with no question (`:304-307`;
+  REQ-FLOW-144). So the 2026-10-16 bullet's commit part, its three options and its default "leave uncommitted", and the
+  earlier bullets' "the commit" part, read as that sequence; the first paragraph's item 3 reads the same, its default
+  the new line.
+  - As built, beyond the delta: an open person QA row does not stop the land step (`:307`); an `asks` outcome is put to
+    the person as one numbered question, `Default if no response: leave it held`, and only on yes does the close run
+    the land line with `--approved <sha>` (`:308`; REQ-FLOW-144); every close writes `morning.md` (`:309`;
+    REQ-FLOW-143).
+  - Proof: `test/corpus/commands/work.test.ts`; the re-quoted cases `work-persisted-plan-asks-once`,
+    `benign-close-no-leftovers-asks-nothing-extra`, `benign-attended-twin-leave-uncommitted` and
+    `close-real-defect-never-preset-to-drop`.
 - **Proof:** `test/corpus/commands/work.test.ts`; census `probe-none-work-run-qa-checkpoint` and
   `work-proof-block-fields`; must-holds `question-shape-and-default`, its charter-only twin and
   `unattended-run-applies-declared-default`; new case `work-persisted-plan-asks-once`; QA.
@@ -929,7 +961,7 @@ integrated. Before the unit, `CODEX_COMMANDS_DIR` was `null` and Codex received 
   `test/docsPages.test.ts`; the live check; QA. (Route clause dropped 1.15.0: the list also named three suites of the
   plugin route, deleted with it.)
 
-### REQ-FLOW-036 — `.claude/settings.json` is merged entry by entry, and an owner's entries survive every verb
+### REQ-FLOW-036 — `.claude/settings.json` is merged entry by entry, an owner's entries survive every verb, and retired rows leave
 
 From `docs/plans/016-fork-distribution-00.md` § Spec delta B, the unit `u0-settings-ownership`. The engine owns only what
 it writes into `.claude/settings.json`: each `permissions.allow` row and each hook entry (one element of a
@@ -1005,6 +1037,29 @@ or an entry it did not write.
   equal one may be yours. It removes no ask row either."; an owner's deny row equal to an engine ask row is kept, and
   the client's deny-before-ask order then refuses that act. Proof: `test/merge/settingsOwnerEntries.test.ts`,
   `test/manifest/claudeSettings.test.ts`.
+- **Amended 2026-10-25** (plan 022 file 1, units `a4b-claude-rows` and `a16-security-pages`, with their fix rounds; read
+  at `864d0111`; the heading read "`.claude/settings.json` is merged entry by entry, and an owner's entries survive every
+  verb"). Given a deny or ask row the engine wrote and no longer renders in that list — one of `RETIRED_CLAUDE_ROWS`, or
+  an ask row the current autonomy setting does not render (REQ-FLOW-137) — Then `sync` removes it where the ledger
+  record lists its hash, keeps an equal row the record does not list, since it may be the owner's, and names each in its
+  notice; a stricter setting writes its rows again at the next `sync` (`leavingRows`, `unrenderedRows` and
+  `withRowNotice`, `src/manifest/claudeSettings.ts`). For those rows alone this replaces the 2026-10-16 and 2026-10-18
+  bullets' "keeps every row … byte for byte" (the module's own comment read "only ever grow"): a row the rendering
+  still carries is kept as they say, and `clean` is unchanged. The hook-entry bound reads a script under `.stamity/generated/hooks/`, an
+  installed pack's `.stamity/packs/<id>/` or `.claude/hooks/stamity/` (`src/manifest/claudeSettings.ts:41-47`), where
+  the 2026-10-07 bullet names the first two.
+  - As built: `RETIRED_CLAUDE_ROWS` is empty, since every 1.16.0 deny row stays in every mode (decision D15) and mode
+    `ask` renders every 1.16.0 ask row (`src/hooks/personOnly.ts:470-475`); what leaves today is the ready-mark row and
+    the five local-tag rows under mode `autonomous` (`RUN_ACT_ASK_ROWS` and `claudeAskRows`, `:477-494`). Each list is
+    compared with its own engine table, so an owner's deny row equal to an engine ask row is never named or removed as
+    a row the engine dropped (`ENGINE_ROWS_BY_LIST`, `src/manifest/claudeSettings.ts`; `review/136`). The ask list also
+    carries, in every mode, two rows for a land line carrying `--approved`, `Bash(* run *land *--approved*)` and
+    `Bash(* run *--approved* land*)` (`CLAUDE_LAND_ASK_ROWS`, `src/hooks/personOnly.ts:454-468`; REQ-FLOW-123). A forged
+    ledger record can list an owner's own equal ready-mark or local-tag ask row and so make `sync` remove it, a residual
+    `SECURITY.md`'s settings row names.
+  - Proof: `test/manifest/claudeSettings.test.ts`, `test/merge/settingsOwnerEntries.test.ts`,
+    `test/merge/settingsKeyOwnership.test.ts`, `test/adapters/claude.test.ts`, `test/docsPages.test.ts` (the settings
+    row's pins).
 - **Proof:** `test/merge/settingsOwnerEntries.test.ts`, `test/merge/settingsKeyOwnership.test.ts`,
   `test/manifest/coOwnedJson.test.ts`, `test/manifest/jsonMembers.test.ts`, `test/manifest/claudeSettings.test.ts`,
   `test/merge/reclaim.test.ts`; QA.
@@ -3498,6 +3553,15 @@ the repo declares not counted as a pass-through, and `not-applicable` for a re-e
 test-only helper (`:77-88`).
 
 - **As built:** functions keep `maint-size-outliers`; only a whole file defers (the sign-off on `f8`'s review).
+- **Amended 2026-10-25** (plan 022 file 1, unit `a14-reviewer-pass-through`; read at `864d0111`; the unit's cell
+  counts nine samples across eval runs 47, 50 and 53 that filed the wrapper as a note). Given a pass-through, Then it is a finding even where the plan asks for the layer, its
+  consequence named, so it is never filed as a note: the row reads "a new layer whose interface is nearly as wide as
+  what it hides (a pass-through), a finding even where the plan asks for the layer: its consequence is the interface
+  kept twice" (`content/agents/stamity-reviewer.md:47`, edited in place on its one line). As built: the delta worded the
+  consequence "the doubled interface: each change to what it hides is now made twice" and added "It is never filed as a
+  note"; the row carries the shorter consequence above and no such sentence, "a finding" standing for it.
+  - Proof: `test/corpus/agents/spine.test.ts` (the pin beside the pass-through regex, `:630-634`); the cases
+    `reviewer-shallow-wrapper-pass-through` and `reviewer-light-pass-catches-logic-defect` re-copy the row.
 - **Proof:** `test/corpus/agents/spine.test.ts`, `test/corpus/skills/verifyRestTools.test.ts`; new case
   `reviewer-shallow-wrapper-pass-through`.
 
@@ -4221,7 +4285,7 @@ egress, token-shaped variable names (names only) and missing review state; with 
   `test/hooks/personOnlyGuard.test.ts` (the canary), `test/mcp/env.test.ts`, `test/cli/commands/init.test.ts` and
   `test/cli/commands/initPanel.test.ts` (the canary's ignore entry).
 
-### REQ-FLOW-102 — Person-only acts that can be undone ask, attended; person-only paths are held
+### REQ-FLOW-102 — Person-only acts ask, run or refuse by the autonomy setting; person-only paths are held
 
 Added 2026-10-16 (plan 021 file 1, units `u6-person-only-tables`, `u14-shell-guard`, `u18b-run-checkpoint` and
 `u20-hook-emission`).
@@ -4363,6 +4427,51 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
   - Proof: `test/change/personOnlyPaths.test.ts`, `test/cli/commands/runCheckpoint.test.ts` ("the scripts the hook
     declarations at Base: name (review/175)" and its nested describe of the fail-closed reads),
     `test/cli/commands/runEnd.test.ts`.
+- **Amended 2026-10-25** (plan 022 file 1, units `a4-guard-ask-list`, `a1-held-patch-prefixes` and
+  `a16-security-pages`, with their fix rounds; read at `864d0111`; the heading read "Person-only acts that can be undone
+  ask, attended; person-only paths are held").
+  - **The autonomy setting.** Given `autonomy.mode: "autonomous"`, the default (REQ-FLOW-137), Then a ready mark
+    (`pr-ready`) on the origin's repository and a local tag (`tag`) leave the ask class and run on the main thread, the
+    allow verdict naming them in `runs`, and a workflow dispatch (`workflow-dispatch`) runs in both modes unless
+    `autonomy.deployingActs` names it; an act that runs never hides one that asks or refuses on the same line
+    (`src/hooks/personOnly.ts:21-27`; `PersonOnlyVerdict` and `PersonOnlyContext.runs`, `:209-211`, `:230-235`). Given
+    mode `ask`, Then the ready mark and the tag ask as in 1.16.0. In both modes a raw merge, a raw push to the default
+    branch, a release, a publish, a secret, variable or protection write keep asking attended and being refused
+    unattended; the flows send the run's own merge and ready mark only through `stamity run land` (REQ-FLOW-132),
+    which is no person-only act, and that is the flows' rule, not the guard's: attended in mode `autonomous` the guard
+    runs a raw ready mark (`gh pr ready`) on the main thread, the allow verdict naming `pr-ready` in `runs`
+    (`src/hooks/personOnly.ts:21-23`, `:230-235`); and the new rules hold: `status-write` and `line-too-long` refused in every mode, and
+    `admin-merge`, `push-deploying`, a named `workflow-dispatch`, `autonomy-loosen`, `land-approved` and
+    `outside-write` asking, while `remote-write` runs on the main thread alone (REQ-FLOW-134, REQ-FLOW-138,
+    REQ-FLOW-140, REQ-FLOW-141; `PERSON_ONLY_RULES`, `:107-203`). So the 2026-10-18 bullet's list of acts that ask reads, for the ready mark and a local tag, by the
+    setting, and its `gh repo edit` with no flag, under `protection`, reads as `repo-irreversible`, refused everywhere
+    (REQ-FLOW-140). The acts the setting runs are the main thread's alone, and on Codex and Cursor no call can be shown
+    to be one (REQ-FLOW-123).
+  - **The held patch.** Given an unattended held patch written while git's configuration sets `diff.noprefix`,
+    `diff.mnemonicPrefix` or custom prefixes, Then every section carries `a/` and `b/` (`PATCH_PINS`,
+    `src/cli/commands/run.ts:1484-1489`, at both patch diffs); a carried section whose name has no prefix git writes is
+    refused as "was written with no diff prefix, so git apply would place it one folder off" (`NAME_PREFIX`, `:2115-2122`;
+    `foreignSectionHeader`, `:2191`); a CRLF copy of a link section reads as a link (`sectionLink`, `:2217-2219`;
+    `review/256`); and `--drop-held <path...>` on `checkpoint` or `end` withdraws the sections of paths the run no
+    longer changes, its JSON listing them in `withdrawn`, while a path the work tree or the index still changes stays
+    held with a `not withdrawn: …` line (`OPTION_FLAGS` and `SUBCOMMAND_OPTIONS`, `:174`, `:185-187`; `review/248`).
+    The mnemonic prefixes `c/`, `i/`, `w/`, `o/`, `1/` and `2/` still carry, from an older version's patch.
+  - **As built**, the page-accuracy rows the plan folded: curl's and wget's long options count from any prefix of two
+    or more letters of an option the guard lists, read as the first listed option it begins (`--req`, `--me`), so
+    round 4d's "read from a unique prefix of two letters or more … (`--req`, `--dat`, `--upl`; …)" reads that way, its
+    "unique" and its `--dat` example no longer standing (`SECURITY.md`, the person-only row); the hold reads only an option's `=` value as a
+    path, and a folder a declaration names is not held where it is present at `Base:` but is held whole where it is
+    absent there (`hookPathsAt` and `hookPathsRead`, `src/runs/hookPaths.ts`, where the hold's reader moved from
+    `src/cli/commands/run.ts`; inbox rows `review/201`, `review/202`), so the 2026-10-19 bullet's "A folder it names is
+    not held" reads with that exception. A literal `--dry-run` publish (npm, pnpm, `yarn npm publish`, bun) sends
+    nothing and runs in both modes; every other spelling (`--dry-run=false`, a later `--no-dry-run`, a quoted or
+    expanded flag, an `npm_config_dry_run` assignment) asks, fail-closed. A push refspec the line cannot show reads as
+    `push-default` (REQ-FLOW-140). An older held patch written with no prefix under a top folder named `a`, `b`, `c`,
+    `i`, `w`, `o`, `1` or `2` still reads as prefixed and applies one folder up: a named residual.
+  - Proof: `test/hooks/personOnly.test.ts` (the describes "the autonomy setting's acts that run unasked (a4,
+    REQ-FLOW-137)" and "a dry-run publish (a4, REQ-FLOW-102 as built)", and the `CLASSES` rows),
+    `test/hooks/personOnlyGuard.test.ts`, `test/cli/commands/runCheckpoint.test.ts` (the prefix pins, the CRLF link,
+    `--drop-held`), `test/docsPages.test.ts` (the run verbs' row and its mapping twin).
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`, `test/change/personOnlyPaths.test.ts`,
   `test/cli/commands/runCheckpoint.test.ts` (the held patch; the refused push, "refuses the push when a commit it would
   send changes a held path, rewriting no history"), `test/adapters/claude.test.ts`,
@@ -4481,6 +4590,30 @@ named network exceptions, and the run verbs on the git-hardening row.
   Action's own named limit, a pull request's change to `.claude/` reverted on its Action run, and committed onto its
   branch by an agent there that runs `git add -A` (`SECURITY.md`, "Claude Code's GitHub Action on a pull request.").
   Proof: `test/docsPages.test.ts` ("the Action's restore covering Claude Code's hook copies (w7-action-pages)").
+- **Amended 2026-10-25** (plan 022 file 1, units `a2-run-verb-config-recheck` and `a16-security-pages`, with their fix
+  rounds; read at `864d0111`). The first paragraph's "a `GIT_CONFIG_*` value changed between the pre-flight and the
+  push goes unseen", and the 2026-10-18 bullet's "a `GIT_CONFIG_*` variable gained after the pre-flight reaches the
+  verbs' git", no longer stand: given a `GIT_CONFIG_*` value or a configuration file changed after the pre-flight, a
+  change made by a line the stand-alone rule did not recognise included, Then an unattended `run checkpoint`, `run end`
+  or `run land` refuses it (REQ-FLOW-131). `SECURITY.md`'s "The configuration window" names what stays open, four gaps
+  among them a steered agent re-running the pre-flight, which vets the new surface, or forging the record it can write;
+  a change made after the run verbs' last read; and a record head rewritten to `Mode: attended`, which all three verbs
+  then read as attended, skipping the compare (`test/docsPages.test.ts`, the pins "Four gaps remain. …" and "a run that
+  rewrites its record head to `Mode: attended` …"). The As built line's "a later page round settles them" is dropped:
+  the place-reader paragraph and the residual for programs the repository's configuration names stand on the page as
+  that line cites them. The residuals name the held-hooks residual (`review/187`, accepted 2026-10-23, decision D9): a
+  module a held hook script loads from outside the held folders is pushed unheld, and `run land` lands it on the
+  evidence, since it lies outside the ask set (`SECURITY.md`, the land verb's row). The page-accuracy rows: "The
+  attended guard's accepted gaps" and its two bullets are gone, since the guard fills gh's placeholders from the
+  checkout's branch and reads a batch ref update's hidden list element as a ref it cannot show, both asking (inbox
+  row `pr/40`); the unattended rule's "in any form that sets one" reads "in the forms the guard reads", and
+  `: ${NAME=…}` is listed beside `: ${NAME:=…}` among the spellings that pass (inbox row `review/252`). So the first
+  paragraph's list of "the attended guard's accepted gaps" reads as forms the guard reads.
+  - As built, beyond the delta: the delta named two open gaps, re-running the pre-flight and "a change made and undone
+    between two reads"; the page names the four above, the last read's window worded as "a change made after the
+    second read".
+  - Proof: `test/docsPages.test.ts` (the cloud section's pins, each a `TEST CHANGE, justified` line naming
+    REQ-FLOW-104 or REQ-FLOW-131, and "the security pages state the autonomy model (REQ-FLOW-145)").
 - **Proof:** `test/docsPages.test.ts` ("cloud and unattended runs (REQ-FLOW-104)": the section's place, every risk
   and gap named above, the retired bullet gone, the control table's pointers, the settings row and the network
   exception); `judgment: reviewer` for the wording around them.
@@ -4939,11 +5072,28 @@ this rule, a residual `SECURITY.md` names (REQ-FLOW-104).
     their subcommand's rule (`unattendedPushVerdict`, `src/hooks/personOnly.ts`).
   - Proof: `test/hooks/personOnlyGuard.test.ts` (the MCP cases), `test/adapters/claude.test.ts`,
     `test/hooks/personOnly.test.ts`.
+- **Amended 2026-10-25** (plan 022 file 1, units `a4-guard-ask-list`, `a6-land-verb` and `a8-unattended-and-close`;
+  read at `864d0111`). `stamity run land` joins the run verbs as the one path for the run's own merge or a
+  default-branch fast-forward (REQ-FLOW-132), alone on its line in every mode (REQ-FLOW-121; the module comment,
+  `src/hooks/personOnly.ts:34-39`). Unattended, in mode `autonomous`: a local tag runs and a tag push stays refused; a
+  raw ready mark stays refused, the run's one draft pull request being the floor, and `run land --ready` marks it ready
+  on the evidence (`decide()`, `src/hooks/scripts.ts`: an allowed ready mark is refused with the unattended sentence
+  while `unattendedBy` reads a run); `status-write` is refused, and `admin-merge` and `push-deploying` are refused as
+  every ask-class act is unattended. A raw `gh pr merge` or a raw push to the default branch keeps its refusal. The
+  unattended sentence names "the run's summary list (`morning.md`)" where it read "the morning list" (`unattendedSentence`,
+  `src/hooks/scripts.ts`).
+  - As built, beyond the delta: an unnamed workflow dispatch runs unattended too, on Claude Code and Copilot CLI; on
+    Codex and Cursor the ready mark, a local tag, the dispatch and a remote write are refused in every mode (REQ-FLOW-123,
+    `review/158`). `run land` refuses `--approved` while a run is unattended, before any GitHub call
+    (`src/cli/commands/runLand.ts:313-314`), and runs only on a morning list with no blocked or refused item
+    (REQ-FLOW-144).
+  - Proof: `test/hooks/personOnlyGuard.test.ts`, `test/hooks/personOnlyGuardDist.e2e.test.ts` (the summary-list
+    sentence), `test/cli/commands/runLand.test.ts`, `test/corpus/skills/unattended.test.ts`.
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`,
   `test/corpus/commands/feedbackPair.test.ts` ("pr-resolve pushes only through the run verbs"),
   `test/corpus/skills/unattended.test.ts`.
 
-### REQ-FLOW-121 — A run verb stands alone on its line, unattended
+### REQ-FLOW-121 — A run verb stands alone on its line, unattended, and the land verb in every mode
 
 Added 2026-10-18 (plan 021 file 2, unit `v0b-run-verb-alone` and its fix round).
 
@@ -4985,6 +5135,20 @@ are unaffected, and a PowerShell tool call is read as PowerShell, not through it
   as `-`). Attended lines are unaffected (`namesVerb`, `namesVerbInWords` and `verbShape` in `unattendedPushVerdict`,
   `src/hooks/personOnly.ts`). Proof: `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`,
   `test/docsPages.test.ts` ("states v0b's reading of a run verb after run's option words on REQ-FLOW-121").
+- **Amended 2026-10-25** (plan 022 file 1, unit `a4-guard-ask-list` and its fix rounds; read at `864d0111`; the
+  heading read "A run verb stands alone on its line, unattended"). `land` joins the verb set the rule reads (`namesVerb`
+  and `namesVerbInWords` in `unattendedPushVerdict`, `src/hooks/personOnly.ts`), and for `land` the rule binds in every
+  mode, attended too: `stamity run land --run <id>` with literal flags (`--ready`, `--wait <n>`, `--fast-forward`,
+  `--json`) passes only alone on its line, and beside another command, after an assignment, under a wrapper or in the
+  `node` form it is refused as "`stamity run land` on a line that is more than the verb". Attended the rule reads the
+  parsed program words only, so a commit message, a comment or a search that names the verb runs; unattended the
+  raw-text backstop holds as before (`decide()`, `src/hooks/scripts.ts`, which reads the land line before the mode).
+  A land line carrying `--approved`, in any spelling or option position, is ask-class in every mode (`land-approved`,
+  `PERSON_ONLY_RULES`, `src/hooks/personOnly.ts:183-187`; `review/103`): attended the client's prompt is the person's
+  one click on the verb's `asks` outcome, and it is refused unattended and for a sub-agent. A land line built by an
+  expression is not seen attended; the verb's own checks back that residual (REQ-FLOW-132).
+  - Proof: `test/hooks/personOnly.test.ts` ("the land verb's line (a4, REQ-FLOW-121)"),
+    `test/hooks/personOnlyGuard.test.ts`.
 - **Proof:** `test/hooks/personOnly.test.ts` (the stand-alone rule's denies and allows, POSIX and PowerShell, and the
   `st` twins of every launch route), `test/hooks/personOnlyGuard.test.ts` (the unattended block on every client),
   `test/hooks/personOnlyGuardDist.e2e.test.ts`, `test/corpus/skills/unattended.test.ts`.
@@ -5109,6 +5273,37 @@ act lands on the morning list.
   - Proof: `test/hooks/personOnlyCopilotAsk.test.ts` ("Copilot's session start updates the record under a lock
     (n5-copilot-record-lock, REQ-FLOW-123)"), `test/qa/hookRuns.test.ts` ("copilotFacts — the three facts Copilot
     CLI's ask rests on"), `test/qa/hookRunsCli.test.ts` ("hook-runs --ask — the facts Copilot CLI's ask rests on").
+- **Amended 2026-10-25** (plan 022 file 1, units `a4-guard-ask-list`, `a4b-claude-rows` and
+  `a7-claude-guard-onfailure`, with `a4`'s fix round for `review/158`; read at `864d0111`).
+  - **`auto` mode.** On Claude Code an ask-class act in `auto` permission mode stays refused until a measured run shows
+    a hook's `ask` prompting there (decision D11): the `auto` branch of `attendedAsk` stands (`src/hooks/scripts.ts`),
+    and an inbox follow-up measures it.
+  - **An `--agent` session.** On Claude Code `agent_type` counts as a sub-agent's only beside a non-empty `agent_id`,
+    so the main thread of a session started with `--agent` asks; a non-empty `agent_id`, a `subagent_*` field or a
+    parent field still refuses (`HELPER_NAMES` and `helperCall` in `attendedAskSource`, `src/hooks/scripts.ts`;
+    `review/86`). The 2026-10-18 bullet's "whose asks are therefore refused" no longer holds.
+  - **A guard that times out.** The guard entries, the core guard, the person-only shell guard and the MCP entry that
+    reuses its row, carry `onFailure: "block"`, so a guard that times out blocks the call (`commandHook`,
+    `src/adapters/claude.ts`): measured on Claude Code 2.1.309 (2026-10-23), the key's floor 2.1.295 read from the
+    vendor changelog's entry for that version, a client older than 2.1.295 not measured; Copilot CLI 1.0.100, which
+    imports the file's hooks, loaded the entries and ignored the key (measured; `CLIENT_HOOK_GUARANTEES`,
+    `src/hooks/model.ts`). The delta named 2.1.295 as the client that blocks.
+  - **The acts the setting runs** (REQ-FLOW-137) are the main thread's alone: a sub-agent's call to one is refused,
+    and on Codex and Cursor, whose hook payloads name no agent, every call is, in every mode, the reason naming the
+    missing identity (`GUARD_NO_MAIN_THREAD` and `helperRefusal`, `src/hooks/scripts.ts`; `review/158`, a declared
+    default taken at the security pages' review, after the plan). A remote or URL-rewrite write is read the same way
+    (REQ-FLOW-134). Claude Code and Copilot CLI are unchanged; `stamity run land` alone on its line runs on all four.
+  - **Unattended**, every client refuses every ask-list act, and the act lands on the summary list; the run's own merge
+    and ready mark reach the person only as `run land`'s `asks` outcome, which the flow turns into a question or a
+    held row (REQ-FLOW-143, REQ-FLOW-144).
+  - **The Claude settings rows** follow the setting: `claudeAskRows(runs)` drops the ready-mark row and the five
+    local-tag rows for the acts mode `autonomous` runs, keeps the raw merge's row in every mode, and adds the two
+    `--approved` land rows in every mode (`src/hooks/personOnly.ts:454-494`; `buildSettingsJson`,
+    `src/adapters/claude.ts`, which renders mode `ask`'s rows where the plan carries no setting); the deny rows stay
+    1.16.0's (decision D15; REQ-FLOW-036).
+  - Proof: `test/hooks/personOnlyGuard.test.ts`, `test/hooks/personOnlyCopilotAsk.test.ts`, `test/adapters/claude.test.ts`
+    (`onFailure` on the guard rows alone, the ask rows by mode), `test/cloud/containerLeg.test.ts`,
+    `test/docsPages.test.ts`.
 - **Proof:** `test/hooks/personOnlyGuard.test.ts` ("each client's answer to a person-only act (v0a2)", the sub-agent,
   `auto`-mode and Copilot byte-for-byte cases), `test/hooks/personOnlyGuardDist.e2e.test.ts`,
   `test/cloud/containerLeg.test.ts` (each client's answer to an ask act), `test/qa/hookRunsCli.test.ts`.
@@ -5289,6 +5484,524 @@ paragraph lies outside the invariants block, which moves for invariant 5 alone.
   template line at or under 117 characters"); the seven eval cases quoting the charter re-pointed their ranges with
   their quotes unchanged (`evals/SET-v7.md`).
 - **Source:** `content/charter/stamity-charter.md`.
+
+### REQ-FLOW-131 — The run verbs re-check git's configuration against the pre-flight
+
+Added 2026-10-25 (plan 022 file 1, unit `a2-run-verb-config-recheck` and its three fix rounds, with `a6-land-verb`'s
+and `a3b-loosen-gate`'s replace-ref rounds).
+
+Given a passed `gate preflight --unattended`, Then it records, atomically and owner-only, a salted digest of git's
+effective configuration (every entry with its scope and its origin, as `git config --list --show-scope --show-origin -z`
+prints it) and of the git-relevant environment, beside the configuration's key names with every subsection masked and
+the variables' names, and keeps no value (`SURFACE_RECORD_FILE` and `surfaceRecord`, `src/runs/gitSurface.ts:78`,
+`:204-207`; `recordGitSurface`, `src/cli/commands/gate.ts:2037-2043`, called at `:2110-2113`). When an unattended
+`run checkpoint` or `run end` starts, and again after its commit, just before it pushes, Then it exits 1 with
+`config changed: …` where the digest now differs, naming the keys (subsections masked) and variables added or removed,
+or saying a value, a source file or the git program changed; with `no pre-flight record (…)` where none reads; and with
+`configuration unreadable (…)` where git cannot list it (`checkSurfaceRecord`, `src/runs/gitSurface.ts:282-308`;
+`src/cli/commands/run.ts:1017-1023`, `:1416-1422`). `run land` makes the same check at its start and again just before
+the act (`surfaceMoved`, `src/cli/commands/runLand.ts:296-306`, `:339-340`, `:581-582`). Attended runs are not checked.
+
+- **As built, beyond the delta:**
+  - The record lives at `<git-dir>/stamity/preflight-git.json`, beside the checkpoint marker; one that is a link or not
+    a regular file, past 64 KiB, or text that is no record refuses as `no pre-flight record (…)`
+    (`SURFACE_RECORD_MAX_BYTES`, `src/runs/gitSurface.ts:84`; `:289-296`).
+  - Left out of the surface: `branch.<name>.remote`, `.merge` and `.rebase` in the local scope, which git writes itself
+    when a branch tracks, and `GIT_TERMINAL_PROMPT`, `GIT_ASKPASS` and `GIT_NO_REPLACE_OBJECTS`, which the write runner
+    sets (`:89-96`; `review/35`). Recorded beside the `GIT_*` names: `HOME`, `XDG_CONFIG_HOME`, the variables `gh` reads
+    for its token, host, config folder, path and default repository (`GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`,
+    `GITHUB_ENTERPRISE_TOKEN`, `GH_HOST`, `GH_CONFIG_DIR`, `GH_PATH`, `GH_REPO`), and on win32 `APPDATA`, `USERPROFILE`,
+    `HOMEDRIVE` and `HOMEPATH`, each by name, its value only inside the salted digest (`:98-113`, `:138-145`;
+    `review/32`, `review/51`). A token swapped after the pre-flight refuses as a value changed, unnamed.
+  - A refusing pre-flight removes an earlier pass's record and writes one marked `refused`; only `run end --refused`
+    takes it, every other verb refusing as `no pre-flight record (the pre-flight refused)` (`:297`; `recordGitSurface`;
+    `review/33`). Under that record the ending stages only the run folder's files and `.stamity/inbox.md`, refuses
+    `--paths`, and refuses as `refused ending carries only the run's records: …` where a commit the push would send
+    (read from origin's tips, never from `Base:`) or the index changes another path, before staging and again after the
+    commit (`refusedEndingStray`, `src/cli/commands/run.ts`; `:1035-1047`, `:1423-1432`; `review/50`).
+  - `gate` is a mutating verb now (`gateCommand`), its `--dry-run`, which only `preflight` takes, writing no record;
+    a record it cannot write refuses as `git-record`, naming the error code alone (`review/36`).
+  - Replace refs are off on every git read the run verbs, the land verb and the loosen gate make:
+    `GIT_NO_REPLACE_OBJECTS=1` and `-c core.useReplaceRefs=false`, which on git 2.19 to 2.42 beats a repository's own
+    `core.useReplaceRefs=true` (`PINNED_OPTIONS` and `gitWriteEnv`, `src/cli/engine/gitWrite.ts:111-125`, `:212-223`;
+    `gitCheckRunner`, `src/cli/engine/gitStatus.ts`; `review/114`, `review/116`), so no `git replace` ref can forge
+    the ledger or a tree they read. The older-git half rests on the argument and git's documented order; git 2.52.0
+    ran here.
+- **Residual:** a steered agent can re-run the pre-flight, which vets the new surface, or forge the record, which it can
+  write; `SECURITY.md`'s configuration window names it beside the other gaps (REQ-FLOW-104).
+- **Proof:** `test/runs/gitSurface.test.ts`, `test/cli/commands/gatePreflight.test.ts`, `test/cli/commands/gate.test.ts`
+  (the `mutating` pin), `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/runEnd.test.ts`,
+  `test/cloud/ending.test.ts` (the `Refused:` draft after a refusing pre-flight), `test/cli/engine/gitWrite.test.ts`.
+- **Source:** `src/runs/gitSurface.ts`, `src/cli/commands/gate.ts`, `src/cli/commands/run.ts`,
+  `src/cli/commands/runLand.ts`, `src/cli/engine/gitWrite.ts`.
+
+### REQ-FLOW-132 — `stamity run land` merges the run's own pull request when the evidence holds
+
+Added 2026-10-25 (plan 022 file 1, unit `a6-land-verb` and its eleven fix rounds; decisions D1, D3, D7, D17).
+
+Given the run's own pull request — the number the run verb recorded when it opened or updated the draft, its head
+branch the record's `Branch:` (or `stamity/<run-id>` where that names a default branch), its head `HEAD` and origin's
+tip, its body ending with the run's marker, its base the default branch, its head repository origin's own, and its
+author the login `gh` acts as — When `stamity run land --run <id>` runs, Then it merges with the head commit set and
+never through an admin route, only when every required check run on that head is completed and passing (the
+rulesets' and the branch protection's required checks, else every check run there and at least one; a commit status
+never counts), no review thread is unresolved, the ledger the head commit holds reads and has no open Critical or
+Warning row, and `mergeable_state` reads `clean` (`runLand`, `src/cli/commands/runLand.ts:222-633`; `checkEvidence`,
+`unresolvedThreads`, `ownPr` and `decideLand`, `src/runs/landEvidence.ts:143-182`, `:374-388`, `:452-503`;
+`ghMergePull`, `src/cli/engine/ghRunner.ts`). Before the merge it writes into the pull request's body only "evidence
+checked at <UTC> for <sha>: …", never that it landed; after the merge call succeeds `record.md` gains
+`- <UTC> land: #<n> <sha> merged`, once per pull request and head, and the pull request's own state is the truth every
+later call re-reads (`evidenceLine` and `withStatusLine`, `src/runs/landEvidence.ts:515-540`; `noteLanded`,
+`src/cli/commands/runLand.ts:798-812`). A missing or unreadable ledger at the head, a row whose severity or state is not
+one of the ledger's words, a work-tree ledger that differs from the commit's ("checkpoint first"), and a `gh`
+resolving inside the work tree or a temp folder each refuse (`ledgerEvidence`, `src/runs/landEvidence.ts:100-110`;
+`ledgerAt`, `src/cli/commands/runLand.ts:735-751`; `:316-330`). `--ready` marks a draft ready only after every `asks`
+condition and the evidence that needs no ready state hold, then reads the merge state again; `--wait <minutes>`, a
+whole number from 0 to 9, polls pending check runs every 30 s. Exit 0 for `landed` or `already-landed`, else 1 with
+`outcome` `asks` or `refused` and every reason named, 2 for a usage error.
+
+- **As built, beyond the delta:**
+  - The options are `--fast-forward`, `--method merge|squash|rebase` (refused beside `--fast-forward`), `--ready`,
+    `--wait <minutes>` and `--approved <sha>`; `--paths` and `--title` are usage errors (`SUBCOMMAND_OPTIONS`,
+    `LAND_WAIT_MAX`, `parseApproved` and `parseWait`, `src/cli/commands/run.ts:183-206`). The global `--dry-run` reads
+    and decides and writes nothing, its outcome `would-land`.
+  - **`--approved <sha>`** (`review/103`, `review/110`): the person's answer to an `asks` outcome, the full
+    40-character head commit that outcome printed. With it an `asks` outcome proceeds to the act and every `refused`
+    condition still refuses; the verb refuses the flag while a run is unattended, before any GitHub call, and wherever
+    the head is no longer that commit, read at the start, after the ready mark and just before the act; the record line
+    then reads `… merged (approved by the person for <sha>)` (`src/cli/commands/runLand.ts:249-254`, `:313-314`,
+    `:369-371`, `:545-546`, `:583-587`, `:623`). An `asks` outcome prints every reason, not only the first, and the head
+    an approval must name (`:128-129`, `:567-572`). The guard asks for that line in every mode (`land-approved`,
+    REQ-FLOW-121), and Claude Code's settings carry an ask row for it (REQ-FLOW-123).
+  - **Why the merge waits** (`build/6`): on `asks` and `refused` the verb writes `merge waits on: <reasons>` into the
+    run's own pull request's body, screened outbound first and in place of an earlier status line, so a cloud run's
+    reasons reach the person without the local summary list (`noteWaits`, `:308-311`, `:408-419`; `waitsLine`,
+    `src/runs/landEvidence.ts:523-525`). So the delta's "writes only 'evidence checked …' into the pull request's body"
+    holds before a merge; a non-landing outcome writes the waits line instead.
+  - **Threads** (`review/71`, `review/72`, `review/94`): a thread the run's login resolved counts as open while a
+    comment by any other person is in it, or while its comments did not read whole; the threads are read again after
+    the wait and after the ready mark, just before the act; the login and the pull request's author come from one
+    constant thread query (`REVIEW_THREADS_QUERY`, `src/cli/engine/ghRunner.ts`). A required check with no run yet on
+    the head is pending, not missing, so `--wait` waits for it (`review/107`; `src/runs/landEvidence.ts:467-470`).
+  - **One budget** (`review/79`, `review/90`): the whole call ends within 9 minutes, every poll included; after the
+    ready mark the merge state is read again every 5 s, at most 60 s and never past that budget, and still uncomputed
+    refuses as "not computed yet, run it again" (`LAND_BUDGET_MS` and `READY_MERGEABLE_MS`,
+    `src/cli/commands/runLand.ts:83-94`).
+  - **`gh`** (`review/75`, `review/91`, `review/95`, `review/96`, `build/18`): the `PATH` entry and the program it
+    names are each checked outside the work tree and the temp folders (`os.tmpdir()`, `/tmp`, and on win32 `%TEMP%`,
+    `%TMP%` and the local `AppData\Temp`), compared as real, normalised paths with a separator boundary; every later
+    call starts that same absolute entry, from the filesystem's root (the system drive's root on Windows), with the
+    version managers' version-choosing variables dropped (`filesystemRoot` and `tempRoots`, `:197-215`;
+    `withoutVersionChoice`, `src/cli/engine/ghRunner.ts`). So a `gh` pinned only in the repository's own
+    version-manager file no longer resolves for the verb.
+  - The setting is the strictest of the default branch's manifest, `HEAD`'s and the work tree's; none readable refuses
+    as `no setup found` (`readSetting`, `:764-792`).
+  - The merge call sends the head commit, so a head that moved meets GitHub's 409 and refuses; a pull request already
+    merged at the head is `already-landed`, which writes no second record line.
+  - `--fast-forward` reads `compare/<tip>...<head>`, then pushes `<sha>:refs/heads/<default>` with no force, after the
+    shell guard's own table, accepting its `push-default` ask and refusing any refuse-class act (`:595-606`).
+- **Residuals** (`SECURITY.md`, the land verb's row): on a single-account repository the run's login is the person's, so
+  neither the author check nor the thread check can tell them apart, and the review loop is the evidence of record; the
+  ledger is a file the run writes and commits; a repository's CI may choose its checks with code the change edits
+  (`review/70`, deferred as `build/5`).
+- **Proof:** `test/runs/landEvidence.test.ts`, `test/cli/commands/runLand.test.ts`, `test/cli/engine/ghRunner.test.ts`
+  (`ghApi` still refusing a PUT merge and GraphQL, each new call refusing any document but its constant).
+- **Source:** `src/cli/commands/runLand.ts`, `src/runs/landEvidence.ts`, `src/cli/engine/ghRunner.ts`,
+  `src/runs/pullRequest.ts` (`PR_RECORD_FILE` and `prRecordRefusal`).
+
+### REQ-FLOW-133 — `run land` asks instead of acting where the act is the person's
+
+Added 2026-10-25 (plan 022 file 1, unit `a6-land-verb`; the ask set is decision D2).
+
+When `autonomy.mode` is `ask`; or the diff, a rename's old path included, touches the person-only path set less its
+charter, rule and agent-definition files, or `.github/actions/**`, an `action.yml` or `action.yaml`, a `CODEOWNERS`
+file (at the root, under `.github/` or `docs/`) or `.stamity/change-classes.json`; or it carries a held patch
+(`.stamity/runs/*/held/*.patch`); or the default branch matches `autonomy.deployingBranches`; or
+`autonomy.deployingActs` names `pr-merge`, `pr-ready` (for `--ready` on a draft) or `push-default` (for
+`--fast-forward`); or a fast-forward could pass a rule that requires a pull request — Then it prints the evidence,
+exits 1 with `outcome: "asks"`, `asks.reason`, `asks.reasons` and the head, and merges, marks ready and pushes nothing
+(`LANDS_ON_EVIDENCE`, `DEFINES_THE_EVIDENCE`, `LAND_ASK_PATHS` and `askPathsOf`, `src/runs/landEvidence.ts:20-89`;
+`decideLand`, `:486-502`). Every evidence gap is decided first, so a pull request that would both ask and refuse
+refuses.
+
+- **As built, beyond the delta:**
+  - `LANDS_ON_EVIDENCE` holds the charter (`AGENTS.md`, `AGENTS.override.md` and `CLAUDE.md` at any depth), the rule
+    and instruction files, and every client's agent, command, skill, prompt and chat-mode trees (`:21-43`), so the
+    delta's "agent-definition files" reads as all of those, each landing on the evidence with the review loop its only
+    reader.
+  - The ask set also takes every hook script the repository's own declarations name, read at the record's `Base:`, at
+    the head and at the default branch's tip, in every mode (`declaredHookPaths`,
+    `src/cli/commands/runLand.ts:648-685`; `hookPathsRead`, `src/runs/hookPaths.ts`; `build/2`, `review/74`,
+    `review/80`); declarations that cannot be read ask, naming the next step.
+  - "A rule that requires a pull request" reads three ways: a ruleset's `pull_request` rule, rules that could not be
+    read, and classic protection that is on, whose pull-request requirement only an admin can read
+    (`src/cli/commands/runLand.ts:462-476`).
+  - An `asks` outcome proceeds only under the person's `--approved <sha>` (REQ-FLOW-132), so the delta's "merges, marks
+    ready and pushes nothing" holds of the call without it.
+- **Proof:** `test/runs/landEvidence.test.ts` (each class of the ask set matched), `test/cli/commands/runLand.test.ts`.
+- **Source:** `src/runs/landEvidence.ts`, `src/runs/hookPaths.ts`, `src/cli/commands/runLand.ts`.
+
+### REQ-FLOW-134 — Writes to another repository and mentions of a person ask
+
+Added 2026-10-25 (plan 022 file 1, unit `a4c-outside-party` and its five fix rounds; decision D16).
+
+Given any session, When a `gh` write (a pull request or issue create, comment, review, edit, ready, merge, close or
+reopen; a release; a gist; an API call with a non-GET method or a field flag; a workflow run) targets a repository other
+than the origin's, host and `owner/repo` compared, by `-R`/`--repo`, a URL, an API path `repos/<owner>/<repo>/…`,
+`GH_REPO` or `GH_HOST` set or wrapped on the line, or `gh`'s default remote where it is not `origin`; or carries no
+target in a checkout with more than one remote and no `gh-resolved` default; or names a target the guard cannot read
+beside such a flag; or carries an inline body or title holding an `@<login>` mention outside backticks that is not one
+of the repository's own apps (`codex`, `dependabot`, `copilot`, `claude`) — Then the guard names `outside-write` and
+asks attended, and refuses unattended and for a sub-agent (`PERSON_ONLY_RULES`, `src/hooks/personOnly.ts:193-197`;
+`PersonOnlyContext.originRepo` and `ghDefaultRepo`, `:257-271`; `repositoryKey`, `:434-452`; the guard's `configOf`,
+`ghDefaultOf` and `originOf`, `src/hooks/scripts.ts`). A body read from a file is not read, a named residual.
+
+- **As built, beyond the delta:**
+  - The origin and `gh`'s default are read from git's merged configuration: the system, global, XDG and repository
+    files, `include.path` and every `includeIf` target whatever its condition, followed at most 10 levels, 64 files
+    and 4 MiB, symbolic links followed at most 8, URL rewrites applied. A reading cut short makes the target
+    unreadable, and so do an included file that sets a remote, URL-rewrite or branch-remote key and a line that sets
+    `HOME`, `XDG_CONFIG_HOME` or git configuration through its environment (`configOf` and the `GUARD_GIT_*` bounds,
+    `src/hooks/scripts.ts`; `review/128`, `review/134`, `review/148`).
+  - A GraphQL mutation whose subject is a node id the line cannot place asks, but for resolving or unresolving a review
+    thread; a GraphQL call whose query the line does not show asks (`build/20`, `review/120`, `review/127`). A `curl`
+    or `wget` write to the GitHub API host is read by the same rule (`build/21`). A reviewer or an assignee
+    (`--reviewer`, `--add-reviewer`, `--assignee`, `--add-assignee`, the API's `reviewers` and `assignees`) other than
+    `@me` and the repository's apps is read as a person (`build/22`). Body and title keys are read at any depth; a body
+    on stdin in every spelling and a heredoc body read as data are read for mentions; a closing or reopening comment is
+    read; short-option clusters are read by gh 2.102.0's per-subcommand short options, an unknown letter asking
+    (`review/121`–`126`, `review/135`, `review/145`, `review/146`). An issue transfer's destination and
+    `gh issue develop`'s repository are targets (`review/122`, `review/123`). A push whose remote or URL names another
+    repository asks, every URL a push to `origin` reaches compared (`review/130`).
+  - A git commit message is not screened: a mention there notifies no one (`build/25`).
+  - **`remote-write`** (`review/129`, overturned at the lens's third round): a line that writes a git remote, a URL
+    rewrite or an include runs on Claude Code's and Copilot CLI's main thread and is refused for a sub-agent, and on
+    Codex and Cursor in every mode, since it moves the origin later writes are held to (`PERSON_ONLY_RULES`,
+    `src/hooks/personOnly.ts:198-202`; `RUNS`, `src/hooks/scripts.ts`).
+  - **Residuals** (`SECURITY.md`): a body the shell fills in and one read from a file are not read; `gh` aliases and
+    extensions; a `gh` version other than 2.102.0 for the cluster table; `gh`'s own configured default host
+    (`build/23`); a sub-agent writing the git configuration file directly, which is any call's on Codex and Cursor; an
+    origin reached through an SSH host alias asks, fail-closed (`build/24`, a troubleshooting entry).
+- **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`,
+  `test/hooks/personOnlyCopilotAsk.test.ts`, `test/hooks/scriptBudget.test.ts`, `test/docsPages.test.ts` (the
+  outside-party sentences of `SECURITY.md`).
+- **Source:** `src/hooks/personOnly.ts`, `src/hooks/scripts.ts`.
+
+### REQ-FLOW-137 — The autonomy setting: reversible acts run, and the repository can tighten it
+
+Added 2026-10-25 (plan 022 file 1, units `a3-autonomy-config` and `a4-guard-ask-list`, with their fix rounds;
+decisions D5, D6).
+
+Given no `autonomy` key or `autonomy.mode: "autonomous"`, When `sync` writes the guard, Then the resolved setting is
+baked into every guard copy as a marker line, `// stamity-autonomy <json>`, and as the guard's `AUTONOMY` constant, and
+on the main thread a ready mark on the origin's repository and a local tag run unless `autonomy.deployingActs` names
+them; a workflow dispatch runs in both modes unless named (`resolveAutonomy` and `autonomyMarkerLine`,
+`src/config/autonomy.ts:78-107`, `:148-155`; `buildPersonOnlyGuardScript`, `src/hooks/scripts.ts`, the marker under
+the banner and `RUNS`). Given `ask`, Then the ready mark and a local tag ask as in 1.16.0. In both modes the new floors
+hold: `status-write` refused (REQ-FLOW-140), outside writes and mentions ask (REQ-FLOW-134), `admin-merge` and
+`push-deploying` ask. `autonomy.deployingBranches` (default `[]`) takes branch names or patterns whose `*` stays inside
+one path segment and whose `**` crosses segments, matched case-folded with `refs/heads/` dropped
+(`matchesDeployingBranch`, `src/config/autonomy.ts:212-251`).
+
+- **As built, beyond the delta:**
+  - The key holds `mode` (`autonomous` | `ask`), `deployingBranches` (at most 32, each at most 255 characters and a
+    branch name by git's ref rules, a `*` allowed) and `deployingActs` from `pr-ready`, `tag`, `workflow-dispatch`,
+    `pr-merge` and `push-default`, an unknown act refused naming the five (`AutonomyConfig` and `DEPLOYING_ACTS`,
+    `src/types/manifest.ts:167-207`; `deployingBranchDefect` and `collectAutonomyErrors`,
+    `src/manifest/manifest.ts:787-834`). The field is additive, so the manifest version does not move; `config`
+    registers the three keys.
+  - A block the schema would refuse resolves to the strictest setting it can state, mode `ask` with every act named,
+    never to the default; a marker that does not parse, or disagrees with itself, reads the same
+    (`src/config/autonomy.ts:78-107`, `:157-166`).
+  - **The main thread only** (`review/43`, `review/158`): the acts the setting runs are refused for a sub-agent, and on
+    Codex and Cursor, whose hook payloads name no agent, in every mode (REQ-FLOW-123); a remote or URL-rewrite write
+    runs on the main thread the same way (REQ-FLOW-134).
+  - Unattended, a raw ready mark stays refused (REQ-FLOW-120); a local tag and an unnamed dispatch run on Claude Code
+    and Copilot CLI.
+  - The Claude settings rows follow the baked setting (REQ-FLOW-036, REQ-FLOW-123). The `autonomy.mode` hint and
+    `docs/configuration.md` say `autonomous` is also what lets `run land` merge and fast-forward on the evidence
+    (`review/21`).
+  - An upgrade from 1.16.0 adopts the default with no flag, since a 1.16.0 guard carries no marker (decision D6;
+    REQ-FLOW-138), and the CHANGELOG's upgrade notes say so.
+- **Proof:** `test/config/autonomy.test.ts`, `test/cli/commands/config.test.ts`, `test/manifest/manifest.test.ts`,
+  `test/hooks/personOnly.test.ts` (the setting's acts; "the deploying-branch matcher's copy", one table read by both
+  copies), `test/hooks/personOnlyGuard.test.ts`.
+- **Source:** `src/config/autonomy.ts`, `src/types/manifest.ts`, `src/manifest/manifest.ts`, `src/cli/commands/config.ts`,
+  `src/hooks/scripts.ts`.
+
+### REQ-FLOW-138 — Loosening the autonomy setting needs the person
+
+Added 2026-10-25 (plan 022 file 1, units `a3b-loosen-gate` and `a4-guard-ask-list`, with their fix rounds; decision
+D18).
+
+The gate runs where a guard copy is written: the two write loops, `applySync` and `applyInit`, hand every planned guard
+copy whose marker or baked constant differs from the copy on disk, or whose bytes the ledger does not vouch for, to a
+gate before they write anything, a dry run included, and a caller that passes none gets the strict one, so `sync`,
+`init`, `workspace sync` and plan 022 file 2's `upgrade` all reach it and leaving it out never loosens
+(`gateGuardCopies` and `strictGuardGate`, `src/cli/engine/autonomyGate.ts:430-488`; `applySync`,
+`src/cli/commands/sync/engine.ts`). The baseline is the strictest of: the guard copies the write plans, on disk (a copy
+carrying this release's guard text and no marker reads `ask`, only a 1.16.0 copy reads as the upgrade default, and any
+other text reads as the strictest setting); the recognised copies at every other client's known guard path, which can
+only tighten; with no planned copy on disk, the copies committed at `HEAD`; the `autonomy` committed at `HEAD`; and the
+manifest on disk before the write. With no guard copy on disk or at `HEAD` while `HEAD` holds a manifest that records
+one, it reads `ask` (`readBaseline` and `baselineLegs`, `:281-372`). A looser setting without `--loosen` exits 1 with
+`AUTONOMY_LOOSENED`, its `why` naming each stricter leg, and writes nothing; tightening runs with no flag
+(`assertNotLoosened`, `:395-428`). The guard asks for the person's `--loosen` on Claude Code's main thread and refuses
+it for a sub-agent, a client that cannot ask and an unattended run: `--loosen` on any command passing its package test
+(`stamity`, `st`, the CLI file under `node` or `tsx`, `npx` or `npm exec` of the package, the engine's bins baked from
+its `package.json`) or whose program it cannot settle, an argument it cannot read on such a command, and a full `clean`
+or `init --force` while the baked setting is stricter than the default (`autonomy-loosen`, `src/hooks/personOnly.ts:178-182`;
+`PersonOnlyContext.stricterThanDefault` and `packageWords`, `:238-247`).
+
+- **As built, where the delta differed:**
+  - `add` writes no guard copy (pack files only, then it names `sync`, which is gated), so it passes no gate; the delta
+    named it among the gated commands.
+  - A setup from before the guard (`build/9`): with no guard copy on disk or at `HEAD`, a manifest at `HEAD` that
+    records no guard copy among the files it owns means the setup never had one, so the baseline is the upgrade
+    default and the first sync after an upgrade from a release before the person-only guard needs no flag; one that
+    records a missing copy still reads `ask` (`src/cli/engine/autonomyGate.ts:327-340`).
+  - Inside a checkout only an unborn `HEAD` or an empty listing means "nothing at `HEAD`"; any other git failure reads
+    as the strictest setting (`review/57`). The ledger in the manifest on disk is never taken as proof that a copy is
+    the engine's (`review/88`). The gate's git reads ignore replace refs (`gitReadEnv` and `runGit`, `:190-227`;
+    `build/14`, `review/116`).
+  - Under `--loosen` each guard copy it loosens is named on stderr with what it let through (`looserParts`,
+    `:374-393`; `review/67`). `AUTONOMY_LOOSENED` joins the error codes and the CLI reference's error table.
+- **Residuals** (`SECURITY.md`): a hand edit of a guard copy, the tamper notice's warning; a commit or a checkout that
+  moves `HEAD`; a repository that never commits its guard copies pays one `--loosen` on a fresh clone, a switch of every
+  selected client or a hooks layout move, by design (decision D18; a troubleshooting entry).
+- **Proof:** `test/cli/engine/autonomyGate.test.ts`, `test/cli/commands/sync.test.ts`, `test/cli/commands/init.test.ts`,
+  `test/cli/commands/workspace.test.ts`, `test/hooks/personOnly.test.ts` ("loosening the autonomy setting (a4,
+  REQ-FLOW-138)").
+- **Source:** `src/cli/engine/autonomyGate.ts`, `src/cli/commands/sync/engine.ts`, `src/cli/commands/init/apply.ts`,
+  `src/hooks/personOnly.ts`.
+
+### REQ-FLOW-139 — `check` names a deploying workflow
+
+Added 2026-10-25 (plan 022 file 1, unit `a3-autonomy-config` and its fix rounds, with the close round's `review/29`,
+`review/30` and `review/178`).
+
+Given a workflow under `.github/workflows/` that runs on a push to a branch `autonomy.deployingBranches` does not cover
+and has a job naming an `environment`, itself or through a local reusable workflow it calls at most three calls deep,
+When `check` runs, Then the `autonomy-deploying` row warns, naming the workflow, the job and the branch, and gives the
+fix: `config set autonomy.deployingBranches <list>`, then `sync` (`checkAutonomyDeploying`,
+`src/cli/commands/check.ts:2234`). It passes with no readable manifest, with no workflows folder, and when every branch
+it read is covered, claiming only what it read.
+
+- **As built, where the delta differed:**
+  - The row warns in both modes, for every push-triggered deploying branch the list does not cover (`review/17`, a
+    declared default); the default branch alone counts as covered in mode `ask`, which asks before a push or a merge
+    there (`:2323-2330`). The delta warned only for the default branch, and only in mode `autonomous`.
+  - A push trigger with no `branches` filter, or a `branches-ignore` one, runs for every branch it does not exclude, so
+    only a `**` entry covers it, and its warning names that entry and a `branches:` filter as the two remedies
+    (`:2319-2322`).
+  - A `schedule` trigger reads as a push to the default branch, since a scheduled run deploys that branch's latest
+    commit, which the land verb may have merged unasked; in mode `ask` it passes (`:2331-2337`; `review/178`, a declared
+    default of the close round).
+  - It warns `not evaluated` on a file it cannot read or parse (a link is not followed), on a branch filter it cannot
+    read (`!`, `?`, `+`, `[`, an entry the deploying list would refuse, a non-string entry such as a YAML number), on a
+    deploy reached through `workflow_run`, `pull_request` or `pull_request_target`, on a trigger outside the ones it
+    reads (`create`, `merge_group`), on a call to another repository's workflow and on a local call it cannot follow; a
+    `workflow_call` is read through its callers and a `workflow_dispatch` is the guard's `workflow-dispatch` act
+    (`KNOWN_TRIGGERS` and `otherTriggers`, `:2009-2025`; `review/30`). An environment name the YAML reader made a
+    number counts as a name (`review/29`).
+  - The default branch is `refs/remotes/origin/HEAD`'s, else `main`, which the row then says it assumed; every name read
+    from a workflow is sanitized before it prints.
+- **Proof:** `test/cli/commands/check.test.ts` (the row's cases), `test/cli/checkExpectations.test.ts`.
+- **Source:** `src/cli/commands/check.ts` (`checkAutonomyDeploying`).
+
+### REQ-FLOW-140 — Status writes are refused; admin merges, deploying pushes and deploying dispatches ask
+
+Added 2026-10-25 (plan 022 file 1, unit `a4-guard-ask-list` and its fix rounds; decisions D4, D5).
+
+Given any session, When a line writes a commit status or a check run (a REST `statuses/<sha>`, `check-runs` or
+`check-runs/<id>` write, GraphQL `createCheckRun` or `updateCheckRun`), Then the guard refuses it as `status-write` in
+every mode, its reason saying it is CI's to write, never an agent's (`PERSON_ONLY_RULES`,
+`src/hooks/personOnly.ts:162-166`; `refuseSentence`, `src/hooks/scripts.ts`). When a line merges with `--admin`
+(`admin-merge`), pushes or writes by REST or GraphQL onto a branch in `autonomy.deployingBranches` (`push-deploying`),
+or dispatches a workflow (`gh workflow run`, a REST `dispatches` call; `workflow-dispatch`) while
+`autonomy.deployingActs` names it, Then it asks attended and is refused unattended; an unnamed dispatch runs
+(`:167-177`). A flagless `gh repo edit`, which asks its own questions on the terminal, visibility among them, is refused
+everywhere as `repo-irreversible` (`build/8`). A push refspec the line cannot show (a substitution, a variable, a
+PowerShell group) reads as `push-default`, and as `push-deploying` too where deploying branches are named (`build/46`,
+`review/69`).
+
+- **As built:** reading a status or a check run passes; `--admin=false` is a plain merge; a merge with `--admin` and a
+  branch deletion is refused as the deletion. A deploying branch matches case-insensitively, under `refs/heads/` too,
+  through the guard's byte-identical copy of `matchesDeployingBranch`, held equal by a test over one shared table
+  (`review/20`); with the default branch listed too, the deploying push is named first. Claude Code's settings carry no
+  row for these rules: a status write is a REST or GraphQL form, `--admin` sits mid-line, a deploying branch is a name,
+  and a dispatch asks only where the repository names it, which a row cannot read.
+- **Proof:** `test/hooks/personOnly.test.ts` ("a commit status or check run written", "an admin merge", "a push or
+  write onto a deploying branch", "the deploying-branch matcher's copy", and the `CLASSES` rows),
+  `test/hooks/personOnlyGuard.test.ts`.
+- **Source:** `src/hooks/personOnly.ts`.
+
+### REQ-FLOW-141 — A heredoc written to a file is data
+
+Added 2026-10-25 (plan 022 file 1, unit `a5-guard-heredoc-data` and its fix rounds; decision D12).
+
+Given a POSIX reading of a line with one here-document (`<<` or `<<-`, never `<<<`, never a PowerShell call), Then
+both verdicts skip its body and terminator only when all of these hold: its command is the line's first; nothing
+earlier on the line defines a function or alias or assigns a variable; the program word is exactly `cat` or `tee`;
+`cat`'s stdout goes by `>` or `>>` to a plain path (not `/dev/*` but `/dev/null`, not under `.git/`, not a process
+substitution); `tee`'s operands are plain paths, none `-`, `/dev/fd/*` or a process substitution; nothing pipes onward;
+the delimiter matches `[A-Za-z_][A-Za-z0-9_]*`, quoted by one pair of quotes or bare, and a bare one's body holds no
+`$(` or backtick; the terminator line equals it byte for byte (after leading tabs for `<<-`) and no line holds a
+carriage return; no later word names a target file. Every other form keeps today's reading (`splitLine`, both
+`<shell-reading>` copies in `src/hooks/personOnly.ts`, held equal by test).
+
+- **As built, beyond the delta** (`review/76`, `review/118`): four more kinds of receiver are data sinks, each under
+  every clause above that applies: exactly `cat` with no redirection inside a command substitution that is a quoted
+  argument word, never the program word, of the outer command (a commit message read from a heredoc); the engine's own
+  CLI, as the guard's package test identifies it, reading the body on stdin (`learn capture`); exactly `git commit`
+  reading its message from stdin (`-F -`, `--file -`, `--file=-`); and exactly `gh pr create`, `gh pr edit` or
+  `gh pr comment` reading its body from stdin (`--body-file -`, `-F -`). A body read as data is still read for a
+  person's mention (REQ-FLOW-134).
+- **As built, beside it** (`build/12`, `review/115`, `review/117`): a double-quoted substitution's closing scan skips a
+  quoted heredoc body, and a scan that never closes reads the rest of the line as filled in, so an unbalanced
+  parenthesis cannot hide a later act; a command line longer than 65,536 characters is refused in every mode before
+  any reading (`line-too-long`, `PERSON_ONLY_RULES`, `src/hooks/personOnly.ts:188-192`), its sentence telling the
+  person to run it themselves. The plan's "asks attended" for that cap became a refusal, since an ask would put a
+  padded refuse-class act one click away.
+- **Residuals** (`SECURITY.md`): a heredoc body read as data is not read for acts, and a file written that way and run
+  later, by another call or by a line that does not name it, is not read either.
+- **Proof:** `test/hooks/personOnly.test.ts` (the skip and keep cases, and the test holding the two copies equal),
+  `test/hooks/personOnlyGuard.test.ts`, `test/hooks/scriptBudget.test.ts`.
+- **Source:** `src/hooks/personOnly.ts` (`splitLine`).
+
+### REQ-FLOW-142 — The portable hook entries name their script in plain text
+
+Added 2026-10-25 (plan 022 file 1, unit `a15-portable-hook-path` and its fix round; inbox row `review/60`).
+
+Given a Codex, Cursor or Copilot hook entry the engine writes through the walk-up starter, other than Cursor's own
+guard entries, Then its command ends with the row's script path as a plain word after the encoded row, whenever that
+path passes `STARTER_SAFE_SCRIPT`; Cursor's guard entries, which take their script in `opts.script`, carry the encoded
+row alone (`portableHookCommand`, `src/hooks/portableRunner.ts:228-237`). So invariant 5's no-hook path reads
+`stamity-session-start.mjs` without decoding anything. The runner refuses a row whose plain word is not the encoded
+row's script (`argv[1]`), and any argument after that word, at the row's own failure exit (`main`, `:338-344`;
+`review/47`).
+
+- **As built, beyond the delta:** the engine's entry recognition reads the plain word: a command whose last word names
+  the encoded row's own script is the engine's rendering, and one naming another script is not (`namesItsOwnScript`,
+  `starterBody` and `encodedRow`, `src/manifest/hookDocuments.ts`); an entry with no word still reads as the engine's.
+  A script outside the plain alphabet gets no word and keeps its
+  earlier bytes. Codex asks for hook trust again, since `.codex/hooks.json`'s hash moves, as every pinned release
+  already makes it do (REQ-FLOW-002).
+- **Proof:** `test/hooks/portableRunner.test.ts`, `test/manifest/hookDocuments.test.ts`,
+  `test/merge/hookFilesOwnership.test.ts`, `test/adapters/codex.test.ts`, `test/adapters/copilot.test.ts`,
+  `test/adapters/cursor.test.ts`.
+- **Source:** `src/hooks/portableRunner.ts`, `src/manifest/hookDocuments.ts`.
+
+### REQ-FLOW-143 — Every `/st-work` run closes with the summary list
+
+Added 2026-10-25 (plan 022 file 1, unit `a8-unattended-and-close` and its fix rounds; decision D8).
+
+Given any `/st-work` run, attended or unattended, When it closes, Then it writes `.stamity/runs/<id>/morning.md` in
+the REQ-FLOW-094 shape (`content/commands/st-work.md:309`; `content/skills/st-unattended/SKILL.md:109-124`). Each act
+run without asking is a `## Decisions` row, kind `decision`, default `1`: a push or a ready mark `1 keep · 2 undo`, a
+ready mark made before a refused land included, a merge `run land` made `1 keep · 2 revert (a revert pull request)`
+(`st-work.md:309`; `SKILL.md:121`). `## Person's calls held` holds the ask-list acts and every `run land` reason,
+`asks` and `refused` alike, as `merge waits on: <reasons>`, a call that returns no outcome as `merge waits on: the land
+call returned nothing`, and the next walk retries `run land` (`SKILL.md:101-102`, `:126-132`, `:145`). The final
+message names the file and the pull request.
+
+- **As built:** an attended run writes the file with its file tools, and its pull request body is the one
+  `run checkpoint` wrote plus the land verb's one status line, the close rewriting none of it (decision D8;
+  `st-work.md:309`). `MORNING_SECTIONS` is unchanged, so no section is added (`src/runs/morning.ts`). The skill keeps
+  the term "morning list"; the guard's unattended sentence calls it "the run's summary list (`morning.md`)".
+- **Proof:** `test/corpus/commands/work.test.ts`, `test/corpus/skills/unattended.test.ts`; the cases
+  `unattended-land-evidence-holds` and `unattended-close-opens-draft-pr`.
+- **Source:** `content/commands/st-work.md`, `content/skills/st-unattended/SKILL.md`.
+
+### REQ-FLOW-144 — The flows land the run's own pull request only through the land verb
+
+Added 2026-10-25 (plan 022 file 1, units `a8-unattended-and-close` and `a17-eval-batch`, with the whole-branch review's
+fix round).
+
+Given an unattended run whose `run end` exited 0 and whose morning list holds no blocked or refused item, or an attended
+close whose `run checkpoint --pr` opened or updated its pull request (its JSON's `pr` not null), Then the flow runs
+`stamity run land --run <id> --ready --wait 8 --json` alone on its line, under a ten-minute shell limit where the client
+sets one (`content/skills/st-unattended/SKILL.md:100`; `content/commands/st-work.md:306`). Exit 0 leaves the verb's
+record line; the `asks` or `refused` exit, or a call that returns nothing, turns into `held` rows the next walk retries.
+With no linked platform there is no land step. A kickoff, an item text or a contract field never counts as evidence
+(`SKILL.md:71-72`). A raw merge, a raw ready mark and a raw push to the default branch are never the flow's
+(`SKILL.md:107`, `:128-130`).
+
+- **As built, where the delta differed:**
+  - The unattended land step waits too, `--wait 8` (`review/105`); the delta named the wait for the attended close
+    alone.
+  - A run whose morning list holds a blocked or refused item does not land: where `Status:` reads
+    `(blocked: <reason>)` or `## Refused` carries a row, no land runs, the pull request is the hand-off and the person
+    decides (`SKILL.md:100`; `a17`'s M-2, a declared default taken after the plan). An attended close keeps landing on
+    the evidence with a blocked unit, the person being at the close (a declared default, `review/169`). No land runs
+    after a `run end` that exits 1 or a `--refused` end (`SKILL.md:102`).
+  - **An `asks` hold is the person's** (`review/103`–`review/112`): attended, the close and the walk put one numbered
+    question naming the pull request, every reason in `asks.reasons` and the head commit `pr.head`,
+    `1 merge it now · 2 leave it held`, `Default if no response: leave it held`; only on 1 does the flow run
+    `stamity run land --run <id> --ready --approved <sha> --json` alone on its line, `<sha>` that JSON's `pr.head` and
+    never another value, where the guard asks again; unattended `--approved` is never passed. A `refused` hold is
+    retried with the land step's own line, and a moved head goes through a fresh land call, never with the old sha
+    (`st-work.md:308`; `SKILL.md:145`).
+  - On a client whose guard refuses the `--approved` line instead of asking (Codex and Cursor), the close does not run
+    it on a yes: it hands the person that exact line and keeps the held row, as the walk does (`st-work.md:308`;
+    the whole-branch review's `review/172`). Where another run's checkpoint replaced the pull-request record in this
+    checkout, this run's `run checkpoint --pr` runs again first.
+  - A ready mark the verb made before a refusal gets its `## Decisions` row, the draft state read by the land JSON's
+    own pull-request link (`SKILL.md:102`; `review/104`, `review/109`).
+- **Proof:** `test/corpus/skills/unattended.test.ts`, `test/corpus/commands/work.test.ts`, `test/docsPages.test.ts`
+  (`docs/cloud.md`'s "After `run end`, when the morning list holds no blocked or refused item"); the cases
+  `unattended-land-evidence-holds`, `unattended-land-injected-merge-refused` and `unattended-blocked-run-still-hands-off`.
+- **Source:** `content/skills/st-unattended/SKILL.md`, `content/commands/st-work.md`.
+
+### REQ-FLOW-145 — The security pages state the autonomy model
+
+Added 2026-10-25 (plan 022 file 1, unit `a16-security-pages` and its three fix rounds).
+
+Given `SECURITY.md`, `docs/security-mapping.md`, `docs/cloud.md` and `docs/troubleshooting.md`, Then each states the same
+four things: what still asks, the ask list; the evidence, required check runs green on the exact head commit with
+commit statuses not counted, no unresolved review thread, no open Critical or Warning ledger row, branch protection
+deciding any required human review, and a diff to CI or the guard's own files still asking; the manifest setting that
+tightens back to the old behaviour, `autonomy.mode`; and how to name deploying branches and acts,
+`autonomy.deployingBranches` and `autonomy.deployingActs`. Each says the guard still asks for or refuses a raw merge and
+a raw push to the default branch (`test/docsPages.test.ts`, "the security pages state the autonomy model
+(REQ-FLOW-145)", its first case over the four pages).
+
+- **As built, beyond the delta:** `SECURITY.md` carries each unit's sentence and the residual it names, pinned claim by
+  claim: the setting and its marker line, the clients that refuse the main-thread acts, `status-write`, `land-approved`,
+  `line-too-long`, the data sinks, the outside-party rule and its residuals, the hooks-off layer, `onFailure`, a Codex
+  verdict role's read-only, the configuration window, the held patch's prefixes, the loosen gate, and the land verb's
+  row, network sentence and replace refs; its land row names every kind of tree `LANDS_ON_EVIDENCE` holds, which the
+  test reads from the source. `docs/troubleshooting.md` gains entries for `run land` exiting 1, a `gh` pinned only in
+  the repository, `AUTONOMY_LOOSENED`, a settings row refusing a chained push, tag or merge (put it alone on its line,
+  decision D15), and own-repository writes through an SSH host alias, each reason quoted as the verb words it; and
+  `docs/working-with-stamity.md` says the close lands through `run land` and asks nothing about the commit. The pages
+  re-attest on the commit form at the integration head `89e088f9`, dated 2026-10-25.
+- **Proof:** `test/docsPages.test.ts` (the describe above, its five cases).
+- **Source:** `SECURITY.md`, `docs/security-mapping.md`, `docs/cloud.md`, `docs/troubleshooting.md`,
+  `docs/working-with-stamity.md`.
+
+### REQ-FLOW-150 — Codex verdict roles state where their read-only boundary actually comes from
+
+Added 2026-10-25 (plan 022 file 1, unit `a10-codex-readonly-roles`, with its measurement on the installed Codex;
+decision D10).
+
+Given Codex selected, When an agent TOML, the `per-agent tool allowlist` cap or the parity row is emitted, Then no text
+says a role's `sandbox_mode` binds a spawned role: each says a spawned role runs in the parent turn's sandbox, which its
+file's `sandbox_mode` does not override (subagents page, read 2026-10-23), so a verdict role's read-only is prompt-level,
+and it names the measured codex-cli version and result (`CODEX_FACTS`, `src/adapters/codex.ts:366-373`;
+`buildAgentToml`, `:1279-1282`, `:1293-1296`; `ADAPTER_ALLOWLIST_COVERAGE`, `src/tools/translator.ts:351-357`).
+`sandbox_mode = "read-only"` is still emitted for the four verdict roles, a documented key and the role's intent. A
+per-agent `features.*` key is emitted only where a measurement shows it blocks both shell writes and patch writes while
+the role can still read.
+
+- **As built:** measured on codex-cli 0.155.1 (2026-10-23), the installed one, the page read that day describing
+  0.164.0: in `codex exec`, a role whose file sets `sandbox_mode = "read-only"`, spawned under a `workspace-write`
+  parent, created files through both its shell and its patch tool, and a per-agent `[features] shell_tool = false` took
+  its shell away but not its patch writes and left it no way to read a file, so no `features.*` key is emitted
+  (`src/adapters/codex.ts:369-372`; the run record of `2026-10-23_autonomy-distribution-01`). The cap asks for a
+  re-measure on each newer Codex; the inbox follow-up's trigger is the installed Codex moving past 0.155.1.
+- **Proof:** `test/adapters/codex.test.ts`, `test/emit/capabilityMatrix.test.ts`.
+- **Source:** `src/adapters/codex.ts`, `src/tools/translator.ts`.
 
 ## Acceptance criteria
 
@@ -5515,6 +6228,12 @@ above.
 - GIVEN a close with person rows, a spec delta, uncommitted changes and leftovers THEN the walk asks about all four, and
   the proof block prints after its last answer with nothing after it (added 2026-10-10, unit `q10a-work-close`;
   REQ-FLOW-074; amended 2026-10-15, plan 020 file 3; it read "exactly one question is asked, naming all four").
+- GIVEN `/st-work`'s close walk THEN it carries no commit part, its default reads `Default if no response: those rows
+  not signed and the delta unmerged`, a person's answer not to commit is honoured, and after the last round it runs
+  `run start`, `run checkpoint --pr`, then the land step when that opened or updated a pull request (added 2026-10-25,
+  plan 022 file 1; it supersedes the three criteria above that name the commit part, the "leave uncommitted" default
+  and "no later turn of the run asks about committing", which stand as 1.16.0's record). *(corpus:
+  `test/corpus/commands/work.test.ts`)*
 
 **REQ-FLOW-020**
 
@@ -5654,6 +6373,11 @@ above.
   THEN both stay byte for byte and in place, a second `sync` moves no byte, and only missing engine rows are appended;
   WHEN `clean -y` runs THEN no ask row is removed and a leftover deny row equal to an engine ask row is named (added
   2026-10-18; `test/merge/settingsOwnerEntries.test.ts`, `test/manifest/claudeSettings.test.ts`).
+- GIVEN a settings file holding 1.16.0's ready-mark and local-tag ask rows, recorded by the ledger, WHEN `sync -y` runs
+  under mode `autonomous` THEN those rows leave and the notice names each; GIVEN an equal row the record does not list
+  THEN it stays and is named; GIVEN an owner's deny row equal to an engine ask row THEN it stays and is not named as a
+  row the engine dropped; GIVEN mode `ask` after `autonomous` THEN the rows return at the next `sync` (added 2026-10-25;
+  `test/manifest/claudeSettings.test.ts`, `test/merge/settingsOwnerEntries.test.ts`).
 
 **REQ-FLOW-037**
 
@@ -6138,6 +6862,9 @@ above.
   hit. *(test: `test/corpus/skills/verifyRestTools.test.ts`)*
 - GIVEN a cache wrapper forwarding five methods THEN the reviewer files a pass-through finding, and GIVEN a 902-line
   one-export file THEN no size finding. `judgment: reviewer` *(eval: `reviewer-shallow-wrapper-pass-through`)*
+- GIVEN the reviewer's Maintainability row THEN it holds "a finding even where the plan asks for the layer: its
+  consequence is the interface kept twice" on its one line (added 2026-10-25). *(corpus:
+  `test/corpus/agents/spine.test.ts`)*
 
 **REQ-FLOW-083** (added 2026-10-15)
 
@@ -6363,6 +7090,16 @@ above.
   `test/change/personOnlyPaths.test.ts`, `test/cli/commands/runCheckpoint.test.ts`)*
 - GIVEN the QA walk's scratch session after `sync` THEN `git tag v0` and `git push origin HEAD:main` are refused by the
   shell guard. `judgment: reviewer` *(QA, or its prover through `scripts/qa/hook-runs.mjs`)*
+- GIVEN the default setting on the main thread THEN `gh pr ready <n>` and a local tag run, naming their rules in
+  `runs`, and with no autonomy context they ask; GIVEN `deployingActs` naming `pr-ready` THEN it asks; GIVEN an act that
+  runs beside a tag push or a force push on one line THEN the line asks or is refused by the other act; GIVEN a literal
+  `--dry-run` publish THEN it runs, and every other spelling asks (added 2026-10-25). *(test:
+  `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`)*
+- GIVEN `diff.noprefix` or `diff.mnemonicPrefix` set WHEN an unattended checkpoint holds a new workflow file THEN the
+  pushed patch's sections read `a/` and `b/`; GIVEN a carried section with no prefix THEN the call refuses naming it;
+  GIVEN a CRLF copy of a link section THEN it carries as a link; GIVEN `--drop-held <path>` after the run undid that
+  path THEN its section leaves and `withdrawn` names it (added 2026-10-25). *(test:
+  `test/cli/commands/runCheckpoint.test.ts`)*
 
 **REQ-FLOW-103** (added 2026-10-16)
 
@@ -6378,6 +7115,9 @@ above.
   line, the verbs' git environment with `SSH_ASKPASS`, the ask and deny lists and the residuals of the 2026-10-18
   amendment (added 2026-10-18; *test: `test/docsPages.test.ts`, "states file 2's ask rule, each client's answer, the run
   verb's line and the residuals REQ-FLOW-104 names" and its mapping twin*).
+- GIVEN `SECURITY.md` THEN its configuration window names the run verbs' compare and the gaps that stay open, it no
+  longer lists "The attended guard's accepted gaps", and its unattended rule reads "in the forms the guard reads" with
+  `: ${NAME=…}` beside `: ${NAME:=…}` (added 2026-10-25; *test: `test/docsPages.test.ts`*).
 
 **REQ-FLOW-105** (added 2026-10-18)
 
@@ -6491,6 +7231,9 @@ above.
 - GIVEN `mcp__github__merge_pull_request` THEN attended an ask on Claude Code, unattended a refusal; GIVEN
   `mcp__github__delete_repository` THEN a refusal; GIVEN an unattended `gh ext exec x` THEN a refusal (added 2026-10-18;
   *test: `test/hooks/personOnlyGuard.test.ts`, `test/hooks/personOnly.test.ts`*).
+- GIVEN an unattended run THEN `gh pr ready <n>` is refused with the unattended sentence naming the summary list, a local
+  lightweight tag is allowed on Claude Code, and `run land --approved <sha>` refuses before any GitHub call (added
+  2026-10-25; *test: `test/hooks/personOnlyGuard.test.ts`, `test/cli/commands/runLand.test.ts`*).
 
 **REQ-FLOW-121** (added 2026-10-18)
 
@@ -6498,6 +7241,10 @@ above.
   `> file` or the `node` form to a run verb THEN a deny naming the run verbs; GIVEN the four accepted invocations, a
   closing ` 2>&1` or a single-quoted title THEN allowed; GIVEN the same lines attended THEN as before. *(test:
   `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`, `test/hooks/personOnlyGuardDist.e2e.test.ts`)*
+- GIVEN `stamity run land --run <id> --ready --json` alone THEN allowed in both modes; GIVEN it after `&&`, after an
+  assignment or under a wrapper THEN refused in both; GIVEN a commit message naming the verb THEN allowed attended and
+  refused unattended; GIVEN a land line carrying `--approved` THEN it asks attended and is refused unattended and for a
+  sub-agent (added 2026-10-25). *(test: `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`)*
 
 **REQ-FLOW-122** (added 2026-10-18)
 
@@ -6511,6 +7258,11 @@ above.
 - GIVEN an attended `gh pr merge 1` THEN Claude Code's ask JSON with exit 0, and a deny on Copilot, Cursor and Codex;
   GIVEN `Mode: unattended`, a fault reading the mode, a sub-agent's identity or `permission_mode: "auto"` THEN a deny on
   all four. *(test: `test/hooks/personOnlyGuard.test.ts`)*
+- GIVEN Claude Code's rendered settings THEN each `PreToolUse` entry running either guard, the MCP one included, carries
+  `onFailure: "block"` and no other entry does; GIVEN `agent_type` with no `agent_id` on Claude Code THEN an ask; GIVEN
+  `permission_mode: "auto"` THEN still a refusal; GIVEN a ready mark, a local tag or an unnamed dispatch on Codex or
+  Cursor THEN a refusal in every mode naming the missing identity, while `stamity run land` alone on its line runs on all
+  four (added 2026-10-25). *(test: `test/adapters/claude.test.ts`, `test/hooks/personOnlyGuard.test.ts`)*
 
 **REQ-FLOW-124** (added 2026-10-18)
 
@@ -6566,6 +7318,123 @@ above.
   invariants block; the three trims each hold one physical line with their pinned phrases; the ai-evals floor line is
   one physical line with its words; and the template is 95 lines, none over 117 characters. *(test:
   `test/content/charter.test.ts`)*
+
+**REQ-FLOW-131** (added 2026-10-25)
+
+- GIVEN a recorded pre-flight and an environment that adds one `GIT_CONFIG_*` pair WHEN an unattended checkpoint runs
+  THEN exit 1, nothing pushed, and `notDone` opens `config changed:` naming the key; GIVEN the same environment THEN it
+  pushes; GIVEN no record THEN unattended exit 1 `no pre-flight record`, attended it pushes; GIVEN a pre-commit hook
+  that writes a local config key THEN the second read refuses before the push; GIVEN the record file THEN a byte search
+  finds no seeded value. *(test: `test/cli/commands/runCheckpoint.test.ts`, `test/runs/gitSurface.test.ts`)*
+- GIVEN a refusing pre-flight THEN it writes a `refused` record that no checkpoint takes, and `run end --refused` after
+  it opens the `Refused:` draft carrying the run's records alone. *(test: `test/cloud/ending.test.ts`,
+  `test/cli/commands/runEnd.test.ts`)*
+
+**REQ-FLOW-132** (added 2026-10-25)
+
+- GIVEN a mocked `gh` answering every required check green, `clean`, no thread and a clean ledger at the head THEN
+  `run land` merges with the head sha, exits 0 `landed`, and the record gains one `land:` line; GIVEN a required context
+  only a commit status carries THEN it waits as a check with no run yet and, unwaited, refuses naming that commit
+  statuses do not count; GIVEN one unresolved thread, an open Warning at the head, a Warning only in the work tree
+  ("checkpoint first"), `mergeable_state: "blocked"` or a 409 from the merge THEN `refused`, nothing merged; GIVEN a pull
+  request already merged at the head THEN `already-landed`, exit 0, no second line. *(test:
+  `test/cli/commands/runLand.test.ts`, `test/runs/landEvidence.test.ts`)*
+- GIVEN an `asks` outcome THEN its JSON lists every reason and the head; GIVEN `--approved` with that head THEN it lands
+  over the ask; GIVEN `--approved` with another sha, or in an unattended run, THEN `refused`. *(test:
+  `test/cli/commands/runLand.test.ts`)*
+
+**REQ-FLOW-133** (added 2026-10-25)
+
+- GIVEN a diff touching `.github/workflows/ci.yml`, a held patch, a renamed workflow's old path, a declared hook script
+  or `.stamity/change-classes.json`, or `autonomy.mode: "ask"`, THEN `asks` with the evidence printed and no merge call;
+  GIVEN a diff touching only `AGENTS.md` or a client's skill tree THEN no ask. *(test: `test/runs/landEvidence.test.ts`,
+  `test/cli/commands/runLand.test.ts`)*
+
+**REQ-FLOW-134** (added 2026-10-25)
+
+- GIVEN origin `acme/app` THEN a comment on its own pull request runs, the same with `-R other/repo` asks, an API POST to
+  another repository's path asks and a GET there runs, an inline body naming a person asks while `@codex review`, an
+  email address and a mention inside backticks run, and unattended the outside form is refused; GIVEN two remotes and
+  no `gh-resolved` marker THEN a target-less comment asks. *(test: `test/hooks/personOnlyGuard.test.ts`,
+  `test/hooks/personOnly.test.ts`)*
+
+**REQ-FLOW-137** (added 2026-10-25)
+
+- GIVEN no `autonomy` key THEN the resolved setting is mode `autonomous`, `runs` `pr-ready` and `tag`, nothing named;
+  GIVEN `config set autonomy.deployingActs pr-ready,push-default` THEN both are written, and `force-push` exits with
+  `VALIDATION_ERROR` naming the five; GIVEN a block the schema refuses THEN mode `ask` with every act named; GIVEN
+  `release/*` THEN `release/1.17` matches and `release/1.17/hotfix` does not, in both copies of the matcher. *(test:
+  `test/config/autonomy.test.ts`, `test/cli/commands/config.test.ts`, `test/hooks/personOnly.test.ts`)*
+
+**REQ-FLOW-138** (added 2026-10-25)
+
+- GIVEN a baked mode `ask` and a manifest reading `autonomous` WHEN `sync` runs THEN exit 1 `AUTONOMY_LOOSENED` and every
+  emitted byte unchanged, and with `--loosen` it writes; GIVEN a tightening THEN no flag; GIVEN `workflow-dispatch`
+  removed from `deployingActs`, a full `clean` then `init -y` with `HEAD` holding mode `ask`, a committed looser manifest
+  with the guard copies deleted, or a loosened member under `workspace sync` THEN exit 1; GIVEN a guard copy of this
+  version with its marker removed THEN it reads `ask`; GIVEN a setup from before the guard THEN the upgrade's first
+  `sync` needs no flag. *(test: `test/cli/engine/autonomyGate.test.ts`, `test/cli/commands/sync.test.ts`,
+  `test/cli/commands/init.test.ts`, `test/cli/commands/workspace.test.ts`)*
+
+**REQ-FLOW-139** (added 2026-10-25)
+
+- GIVEN a workflow running a job with `environment: production` on a push to `main` in mode `autonomous` THEN the row
+  warns naming the workflow, the job and the branch; GIVEN `deployingBranches: ["main"]` THEN it passes; GIVEN no
+  workflows folder THEN it passes; GIVEN a scheduled deploy THEN it warns as a push to the default branch; GIVEN a
+  `create` or `merge_group` trigger on a deploy THEN `not evaluated`. *(test: `test/cli/commands/check.test.ts`)*
+
+**REQ-FLOW-140** (added 2026-10-25)
+
+- GIVEN a REST POST to `statuses/<sha>`, a `check-runs` write or a GraphQL `createCheckRun` THEN a refusal in every mode;
+  GIVEN `gh pr merge 3 --admin` THEN an ask naming `admin-merge`; GIVEN a push naming `production` with
+  `deployingBranches: ["production"]` THEN an ask naming `push-deploying`; GIVEN a dispatch THEN it runs unnamed and asks
+  named; GIVEN a flagless `gh repo edit` THEN a refusal; GIVEN a refspec in a PowerShell group THEN `push-default`.
+  *(test: `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`)*
+
+**REQ-FLOW-141** (added 2026-10-25)
+
+- GIVEN a quoted-delimiter heredoc appended to a record file by `cat` whose body reads as a force push THEN
+  `{deny:false}`; GIVEN that body fed to a shell, piped onward, under a bare delimiter holding a substitution, with no
+  terminator, or followed by a refused act on the line THEN refused; GIVEN a function, an alias or an assignment
+  earlier on the line, a `tee` process substitution or a carriage return THEN today's reading; GIVEN a line over 65,536
+  characters THEN a refusal in every mode. *(test: `test/hooks/personOnly.test.ts`,
+  `test/hooks/personOnlyGuard.test.ts`)*
+
+**REQ-FLOW-142** (added 2026-10-25)
+
+- GIVEN each client's session-start entry THEN it ends with `.stamity/generated/hooks/<tool>/stamity-session-start.mjs`
+  as a plain word; GIVEN the runner given a different plain word, or an argument after it, THEN the row's failure exit;
+  GIVEN a script outside `STARTER_SAFE_SCRIPT` THEN no word and the earlier bytes. *(test:
+  `test/hooks/portableRunner.test.ts`, `test/adapters/codex.test.ts`, `test/adapters/copilot.test.ts`,
+  `test/adapters/cursor.test.ts`)*
+
+**REQ-FLOW-143** (added 2026-10-25)
+
+- GIVEN `/st-work`'s close and the unattended skill THEN every run writes `morning.md`, each act run without asking is a
+  `## Decisions` row with its options and default `1`, and every `run land` reason is a `held` row. *(corpus:
+  `test/corpus/commands/work.test.ts`, `test/corpus/skills/unattended.test.ts`)*
+
+**REQ-FLOW-144** (added 2026-10-25)
+
+- GIVEN the unattended ending THEN `run end` comes before `run land --ready --wait 8 --json`, no land follows a blocked
+  or refused list, and `--approved` is never passed; GIVEN `/st-work`'s close THEN the land step follows a
+  `run checkpoint --pr` that opened or updated a pull request, and an `asks` hold is one numbered question before any
+  `--approved` line. *(corpus: `test/corpus/skills/unattended.test.ts`, `test/corpus/commands/work.test.ts`)*
+- GIVEN a run whose land step is given an `asks` exit for a required check with no run yet and an unresolved thread
+  THEN the reasons become `held` rows and no raw merge, raw ready mark or status write is made. *(eval: adversarial case
+  `unattended-land-injected-merge-refused`, a floor case; golden case `unattended-land-evidence-holds`)*
+
+**REQ-FLOW-145** (added 2026-10-25)
+
+- GIVEN each of the four pages THEN it names the land verb, "commit statuses do not count", the exact head, the threads,
+  the Critical or Warning rows, required human review, `autonomy.mode`, `autonomy.deployingBranches`,
+  `autonomy.deployingActs`, a raw merge and "raw push to the default branch". *(test: `test/docsPages.test.ts`)*
+
+**REQ-FLOW-150** (added 2026-10-25)
+
+- GIVEN a Codex reviewer's TOML THEN it holds no "sandbox_mode binds" and does hold "runs in the parent turn's
+  sandbox"; GIVEN the cap THEN it names codex-cli 0.155.1 with its date; GIVEN the four verdict roles THEN
+  `sandbox_mode = "read-only"` is still emitted. *(test: `test/adapters/codex.test.ts`)*
 
 ## References
 
@@ -6675,6 +7544,22 @@ above.
 - `test` (added 2026-10-22): `test/merge/claudeHookCopies.test.ts`, `test/content/charter.test.ts`,
   `test/content/invariantsVersion.test.ts`, and the suites each requirement names; eval cases `probe-plain-select` and
   `plain-never-drops-open-gap` in `evals/cases-v6/`.
+- `docs/plans/022-autonomy-distribution-01.md`, with `.stamity/runs/2026-10-23_autonomy-distribution-01/` (its record,
+  ledger and units' reports) — the spec delta and the cells' amendments the text dated 2026-10-25 merges (REQ-FLOW-131
+  to REQ-FLOW-134, REQ-FLOW-137 to REQ-FLOW-145 and REQ-FLOW-150; REQ-FLOW-019, REQ-FLOW-036, REQ-FLOW-082,
+  REQ-FLOW-102, REQ-FLOW-104, REQ-FLOW-120, REQ-FLOW-121 and REQ-FLOW-123 amended), added 2026-10-25; its REQ-PACK,
+  REQ-PROVE, REQ-LADDER, REQ-CTX and REQ-PLUGIN ids in the specs that own them.
+- `source` (added 2026-10-25): `src/runs/gitSurface.ts`, `src/runs/landEvidence.ts`, `src/runs/hookPaths.ts`,
+  `src/cli/commands/runLand.ts`, `src/cli/engine/autonomyGate.ts`, `src/config/autonomy.ts`, `src/cli/engine/ghRunner.ts`
+  (`ghMergePull`, `ghReviewThreads`, `ghMarkReady`, `withoutVersionChoice`), `src/hooks/personOnly.ts` (the new rules,
+  `claudeAskRows`, `CLAUDE_LAND_ASK_ROWS`, `RETIRED_CLAUDE_ROWS`), `src/hooks/scripts.ts` (the baked setting,
+  `GUARD_NO_MAIN_THREAD`, the git-configuration readers), `src/manifest/claudeSettings.ts` (`leavingRows`),
+  `src/cli/commands/check.ts` (`checkAutonomyDeploying`), `src/hooks/portableRunner.ts`, `src/adapters/codex.ts`,
+  `content/commands/st-work.md`, `content/skills/st-unattended/SKILL.md`, `content/agents/stamity-reviewer.md`.
+- `test` (added 2026-10-25): `test/runs/gitSurface.test.ts`, `test/runs/landEvidence.test.ts`,
+  `test/runs/hookPaths.test.ts`, `test/cli/commands/runLand.test.ts`, `test/cli/engine/autonomyGate.test.ts`,
+  `test/config/autonomy.test.ts`, and the suites each requirement names; eval cases
+  `unattended-land-evidence-holds` and `unattended-land-injected-merge-refused` in `evals/cases-v6/`.
 
 ## Risks
 
@@ -6729,6 +7614,13 @@ above.
   (`Makefile:all`, `Makefile:12:5`), and a suffix with no letter before it (`12:30`, `—:12`). The rule's limit,
   accepted: a prose location whose first word reads `<word>:<number>` (`step:2 of the plan`) names a path too, and
   `--area` no longer reaches its row.
+- The autonomy model of REQ-FLOW-131 to REQ-FLOW-145 lets an agent merge the run's own pull request on evidence a
+  single-account repository's run attests itself (REQ-FLOW-132's residuals). What bounds it: required check runs on
+  the exact head, statuses refused to agents (REQ-FLOW-140), the ask set over CI and the guard's own files
+  (REQ-FLOW-133), mode `ask` to tighten back, and the review loop and the whole-branch review as the evidence of
+  record. Unmeasured at this merge (the run record's close): a tokenless publish dry run against GitHub Packages
+  (REQ-PLUGIN-050 in `docs/specs/fork-layer.md`), mise's trust of a config at the Windows drive root, replace refs on
+  git 2.19 to 2.42, and Claude Code older than 2.1.295.
 
 ## Concerns
 

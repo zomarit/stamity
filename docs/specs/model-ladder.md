@@ -1,6 +1,6 @@
 ---
 id: model-ladder
-# A design document, authored from docs/plans/008-plugin-lifecycle-02.md on 2026-09-17, extended from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18 and 2026-10-20, and excluded from the site build.
+# A design document, authored from docs/plans/008-plugin-lifecycle-02.md on 2026-09-17, extended from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18 and 2026-10-20, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.16.0
 obsolete_when: every supported client publishes one effort scale the ladder can name without a per-client table and resumes, waits out and reports a sub-agent's capacity stop on its own, or a decision row cuts the surface
@@ -45,6 +45,12 @@ form, merged by its unit `v20-spec-merge`, with the clauses its units' and fixer
 silent. Every `path:line` in that text reads at the integration head `e64bc09f`; a module that run rewrote is cited by
 file and symbol. It reached `main` through pull request #113 and shipped with 1.16.0, which set `status` to
 `shipped-with-1.16.0`; plan 021's first file, `docs/plans/021-cloud-runs-01.md` (pull request #112), moved nothing here.
+
+The paragraph and criteria dated 2026-10-25 under REQ-LADDER-006 come from the spec delta of
+`docs/plans/022-autonomy-distribution-01.md` (plan 022 file 1, run `2026-10-23_autonomy-distribution-01`, unit
+`a9-model-defaults-refresh`). That run reached `main` as pull request #125 without this merge; pass `spec1` of run
+`2026-10-25_autonomy-distribution-02` made it afterwards, and every `path:line` in that text reads at `864d0111`,
+`main` after #125. A ledger id in that text (`review/31`, `cut/11`) is that run's own. It is not in a release yet.
 
 ## Intent
 
@@ -476,6 +482,33 @@ no longer says the list lands in the committed manifest, and the `sync` criterio
   committed manifest holds no `models.listed`, and a second `sync` moves no byte but the `updatedAt` stamp
   (`test/cli/commands/sync.test.ts`, "keeps what a selected client listed in the cache, and a second sync moves no
   byte"; amended 2026-10-18, the criterion above read `models.listed.cursor` as persisted).
+
+Amended 2026-10-25 (plan 022 file 1, unit `a9-model-defaults-refresh` and its fix round for `review/31`; read at
+`864d0111`). Given the shipped `MODEL_PRIORITY`, Then no Copilot or Codex candidate is on that client's
+`VENDOR_RETIREMENTS` list, a table of the vendors' dated retirement notices, each row its id, retirement day, notice URL
+and read date, a row whose date has passed staying as the record (`VENDOR_RETIREMENTS`, `src/roster/modelDefaults.ts`;
+Copilot's `gpt-5.4-mini` retired 2026-10-19 and `claude-opus-5` and `gpt-5.6-terra` retiring 2026-11-16, Codex's
+`gpt-5.5` retired 2026-10-14, every notice read 2026-10-23). Given a re-read, Then each client's capture and
+`MODEL_PRIORITY_CITATION` carry that client's own read date: Copilot's read 2026-10-23 from Copilot CLI 1.0.103's
+`copilot help config`, Cursor's and Codex's still 2026-10-14 (`MODEL_PRIORITY_CITATION`, `:112-125`;
+`test/fixtures/client-models/copilot-help-config-2026-10-23.txt`, the 2026-10-14 capture kept for the lister's
+parser case). The three dates no longer have to match. The resolver's order is unchanged. A CLI's help list is baked
+into its build and keeps a retired id, so the notices, not the capture, say an id is gone; an operator's pin is never
+refused by the table.
+
+- **As built:** Copilot's third candidates are now `claude-fable-5.1` (`advanced`), `claude-sonnet-5.5` (`standard`)
+  and `economy` reads `claude-haiku-5.5`, `claude-haiku-4.5`, `gpt-6-luna`: Haiku 5.5 leads because it costs less than
+  Haiku 4.5 at every listed tier (the models-and-pricing page, read 2026-10-23), and Haiku 4.5 comes second so an
+  account that lacks 5.5 keeps the pick it had on 1.16.0 (`MODEL_PRIORITY`, `src/roster/modelDefaults.ts:61-102`;
+  `review/31`, signed off). The plan had proposed Haiku 4.5 in the lead. The capture was read on Copilot CLI 1.0.103,
+  where the plan named 1.0.100. With no Copilot or Codex candidate carrying the effort token, the nearest-variant code
+  only Cursor candidates had reached is gone (`pickModel`, inbox row `cut/11`), and the effort level picks nothing.
+  Codex's rows are unchanged.
+- GIVEN every candidate of `MODEL_PRIORITY.copilot` and `.codex` THEN none is on that client's `VENDOR_RETIREMENTS`;
+  GIVEN the citations THEN Cursor's and Codex's read 2026-10-14 and Copilot's 2026-10-23, each capture's file name
+  carrying its client's date; GIVEN `pickModel("copilot", "economy", …)` with no list THEN `claude-haiku-5.5`, its
+  fallbacks `claude-haiku-4.5` and `gpt-6-luna` (`test/roster/modelDefaults.test.ts`, `test/adapters/copilot.test.ts`;
+  added 2026-10-25). The suite's case that held the three citation dates equal now reads each client's own.
 
 ### REQ-LADDER-007 — Each client carries the pick
 
