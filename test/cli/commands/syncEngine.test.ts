@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 // `link` is the hard-link primitive, aliased for the same reason the write-escape
 // suite aliases it: `link` reads as a symlink at a glance, and the shared-name
 // class is precisely the shape that is NOT one.
-import { link as hardLink, lstat, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { link as hardLink, lstat, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -17,7 +17,8 @@ import {
   type SyncPlan,
 } from "../../../src/cli/commands/sync/engine.ts";
 import { CODEX_HOOKS_FILE } from "../../../src/adapters/codex.ts";
-import type { ReclaimActionEntry, ReclaimReport } from "../../../src/merge/reclaim.ts";
+import { sweepReclaimCandidates, type ReclaimActionEntry, type ReclaimReport } from "../../../src/merge/reclaim.ts";
+import { trustedInfraPaths } from "../../../src/manifest/ledger.ts";
 import { HOOKS_GENERATED_DIR } from "../../../src/types/markers.ts";
 import { syncCommand } from "../../../src/cli/commands/sync.ts";
 import {
@@ -26,7 +27,7 @@ import {
   syncJsonPayload,
 } from "../../../src/cli/commands/sync/report.ts";
 import { getEmissionPlanner } from "../../../src/cli/engine/emission.ts";
-import { fullCorpusSelection, type CoOwnedDocumentLane } from "../../../src/cli/engine/emissionWrite.ts";
+import { coOwnedReclaimReducers, fullCorpusSelection, type CoOwnedDocumentLane } from "../../../src/cli/engine/emissionWrite.ts";
 import { hasNpmChannel, packageName, registryOption } from "../../../src/cli/kit/packageName.ts";
 import { buildContentIndex } from "../../../src/content/catalog.ts";
 import { makePalette } from "../../../src/cli/kit/terminal.ts";
@@ -340,7 +341,8 @@ describe("corpus-backed run", () => {
     const onDisk = await readManifest(root);
     expect(onDisk?.updatedAt).toBe(T1.toISOString());
     expect(onDisk?.generatedBy).toBe(ENGINE_VERSION);
-    expect(onDisk?.ledger.map((row) => row.path).toSorted()).toEqual(plannedPaths);
+    // TEST CHANGE, justified: REQ-FLOW-016 — the ledger also records the .gitignore lines this run appended.
+    expect(onDisk?.ledger.map((row) => row.path).toSorted()).toEqual([...plannedPaths, ".gitignore"].toSorted());
 
     const rendered = renderSyncReport(plan, report, plainPalette);
     expect(rendered).toContain(`synced: ${report.created} created`);
@@ -708,9 +710,13 @@ describe("only-when-stale", () => {
 
     const secondEntries = await planOutputEntries(root, outputs, ENGINE_VERSION);
     expect(secondEntries[0]?.action).toBe("unchanged");
+    // TEST CHANGE, justified: REQ-FLOW-016 — the second run reads the first run's manifest, as every
+    // `sync` does: the .gitignore lines the first run appended are its own only by that ledger's record,
+    // and a run handed the pre-first-run ledger would read them as the owner's lines.
+    const { manifest: afterFirst } = await planSync(root, ENGINE_VERSION);
     const second = await applySync(
       root,
-      { ...base, outputs, entries: secondEntries, collisions: [] },
+      { ...base, manifest: afterFirst, outputs, entries: secondEntries, collisions: [] },
       { engineVersion: ENGINE_VERSION, force: false, dryRun: false, now: T2 },
     );
 
@@ -726,6 +732,8 @@ describe("only-when-stale", () => {
     expect(second.manifest?.ledger).toEqual(first.manifest?.ledger);
     expect(second.manifest?.ledger).toEqual([
       expect.objectContaining({ path: guardPath, stampedVersion: ENGINE_VERSION }),
+      // TEST CHANGE, justified: REQ-FLOW-016 — the record of the .gitignore lines the first run appended, carried unchanged.
+      expect.objectContaining({ path: ".gitignore", artifactType: "infra" }),
     ]);
   });
 });
@@ -982,8 +990,9 @@ function isIgnored(root: string, relPath: string): boolean {
  * and a string compare would pass a spelling git reads differently.
  */
 describe("the review gate's state is ignored on sync", () => {
+  // TEST CHANGE, justified: REQ-FLOW-016 — .env.mcp is written only when a server needs a credential,
+  // and this setup selects none, so the credential file leaves this list (asserted not ignored below).
   const IGNORED_PATHS = [
-    ".env.mcp",
     ".stamity/review-gate.json",
     ".stamity/review-gate.json.lock/owner",
     ".stamity/review-gate.json.tmp-deadbeef",
@@ -1004,6 +1013,7 @@ describe("the review gate's state is ignored on sync", () => {
     });
 
     for (const path of IGNORED_PATHS) expect(isIgnored(root, path), path).toBe(true);
+    expect(isIgnored(root, ".env.mcp")).toBe(false);
     const first = await readFile(join(root, ".gitignore"), "utf8");
     expect(first.startsWith("dist/\n")).toBe(true);
 
@@ -1074,6 +1084,144 @@ describe("the review gate's state is ignored on sync", () => {
     await handle.seedFiles({ "repo/.gitignore": "dist/\n" });
     await applySync(root, await planSync(root, ENGINE_VERSION), opts);
     expect(await readFile(join(root, ".gitignore"), "utf8")).toBe("dist/\n");
+  });
+
+  /** One live sync of `root`, planned fresh, with its plan. */
+  async function liveSync(root: string, now: Date): Promise<{ plan: SyncPlan; report: SyncApplyReport }> {
+    const plan = await planSync(root, ENGINE_VERSION);
+    return { plan, report: await applySync(root, plan, { engineVersion: ENGINE_VERSION, force: false, dryRun: false, now }) };
+  }
+
+  /** The manifest on disk with `edit` applied, written back (what `config set` and `config mcp` do to it). */
+  async function editManifest(root: string, edit: (manifest: SetupManifest) => SetupManifest): Promise<void> {
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("no manifest to edit");
+    await writeManifest(root, edit(manifest));
+  }
+
+  const gitignoreRows = async (root: string): Promise<LedgerEntry[]> =>
+    ((await readManifest(root))?.ledger ?? []).filter((row) => row.path === ".gitignore");
+
+  /** The seven entries every client setup ignores (decision E1): all but `.env.mcp`. */
+  const MACHINE_LOCAL = [
+    ".stamity/review-gate.json",
+    ".stamity/review-gate.json.lock",
+    ".stamity/review-gate.json.tmp-*",
+    ".stamity/preflight-canary.json",
+    ".stamity/run-ended.json",
+    ".stamity/context-once/",
+    ".stamity/client-models.json",
+  ];
+
+  it("keeps all seven machine-local lines when the client changes, and records them on the new client's row (decision E1)", async () => {
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+    await liveSync(root, T1);
+    const before = await readFile(join(root, ".gitignore"), "utf8");
+    expect(before).toBe(`${MACHINE_LOCAL.join("\n")}\n`);
+
+    await editManifest(root, (manifest) => ({ ...manifest, tools: ["cursor"] }));
+    const { report } = await liveSync(root, T2);
+
+    expect(report.gitignoreRemoved).toBeUndefined();
+    expect(await readFile(join(root, ".gitignore"), "utf8")).toBe(before);
+    expect((await gitignoreRows(root)).map((row) => [row.adapter, row.coOwned?.lines])).toEqual([["cursor", MACHINE_LOCAL]]);
+  });
+
+  it("takes back the .env.mcp line once no server needs a credential and the file is gone, and names it", async () => {
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+    await editManifest(root, (manifest) => ({ ...manifest, mcp: { servers: ["github"] } }));
+    const first = await liveSync(root, T1);
+    expect(first.report.gitignoreAdded).toEqual([".env.mcp", ...MACHINE_LOCAL]);
+    expect((await gitignoreRows(root))[0]?.coOwned?.lines).toEqual([".env.mcp", ...MACHINE_LOCAL]);
+
+    await editManifest(root, (manifest) => ({ ...manifest, mcp: { servers: [] } }));
+    const { plan, report } = await liveSync(root, T2);
+
+    expect(report.gitignoreRemoved).toEqual([".env.mcp"]);
+    expect(report.gitignoreAdded).toEqual([]);
+    expect(await readFile(join(root, ".gitignore"), "utf8")).toBe(`${MACHINE_LOCAL.join("\n")}\n`);
+    expect(syncJsonPayload(plan, report).gitignoreRemoved).toEqual([".env.mcp"]);
+    expect(renderSyncReport(plan, report, plainPalette)).toContain(".gitignore: removed .env.mcp");
+    expect((await gitignoreRows(root))[0]?.coOwned?.lines).toEqual(MACHINE_LOCAL);
+  });
+
+  it("keeps the .env.mcp line while the file is on disk after its server goes, and takes it back once the file goes", async () => {
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+    gitInit(root);
+    await editManifest(root, (manifest) => ({ ...manifest, mcp: { servers: ["github"] } }));
+    await liveSync(root, T1);
+    await handle.seedFiles({ "repo/.env.mcp": "GITHUB_PERSONAL_ACCESS_TOKEN=filled\n" });
+
+    await editManifest(root, (manifest) => ({ ...manifest, mcp: { servers: [] } }));
+    const kept = await liveSync(root, T2);
+    expect(kept.report.gitignoreRemoved).toBeUndefined();
+    expect(isIgnored(root, ".env.mcp")).toBe(true);
+
+    await rm(join(root, ".env.mcp"));
+    const gone = await liveSync(root, new Date("2026-01-04T00:00:00.000Z"));
+    expect(gone.report.gitignoreRemoved).toEqual([".env.mcp"]);
+  });
+
+  it.each([".env*\n", ".env.*\n!.env.mcp\n"])("neither appends nor owns .env.mcp when the owner's %j answers for it", async (owner) => {
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+    await handle.seedFiles({ "repo/.gitignore": owner });
+    await editManifest(root, (manifest) => ({ ...manifest, mcp: { servers: ["github"] } }));
+
+    const { report } = await liveSync(root, T1);
+
+    expect(report.gitignoreAdded).toEqual(MACHINE_LOCAL);
+    expect(await readFile(join(root, ".gitignore"), "utf8")).toBe(`${owner}${MACHINE_LOCAL.join("\n")}\n`);
+    expect((await gitignoreRows(root))[0]?.coOwned).toEqual({ lines: MACHINE_LOCAL });
+  });
+
+  it("puts the lines back in a deleted .gitignore at the next sync, recorded as the engine's file", async () => {
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+    await liveSync(root, T1);
+    await rm(join(root, ".gitignore"));
+
+    const { report } = await liveSync(root, T2);
+
+    expect(report.gitignoreAdded).toEqual(MACHINE_LOCAL);
+    expect((await gitignoreRows(root))[0]?.coOwned).toEqual({ lines: MACHINE_LOCAL, createdFile: true });
+  });
+
+  it("never lets the reclaim sweep edit or delete .gitignore, whatever its row says", async () => {
+    // A `.gitignore` row is an `infra` row at a platform name, so the trusted-path
+    // allowlist covers it; this candidate also records the file's own hash, which
+    // on the whole-file branch reads as sole authorship of the owner's file.
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+    const owner = `node_modules/\n${MACHINE_LOCAL.join("\n")}\n`;
+    await handle.seedFiles({ "repo/.gitignore": owner });
+    const row: LedgerEntry = {
+      path: ".gitignore",
+      adapter: "claude",
+      artifactId: "gitignore",
+      artifactType: "infra",
+      contentHash: createHash("sha256").update(owner).digest("hex"),
+      coOwned: { lines: MACHINE_LOCAL },
+    };
+    const seeded = await readManifest(root);
+    if (seeded === null) throw new Error("no manifest");
+    const manifest: SetupManifest = { ...seeded, ledger: [row] };
+    await writeManifest(root, manifest);
+
+    const swept = await sweepReclaimCandidates([{ entry: row, reason: "adapter-removed" }], {
+      rootDir: root,
+      consent: true,
+      trustedExactPaths: trustedInfraPaths(manifest.ledger),
+      coOwnedPaths: coOwnedReclaimReducers(manifest),
+    });
+
+    expect(swept.entries.map((entry) => entry.action)).toEqual(["skipped-user-content"]);
+    expect(await readFile(join(root, ".gitignore"), "utf8")).toBe(owner);
+    // And `sync` never hands it one: its plan counts the path as its own.
+    expect((await planSync(root, ENGINE_VERSION)).reclaim.map((candidate) => candidate.entry.path)).not.toContain(".gitignore");
   });
 
   it("a .gitignore the injection screen refuses stops the sync before any emitted file is written", async () => {
@@ -1170,8 +1318,10 @@ describe("report payload", () => {
     expect(rendered).toContain(`synced: ${report.created} created, ${report.updated} updated`);
     expect(rendered).toContain("provenance");
     // Post-apply provenance: the persisted manifest carries the new stamp.
+    // TEST CHANGE, justified: REQ-FLOW-016 — claude's rows gain the .gitignore row, which records lines
+    // and carries no version stamp, so the rollup counts two files and names no single stamp.
     expect((payload.provenance as { perAdapter: unknown[] }).perAdapter).toEqual([
-      { adapter: "claude", files: 1, stampedVersion: ENGINE_VERSION },
+      { adapter: "claude", files: 2, stampedVersion: null },
     ]);
   });
 

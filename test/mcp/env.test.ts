@@ -9,14 +9,24 @@ import {
   symlink,
   writeFile,
 } from "node:fs/promises";
-import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   collectRequiredEnvVars,
   ensureEnvMcp,
   ensureGitignoreEntry,
   generateEnvMcpContent,
+  GITIGNORE_ENTRY_WHEN,
+  gitignoreLedgerRows,
+  gitignoreRecordOf,
+  presentGitignoreTargets,
+  reconcileGitignore,
+  reduceGitignoreToForeignContent,
   REQUIRED_GITIGNORE_ENTRIES,
+  requiredGitignoreEntries,
   getSourceEnvMcpCommand,
   getSourceEnvMcpDisclaimer,
   parseEnvFile,
@@ -24,6 +34,8 @@ import {
   type EnvVar,
 } from "../../src/mcp/env.ts";
 import type * as Catalog from "../../src/mcp/catalog.ts";
+import type { Tool } from "../../src/types/core.ts";
+import type { CoOwnership, LedgerEntry } from "../../src/types/manifest.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 /**
@@ -611,6 +623,196 @@ describe("ensureGitignoreEntry", () => {
       expect((await stat(dir.path(".gitignore"))).mode & 0o044).not.toBe(0);
     },
   );
+});
+
+/** The seven entries every client setup ignores (decision E1): all but `.env.mcp`. */
+const CLIENT_TAIL = REQUIRED_TAIL.filter((entry) => entry !== ".env.mcp");
+
+/**
+ * Step 0 of b4 (decision E1): the census of what names each entry's constant
+ * under `src/`, so a new writer of a machine-local file meets
+ * {@link GITIGNORE_ENTRY_WHEN} before it ships. Writers are listed per
+ * constant and must still name it; any other file naming one must be a known
+ * non-writer (it reads, names, refuses or deletes the target).
+ */
+describe("the .gitignore entries' census (decision E1)", () => {
+  const WRITERS: Readonly<Record<string, readonly string[]>> = {
+    ENV_MCP_FILE: ["cli/commands/config/mcp.ts", "migration/carry.ts"],
+    REVIEW_GATE_STATE_FILE: ["adapters/claude.ts", "hooks/scripts.ts"],
+    // The gate script spells the lock and temp suffixes inline (ledger review/68).
+    REVIEW_GATE_LOCK_SUFFIX: [],
+    REVIEW_GATE_TEMP_INFIX: [],
+    PREFLIGHT_CANARY_FILE: ["hooks/scripts.ts"],
+    RUN_ENDED_MARKER_FILE: ["cli/commands/run.ts"],
+    CONTEXT_ONCE_DIR: ["hooks/scripts.ts"],
+    CONTEXT_ONCE_GITIGNORE_ENTRY: [],
+    CLIENT_MODELS_CACHE_FILE: ["cli/engine/clientModels.ts"],
+  };
+  /** Files that name a constant without writing its target: the definitions, readers, the panel's reasons, the worktree policy's refusal, clean's deletions. */
+  const NON_WRITERS: ReadonlySet<string> = new Set([
+    "mcp/env.ts",
+    "types/markers.ts",
+    "cli/commands/check.ts",
+    "cli/commands/clean.ts",
+    "cli/commands/gate.ts",
+    "cli/commands/init/panel.ts",
+    "cli/commands/validate.ts",
+    "hooks/scripts.ts",
+    "worktree/policy.ts",
+  ]);
+
+  const sourceRoot = fileURLToPath(new URL(["..", "..", "src", ""].join("/"), import.meta.url));
+  const sources = new Map(
+    readdirSync(sourceRoot, { recursive: true, encoding: "utf8" })
+      .filter((name) => name.endsWith(".ts"))
+      .map((name) => [name.split(sep).join("/"), readFileSync(join(sourceRoot, name), "utf8")] as const),
+  );
+  const naming = (constant: string): string[] =>
+    [...sources].filter(([, text]) => new RegExp(`\\b${constant}\\b`).test(text)).map(([name]) => name).toSorted();
+
+  it.each(Object.entries(WRITERS))("lists every file that names %s, and each writer still names it", (constant, writers) => {
+    const named = naming(constant);
+    for (const writer of writers) expect(named, writer).toContain(writer);
+    const unknown = named.filter((name) => !writers.includes(name) && !NON_WRITERS.has(name));
+    expect(unknown, `a new file names ${constant}: if it writes the target, list it and re-read GITIGNORE_ENTRY_WHEN`).toEqual([]);
+  });
+
+  it("answers for exactly the required entries: .env.mcp on a credential, the other seven on any client", () => {
+    expect(Object.keys(GITIGNORE_ENTRY_WHEN).toSorted()).toEqual([...REQUIRED_GITIGNORE_ENTRIES].toSorted());
+    const none = { tools: [] as Tool[], envVarsRequired: false };
+    const codex = { tools: ["codex"] as Tool[], envVarsRequired: false };
+    for (const entry of REQUIRED_GITIGNORE_ENTRIES) {
+      expect(GITIGNORE_ENTRY_WHEN[entry]?.(none), entry).toBe(false);
+      expect(GITIGNORE_ENTRY_WHEN[entry]?.(codex), entry).toBe(entry !== ".env.mcp");
+    }
+    expect(GITIGNORE_ENTRY_WHEN[".env.mcp"]?.({ tools: [], envVarsRequired: true })).toBe(true);
+  });
+});
+
+describe("requiredGitignoreEntries", () => {
+  it("leaves .env.mcp out until a server needs a credential, and keeps every line whose target is on disk", () => {
+    expect(requiredGitignoreEntries({ tools: ["codex"], envVarsRequired: false, present: new Set() })).toEqual(CLIENT_TAIL);
+    expect(requiredGitignoreEntries({ tools: ["codex"], envVarsRequired: true, present: new Set() })).toEqual(REQUIRED_TAIL);
+    expect(requiredGitignoreEntries({ tools: ["codex"], envVarsRequired: false, present: new Set([".env.mcp"]) })).toEqual(REQUIRED_TAIL);
+    expect(requiredGitignoreEntries({ tools: [], envVarsRequired: false, present: new Set([MODEL_CACHE_ENTRY]) })).toEqual([MODEL_CACHE_ENTRY]);
+  });
+});
+
+describe("presentGitignoreTargets", () => {
+  it("finds each target by lstat, the lock and context-once folders and a temp file by its stem included", async () => {
+    const dir = repo();
+    expect(await presentGitignoreTargets(dir.dir)).toEqual(new Set());
+
+    await dir.seedFiles({
+      ".env.mcp": "",
+      ".stamity/review-gate.json.lock/owner": "",
+      ".stamity/review-gate.json.tmp-1a2b": "",
+      ".stamity/context-once/marker": "",
+    });
+    expect(await presentGitignoreTargets(dir.dir)).toEqual(
+      new Set([".env.mcp", ".stamity/review-gate.json.lock", ".stamity/review-gate.json.tmp-*", CONTEXT_ONCE_ENTRY]),
+    );
+  });
+});
+
+describe("reduceGitignoreToForeignContent", () => {
+  it("keeps an owner's .env line a forged record names, and removes only the engine's own lines", () => {
+    const raw = "node_modules/\n.env\n.env.mcp\n.stamity/run-ended.json\n";
+    const reduction = reduceGitignoreToForeignContent(raw, { lines: [".env", ".env.mcp", "node_modules/", MARKER_ENTRY] });
+    expect(reduction).toMatchObject({ kind: "reduced", content: "node_modules/\n.env\n", proven: true });
+    expect(reduceGitignoreToForeignContent(".env\n", { lines: [".env"], createdFile: true })).toMatchObject({ kind: "untouched", refused: false });
+  });
+
+  it("removes the last equal line on CRLF, and drops the break it added when its lines were last", () => {
+    expect(reduceGitignoreToForeignContent(".env.mcp\r\nnode_modules/\r\n.env.mcp\r\n", { lines: [".env.mcp"] })).toMatchObject({
+      kind: "reduced",
+      content: ".env.mcp\r\nnode_modules/\r\n",
+    });
+    expect(reduceGitignoreToForeignContent("dist/\n.env.mcp\n", { lines: [".env.mcp"], terminatorAdded: true })).toMatchObject({
+      kind: "reduced",
+      content: "dist/",
+    });
+    // An owner's line after the engine's: the break it added is no longer the file's last, so it stays.
+    expect(reduceGitignoreToForeignContent("dist/\n.env.mcp\nmine/\n", { lines: [".env.mcp"], terminatorAdded: true })).toMatchObject({
+      kind: "reduced",
+      content: "dist/\nmine/\n",
+    });
+  });
+
+  it("reads a created file left with nothing of the owner's as engine-only, an emptied one included", () => {
+    expect(reduceGitignoreToForeignContent(`${CLIENT_TAIL.join("\n")}\n`, { lines: CLIENT_TAIL, createdFile: true }).kind).toBe("engine-only");
+    expect(reduceGitignoreToForeignContent("", { lines: CLIENT_TAIL, createdFile: true }).kind).toBe("engine-only");
+    expect(reduceGitignoreToForeignContent(`${CLIENT_TAIL.join("\n")}\n`, { lines: CLIENT_TAIL })).toMatchObject({ kind: "reduced", content: "" });
+  });
+});
+
+describe("reconcileGitignore", () => {
+  it("records what it appends, and on a file it created", async () => {
+    const dir = repo();
+
+    const first = await reconcileGitignore(dir.dir, { required: CLIENT_TAIL, previous: null });
+
+    expect(first).toEqual({
+      added: CLIENT_TAIL,
+      removed: [],
+      deleted: false,
+      record: { lines: CLIENT_TAIL, createdFile: true },
+      contentHash: createHash("sha256").update(`${CLIENT_TAIL.join("\n")}\n`).digest("hex"),
+    });
+    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(`${CLIENT_TAIL.join("\n")}\n`);
+  });
+
+  it("takes back an owned line no longer required, keeps the owner's bytes, and appends what is new", async () => {
+    const dir = repo();
+    await dir.seedFiles({ ".gitignore": "dist/" });
+    const first = await reconcileGitignore(dir.dir, { required: REQUIRED_TAIL, previous: null });
+    expect(first.record).toEqual({ lines: REQUIRED_TAIL, terminatorAdded: true });
+
+    const second = await reconcileGitignore(dir.dir, { required: CLIENT_TAIL, previous: first.record });
+
+    expect(second).toMatchObject({ added: [], removed: [".env.mcp"], deleted: false, record: { lines: CLIENT_TAIL, terminatorAdded: true } });
+    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(`dist/\n${CLIENT_TAIL.join("\n")}\n`);
+
+    const last = await reconcileGitignore(dir.dir, { required: [], previous: second.record });
+    expect(last.removed).toEqual(CLIENT_TAIL);
+    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe("dist/");
+  });
+
+  it("deletes a file it created once nothing is left, and an owner's line keeps it", async () => {
+    const dir = repo();
+    const created = await reconcileGitignore(dir.dir, { required: CLIENT_TAIL, previous: null });
+    expect(await reconcileGitignore(dir.dir, { required: [], previous: created.record })).toMatchObject({ deleted: true, contentHash: null });
+    expect(existsSync(dir.path(".gitignore"))).toBe(false);
+
+    const again = await reconcileGitignore(dir.dir, { required: CLIENT_TAIL, previous: null });
+    await writeFile(dir.path(".gitignore"), `${await readFile(dir.path(".gitignore"), "utf8")}mine.log\n`, "utf8");
+    const kept = await reconcileGitignore(dir.dir, { required: [], previous: again.record });
+    expect(kept.deleted).toBe(false);
+    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe("mine.log\n");
+  });
+
+  it("never removes a line it does not own, whatever is required", async () => {
+    const dir = repo();
+    const owner = `.env.mcp\n${MARKER_ENTRY}\n`;
+    await dir.seedFiles({ ".gitignore": owner });
+
+    const result = await reconcileGitignore(dir.dir, { required: [], previous: { lines: [CANARY_ENTRY] } });
+
+    expect(result.removed).toEqual([]);
+    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(owner);
+  });
+});
+
+describe("gitignoreRecordOf and gitignoreLedgerRows", () => {
+  it("unions the rows' records within the bound, and writes no row for an empty record", () => {
+    const row = (adapter: Tool, coOwned: CoOwnership): LedgerEntry => ({ path: ".gitignore", adapter, artifactId: "gitignore", artifactType: "infra", coOwned });
+    expect(gitignoreRecordOf([])).toBeNull();
+    expect(
+      gitignoreRecordOf([row("claude", { lines: [MARKER_ENTRY], createdFile: true }), row("cursor", { lines: [".env.mcp", ".env"] })]),
+    ).toEqual({ lines: [".env.mcp", MARKER_ENTRY], createdFile: true });
+    expect(gitignoreLedgerRows(["claude", "cursor"], { lines: [] })).toEqual([]);
+    expect(gitignoreLedgerRows(["claude", "cursor"], { lines: [MARKER_ENTRY] }).map((entry) => entry.adapter)).toEqual(["claude", "cursor"]);
+  });
 });
 
 describe("ensureEnvMcp", () => {

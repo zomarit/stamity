@@ -49,6 +49,7 @@ import { OWNED_PATHS, RETIRED_ENGINE_PATHS, needsRenderingProof } from "../../ma
 import { planUserMcpJson, predictMcpMergeRefusal } from "../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../mcp/catalog.ts";
 import { engineOwnedServerIds, mcpReclaimReducers } from "../../mcp/emit.ts";
+import { GITIGNORE_FILE } from "../../mcp/env.ts";
 import type { HookScriptReader, ReclaimActionEntry, ReclaimReport } from "../../merge/reclaim.ts";
 import { displayPath, type SafeWriteFileOptions } from "../../merge/safeWrite.ts";
 import { movedCoreSkill, movedRenderingAt } from "../../pack/moved.ts";
@@ -874,8 +875,26 @@ export function coOwnedReclaimReducers(
     const ownership = coOwnedOwnershipOf(manifest.ledger, lane.path);
     reducers.set(lane.path, lane.reducer(ownership, ownership.deleteWhenEngineOnly, renderings.get(lane.path)));
   }
+  reducers.set(GITIGNORE_FILE, gitignoreSweepReducer);
   return reducers;
 }
+
+/**
+ * `.gitignore` in the sweep: refused, so the file is never edited or deleted
+ * there (REQ-FLOW-016). Its rows are `infra` rows at a platform name, so
+ * without a reducer a candidate would reach the whole-file branch, where a
+ * trusted path and a hash match read as sole authorship of the owner's file.
+ * No sweep is handed one: `sync` plans the path as its own (`planSync`'s
+ * emission set) and `clean` takes it out of its candidates, and both take the
+ * lines back through `reconcileGitignore` (`../../mcp/env.ts`), which reads
+ * which ignored files are still on disk — the one fact a pure reducer cannot
+ * see, and the one that keeps a filled `.env.mcp` ignored.
+ */
+const gitignoreSweepReducer: CoOwnedReducer = () => ({
+  kind: "untouched",
+  refused: true,
+  detail: "Its lines are taken back by the .gitignore lane, which checks which ignored files are still on disk; the sweep leaves the file.",
+});
 
 /** The user hooks folder when the manifest names none (`../../emit/hooksInfra.ts`'s default). */
 const DEFAULT_USER_HOOKS_DIR = `${STATE_DIR}/hooks`;

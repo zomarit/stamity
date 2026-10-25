@@ -100,6 +100,21 @@ const ENGINE_VERSION = "0.0.0-test";
 
 const STATE_DIRS = [".stamity", ".stamity/learnings", ".stamity/handoffs"] as const;
 
+/** The machine-local entries every client setup ignores (decision E1): all but `.env.mcp`, which waits for a server that needs a credential. */
+const CLIENT_ENTRIES = REQUIRED_GITIGNORE_ENTRIES.filter((entry) => entry !== ".env.mcp");
+
+/** The `.gitignore` row a first init records for `adapter` where the repo had no `.gitignore` (REQ-FLOW-016). */
+function gitignoreRow(adapter: Tool): Record<string, unknown> {
+  return {
+    path: ".gitignore",
+    adapter,
+    artifactId: "gitignore",
+    artifactType: "infra",
+    contentHash: createHash("sha256").update(`${CLIENT_ENTRIES.join("\n")}\n`).digest("hex"),
+    coOwned: { lines: CLIENT_ENTRIES, createdFile: true },
+  };
+}
+
 /** Content-root fixture directory (inside the per-test temp dir) the pin points at. */
 const CONTENT_FIXTURE = "content-fixture";
 
@@ -196,7 +211,9 @@ async function snapshotTree(dir: string, prefix = ""): Promise<Record<string, st
 }
 
 describe("applyInit — fresh repo", () => {
-  it("scaffolds state dirs, writes a valid manifest, and gitignores .env.mcp", async () => {
+  // TEST CHANGE, justified: REQ-FLOW-016 — .env.mcp is written only when a server needs a credential;
+  // retitled from "… and gitignores .env.mcp", since a setup with no MCP server no longer does.
+  it("scaffolds state dirs, writes a valid manifest, and gitignores the machine-local state", async () => {
     // A plain temp directory is also the non-git edge case: no repository,
     // no platform, and apply must still succeed.
     const root = await makeRepo();
@@ -212,9 +229,11 @@ describe("applyInit — fresh repo", () => {
       createdKeeps: [".stamity/learnings/.gitkeep", HANDOFFS_KEEP],
       wrote: [],
       warnings: [],
-      ledgerCount: 0,
+      // TEST CHANGE, justified: REQ-FLOW-016 — .env.mcp is written only when a server needs a credential,
+      // and the lines this run appended are recorded on a .gitignore row, so the ledger holds that row.
+      ledgerCount: 1,
       gitignoreEnsured: true,
-      gitignoreAdded: [...REQUIRED_GITIGNORE_ENTRIES],
+      gitignoreAdded: CLIENT_ENTRIES,
       dryRun: false,
     });
     for (const dir of STATE_DIRS) {
@@ -239,9 +258,11 @@ describe("applyInit — fresh repo", () => {
     // empty because the SUBSTITUTED planner was handed no outputs for this
     // case, not because a real planner over this manifest would emit none.
     expect(manifest?.selection).toEqual({ items: { agent: [], skill: [], rule: [], command: [] } });
-    expect(manifest?.ledger).toEqual([]);
+    // TEST CHANGE, justified: REQ-FLOW-016 — the one row is the record of the .gitignore lines this run
+    // appended, which `clean` takes back; no MCP server is selected, so .env.mcp gets no line.
+    expect(manifest?.ledger).toEqual([gitignoreRow("claude")]);
 
-    expect(await readFile(join(root, ".gitignore"), "utf8")).toContain(".env.mcp");
+    expect((await readFile(join(root, ".gitignore"), "utf8")).split("\n")).not.toContain(".env.mcp");
     // REQ-FLOW-016: the same lane ignores the review gate's runtime state.
     expect((await readFile(join(root, ".gitignore"), "utf8")).split("\n")).toEqual(
       expect.arrayContaining([".stamity/review-gate.json", ".stamity/review-gate.json.lock", ".stamity/review-gate.json.tmp-*"]),
@@ -296,6 +317,51 @@ describe("applyInit — fresh repo", () => {
     );
 
     expect((await readManifest(root))?.platform).toBe("github");
+  });
+});
+
+describe("applyInit — the .gitignore lines it records (REQ-FLOW-016)", () => {
+  it("writes no .env.mcp line for codex with no MCP server, and the other seven", async () => {
+    const root = await makeRepo();
+    const report = await applyInit(optionsFor(root, { decisions: decisionsFor(root, { tools: ["codex"] }) }));
+
+    expect(report.gitignoreAdded).toEqual(CLIENT_ENTRIES);
+    expect(CLIENT_ENTRIES).toHaveLength(7);
+    expect(await readFile(join(root, ".gitignore"), "utf8")).toBe(`${CLIENT_ENTRIES.join("\n")}\n`);
+    expect((await readManifest(root))?.ledger).toEqual([gitignoreRow("codex")]);
+  });
+
+  it("writes and records the .env.mcp line when the file is already on disk", async () => {
+    const root = await makeRepo();
+    await writeFile(join(root, ".env.mcp"), "GITHUB_TOKEN=\n", "utf8");
+
+    const report = await applyInit(optionsFor(root));
+
+    expect(report.gitignoreAdded).toEqual([...REQUIRED_GITIGNORE_ENTRIES]);
+    const [row] = (await readManifest(root))?.ledger ?? [];
+    expect(row?.coOwned?.lines).toEqual([...REQUIRED_GITIGNORE_ENTRIES]);
+  });
+
+  it("owns neither a line the file already covers nor one it negates", async () => {
+    const root = await makeRepo();
+    await writeFile(join(root, ".gitignore"), "/.stamity/\n!.env.mcp\n", "utf8");
+    await writeFile(join(root, ".env.mcp"), "GITHUB_TOKEN=\n", "utf8");
+
+    const report = await applyInit(optionsFor(root));
+
+    expect(report.gitignoreAdded).toEqual([]);
+    expect(await readFile(join(root, ".gitignore"), "utf8")).toBe("/.stamity/\n!.env.mcp\n");
+    expect((await readManifest(root))?.ledger).toEqual([]);
+  });
+
+  it("carries the previous setup's record through a --force re-init that appends nothing", async () => {
+    const root = await makeRepo();
+    await applyInit(optionsFor(root));
+
+    const report = await applyInit(optionsFor(root, { force: true, now: LATER_NOW }));
+
+    expect(report.gitignoreAdded).toEqual([]);
+    expect((await readManifest(root))?.ledger).toEqual([gitignoreRow("claude")]);
   });
 });
 
@@ -500,7 +566,8 @@ describe("applyInit — planned emission (planner seam)", () => {
     expect(report.wrote).toEqual([
       { path: join(root, ".claude", "rules", "stamity-guide.md"), action: "created" },
     ]);
-    expect(report.ledgerCount).toBe(1);
+    // TEST CHANGE, justified: REQ-FLOW-016 — the ledger also records the .gitignore lines this run appended.
+    expect(report.ledgerCount).toBe(2);
 
     const manifest = await readManifest(root);
     // Justification for the changed expectation: the row gains `contentHash`.
@@ -521,6 +588,8 @@ describe("applyInit — planned emission (planner seam)", () => {
           .digest("hex"),
         stampedVersion: ENGINE_VERSION,
       },
+      // TEST CHANGE, justified: REQ-FLOW-016 — the record of the .gitignore lines this run appended.
+      gitignoreRow("claude"),
     ]);
     // The persisted document, ledger included, passes the full validator.
     const raw: unknown = JSON.parse(await readFile(report.manifestPath, "utf8"));
@@ -555,8 +624,9 @@ describe("applyInit — planned emission (planner seam)", () => {
     expect(merged).toContain("STAMITY:BEGIN");
     expect(merged).toContain("user notes survive merges");
     // Merged (not skipped): the run stands behind the path, so it is ledgered.
-    expect(report.ledgerCount).toBe(1);
-    expect((await readManifest(root))?.ledger.map((entry) => entry.path)).toEqual(["AGENTS.md"]);
+    // TEST CHANGE, justified: REQ-FLOW-016 — the ledger also records the .gitignore lines this run appended.
+    expect(report.ledgerCount).toBe(2);
+    expect((await readManifest(root))?.ledger.map((entry) => entry.path)).toEqual([".gitignore", "AGENTS.md"]);
   });
 
   it("predicts the same collision disposition under dryRun while touching nothing", async () => {
@@ -630,7 +700,8 @@ describe("applyInit — write boundary", () => {
     expect(report.wrote).toEqual([
       { path: join(root, ".cursor", "rules", "stamity-guide.md"), action: "created" },
     ]);
-    expect(report.ledgerCount).toBe(1);
+    // TEST CHANGE, justified: REQ-FLOW-016 — the ledger also records the .gitignore lines this run appended.
+    expect(report.ledgerCount).toBe(2);
     expect(await readFile(join(root, "shared", "rules", "stamity-guide.md"), "utf8")).toContain(
       "Guide body.",
     );

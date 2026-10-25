@@ -801,7 +801,9 @@ export async function resolveModelLists(
  * list, which leaves the cache untouched. The caller's write proceeds either way.
  * The ignore rules land before the cache does, as `sync` orders them (review/244):
  * a 1.15.0 `.gitignore` has no rule for the cache, and a cache written without
- * one is a file `git add -A` commits. A rule that cannot be added keeps the
+ * one is a file `git add -A` commits. Only the cache rule, and unrecorded: this
+ * runs ahead of the calling verb's own manifest write and holds no ledger to
+ * record it on, so `clean` leaves this line (REQ-FLOW-016). A rule that cannot be added keeps the
  * cache unwritten, named as a cache not written.
  */
 export async function keepSavedModelLists(rootDir: string): Promise<string[]> {
@@ -815,7 +817,7 @@ export async function keepSavedModelLists(rootDir: string): Promise<string[]> {
 /** {@link writeModelListCache} behind the engine's ignore rules; the warning line when either step fails, else `null`. */
 async function writeIgnoredModelListCache(rootDir: string, lists: ModelLists): Promise<string | null> {
   try {
-    await ensureGitignoreEntry(rootDir);
+    await ensureGitignoreEntry(rootDir, [CLIENT_MODELS_CACHE_FILE]);
   } catch (cause) {
     const code = (cause as NodeJS.ErrnoException | null)?.code;
     return (

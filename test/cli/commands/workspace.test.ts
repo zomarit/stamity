@@ -1204,8 +1204,11 @@ describe("workspace sync — the bridge", () => {
     const gitignore = await readFile(join(api, ".gitignore"), "utf8");
 
     expect(first.code).toBe(0);
-    for (const entry of REQUIRED_GITIGNORE_ENTRIES) expect(gitignore).toContain(entry);
-    expect(first.stdout).toContain(`.gitignore: added ${REQUIRED_GITIGNORE_ENTRIES.join(", ")}`);
+    // TEST CHANGE, justified: REQ-FLOW-016 — .env.mcp is written only when a server needs a credential,
+    // and this member selects none, so its sync appends the other seven.
+    const appended = REQUIRED_GITIGNORE_ENTRIES.filter((entry) => entry !== ".env.mcp");
+    expect(gitignore).toBe(`${appended.join("\n")}\n`);
+    expect(first.stdout).toContain(`.gitignore: added ${appended.join(", ")}`);
     const again = singleSyncDocument((await runSync(root, ["--json"])).stdout);
     expect(again.repos[0]).not.toHaveProperty("gitignoreAdded");
   });
@@ -1726,7 +1729,8 @@ describe("workspace sync — --dry-run and the JSON contract", () => {
         ok: true,
         state: "synced",
         patched: ["tools"],
-        gitignoreAdded: [...REQUIRED_GITIGNORE_ENTRIES],
+        // TEST CHANGE, justified: REQ-FLOW-016 — .env.mcp is written only when a server needs a credential.
+        gitignoreAdded: REQUIRED_GITIGNORE_ENTRIES.filter((entry) => entry !== ".env.mcp"),
       },
     ]);
     expect(doc.journalWarnings).toEqual([]);

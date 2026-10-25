@@ -78,12 +78,16 @@ export const IMPORT_TARGET = Object.freeze({
  * became `stamity-mcp-guard.mjs` and `stamity-subagent-guard.mjs` in version 2,
  * REQ-FLOW-038): their rows must validate for the first sync after an upgrade
  * to reclaim them. Version 3 adds the hook folder Claude Code's hooks run from
- * ({@link OwnedPathBound.hookRoots}, REQ-FLOW-113). A unit that adds an emitted
- * path extends this value and raises `version`.
+ * ({@link OwnedPathBound.hookRoots}, REQ-FLOW-113). Version 4 adds `.gitignore`,
+ * whose row records the ignore lines the engine appended (`coOwned.lines`,
+ * REQ-FLOW-016); the manifest validator bounds those lines to the engine's own
+ * entries, and the row never licenses a whole-file write or delete. A unit that
+ * adds an emitted path extends this value and raises `version`.
  */
 export const OWNED_PATHS: OwnedPathBound = Object.freeze({
-  version: 3,
+  version: 4,
   exact: Object.freeze([
+    ".gitignore",
     "AGENTS.md",
     "AGENTS.override.md",
     "CLAUDE.md",

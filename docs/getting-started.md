@@ -360,7 +360,8 @@ and `check` is what catches it drifting from what the engine would emit today.
 Apart from each run's `reports/` folder, which ignores itself, six things stay out of the
 repository, and `init` and `sync` add their `.gitignore` lines for you:
 
-- `.env.mcp`, which holds MCP credentials.
+- `.env.mcp`, which holds MCP credentials. Its line is added once a selected MCP server needs a
+  credential, or while the file is there.
 - The review gate's runtime state: `.stamity/review-gate.json`, its `.lock` and its `.tmp-*`
   files. A run writes them, and the counter is keyed by the client's session, not by the run.
   When the counter is missing, as on a cloud machine that was reclaimed, the gate rebuilds the
@@ -378,6 +379,11 @@ repository, and `init` and `sync` add their `.gitignore` lines for you:
 
 A line your `.gitignore` already covers, with `.stamity/` or `.env*` for example, is not added
 twice. A file you committed before the line existed stays tracked: setup never touches the git index.
+
+The manifest records each line setup added, and `clean` takes back exactly those once the file each
+one ignores is gone. A filled `.env.mcp`, which `clean` never deletes, keeps its line, and a line
+you wrote yourself always stays. When setup created `.gitignore` and nothing else is left in it,
+`clean` deletes it. A setup made before 1.17.0 recorded no line, so `clean` leaves its lines alone.
 
 Because everything else is committed, a second checkout of this repository arrives with the whole
 setup in place and only those files missing. Placing `.env.mcp` is exactly what

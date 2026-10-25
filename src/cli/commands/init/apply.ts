@@ -22,7 +22,14 @@ import type { CoOwnedMergeResult, CoOwnedOwnership } from "../../../manifest/coO
 import { materializeUserMcpJson, type McpMergeResult } from "../../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../../mcp/catalog.ts";
 import { engineOwnedServerIds, MERGED_MCP_JSON_PATHS } from "../../../mcp/emit.ts";
-import { ensureGitignoreEntry } from "../../../mcp/env.ts";
+import {
+  collectRequiredEnvVars,
+  gitignoreLedgerRows,
+  gitignoreRecordOf,
+  presentGitignoreTargets,
+  reconcileGitignore,
+  requiredGitignoreEntries,
+} from "../../../mcp/env.ts";
 import { extractManagedBlock } from "../../../merge/managedBlocks.ts";
 import {
   ledgerHashIndex,
@@ -174,11 +181,11 @@ export interface InitApplyReport {
   warnings: string[];
   /** Ledger rows the manifest carries after this run. */
   ledgerCount: number;
-  /** True when the required gitignore rules (`.env.mcp`, the review gate's state) were put in place (never under `dryRun`). */
+  /** True when the gitignore rules this setup needs (the review gate's state, `.env.mcp` when a server needs it) were put in place (never under `dryRun`). */
   gitignoreEnsured: boolean;
   /**
-   * The `.gitignore` entries this run appended, in the order written: the
-   * return value of `ensureGitignoreEntry` (`../../../mcp/env.ts`). Empty when
+   * The `.gitignore` entries this run appended, in the order written:
+   * `reconcileGitignore`'s `added` (`../../../mcp/env.ts`). Empty when
    * the file already covered every required entry, and always under `dryRun`,
    * which writes nothing. The panel names exactly these.
    */
@@ -542,18 +549,35 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
       add(row);
     }
   }
+
+  let gitignoreAdded: string[] = [];
+  if (!dryRun) {
+    // The machine-local files this setup writes are the entries this engine
+    // gitignores (decision E1: `.env.mcp` only when a selected server needs a
+    // credential or the file is there); the rest of the state dir is committed
+    // by design. Each line appended is recorded, so `clean` takes back exactly
+    // those (REQ-FLOW-016), and a `--force` re-init carries the previous
+    // setup's record. Kept, not discarded: the panel names the entries this
+    // run actually added.
+    const gitignore = await reconcileGitignore(rootDir, {
+      required: requiredGitignoreEntries({
+        tools: manifest.tools,
+        envVarsRequired: collectRequiredEnvVars(manifest.mcp?.servers ?? [], packServers).length > 0,
+        present: await presentGitignoreTargets(rootDir),
+      }),
+      previous: gitignoreRecordOf(previousLedger),
+    });
+    gitignoreAdded = gitignore.added;
+    for (const row of gitignoreLedgerRows(manifest.tools, gitignore.record, gitignore.contentHash)) add(row);
+  }
+
   let ledger: LedgerEntry[] = manifest.ledger;
   for (const tool of manifest.tools) {
     ledger = replaceAdapterEntries(ledger, tool, toLedgerEntries(emittedByAdapter.get(tool) ?? []));
   }
   manifest.ledger = ledger;
 
-  let gitignoreAdded: string[] = [];
   if (!dryRun) {
-    // The credential file and the review gate's runtime state are the entries
-    // this engine gitignores; the rest of the state dir is committed by design.
-    // Kept, not discarded: the panel names the entries this run actually added.
-    gitignoreAdded = await ensureGitignoreEntry(rootDir);
     // The account's lists, kept beside the manifest and never in it: a cache
     // that cannot be written leaves them for this run only, and says so.
     const cacheFailure = modelLists.toWrite === null ? null : await writeModelListCache(rootDir, modelLists.toWrite);

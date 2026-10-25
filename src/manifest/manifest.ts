@@ -30,6 +30,7 @@ import {
 } from "../types/core.ts";
 import type { DetectedSummary } from "../types/detect.ts";
 import { isSemverShaped } from "../shared/cliCall.ts";
+import { GITIGNORE_FILE, REQUIRED_GITIGNORE_ENTRIES } from "../mcp/env.ts";
 import { EngineError } from "../types/errors.ts";
 import {
   AUTONOMY_MODES,
@@ -367,7 +368,7 @@ function memberPointerDefect(pointer: string): string | null {
  * record past its bounds refuses the manifest. A pointer outside the spec of
  * the row's document is NOT a defect — every reader ignores what it does not own.
  */
-function collectCoOwnedErrors(value: unknown, field: string, errors: string[]): void {
+function collectCoOwnedErrors(value: unknown, field: string, path: unknown, errors: string[]): void {
   if (!isPlainObject(value)) {
     errors.push(`\`${field}\` must be an object`);
     return;
@@ -424,15 +425,23 @@ function collectCoOwnedErrors(value: unknown, field: string, errors: string[]): 
       }
     }
   }
+  // The SECURITY bound on owned lines (REQ-FLOW-016): `clean` removes each one,
+  // so a forged row naming the owner's `.env` would un-ignore their secrets.
+  // Lines are accepted only on the `.gitignore` row, and only lines this engine
+  // writes there; the reducer re-checks the same set (`../mcp/env.ts`).
   if (lines !== undefined) {
     if (!Array.isArray(lines)) {
       errors.push(`\`${field}.lines\` must be an array`);
+    } else if (path !== GITIGNORE_FILE) {
+      errors.push(`\`${field}.lines\` is recorded only on the ${GITIGNORE_FILE} row, not on ${JSON.stringify(path)}`);
     } else {
       for (const [position, line] of lines.entries()) {
         if (typeof line !== "string" || line === "" || line.length > MAX_CO_OWNED_LINE || /[\r\n]/.test(line)) {
           errors.push(
             `\`${field}.lines[${position}]\` must be a non-empty string of at most ${MAX_CO_OWNED_LINE} characters with no line break`,
           );
+        } else if (!REQUIRED_GITIGNORE_ENTRIES.includes(line)) {
+          errors.push(`\`${field}.lines[${position}]\` ${JSON.stringify(line)} is not a line this engine writes to ${GITIGNORE_FILE}`);
         }
       }
     }
@@ -467,7 +476,7 @@ function collectLedgerEntryErrors(entry: unknown, index: number, errors: string[
   if (entry.stampedVersion !== undefined && typeof entry.stampedVersion !== "string") {
     errors.push(`\`ledger[${index}].stampedVersion\` must be a string`);
   }
-  if (entry.coOwned !== undefined) collectCoOwnedErrors(entry.coOwned, `ledger[${index}].coOwned`, errors);
+  if (entry.coOwned !== undefined) collectCoOwnedErrors(entry.coOwned, `ledger[${index}].coOwned`, entry.path, errors);
   if (typeof entry.path !== "string") {
     errors.push(`\`ledger[${index}].path\` must be a string`);
     return null;

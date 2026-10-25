@@ -72,9 +72,12 @@ describe("OWNED_PATHS", () => {
   // the two new guard names (version 1 -> 2) and keeps the 1.11.0 names so their rows validate.
   // TEST CHANGE, justified (w6-claude-hooks-in-claude-dir, REQ-FLOW-113): Claude Code's hooks run copies under
   // `.claude/hooks/stamity/`, so the bound gains that hook folder as a root kind of its own (version 2 -> 3).
-  it("lists the sixteen platform files, the twelve content folders, the two state folders and the one hook folder", () => {
-    expect(OWNED_PATHS.version).toBe(3);
-    expect(OWNED_PATHS.exact).toHaveLength(16);
+  // TEST CHANGE, justified: REQ-FLOW-016 — the engine records the .gitignore lines it appends on a row at
+  // `.gitignore`, so the bound gains that platform file (version 3 -> 4, sixteen -> seventeen).
+  it("lists the seventeen platform files, the twelve content folders, the two state folders and the one hook folder", () => {
+    expect(OWNED_PATHS.version).toBe(4);
+    expect(OWNED_PATHS.exact).toHaveLength(17);
+    expect(OWNED_PATHS.exact).toContain(".gitignore");
     expect(OWNED_PATHS.contentRoots).toHaveLength(12);
     expect(OWNED_PATHS.stateRoots).toEqual([".stamity/generated/", ".stamity/mcp/"]);
     expect(OWNED_PATHS.hookRoots).toEqual([`${CLAUDE_HOOKS_DIR}/`]);

@@ -475,11 +475,23 @@ export async function runMcpAdd(
   // Credential file first, manifest last: a failure between the two leaves
   // spare placeholder names in an ignored file, not a selection whose
   // credentials were never provisioned.
-  await ctx.engine.mcp.env.ensureEnvMcp(rootDir, servers, packServers);
-  await ctx.engine.mcp.env.ensureGitignoreEntry(rootDir);
+  // The ignore lines the grown selection needs (`.env.mcp`'s once a server
+  // needs a credential), each appended line recorded on the ledger so `clean`
+  // takes back exactly those (REQ-FLOW-016).
+  const envLane = ctx.engine.mcp.env;
+  await envLane.ensureEnvMcp(rootDir, servers, packServers);
+  const gitignore = await envLane.reconcileGitignore(rootDir, {
+    required: envLane.requiredGitignoreEntries({
+      tools: manifest.tools,
+      envVarsRequired: envLane.collectRequiredEnvVars(servers, packServers).length > 0,
+      present: await envLane.presentGitignoreTargets(rootDir),
+    }),
+    previous: envLane.gitignoreRecordOf(manifest.ledger),
+  });
   await writeSetupManifest(ctx, rootDir, {
     ...manifest,
     mcp: { ...manifest.mcp, servers },
+    ledger: envLane.withGitignoreRows(manifest.ledger, manifest.tools, gitignore),
   });
 
   const values = await readEnvValues(ctx, rootDir);

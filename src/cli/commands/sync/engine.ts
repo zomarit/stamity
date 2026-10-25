@@ -17,7 +17,15 @@ import { OWNED_PATHS } from "../../../manifest/ownedPaths.ts";
 import { materializeUserMcpJson } from "../../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../../mcp/catalog.ts";
 import { engineOwnedServerIds, MERGED_MCP_JSON_PATHS } from "../../../mcp/emit.ts";
-import { ensureGitignoreEntry } from "../../../mcp/env.ts";
+import {
+  collectRequiredEnvVars,
+  GITIGNORE_FILE,
+  gitignoreLedgerRows,
+  gitignoreRecordOf,
+  presentGitignoreTargets,
+  reconcileGitignore,
+  requiredGitignoreEntries,
+} from "../../../mcp/env.ts";
 import { resolveModelLists, withModelLists, writeModelListCache, type ModelLists } from "../../engine/clientModels.ts";
 import { assertWriteTargetContained, isSharedRegularFile } from "../../../merge/atomicWrite.ts";
 import { extractManagedBlock, hasOwnerTextOutsideBlock } from "../../../merge/managedBlocks.ts";
@@ -651,9 +659,11 @@ export async function planSync(
   // Candidates are judged against the union of the persisted ledger and the
   // planned rows, so a renamed artifact's old path classifies `path-renamed`
   // (the new row must be present) instead of degrading to `deselected`.
+  // `.gitignore` is planned too: the apply's own lane reconciles its lines
+  // (REQ-FLOW-016), so its rows are never the sweep's.
   const reclaim = computeReclaimCandidates(
     [...manifest.ledger, ...rows],
-    new Set(outputs.map((output) => output.path)),
+    new Set([...outputs.map((output) => output.path), GITIGNORE_FILE]),
     new Set<Tool>(manifest.tools),
   );
 
@@ -699,6 +709,12 @@ export interface SyncApplyReport {
    * was already covered, and on a dry run, which does not touch the file.
    */
   gitignoreAdded?: string[];
+  /**
+   * The recorded `.gitignore` lines this run took back because the setup no
+   * longer needs them and the file each one ignores is gone (REQ-FLOW-016).
+   * Absent when it took back none, and on a dry run.
+   */
+  gitignoreRemoved?: string[];
   /** Sweep report; `null` when the plan had no reclaim candidates. */
   reclaimed: ReclaimReport | null;
   manifestPath: string;
@@ -1085,8 +1101,9 @@ function collisionRefusalMessage(plan: SyncPlan): string {
  * reclaim sweep runs in report-only mode (every actionable entry `dry-run`,
  * zero tallies). `.gitignore` is not touched either.
  *
- * A live run puts the engine's required ignore entries in place
- * ({@link ensureGitignoreEntry}) BEFORE the first emitted file is written, so a
+ * A live run puts the ignore entries this setup needs in place and takes back
+ * the recorded ones it no longer needs ({@link reconcileGitignore}) BEFORE the
+ * first emitted file is written, so a
  * repository set up before an entry existed gains it on its next sync, and a
  * `.gitignore` the lane refuses to republish (a link, a shared hard link, a
  * block-severity injection pattern in the bytes it would keep) stops the run
@@ -1213,7 +1230,17 @@ export async function applySync(
   // it, because this lane can REFUSE — and a refusal that landed after the
   // emitted files would leave a half-applied run with no manifest to account
   // for it. `--force` does not reach it: none of its refusals is a collision.
-  const gitignoreAdded = await ensureGitignoreEntry(rootDir);
+  // Exactly the lines this setup needs (decision E1), and the recorded lines
+  // it no longer needs taken back: `.env.mcp`'s once no selected server needs
+  // a credential and the file is gone.
+  const gitignore = await reconcileGitignore(rootDir, {
+    required: requiredGitignoreEntries({
+      tools: plan.manifest.tools,
+      envVarsRequired: collectRequiredEnvVars(plan.manifest.mcp?.servers ?? [], packMcpSupply).length > 0,
+      present: await presentGitignoreTargets(rootDir),
+    }),
+    previous: gitignoreRecordOf(plan.manifest.ledger),
+  });
 
   // Ownership as of BEFORE this run (the ledger apply is about to rebuild), so
   // the write lane judges each path the same way the plan above predicted it.
@@ -1326,6 +1353,8 @@ export async function applySync(
     }
     emitted.push(...ledgerRowsForOutput(output, written, managedBody, engineVersion, coOwnedRecord));
   }
+  // The lines the ignore lane owns, one row per client (`coOwned.lines`).
+  emitted.push(...gitignoreLedgerRows(plan.manifest.tools, gitignore.record, gitignore.contentHash));
 
   // Rebuild the ledger over the full closed tool set: an active tool's rows
   // become exactly this run's emission, and a tool the user removed from the
@@ -1395,7 +1424,8 @@ export async function applySync(
     unchanged: done("unchanged"),
     skipped: done("skipped"),
     refused: [...refused],
-    gitignoreAdded,
+    gitignoreAdded: gitignore.added,
+    ...(gitignore.removed.length > 0 ? { gitignoreRemoved: gitignore.removed } : {}),
     reclaimed,
     manifestPath: statePath,
     dryRun: false,

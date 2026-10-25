@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { configCommand } from "../../../src/cli/commands/config.ts";
 import { CONTENT_CLASSES, type ContentSelection } from "../../../src/types/content.ts";
@@ -304,6 +305,37 @@ describe("config mcp add — what the selected id runs", () => {
     // auditing a standing selection reads the block from `config mcp list`,
     // which the case below pins.
     expect(result.stdout).not.toContain("runs on this machine:");
+  });
+});
+
+describe("config mcp add — the .gitignore lines it records (REQ-FLOW-016)", () => {
+  const readLedger = async (handle: TempDirHandle): Promise<SetupManifest["ledger"]> =>
+    (JSON.parse(await readFile(handle.path(STATE_DIR, MANIFEST_FILE), "utf8")) as SetupManifest).ledger;
+
+  it("appends and records .env.mcp's line for a server that needs a credential, beside the other seven", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+
+    const result = await run(handle, ["mcp", "add", "github"]);
+
+    expect(result.code, result.stderr).toBe(0);
+    const lines = (await readFile(handle.path(".gitignore"), "utf8")).split("\n");
+    expect(lines).toContain(".env.mcp");
+    const rows = (await readLedger(handle)).filter((row) => row.path === ".gitignore");
+    expect(rows.map((row) => row.adapter)).toEqual(["claude"]);
+    expect(rows[0]?.coOwned?.lines).toContain(".env.mcp");
+    expect(rows[0]?.coOwned?.lines).toHaveLength(8);
+  });
+
+  it("writes no .env.mcp line for a server that needs none", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+
+    const result = await run(handle, ["mcp", "add", "context7"]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect((await readFile(handle.path(".gitignore"), "utf8")).split("\n")).not.toContain(".env.mcp");
+    expect((await readLedger(handle)).find((row) => row.path === ".gitignore")?.coOwned?.lines).toHaveLength(7);
   });
 });
 

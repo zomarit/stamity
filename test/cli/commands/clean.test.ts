@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { COMMANDS } from "../../../src/cli.ts";
@@ -325,6 +325,71 @@ describe("clean — full removal", () => {
     expect(result.stdout).toContain(".gitignore");
     expect(await readIfPresent(join(root, ".gitignore"))).toBe(`${STATE_DIR}/\nnode_modules/\n`);
   });
+});
+
+// ── The .gitignore lines setup recorded (REQ-FLOW-016, REQ-FLOW-027) ─────
+//
+// Real `init` through the funnel: the record clean reads is the one `init`
+// writes on the `.gitignore` row, which a hand-built ledger would only restate.
+describe("clean — the .gitignore lines setup recorded", () => {
+  const MACHINE_LOCAL = [
+    ".stamity/review-gate.json",
+    ".stamity/review-gate.json.lock",
+    ".stamity/review-gate.json.tmp-*",
+    ".stamity/preflight-canary.json",
+    ".stamity/run-ended.json",
+    ".stamity/context-once/",
+    ".stamity/client-models.json",
+  ];
+
+  async function initialised(): Promise<string> {
+    const root = tempDir().path("repo");
+    await mkdir(root, { recursive: true });
+    const init = await runInProcess(COMMANDS, ["init", "-y", "--tools", "claude"], { cwd: root });
+    expect(init.code, init.stderr).toBe(0);
+    expect(await readIfPresent(join(root, ".gitignore"))).toBe(`${MACHINE_LOCAL.join("\n")}\n`);
+    return root;
+  }
+
+  it("takes back the lines it added and keeps a line the owner added after setup", async () => {
+    const root = await initialised();
+    await writeFile(join(root, ".gitignore"), `${await readFile(join(root, ".gitignore"), "utf8")}my.log\n`, "utf8");
+
+    const result = await runClean(root, ["--json", "-y"]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(await readIfPresent(join(root, ".gitignore"))).toBe("my.log\n");
+    expect(parseSingleDoc(result.stdout)["gitignoreRemoved"]).toEqual(MACHINE_LOCAL);
+  });
+
+  it("says which lines it took back, and deletes the .gitignore it created", async () => {
+    const root = await initialised();
+
+    const result = await runClean(root, ["-y"]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(existsSync(join(root, ".gitignore"))).toBe(false);
+    expect(result.stdout).toContain("Removed .gitignore: the setup created it, and nothing of yours was in it.");
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "refuses a linked .gitignore after the rest is clean, naming the lines left, and writes nothing through it",
+    async () => {
+      const root = await initialised();
+      const outside = tempDir().path("outside-ignore");
+      await writeFile(outside, await readFile(join(root, ".gitignore"), "utf8"), "utf8");
+      const victim = await readFile(outside, "utf8");
+      await rm(join(root, ".gitignore"));
+      await symlink(outside, join(root, ".gitignore"));
+
+      const result = await runClean(root, ["-y"]);
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain(".gitignore lines this setup added were not taken back");
+      expect(result.stderr).toContain(MACHINE_LOCAL[0]);
+      expect(await readFile(outside, "utf8")).toBe(victim);
+    },
+  );
 });
 
 describe("clean — destructive confirmation gate", () => {

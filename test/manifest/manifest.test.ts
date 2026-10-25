@@ -24,6 +24,7 @@ import {
   type CreateManifestOptions,
 } from "../../src/manifest/manifest.ts";
 import { REPO_SUBSTITUTION_TOKENS } from "../../src/emit/substitution.ts";
+import { REQUIRED_GITIGNORE_ENTRIES } from "../../src/mcp/env.ts";
 import {
   DEFAULT_MAX_REVIEW_ITERATIONS,
   HARD_MAX_REVIEW_ITERATIONS,
@@ -262,6 +263,16 @@ describe("collectManifestErrors", () => {
     });
     const errorsFor = (coOwned: unknown): string[] =>
       collectManifestErrors({ ...fullManifest(), ledger: [settingsRow(coOwned)] });
+    /** The row the engine records its `.gitignore` lines on (REQ-FLOW-016). */
+    const gitignoreRow = (coOwned: unknown): Record<string, unknown> => ({
+      path: ".gitignore",
+      adapter: "claude",
+      artifactId: "gitignore",
+      artifactType: "infra",
+      coOwned,
+    });
+    const gitignoreErrorsFor = (coOwned: unknown): string[] =>
+      collectManifestErrors({ ...fullManifest(), ledger: [gitignoreRow(coOwned)] });
 
     it("accepts every field at its bound, and a row without the record", () => {
       expect(
@@ -269,11 +280,13 @@ describe("collectManifestErrors", () => {
           members: Object.fromEntries(Array.from({ length: 64 }, (_, i) => [`/m${i}`, HASH])),
           elements: { "/permissions/allow": Array.from({ length: 256 }, () => HASH), "/hooks/Pre~1Tool": [] },
           preexisting: Array.from({ length: 64 }, (_, i) => `/c${i}`),
-          lines: ["node_modules/", "x".repeat(1024)],
+          // TEST CHANGE, justified: REQ-FLOW-016 — `lines` is accepted only on the .gitignore row and
+          // only for lines this engine writes there, so it moved to the case below.
           createdFile: true,
           terminatorAdded: true,
         }),
       ).toEqual([]);
+      expect(gitignoreErrorsFor({ lines: [...REQUIRED_GITIGNORE_ENTRIES], createdFile: true, terminatorAdded: true })).toEqual([]);
       expect(errorsFor({})).toEqual([]);
       expect(collectManifestErrors({ ...fullManifest(), ledger: [{ ...settingsRow(undefined) }] })).toEqual([]);
     });
@@ -297,9 +310,6 @@ describe("collectManifestErrors", () => {
         [{ preexisting: ["/a", "/a"] }, "`ledger[0].coOwned.preexisting[1]` repeats `/a`"],
         [{ preexisting: "/a" }, "`ledger[0].coOwned.preexisting` must be an array of at most 64 member pointers"],
         [{ preexisting: [1] }, "`ledger[0].coOwned.preexisting[0]` must be a member pointer string"],
-        [{ lines: ["a\nb"] }, "`ledger[0].coOwned.lines[0]` must be a non-empty string of at most 1024 characters with no line break"],
-        [{ lines: [""] }, "`ledger[0].coOwned.lines[0]` must be a non-empty string of at most 1024 characters with no line break"],
-        [{ lines: ["x".repeat(1025)] }, "`ledger[0].coOwned.lines[0]` must be a non-empty string of at most 1024 characters with no line break"],
         [{ lines: "a" }, "`ledger[0].coOwned.lines` must be an array"],
         [{ createdFile: false }, "`ledger[0].coOwned.createdFile` must be exactly true when present"],
         [{ terminatorAdded: "yes" }, "`ledger[0].coOwned.terminatorAdded` must be exactly true when present"],
@@ -307,6 +317,49 @@ describe("collectManifestErrors", () => {
       for (const [coOwned, message] of cases) {
         expect(errorsFor(coOwned), JSON.stringify(coOwned)).toEqual([message]);
       }
+      // TEST CHANGE, justified: REQ-FLOW-016 — a line's shape is judged on the .gitignore row, the one
+      // row `lines` is accepted on; the three shape cases moved there, their messages unchanged.
+      const lineCases: readonly [unknown, string][] = [
+        [{ lines: ["a\nb"] }, "`ledger[0].coOwned.lines[0]` must be a non-empty string of at most 1024 characters with no line break"],
+        [{ lines: [""] }, "`ledger[0].coOwned.lines[0]` must be a non-empty string of at most 1024 characters with no line break"],
+        [{ lines: ["x".repeat(1025)] }, "`ledger[0].coOwned.lines[0]` must be a non-empty string of at most 1024 characters with no line break"],
+      ];
+      for (const [coOwned, message] of lineCases) {
+        expect(gitignoreErrorsFor(coOwned), JSON.stringify(coOwned)).toEqual([message]);
+      }
+    });
+
+    it("refuses a .gitignore row whose lines name one this engine does not write, naming the line (REQ-FLOW-016)", () => {
+      expect(gitignoreErrorsFor({ lines: [".env"] })).toEqual([
+        '`ledger[0].coOwned.lines[0]` ".env" is not a line this engine writes to .gitignore',
+      ]);
+      expect(gitignoreErrorsFor({ lines: [".env.mcp", "node_modules/", ".stamity/run-ended.json"] })).toEqual([
+        '`ledger[0].coOwned.lines[1]` "node_modules/" is not a line this engine writes to .gitignore',
+      ]);
+    });
+
+    it("refuses lines on any row but .gitignore's (REQ-FLOW-016)", () => {
+      expect(errorsFor({ lines: [".env.mcp"] })).toEqual([
+        '`ledger[0].coOwned.lines` is recorded only on the .gitignore row, not on ".claude/settings.json"',
+      ]);
+    });
+
+    it("raises CONFIG_ERROR on read for a forged .gitignore row, before any verb writes (REQ-FLOW-027)", async () => {
+      const root = getRoot().path("forged-gitignore");
+      const manifest = { ...fullManifest(), ledger: [gitignoreRow({ lines: [".env"] })] } as unknown as SetupManifest;
+      await mkdir(join(root, STATE_DIR), { recursive: true });
+      await writeFile(manifestPath(root), `${JSON.stringify(manifest, null, 2)}\n`);
+
+      const failure = await readManifest(root).then(
+        () => null,
+        (cause: unknown) => cause,
+      );
+
+      expect(failure).toBeInstanceOf(EngineError);
+      expect((failure as EngineError).code).toBe("CONFIG_ERROR");
+      expect((failure as EngineError).message).toContain('`ledger[0].coOwned.lines[0]` ".env" is not a line this engine writes');
+      // The writer refuses the same manifest, so the defect is never persisted.
+      await expect(writeManifest(root, manifest)).rejects.toMatchObject({ code: "CONFIG_ERROR" });
     });
 
     it("refuses a record past its bounds, with one error per oversized field", () => {
