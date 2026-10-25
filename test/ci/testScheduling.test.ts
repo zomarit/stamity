@@ -6,15 +6,18 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import { lock } from "proper-lockfile";
 import { afterAll, describe, expect, it } from "vitest";
 import { BaseSequencer, createVitest } from "vitest/node";
 import config, {
   fixtureScheduling,
+  loadedCaseTimeout,
   privateTempRoot,
   WINDOWS_SHARD_OF,
   WindowsFixtureSequencer,
   workerCap,
 } from "../../vitest.config.ts";
+import { ensureDistBuilt } from "../support/distBuild.ts";
 import setup, {
   PRIVATE_TMP_PREFIX,
   prepareTempRoot,
@@ -274,33 +277,64 @@ describe("ensureDistBuilt across processes", () => {
   const scratch = realpathSync(mkdtempSync(join(tmpdir(), "dist-build-")));
   afterAll(() => lazyCleanup(scratch));
 
-  it("starts one build when two processes ask at once for a root with no dist/", { timeout: 60_000 }, async () => {
+  it("starts one build when two processes ask at once for a root with no dist/", { timeout: loadedCaseTimeout() }, async () => {
     // A temp root, never this checkout: the shared checkout's dist/ is not removed or written.
     const root = join(scratch, "root");
     mkdirSync(root);
     const starts = join(scratch, "starts.log");
+    const absent = join(scratch, "absent.log");
+    // TEST CHANGE, tightened (ledger row 2026-10-25_autonomy-distribution-02/review/17): the stub
+    // used to hold its build open for one second, so two callers started further apart than that
+    // found the first one's build and the case passed without the lock. Now each caller logs its
+    // pid each time the helper finds dist/cli.js absent, and the stub writes the file only once
+    // both pids are in that log. Both callers have then passed the helper's first check with no
+    // build on disk, however far apart they started, so without the lock both would build.
     // The stub stands in for tsdown, set by env (STAMITY_TEST_DIST_BUILD_STUB): the case counts
-    // build starts, and the real build would take tens of seconds and compile this repository. It
-    // logs its start, holds the window open for a second so the other process reaches the lock
-    // while it runs, then writes the one file the helper checks for.
+    // build starts, and the real build would take tens of seconds and compile this repository.
     const stub = join(scratch, "stub.mjs");
     writeFileSync(
       stub,
       [
-        'import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";',
+        'import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";',
         `appendFileSync(${JSON.stringify(starts)}, \`\${process.pid}\\n\`);`,
-        "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);",
+        `const callers = () => existsSync(${JSON.stringify(absent)}) ? new Set(readFileSync(${JSON.stringify(absent)}, "utf8").split("\\n").filter(Boolean)).size : 0;`,
+        "const deadline = Date.now() + 30_000;",
+        "while (callers() < 2) {",
+        "  if (Date.now() > deadline) {",
+        '    console.error("stub build: the second caller did not find dist/cli.js absent within 30 s");',
+        "    process.exit(1);",
+        "  }",
+        "  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);",
+        "}",
         'mkdirSync("dist", { recursive: true });',
         'writeFileSync("dist/cli.js", "// stub build\\n");',
         "",
       ].join("\n"),
     );
+    // The caller wraps `stat` before it loads the helper, so the helper's own existence checks are
+    // the ones that log; `syncBuiltinESMExports` carries the wrapper to the helper's named import.
     const caller = join(scratch, "caller.mjs");
     writeFileSync(
       caller,
       [
-        `import { ensureDistBuilt } from ${JSON.stringify(pathToFileURL(join(ROOT, "test/support/distBuild.ts")).href)};`,
-        "await ensureDistBuilt({ root: process.argv[2] });",
+        'import { appendFileSync } from "node:fs";',
+        'import fsp from "node:fs/promises";',
+        'import { syncBuiltinESMExports } from "node:module";',
+        'import { join } from "node:path";',
+        "const root = process.argv[2];",
+        'const distCli = join(root, "dist", "cli.js");',
+        "const stat = fsp.stat;",
+        "fsp.stat = async (...args) => {",
+        "  try {",
+        "    return await stat(...args);",
+        "  } catch (error) {",
+        `    if (args[0] === distCli) appendFileSync(${JSON.stringify(absent)}, \`\${process.pid}\\n\`);`,
+        "    throw error;",
+        "  }",
+        "};",
+        "syncBuiltinESMExports();",
+        `const { ensureDistBuilt } = await import(${JSON.stringify(pathToFileURL(join(ROOT, "test/support/distBuild.ts")).href)});`,
+        "await ensureDistBuilt({ root });",
         "",
       ].join("\n"),
     );
@@ -310,8 +344,84 @@ describe("ensureDistBuilt across processes", () => {
         env: { ...process.env, STAMITY_TEST_DIST_BUILD_STUB: stub },
       });
     await Promise.all([call(), call()]);
+    expect(new Set(readFileSync(absent, "utf8").trim().split("\n")).size, "callers that found no dist/cli.js").toBe(2);
     expect(readFileSync(starts, "utf8").trim().split("\n"), "build starts").toHaveLength(1);
     expect(readFileSync(join(root, "dist", "cli.js"), "utf8")).toBe("// stub build\n");
+  });
+
+  // ADDED 2026-10-25 (ledger row 2026-10-25_autonomy-distribution-02/review/16, no spec id): a waiter
+  // that ran out of retries rejected with the lock library's bare message, which names neither the
+  // lock nor the way out, and every dist suite in that worker got the same message.
+  it("names the lock and the way out when a waiter runs out of retries", async () => {
+    const root = join(scratch, "held");
+    const lockfilePath = join(root, "node_modules", ".cache", "stamity", "dist-build.lock");
+    mkdirSync(dirname(lockfilePath), { recursive: true });
+    const release = await lock(root, { lockfilePath, realpath: false });
+    try {
+      const waiting = ensureDistBuilt({ root, lockRetries: 0 });
+      await expect(waiting).rejects.toThrow(
+        `distBuild: the build lock at ${lockfilePath} was still held after 0 retries a second apart, ` +
+          `so ${join(root, "dist", "cli.js")} was not built; if no other test run is building it, ` +
+          `remove ${lockfilePath} and re-run`,
+      );
+      await expect(waiting).rejects.toMatchObject({ cause: { code: "ELOCKED" } });
+    } finally {
+      await release();
+    }
+    expect(existsSync(join(root, "dist")), "a build ran without the lock").toBe(false);
+  });
+});
+
+// ADDED 2026-10-25 (ledger row 2026-10-25_autonomy-distribution-02/review/15, no spec id): a case's
+// own `timeout` replaces its project's `testTimeout`, so the 60 s these cases were given halved the
+// 120 s of the Windows parallel group they run in. Each one reads `loadedCaseTimeout()`, and that
+// budget is held to the resolved budget of the project each file runs in, on Windows and on POSIX.
+describe("the budgets of the cases given one of their own", () => {
+  const LOADED_CASES: Readonly<Record<string, number>> = {
+    "test/ci/testScheduling.test.ts": 1,
+    "test/cli/commands/syncMcpOwnership.test.ts": 1,
+    "test/hooks/personOnlyGuard.test.ts": 1,
+    "test/merge/reclaimMcpPreserve.test.ts": 2,
+  };
+
+  it("are each read from loadedCaseTimeout (vitest.config.ts), not a literal", () => {
+    for (const [file, count] of Object.entries(LOADED_CASES)) {
+      const budgets = [...readFileSync(join(ROOT, file), "utf8").matchAll(/\{ timeout: ([^}]*) \}/g)].map((match) => match[1]);
+      expect(budgets, file).toEqual(Array.from({ length: count }, () => "loadedCaseTimeout()"));
+    }
+  });
+
+  it("are never below the budget of the project each file runs in, on Windows and on POSIX", async () => {
+    const windows = await createVitest(
+      { watch: false, run: true, config: false, root: ROOT },
+      { test: { ...config.test, ...fixtureScheduling("win32") } },
+    );
+    try {
+      const specs = await windows.globTestSpecifications();
+      for (const file of Object.keys(LOADED_CASES)) {
+        const spec = specs.find((candidate) => relative(ROOT, candidate.moduleId).replaceAll("\\", "/") === file);
+        expect(spec, file).toBeDefined();
+        const budget = spec?.project.config.testTimeout ?? Number.POSITIVE_INFINITY;
+        expect(loadedCaseTimeout("win32"), `${file} on win32, in ${spec?.project.name}`).toBeGreaterThanOrEqual(budget);
+      }
+    } finally {
+      await windows.close();
+    }
+    const { include: _hostInclude, projects: _hostProjects, sequence: _hostSequence, ...shared } = config.test ?? {};
+    const posix = await createVitest(
+      { watch: false, run: true, config: false, root: ROOT },
+      { test: { ...shared, include: ["test/**/*.test.ts"], ...fixtureScheduling("linux") } },
+    );
+    try {
+      for (const platform of ["linux", "darwin"] as const) {
+        expect(loadedCaseTimeout(platform), platform).toBeGreaterThanOrEqual(posix.config.testTimeout);
+      }
+    } finally {
+      await posix.close();
+    }
+    for (const platform of ["win32", "linux", "darwin"] as const) {
+      expect(loadedCaseTimeout(platform), `${platform}: the 60 s these cases need under load`).toBeGreaterThanOrEqual(60_000);
+    }
   });
 });
 

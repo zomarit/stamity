@@ -18,6 +18,7 @@ import type { Tool } from "../../../src/types/core.ts";
 import type { RepoInfo } from "../../../src/types/detect.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { useTempDir } from "../../support/tempDir.ts";
+import { loadedCaseTimeout } from "../../../vitest.config.ts";
 
 /**
  * Ownership of a PACK-SUPPLIED MCP server, asserted at the LANE — `planSync` /
@@ -774,7 +775,7 @@ describe("clean --pack — uninstall-first ordering", () => {
   // TEST CHANGE, justified (ledger row 2026-10-18_cloud-runs-2/prove/6, no spec id): this case timed out at the 20 s
   // default while another suite loaded the machine, and passed on a re-run, so it has a budget of its own; every
   // assertion is unchanged.
-  it("keeps a hand-tuned pack entry, and still stops selecting it", { timeout: 60_000 }, async () => {
+  it("keeps a hand-tuned pack entry, and still stops selecting it", { timeout: loadedCaseTimeout() }, async () => {
     // The blast-radius guard, in the uninstall verb's spelling. Removal is
     // proved by re-rendering the bytes, so an operator who edited the engine's
     // pack entry owns it from that moment and it survives — but the selection

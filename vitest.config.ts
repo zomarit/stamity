@@ -119,6 +119,16 @@ const RECORDS_SUITE = "test/records/**";
 const WINDOWS_PARALLEL_TEST_TIMEOUT_MS = 120_000;
 
 /**
+ * 2026-10-25 (plan 022 file 2, unit b17-test-infra-batch): the per-case budget of a case that ran past
+ * the 20 s default while other suites loaded the machine. A per-case `timeout` replaces the project's
+ * `testTimeout`, so it is never below the budget of the project the case runs in: 60 s, or the Windows
+ * parallel group's budget on win32, whichever is larger (the serialized group keeps 20 s, under both).
+ */
+export function loadedCaseTimeout(platform: NodeJS.Platform = process.platform): number {
+  return platform === "win32" ? Math.max(60_000, WINDOWS_PARALLEL_TEST_TIMEOUT_MS) : 60_000;
+}
+
+/**
  * 2026-09-11: Windows CI first showed overlapping stalls in three real-disk
  * suites. CI 34588320202 later timed out the all-four fresh-directory golden
  * while it ran in the ordinary parallel group. Isolate these four fixtures,

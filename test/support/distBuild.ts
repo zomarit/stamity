@@ -45,37 +45,54 @@ const LOCK_RETRIES = { retries: 300, factor: 1, minTimeout: 1_000, maxTimeout: 1
 
 const inFlight = new Map<string, Promise<void>>();
 
-/** Resolves once `<root>/dist/cli.js` exists — building it first when absent. */
-export function ensureDistBuilt({ root = REPO_ROOT }: { root?: string } = {}): Promise<void> {
+/**
+ * Resolves once `<root>/dist/cli.js` exists — building it first when absent.
+ * `lockRetries` is how many times a waiter polls the build lock, a second
+ * apart; only the first call for a root sets it, since the result is memoized.
+ */
+export function ensureDistBuilt({
+  root = REPO_ROOT,
+  lockRetries = LOCK_RETRIES.retries,
+}: { root?: string; lockRetries?: number } = {}): Promise<void> {
   // A failed build stays memoized: every later caller in the run gets the
   // same actionable rejection instead of re-spawning a doomed build.
   let pending = inFlight.get(root);
   if (pending === undefined) {
-    pending = buildIfAbsent(root);
+    pending = buildIfAbsent(root, lockRetries);
     inFlight.set(root, pending);
   }
   return pending;
 }
 
-async function buildIfAbsent(root: string): Promise<void> {
+async function buildIfAbsent(root: string, lockRetries: number): Promise<void> {
   const distCli = join(root, "dist", "cli.js");
   if (await exists(distCli)) return;
 
   const lockfilePath = join(root, "node_modules", ".cache", "stamity", "dist-build.lock");
   await mkdir(dirname(lockfilePath), { recursive: true });
   let compromised: Error | undefined;
-  const release = await lock(root, {
-    lockfilePath,
-    realpath: false,
-    stale: LOCK_STALE_MS,
-    update: LOCK_UPDATE_MS,
-    retries: LOCK_RETRIES,
-    // The library's default rethrows from its refresh timer, which would crash
-    // the worker; the build below reports it instead.
-    onCompromised: (error: Error) => {
-      compromised = error;
-    },
-  });
+  let release: () => Promise<void>;
+  try {
+    release = await lock(root, {
+      lockfilePath,
+      realpath: false,
+      stale: LOCK_STALE_MS,
+      update: LOCK_UPDATE_MS,
+      retries: { ...LOCK_RETRIES, retries: lockRetries },
+      // The library's default rethrows from its refresh timer, which would crash
+      // the worker; the build below reports it instead.
+      onCompromised: (error: Error) => {
+        compromised = error;
+      },
+    });
+  } catch (error) {
+    if ((error as { code?: unknown }).code !== "ELOCKED") throw error;
+    throw new Error(
+      `distBuild: the build lock at ${lockfilePath} was still held after ${lockRetries} retries a second apart, ` +
+        `so ${distCli} was not built; if no other test run is building it, remove ${lockfilePath} and re-run`,
+      { cause: error },
+    );
+  }
   try {
     // Another process may have built while this one waited for the lock.
     if (await exists(distCli)) return;
