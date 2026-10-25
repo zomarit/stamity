@@ -1725,15 +1725,18 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   /**
    * Whether `text` mentions a person (REQ-FLOW-134): an `@` after no letter, digit or `_` (so an email address is
    * none), then a login (`[A-Za-z0-9][A-Za-z0-9-]*`) that is not one of the repository's own apps (any case, a `[bot]`
-   * suffix allowed), or any `@<org>/<team>`; a closed backtick span is code, so a mention inside one is none. One pass.
+   * suffix allowed), or any `@<org>/<team>`; a closed backtick span is code, so a mention inside one is none. With
+   * `files`, the whole line's read: an `@` that a data or field option puts before a file the call itself names
+   * (`fileRefs`) is that file (review/143), never in an inline value's text (review/147). One pass.
    */
-  const mentions = (text: string): boolean => {
+  const mentions = (text: string, files?: ReadonlySet<string>): boolean => {
     for (let at = 0; at < text.length; at += 1) {
       if (text[at] === "`") {
         const close = text.indexOf("`", at + 1);
         if (close === -1) continue;
         at = close;
-      } else if (text[at] === "@" && !/\w/.test(text[at - 1] ?? "") && !FILE_AT.test(text.slice(Math.max(0, at - 48), at))) {
+      } else if (text[at] === "@" && !/\w/.test(text[at - 1] ?? "") &&
+        !(files?.has(/^[^\s'"]*/.exec(text.slice(at + 1, at + 257))?.[0] ?? "") === true && FILE_AT.test(text.slice(Math.max(0, at - 48), at)))) {
         const login = /^[A-Za-z0-9][A-Za-z0-9-]*/.exec(text.slice(at + 1, at + 41))?.[0];
         if (login !== undefined && (!IN_REPO_APPS.has(login.toLowerCase()) || text[at + 1 + login.length] === "/")) return true;
       }
@@ -1795,6 +1798,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   };
   // Read once per verdict, so a line holding many gh calls is still read in one pass (the guard's hook timeout).
   let lineMentions: boolean | null = null;
+  /** The files the line's data and field options name by `@` (review/147), for the whole-line read. */
+  const fileRefs = new Set<string>();
   const environment = /\bGH_(?:REPO|HOST)\b|\bGIT_CONFIG\w*|\b(?:HOME|XDG_CONFIG_HOME)\s*=/.test(command);
   /** Whether a gh write naming no repository lands outside the origin: gh's default unknown or another repository. */
   const defaultAway = (): boolean => {
@@ -2570,8 +2575,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         // A key at any depth of a gh field (`comments[][body]`) is read by its last part (review/125).
         const name = (/(?:^|\[)([A-Za-z_]\w*)\]?(?:\[\])*$/.exec(key)?.[1] ?? key).toLowerCase();
         if (name === "body" || name === "title") {
-          if (typeof value === "string") prose.push(value);
-          else if (value === null) whole = true;
+          if (typeof value === "string" && !/\$[\w{(]|`/.test(value)) prose.push(value);
+          else if (value === null || typeof value === "string") whole = true;
         } else if (PEOPLE_KEYS.has(name)) {
           for (const entry of Array.isArray(value) ? (value as unknown[]) : [value]) persons.push(typeof entry === "string" ? entry : null);
         }
@@ -2612,11 +2617,17 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         // A body curl or wget reads from stdin in any spelling (`-d @-`, `@/dev/stdin`, `-T -`, a joined value), or a
         // body word the shell fills in, whose JSON strings the line does not show (review/126); a token header or another
         // filled-in word is no body (review/143).
-        const DATA = /^(?:-[A-Za-z]*d|--(?:data(?:-binary|-ascii|-urlencode)?|json|post-data|body-data))$/;
+        const DATA = /^(?:-[A-Za-z]*d|--(?:data(?:-raw|-binary|-ascii|-urlencode)?|json|post-data|body-data))$/;
         whole ||= cmd.some((word) => /(?:^|[=@])(?:-|\/dev\/stdin|\/dev\/fd\/0|\/proc\/self\/fd\/0)$/.test(word)) ||
-          line.some((word, at) => at > 0 && shellFilled(at) && (DATA.test(line[at - 1] ?? "") || /^(?:-d|--(?:data(?:-binary|-ascii|-urlencode)?|json|post-data|body-data)=)/.test(word)));
+          line.some((word, at) => at > 0 && shellFilled(at) && (DATA.test(line[at - 1] ?? "") || /^(?:-d|--(?:data(?:-raw|-binary|-ascii|-urlencode)?|json|post-data|body-data)=)/.test(word)));
       }
-      if (whole ? (lineMentions ??= mentions(command)) : prose.some(mentions)) {
+      for (let k = 1; k < cmd.length; k += 1) {
+        const word = cmd[k] ?? "";
+        const value = /^(?:-[A-Za-z]*[dFT]|--(?:data(?:-binary|-ascii|-urlencode)?|json|form|upload-file|field))$/.test(word) ? (cmd[k + 1] ?? "") : word.replace(/^--(?:data(?:-binary|-ascii|-urlencode)?|json|form|upload-file|field)=/, "");
+        const at = value.indexOf("@");
+        if (at !== -1 && (at === 0 || value[at - 1] === "=") && value !== word) fileRefs.add(value.slice(at + 1));
+      }
+      if (whole ? (lineMentions ??= mentions(command, fileRefs)) : prose.some((entry) => mentions(entry))) {
         deny("outside-write", `A body or title naming a person (an \`@\` mention), which reaches them (\`${what}\`)`);
       }
       if (persons.some((value) => value === null || people(value))) {
@@ -2956,7 +2967,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     if (environment || targets.some((key) => key === "" || key !== origin) || (targets.length === 0 && defaultAway())) {
       deny("outside-write", `A write that reaches another repository, or one the guard cannot place (\`${what}\`)`);
     }
-    if (whole ? (lineMentions ??= mentions(command)) : prose.some(mentions)) {
+    if (whole ? (lineMentions ??= mentions(command, fileRefs)) : prose.some((text) => mentions(text))) {
       deny("outside-write", `A body or title naming a person (an \`@\` mention), which reaches them (\`${what}\`)`);
     }
     if (persons.some((value) => value === null || people(value))) {

@@ -4324,3 +4324,35 @@ describe("the outside-party readers' fifth round (a4c, review/143, the lens's W-
     expect(rule("git push -u origin feat/x", { ...ORIGIN, originPush: null })).toBeNull();
   });
 });
+
+/**
+ * a4c fix round 5 (REQ-FLOW-134, review/147, the lens's round-4 W-1): a file reference is skipped only where the call's
+ * own data or field option names it, in the whole-line read, never inside an inline value's text; a JSON string holding
+ * a shell expansion makes the whole line read, the raw data option included. Each asking row is red on 6a2e23e0.
+ */
+describe("the outside-party readers' sixth round (a4c, review/147, the lens's round-4 W-1)", () => {
+  const ORIGIN = { ...ON_FEATURE, originRepo: "github.com/acme/app" };
+  const rule = (command: string): string | null => {
+    const verdict = personOnlyVerdict(command, ORIGIN);
+    return verdict.deny ? verdict.rule : null;
+  };
+  const API = "https://api.github.com/repos/acme/app/issues/1/comments";
+
+  it.each([
+    ["an inline body putting a data-option-like word right before a mention", "gh pr comment 3 --body 'run it with -d @alice please'"],
+    ["an inline body putting a form-option-like word right before a mention", "gh issue comment 3 --body 'see -F @alice'"],
+    ["a heredoc body on stdin putting a data-option-like word before a mention", "gh pr comment 3 --body-file - <<'EOF'\nuse -d @alice\nEOF"],
+    ["a JSON body sent with the raw data option, its value from a variable set on the line", `B='@alice look'; curl -X POST --data-raw "{\\"body\\":\\"$B\\"}" ${API}`],
+    ["a JSON body joined to the raw data option, its value from a variable set on the line", `B='@alice look'; curl -X POST --data-raw="{\\"body\\":\\"$B\\"}" ${API}`],
+  ])("asks for %s", (_, command) => {
+    expect(rule(command), command).toBe("outside-write");
+  });
+
+  it.each([
+    ["a data option's own file beside a body the shell fills in", `T=t; curl -X POST -d @alice.json -d "{\\"title\\":\\"$T\\"}" ${API}`],
+    ["a typed field's own file on a gh REST write read whole", "echo x | gh api -X POST repos/acme/app/issues/1/comments -F body=@alice.md --input -"],
+    ["a JSON string holding a literal dollar sign and no mention", `curl -X POST --data-raw '{"body":"costs $5"}' ${API}`],
+  ])("runs %s", (_, command) => {
+    expect(rule(command), command).toBeNull();
+  });
+});

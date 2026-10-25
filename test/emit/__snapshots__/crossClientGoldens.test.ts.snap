@@ -467,7 +467,7 @@ process.stdout.write(lines.join("\\n") + "\\n");
 // writes only the pre-flight canary.
 // stamity-autonomy {"mode":"autonomous","runs":["pr-ready","tag"],"deployingBranches":[],"deploying":[]}
 
-import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, readlinkSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -487,6 +487,7 @@ const PACKED_REFS_MAX_BYTES = 8388608;
 const CONFIG_MAX_BYTES = 1048576;
 const REWRITES_MAX = 256;
 const INCLUDE_DEPTH_MAX = 10;
+const LINK_HOPS_MAX = 8;
 const INCLUDE_FILES_MAX = 64;
 const INCLUDE_BYTES_MAX = 4194304;
 const PLACES_MAX = 32;
@@ -2129,15 +2130,17 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	/**
 	* Whether \`text\` mentions a person (REQ-FLOW-134): an \`@\` after no letter, digit or \`_\` (so an email address is
 	* none), then a login (\`[A-Za-z0-9][A-Za-z0-9-]*\`) that is not one of the repository's own apps (any case, a \`[bot]\`
-	* suffix allowed), or any \`@<org>/<team>\`; a closed backtick span is code, so a mention inside one is none. One pass.
+	* suffix allowed), or any \`@<org>/<team>\`; a closed backtick span is code, so a mention inside one is none. With
+	* \`files\`, the whole line's read: an \`@\` that a data or field option puts before a file the call itself names
+	* (\`fileRefs\`) is that file (review/143), never in an inline value's text (review/147). One pass.
 	*/
-	const mentions = (text) => {
+	const mentions = (text, files) => {
 		for (let at = 0; at < text.length; at += 1) {
 			if (text[at] === "\`") {
 				const close = text.indexOf("\`", at + 1);
 				if (close === -1) continue;
 				at = close;
-			} else if (text[at] === "@" && !/\\w/.test(text[at - 1] ?? "") && !FILE_AT.test(text.slice(Math.max(0, at - 48), at))) {
+			} else if (text[at] === "@" && !/\\w/.test(text[at - 1] ?? "") && !(files?.has(/^[^\\s'"]*/.exec(text.slice(at + 1, at + 257))?.[0] ?? "") === true && FILE_AT.test(text.slice(Math.max(0, at - 48), at)))) {
 				const login = /^[A-Za-z0-9][A-Za-z0-9-]*/.exec(text.slice(at + 1, at + 41))?.[0];
 				if (login !== undefined && (!IN_REPO_APPS.has(login.toLowerCase()) || text[at + 1 + login.length] === "/")) return true;
 			}
@@ -2203,6 +2206,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	};
 	// Read once per verdict, so a line holding many gh calls is still read in one pass (the guard's hook timeout).
 	let lineMentions = null;
+	/** The files the line's data and field options name by \`@\` (review/147), for the whole-line read. */
+	const fileRefs = new Set();
 	const environment = /\\bGH_(?:REPO|HOST)\\b|\\bGIT_CONFIG\\w*|\\b(?:HOME|XDG_CONFIG_HOME)\\s*=/.test(command);
 	/** Whether a gh write naming no repository lands outside the origin: gh's default unknown or another repository. */
 	const defaultAway = () => {
@@ -3062,8 +3067,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				// A key at any depth of a gh field (\`comments[][body]\`) is read by its last part (review/125).
 				const name = (/(?:^|\\[)([A-Za-z_]\\w*)\\]?(?:\\[\\])*$/.exec(key)?.[1] ?? key).toLowerCase();
 				if (name === "body" || name === "title") {
-					if (typeof value === "string") prose.push(value);
-					else if (value === null) whole = true;
+					if (typeof value === "string" && !/\\$[\\w{(]|\`/.test(value)) prose.push(value);
+					else if (value === null || typeof value === "string") whole = true;
 				} else if (PEOPLE_KEYS.has(name)) {
 					for (const entry of Array.isArray(value) ? value : [value]) persons.push(typeof entry === "string" ? entry : null);
 				}
@@ -3104,10 +3109,16 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				// A body curl or wget reads from stdin in any spelling (\`-d @-\`, \`@/dev/stdin\`, \`-T -\`, a joined value), or a
 				// body word the shell fills in, whose JSON strings the line does not show (review/126); a token header or another
 				// filled-in word is no body (review/143).
-				const DATA = /^(?:-[A-Za-z]*d|--(?:data(?:-binary|-ascii|-urlencode)?|json|post-data|body-data))$/;
-				whole ||= cmd.some((word) => /(?:^|[=@])(?:-|\\/dev\\/stdin|\\/dev\\/fd\\/0|\\/proc\\/self\\/fd\\/0)$/.test(word)) || line.some((word, at) => at > 0 && shellFilled(at) && (DATA.test(line[at - 1] ?? "") || /^(?:-d|--(?:data(?:-binary|-ascii|-urlencode)?|json|post-data|body-data)=)/.test(word)));
+				const DATA = /^(?:-[A-Za-z]*d|--(?:data(?:-raw|-binary|-ascii|-urlencode)?|json|post-data|body-data))$/;
+				whole ||= cmd.some((word) => /(?:^|[=@])(?:-|\\/dev\\/stdin|\\/dev\\/fd\\/0|\\/proc\\/self\\/fd\\/0)$/.test(word)) || line.some((word, at) => at > 0 && shellFilled(at) && (DATA.test(line[at - 1] ?? "") || /^(?:-d|--(?:data(?:-raw|-binary|-ascii|-urlencode)?|json|post-data|body-data)=)/.test(word)));
 			};
-			if (whole ? lineMentions ??= mentions(command) : prose.some(mentions)) {
+			for (let k = 1; k < cmd.length; k += 1) {
+				const word = cmd[k] ?? "";
+				const value = /^(?:-[A-Za-z]*[dFT]|--(?:data(?:-binary|-ascii|-urlencode)?|json|form|upload-file|field))$/.test(word) ? cmd[k + 1] ?? "" : word.replace(/^--(?:data(?:-binary|-ascii|-urlencode)?|json|form|upload-file|field)=/, "");
+				const at = value.indexOf("@");
+				if (at !== -1 && (at === 0 || value[at - 1] === "=") && value !== word) fileRefs.add(value.slice(at + 1));
+			};
+			if (whole ? lineMentions ??= mentions(command, fileRefs) : prose.some((entry) => mentions(entry))) {
 				deny("outside-write", \`A body or title naming a person (an \\\`@\\\` mention), which reaches them (\\\`\${what}\\\`)\`);
 			};
 			if (persons.some((value) => value === null || people(value))) {
@@ -3526,7 +3537,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		if (environment || targets.some((key) => key === "" || key !== origin) || targets.length === 0 && defaultAway()) {
 			deny("outside-write", \`A write that reaches another repository, or one the guard cannot place (\\\`\${what}\\\`)\`);
 		};
-		if (whole ? lineMentions ??= mentions(command) : prose.some(mentions)) {
+		if (whole ? lineMentions ??= mentions(command, fileRefs) : prose.some((text) => mentions(text))) {
 			deny("outside-write", \`A body or title naming a person (an \\\`@\\\` mention), which reaches them (\\\`\${what}\\\`)\`);
 		};
 		if (persons.some((value) => value === null || people(value))) {
@@ -6043,14 +6054,21 @@ function configOf(dirs) {
       return;
     }
     let text = "";
+    let hops = 0;
     if (path !== "/dev/null") {
       try {
-        const stats = lstatSync(path);
+        let real = path;
+        let stats = lstatSync(real);
+        while (stats.isSymbolicLink()) {
+          if ((hops += 1) > LINK_HOPS_MAX) throw new Error("links");
+          real = resolve(dirname(real), readlinkSync(real));
+          stats = lstatSync(real);
+        }
         bytes += stats.size;
         if (!stats.isFile() || stats.size > CONFIG_MAX_BYTES || bytes > INCLUDE_BYTES_MAX) partial = true;
-        else text = readFileSync(path, "utf8");
+        else text = readFileSync(real, "utf8");
       } catch (error) {
-        if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) partial = true;
+        if (hops > 0 || !error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) partial = true;
       }
     }
     let kind = "";
@@ -11238,7 +11256,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/hooks/stamity/stamity-agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".claude/hooks/stamity/stamity-cloud-readiness.mjs": "acef8b976c3cf0dc29df1ab1584458bc83c66ab1e7284e28df62af60f1311c91 11348 bytes",
   ".claude/hooks/stamity/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "af6819955ca8674e18206e7a84f1b79d2c5a65e0c859bda759c6ccaf0d2a0e21 286751 bytes",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "09a80c99929caceb79114a5103abeddd3b7a86e51e4a775c1b79235739acde2b 288072 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
   ".claude/hooks/stamity/stamity-session-start.mjs": "c807b92eeff34b3e194a0f7ae843c2945d5663d56cdb937786454a6402df3f31 51786 bytes",
@@ -11360,12 +11378,12 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".mcp.json": "f4e65233eea1ba936b61b16f2ee2d90f84a2510436d58f6484d872f507314f2f 387 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "0b19da793e8acbff1793e1245e5a4662679bb826b136ade290bd474fbf960025 286747 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "3be2dd6ea7d18167edd0e10bc140a1cca4b07fceb9bbed3f8292f27c41e9cf29 288068 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "8480d3a6fe6ea5fe1cad1c683ecbb07f3999cbdb411ae7dff7a1ec09eb207068 20937 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/codex/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "8c1cbea70393b366c45b40b2453df27c63428e0b6cfd31410debd978415ab50e 289501 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "cf35489077e970972f864162665145fd155f8459d8a614d63796435e357e75bf 290822 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "97b118796dbd153216cacceb34fd122b82f9cf75eae3b1d2de4c0938482af8a5 22349 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "9f930fcd797ef464e7f4cb4c40e59b4976d65199a5c974fb67ca7624e5d0287c 56602 bytes",
@@ -11373,7 +11391,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "c74c1b3d2cd908b170c48a8813bd05cc91f058210789a9b2f815b731a2eb6ccd 31773 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "7fd19cc7af491a9d0c91f1b061f16ecbbcbb33d420c1c497eba7bee934344104 286783 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "43cfb89e7bbb9e54522c15d200ef7cc5a1508e6ac80e800a0cd2bc42f4ff17b3 288104 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "513a8e4c2631670fffed73a96be46542fea82d8e1719a5d26da0a872699277c6 20938 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -11385,7 +11403,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "6c58c3086a6b067ac8294b2f6bae2d0a8e018eace84e83f4d781e541fca73fb6 94261 bytes",
+  ".stamity/manifest.json": "2f2760242f6d8daec3779cb17c4f033720ce7b2d809b4275d26ebf206659d19c 94261 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
@@ -11873,7 +11891,7 @@ process.stdout.write(lines.join("\\n") + "\\n");
 // writes only the pre-flight canary.
 // stamity-autonomy {"mode":"autonomous","runs":["pr-ready","tag"],"deployingBranches":[],"deploying":[]}
 
-import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, readlinkSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11893,6 +11911,7 @@ const PACKED_REFS_MAX_BYTES = 8388608;
 const CONFIG_MAX_BYTES = 1048576;
 const REWRITES_MAX = 256;
 const INCLUDE_DEPTH_MAX = 10;
+const LINK_HOPS_MAX = 8;
 const INCLUDE_FILES_MAX = 64;
 const INCLUDE_BYTES_MAX = 4194304;
 const PLACES_MAX = 32;
@@ -13535,15 +13554,17 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	/**
 	* Whether \`text\` mentions a person (REQ-FLOW-134): an \`@\` after no letter, digit or \`_\` (so an email address is
 	* none), then a login (\`[A-Za-z0-9][A-Za-z0-9-]*\`) that is not one of the repository's own apps (any case, a \`[bot]\`
-	* suffix allowed), or any \`@<org>/<team>\`; a closed backtick span is code, so a mention inside one is none. One pass.
+	* suffix allowed), or any \`@<org>/<team>\`; a closed backtick span is code, so a mention inside one is none. With
+	* \`files\`, the whole line's read: an \`@\` that a data or field option puts before a file the call itself names
+	* (\`fileRefs\`) is that file (review/143), never in an inline value's text (review/147). One pass.
 	*/
-	const mentions = (text) => {
+	const mentions = (text, files) => {
 		for (let at = 0; at < text.length; at += 1) {
 			if (text[at] === "\`") {
 				const close = text.indexOf("\`", at + 1);
 				if (close === -1) continue;
 				at = close;
-			} else if (text[at] === "@" && !/\\w/.test(text[at - 1] ?? "") && !FILE_AT.test(text.slice(Math.max(0, at - 48), at))) {
+			} else if (text[at] === "@" && !/\\w/.test(text[at - 1] ?? "") && !(files?.has(/^[^\\s'"]*/.exec(text.slice(at + 1, at + 257))?.[0] ?? "") === true && FILE_AT.test(text.slice(Math.max(0, at - 48), at)))) {
 				const login = /^[A-Za-z0-9][A-Za-z0-9-]*/.exec(text.slice(at + 1, at + 41))?.[0];
 				if (login !== undefined && (!IN_REPO_APPS.has(login.toLowerCase()) || text[at + 1 + login.length] === "/")) return true;
 			}
@@ -13609,6 +13630,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	};
 	// Read once per verdict, so a line holding many gh calls is still read in one pass (the guard's hook timeout).
 	let lineMentions = null;
+	/** The files the line's data and field options name by \`@\` (review/147), for the whole-line read. */
+	const fileRefs = new Set();
 	const environment = /\\bGH_(?:REPO|HOST)\\b|\\bGIT_CONFIG\\w*|\\b(?:HOME|XDG_CONFIG_HOME)\\s*=/.test(command);
 	/** Whether a gh write naming no repository lands outside the origin: gh's default unknown or another repository. */
 	const defaultAway = () => {
@@ -14468,8 +14491,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				// A key at any depth of a gh field (\`comments[][body]\`) is read by its last part (review/125).
 				const name = (/(?:^|\\[)([A-Za-z_]\\w*)\\]?(?:\\[\\])*$/.exec(key)?.[1] ?? key).toLowerCase();
 				if (name === "body" || name === "title") {
-					if (typeof value === "string") prose.push(value);
-					else if (value === null) whole = true;
+					if (typeof value === "string" && !/\\$[\\w{(]|\`/.test(value)) prose.push(value);
+					else if (value === null || typeof value === "string") whole = true;
 				} else if (PEOPLE_KEYS.has(name)) {
 					for (const entry of Array.isArray(value) ? value : [value]) persons.push(typeof entry === "string" ? entry : null);
 				}
@@ -14510,10 +14533,16 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				// A body curl or wget reads from stdin in any spelling (\`-d @-\`, \`@/dev/stdin\`, \`-T -\`, a joined value), or a
 				// body word the shell fills in, whose JSON strings the line does not show (review/126); a token header or another
 				// filled-in word is no body (review/143).
-				const DATA = /^(?:-[A-Za-z]*d|--(?:data(?:-binary|-ascii|-urlencode)?|json|post-data|body-data))$/;
-				whole ||= cmd.some((word) => /(?:^|[=@])(?:-|\\/dev\\/stdin|\\/dev\\/fd\\/0|\\/proc\\/self\\/fd\\/0)$/.test(word)) || line.some((word, at) => at > 0 && shellFilled(at) && (DATA.test(line[at - 1] ?? "") || /^(?:-d|--(?:data(?:-binary|-ascii|-urlencode)?|json|post-data|body-data)=)/.test(word)));
+				const DATA = /^(?:-[A-Za-z]*d|--(?:data(?:-raw|-binary|-ascii|-urlencode)?|json|post-data|body-data))$/;
+				whole ||= cmd.some((word) => /(?:^|[=@])(?:-|\\/dev\\/stdin|\\/dev\\/fd\\/0|\\/proc\\/self\\/fd\\/0)$/.test(word)) || line.some((word, at) => at > 0 && shellFilled(at) && (DATA.test(line[at - 1] ?? "") || /^(?:-d|--(?:data(?:-raw|-binary|-ascii|-urlencode)?|json|post-data|body-data)=)/.test(word)));
 			};
-			if (whole ? lineMentions ??= mentions(command) : prose.some(mentions)) {
+			for (let k = 1; k < cmd.length; k += 1) {
+				const word = cmd[k] ?? "";
+				const value = /^(?:-[A-Za-z]*[dFT]|--(?:data(?:-binary|-ascii|-urlencode)?|json|form|upload-file|field))$/.test(word) ? cmd[k + 1] ?? "" : word.replace(/^--(?:data(?:-binary|-ascii|-urlencode)?|json|form|upload-file|field)=/, "");
+				const at = value.indexOf("@");
+				if (at !== -1 && (at === 0 || value[at - 1] === "=") && value !== word) fileRefs.add(value.slice(at + 1));
+			};
+			if (whole ? lineMentions ??= mentions(command, fileRefs) : prose.some((entry) => mentions(entry))) {
 				deny("outside-write", \`A body or title naming a person (an \\\`@\\\` mention), which reaches them (\\\`\${what}\\\`)\`);
 			};
 			if (persons.some((value) => value === null || people(value))) {
@@ -14932,7 +14961,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		if (environment || targets.some((key) => key === "" || key !== origin) || targets.length === 0 && defaultAway()) {
 			deny("outside-write", \`A write that reaches another repository, or one the guard cannot place (\\\`\${what}\\\`)\`);
 		};
-		if (whole ? lineMentions ??= mentions(command) : prose.some(mentions)) {
+		if (whole ? lineMentions ??= mentions(command, fileRefs) : prose.some((text) => mentions(text))) {
 			deny("outside-write", \`A body or title naming a person (an \\\`@\\\` mention), which reaches them (\\\`\${what}\\\`)\`);
 		};
 		if (persons.some((value) => value === null || people(value))) {
@@ -17449,14 +17478,21 @@ function configOf(dirs) {
       return;
     }
     let text = "";
+    let hops = 0;
     if (path !== "/dev/null") {
       try {
-        const stats = lstatSync(path);
+        let real = path;
+        let stats = lstatSync(real);
+        while (stats.isSymbolicLink()) {
+          if ((hops += 1) > LINK_HOPS_MAX) throw new Error("links");
+          real = resolve(dirname(real), readlinkSync(real));
+          stats = lstatSync(real);
+        }
         bytes += stats.size;
         if (!stats.isFile() || stats.size > CONFIG_MAX_BYTES || bytes > INCLUDE_BYTES_MAX) partial = true;
-        else text = readFileSync(path, "utf8");
+        else text = readFileSync(real, "utf8");
       } catch (error) {
-        if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) partial = true;
+        if (hops > 0 || !error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) partial = true;
       }
     }
     let kind = "";
@@ -21315,7 +21351,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/hooks/stamity/stamity-agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".claude/hooks/stamity/stamity-cloud-readiness.mjs": "acef8b976c3cf0dc29df1ab1584458bc83c66ab1e7284e28df62af60f1311c91 11348 bytes",
   ".claude/hooks/stamity/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "af6819955ca8674e18206e7a84f1b79d2c5a65e0c859bda759c6ccaf0d2a0e21 286751 bytes",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "09a80c99929caceb79114a5103abeddd3b7a86e51e4a775c1b79235739acde2b 288072 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
   ".claude/hooks/stamity/stamity-session-start.mjs": "c807b92eeff34b3e194a0f7ae843c2945d5663d56cdb937786454a6402df3f31 51786 bytes",
@@ -21371,7 +21407,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "86eb2e21d56897c5cdab0b230b5493cec5b2838f0fcdb644dc56622a669e5829 28322 bytes",
+  ".stamity/manifest.json": "4764d7304d1f7bc82f0f1cc2e370f299f5363520da6bc9168113290a1b551a13 28322 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -22233,7 +22269,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "0b19da793e8acbff1793e1245e5a4662679bb826b136ade290bd474fbf960025 286747 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "3be2dd6ea7d18167edd0e10bc140a1cca4b07fceb9bbed3f8292f27c41e9cf29 288068 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "8480d3a6fe6ea5fe1cad1c683ecbb07f3999cbdb411ae7dff7a1ec09eb207068 20937 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/codex/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -22242,7 +22278,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "483579c1a7a31e9ad1c2cf7259a17239747f6cbd967af08bb04339fe3f1607e4 22156 bytes",
+  ".stamity/manifest.json": "21845b20492d402203b18328e13686098e4112ba1644ec76bf902ea237b75839 22156 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "AGENTS.override.md": "122504f41cc40a99c65cba4995c228bf4a5137d738324bbe3a847c6aaa5192db 25872 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -22583,7 +22619,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "8c1cbea70393b366c45b40b2453df27c63428e0b6cfd31410debd978415ab50e 289501 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "cf35489077e970972f864162665145fd155f8459d8a614d63796435e357e75bf 290822 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "97b118796dbd153216cacceb34fd122b82f9cf75eae3b1d2de4c0938482af8a5 22349 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "9f930fcd797ef464e7f4cb4c40e59b4976d65199a5c974fb67ca7624e5d0287c 56602 bytes",
@@ -22592,7 +22628,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "7245ae1bf5ef48df0c80e019f819cbac9e81c68d4966ef1bdf87e6ff71b4838b 20257 bytes",
+  ".stamity/manifest.json": "be6321353eb006031e62f908b0f006ec4183ab27dfe10ce07b4919935512a7af 20257 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
@@ -23208,7 +23244,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "c74c1b3d2cd908b170c48a8813bd05cc91f058210789a9b2f815b731a2eb6ccd 31773 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "7fd19cc7af491a9d0c91f1b061f16ecbbcbb33d420c1c497eba7bee934344104 286783 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "43cfb89e7bbb9e54522c15d200ef7cc5a1508e6ac80e800a0cd2bc42f4ff17b3 288104 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "513a8e4c2631670fffed73a96be46542fea82d8e1719a5d26da0a872699277c6 20938 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
   ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "1111332a1630ed4dcb42e421b2326c5dd423a358e3c92bf8cb367e212a7a996d 51799 bytes",
@@ -23217,7 +23253,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "36ef16434f82658df7a8f2999277f51988e8abb3a5a8f8d7b9c48c64f105bdb5 24101 bytes",
+  ".stamity/manifest.json": "32d306245f6ed53af31e044047a50c48381965cb16ada279a2cb51c54b92987e 24101 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",

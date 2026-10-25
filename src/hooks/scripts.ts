@@ -341,7 +341,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // margin: 287,936 bytes / 6,141 lines (copilot, generated; 283,112 bytes before the round), past the bytes row and at
   // the lines row, because the guard now follows a configuration's includes and reads origin's push URL, and the verdict
   // reads a remote write and short-option clusters. 287,936 + 2,880 = 290,816 bytes; 6,141 + 100 = 6,241 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 290_816, lines: 6_241 },
+  // Moved again 2026-10-25 on the a4c lane (review/147, review/148), by the measured size plus a small margin: 290,821
+  // bytes / 6,178 lines (copilot, generated; 289,500 bytes before the round), past the bytes row, because the guard now
+  // follows a linked git configuration file. 290,821 + 4,091 = 294,912 bytes; the lines row (6,241) holds.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 294_912, lines: 6_241 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -4141,8 +4144,9 @@ const GUARD_GIT_REWRITES_MAX = 256;
  * and pushInsteadOf rule. Includes are followed (review/134): include.path and every includeIf target, whatever its
  * condition (a superset of what git reads), relative to the including file, ~/ from the home folder, at most
  * INCLUDE_DEPTH_MAX deep, INCLUDE_FILES_MAX files and INCLUDE_BYTES_MAX bytes in all; a missing target reads as empty,
- * as git reads it. partial where the reading may miss or misplace a remote: a file past CONFIG_MAX_BYTES or behind a
- * link (/dev/null aside), a file it cannot read, a bound passed, an included file setting a remote, URL-rewrite or
+ * as git reads it. A file that is a symbolic link is followed, at most LINK_HOPS_MAX links (review/148). partial where
+ * the reading may miss or misplace a remote: a file past CONFIG_MAX_BYTES or not a regular file (/dev/null aside), a
+ * link that cannot be resolved, a file it cannot read, a bound passed, an included file setting a remote, URL-rewrite or
  * branch-remote key (its condition is not read), configuration the hook's environment sets (GIT_CONFIG_COUNT,
  * GIT_CONFIG_PARAMETERS), or more than REWRITES_MAX URL rewrite rules.
  *
@@ -4154,6 +4158,8 @@ const GUARD_GIT_REWRITES_MAX = 256;
  * naming another host than that remote's.
  */
 const GUARD_GIT_INCLUDE_DEPTH_MAX = 10;
+/** The symbolic links a git configuration file may pass through before the reading is partial (review/148). */
+const GUARD_GIT_LINK_HOPS_MAX = 8;
 const GUARD_GIT_INCLUDE_FILES_MAX = 64;
 const GUARD_GIT_INCLUDE_BYTES_MAX = 4_194_304;
 
@@ -4489,7 +4495,7 @@ export function buildPersonOnlyGuardScript(opts: {
   )}
 ${AUTONOMY_MARKER}${json(baked)}
 
-${namedImport(["closeSync", "lstatSync", "mkdirSync", "openSync", "readFileSync", "readSync", "readdirSync", "statSync", "writeFileSync"], "node:fs")}
+${namedImport(["closeSync", "lstatSync", "mkdirSync", "openSync", "readFileSync", "readSync", "readdirSync", "readlinkSync", "statSync", "writeFileSync"], "node:fs")}
 ${namedImport(["dirname", "isAbsolute", "join", "resolve", "sep", ...extra.path], "node:path")}
 ${extra.url}
 const STATE_SEGMENTS = ${json([RUNS_SEGMENTS[0]])};
@@ -4508,6 +4514,7 @@ const PACKED_REFS_MAX_BYTES = ${GUARD_PACKED_REFS_MAX_BYTES};
 const CONFIG_MAX_BYTES = ${GUARD_GIT_CONFIG_MAX_BYTES};
 const REWRITES_MAX = ${GUARD_GIT_REWRITES_MAX};
 const INCLUDE_DEPTH_MAX = ${GUARD_GIT_INCLUDE_DEPTH_MAX};
+const LINK_HOPS_MAX = ${GUARD_GIT_LINK_HOPS_MAX};
 const INCLUDE_FILES_MAX = ${GUARD_GIT_INCLUDE_FILES_MAX};
 const INCLUDE_BYTES_MAX = ${GUARD_GIT_INCLUDE_BYTES_MAX};
 const PLACES_MAX = ${GUARD_PLACES_MAX};
@@ -4963,14 +4970,21 @@ function configOf(dirs) {
       return;
     }
     let text = "";
+    let hops = 0;
     if (path !== "/dev/null") {
       try {
-        const stats = lstatSync(path);
+        let real = path;
+        let stats = lstatSync(real);
+        while (stats.isSymbolicLink()) {
+          if ((hops += 1) > LINK_HOPS_MAX) throw new Error("links");
+          real = resolve(dirname(real), readlinkSync(real));
+          stats = lstatSync(real);
+        }
         bytes += stats.size;
         if (!stats.isFile() || stats.size > CONFIG_MAX_BYTES || bytes > INCLUDE_BYTES_MAX) partial = true;
-        else text = readFileSync(path, "utf8");
+        else text = readFileSync(real, "utf8");
       } catch (error) {
-        if (!error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) partial = true;
+        if (hops > 0 || !error || (error.code !== "ENOENT" && error.code !== "ENOTDIR")) partial = true;
       }
     }
     let kind = "";

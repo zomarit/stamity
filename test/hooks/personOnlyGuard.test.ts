@@ -13,7 +13,7 @@
  * everything, or nothing, fails.
  */
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { gitignoreLine } from "../../src/cli/commands/init/panel.ts";
@@ -2620,5 +2620,48 @@ describe("the guard's push to origin over every URL, and the remote write's own 
       deny: true,
       reason: expect.stringContaining("so it runs on the main thread only (REQ-FLOW-134)"),
     });
+  });
+});
+
+/**
+ * a4c fix round 5 (REQ-FLOW-134, review/148): the emitted guard follows a git configuration file that is a symbolic
+ * link, global and included alike, at most eight links, as git follows it; a link it cannot resolve is unreadable. Red
+ * on 6a2e23e0, which reads any linked file as partial, so an own-origin comment, reply and feature push ask there.
+ */
+describe("the guard's linked git configuration files (a4c, review/148)", () => {
+  const ORIGIN = '[remote "origin"]\n\turl = https://github.com/acme/app.git\n';
+  const COMMENT = "gh pr comment 3 --body 'looks good'";
+  const REPLY = "gh api -X POST repos/{owner}/{repo}/pulls/3/comments -F in_reply_to=1 -F body=@reply.md";
+  const OWN = [COMMENT, REPLY, "git push -u origin feat/x"];
+  const global = (): Record<string, string> => ({ GIT_CONFIG_GLOBAL: getRepo().path("cfg", "global") });
+  const link = (target: string, at: string): void => symlinkSync(target, getRepo().path(...at.split("/")));
+
+  it("follows a global file that is a symbolic link and holds nothing about remotes, so own-origin writes run", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN, "dotfiles/gitconfig": "[user]\n\tname = x\n", "cfg/.keep": "" });
+    link("../dotfiles/gitconfig", "cfg/global");
+    for (const command of OWN) expect(decide("claude", guard, command, global()), command).toEqual({ deny: false });
+  });
+
+  it("asks for those writes where a linked global file includes a linked file that moves origin", async () => {
+    const guard = await placeGuard("claude", {
+      ".git/config": ORIGIN,
+      "dotfiles/gitconfig": "[include]\n\tpath = remotes.gitconfig\n",
+      "dotfiles/remotes-real.gitconfig": '[remote "origin"]\n\turl = https://github.com/other/repo.git\n',
+      "cfg/.keep": "",
+    });
+    // A relative include is read from the directory of the file as git opened it, the link's, as git reads it.
+    link("../dotfiles/remotes-real.gitconfig", "cfg/remotes.gitconfig");
+    link("../dotfiles/gitconfig", "cfg/global");
+    for (const command of OWN) expect(decide("claude", guard, command, global()), command).toMatchObject({ deny: true, ask: true });
+  });
+
+  it("reads a link it cannot resolve, or a chain past eight links, as unreadable, and a short chain as its target", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN, "cfg/target": "[user]\n\tname = x\n" });
+    const named = `${COMMENT} -R acme/app`;
+    link("missing", "cfg/global");
+    expect(decide("claude", guard, named, global())).toMatchObject({ deny: true, ask: true });
+    for (let n = 1; n <= 9; n += 1) link(n === 9 ? "target" : `l${n + 1}`, `cfg/l${n}`);
+    expect(decide("claude", guard, named, { GIT_CONFIG_GLOBAL: getRepo().path("cfg", "l1") })).toMatchObject({ deny: true, ask: true });
+    expect(decide("claude", guard, named, { GIT_CONFIG_GLOBAL: getRepo().path("cfg", "l3") })).toEqual({ deny: false });
   });
 });
