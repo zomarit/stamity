@@ -2,7 +2,7 @@
 title: Cloud runs
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.16.0 release cut (2026-10-20). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 89e088f9. Re-attested 2026-10-25 for the autonomy setting, the land verb and the rows plan 022 file 1 moved. -->
 <!-- Re-open when: a row of `CLIENT_CLOUD_FACTS` moves, a run contract key or a pre-flight check
      changes, or a client's answer to a person-only act moves. `test/docsPages.test.ts` holds this
      page to the hand-page contract, the contract parser and that table; a vendor page that changed
@@ -31,11 +31,28 @@ set to any value but empty, `false` or `0`. A cloud's own marker means "cloud", 
 - **An unattended run asks nothing.** Each question takes its declared default, written into the
   record as `Default applied:`, and a question with no default stops the run. It pushes only
   through the run verbs, `stamity run checkpoint` and `stamity run end`: the shell guard refuses a
-  raw `git push`, `gh pr create` or `gh pr edit`, and every person-only act, on every client.
-- **Attended, Claude Code asks for one click** on a person-only act that can be undone, such as a
-  merge, a push of a tag or of the default branch, a ready-for-review mark, a release, a publish, or
-  a secret or protection write, and the agent runs it on yes. It refuses instead where a sub-agent
-  runs the act, and in Claude Code's `auto` permission mode.
+  raw `git push`, `gh pr create` or `gh pr edit`, and every act on the ask list, on every client.
+  After `run end` it runs `stamity run land --ready`, which marks the run's own draft ready and
+  merges it only when the evidence holds: every required check run green on the exact head commit
+  (commit statuses do not count), no unresolved review thread, and no open Critical or Warning row
+  in the run's ledger, with the branch's own protection deciding any required human review. A diff
+  to the CI definitions or the guard's own files still asks, and an asks or refused outcome leaves
+  each reason as a held row on the morning list and in the pull request's body. A raw ready mark, a
+  raw merge and a raw push to the default branch stay refused.
+- **What runs without a click.** In `autonomy.mode: autonomous`, the default, a ready-for-review
+  mark on the main thread, a local tag and a workflow dispatch run unasked (a raw ready mark stays
+  refused in a run nobody watches); the run's own merge goes only through `run land`. Everything else on the ask list still asks: a raw merge, a
+  push of a tag or of the default branch, a release, a publish, a secret or protection write, an
+  `--admin` merge, a write to another repository or a mention of a person, and a loosening of the
+  setting. To tighten back to 1.16.0's asks, set `autonomy.mode` to `ask` and run `sync`. To name
+  what deploys, set `autonomy.deployingBranches` to the branches a push to which deploys (the
+  default branch included, so the land verb asks before it merges there) and
+  `autonomy.deployingActs` to the acts that ask in every mode; `stamity check` warns on a workflow
+  that deploys from a branch the list leaves out. Loosening either needs the person's `--loosen`.
+- **Attended, Claude Code asks for one click** on an act on the ask list that can be undone, such
+  as a raw merge, a push of a tag or of the default branch, a release, a publish, or a secret or
+  protection write, and the agent runs it on yes. It refuses instead where a sub-agent runs the
+  act, and in Claude Code's `auto` permission mode.
 - **Attended, Copilot CLI asks too, for your own agent alone.** The guard asks only for a call that
   carries no helper agent's fields and whose session id Copilot's session start recorded; a helper's
   call is refused. Copilot CLI 1.0.98 showed its hook permission dialog and waited for the person
@@ -163,7 +180,8 @@ then `stamity plan check docs/plans/<file>.md --contract <path> --json`, and any
 refusal. The session line names a Cursor cloud agent, and in a managed run the agent asks nothing
 and takes each declared default.
 Cursor's page does not say whether the pull request its agent opens is a draft, so the run opens its
-own draft through the run verbs and never marks it ready.
+own draft through the run verbs and marks it ready only through `stamity run land --ready`, once the
+evidence holds.
 
 ### The morning walk
 
@@ -325,6 +343,9 @@ text, and the draft pull request's diff is where you check them.
   `## How to answer`. Where the repository takes no drafts, it is a normal pull request titled
   `[DRAFT] <title>`. Where a pull request this run did not open is already open from the branch
   into the base, a person's or the platform's, the run posts the body on it as one comment.
+- The land step's result: where the evidence held, the pull request merged by `stamity run land`
+  and a `land:` line in the record; otherwise the pull request left open, its body saying
+  `merge waits on: <reasons>`, and each reason a row of `## Person's calls held`.
 - A change to a held path, such as a CI workflow, the hook configuration or the charter, never
   reaches the pushed tree. It waits in `.stamity/runs/<run-id>/held/person-only.patch` as a row of
   `## Person's calls held`.

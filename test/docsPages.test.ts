@@ -798,8 +798,17 @@ const RELEASE_CUT_DATE = "2026-10-20";
  * dist-tag, and the page moved onto the commit form naming the lane base f9abc9c6 plus
  * `Re-attested 2026-10-23`. The newest commit-form date is that pass, so the constant names it;
  * every other page keeps its cut date.
+ *
+ * TEST CHANGE, justified: MOVED 2026-10-25, from 2026-10-23, by plan 022 file 1, unit
+ * a16-security-pages (REQ-FLOW-145; REQ-FLOW-036, REQ-FLOW-102 and REQ-FLOW-104 as built). `SECURITY.md`,
+ * `docs/security-mapping.md`, `docs/cloud.md`, `docs/troubleshooting.md` and `docs/working-with-stamity.md`
+ * were re-read against the integration head for the autonomy setting, the land verb and the rows the
+ * file's units moved, and moved onto the commit form naming that head, 89e088f9, plus `Re-attested
+ * 2026-10-25`. A page re-read today can honestly carry only today's date, which the 2026-10-23 pin
+ * refused as later than the pass it ships in. `docs/enterprise-forks.md` keeps its 2026-10-23 clause and
+ * every other page its cut date.
  */
-const REATTESTATION_DATE = "2026-10-23";
+const REATTESTATION_DATE = "2026-10-25";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");
@@ -2267,10 +2276,15 @@ describe("SECURITY.md", () => {
         expect(residuals.toLowerCase(), `the cloud section does not name: ${risk}`).toContain(risk.toLowerCase());
       }
       // The attended guard's accepted gaps, which the unattended rules cover, and the two they do not.
+      // TEST CHANGE, justified (plan 022 file 1, unit a16-security-pages; REQ-FLOW-104, inbox row pr/40): the guard
+      // fills gh's placeholders from the checkout's branch and reads a batch ref update's hidden list element as a ref
+      // it cannot show (src/hooks/personOnly.ts::personOnlyVerdict, httpVerdict's `fill` and the `refUpdates` read), so
+      // the page states both as read, asking, and no longer lists them as passing; the three pins move to that reading.
+      expect(residuals, "the page lists the attended guard's accepted gaps again").not.toContain("The attended guard's accepted gaps");
       for (const gap of [
-        "gh's own field conversions",
-        "current-branch placeholder",
-        "a batch ref update",
+        "gh's own field conversions and its current-branch placeholder are read as gh fills them, from the branch the checkout is on",
+        "asks as a push of that branch",
+        "a batch ref update whose list element is given whole as a GraphQL variable names a ref the line cannot show, which asks as a push of the default branch",
         "tag-ref create",
         "percent-encoded",
         "a directory change",
@@ -2321,7 +2335,10 @@ describe("SECURITY.md", () => {
         // of a shell that persists, where the verb's git drops a program-valued variable and keeps a `GIT_CONFIG_*`
         // one. The pins move from "the verb's git runs in" and "on the line" / "before the verb" to that reading.
         "These spellings pass the rule too, on a line of their own in a shell that persists, and each changes the environment a later verb's git starts from",
-        "`readonly NAME=…`, `select`, zsh's `print -v` and `foreach`, and `: ${NAME:=…}`, each of which sets a value that reaches it when the variable is already in the environment",
+        // TEST CHANGE, justified (plan 022 file 1, unit a16-security-pages; REQ-FLOW-104, inbox row review/252): the
+        // assignment form without the colon passes the unattended rule as the colon form does (measured on the lane's
+        // src/hooks/personOnly.ts::unattendedPushVerdict), so the page lists it beside it.
+        "`readonly NAME=…`, `select`, zsh's `print -v` and `foreach`, `: ${NAME:=…}` and `: ${NAME=…}`, each of which sets a value that reaches it when the variable is already in the environment",
         "zsh's `readonly -x NAME=…`, which exports the variable whether or not it was before",
         "allexport turned on by zsh's `setopt -a` or by a shell started with `-a` (`bash -a -c '…'`), which exports a variable one of those forms then sets",
         "`source <file>` (or `. <file>`), since the guard does not read the file, which can set or export any of them",
@@ -2366,7 +2383,12 @@ describe("SECURITY.md", () => {
       ]) {
         expect(flat, `SECURITY.md says again: ${overstated}`).not.toContain(overstated);
       }
-      expect(table).toContain("no run verb reads a pre-flight verdict");
+      // TEST CHANGE, justified (plan 022 file 1, unit a16-security-pages; REQ-FLOW-131, REQ-FLOW-104): an unattended
+      // `run checkpoint`, `run end` and `run land` refuse without the record a pre-flight writes
+      // (src/runs/gitSurface.ts::checkSurfaceRecord), so the row no longer says no verb reads the pre-flight; it still
+      // claims no gate on the verdict itself, and `run start` runs without one.
+      expect(table).toContain("`run start` runs without a pre-flight. The verdict is not a gate on the later verbs either, but its record is");
+      expect(table).toContain("exit 1 with `no pre-flight record` where none reads");
       expect(residuals).toContain("no run verb requires a passing verdict");
       expect(residuals).toContain("only an organization ruleset counts");
       for (const page of [table, residuals]) {
@@ -2417,7 +2439,12 @@ describe("SECURITY.md", () => {
       // TEST CHANGE, justified (plan 021 file 2, v0a2 and v0d; REQ-FLOW-036, REQ-FLOW-104): the engine now writes
       // `permissions.ask` rows beside the deny rows and `clean` keeps both lists, naming rows equal to either table's,
       // so the pin reads both lists, and the unreleased build's leftover deny rows are named as REQ-FLOW-104 asks.
-      expect(row).toContain("and no `permissions.ask` row");
+      // TEST CHANGE, justified (plan 022 file 1, unit a16-security-pages; REQ-FLOW-036, REQ-FLOW-123): an ask row the
+      // autonomy setting no longer renders leaves at `sync` when the ledger record lists it, and an unrecorded equal
+      // row is kept and named (src/manifest/claudeSettings.ts, `leavingRows` and `withRowNotice`), so "no ask row"
+      // moves to that rule; the forged-record residual is named beside it.
+      expect(row).toContain("and an ask row only where the current setting no longer renders it and the ledger record lists its hash");
+      expect(row).toContain("a forged record that lists an owner's own ready-mark or local-tag ask row makes `sync` remove it");
       expect(row).toMatch(/`clean` leaves every row of both lists and names those equal to an engine row of either table/);
       expect(row).toContain("a checkout synced from an unreleased build before 1.16.0 keeps the deny rows that build wrote for acts that now ask");
       expect(row).toContain("`src/manifest/claudeSettings.ts::reduceClaudeSettingsToForeignContent`");
@@ -2560,7 +2587,9 @@ describe("SECURITY.md", () => {
         "a hook a run writes runs when `run checkpoint` or `run end` commits or pushes",
         "The control that holds is the pre-flight's refusal of an account that can push to the default branch",
         "Unattended too, a line is refused whatever program it runs, a `stamity run checkpoint` or `run end` line, `npx`, `node` and `npm test` alike, when it sets one of git's configuration variables",
-        "`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`), in any form that sets one",
+        // TEST CHANGE, justified (plan 022 file 1, unit a16-security-pages; REQ-FLOW-104, inbox row review/252): the rule
+        // refuses the forms it reads, and the page lists the forms that pass, so "in any form that sets one" overstated it.
+        "`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`), in the forms the guard reads",
         // TEST CHANGE, justified (plan 021 file 2, v0b and v0d; REQ-FLOW-121): nothing rides a run verb's own line any
         // more, so a variable set there no longer reaches its push.
         "A run verb's own line holds the verb alone, so no spelling of any kind rides it",
@@ -2902,7 +2931,11 @@ describe("SECURITY.md", () => {
         "Where no hook runs.",
         "a respelling no row names costs one click there",
         "since a row ending in ` :*` after a `*` matched nothing in the same measurement",
-        "so such a variable gained after the pre-flight, set on an earlier line of a shell that persists or by a line of Claude Code's environment file, reaches their git",
+        // TEST CHANGE, justified (plan 022 file 1, unit a16-security-pages; REQ-FLOW-131, REQ-FLOW-104): the run verbs
+        // compare git's surface with the pre-flight's record at their start and before the push
+        // (src/runs/gitSurface.ts::checkSurfaceRecord), so such a variable reaches their git only as far as that compare.
+        "set on an earlier line of a shell that persists or by a line of Claude Code's environment file, reaches their git only as far as that compare, which refuses it",
+        "Three gaps remain. A steered agent can run the pre-flight again, which vets the new surface, or forge the record, which it can write. And a change made after the second read",
         "The stand-alone rule for a run verb's line finds the verb by its name in the line's text, so a launcher the guard does not unwrap, a name split by quotes or a line built by an expression can skip it",
         "Claude Code's cloud readiness hook.",
         "`npm ci` runs the locked dependencies' install scripts, and they inherit `CLAUDE_ENV_FILE`, so one can append lines that run before every later shell command",
@@ -3284,7 +3317,10 @@ describe("the night units' pages (n2, n3, n4, n5)", () => {
       // review/197: the residual widens from modules loaded outside the held folders to all a held script reads or loads.
       "The hook hold reads the declarations at `Base:` alone, so a hook written by hand into a client's settings file whose script lies outside the held folders, and anything a held script reads or loads beyond the files its declaration names, the contents of a folder it names included, are pushed as any other file, and a run that rewrites its record head's `Base:` moves the commit the hold reads",
       // review/196, review/197, review/198, review/199: every file a declaration names, present or not, and no folder.
-      "The hold covers every other file such a declaration names the same way, an option's value or an argument word past the launcher, bare or written as a path, present at `Base:` or not; a folder it names is not held, a value with a URL-like scheme (`unix:`, `npm:`) is not a path and is neither held nor refused, and a value naming a drive path is absolute and refuses.",
+      // TEST CHANGE, justified (plan 022 file 1, unit a16-security-pages; REQ-FLOW-102 as built, inbox rows review/202
+      // and review/201): the hold reads only an option's `=` value, and holds whole a folder absent at `Base:`
+      // (src/runs/hookPaths.ts, hookPathsRead's `values` and the `folder` test), so the row says both.
+      "The hold covers every other file such a declaration names the same way, an option's `=` value or an argument word past the launcher, bare or written as a path, present at `Base:` or not; a folder it names is not held where it is present at `Base:`, one absent there is held whole, a value with a URL-like scheme (`unix:`, `npm:`) is not a path and is neither held nor refused, and a value naming a drive path is absolute and refuses.",
     ]) {
       expect(verbs, `the run verbs' row does not state: ${claim}`).toContain(claim);
     }
@@ -3299,7 +3335,9 @@ describe("the night units' pages (n2, n3, n4, n5)", () => {
     const mapping = flowed(read(SECURITY_MAPPING));
     for (const claim of [
       "hold `.stamity/packs/`, the hooks folder `Base:`'s manifest names and each script and repository-path launcher a hook declaration at `Base:` names the same way, refusing before they stage on anything they cannot resolve cleanly there",
-      "and every other file such a declaration names, an option's value or an argument word, present at `Base:` or not, but no folder it names and no value with a URL-like scheme,",
+      // TEST CHANGE, justified (plan 022 file 1, unit a16-security-pages; REQ-FLOW-102 as built, inbox rows review/202
+      // and review/201): the mapping row follows SECURITY.md's, an option's `=` value and a folder absent at `Base:`.
+      "and every other file such a declaration names, an option's `=` value or an argument word, present at `Base:` or not, but no folder present at `Base:` that it names (one absent there is held whole) and no value with a URL-like scheme,",
       "The hook hold reads the declarations at `Base:` alone: a hook written by hand into a client's settings file whose script lies outside the held folders, anything a held script reads or loads beyond the files its declaration names, and a run that rewrites its record head's `Base:` stay open.",
     ]) {
       expect(mapping, `the mapping page does not state: ${claim}`).toContain(claim);
@@ -3588,7 +3626,9 @@ describe("docs/security-mapping.md", () => {
       // TEST CHANGE, justified (plan 021 file 2, v0b and v0d; REQ-FLOW-121, REQ-FLOW-122): a run verb stands alone on
       // its line, so these spellings pass only on an earlier line of a shell that persists, where the verb's git
       // drops a program-valued variable and keeps a `GIT_CONFIG_*` one.
-      "a respelling SECURITY.md names. So do `readonly NAME=…` and zsh's `readonly -x`, `select`, zsh's `print -v` and `foreach`, `: ${NAME:=…}`, allexport turned on by zsh's `setopt -a` or by a shell started with `-a`, and `source <file>`, on a line of their own in a shell that persists, each changing the environment a later verb's git starts from, since a run verb's own line holds the verb alone; set that way, a program-valued variable is removed from the verb's git and a `GIT_CONFIG_*` one reaches it; the pre-flight's refusal of an account that can push to the default branch is the control that holds",
+      // TEST CHANGE, justified (plan 022 file 1, unit a16-security-pages; REQ-FLOW-104, inbox row review/252): the form
+      // without the colon passes as the colon form does, so the mapping lists it beside it, as SECURITY.md does.
+      "a respelling SECURITY.md names. So do `readonly NAME=…` and zsh's `readonly -x`, `select`, zsh's `print -v` and `foreach`, `: ${NAME:=…}` and `: ${NAME=…}`, allexport turned on by zsh's `setopt -a` or by a shell started with `-a`, and `source <file>`, on a line of their own in a shell that persists, each changing the environment a later verb's git starts from, since a run verb's own line holds the verb alone; set that way, a program-valued variable is removed from the verb's git and a `GIT_CONFIG_*` one reaches it; the pre-flight's refusal of an account that can push to the default branch is the control that holds",
       "a program-valued variable set through a PowerShell `env:` drive command other than `Set-Item` and `New-Item` among the ways",
     ]) {
       expect(flat, `the mapping page does not state: ${claim}`).toContain(claim);
@@ -3709,10 +3749,14 @@ describe("docs/security-mapping.md", () => {
       "`gh extension exec`",
       "and a line that runs `stamity run start`, `checkpoint` or `end` unless the verb stands alone on it as one simple command",
       "An attended ask holds only while the client honours it",
-      "No `permissions.deny` or `permissions.ask` row leaves `.claude/settings.json`",
+      // TEST CHANGE, justified (plan 022 file 1, unit a16-security-pages; REQ-FLOW-036): an ask row the setting no
+      // longer renders leaves when the ledger record lists it (src/manifest/claudeSettings.ts, `leavingRows`).
+      "No `permissions.deny` row leaves `.claude/settings.json`, and an ask row leaves only where the autonomy setting no longer renders it and the ledger record lists its hash",
       "A checkout synced from an unreleased build before 1.16.0 keeps the deny rows it wrote for acts that now ask",
       "Attended, an ask holds only while the client honours it, and where no hook runs a respelling no settings row names costs one click",
-      "a `GIT_CONFIG_*` value changed or gained after it stay open",
+      // TEST CHANGE, justified (plan 022 file 1, unit a16-security-pages; REQ-FLOW-131): the run verbs compare it with
+      // the pre-flight's record (src/runs/gitSurface.ts::checkSurfaceRecord), so it stays open only that far.
+      "a `GIT_CONFIG_*` value changed or gained after it as far as the run verbs' compare with the pre-flight's record, which refuses it, stay open",
       "which the cloud readiness hook's `npm ci` install scripts inherit and can append to",
       "and a run verb's line the stand-alone rule skips, since it finds the verb by its name in the line's text",
     ]) {
@@ -5303,5 +5347,138 @@ describe("the Action's restore covering Claude Code's hook copies (w7-action-pag
       expect(flow088).not.toMatch(/the invariant names that folder for a client that has one, and `sync` stops emitting/);
       expect(requirement("REQ-FLOW-064")).toContain(`\`${CLAUDE_HOOKS_DIR}/stamity-review-gate.mjs\``);
     });
+  });
+});
+
+// ADDED 2026-10-25 (plan 022 file 1, unit a16-security-pages; REQ-FLOW-145, with REQ-FLOW-036, REQ-FLOW-102 and
+// REQ-FLOW-104 as built). The four security pages state the autonomy model the guard, the land verb and the setting
+// build (src/hooks/personOnly.ts::personOnlyVerdict, src/runs/landEvidence.ts::decideLand,
+// src/config/autonomy.ts::resolveAutonomy), SECURITY.md carries each unit's sentence with its residuals, the
+// troubleshooting page gives the land verb's reasons as the verb words them, and the close says it lands through the
+// verb. Each pin fails on the integration head 89e088f9, whose pages say none of it.
+describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
+  it.each([SECURITY, SECURITY_MAPPING, CLOUD, TROUBLESHOOTING])(
+    "%s names the land verb, its evidence, the setting, the deploying lists and the raw acts that still ask",
+    (page) => {
+      const flat = flowed(read(page));
+      expect(flat, `${page} does not name the land verb`).toMatch(/`stamity run land[` ]/);
+      // The evidence: check runs on the exact head, statuses never counted, threads, the ledger, protection.
+      expect(flat).toContain("commit statuses do not count");
+      expect(flat).toMatch(/exact head/);
+      expect(flat).toMatch(/no unresolved review thread|no review thread is unresolved/);
+      expect(flat).toContain("Critical or Warning");
+      expect(flat).toContain("required human review");
+      // The setting that tightens back, and how a repository names what deploys.
+      expect(flat).toContain("`autonomy.mode`");
+      expect(flat).toContain("`autonomy.deployingBranches`");
+      expect(flat).toContain("`autonomy.deployingActs`");
+      // A raw merge and a raw push to the default branch stay the person's.
+      expect(flat).toMatch(/raw merge/);
+      expect(flat).toContain("raw push to the default branch");
+    },
+  );
+
+  it("SECURITY.md carries each unit's sentence and the residual it names", () => {
+    const flat = flowed(read(SECURITY));
+    for (const claim of [
+      // a4: the setting, the ask list, status writes, the land line and its approval.
+      "In mode `autonomous`, the default, the main thread's ready-for-review mark on the origin's own repository, a local tag and a workflow dispatch run unasked unless `autonomy.deployingActs` names them",
+      "A raw ready mark stays refused while a run is unattended",
+      "A commit status or a check run is refused in every mode (`status-write`)",
+      "asks in every mode (`land-approved`), so it is refused unattended and for a sub-agent",
+      "baked into every guard copy as a `// stamity-autonomy` marker line",
+      // a5: the 64 KiB cap, the data sinks and their residuals.
+      "A command line longer than 65,536 characters is refused in every mode before any reading (`line-too-long`)",
+      "A heredoc body the guard reads as data is not read for acts",
+      "A file written this way and run later, by another call or by a line that does not name it, is not read either",
+      // a4c, with the two corrections decided for it, and the host residual.
+      "And in any mode a sub-agent can move the origin by writing the git configuration file directly, since the guard reads shell calls only: with a file tool, a redirect or a symbolic link, the global or XDG file outside the repository included",
+      "on a gh version other than 2.102.0",
+      "the guard does not read gh's own configured default host",
+      "A body read from a file is not screened for mentions",
+      // a4b: the hooks-off layer and the forged ledger record.
+      "That leaves no layer at all for a sub-agent's ready mark or tag",
+      "a forged record that lists an owner's own ready-mark or local-tag ask row makes `sync` remove it",
+      // a7: the fail-closed tail on a timeout.
+      "measured on Claude Code 2.1.309 (2026-10-23), a guard that times out blocks the call",
+      "Copilot CLI 1.0.100, which reads the same file's hooks, loads the entries and ignores the key (measured)",
+      // a10: a Codex verdict role's read-only.
+      "a verdict role's read-only grant there is an instruction, not a boundary",
+      "refused only by that tool's own policy",
+      // a2: the configuration window and the refused ending.
+      "`run checkpoint`, `run end` and `run land` compare three things with the salted digest that `gate preflight --unattended` recorded",
+      "A record marked `refused` is accepted only by `run end --refused`",
+      // a1: the held patch's prefixes.
+      "The held patch pins git's `a/` and `b/` prefixes",
+      "under a top folder named `a`, `b`, `c`, `i`, `w`, `o`, `1` or `2`, still reads as prefixed",
+      // a3b: the loosen gate and its residuals.
+      "refuse with `AUTONOMY_LOOSENED`, exit 1 and nothing written",
+      "A commit or a checkout that moves `HEAD`",
+      "a fresh clone, a switch of every selected client or a hooks layout move there costs one `--loosen` by design",
+      // a6: the land verb's row, its network sentence and replace refs.
+      "Only `stamity run land` marks the run's own pull request ready and merges it, and only on its evidence",
+      "**`stamity run land` belongs to the third exception.**",
+      "`os.tmpdir()`, one of the temp folders, follows `TMPDIR`",
+      "a `gh` that a version manager pins only in the repository's own version file no longer resolves from the root",
+      "On a single-account repository the run's login is the person's, so neither the author check nor the thread check can tell them apart, and the review loop is the evidence of record",
+      "A repository's CI may choose which checks run with code the change edits",
+      "`GIT_NO_REPLACE_OBJECTS=1` and the command-line key `-c core.useReplaceRefs=false`",
+    ]) {
+      expect(flat, `SECURITY.md does not state: ${claim}`).toContain(claim);
+    }
+    for (const stale of [
+      "No run verb marks a pull request ready, merges it or tags",
+      "The attended guard's accepted gaps.",
+      "removes no `permissions.deny` row and no `permissions.ask` row",
+    ]) {
+      expect(flat, `SECURITY.md says again: ${stale}`).not.toContain(stale);
+    }
+  });
+
+  it("troubleshooting gives the land verb's reasons as the verb words them, and the new entries", () => {
+    const page = flowed(read(TROUBLESHOOTING));
+    const verb = read("src/runs/landEvidence.ts") + read("src/cli/commands/runLand.ts");
+    for (const heading of [
+      "### `run land` exits 1 and does not merge",
+      "### `run land` cannot start a `gh` pinned only in the repository",
+      "### `sync` exits 1 with `AUTONOMY_LOOSENED`",
+      "### A settings row refuses a push, a tag or a merge chained with another command",
+      "### Writes to your own repository ask, through an SSH host alias",
+    ]) {
+      expect(page, `troubleshooting has no entry: ${heading}`).toContain(heading);
+    }
+    // Each reason the page quotes is the verb's own wording.
+    for (const reason of [
+      "autonomy.mode is ask",
+      "the diff touches paths that define the evidence",
+      "the diff carries a held patch",
+      "is named in autonomy.deployingBranches",
+      "autonomy.deployingActs names",
+      "is still running",
+      "has no check run yet",
+      "did not pass",
+      "holds open Critical or Warning rows",
+      "mergeable_state is not computed yet, run it again",
+      "the pull request is a draft",
+      "the head moved since the approval",
+      "gh not found on PATH",
+      "failed before GitHub answered",
+    ]) {
+      expect(page, `troubleshooting does not quote: ${reason}`).toContain(reason);
+      expect(verb, `the land verb no longer says: ${reason}`).toContain(reason);
+    }
+    expect(page).toContain("on a fresh clone, on a switch of every selected client, and on a hooks layout move");
+    expect(page).toContain("Put a push, a tag or a merge alone on its line");
+    expect(page).toContain("It applies git's URL rewrites, but not your SSH configuration");
+    // The settings entry: a raw merge keeps its ask row, and the rows no longer only grow (REQ-FLOW-036).
+    expect(page).toContain("a raw merge keeps its row in every mode");
+    expect(page).not.toContain("Those two lists only grow");
+  });
+
+  it("working with stamity says the close lands through the verb, and asks nothing about the commit", () => {
+    const page = flowed(read(WORKING_WITH_STAMITY));
+    expect(page).toContain("The commit is no question");
+    expect(page).toContain("then runs `stamity run land --ready`, which marks it ready and merges it when the evidence holds");
+    expect(page).not.toContain("whose recommended option commits");
   });
 });

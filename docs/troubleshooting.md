@@ -2,7 +2,7 @@
 title: Troubleshooting
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.16.0 release cut (2026-10-20). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 89e088f9. Re-attested 2026-10-25 for the autonomy setting, the land verb and the rows plan 022 file 1 moved. -->
 <!-- Re-open when: a `check` probe is added or removed, an error code starts or stops being
      thrown, or a remedy below stops working. `test/docsPages.test.ts` holds this page to the
      hand-page contract and reads the probe rows out of `src/cli/commands/check.ts`;
@@ -75,7 +75,8 @@ on stderr. Parse stdout only after checking that the status is not `2`.
 
 [The CLI reference](cli-reference.md) lists every error code and what it classifies, including
 the two that exist only at the CLI edge. The codes this page names are `VALIDATION_ERROR`,
-`CONFIG_ERROR`, `INTEGRITY_ERROR`, `FS_ERROR`, `LOCK_TIMEOUT` and `EXPECTATION_ERROR`.
+`CONFIG_ERROR`, `INTEGRITY_ERROR`, `FS_ERROR`, `LOCK_TIMEOUT`, `EXPECTATION_ERROR` and
+`AUTONOMY_LOOSENED`.
 
 ## What `check` prints
 
@@ -298,10 +299,14 @@ depends on whose content matters, and `sync` cannot know that.
 `.claude/settings.json` is different: it is merged entry by entry, never overwritten, and
 `--force` does not apply to it. The engine owns the hook entries it wrote there, and it writes
 `permissions.deny` and `permissions.ask` rows for the person-only acts, such as a force push, a
-merge or a publish; it pre-approves no tool, so it writes no `allow` row. Those two lists only
-grow: `sync` keeps every row in them byte for byte and appends each engine row a list lacks, so an
-engine row you delete comes back on the next `sync`, and `clean` removes none of them, naming each
-row equal to an engine row for you to remove by hand. Your own rows and hook entries, the client's
+merge or a publish; it pre-approves no tool, so it writes no `allow` row. The ask rows follow the
+autonomy setting: in mode `autonomous`, the default, no row asks for a ready-for-review mark or a
+local tag unless `autonomy.deployingActs` names the act, and a raw merge keeps its row in every
+mode. `sync` appends each engine row a list lacks, so an engine row you delete comes back on the
+next `sync`. It removes no deny row, and an ask row only where the setting no longer renders it and
+the ledger records that the engine wrote it, naming the row; an equal row the ledger does not record
+stays, named, since it may be yours. Every other row it keeps byte for byte. `clean` removes none of
+them, naming each row equal to an engine row for you to remove by hand. Your own rows and hook entries, the client's
 `enabledPlugins` and your `model` or `env` stay whatever you run.
 The `Read`, `Grep` and `Glob` allow rows a release up to 1.12.0 wrote leave on the next `sync`.
 Where the ledger records each row (a 1.12.0 setup), they leave with no backup, and an equal row it
@@ -321,6 +326,121 @@ own, and personal rows in `.claude/settings.local.json`, which this engine never
 Editing or removing a hook you define in `.stamity/hooks/` does the same to the entry the engine
 wired for it: the next `sync` removes the old entry behind a verified `.bak` and names it in a
 warning. Adding a definition takes none.
+
+### `run land` exits 1 and does not merge
+
+`stamity run land` merges the run's own pull request, or fast-forwards the default branch to it,
+only when the evidence holds: every required check run green on the exact head commit (commit
+statuses do not count), no unresolved review thread, no open Critical or Warning row in the run's
+ledger at that commit, and `mergeable_state` reading `clean`. The branch's own protection still
+decides any required human review. Exit 0 means `landed` or `already-landed`; exit 1 carries
+`outcome` in its `--json` output, `asks` or `refused`, and prints every reason. Once it has found
+the run's own pull request it also writes `merge waits on: <reasons>` into that pull request's body
+(not under `--dry-run`), and a flow's close turns each reason into a
+held row the next walk retries. A raw merge and a raw push to the default branch stay the person's:
+the guard asks for them attended and refuses them unattended, as it does for the rest of its ask
+list (a push of a tag, a release, a publish, a secret or protection write, an `--admin` merge, a write
+to another repository or a mention of a person, and a loosening of the setting). To tighten back to
+1.16.0's asks, set `autonomy.mode` to `ask` and run `sync`; to name what deploys, set
+`autonomy.deployingBranches` and `autonomy.deployingActs`, and the land verb asks for those.
+
+**`asks`: the act is the person's.** The verb merged nothing, and the outcome names the head commit
+it holds for on its `approve with:` line. The reasons, and what each needs:
+
+- `autonomy.mode is ask`: the setting asks for every merge. The person decides. To let the verb land
+  on its evidence again, the person sets `autonomy.mode` to `autonomous` and runs `sync --loosen`.
+- `the diff touches paths that define the evidence: <paths>`: the change edits a CI definition, a
+  hook or guard file, a client's settings, the manifest, the MCP configuration, a composite action,
+  a `CODEOWNERS` file, `.stamity/change-classes.json` or a hook script the repository declares. A
+  person reads that diff and decides.
+- `the diff carries a held patch`: an unattended run held a person-only change. A person applies
+  the patch or drops it, then decides.
+- `<branch> is named in autonomy.deployingBranches`, or `autonomy.deployingActs names <act>`: the
+  repository says this merge or this ready mark deploys, so it asks in every mode.
+- For `--fast-forward`, a rule that requires a pull request, branch protection that may require one,
+  or rules the account cannot read: land it as a merge instead, without `--fast-forward`.
+- `the hook declarations at <place> could not be read`: the reason names the fix and where it
+  lands; make it, then run `run land` again.
+
+To land over an `asks` outcome, the person answers it: the land line again, with `--approved` and the
+commit the `approve with:` line printed. The guard asks on that line, the flag holds only while the
+head is still that commit, and an unattended run refuses it. Every `refused` reason still refuses.
+
+**`refused`: the evidence does not hold yet.** Fix what the reason names, then run it again:
+
+- `required check <name> is still running`, or `has no check run yet` on the head: wait.
+  `--wait <minutes>`, at most 9, polls every 30 seconds within one call. A check that reports only a
+  commit status never counts: the check has to report as a check run.
+- `required check <name> did not pass`: fix the change and push it.
+- `<n> review threads are unresolved`: resolve them. A thread the run's own login resolved stays
+  open while another person's comment is in it, so that person resolves it.
+- `the ledger at <sha> holds open Critical or Warning rows`, `does not read`, or `the work tree's
+  … differs from the commit's: checkpoint first`: close or fix the rows, then run `run checkpoint`,
+  so the ledger the head commit holds is the one on disk.
+- `mergeable_state is not computed yet, run it again`; `is behind` or `is dirty`: bring the branch up
+  to date with the default branch; `is unstable`: a check that is not required is failing; `is
+  blocked`: the branch's rules stop the merge, and a merge past them is the person's.
+- `the pull request is a draft`: pass `--ready`, which marks it ready once everything else holds.
+- The pull request is not the run's own: another branch, a fork, another base, a body that does
+  not end with the run's marker, a head that is not `HEAD` and origin's tip, an author other than
+  the run's login, or a number the run verb did not record (`pull request not recorded`). The verb
+  lands only the draft `run checkpoint --pr` or `run end` opened and recorded from the run's branch:
+  run `run checkpoint` there so `HEAD` and origin's tip agree, and leave a pull request the run verbs
+  did not open to a person.
+- `the head moved since the approval`: a commit landed after the person approved. Run `run land`
+  again without the old commit, and answer the new outcome.
+- `gh not found on PATH`, or `gh resolves to a program inside the work tree` or `inside a temp
+  folder`: install `gh` outside the repository and the temp folders, and put its folder on `PATH`
+  by its full path.
+- `a read failed before GitHub answered`: `gh` did not start, is not signed in, or has no network.
+  If `gh` comes from a version manager, see the next section.
+- `no setup found`, `config changed: …` or `no pre-flight record` (unattended): the first needs a
+  committed setup; the other two are the configuration window in [`SECURITY.md`](../SECURITY.md):
+  git's configuration or environment moved since the pre-flight, or none ran.
+
+### `run land` cannot start a `gh` pinned only in the repository
+
+`run land` starts every `gh` call at the filesystem's root, with the version managers'
+version-choosing variables dropped, so no version file the run can write steers which program
+answers. A `gh` that a version manager (mise, asdf) pins only in the repository's own version file,
+with no pin in your home folder, then no longer resolves there: every land read fails, and the verb
+refuses with `a read failed before GitHub answered`, merging nothing. Pin `gh` in the version
+manager's user-level configuration as well, or install `gh` outside a version manager.
+
+### `sync` exits 1 with `AUTONOMY_LOOSENED`
+
+`sync`, `init` and `workspace sync` refuse to bake a looser autonomy setting into the guard than the
+strictest one in force: the guard copies on disk, the copies and the setting committed at `HEAD`,
+and the manifest on disk. The `why` names the place that is stricter, and nothing is written.
+Loosening is the person's act: the person checks the setting in the manifest is the one they want,
+then runs the command again with `--loosen`, which names each guard copy it loosens and what it
+dropped. Tightening needs no flag.
+
+A repository that commits `.stamity/manifest.json` but not its guard copies (under
+`.claude/hooks/stamity/` or `.stamity/generated/hooks/<client>/`) pays this once on a fresh clone,
+on a switch of every selected client, and on a hooks layout move. There the `why` reads `no guard copy
+found on disk or at HEAD beside the setup committed there (read as ask)`: with no copy at `HEAD`, the
+engine cannot tell a fresh clone from guard copies deleted in a commit, so it reads the strictest
+setting the committed setup allows. One `sync --loosen` settles it, and later syncs need no flag.
+Committing the guard copies, as the default layout does, avoids it on later clones.
+
+### A settings row refuses a push, a tag or a merge chained with another command
+
+Claude Code's `permissions.deny` rows stay as 1.16.0 wrote them, the wide ones included: they are
+the second layer under the hook, for a session whose hooks are off or a guard that timed out. A
+`*` inside such a row matches anywhere on the line, so a row meant for a later flag can match a
+later command on the same line instead. A feature-branch push followed by a `date` call whose
+format starts with `+` met the force-push row this way. Put a push, a tag or a merge alone on its
+line, with nothing chained before or after it; the flows already do.
+
+### Writes to your own repository ask, through an SSH host alias
+
+The guard compares a `gh` write's target with the host and `owner/repo` of the `origin` remote as
+the URL writes them. It applies git's URL rewrites, but not your SSH configuration. So an origin
+cloned through an SSH host alias, a host other than GitHub's own in the remote's URL, reads as
+another host: writes to your own repository ask when someone is watching and are refused
+unattended. Set the remote's URL to the real host name, or add a git URL rewrite (`url.<base>.insteadOf`)
+from the alias to the real host.
 
 ### `sync` refuses an instruction file with an `import-decision` collision
 
