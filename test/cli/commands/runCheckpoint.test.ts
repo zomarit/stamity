@@ -1220,6 +1220,20 @@ describe("stamity run checkpoint", () => {
     expect(pushedFile(remote, "vendor/lib.txt")).toBe("patched");
   });
 
+  // review/224's update-only add takes a tracked file; one the work tree replaced with a folder takes the plain add,
+  // so the folder's new files are staged with it, not left behind.
+  it("stages a tracked file the work tree replaced with a folder as the folder's new files (review/224)", async () => {
+    const { repo, remote } = await seed("attended");
+    await rm(join(repo, "b.txt"));
+    await put(repo, "b.txt/inner.txt", "now a folder\n");
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "b.txt"]);
+
+    expect(doc).toMatchObject({ pushed: true, notDone: [] });
+    expect(code).toBe(0);
+    expect(pushedFile(remote, "b.txt/inner.txt")).toBe("now a folder");
+  });
+
   it("stages a learning file the close captured when --paths names it (review/146)", async () => {
     const { repo, remote } = await seed("unattended");
     await put(repo, ".stamity/learnings/push-hooks.md", "# A learning\n");

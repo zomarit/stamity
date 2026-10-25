@@ -1810,7 +1810,9 @@ async function add(top: string, paths: readonly string[], notDone: string[], ver
     notDone.push(`stage failed: git ls-files answered ${listed.code}: ${firstLine(listed.stderr)}`);
     return false;
   }
-  const tracked = new Set(listed.stdout.split("\0"));
+  // A tracked file the work tree now holds a folder at takes the plain add, which also adds that folder's new files.
+  const indexed = new Set(listed.stdout.split("\0"));
+  const tracked = new Set(paths.filter((path) => indexed.has(path) && !isDirectory(join(top, path))));
   /** One `git add` over `group`, none where it is empty; false, the reason in `notDone`, where git refused it. */
   const step = async (args: readonly string[], group: readonly string[]): Promise<boolean> => {
     if (group.length === 0) return true;
