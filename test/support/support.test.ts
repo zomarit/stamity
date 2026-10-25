@@ -277,9 +277,14 @@ describe("support lane discipline", () => {
       // cliHarness/packFixtures/inProcess compose each other by design. A `../`
       // specifier is still refused — that is how a src/ import would sneak back
       // in without the literal "src/" substring.
+      // TEST CHANGE, justified: review/59 (b17) — distBuild.ts takes its cross-process
+      // build lock with proper-lockfile, a declared dependency. A named third-party
+      // package cannot reach src/; bare specifiers stay refused one by one, so the
+      // package's own name (whose exports could) still fails here.
       expect(
         specifiers.filter(
-          (specifier) => !/^(node:|vitest$|memfs$|\.\/[A-Za-z0-9]+\.ts$)/.test(specifier),
+          (specifier) =>
+            !/^(node:|vitest$|memfs$|proper-lockfile$|\.\/[A-Za-z0-9]+\.ts$)/.test(specifier),
         ),
         module,
       ).toEqual([]);
