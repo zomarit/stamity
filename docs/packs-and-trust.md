@@ -210,9 +210,10 @@ commit. None of it fetches pack content.
 One further path is network-capable and is no part of any command's work. The startup update
 notice asks the npm registry the running package publishes to — the public one for
 `@zomarit/stamity`, and for a fork made with `scripts/fork-identity.mjs --registry` that registry and
-never the public one — whether a version newer than the running one exists. It is a GET at most
-once a day. `STAMITY_NO_UPDATE_CHECK=1` turns it off, and so do `NO_UPDATE_NOTIFIER` and `CI` on
-any non-empty value.
+never the public one — whether a version newer than the one this repository pins exists. It is a
+GET at most once a day, and only when stderr is a terminal and the run is not `--json`.
+`STAMITY_NO_UPDATE_CHECK` set to `1`, `true` or `yes` turns it off, and so do `NO_UPDATE_NOTIFIER`
+and `CI` on any non-empty value.
 
 The client programs the engine starts to read a model list may make network calls of their own.
 `init`, `sync` (`--dry-run` included), `workspace sync` and `check`'s `model-pins` row start each

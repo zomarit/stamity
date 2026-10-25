@@ -112,7 +112,7 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         path: "README.md",
         title: "README",
         description:
-          "what stamity generates from one canonical source and for which clients, the nine verbs, where each subject lives, and what this repository can prove.",
+          "what stamity generates from one canonical source and for which clients, the ten verbs, where each subject lives, and what this repository can prove.",
         regenerateCommand: null,
       },
       {

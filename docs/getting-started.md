@@ -166,10 +166,10 @@ Codex, and each starts only when you name it.
 The npm route is proved before it ships, on a clean machine, lane by lane, on
 [the measurements page](measurements.md).
 
-## The nine verbs
+## The ten verbs
 
-`init` · `sync` · `check` · `validate` · `add` · `config` · `workspace` · `worktree` ·
-`clean`
+`init` · `sync` · `upgrade` · `check` · `validate` · `add` · `config` · `workspace` ·
+`worktree` · `clean`
 
 The package installs two names for one binary: `stamity` and the shorter alias `st`.
 
@@ -256,9 +256,9 @@ Four engine paths, and no more; the client programs the engine starts to read a 
 make network calls of their own.
 
 - **A startup update notice** asks the npm registry whether a newer version exists. It probes at
-  most once a day. There is no `config` key for it — three environment variables switch it off.
-  Set `STAMITY_NO_UPDATE_CHECK` to exactly `1`. `NO_UPDATE_NOTIFIER` and `CI` switch it off on
-  any non-empty value.
+  most once a day, and only when stderr is a terminal and the run is not `--json`. There is no
+  `config` key for it — three environment variables switch it off. Set `STAMITY_NO_UPDATE_CHECK`
+  to `1`, `true` or `yes`. `NO_UPDATE_NOTIFIER` and `CI` switch it off on any non-empty value.
 - **`add` fetches the Sigstore trust root** when it installs a pack that declares a signature.
 - **`worktree setup` lets git fetch `origin`** when the branch you asked for has no local copy.
 - **An unattended run reaches GitHub** through `gh api`, under your `gh` login: `gate preflight
@@ -390,15 +390,18 @@ the directory live, state included, and setup cannot split it.
 ## Keeping your setup current
 
 ```sh
-npx -y @zomarit/stamity@<version> sync
+npx -y @zomarit/stamity@<version> upgrade --to <version>
 ```
 
-`sync` regenerates every managed file from the bundled content of whichever version ran it, so
-running it at a newer version is how you take an engine update. Name the exact version you are
-moving to; when a newer release exists, the update notice prints this command with it filled in.
-Staying on the version you have needs nothing — the setup keeps the version it was generated
-with until you run a newer one. Your own edits outside a managed block survive;
-the block itself is rewritten. Run `check` afterwards to confirm the tree is clean.
+`upgrade` runs that release's own `sync`, which regenerates every managed file from its bundled
+content, and moves the `package.json` pin to it, so running it at a newer version is how you take
+an engine update. Name the exact version you are moving to, in both places; when a newer release
+exists, the update notice prints this command with it filled in. A release before 1.17.0 has no
+`upgrade`, so a move to one runs its `sync` instead. `sync` at a newer version regenerates the same
+files and leaves the pin where it is. Staying on the version you have needs nothing — the setup
+keeps the version it was generated with until you run a newer one. Your own edits outside a
+managed block survive; the block itself is rewritten. Run `check` afterwards to confirm the tree
+is clean.
 
 ## Where to go next
 
@@ -417,7 +420,7 @@ One spelling per idea, across every page.
 | corpus | the canonical content stamity ships — `content/` plus `packs/`. Authored once, emitted per client. |
 | charter | the always-on file every generated setup carries: your repository's facts, the floor invariants, and the touchpoint index. It is written as `AGENTS.md`. |
 | touchpoint | one of the nine `/st-` slash commands your agent runs. Your client decides the invocation form. |
-| verb | one of the nine names you type after `stamity`: `init`, `sync`, `check`, `validate`, `add`, `config`, `workspace`, `worktree`, `clean`. |
+| verb | one of the ten names you type after `stamity`: `init`, `sync`, `upgrade`, `check`, `validate`, `add`, `config`, `workspace`, `worktree`, `clean`. |
 | manifest | `.stamity/manifest.json` — the record of your setup: its clients, its config, and every file stamity wrote. |
 | managed block | the span between a `STAMITY:BEGIN` and a `STAMITY:END` marker. Every sync rewrites it; the text outside it is yours. |
 | drift | disk and the engine's output disagreeing. `check` asks whether a sync would change anything, and names each file that would. |

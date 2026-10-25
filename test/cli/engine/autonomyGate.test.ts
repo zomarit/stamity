@@ -848,6 +848,9 @@ const LOOP_CALLERS: Readonly<Record<string, "gate" | "strict default">> = {
   "src/cli/commands/sync.ts": "gate",
   "src/cli/commands/init.ts": "gate",
   "src/cli/commands/workspace.ts": "gate",
+  // TEST CHANGE, justified: REQ-FLOW-034 / REQ-FLOW-138 — `upgrade` (plan 022 file 2, b9) runs this release's sync,
+  // and its one applySync call passes the gate on its own --loosen flag.
+  "src/cli/commands/upgrade.ts": "gate",
 };
 
 describe("census — every caller of the two write loops passes the gate or takes the strict default", () => {
@@ -879,6 +882,8 @@ describe("census — every caller of the two write loops passes the gate or take
       "src/cli/commands/sync.ts": ["loosen"],
       "src/cli/commands/init.ts": [FLAG_READ],
       "src/cli/commands/workspace.ts": ["opts.loosen"],
+      // TEST CHANGE, justified: REQ-FLOW-034 / REQ-FLOW-138 — `upgrade` reads `const loosen = opts["loosen"] === true;`.
+      "src/cli/commands/upgrade.ts": ["loosen"],
     });
   });
 

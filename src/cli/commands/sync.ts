@@ -33,15 +33,18 @@ import { renderSyncReport, syncJsonPayload } from "./sync/report.ts";
  *   carries the `init` remedy for this installation), newer-schema manifest
  *   (`CONFIG_ERROR`, upgrade
  *   guidance) — passes through to the kit funnel, which renders it and exits 1.
- * - **Update path.** There is no update command: a sync run by the newer
- *   release, `npx -y <this package>@<version> sync` with the exact version to
- *   move to, IS the update, so the help text says exactly that, and manifest schema
- *   migrations run inside sync — a migrated manifest gets its own report line
- *   so the on-version-change rewrite is visible.
+ * - **Update path.** The update is `upgrade` run by the newer release,
+ *   `npx -y <this package>@<version> upgrade --to <version>` with the exact
+ *   version to move to (`./upgrade.ts`): that release's own sync, plus the
+ *   repository's `package.json` pin. A sync run by the newer release
+ *   regenerates without moving the pin, so the help text names both, and
+ *   manifest schema migrations run inside sync — a migrated manifest gets its
+ *   own report line so the on-version-change rewrite is visible.
  */
 
 /**
- * The update story, baked into `sync --help` — no update command exists.
+ * The update story, baked into `sync --help`: `upgrade --to <version>` first,
+ * the pinned `sync` second, as the regenerate-only form (REQ-FLOW-022).
  * Module-private: the only consumer is `configure()` below, and the contract is
  * asserted through the rendered help output ("sync — help text" in
  * test/cli/commands/sync.test.ts), not by importing the string.
@@ -63,24 +66,23 @@ import { renderSyncReport, syncJsonPayload } from "./sync/report.ts";
  * nobody holds on the public registry, and an `npx <name>@<version>` with neither
  * `-y` nor `--no` installs without asking in a shell with no TTY, which is
  * an agent's. So the line says to install the newer release into the project
- * first and then run `npx --no <name> sync`, which runs that installed copy
- * and refuses to fetch one.
+ * first and then run `npx --no <name> upgrade --to <version>`, which runs that
+ * installed copy and refuses to fetch one.
  */
 function updatePathHelp(): string {
+  const tail = "runs that release's sync and moves the package.json pin";
   if (!hasNpmChannel()) {
+    const call = `npx --no ${packageName()}`;
     return (
-      `update = install the newer release into this project, then npx --no ${packageName()} sync — ` +
-      `regenerating from the newest release is the update; no separate update command exists.`
+      `update = install the newer release into this project, then ${call} upgrade --to <version> — ` +
+      `${tail}; ${call} sync regenerates without moving it.`
     );
   }
   // A `--registry` fork names its registry for its scope ahead of the spec
   // (REQ-PLUGIN-048); `npmRegistry()` answers only a registry the call can write.
   const registryArg = scopeRegistryArg(packageName(), npmRegistry() ?? undefined);
-  const call = ["npx -y", registryArg, `${packageName()}@<version> sync`].filter((word) => word !== "").join(" ");
-  return (
-    `update = ${call}, with <version> the release to move to — ` +
-    `regenerating from that release is the update; no separate update command exists.`
-  );
+  const call = ["npx -y", registryArg, `${packageName()}@<version>`].filter((word) => word !== "").join(" ");
+  return `update = ${call} upgrade --to <version> — ${tail}; ${call} sync regenerates without moving it.`;
 }
 
 /** Continuous-onboarding close after a run that changed files on disk. */
@@ -221,9 +223,10 @@ export function syncClosingLines(plan: SyncPlan, report: SyncApplyReport): strin
  * does not answer keeps its cached list.
  * Read through the run's own environment, so `STAMITY_NO_CLIENT_PROBE=1`
  * there skips every read. An uninitialised repository reads nothing here and
- * gets the plan's own refusal.
+ * gets the plan's own refusal. `upgrade` (`./upgrade.ts`) reads them the same
+ * way before the sync it runs.
  */
-async function freshModelLists(ctx: CliContext, rootDir: string): ReturnType<typeof readClientModelLists> {
+export async function freshModelLists(ctx: CliContext, rootDir: string): ReturnType<typeof readClientModelLists> {
   const manifest = await ctx.engine.manifest.manifest.readManifest(rootDir);
   if (manifest === null) return {};
   return readClientModelLists(manifest.tools, ctx.app.runtime.env, await listerTreeRoot(rootDir));

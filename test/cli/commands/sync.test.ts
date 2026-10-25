@@ -658,11 +658,13 @@ describe("sync — help text", () => {
     // spelling the update notice prints. The no-channel line is unchanged.
     // TEST CHANGE, justified: REQ-PLUGIN-048 — a `--registry` fork's checkout names its
     // registry ahead of the spec; the canonical checkout asserts the same bytes as before.
-    expect(result.stdout).toContain(
-      canonical().npmChannel
-        ? ["npx -y", registryArgument(canonical()), `${canonical().name}@<version> sync`].filter(Boolean).join(" ")
-        : `then npx --no ${canonical().name} sync`,
-    );
+    // TEST CHANGE, justified: REQ-FLOW-022 — the line names `upgrade --to <version>` first and
+    // the pinned `sync` second, on either branch; both calls are asserted.
+    const call = canonical().npmChannel
+      ? ["npx -y", registryArgument(canonical()), `${canonical().name}@<version>`].filter(Boolean).join(" ")
+      : `npx --no ${canonical().name}`;
+    expect(result.stdout).toContain(`${call} upgrade --to <version> — `);
+    expect(result.stdout).toContain(`${call} sync regenerates without moving it.`);
     expect(result.stdout).not.toContain("@latest");
     expect(result.stdout).toContain("--force");
   });
@@ -703,9 +705,12 @@ describe("sync — help text, by npm channel", () => {
   it("names no registry fetch for a registry-less fork (private, no publishConfig.registry)", async () => {
     const stdout = await helpFor({ name: "@acme/stamity", version: "1.8.0", private: true });
 
+    // TEST CHANGE, justified: REQ-FLOW-022 — `upgrade --to <version>` is the update now, and
+    // the pinned `sync` follows as the regenerate-only form; this branch keeps `npx --no`.
     expect(stdout).toContain(
-      "update = install the newer release into this project, then npx --no @acme/stamity sync — " +
-        "regenerating from the newest release is the update; no separate update command exists.",
+      "update = install the newer release into this project, then npx --no @acme/stamity upgrade " +
+        "--to <version> — runs that release's sync and moves the package.json pin; " +
+        "npx --no @acme/stamity sync regenerates without moving it.",
     );
     expect(stdout).not.toContain("@latest");
     expect(stdout).not.toContain("npx @acme/stamity");
@@ -723,9 +728,11 @@ describe("sync — help text, by npm channel", () => {
     // TEST CHANGE (sw10-first-run-output, REQ-FLOW-022): the channel line moved
     // from `npx <name>@latest sync` to the pinned exact-version form; what this case
     // pins, the channel line against the no-channel line, is unchanged.
+    // TEST CHANGE, justified: REQ-FLOW-022 — the channel line names `upgrade --to <version>`
+    // first and the pinned `sync` second; the channel against no-channel contrast is unchanged.
     expect(stdout).toContain(
-      "update = npx -y @acme/stamity@<version> sync, with <version> the release to move to — " +
-        "regenerating from that release is the update; no separate update command exists.",
+      "update = npx -y @acme/stamity@<version> upgrade --to <version> — runs that release's sync " +
+        "and moves the package.json pin; npx -y @acme/stamity@<version> sync regenerates without moving it.",
     );
     expect(stdout).not.toContain("@latest");
     expect(stdout).not.toContain("npx --no");
@@ -739,10 +746,12 @@ describe("sync — help text, by npm channel", () => {
       publishConfig: { registry: "https://npm.pkg.github.com" },
     });
 
+    // TEST CHANGE, justified: REQ-FLOW-022 — both calls of the update line carry the fork's
+    // registry word now, `upgrade --to <version>` first and the pinned `sync` second.
     expect(stdout).toContain(
-      "update = npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@<version> sync, " +
-        "with <version> the release to move to — " +
-        "regenerating from that release is the update; no separate update command exists.",
+      "update = npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@<version> upgrade " +
+        "--to <version> — runs that release's sync and moves the package.json pin; " +
+        "npx -y --@acme:registry=https://npm.pkg.github.com @acme/stamity@<version> sync regenerates without moving it.",
     );
     expect(stdout).not.toContain("npx -y @acme/stamity@");
     expect(stdout).not.toContain("npx --no");

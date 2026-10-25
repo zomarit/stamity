@@ -14,6 +14,7 @@ import { ledgerCommand } from "./cli/commands/ledger.ts";
 import { planCommand } from "./cli/commands/plan.ts";
 import { runCommand } from "./cli/commands/run.ts";
 import { syncCommand } from "./cli/commands/sync.ts";
+import { upgradeCommand } from "./cli/commands/upgrade.ts";
 import { validateCommand } from "./cli/commands/validate.ts";
 import { workspaceCommand } from "./cli/commands/workspace.ts";
 import { worktreeCommand } from "./cli/commands/worktree.ts";
@@ -22,7 +23,9 @@ import {
   checkForUpdateNotice,
   noticeCacheDir,
   noticeOptionsFromFacts,
+  readRepositoryPin,
   resolveOwnPackageFacts,
+  shouldProbeNotice,
 } from "./cli/notice/updateNotice.ts";
 
 /**
@@ -30,9 +33,10 @@ import {
  *
  * Everything else is owned elsewhere: the exit-code contract, flag matrix and
  * JSON funnel live in `./cli/kit/program.ts`; each verb's behavior lives in its
- * own module under `./cli/commands/`. This file only (1) enumerates the fifteen
- * CommandModules in help order, (2) fires the update-notice probe early and
- * settles it non-blockingly after the run, and (3) records the exit code.
+ * own module under `./cli/commands/`. This file only (1) enumerates the sixteen
+ * CommandModules in help order, (2) fires the update-notice probe early, where
+ * its banner can show, and settles it non-blockingly after the run, and (3)
+ * records the exit code.
  *
  * Exit discipline: `process.exitCode` is assigned, `process.exit()` is never
  * called — stdout/stderr flush naturally and a piped reader always sees the
@@ -45,9 +49,13 @@ import {
  */
 
 /**
- * The advertised surface in help order — init, sync, check, validate, add,
- * config, workspace, worktree, clean — plus `learn`, `handoff`, `ledger`, `gate`,
- * `plan` and `run`, the six hidden plumbing verbs. Nine advertised, fifteen registered.
+ * The advertised surface in help order — init, sync, upgrade, check, validate,
+ * add, config, workspace, worktree, clean — plus `learn`, `handoff`, `ledger`,
+ * `gate`, `plan` and `run`, the six hidden plumbing verbs. Ten advertised,
+ * sixteen registered.
+ *
+ * `upgrade` sits directly after `sync`: it runs the running release's sync and
+ * moves the repository's pin, so a reader meets the two together.
  *
  * `workspace` sits after `config` and before `clean`: it is a configuration
  * verb, and `clean` stays last on the advertised surface because it is the one
@@ -65,6 +73,7 @@ import {
 export const COMMANDS: readonly CommandModule[] = [
   initCommand,
   syncCommand,
+  upgradeCommand,
   checkCommand,
   validateCommand,
   addCommand,
@@ -122,19 +131,21 @@ async function main(): Promise<void> {
   // answer that is not strictly newer than this build — so it is invisible
   // unless it has something to say. A fork made with `--registry` is asked
   // about at its own `publishConfig.registry`, never the public one
-  // (`noticeOptionsFromFacts`).
-  const notice = checkForUpdateNotice(
-    noticeOptionsFromFacts(
-      resolveOwnPackageFacts(),
-      process.env,
-      noticeCacheDir(process.env, homedir()),
-    ),
-  );
+  // (`noticeOptionsFromFacts`). It runs only where its banner can show
+  // (`shouldProbeNotice`: stderr a terminal, no `--json`), and compares the
+  // registry with the version this repository pins (`readRepositoryPin`, which
+  // never throws).
+  const argv = process.argv.slice(2);
+  const facts = resolveOwnPackageFacts();
+  const notice = shouldProbeNotice({ stderrIsTTY: process.stderr.isTTY === true, argv })
+    ? readRepositoryPin(process.cwd(), facts.name).then((pin) =>
+        checkForUpdateNotice(noticeOptionsFromFacts(facts, process.env, noticeCacheDir(process.env, homedir()), pin)),
+      )
+    : Promise.resolve<string | null>(null);
 
   // Bare `stamity` is a first touch, not a mistake: show help and exit 0. The
   // explicit rewrite (rather than commander's help-as-error default, which the
   // funnel maps to exit 2) is what makes that friendly contract deliberate.
-  const argv = process.argv.slice(2);
   const code = await runCli(argv.length === 0 ? ["--help"] : argv, COMMANDS);
 
   // Settle without waiting: a resolved probe wins the race, a pending one

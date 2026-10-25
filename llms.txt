@@ -12,7 +12,7 @@ hand-written or corpus source. Nothing here links outside this tree.
 
 ## Start here
 
-- [README](README.md): what stamity generates from one canonical source and for which clients, the nine verbs, where each subject lives, and what this repository can prove.
+- [README](README.md): what stamity generates from one canonical source and for which clients, the ten verbs, where each subject lives, and what this repository can prove.
 - [Contributing](CONTRIBUTING.md): the contributor gate CI runs, the three test lanes, the regeneration command for every derived file, and what a pull request has to pass.
 - [Security](SECURITY.md): what the engine defends today, what it does not defend, and where to send a vulnerability report.
 - [Governance](GOVERNANCE.md): who decides, the two required checks a change passes to land, what the private layer holds, and what happens if the maintainer stops.

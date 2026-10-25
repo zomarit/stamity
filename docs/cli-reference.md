@@ -20,6 +20,7 @@ mistake.
 |---|---|---|---|
 | `stamity init` | yes | writes | set up this repo: detect the stack, decide the defaults, write the state |
 | `stamity sync` | yes | writes | regenerate every managed file from the manifest and bundled content |
+| `stamity upgrade` | yes | writes | move this setup to the running release: run its sync and move the package.json pin |
 | `stamity check` | yes | reads only | diagnose the environment and gate on drift between disk and the engine's output |
 | `stamity validate` | yes | reads only | check the content, hooks, learnings and credentials this repo authored |
 | `stamity add` | yes | writes | install a content pack: run the gate chain, show every command it would wire, then write |
@@ -51,7 +52,7 @@ identically everywhere they apply.
 ### JSON output
 
 `--json` produces exactly one JSON document on stdout, and nothing else, for every
-run that reaches a command — all 15 of the commands above, success and
+run that reaches a command — all 16 of the commands above, success and
 failure alike. Human output is suppressed in the same run, so a reader never has to
 separate prose from payload. Every document carries `ok`, `command` and `version`;
 a success adds the command's own fields, and a failure adds `error` with `code` and
@@ -131,6 +132,20 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | Flag | What it does | Default |
 |---|---|---|
 | `--force` | overwrite colliding unmanaged files after a verified .bak | — |
+| `--loosen` | write a guard copy looser than the autonomy setting on disk, at HEAD or in the manifest it replaces (the person's act) | — |
+
+## `stamity upgrade`
+
+move this setup to the running release: run its sync and move the package.json pin
+
+May write when it runs, so `--dry-run` previews any change without making it.
+
+| Flag | What it does | Default |
+|---|---|---|
+| `--to <version>` | the release to move to, which must be the release running this command | required |
+| `--allow-downgrade` | move to a release older than the one that wrote the setup | — |
+| `--allow-major` | move to another major release | — |
+| `--allow-client-change` | move even when this release would set up another client set | — |
 | `--loosen` | write a guard copy looser than the autonomy setting on disk, at HEAD or in the manifest it replaces (the person's act) | — |
 
 ## `stamity check`

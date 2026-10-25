@@ -8,7 +8,9 @@ import {
   checkForUpdateNotice,
   noticeCacheDir,
   noticeOptionsFromFacts,
+  readRepositoryPin,
   resolveOwnPackageFacts,
+  shouldProbeNotice,
   type UpdateNoticeOptions,
 } from "../../../src/cli/notice/updateNotice.ts";
 import { canonical } from "../../support/identity.ts";
@@ -39,7 +41,10 @@ const PKG = "@zomarit/stamity";
 const PKG_ENCODED = "%40zomarit%2Fstamity";
 const CURRENT = "1.2.2";
 const REGISTRY = "https://registry.example.test";
-const CACHE_FILE = "update-check.json";
+// TEST CHANGE, justified: REQ-FLOW-048 — the stamp is keyed by package name, `/` and `@` read
+// as `-`, so the canonical build and a fork on one machine keep separate answers. Spelled out
+// rather than derived, as `PKG_ENCODED` is above.
+const CACHE_FILE = "update-check--zomarit-stamity.json";
 
 type FetchImpl = NonNullable<UpdateNoticeOptions["fetchImpl"]>;
 
@@ -79,6 +84,7 @@ function versionResponse(version: string): FetchSpy {
 
 interface Overrides {
   currentVersion?: string;
+  repositoryPin?: string | null;
   isPrivate?: boolean;
   env?: Readonly<Record<string, string | undefined>>;
   ttlMs?: number;
@@ -91,6 +97,7 @@ function options(cacheDir: string, fetchImpl: FetchImpl, overrides: Overrides = 
   return {
     packageName: PKG,
     currentVersion: overrides.currentVersion ?? CURRENT,
+    ...(overrides.repositoryPin === undefined ? {} : { repositoryPin: overrides.repositoryPin }),
     isPrivate: overrides.isPrivate ?? false,
     env: overrides.env ?? {},
     cacheDir,
@@ -165,6 +172,134 @@ describe("checkForUpdateNotice — env opt-outs", () => {
 
     expect(notice).toContain("1.2.3");
     expect(fetch.calls).toHaveLength(1);
+  });
+
+  // REQ-FLOW-048: our switch reads `1`, `true` or `yes`, trimmed and in any case.
+  for (const value of ["true", "YES", " 1 "]) {
+    it(`opts out on STAMITY_NO_UPDATE_CHECK=${JSON.stringify(value)}`, async () => {
+      const dir = tempDir().path("cache");
+      const fetch = forbiddenFetch();
+
+      const notice = await checkForUpdateNotice(
+        options(dir, fetch.impl, { env: { STAMITY_NO_UPDATE_CHECK: value }, now: frozen() }),
+      );
+
+      expect(notice).toBeNull();
+      expect(fetch.calls).toEqual([]);
+      expect(existsSync(dir)).toBe(false);
+    });
+  }
+
+  it("does not opt out on STAMITY_NO_UPDATE_CHECK=0", async () => {
+    const dir = tempDir().path("cache");
+    const fetch = versionResponse("1.2.3");
+
+    const notice = await checkForUpdateNotice(
+      options(dir, fetch.impl, { env: { STAMITY_NO_UPDATE_CHECK: "0" }, now: frozen() }),
+    );
+
+    expect(notice).toContain("1.2.3");
+    expect(fetch.calls).toHaveLength(1);
+  });
+});
+
+describe("shouldProbeNotice — the probe runs only where its banner can show", () => {
+  it("probes on a terminal stderr only, and never on a --json run", () => {
+    expect(shouldProbeNotice({ stderrIsTTY: false, argv: ["sync"] })).toBe(false);
+    expect(shouldProbeNotice({ stderrIsTTY: true, argv: ["sync", "--json"] })).toBe(false);
+    expect(shouldProbeNotice({ stderrIsTTY: true, argv: ["sync"] })).toBe(true);
+    // A `--json` after a bare `--` is an operand, not the flag.
+    expect(shouldProbeNotice({ stderrIsTTY: true, argv: ["learn", "--", "--json"] })).toBe(true);
+  });
+});
+
+describe("checkForUpdateNotice — the repository's pin and the upgrade move (REQ-FLOW-048)", () => {
+  it("compares with the pin and names `upgrade --to` from 1.17.0 on", async () => {
+    const dir = tempDir().path("cache");
+    const fetch = versionResponse("1.18.0");
+
+    const notice = await checkForUpdateNotice(
+      options(dir, fetch.impl, { currentVersion: "1.18.0", repositoryPin: "1.17.0", now: frozen() }),
+    );
+
+    expect(notice).toBe(
+      `Update available: 1.17.0 -> 1.18.0. To move: npx -y ${PKG}@1.18.0 upgrade --to 1.18.0. ` +
+        "To stay on 1.17.0, do nothing.",
+    );
+  });
+
+  it("names the pinned sync for a target below 1.17.0", async () => {
+    const dir = tempDir().path("cache");
+    const fetch = versionResponse("1.10.0");
+
+    const notice = await checkForUpdateNotice(
+      options(dir, fetch.impl, { currentVersion: "1.10.0", repositoryPin: "1.9.1", now: frozen() }),
+    );
+
+    expect(notice).toBe(
+      `Update available: 1.9.1 -> 1.10.0. To move: npx -y ${PKG}@1.10.0 sync. To stay on 1.9.1, do nothing.`,
+    );
+  });
+
+  it("says nothing when the pin already reads the registry's version", async () => {
+    const dir = tempDir().path("cache");
+    const fetch = versionResponse("1.18.0");
+
+    const notice = await checkForUpdateNotice(
+      options(dir, fetch.impl, { currentVersion: "1.17.0", repositoryPin: "1.18.0", now: frozen() }),
+    );
+
+    expect(notice).toBeNull();
+  });
+
+  it("ends the move with --allow-major when the majors differ", async () => {
+    const dir = tempDir().path("cache");
+    const fetch = versionResponse("2.0.0");
+
+    const notice = await checkForUpdateNotice(
+      options(dir, fetch.impl, { currentVersion: "1.18.0", repositoryPin: "1.18.0", now: frozen() }),
+    );
+
+    expect(notice).toContain(`To move: npx -y ${PKG}@2.0.0 upgrade --to 2.0.0 --allow-major.`);
+  });
+
+  it("keeps one stamp per package name", async () => {
+    const dir = tempDir().path("cache");
+    const first = versionResponse("1.2.3");
+    const second = versionResponse("1.2.3");
+
+    await checkForUpdateNotice(options(dir, first.impl, { now: frozen() }));
+    await checkForUpdateNotice({ ...options(dir, second.impl, { now: frozen() }), packageName: "@acme/stamity" });
+
+    expect(existsSync(join(dir, CACHE_FILE))).toBe(true);
+    expect(existsSync(join(dir, "update-check--acme-stamity.json"))).toBe(true);
+    // The second name probed for itself rather than reading the first one's fresh stamp.
+    expect(second.calls).toHaveLength(1);
+  });
+});
+
+describe("readRepositoryPin", () => {
+  it("reads devDependencies, then dependencies, then the manifest's generatedBy", async () => {
+    const handle = tempDir();
+    await handle.seedFiles({
+      "package.json": JSON.stringify({ devDependencies: { [PKG]: "^1.17.0" }, dependencies: { [PKG]: "1.16.0" } }),
+      ".stamity/manifest.json": JSON.stringify({ generatedBy: "1.15.0" }),
+    });
+    expect(await readRepositoryPin(handle.dir, PKG)).toBe("1.17.0");
+
+    await handle.seedFiles({ "package.json": JSON.stringify({ dependencies: { [PKG]: "~1.16.2" } }) });
+    expect(await readRepositoryPin(handle.dir, PKG)).toBe("1.16.2");
+
+    await handle.seedFiles({ "package.json": JSON.stringify({ devDependencies: { [PKG]: "latest" } }) });
+    expect(await readRepositoryPin(handle.dir, PKG)).toBe("1.15.0");
+  });
+
+  it("never throws: a malformed package.json and no manifest answer null", async () => {
+    const handle = tempDir();
+    await handle.seedFiles({ "package.json": "{ not json" });
+
+    expect(await readRepositoryPin(handle.dir, PKG)).toBeNull();
+    expect(await readRepositoryPin(handle.path("missing"), PKG)).toBeNull();
   });
 });
 

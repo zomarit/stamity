@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { COMMANDS, assertUniqueCommandNames } from "../../src/cli.ts";
 import type { CommandModule } from "../../src/cli/kit/program.ts";
 import { useCliFixture } from "../support/cliHarness.ts";
-import { npxCommand } from "../support/identity.ts";
+import { canonical, npxCommand } from "../support/identity.ts";
 /**
  * TEST CHANGE, justified (audit FORK-3): every `npx @zomarit/stamity …` literal below
  * became `npxCommand("…")`, which reads the running checkout's own `package.json`.
@@ -49,10 +49,16 @@ const packageJson = createRequire(import.meta.url)("../../package.json") as { ve
  * registered to nine and thirteen, because 1.15.0 deleted the plugin route and
  * its verb (REQ-PLUGIN-047). The assertions keep their shape; the surface
  * shrank by one command, and the removed verb's exit 2 is pinned below.
+ *
+ * TEST CHANGE, justified (plan 022 file 2, unit b9-upgrade-verb, REQ-FLOW-034):
+ * `upgrade` joins the advertised surface right after `sync`, so the counts below
+ * move from nine advertised and fifteen registered to ten and sixteen. The
+ * assertions keep their shape; the surface grew by one command.
  */
 const ADVERTISED = [
   "init",
   "sync",
+  "upgrade",
   "check",
   "validate",
   "add",
@@ -85,9 +91,9 @@ const twin = (name: string): CommandModule => ({
 });
 
 describe("COMMANDS enumeration (in-process)", () => {
-  it("registers exactly 15 uniquely-named commands in help order, the hidden six last", () => {
+  it("registers exactly 16 uniquely-named commands in help order, the hidden six last", () => {
     expect(COMMANDS.map((command) => command.name)).toEqual([...ADVERTISED, ...HIDDEN]);
-    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(15);
+    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(16);
     expect(HIDDEN).toHaveLength(6);
     expect(COMMANDS.filter((command) => command.hidden === true).map((c) => c.name)).toEqual([
       ...HIDDEN,
@@ -116,7 +122,7 @@ describe("COMMANDS enumeration (in-process)", () => {
 describe("advertised surface (child process)", () => {
   const getFixture = useCliFixture();
 
-  it("--help lists exactly the 9 advertised commands and none of the four plumbing verbs", async () => {
+  it("--help lists exactly the 10 advertised commands and none of the four plumbing verbs", async () => {
     const result = await getFixture().run(["--help"]);
 
     expect(result.code).toBe(0);
@@ -319,7 +325,10 @@ describe("update notice (opt-out dormancy)", () => {
 
   it("stays silent under either opt-out: empty stderr, no cache write", async () => {
     const fixture = getFixture();
-    const stamp = join(fixture.home.cacheDir, "stamity", "update-check.json");
+    // TEST CHANGE, justified: REQ-FLOW-048 — the stamp is keyed by package name, `/` and `@`
+    // read as `-`, so the absent file is the one this checkout's own name would write. The
+    // name is the `package.json` read `npxCommand` takes.
+    const stamp = join(fixture.home.cacheDir, "stamity", `update-check-${canonical().name.replace(/[/@]/g, "-")}.json`);
 
     // TEST CHANGE, justified: this case used to reach silence through the
     // package.json `private: true` short-circuit. The manifest is publishable,

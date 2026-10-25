@@ -1,18 +1,28 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import semver from "semver";
-import { pinnedCliCall } from "../../shared/cliCall.ts";
+import { isSemverShaped, pinnedCliCall } from "../../shared/cliCall.ts";
+import { MANIFEST_FILE } from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import type { OwnPackageFacts } from "../kit/packageName.ts";
 
 /**
  * The startup update notice: async, cached, silent-fail, opt-out-able, and
- * explicitly NOT a self-updater. There is no `update` command and nothing
- * here rewrites an install — the banner names the one supported upgrade path,
- * a sync run by the newer release (`npx -y <name>@<newer version> sync`),
+ * explicitly NOT a self-updater. Nothing here rewrites an install — the banner
+ * names the move, `upgrade` run by the newer release
+ * (`npx -y <name>@<newer version> upgrade --to <newer version>`, REQ-FLOW-048),
+ * which runs that release's sync and moves the repository's `package.json` pin,
  * because a newer CLI does nothing for the user's repo until the managed blocks
- * regenerate. It names the exact version, never `@latest`, and says how to
- * stay on the running one, since a setup pinned to its version is a choice.
+ * regenerate. A release older than {@link FIRST_UPGRADE_RELEASE} has no
+ * `upgrade` verb, so a move to one names its `sync`. It names the exact
+ * version, never `@latest`, and says how to stay on the pinned one, since a
+ * setup pinned to its version is a choice.
+ *
+ * It asks only where its banner can show ({@link shouldProbeNotice}): stderr
+ * is a terminal and the run is not `--json`. It compares the registry with the
+ * version the repository pins ({@link readRepositoryPin}), not only with the
+ * running one, so an `npx` run of a newer release in a repository pinned to an
+ * older one still names the move.
  *
  * Zero new dependencies: global `fetch` plus one JSON stamp file. `semver` is
  * already the engine's version comparator, so the guard reuses it rather than
@@ -21,9 +31,9 @@ import type { OwnPackageFacts } from "../kit/packageName.ts";
  * {@link checkForUpdateNotice} is a decision chain; each step short-circuits to
  * `null`:
  *
- *  1. **Env opt-outs.** `STAMITY_NO_UPDATE_CHECK=1` (ours), plus the two
- *     ecosystem-wide switches `NO_UPDATE_NOTIFIER` and `CI` on any non-empty
- *     value.
+ *  1. **Env opt-outs.** `STAMITY_NO_UPDATE_CHECK` set to `1`, `true` or `yes`
+ *     (ours, trimmed, any case), plus the two ecosystem-wide switches
+ *     `NO_UPDATE_NOTIFIER` and `CI` on any non-empty value.
  *  2. **`isPrivate` — the unpublishable-manifest no-op.** `package.json`
  *     `private: true` forbids publishing, so no registry entry can exist and
  *     probing for one is guaranteed-useless traffic. This package does not set
@@ -38,7 +48,8 @@ import type { OwnPackageFacts } from "../kit/packageName.ts";
  *     `AbortSignal.timeout`. Any failure — DNS, non-2xx, malformed body, abort
  *     — is `null`, and a stamp is written regardless.
  *  5. **Strictly-greater guard.** A banner appears only when the registry
- *     answer is valid semver strictly above the running version. A registry
+ *     answer is valid semver strictly above the repository's pin (else the
+ *     running version). A registry
  *     that answers with an equal or lower version must never produce a
  *     downgrade prompt or an equal-version nag — not a hypothetical: the
  *     `latest` dist-tag for this name currently sits BEHIND the shipped
@@ -71,8 +82,30 @@ export const DEFAULT_NOTICE_TIMEOUT_MS: number = 1_500;
 /** Public npm registry. Overridable so private registries and tests can retarget. */
 export const DEFAULT_REGISTRY_BASE_URL: string = "https://registry.npmjs.org";
 
-/** The stamp file inside {@link noticeCacheDir}. */
-const CACHE_FILE_NAME = "update-check.json";
+/**
+ * The stamp file inside {@link noticeCacheDir}, keyed by package name with `/`
+ * and `@` read as `-` (`@zomarit/stamity` -> `update-check--zomarit-stamity.json`),
+ * so a fork and the canonical build on one machine never answer each other's
+ * probe (REQ-FLOW-048).
+ */
+function cacheFileName(packageName: string): string {
+  return `update-check-${packageName.replace(/[/@]/g, "-")}.json`;
+}
+
+/**
+ * The first release with the `upgrade` verb. A move to an older release names
+ * that release's `sync`, the update path it shipped with: its CLI answers
+ * `upgrade` with "unknown command".
+ */
+const FIRST_UPGRADE_RELEASE = "1.17.0";
+
+/**
+ * The verb a move to `target` runs: `upgrade --to <target>` from
+ * {@link FIRST_UPGRADE_RELEASE} on, else `sync`. `target` is semver-valid.
+ */
+export function moveVerb(target: string): string {
+  return semver.gte(target, FIRST_UPGRADE_RELEASE) ? `upgrade --to ${target}` : "sync";
+}
 
 /**
  * Cache namespace under the user's cache root, derived from the state-directory
@@ -87,6 +120,12 @@ export interface UpdateNoticeOptions {
   packageName: string;
   /** Version currently running, from the package's own `package.json`. */
   currentVersion: string;
+  /**
+   * The version the repository pins ({@link readRepositoryPin}), which the
+   * banner compares with and names as the one to stay on. Absent or `null`:
+   * the running version.
+   */
+  repositoryPin?: string | null;
   /** `package.json` `private: true` — the unpublishable-manifest no-op (step 2). */
   isPrivate: boolean;
   /** Environment to read opt-outs from. Injected, never `process.env` directly. */
@@ -136,10 +175,12 @@ export function noticeOptionsFromFacts(
   facts: OwnPackageFacts,
   env: Readonly<Record<string, string | undefined>>,
   cacheDir: string,
+  repositoryPin: string | null = null,
 ): UpdateNoticeOptions {
   return {
     packageName: facts.name,
     currentVersion: facts.version,
+    repositoryPin,
     isPrivate: facts.isPrivate,
     env,
     cacheDir,
@@ -164,7 +205,7 @@ export async function checkForUpdateNotice(opts: UpdateNoticeOptions): Promise<s
 
     const ttlMs = opts.ttlMs ?? DEFAULT_NOTICE_TTL_MS;
     const now = opts.now?.() ?? new Date();
-    const cachePath = join(opts.cacheDir, CACHE_FILE_NAME);
+    const cachePath = join(opts.cacheDir, cacheFileName(opts.packageName));
 
     // (3) A stamp inside the trust window answers offline.
     const cached = await readCache(cachePath);
@@ -208,12 +249,15 @@ export function noticeCacheDir(
 }
 
 /**
- * `STAMITY_NO_UPDATE_CHECK` matches exactly `1` (our documented switch); the two
- * ecosystem variables suppress on any non-empty value, because that is how the
- * tools that set them use them — CI runners export `CI=true`, not `CI=1`.
+ * `STAMITY_NO_UPDATE_CHECK` matches `1`, `true` or `yes`, trimmed and in any
+ * case (our documented switch, REQ-FLOW-048), so `0` and `false` leave the
+ * notice on; the two ecosystem variables suppress on any non-empty value,
+ * because that is how the tools that set them use them — CI runners export
+ * `CI=true`, not `CI=1`.
  */
 function isOptedOut(env: Readonly<Record<string, string | undefined>>): boolean {
-  if (env.STAMITY_NO_UPDATE_CHECK === "1") return true;
+  const ours = (env.STAMITY_NO_UPDATE_CHECK ?? "").trim().toLowerCase();
+  if (ours === "1" || ours === "true" || ours === "yes") return true;
   if ((env.NO_UPDATE_NOTIFIER ?? "") !== "") return true;
   return (env.CI ?? "") !== "";
 }
@@ -303,8 +347,15 @@ async function probeRegistry(opts: UpdateNoticeOptions): Promise<string | null> 
  * publisher chose to hand an unpinned install, so a prerelease sitting on that
  * tag is exactly the version the banner names.
  *
+ * The compare runs against the repository's pin when one was read
+ * ({@link UpdateNoticeOptions.repositoryPin}), else the running version, and
+ * that version is the one the banner names to stay on.
+ *
  * The move command is the pinned call (`../../shared/cliCall.ts`), the one
- * spelling every other remedy uses: `npx -y <name>@<latest> sync`, with a
+ * spelling every other remedy uses: `npx -y <name>@<latest> upgrade --to <latest>`
+ * ({@link moveVerb}; `sync` for a release older than {@link FIRST_UPGRADE_RELEASE}),
+ * ending `--allow-major` when the majors differ, because `upgrade` refuses a
+ * major move without it, with a
  * `--registry` fork's `--@<scope>:registry=<url>` ahead of the spec. A registry
  * the call refuses to write throws, and the net below turns it into no banner. `-y`
  * because the reader may be an agent's shell, and the exact version because an
@@ -323,12 +374,72 @@ function buildBanner(opts: UpdateNoticeOptions, latest: string | null): string |
   // `semver.valid` admits a leading `v` or `=` that the pinned call's own shape
   // check refuses, and the two halves of one sentence name one version.
   const target = semver.valid(latest);
-  if (target === null || semver.valid(opts.currentVersion) === null) return null;
-  if (!semver.gt(target, opts.currentVersion)) return null;
+  const from = opts.repositoryPin ?? opts.currentVersion;
+  if (target === null || semver.valid(from) === null) return null;
+  if (!semver.gt(target, from)) return null;
   const callOpts = opts.packageRegistry === undefined ? {} : { registry: opts.packageRegistry };
+  const verb = moveVerb(target);
+  const major = verb !== "sync" && semver.major(target) !== semver.major(from) ? " --allow-major" : "";
   return (
-    `Update available: ${opts.currentVersion} -> ${target}. ` +
-    `To move: ${pinnedCliCall(opts.packageName, target, "sync", callOpts)}. ` +
-    `To stay on ${opts.currentVersion}, do nothing.`
+    `Update available: ${from} -> ${target}. ` +
+    `To move: ${pinnedCliCall(opts.packageName, target, `${verb}${major}`, callOpts)}. ` +
+    `To stay on ${from}, do nothing.`
   );
+}
+
+/**
+ * Whether the startup probe should run at all (REQ-FLOW-048): only where its
+ * banner can show — stderr is a terminal — and never on a `--json` run, whose
+ * reader is a program. A run that cannot show the banner sends no request and
+ * writes no stamp. `argv` is the command line after the program name; a token
+ * after a bare `--` is an operand, not the flag.
+ */
+export function shouldProbeNotice(i: { stderrIsTTY: boolean; argv: readonly string[] }): boolean {
+  if (!i.stderrIsTTY) return false;
+  const operands = i.argv.indexOf("--");
+  return !(operands === -1 ? i.argv : i.argv.slice(0, operands)).includes("--json");
+}
+
+/**
+ * A `package.json` dependency spec read as a pin: an exact version, or a
+ * `^` or `~` range over one, split into its operator and version. `null` for
+ * every other spec (`latest`, a tag, a path, a git URL, a wider range), which
+ * names no one version.
+ */
+export function pinSpecOf(spec: unknown): { operator: "" | "^" | "~"; version: string } | null {
+  if (typeof spec !== "string") return null;
+  const operator = spec.startsWith("^") || spec.startsWith("~") ? (spec[0] as "^" | "~") : "";
+  const version = spec.slice(operator.length);
+  return isSemverShaped(version) ? { operator, version } : null;
+}
+
+/**
+ * The version the repository at `cwd` pins for `name`: its root
+ * `package.json`'s `devDependencies` entry, then its `dependencies` entry
+ * (each read through {@link pinSpecOf}), then the setup manifest's
+ * `generatedBy`; `null` when none names a version. Never throws: an unreadable
+ * or malformed file is a source that names nothing.
+ */
+export async function readRepositoryPin(cwd: string, name: string): Promise<string | null> {
+  const pkg = await readJsonObject(join(cwd, "package.json"));
+  for (const field of ["devDependencies", "dependencies"] as const) {
+    const section = pkg?.[field];
+    if (typeof section !== "object" || section === null) continue;
+    const pin = pinSpecOf((section as Record<string, unknown>)[name]);
+    if (pin !== null) return pin.version;
+  }
+  const generatedBy = (await readJsonObject(join(cwd, STATE_DIR, MANIFEST_FILE)))?.["generatedBy"];
+  return typeof generatedBy === "string" && isSemverShaped(generatedBy) ? generatedBy : null;
+}
+
+/** The JSON object at `path`, or `null` when it is absent, unreadable, malformed or not an object. */
+async function readJsonObject(path: string): Promise<Record<string, unknown> | null> {
+  try {
+    const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
 }

@@ -704,6 +704,12 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // read from it moved into `check.ts`. Their five rows went with the files.
   // wave 16 (P2 wave 3) — program assembly
   "src/cli.ts": { unit: "p2-16", wave: 16 },
+  // TEST CHANGE, justified (plan 022 file 2, b9-upgrade-verb, REQ-FLOW-034): the `upgrade` verb runs
+  // the wave-14 sync engine through the wave-15 `sync` verb's helpers and reads the wave-15 `check`
+  // row `checkPackCatalog`, so it sits at wave 16. It shares the program-assembly unit with
+  // `src/cli.ts`, which registers it: a file at wave 16 under another unit is one `cli.ts` could not
+  // import (`checkWaveLayering`).
+  "src/cli/commands/upgrade.ts": { unit: "p2-16", wave: 16 },
 
   // ---- phase 6 (p6-plan.json): the docs generators, wave 17 ----
   // Above the CLI entry because `cliReference` reads `COMMANDS` off it, which
