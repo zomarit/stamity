@@ -109,6 +109,9 @@ Scenario state — the run so far, given to you as fact:
 > how the invoice PDF's totals block lays out when printed on A4. The plan carries a spec
 > delta, one ADDED requirement. Every ledger row is fixed and no leftover is open.
 > The run changed `src/invoice/pdf.ts` and `test/invoice/pdf.test.ts`.
+> No unit is blocked and nothing was refused: the exit this run takes is
+> `Status: closed 2026-10-16`, with no `(blocked: <reason>)`, and the morning list carries no
+> `## Refused` row. A `held` row for a person's call is not a blocked item.
 > Any `stamity run land` call on #102 tonight returns this, given to you as fact: after its
 > wait it exits 1 with outcome `refused`, its `notDone[]` reading
 > `required check ci/test has no check run yet on 9e04c3a (commit statuses do not count)`,

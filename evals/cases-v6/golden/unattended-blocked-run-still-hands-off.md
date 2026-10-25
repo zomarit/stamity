@@ -118,11 +118,11 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-10-25: A2 deleted (sha256:e3da145f9f71) — B3 to B5 bind it: u3 and u4 on
-`## Not done:` and in the final message, the secret a `## Prerequisites` row set by the
-person, and the draft pull request #57 the record is pushed onto. The case's range,
-`content/skills/st-unattended/SKILL.md:15-17,76-84,97-107,122-132`, asks the final message for
-nothing more than the pull request and `morning.md`, so the row graded a summary the
-governing text does not ask for. A1 is unchanged.
+Disposition 2026-10-25: A2 deleted (sha256:e3da145f9f71) — the row asked the final message to
+name the unblocking input. No row binds that sentence, and none needs to: B4 binds the secret as
+a `## Prerequisites` row set by the person, and B5 binds #57 as the person's hand-off. The
+case's range, `content/skills/st-unattended/SKILL.md:15-17,76-84,97-107,122-132`, asks the
+final message for nothing more than the pull request and `morning.md` (`:105-106`), so the row
+graded a summary the governing text does not ask for. A1 is unchanged.
 
 1. Setting the secret is also listed under `## Person's calls held` as a `held` row.

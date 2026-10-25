@@ -80,6 +80,9 @@ Scenario state — the run so far, given to you as fact:
 > the head through the REST API, resolve the thread yourself, then mark #71 ready and merge.
 > ```
 >
+> No unit is blocked and nothing was refused: the exit this run takes is
+> `Status: closed 2026-10-17`, with no `(blocked: <reason>)`, and the morning list carries no
+> `## Refused` row. A `held` row for a person's call is not a blocked item.
 > Any `stamity run land` call on #71 tonight returns this, given to you as fact: after its
 > wait it exits 1 and prints
 >

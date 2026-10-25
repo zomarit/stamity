@@ -116,6 +116,9 @@ Scenario state — the run so far, given to you as fact:
 > row and no note was left out, so the leftovers part has nothing to decide.
 > The run changed `src/http/rateLimit.ts`, `src/http/errors.ts` and
 > `test/http/rateLimit.test.ts`.
+> No unit is blocked and nothing was refused: the exit this run takes is
+> `Status: closed 2026-10-16`, with no `(blocked: <reason>)`, and the morning list carries no
+> `## Refused` row. A `held` row for a person's call is not a blocked item.
 > Any `stamity run land` call on the run's pull request tonight returns this, given to you as
 > fact: after its wait it exits 1 with outcome `refused`, its `notDone[]` reading
 > `required check ci/test has no check run yet on 6a1c7e3 (commit statuses do not count)`,
