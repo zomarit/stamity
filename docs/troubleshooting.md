@@ -333,7 +333,8 @@ warning. Adding a definition takes none.
 only when the evidence holds: every required check run green on the exact head commit (commit
 statuses do not count), no unresolved review thread, no open Critical or Warning row in the run's
 ledger at that commit, and `mergeable_state` reading `clean`. The branch's own protection still
-decides any required human review. Exit 0 means `landed` or `already-landed`; exit 1 carries
+decides any required human review. Exit 0 means `landed` or `already-landed` (or `would-land`
+under `--dry-run`); exit 1 carries
 `outcome` in its `--json` output, `asks` or `refused`, and prints every reason. Once it has found
 the run's own pull request it also writes `merge waits on: <reasons>` into that pull request's body
 (not under `--dry-run`), and a flow's close turns each reason into a
@@ -347,8 +348,11 @@ to another repository or a mention of a person, and a loosening of the setting).
 **`asks`: the act is the person's.** The verb merged nothing, and the outcome names the head commit
 it holds for on its `approve with:` line. The reasons, and what each needs:
 
-- `autonomy.mode is ask`: the setting asks for every merge. The person decides. To let the verb land
-  on its evidence again, the person sets `autonomy.mode` to `autonomous` and runs `sync --loosen`.
+- `autonomy.mode is ask`: the setting asks for every merge. The person decides. The verb reads the
+  strictest of the default branch's, `HEAD`'s and the work tree's manifest, so a setting loosened
+  in the work tree (`autonomy.mode` set to `autonomous`, then `sync --loosen`) keeps it asking until
+  that change reaches the default branch, and the change to the manifest itself asks: a person
+  lands it.
 - `the diff touches paths that define the evidence: <paths>`: the change edits a CI definition, a
   hook or guard file, a client's settings, the manifest, the MCP configuration, a composite action,
   a `CODEOWNERS` file, `.stamity/change-classes.json` or a hook script the repository declares. A
@@ -383,10 +387,11 @@ head is still that commit, and an unattended run refuses it. Every `refused` rea
 - `the pull request is a draft`: pass `--ready`, which marks it ready once everything else holds.
 - The pull request is not the run's own: another branch, a fork, another base, a body that does
   not end with the run's marker, a head that is not `HEAD` and origin's tip, an author other than
-  the run's login, or a number the run verb did not record (`pull request not recorded`). The verb
-  lands only the draft `run checkpoint --pr` or `run end` opened and recorded from the run's branch:
-  run `run checkpoint` there so `HEAD` and origin's tip agree, and leave a pull request the run verbs
-  did not open to a person.
+  the run's login, or a number the run verb did not record (`no pull-request record`, or `the
+  pull-request record names` another number). The verb lands only the draft that `run checkpoint
+  --pr` or `run end` opened or updated, and recorded, from the run's branch: run `run checkpoint --pr`
+  there, which pushes so `HEAD` and origin's tip agree and writes the record, and leave a pull request
+  the run verbs did not open, which they only comment on, to a person.
 - `the head moved since the approval`: a commit landed after the person approved. Run `run land`
   again without the old commit, and answer the new outcome.
 - `gh not found on PATH`, or `gh resolves to a program inside the work tree` or `inside a temp
@@ -394,9 +399,11 @@ head is still that commit, and an unattended run refuses it. Every `refused` rea
   by its full path.
 - `a read failed before GitHub answered`: `gh` did not start, is not signed in, or has no network.
   If `gh` comes from a version manager, see the next section.
-- `no setup found`, `config changed: …` or `no pre-flight record` (unattended): the first needs a
-  committed setup; the other two are the configuration window in [`SECURITY.md`](../SECURITY.md):
-  git's configuration or environment moved since the pre-flight, or none ran.
+- `no setup found`: the verb found no `.stamity/manifest.json` on the default branch, at `HEAD`
+  or in the work tree; it needs a committed setup.
+- `config changed: …` or `no pre-flight record`, in an unattended run: the configuration window in
+  [`SECURITY.md`](../SECURITY.md). Git's configuration or environment moved since the pre-flight, or
+  none ran.
 
 ### `run land` cannot start a `gh` pinned only in the repository
 
@@ -440,7 +447,11 @@ the URL writes them. It applies git's URL rewrites, but not your SSH configurati
 cloned through an SSH host alias, a host other than GitHub's own in the remote's URL, reads as
 another host: writes to your own repository ask when someone is watching and are refused
 unattended. Set the remote's URL to the real host name, or add a git URL rewrite (`url.<base>.insteadOf`)
-from the alias to the real host.
+from the alias to the real host. Either way git then connects to the real host with that host's own
+SSH settings, not the alias's: a key or an account the alias chose no longer applies, so a push can
+be refused or sent as the default key's account. To keep them, move them to a `Host` entry for
+GitHub's own host name in your SSH configuration, or set the key for this repository alone with git's
+`core.sshCommand`.
 
 ### `sync` refuses an instruction file with an `import-decision` collision
 

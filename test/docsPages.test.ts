@@ -2275,7 +2275,7 @@ describe("SECURITY.md", () => {
         // Without case: a risk may open its sentence on the page.
         expect(residuals.toLowerCase(), `the cloud section does not name: ${risk}`).toContain(risk.toLowerCase());
       }
-      // The attended guard's accepted gaps, which the unattended rules cover, and the two they do not.
+      // The attended forms the guard reads, which the unattended rules refuse as well, and the two they do not cover.
       // TEST CHANGE, justified (plan 022 file 1, unit a16-security-pages; REQ-FLOW-104, inbox row pr/40): the guard
       // fills gh's placeholders from the checkout's branch and reads a batch ref update's hidden list element as a ref
       // it cannot show (src/hooks/personOnly.ts::personOnlyVerdict, httpVerdict's `fill` and the `refUpdates` read), so
@@ -2935,7 +2935,11 @@ describe("SECURITY.md", () => {
         // compare git's surface with the pre-flight's record at their start and before the push
         // (src/runs/gitSurface.ts::checkSurfaceRecord), so such a variable reaches their git only as far as that compare.
         "set on an earlier line of a shell that persists or by a line of Claude Code's environment file, reaches their git only as far as that compare, which refuses it",
-        "Three gaps remain. A steered agent can run the pre-flight again, which vets the new surface, or forge the record, which it can write. And a change made after the second read",
+        // TEST CHANGE, justified (plan 022 file 1, unit a16-security-pages, fix round 1, review/162; REQ-FLOW-131): a
+        // record head rewritten to `Mode: attended` reads as attended to the three verbs, which then skip the compare and
+        // the record (src/cli/commands/runLand.ts, `readsUnattended` and `surfaceMoved`), so a fourth gap joins the three.
+        "Four gaps remain. A steered agent can run the pre-flight again, which vets the new surface, or forge the record, which it can write. A change made after the second read",
+        "a run that rewrites its record head to `Mode: attended` reads as attended to all three verbs, so they skip the compare and the pre-flight record, and the land verb's own refusal of `--approved` lifts",
         "The stand-alone rule for a run verb's line finds the verb by its name in the line's text, so a launcher the guard does not unwrap, a name split by quotes or a line built by an expression can skip it",
         "Claude Code's cloud readiness hook.",
         "`npm ci` runs the locked dependencies' install scripts, and they inherit `CLAUDE_ENV_FILE`, so one can append lines that run before every later shell command",
@@ -3313,7 +3317,10 @@ describe("the night units' pages (n2, n3, n4, n5)", () => {
       "Anything that hold cannot resolve cleanly at `Base:` refuses the call before it stages, naming its cause, and nothing is pushed",
       "a path that passes through a link or a submodule there, one spelled in another letter case than the tree's or ambiguous by case, a `..` segment, a path that is absolute or leaves the repository, and a script the hold could not stand in for",
       "a byte-order mark is read as the manifest reader reads it",
-      "`src/cli/commands/run.ts::hookPathsAt`",
+      // TEST CHANGE, justified (plan 022 file 1, unit a16-security-pages, fix round 1, review/154; REQ-FLOW-102 as
+      // built): the hold's reader moved into src/runs/hookPaths.ts (a6, `hookPathsAt` and `hookPathsRead`), and
+      // src/cli/commands/run.ts only calls it, so the row's address names the module that holds the code.
+      "`src/runs/hookPaths.ts::hookPathsAt`",
       // review/197: the residual widens from modules loaded outside the held folders to all a held script reads or loads.
       "The hook hold reads the declarations at `Base:` alone, so a hook written by hand into a client's settings file whose script lies outside the held folders, and anything a held script reads or loads beyond the files its declaration names, the contents of a folder it names included, are pushed as any other file, and a run that rewrites its record head's `Base:` moves the commit the hold reads",
       // review/196, review/197, review/198, review/199: every file a declaration names, present or not, and no folder.
@@ -5423,6 +5430,15 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
       "On a single-account repository the run's login is the person's, so neither the author check nor the thread check can tell them apart, and the review loop is the evidence of record",
       "A repository's CI may choose which checks run with code the change edits",
       "`GIT_NO_REPLACE_OBJECTS=1` and the command-line key `-c core.useReplaceRefs=false`",
+      // Fix round 1 (review/150, 156-158, 161, 162): the trees that land on the evidence, the run's own ledger, the
+      // clients whose payload names no agent, the unattended tag and dispatch, and the record-head gap.
+      "other than the charter, the rule files and the agent, command, skill, prompt and chat-mode definitions under each client's folder",
+      "the instructions every later session follows among them, and the review loop is their only reader",
+      "The ledger it checks is a file the run itself writes and commits, so an empty or rewritten ledger passes: the review loop and the whole-branch review are the evidence of record",
+      "while on Cursor and Codex, whose hook payloads name no agent, no call can be shown to be the main thread's, so they are refused in every mode, as 1.16.0 refused them. `stamity run land` alone on its line runs on every client",
+      "Unattended, of these acts only the raw ready mark is refused: a local tag and an unnamed workflow dispatch run there too",
+      "is refused for a sub-agent, and on Cursor and Codex in every mode",
+      "a local tag and a workflow dispatch the setting does not name run unasked; Cursor and Codex refuse those three in every mode",
     ]) {
       expect(flat, `SECURITY.md does not state: ${claim}`).toContain(claim);
     }
@@ -5430,14 +5446,45 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
       "No run verb marks a pull request ready, merges it or tags",
       "The attended guard's accepted gaps.",
       "removes no `permissions.deny` row and no `permissions.ask` row",
+      "The charter, rule and agent-definition files land on the evidence",
+      "other than the charter, rule and agent-definition files",
+      "`src/cli/commands/run.ts::hookPathsAt`",
     ]) {
       expect(flat, `SECURITY.md says again: ${stale}`).not.toContain(stale);
     }
   });
 
+  // Fix round 1 (review/150, 157): the trees the land verb lands on the evidence are exactly the code's, so the land row
+  // names each kind `LANDS_ON_EVIDENCE` holds; and the mapping carries the same list and the identity-free clients.
+  it("the land row names every kind of tree that lands on the evidence, and the mapping says the same", () => {
+    const evidence = read("src/runs/landEvidence.ts");
+    const list = /export const LANDS_ON_EVIDENCE[^=]*=\s*\[([^\]]*)\]/.exec(evidence)?.[1] ?? "";
+    const globs = [...list.matchAll(/"([^"]+)"/g)].map((match) => match[1] ?? "");
+    expect(globs.length, "LANDS_ON_EVIDENCE could not be read").toBeGreaterThan(10);
+    // Each glob is one of the kinds the page names: a charter, a rule file, or an agent, command, skill, prompt or chat-mode tree.
+    const kind = (glob: string): string | null =>
+      /AGENTS(\.override)?\.md|CLAUDE\.md/.test(glob) ? "the charter"
+        : /rules|instructions/.test(glob) ? "the rule files"
+          : /\/agents\//.test(glob) ? "agent" : /\/commands\//.test(glob) ? "command" : /\/skills\//.test(glob) ? "skill"
+            : /\/prompts\//.test(glob) ? "prompt" : /\/chatmodes\//.test(glob) ? "chat-mode" : null;
+    for (const glob of globs) expect(kind(glob), `the page names no kind for ${glob}`).not.toBeNull();
+    const phrase = "the charter, the rule files and the agent, command, skill, prompt and chat-mode definitions under each client's folder";
+    for (const name of new Set(globs.map(kind))) expect(phrase, `the land row omits ${name}`).toContain(name ?? "");
+    const security = flowed(read(SECURITY));
+    const land = security.slice(security.indexOf("| An agent working on a change, attended or not"), security.indexOf("| An agent, or the text that steers it | Loosening"));
+    expect(land).toContain(`other than ${phrase}`);
+    const mapping = flowed(read(SECURITY_MAPPING));
+    expect(mapping).toContain(`other than ${phrase}, which land on the evidence with the review loop their only reader`);
+    expect(mapping).toContain("The ledger is a file the run itself writes and commits, so an empty or rewritten one passes");
+    expect(mapping).toContain("on Claude Code and Copilot CLI and never for a sub-agent, while Cursor and Codex, whose payloads name no agent, refuse them and a remote write in every mode");
+    expect(mapping).toContain("and of the acts the setting runs only the raw ready mark: a local tag and an unnamed workflow dispatch run there too");
+    expect(mapping, "the mapping says again an unattended run refuses every person-only act").not.toContain("it refuses every person-only act on every client and also");
+    expect(flowed(read(CLOUD))).toContain("Cursor and Codex refuse them in every mode, since their hook payloads name no agent");
+  });
+
   it("troubleshooting gives the land verb's reasons as the verb words them, and the new entries", () => {
     const page = flowed(read(TROUBLESHOOTING));
-    const verb = read("src/runs/landEvidence.ts") + read("src/cli/commands/runLand.ts");
+    const verb = read("src/runs/landEvidence.ts") + read("src/cli/commands/runLand.ts") + read("src/runs/pullRequest.ts");
     for (const heading of [
       "### `run land` exits 1 and does not merge",
       "### `run land` cannot start a `gh` pinned only in the repository",
@@ -5463,6 +5510,9 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
       "the head moved since the approval",
       "gh not found on PATH",
       "failed before GitHub answered",
+      // Fix round 1 (review/151): the record's refusals as `prRecordRefusal` words them.
+      "no pull-request record",
+      "the pull-request record names",
     ]) {
       expect(page, `troubleshooting does not quote: ${reason}`).toContain(reason);
       expect(verb, `the land verb no longer says: ${reason}`).toContain(reason);
@@ -5470,6 +5520,11 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
     expect(page).toContain("on a fresh clone, on a switch of every selected client, and on a hooks layout move");
     expect(page).toContain("Put a push, a tag or a merge alone on its line");
     expect(page).toContain("It applies git's URL rewrites, but not your SSH configuration");
+    // Fix round 1 (review/155, 160, 152, 151): the alias's own SSH settings, the land verb's strictest setting, the record's verb.
+    expect(page).toContain("a key or an account the alias chose no longer applies");
+    expect(page).toContain("keeps it asking until that change reaches the default branch");
+    expect(page).toContain("run `run checkpoint --pr` there, which pushes so `HEAD` and origin's tip agree and writes the record");
+    expect(page, "troubleshooting quotes a reason the land verb does not print").not.toContain("(`pull request not recorded`)");
     // The settings entry: a raw merge keeps its ask row, and the rows no longer only grow (REQ-FLOW-036).
     expect(page).toContain("a raw merge keeps its row in every mode");
     expect(page).not.toContain("Those two lists only grow");

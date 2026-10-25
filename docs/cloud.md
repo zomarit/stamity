@@ -40,8 +40,12 @@ set to any value but empty, `false` or `0`. A cloud's own marker means "cloud", 
   each reason as a held row on the morning list and in the pull request's body. A raw ready mark, a
   raw merge and a raw push to the default branch stay refused.
 - **What runs without a click.** In `autonomy.mode: autonomous`, the default, a ready-for-review
-  mark on the main thread, a local tag and a workflow dispatch run unasked (a raw ready mark stays
-  refused in a run nobody watches); the run's own merge goes only through `run land`. Everything else on the ask list still asks: a raw merge, a
+  mark, a local tag and a workflow dispatch run unasked on Claude Code's and Copilot CLI's main
+  thread, and never for a sub-agent. Cursor and Codex refuse them in every mode, since their hook
+  payloads name no agent and no call can be shown to be the main thread's. In a run nobody watches a
+  raw ready mark stays refused, while a local tag and an unnamed dispatch run, so name
+  `workflow-dispatch` in `autonomy.deployingActs` if a dispatchable workflow releases or deploys. The
+  run's own merge goes only through `run land`, which runs on every client. Everything else on the ask list still asks: a raw merge, a
   push of a tag or of the default branch, a release, a publish, a secret or protection write, an
   `--admin` merge, a write to another repository or a mention of a person, and a loosening of the
   setting. To tighten back to 1.16.0's asks, set `autonomy.mode` to `ask` and run `sync`. To name
@@ -187,7 +191,8 @@ evidence holds.
 
 Read the morning list in the draft pull request's body, and answer the way its
 `## How to answer` section names. Cursor's guard refuses every person-only act rather than asking,
-so each held act comes to you as the exact command, the morning walk included. Locally,
+a ready mark and a local tag included, so each held act comes to you as the exact command, the
+morning walk included. Locally,
 `/st-work --resume <run-id>` on the run's branch walks the same list.
 
 ## Copilot's cloud agent
