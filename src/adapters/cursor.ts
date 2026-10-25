@@ -545,9 +545,11 @@ export const cursorResiduePlanner: ResiduePlanner = {
 
     // The touchpoints are the shared rows Codex emits too: rendered tool-neutral
     // by the core helper, so the composer finds the same bytes from both
-    // adapters and writes each file once, owned by both.
+    // adapters and writes each file once, owned by both. Cursor reads
+    // `disable-model-invocation`, never Codex's companion, so it plans none
+    // (REQ-FLOW-033).
     if (CURSOR_COMMANDS_DIR !== null) {
-      for (const row of projectTouchpointSkills(admitted("command"), ctx)) {
+      for (const row of projectTouchpointSkills(admitted("command"), ctx, { policy: false })) {
         rows.push({
           path: row.path,
           content: row.content,

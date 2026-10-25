@@ -943,17 +943,12 @@ describe("touchpoint commands", () => {
       return;
     }
 
-    // TEST CHANGE, justified (sw17-touchpoints-as-shared-skills): each
-    // touchpoint is now the shared skill Codex reads too, so it carries the
-    // Codex companion beside its `SKILL.md` — two rows per command, both owned
-    // here, both reclaimed with the command. The `SKILL.md` bytes are held
-    // below exactly as before.
-    expect(commandRows.map((row) => row.path)).toEqual([
-      P.askCommand,
-      P.askCommand.replace("SKILL.md", TOUCHPOINT_POLICY_FILE),
-      P.workCommand,
-      P.workCommand.replace("SKILL.md", TOUCHPOINT_POLICY_FILE),
-    ]);
+    // TEST CHANGE, justified: REQ-FLOW-033 — Cursor reads
+    // disable-model-invocation, not the companion, so the Codex companion is
+    // Codex's row alone and Cursor plans one row per command again. The
+    // `SKILL.md` bytes are held below exactly as before.
+    expect(commandRows.map((row) => row.path)).toEqual([P.askCommand, P.workCommand]);
+    expect(plan.some((row) => row.path.endsWith(`/st-ask/${TOUCHPOINT_POLICY_FILE}`))).toBe(false);
     expect(CURSOR_COMMANDS_DIR).toBe(SKILLS_PROJECTION_DIR);
     expect(surfaceCap?.value).toContain(CURSOR_COMMANDS_DIR);
     expect(surfaceCap?.value).toContain("/<id>");

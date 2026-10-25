@@ -556,12 +556,12 @@ export const TOUCHPOINT_POLICY_FILE = "agents/openai.yaml";
  * the rule `disable-model-invocation: true` states for Cursor, so both readers
  * of the one shared file start a touchpoint only when the operator names it.
  */
-const TOUCHPOINT_POLICY = "policy:\n  allow_implicit_invocation: false\n";
+export const TOUCHPOINT_POLICY = "policy:\n  allow_implicit_invocation: false\n";
 
 /**
  * The nine touchpoint commands as shared skills: one
- * `.agents/skills/st-<id>/SKILL.md` per selected command, with its
- * {@link TOUCHPOINT_POLICY_FILE} companion.
+ * `.agents/skills/st-<id>/SKILL.md` per selected command and, when
+ * `options.policy` is set, its {@link TOUCHPOINT_POLICY_FILE} companion.
  *
  * Codex and Cursor both read {@link SKILLS_PROJECTION_DIR}, so one file per
  * touchpoint serves both: Codex had no repository surface for these bodies at
@@ -569,7 +569,12 @@ const TOUCHPOINT_POLICY = "policy:\n  allow_implicit_invocation: false\n";
  * two adapters calls this with the commands it admits and emits the rows as its
  * own; the composer merges byte-identical rows into one write with both owners,
  * so the file survives the deselection of either client and is reclaimed when
- * both are gone. That is why the render is tool-neutral — the same
+ * both are gone. The companion is Codex's alone (REQ-FLOW-033): only Codex
+ * reads it, Cursor takes the same rule from `disable-model-invocation`, so
+ * Codex passes `policy: true` and Cursor `policy: false`, and a setup without
+ * Codex plans no companion, which the reclaim sweep then deletes by its proof
+ * (`../cli/engine/emissionWrite.ts::retiredEngineRenderings`). The option is
+ * required, so each caller decides. That is why the render is tool-neutral — the same
  * substitution {@link projectSkills} applies, with the platform ask-user marker
  * resolving to the all-clients table — and why nothing here takes a tool.
  *
@@ -585,6 +590,7 @@ const TOUCHPOINT_POLICY = "policy:\n  allow_implicit_invocation: false\n";
 export function projectTouchpointSkills(
   commands: readonly CatalogItem[],
   ctx: SkillsEmissionContext,
+  options: { readonly policy: boolean },
 ): ProjectedSkillFile[] {
   const detection = detectionContextFromManifest(ctx.manifest);
   const gates = verificationGatesFor(ctx.manifest.detected, readGates(ctx.manifest));
@@ -598,12 +604,14 @@ export function projectTouchpointSkills(
       artifactPath: item.relativePath,
       origin: item.origin ?? "corpus",
     } as const;
+    const skill = {
+      ...row,
+      path: posix.join(SKILLS_PROJECTION_DIR, name, SKILL_FILE),
+      content: buildTouchpointSkill(item, name, substituteBody(item.body, detection, gates, cli)),
+    };
+    if (!options.policy) return [skill];
     return [
-      {
-        ...row,
-        path: posix.join(SKILLS_PROJECTION_DIR, name, SKILL_FILE),
-        content: buildTouchpointSkill(item, name, substituteBody(item.body, detection, gates, cli)),
-      },
+      skill,
       {
         ...row,
         path: posix.join(SKILLS_PROJECTION_DIR, name, TOUCHPOINT_POLICY_FILE),

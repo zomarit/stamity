@@ -103,7 +103,7 @@ export const CODEX_AGENTS_DIR = `${CODEX_DIR}/agents`;
  * are the surface the banner names, and this client reads the shared tree
  * already, so the touchpoints ship there once
  * ({@link projectTouchpointSkills}), co-owned with Cursor, each with an
- * `agents/openai.yaml` companion that turns implicit invocation off — a
+ * `agents/openai.yaml` companion, this client's row alone, that turns implicit invocation off — a
  * touchpoint starts when the operator names it, never on the model's own
  * judgement. Typed `string | null` so the panel and the capability rows read
  * this constant rather than a second decision.
@@ -849,7 +849,7 @@ async function skillsListOf(
   measure: CodexSkillsListMeasure;
 }> {
   const { agents, rules, commands, packOf } = await selectedItems(ctx);
-  const touchpoints = projectTouchpointSkills(commands, ctx);
+  const touchpoints = projectTouchpointSkills(commands, ctx, { policy: true });
   const measure = measureCodexSkillsList(shownSkillRows([...core.skills, ...touchpoints]), packOf);
   return { agents, rules, touchpoints, measure };
 }

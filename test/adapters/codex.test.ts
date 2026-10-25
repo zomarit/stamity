@@ -17,6 +17,7 @@ import {
   composeConfigToml,
   downConvertRules,
   measureCodexSkillsList,
+  measureCodexSkillsListFor,
   shownSkillRows,
   skillsListCharacters,
 } from "../../src/adapters/codex.ts";
@@ -2920,3 +2921,30 @@ describe("the omission notice under on-demand", () => {
 // residue under a held `plugin` block with the residue without one left. The block is dropped
 // on read, so no manifest the adapter sees carries it; `test/cli/commands/syncEngine.test.ts`
 // pins that a block on disk moves no emitted byte, for all four clients.
+
+// REQ-FLOW-033 (b12-repo-file-waste): the touchpoint companion is this client's row alone, so
+// codex alone still plans all nine and the skills list it measures is unchanged.
+describe("the touchpoint companion on codex alone", () => {
+  it("plans the nine companions and keeps the touchpoints out of the measured skills list", async () => {
+    const index = await buildContentIndex();
+    const commands = index.items.filter((item) => item.type === "command").map((item) => item.id);
+    expect(commands).toHaveLength(9);
+    const ctx = ctxOf({ contentRoot: resolveBundledContentRoot(), commands, ruleDelivery: "on-demand" });
+    const core = await buildCoreEmissionPlan(ctx);
+    const residue = await codexResiduePlanner.planResidue(core, ctx);
+    const touchpoints = residue.outputs.filter((row) => row.owner.artifactType === "command");
+    const companions = touchpoints.filter((row) => row.path.endsWith("/agents/openai.yaml"));
+    expect(companions).toHaveLength(9);
+    for (const row of companions) expect(outputOwners(row).map((owner) => owner.adapter)).toEqual(["codex"]);
+
+    const measure = await measureCodexSkillsListFor(core, ctx);
+    // The touchpoints add nothing: their companions hide all nine, so the measure is the core's.
+    expect(measure.total).toBe(skillsListCharacters(shownSkillRows(core.skills)));
+    // Non-degenerate: the same nine SKILL.md rows with no companion beside them would be listed.
+    const bare = touchpoints
+      .filter((row) => row.path.endsWith("/SKILL.md"))
+      .map((row) => ({ path: row.path, content: row.content, artifactType: row.owner.artifactType }));
+    expect(bare).toHaveLength(9);
+    expect(skillsListCharacters(shownSkillRows([...core.skills, ...bare]))).toBeGreaterThan(measure.total);
+  });
+});

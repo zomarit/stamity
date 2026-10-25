@@ -2553,8 +2553,14 @@ describe("four-tool union", () => {
     const types = artifactTypesByPath(repo.manifest);
     const touchpointPaths = skills.filter((path) => types.get(path)?.has("command") === true);
     expect(touchpointPaths.filter((path) => path.endsWith("/SKILL.md"))).toHaveLength(9);
+    // TEST CHANGE, justified: REQ-FLOW-033 — Cursor reads
+    // disable-model-invocation, not the companion, so a touchpoint's
+    // `agents/openai.yaml` is codex's alone; its SKILL.md keeps both owners.
+    const touchpointOwners = (path: string): string[] =>
+      path.endsWith("/SKILL.md") ? ["codex", "cursor"] : ["codex"];
+    expect(touchpointPaths.filter((path) => !path.endsWith("/SKILL.md"))).toHaveLength(9);
     for (const path of skills) {
-      const expected = touchpointPaths.includes(path) ? ["codex", "cursor"] : [...projectionReaders];
+      const expected = touchpointPaths.includes(path) ? touchpointOwners(path) : [...projectionReaders];
       expect([...(owners.get(path) ?? [])].toSorted(), path).toEqual(expected.toSorted());
     }
 

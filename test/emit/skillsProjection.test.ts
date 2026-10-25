@@ -1762,7 +1762,7 @@ describe("projectTouchpointSkills", () => {
     const commands = await corpusCommands();
     expect(commands).toHaveLength(9);
 
-    const rows = projectTouchpointSkills(commands, contextOf([], RULE_DETECTION));
+    const rows = projectTouchpointSkills(commands, contextOf([], RULE_DETECTION), { policy: true });
 
     // Two files per touchpoint, and nothing outside the shared tree.
     expect(rows).toHaveLength(18);
@@ -1782,7 +1782,7 @@ describe("projectTouchpointSkills", () => {
 
   it("heads each body with the three explicit-invocation keys and renders it tool-neutral", async () => {
     const commands = await corpusCommands();
-    const rows = projectTouchpointSkills(commands, contextOf([], RULE_DETECTION));
+    const rows = projectTouchpointSkills(commands, contextOf([], RULE_DETECTION), { policy: true });
     const work = rows.find((row) => row.path === `${SKILLS_PROJECTION_DIR}/st-work/${SKILL_FILE_NAME}`);
     expect(work).toBeDefined();
 
@@ -1805,11 +1805,26 @@ describe("projectTouchpointSkills", () => {
   it("renders the same bytes on every call, so two adapters emitting it merge into one write", async () => {
     const commands = await corpusCommands();
     const ctx = contextOf([], RULE_DETECTION);
-    expect(projectTouchpointSkills(commands, ctx)).toEqual(projectTouchpointSkills(commands, ctx));
+    expect(projectTouchpointSkills(commands, ctx, { policy: true })).toEqual(
+      projectTouchpointSkills(commands, ctx, { policy: true }),
+    );
+  });
+
+  it("returns only the SKILL.md rows when the caller asks for no companion (REQ-FLOW-033)", async () => {
+    const commands = await corpusCommands();
+    const ctx = contextOf([], RULE_DETECTION);
+    const bare = projectTouchpointSkills(commands, ctx, { policy: false });
+    const withPolicy = projectTouchpointSkills(commands, ctx, { policy: true });
+    expect(bare).toHaveLength(9);
+    expect(bare.every((row) => row.path.endsWith(`/${SKILL_FILE_NAME}`))).toBe(true);
+    // Non-degenerate: the same input with the companion asked for adds exactly the nine companions,
+    // and the SKILL.md rows are the same objects either way.
+    expect(withPolicy).toHaveLength(18);
+    expect(withPolicy.filter((row) => row.path.endsWith(`/${SKILL_FILE_NAME}`))).toEqual(bare);
   });
 
   it("renders nothing for an empty command selection", () => {
-    expect(projectTouchpointSkills([], contextOf([]))).toEqual([]);
+    expect(projectTouchpointSkills([], contextOf([]), { policy: true })).toEqual([]);
   });
 
   it("builds a head with no fourth key", () => {

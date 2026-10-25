@@ -69,9 +69,32 @@ describe("the nine touchpoints as shared skills", () => {
       expect(ownersOf(skill), id).toEqual(["codex", "cursor"]);
       expect(outputOwners(skill!).every((owner) => owner.artifactType === "command"), id).toBe(true);
       const policy = byPath.get(`${SKILLS_PROJECTION_DIR}/st-${id}/${TOUCHPOINT_POLICY_FILE}`);
-      expect(ownersOf(policy), id).toEqual(["codex", "cursor"]);
+      // TEST CHANGE, justified: REQ-FLOW-033 — Cursor reads disable-model-invocation, not the companion
+      expect(ownersOf(policy), id).toEqual(["codex"]);
     }
     expect(plan.filter((row) => row.path.startsWith(".cursor/skills/"))).toEqual([]);
+  });
+
+  it("writes no companion for cursor alone, and the same SKILL.md bytes as with codex", async () => {
+    const isCompanion = (row: AdapterOutput): boolean =>
+      row.path.startsWith(`${SKILLS_PROJECTION_DIR}/st-`) && row.path.endsWith(`/${TOUCHPOINT_POLICY_FILE}`);
+    const alone = await planFor(["cursor"]);
+    const both = await planFor(["cursor", "codex"]);
+    const touchpointCompanions = alone.filter(
+      (row) => isCompanion(row) && outputOwners(row).some((owner) => owner.artifactType === "command"),
+    );
+    expect(touchpointCompanions.map((row) => row.path)).toEqual([]);
+    // Decision E4: a bundled skill's own companion (st-onboard here) is not a touchpoint's and stays.
+    expect(alone.filter(isCompanion).map((row) => row.path)).toEqual([
+      `${SKILLS_PROJECTION_DIR}/st-onboard/${TOUCHPOINT_POLICY_FILE}`,
+    ]);
+    // Non-degenerate: the same corpus with codex beside cursor plans all nine companions.
+    expect(both.filter(isCompanion)).toHaveLength(10);
+    for (const id of TOUCHPOINT_IDS) {
+      const mine = alone.find((row) => row.path === touchpointSkill(id));
+      expect(mine, id).toBeDefined();
+      expect(mine?.content, id).toBe(both.find((row) => row.path === touchpointSkill(id))?.content);
+    }
   });
 
   it("ships the nine to codex alone", async () => {
