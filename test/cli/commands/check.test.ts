@@ -5930,4 +5930,27 @@ describe("check — autonomy-deploying", () => {
       ].join("\n"),
     });
   });
+
+  // Close fix round 2 (close-reviewer-r1): a scheduled run deploys the default branch's latest commit.
+  it("reads a schedule trigger as a push to the default branch, until the list names it (close round 2)", async () => {
+    const scheduled = `on:\n  schedule:\n    - cron: "0 0 * * *"\n${ENV_JOB}`;
+    const unlisted = await rowAt({ ".github/workflows/nightly.yml": scheduled });
+    const listed = await rowAt({ ".github/workflows/nightly.yml": scheduled }, { deployingBranches: ["main"] });
+
+    // Red on 0d838f4d: the row skipped a schedule-only workflow and passed.
+    expect(unlisted).toEqual({
+      id: "autonomy-deploying",
+      status: "warn",
+      detail:
+        ".github/workflows/nightly.yml: job ship names an environment and runs on a schedule, on the latest commit of main\n" +
+        "autonomy.deployingBranches does not list main, so the land verb would merge into it on the " +
+        "evidence alone and the workflow deploys; add it: " +
+        `${npxCommand("config set autonomy.deployingBranches main")}, then ${npxCommand("sync")}`,
+    });
+    expect(listed).toEqual({
+      id: "autonomy-deploying",
+      status: "pass",
+      detail: "every branch a workflow this row read deploys on a push to is in autonomy.deployingBranches",
+    });
+  });
 });

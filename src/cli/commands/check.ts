@@ -2000,9 +2000,11 @@ function hasTrigger(on: unknown, event: string): boolean {
 
 /**
  * The triggers the row reads or may pass over: the four it evaluates; a
- * `workflow_call`, whose callers it reads; a `workflow_dispatch`, which is
- * the guard's `workflow-dispatch` act (REQ-FLOW-140); and a `schedule`, which
- * no agent act fires.
+ * `schedule`, which it reads as a push to the default branch, since a
+ * scheduled run deploys that branch's latest commit, which the land verb may
+ * have merged unasked (close round 2); a `workflow_call`, whose callers it
+ * reads; and a `workflow_dispatch`, which is the guard's `workflow-dispatch`
+ * act (REQ-FLOW-140).
  */
 const KNOWN_TRIGGERS = new Set([
   "push",
@@ -2211,7 +2213,9 @@ const ASSUMED_DEFAULT = "the default branch is assumed to be main: no refs/remot
  * `config set` line that lists it. The default branch counts as covered in
  * mode `ask`, which asks before a push or a merge there. A push trigger with
  * no `branches` list runs for every branch it does not exclude, so it is
- * covered only by a `**` entry, and its warning names the two remedies.
+ * covered only by a `**` entry, and its warning names the two remedies. A
+ * `schedule` trigger reads as a push to the default branch: a scheduled run
+ * deploys that branch's latest commit.
  *
  * It warns `not evaluated` on a file it cannot read or parse, on a branch
  * filter it cannot read ({@link unreadableFilter}), on a deploy reached
@@ -2264,7 +2268,7 @@ export async function checkAutonomyDeploying(
   const workflows = new Map(read.map((entry) => [entry.name, entry.workflow] as const));
 
   const notEvaluated: string[] = [];
-  const unlisted: { file: string; jobs: string[]; branch: string; isDefault: boolean }[] = [];
+  const unlisted: { file: string; jobs: string[]; branch: string; isDefault: boolean; scheduled?: true }[] = [];
   const everyBranch: { file: string; jobs: string[] }[] = [];
   let defaultBranch: { name: string; assumed: boolean } | undefined;
   const mainBranch = (): string => {
@@ -2283,8 +2287,9 @@ export async function checkAutonomyDeploying(
     const on = workflow["on"];
     const onRun = hasTrigger(on, "workflow_run");
     const onPullRequest = hasTrigger(on, "pull_request") || hasTrigger(on, "pull_request_target");
+    const onSchedule = hasTrigger(on, "schedule");
     const others = otherTriggers(on);
-    if (!hasTrigger(on, "push") && !onRun && !onPullRequest && others.length === 0) continue;
+    if (!hasTrigger(on, "push") && !onRun && !onPullRequest && !onSchedule && others.length === 0) continue;
     const reach = environmentJobs(name, workflows, [name], display);
     notEvaluated.push(...reach.problems);
     if (reach.jobs.length === 0) continue;
@@ -2321,6 +2326,14 @@ export async function checkAutonomyDeploying(
       if (isDefault && setting.mode === "ask") continue;
       if (!filterCovered(branch, setting.deployingBranches)) {
         unlisted.push({ file: display, jobs: reach.jobs, branch, isDefault });
+      }
+    }
+    // A scheduled run deploys the default branch's latest commit: read as a push there.
+    if (onSchedule) {
+      deploysOnPush = true;
+      const branch = mainBranch();
+      if (setting.mode !== "ask" && !filterCovered(branch, setting.deployingBranches)) {
+        unlisted.push({ file: display, jobs: reach.jobs, branch, isDefault: true, scheduled: true });
       }
     }
   }
@@ -2372,7 +2385,9 @@ export async function checkAutonomyDeploying(
       ...unlisted.map(
         (entry) =>
           `${entry.file}: job ${entry.jobs.join(", ")} names an environment ` +
-          `and runs on a push to ${sanitizeLabel(entry.branch)}`,
+          (entry.scheduled === true
+            ? `and runs on a schedule, on the latest commit of ${sanitizeLabel(entry.branch)}`
+            : `and runs on a push to ${sanitizeLabel(entry.branch)}`),
       ),
       ...everyBranch.map(
         (entry) =>
