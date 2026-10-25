@@ -23,7 +23,9 @@ import type { GitRunner } from "../workspace/git.ts";
  *   (`core.symlinks=false`) is caught too.
  * - `untracked`: a path on disk that HEAD's tree holds as no file, folder or
  *   gitlink (an untracked or ignored file, a path inside a submodule, another
- *   letter case on a case-insensitive disk). Git counts 0 for it forever.
+ *   letter case on a case-insensitive disk), or a folder HEAD's tree holds
+ *   whose disk copy holds such an entry below it (a file, a non-empty folder, a
+ *   nested repository; ignored ones too). Git counts 0 for that content forever.
  *
  * A stamp that names no commit, or a commit HEAD does not descend from (a
  * stamp rebased away), is `unresolved` and the verdict is stale: nothing can
@@ -83,8 +85,11 @@ const OBJECT_NAME = /^[0-9a-f]{7,64}$/i;
 /** What the walk finds along a read path: the path itself, a missing segment, a link on the way, or a spelling it never walks. */
 type DiskState = "present" | "missing" | "link" | "spelling";
 
-/** What HEAD's tree holds at a read path: a file, a folder or a gitlink; a link at, above or below it; or nothing. */
-type TreeState = "tracked" | "link" | "absent";
+/**
+ * What HEAD's tree holds at a read path: a file, a folder or a gitlink; a link at, above or below it; a folder
+ * whose disk copy holds entries outside the tree; or nothing.
+ */
+type TreeState = "tracked" | "link" | "untracked" | "absent";
 
 const LINK_MODE = "120000";
 const TREE_MODE = "040000";
@@ -126,7 +131,7 @@ export async function freshness(
         return;
       }
       const tree = treeState(git, cwd, path);
-      if (tree === "link" || (tree === "absent" && state === "present")) {
+      if (tree === "link" || tree === "untracked" || (tree === "absent" && state === "present")) {
         stale.push({ path, reason: tree === "link" ? "link" : "untracked" });
         return;
       }
@@ -212,8 +217,10 @@ function plainPath(path: string): boolean {
 
 /**
  * Read HEAD's tree at a plain `path`: one recursive listing gives the folders above it, the entry
- * itself and, for a folder, every entry below it. Where the entry is absent, the first segment the
- * listing does not reach as a folder is looked up alone, since a link above the path hides it.
+ * itself and, for a folder, every entry below it. A folder holding no link is then listed on disk
+ * ({@link untrackedBelow}), since a history count never sees what the tree does not hold. Where the
+ * entry is absent, the first segment the listing does not reach as a folder is looked up alone,
+ * since a link above the path hides it.
  */
 function treeState(git: GitRunner, cwd: string, path: string): TreeState {
   const entries = listTree(git, cwd, ["-r", "-t"], path);
@@ -221,7 +228,7 @@ function treeState(git: GitRunner, cwd: string, path: string): TreeState {
   if (mode === LINK_MODE) return "link";
   if (mode === TREE_MODE) {
     for (const [name, entryMode] of entries) if (entryMode === LINK_MODE && name.startsWith(`${path}/`)) return "link";
-    return "tracked";
+    return untrackedBelow(git, cwd, path) ? "untracked" : "tracked";
   }
   if (mode === GITLINK_MODE || mode?.startsWith("100") === true) return "tracked";
   if (mode !== undefined) return "absent";
@@ -243,6 +250,17 @@ function listTree(git: GitRunner, cwd: string, flags: readonly string[], path: s
     if (tab !== -1) entries.set(record.slice(tab + 1), record.slice(0, record.indexOf(" ")));
   }
   return entries;
+}
+
+/**
+ * Whether the disk copy of the folder `path` holds any entry HEAD's index does not: `git ls-files --others`
+ * with no exclude option, so ignored entries count too, read literally. `--directory` lists an untracked
+ * folder as one entry, so the output stays small under a large one, and `--no-empty-directory` leaves out a
+ * folder holding no file, which git could not record. A nested repository is listed as one entry.
+ */
+function untrackedBelow(git: GitRunner, cwd: string, path: string): boolean {
+  const args = ["--literal-pathspecs", "ls-files", "--others", "--directory", "--no-empty-directory", "-z", "--", path];
+  return (runGit(git, cwd, args, false) ?? "") !== "";
 }
 
 /** The full sha `name` resolves to as a commit, or null when it names none (`--quiet` exits 1). */

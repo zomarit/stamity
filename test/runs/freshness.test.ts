@@ -285,6 +285,83 @@ describe("freshness", () => {
     expect(await freshness(git, cwd, stamp, ["docs/gone.md"])).toMatchObject({ stale: [{ path: "docs/gone.md", reason: "missing" }] });
   });
 
+  it("reads a tracked folder as untracked once it holds a file outside HEAD's tree, ignored or not", async (ctx) => {
+    await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    const stamp = await touchAndCommit(cwd, ".gitignore", "*.out");
+    await writeFile(join(cwd, "docs/extra.md"), "never committed\n", "utf8");
+    await writeFile(join(cwd, "src/build.out"), "ignored output\n", "utf8");
+    const seen: string[][] = [];
+    // A recording wrapper around the real runner, so the paths the added listing read can be checked.
+    const recording: GitRunner = (args, dir) => {
+      seen.push([...args]);
+      return git(args, dir);
+    };
+
+    // No commit since the stamp touched either folder, so a history count alone reads both fresh.
+    expect(writeGit(cwd, ["rev-list", "--count", `${stamp}..HEAD`, "--", "docs", "src"]).trim()).toBe("0");
+    expect(await freshness(recording, cwd, stamp, ["docs", "src", "notes with space", "docs/a.md"])).toEqual({
+      verdict: "stale",
+      stale: [
+        { path: "docs", reason: "untracked" },
+        { path: "src", reason: "untracked" },
+      ],
+      exempt: [],
+      unresolved: false,
+    });
+    // Non-degenerate: a clean tracked folder and a tracked file beside the new one stay fresh,
+    // and the listing ran once per folder path, never for a file.
+    const listed = seen.filter((args) => args.includes("ls-files")).map((args) => args.at(-1));
+    expect(listed).toEqual(["docs", "src", "notes with space"]);
+    expect(await freshness(git, cwd, stamp, ["notes with space", "docs/a.md"])).toEqual({
+      verdict: "fresh",
+      stale: [],
+      exempt: [],
+      unresolved: false,
+    });
+  });
+
+  it("counts a nested repository inside a tracked folder, and not an empty untracked folder", async (ctx) => {
+    const stamp = await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    await mkdir(join(cwd, "docs/inner"), { recursive: true });
+    writeGit(join(cwd, "docs/inner"), ["init", "--quiet"]);
+    await writeFile(join(cwd, "docs/inner/file.md"), "the nested repository's own file\n", "utf8");
+    await mkdir(join(cwd, "src/empty/deeper"), { recursive: true });
+
+    expect(await freshness(git, cwd, stamp, ["docs", "src"])).toEqual({
+      verdict: "stale",
+      stale: [{ path: "docs", reason: "untracked" }],
+      exempt: [],
+      unresolved: false,
+    });
+  });
+
+  it("reports a failed listing below a tracked folder as an error, the verdict stale", async (ctx) => {
+    const stamp = await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    // A fake failure for the listing alone: real git does not fail on demand, and every other call stays real.
+    const failing: GitRunner = (args, dir) => {
+      if (args.includes("ls-files")) throw Object.assign(new Error("listing failed"), { status: 128 });
+      return git(args, dir);
+    };
+
+    expect(await freshness(failing, cwd, stamp, ["docs"])).toEqual({
+      verdict: "stale",
+      stale: [],
+      exempt: [],
+      unresolved: false,
+      error: "git ls-files exited 128",
+    });
+    // Non-degenerate: a read path that is a file runs no listing, so the same runner answers fresh.
+    expect(await freshness(failing, cwd, stamp, ["docs/a.md"])).toEqual({
+      verdict: "fresh",
+      stale: [],
+      exempt: [],
+      unresolved: false,
+    });
+  });
+
   it("reads a deleted path as missing, committed or not", async (ctx) => {
     const stamp = await seededRepo(() => ctx.skip());
     const cwd = tempDir().dir;
