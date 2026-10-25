@@ -168,6 +168,26 @@ const ON_FEATURE = { defaultBranches: [], currentBranch: "feat/x", tags: ["v1.0.
 const DEFAULT_RUNS: readonly PersonOnlyRuleId[] = ["pr-ready", "tag", "workflow-dispatch"];
 /** The context the default guard hands its verdict on `feat/x` (a4). */
 const BAKED_DEFAULT = { ...ON_FEATURE, runs: DEFAULT_RUNS, deployingBranches: [], stricterThanDefault: false };
+/**
+ * The clients whose hook payload names no agent (review/158, `src/hooks/model.ts`'s codex and cursor notes): an act the
+ * setting runs on the main thread only is refused there in every mode, since no call can be shown to be the main thread's.
+ */
+const NO_AGENT = new Set<Tool>(["codex", "cursor"]);
+/** The refusal such a client gives an act the setting runs on the main thread only (review/158). */
+function noAgentSentence(act: string, rule: string): string {
+  const why =
+    rule === "remote-write"
+      ? "it moves the origin later writes are held to, so it runs on the main thread only (REQ-FLOW-134)"
+      : "the autonomy setting runs it unasked on the main thread only (REQ-FLOW-137)";
+  return `${act} is a person-only act (\`${rule}\`) and this client's hook payload names no agent, so the call cannot be shown to come from the main thread: ${why}. Give the person the exact command.`;
+}
+/** The guard's name for each act the setting runs (its `RUN_ACTS`). */
+const RUN_ACT_NAMES: Readonly<Record<string, string>> = {
+  "pr-ready": "Marking a pull request ready for review",
+  tag: "Creating a tag",
+  "workflow-dispatch": "Dispatching a workflow",
+  "remote-write": "Writing a git remote or a URL rewrite",
+};
 
 /** One case per person-only rule, each beside an allowed neighbour. The repository is on `feat/x`, tag `v1.0.0`. */
 const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
@@ -307,6 +327,13 @@ describe("the person-only guard, on every client", () => {
       // the verdict above. The baked `ask` setting's answer to those two rows is pinned in the a4 block below.
       const guarded = personOnlyVerdict(command, { ...BAKED_DEFAULT, originRepo: "github.com/o/r", ghDefaultRepo: "github.com/o/r" });
       const decision = decide(tool, guard, command);
+      // TEST CHANGE, justified (REQ-FLOW-137, review/158): on a client whose payload names no agent, a row the setting
+      // runs is refused with the missing-identity sentence, since no call there can be shown to be the main thread's.
+      const first = guarded.deny ? undefined : guarded.runs?.[0];
+      if (first !== undefined && NO_AGENT.has(tool)) {
+        expect(decision, `${tool}: ${command}`).toEqual({ deny: true, reason: expect.stringContaining(noAgentSentence(RUN_ACT_NAMES[first] ?? "This act", first)) });
+        continue;
+      }
       expect(decision.deny, `${tool}: ${command}`).toBe(guarded.deny);
       expect(guarded.deny || rule === null || DEFAULT_RUNS.includes(rule as PersonOnlyRuleId), command).toBe(true);
       // TEST CHANGE, justified (v0a2, REQ-FLOW-123, REQ-FLOW-124): the client no longer prints the verdict's `reason`;
@@ -1473,7 +1500,9 @@ describe("the autonomy setting the guard bakes (a4)", () => {
     for (const copy of copies) expect(parseAutonomyMarker(copy.content), copy.path).toEqual(setting);
   });
 
-  it.each(TOOLS)("%s: runs a ready mark and an annotated local tag attended under the default setting", async (tool) => {
+  // TEST CHANGE, justified (REQ-FLOW-137, review/158): Codex and Cursor name no agent, so they refuse these acts in
+  // every mode; their answer is pinned in the review/158 block below.
+  it.each(TOOLS.filter((tool) => !NO_AGENT.has(tool)))("%s: runs a ready mark and an annotated local tag attended under the default setting", async (tool) => {
     const guard = await placeGuard(tool);
     for (const command of [READY, ANNOTATED, LIGHT]) expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual({ deny: false });
     const quiet = run(guard, payload(tool, READY));
@@ -1490,7 +1519,9 @@ describe("the autonomy setting the guard bakes (a4)", () => {
     }
   });
 
-  it.each(TOOLS)("%s: unattended, refuses a raw ready mark with the summary-list sentence and lets a local tag run", async (tool) => {
+  // TEST CHANGE, justified (REQ-FLOW-137, review/158): Codex and Cursor refuse both with the missing-identity sentence;
+  // pinned in the review/158 block below.
+  it.each(TOOLS.filter((tool) => !NO_AGENT.has(tool)))("%s: unattended, refuses a raw ready mark with the summary-list sentence and lets a local tag run", async (tool) => {
     const guard = await placeGuard(tool, UNATTENDED);
     expect(decide(tool, guard, READY)).toEqual({
       deny: true,
@@ -1538,8 +1569,13 @@ describe("the autonomy setting the guard bakes (a4)", () => {
 
   it.each(TOOLS)("%s: runs an unnamed workflow dispatch in both modes, and asks for a named one attended and refuses it unattended", async (tool) => {
     const DISPATCH = "gh workflow run deploy.yml -f env=prod";
-    expect(decide(tool, await placeGuard(tool), DISPATCH), "autonomous").toEqual({ deny: false });
-    expect(decide(tool, await placeGuard(tool, {}, ASK_MODE), DISPATCH), "ask").toEqual({ deny: false });
+    // TEST CHANGE, justified (REQ-FLOW-137, review/158): on Codex and Cursor, which name no agent, the unnamed dispatch
+    // is refused in both modes with the missing-identity sentence; the named one is unchanged.
+    const unnamed: Decision = NO_AGENT.has(tool)
+      ? { deny: true, reason: expect.stringContaining(noAgentSentence("Dispatching a workflow", "workflow-dispatch")) as unknown as string }
+      : { deny: false };
+    expect(decide(tool, await placeGuard(tool), DISPATCH), "autonomous").toEqual(unnamed);
+    expect(decide(tool, await placeGuard(tool, {}, ASK_MODE), DISPATCH), "ask").toEqual(unnamed);
     const named = resolveAutonomy({ autonomy: { deployingActs: ["workflow-dispatch"] } });
     const guard = await placeGuard(tool, {}, named);
     const verdict = personOnlyVerdict(DISPATCH, ON_FEATURE);
@@ -1639,7 +1675,9 @@ describe("the autonomy setting's acts on the main thread only (a4, review/43)", 
   ] as const;
 
   // Red on the head: the acts that run were allowed with no read of the caller's identity.
-  it.each(TOOLS)("%s: refuses a sub-agent's ready mark, local tag and unnamed dispatch, and runs the main thread's", async (tool) => {
+  // TEST CHANGE, justified (REQ-FLOW-137, review/158): Codex and Cursor name no agent, so they refuse the main thread's
+  // call too; pinned in the review/158 block below.
+  it.each(TOOLS.filter((tool) => !NO_AGENT.has(tool)))("%s: refuses a sub-agent's ready mark, local tag and unnamed dispatch, and runs the main thread's", async (tool) => {
     const guard = await placeGuard(tool);
     for (const [act, rule, command] of ACTS) {
       const sentence = `${act} is a person-only act (\`${rule}\`) and a sub-agent runs it: the autonomy setting runs it unasked on the main thread only (REQ-FLOW-137). Give the person the exact command.`;
@@ -1668,6 +1706,57 @@ describe("the autonomy setting's acts on the main thread only (a4, review/43)", 
   it("leaves a sub-agent's call that holds no act the setting runs alone", async () => {
     const guard = await placeGuard("claude");
     expect(clientDecision("claude", run(guard, asHelper("claude", "git status && gh pr view 3")), "read")).toEqual({ deny: false });
+  });
+});
+
+/**
+ * review/158 (REQ-FLOW-137, REQ-FLOW-134): the acts that run on the main thread only, on a client whose hook payload
+ * names no agent (`src/hooks/scripts.ts` `helperRefusal`), and on the two whose payload does. Titles name the class of
+ * input; each input sits in the body.
+ */
+describe("the main-thread acts on a client whose payload names no agent (a4, review/158)", () => {
+  const ORIGIN = '[remote "origin"]\n\turl = https://github.com/acme/app.git\n';
+  const UNATTENDED = { ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") };
+  const ACTS = [
+    ["pr-ready", "gh pr ready 3"],
+    ["tag", "git tag -a v2 -m 'release v2'"],
+    ["workflow-dispatch", "gh workflow run ci.yml"],
+    ["remote-write", "git remote set-url origin https://github.com/other/repo.git"],
+  ] as const;
+  const LANDS = ["npx --no stamity run land --run 2026-10-23_x --json", "npx --no stamity run land --run 2026-10-23_x --ready --json"];
+  const asHelper = (tool: Tool, command: string): string => JSON.stringify({ ...JSON.parse(payload(tool, command)), agent_id: "a1" });
+
+  // Red on 89e088f9: each act ran on these clients, the main thread's call and a sub-agent's alike.
+  it.each([...NO_AGENT])("%s: refuses a ready mark, a local annotated tag, an unnamed dispatch and a remote write attended and unattended, naming the missing identity; the land line runs", async (tool) => {
+    const guard = await placeGuard(tool, { ".git/config": ORIGIN });
+    for (const [rule, command] of ACTS) {
+      const refused = { deny: true, reason: expect.stringContaining(noAgentSentence(RUN_ACT_NAMES[rule] ?? "", rule)) };
+      expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual(refused);
+      expect(clientDecision(tool, run(guard, asHelper(tool, command)), `${tool} helper: ${command}`)).toEqual(refused);
+    }
+    for (const land of LANDS) expect(decide(tool, guard, land), `${tool}: ${land}`).toEqual({ deny: false });
+    await getRepo().seedFiles(UNATTENDED);
+    for (const [rule, command] of ACTS) {
+      expect(decide(tool, guard, command), `${tool} unattended: ${command}`).toEqual({
+        deny: true,
+        reason: expect.stringContaining(noAgentSentence(RUN_ACT_NAMES[rule] ?? "", rule)),
+      });
+    }
+    for (const land of LANDS) expect(decide(tool, guard, land), `${tool} unattended: ${land}`).toEqual({ deny: false });
+  });
+
+  // A pin, green on 89e088f9 by design: the clients that name an agent keep the main thread's run and the sub-agent's refusal.
+  it.each(TOOLS.filter((tool) => !NO_AGENT.has(tool)))("%s: runs the main thread's acts and the land line, and refuses a sub-agent's acts, as before", async (tool) => {
+    const guard = await placeGuard(tool, { ".git/config": ORIGIN });
+    for (const [rule, command] of ACTS) {
+      expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual({ deny: false });
+      const helper = clientDecision(tool, run(guard, asHelper(tool, command)), `${tool} helper: ${command}`);
+      expect(helper, `${tool} helper: ${command}`).toEqual({
+        deny: true,
+        reason: expect.stringContaining(`${RUN_ACT_NAMES[rule] ?? ""} is a person-only act (\`${rule}\`) and a sub-agent runs it`),
+      });
+    }
+    for (const land of LANDS) expect(decide(tool, guard, land), `${tool}: ${land}`).toEqual({ deny: false });
   });
 });
 

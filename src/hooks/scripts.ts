@@ -4247,6 +4247,15 @@ const GUARD_HELPER_FIELDS: readonly string[] = [
 ];
 
 /**
+ * The clients whose hook payload names no agent to the person-only guard (REQ-FLOW-137, REQ-FLOW-134, review/158):
+ * every identity-free client ({@link IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS}) but Copilot CLI, whose helper's call carries
+ * `parentAgentId` and whose main session its session start records (measured on 1.0.98). On these, today Codex and
+ * Cursor, no call can be shown to be the main thread's, so an act that runs on the main thread only is refused there in
+ * every mode, as 1.16.0 refused it.
+ */
+const GUARD_NO_MAIN_THREAD: ReadonlySet<Tool> = new Set([...IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS].filter((tool) => tool !== "copilot"));
+
+/**
  * The guard's `attendedAsk(payload, act, rule)` for one client, as source text: an attended ask-class act's decision.
  * The person is asked, except where a sub-agent runs it ({@link GUARD_HELPER_FIELDS}), since the act is the person's,
  * or in Claude Code's `auto` permission mode, where a classifier may settle the prompt; both are refused.
@@ -4259,6 +4268,8 @@ const GUARD_HELPER_FIELDS: readonly string[] = [
  */
 function attendedAskSource(tool: Tool): string {
   const copilot = tool === "copilot";
+  const noMain = GUARD_NO_MAIN_THREAD.has(tool);
+  const why = String.raw`const why = rule === "remote-write" ? "it moves the origin later writes are held to, so it runs on the main thread only (REQ-FLOW-134)" : "the autonomy setting runs it unasked on the main thread only (REQ-FLOW-137)";`;
   const held = copilot ? `({ ask: false, reason: reason + " " + ${json(GUARD_NO_CALLER)} })` : "({ ask: false, reason })";
   const record = String.raw`${COPILOT_SESSION_SOURCE}
 
@@ -4307,14 +4318,16 @@ function helperCall(payload) {
 
 /**
  * An act the autonomy setting runs unasked (REQ-FLOW-137) is the main thread's alone: a sub-agent's call to one is
- * refused${copilot ? ", and on Copilot CLI a helper field's presence alone counts" : ""}; null for the main thread's.
+ * refused${copilot ? ", and on Copilot CLI a helper field's presence alone counts" : ""}${noMain ? ", and on this client, whose hook payload names no agent, every call is (review/158)" : ""}; null for the main thread's.
  */
 function helperRefusal(payload, act, rule) {
-  const held = (reason) => ${held};
+  const held = (reason) => ${held};${noMain ? String.raw`
+  ${why}
+  return held(act + " is a person-only act (\`" + rule + "\`) and this client's hook payload names no agent, so the call cannot be shown to come from the main thread: " + why + ". Give the person the exact command.");` : String.raw`
   const helper = helperCall(payload)${copilot ? " || HELPER_NAMES.some((name) => Object.hasOwn(payload, name))" : ""};
   if (!helper) return null;
-  const why = rule === "remote-write" ? "it moves the origin later writes are held to, so it runs on the main thread only (REQ-FLOW-134)" : "the autonomy setting runs it unasked on the main thread only (REQ-FLOW-137)";
-  return held(act + " is a person-only act (\`" + rule + "\`) and a sub-agent runs it: " + why + ". Give the person the exact command.");
+  ${why}
+  return held(act + " is a person-only act (\`" + rule + "\`) and a sub-agent runs it: " + why + ". Give the person the exact command.");`}
 }
 
 /**
