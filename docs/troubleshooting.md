@@ -367,8 +367,10 @@ it holds for on its `approve with:` line. The reasons, and what each needs:
   lands; make it, then run `run land` again.
 
 To land over an `asks` outcome, the person answers it: the land line again, with `--approved` and the
-commit the `approve with:` line printed. The guard asks on that line, the flag holds only while the
-head is still that commit, and an unattended run refuses it. Every `refused` reason still refuses.
+commit the `approve with:` line printed. On Claude Code's and Copilot CLI's main thread the guard
+asks on that line. On Codex and Cursor the guard refuses it instead of asking, so the agent hands
+the person that exact line to run in their own terminal, and the merge stays held until they do. The
+flag holds only while the head is still that commit, and an unattended run refuses it. Every `refused` reason still refuses.
 
 **`refused`: the evidence does not hold yet.** Fix what the reason names, then run it again:
 

@@ -5068,6 +5068,9 @@ describe("docs/cloud.md", () => {
     expect(section).toMatch(/asks nothing/);
     expect(section).toContain("`stamity run checkpoint`");
     expect(section).toContain("`stamity run end`");
+    // Added (whole-branch review M-4, review/176; REQ-FLOW-144): the skill runs no land on a blocked or refused exit
+    // (`content/skills/st-unattended/SKILL.md`, the ending's step 4), so the page does not promise one after every end.
+    expect(section).toContain("After `run end`, when the morning list holds no blocked or refused item, it runs `stamity run land --ready`");
   });
 
   it("states the cloud facts the capability matrix's table holds", () => {
@@ -5512,6 +5515,14 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
     ]) {
       expect(page, `troubleshooting has no entry: ${heading}`).toContain(heading);
     }
+    // Added (whole-branch review W-1, review/172; REQ-FLOW-144): the guard asks on the approval line only where it can
+    // ask; on Codex and Cursor it refuses that ask-class act (`src/hooks/personOnly.ts:184-187`), so the line goes to
+    // the person.
+    expect(page).toContain("On Claude Code's and Copilot CLI's main thread the guard asks on that line.");
+    expect(page).toContain(
+      "On Codex and Cursor the guard refuses it instead of asking, so the agent hands the person that exact line to run in their own terminal, and the merge stays held until they do.",
+    );
+    expect(page).not.toContain("The guard asks on that line, the flag holds");
     // Each reason the page quotes is the verb's own wording.
     for (const reason of [
       "autonomy.mode is ask",

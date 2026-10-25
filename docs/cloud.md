@@ -32,8 +32,9 @@ set to any value but empty, `false` or `0`. A cloud's own marker means "cloud", 
   record as `Default applied:`, and a question with no default stops the run. It pushes only
   through the run verbs, `stamity run checkpoint` and `stamity run end`: the shell guard refuses a
   raw `git push`, `gh pr create` or `gh pr edit`, and every act on the ask list, on every client.
-  After `run end` it runs `stamity run land --ready`, which marks the run's own draft ready and
-  merges it only when the evidence holds: every required check run green on the exact head commit
+  After `run end`, when the morning list holds no blocked or refused item, it runs
+  `stamity run land --ready`, which marks the run's own draft ready and merges it only when the
+  evidence holds: every required check run green on the exact head commit
   (commit statuses do not count), no unresolved review thread, and no open Critical or Warning row
   in the run's ledger, with the branch's own protection deciding any required human review. A diff
   to the CI definitions or the guard's own files still asks, and an asks or refused outcome leaves

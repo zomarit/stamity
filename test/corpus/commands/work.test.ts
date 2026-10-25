@@ -1548,11 +1548,21 @@ describe("/st-work — Prove", () => {
     // TEST CHANGE, justified (fix round 4, review/110; REQ-FLOW-019, REQ-FLOW-144): the question names every reason and
     // the head commit; the flag carries that commit, `--approved <sha>`, from the `asks` JSON and no other value; a
     // moved head means a commit landed after the question, so the person is asked again, never with the old sha.
+    // TEST CHANGE, justified (whole-branch review W-1, review/172; REQ-FLOW-144): this ended "… where the guard asks
+    // again on that line." What moved: the sentence goes on to the clients whose guard refuses instead of asking.
     const approved =
-      "On `asks` the close first asks the person one numbered question naming the pull request, every reason in `asks.reasons` and the head commit `pr.head`, 1 merge it now · 2 leave it held, `Default if no response: leave it held`; only on 1 does it run `stamity run land --run <run-id> --ready --approved <sha> --json`, alone on its line, `<sha>` that `asks` JSON's `pr.head` and never another value, where the guard asks again on that line.";
+      "On `asks` the close first asks the person one numbered question naming the pull request, every reason in `asks.reasons` and the head commit `pr.head`, 1 merge it now · 2 leave it held, `Default if no response: leave it held`; only on 1 does it run `stamity run land --run <run-id> --ready --approved <sha> --json`, alone on its line, `<sha>` that `asks` JSON's `pr.head` and never another value, where the guard asks again on that line;";
     expect(qa).toContain(approved);
+    // Added (whole-branch review W-1, review/172; REQ-FLOW-144): on Codex and Cursor the guard refuses the `--approved`
+    // line, an ask-class act (`src/hooks/personOnly.ts:184-187`), so running it on a yes ends in a refusal filed as an
+    // empty land call; the close hands the person the line instead and keeps the held row, as the walk does.
     expect(qa).toContain(
-      "That call's `landed` outcome writes its `## Decisions` row; its `asks` or `refused` keeps the held row, and a `refused` hold is retried by the next walk with the land step's own line, `stamity run land --run <run-id> --ready --wait 8 --json`; a `refused` whose reason is a moved head means a commit landed after the question, so the close runs `stamity run land --run <run-id> --ready --wait 8 --json` again, its outcomes handled as the land step's (`landed` writes the `## Decisions` row, `refused` stays a held row with its reasons, `asks` takes this question anew), never with the old `<sha>`.",
+      "on a client whose guard refuses that line instead of asking, the close does not run it on 1: it hands the person that exact line to run themselves and keeps the held row.",
+    );
+    // TEST CHANGE, justified (whole-branch review M-3, review/175; REQ-FLOW-144): the walk's retry clause gains the
+    // checkpoint that rewrites a pull-request record another run's checkpoint replaced (`runLand.ts:386-389`).
+    expect(qa).toContain(
+      "That call's `landed` outcome writes its `## Decisions` row; its `asks` or `refused` keeps the held row, and a `refused` hold is retried by the next walk with the land step's own line, `stamity run land --run <run-id> --ready --wait 8 --json`, and where another run's checkpoint has since replaced the pull-request record in this checkout (the land refuses: `the pull-request record names` that other run), this run's `stamity run checkpoint --run <run-id> --pr --title <conventional title>` runs again first; a `refused` whose reason is a moved head means a commit landed after the question, so the close runs `stamity run land --run <run-id> --ready --wait 8 --json` again, its outcomes handled as the land step's (`landed` writes the `## Decisions` row, `refused` stays a held row with its reasons, `asks` takes this question anew), never with the old `<sha>`.",
     );
     // TEST CHANGE, justified (fix round 5, review/111; REQ-FLOW-144): the approved line carries `--ready`, the walk's retry
     // is the land step's own line, and a moved head is re-asked from a fresh `--ready --json` read.
@@ -1581,9 +1591,13 @@ describe("/st-work — Prove", () => {
       // TEST CHANGE, justified (fix round 2, review/104; REQ-FLOW-143): a ready mark made before a refused land is named.
       "each act run without asking a `## Decisions` row (kind `decision`, default `1`: a push or ready mark `1 keep · 2 undo`, a ready mark made before a refused land included, a merge `run land` made `1 keep · 2 revert (a revert pull request)`);",
     );
+    // TEST CHANGE, justified (whole-branch review M-1, review/173; REQ-FLOW-143): this read "the pull request body stays
+    // as `run checkpoint` wrote it"; the land verb writes its waits-on or evidence line into that body in every mode
+    // (`runLand.ts:408-419`, `:588-594`), so the close names it and still rewrites none of the body.
     expect(qa).toContain(
-      "the pull request body stays as `run checkpoint` wrote it, and the final message names that file and the pull request.",
+      "the pull request body is the one `run checkpoint` wrote plus the line the land verb writes into it (`merge waits on: <reasons>`, or `evidence checked at` before a merge), the close rewriting none of it, and the final message names that file and the pull request.",
     );
+    expect(qa).not.toContain("the pull request body stays as `run checkpoint` wrote it");
     // After the land step, whose rows it carries.
     expect(qa.indexOf(summary)).toBeGreaterThan(qa.indexOf("`stamity run land --run <run-id> --ready --wait 8 --json`"));
     // The section it names is the skill's.
