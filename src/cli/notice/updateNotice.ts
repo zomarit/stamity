@@ -4,6 +4,7 @@ import semver from "semver";
 import { isSemverShaped, pinnedCliCall } from "../../shared/cliCall.ts";
 import { MANIFEST_FILE } from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
+import { readRegularFile } from "../engine/autonomyGate.ts";
 import type { OwnPackageFacts } from "../kit/packageName.ts";
 
 /**
@@ -102,9 +103,13 @@ const FIRST_UPGRADE_RELEASE = "1.17.0";
 /**
  * The verb a move to `target` runs: `upgrade --to <target>` from
  * {@link FIRST_UPGRADE_RELEASE} on, else `sync`. `target` is semver-valid.
+ * The compare reads the release's major.minor.patch alone, so a prerelease of
+ * 1.17.0 or later (a fork's `1.17.0-fork.1` included), which semver orders
+ * below its release, gets the `upgrade` form its CLI carries.
  */
 export function moveVerb(target: string): string {
-  return semver.gte(target, FIRST_UPGRADE_RELEASE) ? `upgrade --to ${target}` : "sync";
+  const release = semver.coerce(target) ?? target;
+  return semver.gte(release, FIRST_UPGRADE_RELEASE) ? `upgrade --to ${target}` : "sync";
 }
 
 /**
@@ -400,6 +405,37 @@ export function shouldProbeNotice(i: { stderrIsTTY: boolean; argv: readonly stri
   return !(operands === -1 ? i.argv : i.argv.slice(0, operands)).includes("--json");
 }
 
+/** What the startup notice is started from: the process's own facts, which `src/cli.ts` hands in as they stand. */
+export interface StartupNoticeInput {
+  /** The command line after the program name. */
+  argv: readonly string[];
+  /** `process.stderr.isTTY === true`. */
+  stderrIsTTY: boolean;
+  /** The directory the command runs in, whose pin the banner compares with. */
+  cwd: string;
+  env: Readonly<Record<string, string | undefined>>;
+  facts: OwnPackageFacts;
+  /** {@link noticeCacheDir} of `env` and the user's home. */
+  cacheDir: string;
+}
+
+/**
+ * The startup notice as `src/cli.ts` starts it: `null` with no probe and no
+ * read when {@link shouldProbeNotice} says the banner cannot show, else
+ * {@link checkForUpdateNotice} over the options of `facts`, `env` and
+ * `cacheDir`, with the pin {@link readRepositoryPin} reads at `cwd`. Never
+ * rejects. `check` is the seam a test records the options through.
+ */
+export function startupNotice(
+  input: StartupNoticeInput,
+  check: (opts: UpdateNoticeOptions) => Promise<string | null> = checkForUpdateNotice,
+): Promise<string | null> {
+  if (!shouldProbeNotice(input)) return Promise.resolve(null);
+  return readRepositoryPin(input.cwd, input.facts.name)
+    .then((pin) => check(noticeOptionsFromFacts(input.facts, input.env, input.cacheDir, pin)))
+    .catch(() => null);
+}
+
 /**
  * A `package.json` dependency spec read as a pin: an exact version, or a
  * `^` or `~` range over one, split into its operator and version. `null` for
@@ -414,11 +450,22 @@ export function pinSpecOf(spec: unknown): { operator: "" | "^" | "~"; version: s
 }
 
 /**
+ * The most either pin source is read up to. A `package.json` or a setup
+ * manifest past it is a source that names nothing, so a planted file cannot
+ * make every run read without bound.
+ */
+const PIN_SOURCE_MAX_BYTES = 1024 * 1024;
+
+/**
  * The version the repository at `cwd` pins for `name`: its root
  * `package.json`'s `devDependencies` entry, then its `dependencies` entry
  * (each read through {@link pinSpecOf}), then the setup manifest's
  * `generatedBy`; `null` when none names a version. Never throws: an unreadable
- * or malformed file is a source that names nothing.
+ * or malformed file is a source that names nothing. Each file is read only
+ * when it is a regular file no bigger than {@link PIN_SOURCE_MAX_BYTES}
+ * (`readRegularFile`, the loosen gate's reader): a link, a device or an
+ * oversized file is a source that names nothing, since the read runs on every
+ * command started from a terminal, before the command itself.
  */
 export async function readRepositoryPin(cwd: string, name: string): Promise<string | null> {
   const pkg = await readJsonObject(join(cwd, "package.json"));
@@ -432,10 +479,12 @@ export async function readRepositoryPin(cwd: string, name: string): Promise<stri
   return typeof generatedBy === "string" && isSemverShaped(generatedBy) ? generatedBy : null;
 }
 
-/** The JSON object at `path`, or `null` when it is absent, unreadable, malformed or not an object. */
+/** The JSON object at `path`, or `null` when it is absent, not a regular file, oversized, unreadable, malformed or not an object. */
 async function readJsonObject(path: string): Promise<Record<string, unknown> | null> {
   try {
-    const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
+    const text = await readRegularFile(path, PIN_SOURCE_MAX_BYTES);
+    if (typeof text !== "string") return null;
+    const parsed: unknown = JSON.parse(text);
     return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : null;

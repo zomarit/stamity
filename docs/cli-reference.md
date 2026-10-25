@@ -145,7 +145,6 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--to <version>` | the release to move to, which must be the release running this command | required |
 | `--allow-downgrade` | move to a release older than the one that wrote the setup | — |
 | `--allow-major` | move to another major release | — |
-| `--allow-client-change` | move even when this release would set up another client set | — |
 | `--loosen` | write a guard copy looser than the autonomy setting on disk, at HEAD or in the manifest it replaces (the person's act) | — |
 
 ## `stamity check`

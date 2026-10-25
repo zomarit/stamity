@@ -28,11 +28,18 @@ import { renderSyncReport, syncJsonPayload } from "./sync/report.ts";
  * Every refusal is an `EngineError` (`VALIDATION_ERROR` unless named), exit 1,
  * with nothing written, and runs in this order: the target's shape; the target
  * against the running release; a setup to move; a downgrade or a major move
- * without its flag; a pin that cannot be edited in place; a planned client set
- * that differs from the manifest's without `--allow-client-change`. The loosen
- * gate (REQ-FLOW-138) runs inside `applySync`, before any write and on a dry
- * run too, as it does for `sync`. A sync that refused a path exits 1 with the
- * pin unmoved.
+ * without its flag; a pin that cannot be edited in place. The loosen gate
+ * (REQ-FLOW-138) runs inside `applySync`, before any write and on a dry run
+ * too, as it does for `sync`. A sync that refused a path exits 1 with the pin
+ * unmoved. The selected clients' own CLIs, which `sync` starts to read their
+ * model lists, start only once every refusal before the plan has passed.
+ *
+ * No client-set refusal: the manifest reader refuses a `tools` entry outside
+ * `TOOLS` (`CONFIG_ERROR`, `../../manifest/manifest.ts::readManifest`) before
+ * `upgrade` sees the manifest, every tool in `TOOLS` has an adapter
+ * (`../../adapters/registry.ts::ADAPTER_REGISTRY`), and the plan keeps the
+ * manifest's `tools` as read, so a setup naming a client this release cannot
+ * plan never reaches a plan.
  *
  * Learnings, handoffs, overrides and run records are never touched: the sync
  * engine does not write them and this module writes only `package.json`.
@@ -56,7 +63,6 @@ export interface UpgradeInput {
   npmChannel: boolean;
   allowDowngrade: boolean;
   allowMajor: boolean;
-  allowClientChange: boolean;
   /** `--loosen`: the person's word for a looser autonomy setting (REQ-FLOW-138). */
   loosen: boolean;
   dryRun: boolean;
@@ -129,9 +135,17 @@ function callFor(input: UpgradeInput, version: string, verb: string): string {
   });
 }
 
-/** Step 2: the call that runs `to`'s own move, for a target that is not the running release. */
-function otherReleaseCall(input: UpgradeInput): string {
-  const verb = moveVerb(input.to);
+/**
+ * Step 2: the call that runs `to`'s own move, for a target that is not the
+ * running release. It ends `--allow-major` when `to` is another major than
+ * the release that wrote the setup (`setup`, `null` when none was read), the
+ * way the update banner's call does, since that release refuses the move
+ * without it.
+ */
+function otherReleaseCall(input: UpgradeInput, setup: string | null): string {
+  const move = moveVerb(input.to);
+  const major = move !== "sync" && setup !== null && semver.major(input.to) !== semver.major(setup) ? " --allow-major" : "";
+  const verb = `${move}${major}`;
   if (!input.npmChannel) {
     return `install ${input.to} into this project, then \`npx --no ${input.packageName} ${verb}\``;
   }
@@ -236,12 +250,6 @@ function reclaimedPaths(report: SyncApplyReport): string[] {
     .map((entry) => entry.path);
 }
 
-function sameSet(a: readonly string[], b: readonly string[]): boolean {
-  const left = new Set(a);
-  const right = new Set(b);
-  return left.size === right.size && [...left].every((item) => right.has(item));
-}
-
 /** The notice for a setup with Codex, whose hooks embed the pinned version (decision E5, `cut/13`). */
 const CODEX_HOOKS_NOTICE =
   "Codex records trust against `.codex/hooks.json`'s hash; review each stamity hook in `/hooks`.";
@@ -255,7 +263,10 @@ export async function runUpgrade(input: UpgradeInput, deps: UpgradeDeps): Promis
   }
   // (2) Only the running release moves a setup in-process.
   if (to !== runningVersion) {
-    const call = otherReleaseCall(input);
+    // The setup's writer only shapes the printed call; a manifest that cannot be
+    // read leaves the flag out, and the target release names its own refusal.
+    const setup = (await readManifest(rootDir).catch(() => null))?.generatedBy ?? null;
+    const call = otherReleaseCall(input, setup);
     throw refusal(`This CLI is ${runningVersion}, and only release ${to} moves a setup to ${to}: run ${call}.`, `run ${call}`);
   }
   // (3) A setup to move.
@@ -277,14 +288,8 @@ export async function runUpgrade(input: UpgradeInput, deps: UpgradeDeps): Promis
   // (5) The pin, prepared in memory.
   const pkgPath = join(rootDir, PACKAGE_JSON);
   const prepared = preparePin(input, await deps.readFile(pkgPath));
-  // (6) The plan, whose client set must be the manifest's.
+  // (6) The plan.
   const plan = await deps.planSync(rootDir, runningVersion, {});
-  if (!input.allowClientChange && !sameSet(plan.manifest.tools, manifest.tools)) {
-    throw refusal(
-      `This release would set up the clients ${plan.manifest.tools.join(", ")} where the manifest lists ${manifest.tools.join(", ")}.`,
-      "pass --allow-client-change to move with that client set",
-    );
-  }
   // (7) This release's sync, with the loosen gate `sync` runs: `loosen` is the
   // command's own `--loosen` flag, read in `upgradeCommand.run` below.
   const notices: string[] = [...prepared.notices];
@@ -356,7 +361,6 @@ export const upgradeCommand: CommandModule = {
     cmd.requiredOption("--to <version>", "the release to move to, which must be the release running this command");
     cmd.option("--allow-downgrade", "move to a release older than the one that wrote the setup");
     cmd.option("--allow-major", "move to another major release");
-    cmd.option("--allow-client-change", "move even when this release would set up another client set");
     cmd.option("--loosen", "write a guard copy looser than the autonomy setting on disk, at HEAD or in the manifest it replaces (the person's act)");
   },
 
@@ -368,7 +372,6 @@ export const upgradeCommand: CommandModule = {
     // sync's own report and closing lines print as `sync` prints them.
     let ran: { plan: SyncPlan; report: SyncApplyReport } | null = null;
     ctx.spinner.start(ctx.dryRun ? "previewing upgrade…" : "upgrading…");
-    const listedOverlay = await freshModelLists(ctx, rootDir);
     const report = await runUpgrade(
       {
         rootDir,
@@ -379,13 +382,15 @@ export const upgradeCommand: CommandModule = {
         npmChannel: hasNpmChannel(),
         allowDowngrade: opts["allowDowngrade"] === true,
         allowMajor: opts["allowMajor"] === true,
-        allowClientChange: opts["allowClientChange"] === true,
         loosen,
         dryRun: ctx.dryRun,
         now: ctx.app.runtime.clock.now(),
       },
       {
+        // Step 6, after every cheaper refusal: the client lists are read here, so
+        // a refused run starts no client CLI.
         planSync: async (root, version, planOpts) => {
+          const listedOverlay = await freshModelLists(ctx, root);
           const plan = await planSync(root, version, { ...planOpts, listedOverlay });
           const warning = dirtyTreeWarning(plan.dirty);
           if (warning !== null) ctx.io.err(`${warning}\n`);

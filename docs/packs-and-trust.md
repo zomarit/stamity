@@ -216,7 +216,7 @@ GET at most once a day, and only when stderr is a terminal and the run is not `-
 and `CI` on any non-empty value.
 
 The client programs the engine starts to read a model list may make network calls of their own.
-`init`, `sync` (`--dry-run` included), `workspace sync` and `check`'s `model-pins` row start each
+`init`, `sync` and `upgrade` (`--dry-run` included), `workspace sync` and `check`'s `model-pins` row start each
 selected client's own CLI but Claude Code's, under your account and sign-in, and that program's
 listing call may reach its vendor. `STAMITY_NO_CLIENT_PROBE=1` in the environment starts none of
 them. [`SECURITY.md`'s "Network and data handling"](../SECURITY.md) states this boundary as a

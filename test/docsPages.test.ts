@@ -5573,3 +5573,19 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
     expect(page).not.toContain("whose recommended option commits");
   });
 });
+
+/**
+ * review/10 (plan 022 file 2, unit b9-upgrade-verb): each page's list of the
+ * verbs that start a selected client's own CLI names `upgrade`, which reads the
+ * model lists through `sync`'s own reader (`src/cli/commands/upgrade.ts`,
+ * `freshModelLists`). An operator who controls outbound traffic by that list
+ * would otherwise run `upgrade` thinking it starts none.
+ */
+describe("the verbs that start a client's own CLI", () => {
+  it.each([README, GETTING_STARTED, PACKS_AND_TRUST])("%s names upgrade among them", (page) => {
+    const list = /`init`, `sync`[^.]*?start each\s+selected client's own CLI/.exec(flowed(read(page)));
+
+    expect(list, `${page}: the list of verbs that start a client's own CLI was not found`).not.toBeNull();
+    expect(list?.[0]).toContain("`upgrade`");
+  });
+});

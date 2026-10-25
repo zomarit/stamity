@@ -269,7 +269,7 @@ make network calls of their own.
   when it continues a run whose branch your clone has only as `origin`'s, and refuses if `origin`
   cannot be read or no longer has that branch at the commit your clone fetched.
 
-`init`, `sync` (`--dry-run` included), `workspace sync` and `check`'s `model-pins` row start each
+`init`, `sync` and `upgrade` (`--dry-run` included), `workspace sync` and `check`'s `model-pins` row start each
 selected client's own CLI, Claude Code's excepted, to read its model list. The engine hands each
 program nothing but its arguments, and those programs may make network calls of their own, under
 your account for that client. `STAMITY_NO_CLIENT_PROBE=1` in the environment starts none of them. [`SECURITY.md`](../SECURITY.md) says how each program is found

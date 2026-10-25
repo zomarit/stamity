@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -6,11 +7,14 @@ import {
   DEFAULT_NOTICE_TTL_MS,
   DEFAULT_REGISTRY_BASE_URL,
   checkForUpdateNotice,
+  moveVerb,
   noticeCacheDir,
   noticeOptionsFromFacts,
   readRepositoryPin,
   resolveOwnPackageFacts,
   shouldProbeNotice,
+  startupNotice,
+  type StartupNoticeInput,
   type UpdateNoticeOptions,
 } from "../../../src/cli/notice/updateNotice.ts";
 import { canonical } from "../../support/identity.ts";
@@ -300,6 +304,106 @@ describe("readRepositoryPin", () => {
 
     expect(await readRepositoryPin(handle.dir, PKG)).toBeNull();
     expect(await readRepositoryPin(handle.path("missing"), PKG)).toBeNull();
+  });
+
+  // review/7: the read runs before every command started from a terminal, so a
+  // committed link (to a terminal or an endless device, say) must not be followed.
+  it.skipIf(process.platform === "win32")("reads a package.json or a manifest that is a link as naming nothing", async () => {
+    const handle = tempDir();
+    await handle.seedFiles({
+      "elsewhere/package.json": JSON.stringify({ devDependencies: { [PKG]: "1.17.0" } }),
+      "elsewhere/manifest.json": JSON.stringify({ generatedBy: "1.16.0" }),
+      ".stamity/manifest.json": JSON.stringify({ generatedBy: "1.15.0" }),
+    });
+    await symlink(handle.path("elsewhere", "package.json"), handle.path("package.json"));
+
+    expect(await readRepositoryPin(handle.dir, PKG)).toBe("1.15.0");
+
+    await rm(handle.path(".stamity", "manifest.json"));
+    await symlink(handle.path("elsewhere", "manifest.json"), handle.path(".stamity", "manifest.json"));
+
+    expect(await readRepositoryPin(handle.dir, PKG)).toBeNull();
+  });
+
+  it("reads a pin source past 1 MiB as naming nothing", async () => {
+    const handle = tempDir();
+    const padding = "x".repeat(1024 * 1024);
+    await handle.seedFiles({
+      "package.json": JSON.stringify({ devDependencies: { [PKG]: "1.17.0" }, padding }),
+      ".stamity/manifest.json": JSON.stringify({ generatedBy: "1.15.0", padding }),
+    });
+
+    expect(await readRepositoryPin(handle.dir, PKG)).toBeNull();
+  });
+});
+
+describe("moveVerb", () => {
+  it("names upgrade for a prerelease of 1.17.0 or later, a fork's included (review/11)", () => {
+    expect(moveVerb("1.17.0-fork.1")).toBe("upgrade --to 1.17.0-fork.1");
+    expect(moveVerb("1.18.0-rc.2")).toBe("upgrade --to 1.18.0-rc.2");
+    expect(moveVerb("1.17.0")).toBe("upgrade --to 1.17.0");
+    expect(moveVerb("1.16.9-fork.1")).toBe("sync");
+  });
+});
+
+/**
+ * The startup wiring `src/cli.ts` runs (review/9): the process's facts in, the
+ * options `checkForUpdateNotice` is asked with out. The check seam records each
+ * call, so "no probe" is a count, not an inference.
+ */
+describe("startupNotice", () => {
+  const FACTS = { name: PKG, version: CURRENT, isPrivate: false, registry: null };
+
+  function recorder(answer: string | null = "banner"): {
+    check: (opts: UpdateNoticeOptions) => Promise<string | null>;
+    calls: UpdateNoticeOptions[];
+  } {
+    const calls: UpdateNoticeOptions[] = [];
+    return {
+      calls,
+      check: async (opts) => {
+        calls.push(opts);
+        return answer;
+      },
+    };
+  }
+
+  function startup(cwd: string, over: Partial<StartupNoticeInput> = {}): StartupNoticeInput {
+    return { argv: ["check"], stderrIsTTY: true, cwd, env: {}, facts: FACTS, cacheDir: "/cache", ...over };
+  }
+
+  it("asks nothing when stderr is not a terminal, or on a --json run", async () => {
+    const handle = tempDir();
+    const { check, calls } = recorder();
+
+    expect(await startupNotice(startup(handle.dir, { stderrIsTTY: false }), check)).toBeNull();
+    expect(await startupNotice(startup(handle.dir, { argv: ["check", "--json"] }), check)).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  it("asks with the repository's pin, the facts, the env and the cache folder on a terminal", async () => {
+    const handle = tempDir();
+    await handle.seedFiles({ "package.json": JSON.stringify({ devDependencies: { [PKG]: "~1.1.0" } }) });
+    const { check, calls } = recorder();
+    const env = { STAMITY_NO_UPDATE_CHECK: "1" };
+
+    expect(await startupNotice(startup(handle.dir, { env }), check)).toBe("banner");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ packageName: PKG, currentVersion: CURRENT, repositoryPin: "1.1.0", env, cacheDir: "/cache" });
+  });
+
+  it("keeps the opt-outs: the real check under STAMITY_NO_UPDATE_CHECK=1 sends no request", async () => {
+    const handle = tempDir();
+    const fetch = forbiddenFetch();
+    const cacheDir = handle.path("cache");
+
+    const banner = await startupNotice(startup(handle.dir, { env: { STAMITY_NO_UPDATE_CHECK: "1" }, cacheDir }), (opts) =>
+      checkForUpdateNotice({ ...opts, fetchImpl: fetch.impl }),
+    );
+
+    expect(banner).toBeNull();
+    expect(fetch.calls).toEqual([]);
+    expect(existsSync(cachePath(cacheDir))).toBe(false);
   });
 });
 

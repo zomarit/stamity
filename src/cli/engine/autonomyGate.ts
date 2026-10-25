@@ -100,8 +100,11 @@ const BAKED_CONSTANT = /^const AUTONOMY = (.*);\s*$/m;
 const GUARD_TITLE_LINE = /^\/\/ stamity — person-only shell guard\.\r?$/m;
 const GUARD_VERDICT_LINE = /^const personOnlyVerdict = /m;
 
-/** A regular file's text, `null` when nothing is there, `undefined` when something is there that cannot be read as one. */
-async function readRegularFile(path: string, maxBytes: number): Promise<string | null | undefined> {
+/**
+ * A regular file's text, `null` when nothing is there, `undefined` when something is there that cannot be read as one.
+ * Also the startup notice's reader of repository files (`../notice/updateNotice.ts::readRepositoryPin`).
+ */
+export async function readRegularFile(path: string, maxBytes: number): Promise<string | null | undefined> {
   let stats;
   try {
     stats = await lstat(path);

@@ -60,7 +60,7 @@ handling"](SECURITY.md): `add` fetches the Sigstore trust root for a signed pack
 unattended run's pre-flight and `run` verbs call GitHub's REST API through `gh` under your login, `run start` continuing
 origin's run branch, `run checkpoint` and `run end` reading `origin` with `git ls-remote`, the last two pushing the
 run's branch to it under your git credentials. The client programs it starts to read a model list may make network calls
-of their own: `init`, `sync`, `workspace sync` and `check` start each selected client's own CLI but Claude Code's, under
+of their own: `init`, `sync`, `upgrade`, `workspace sync` and `check` start each selected client's own CLI but Claude Code's, under
 your account; `STAMITY_NO_CLIENT_PROBE=1` starts none. Two touchpoints go further, through the authenticated GitHub CLI,
 `gh`: `/st-pr-resolve`, and `/st-board`, which once a board is linked files, edits and comments on its items by default
 behind one preview, and moves them only with `--move`. `/st-work`'s close walk recommends `run checkpoint --pr`.

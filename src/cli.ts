@@ -19,14 +19,7 @@ import { validateCommand } from "./cli/commands/validate.ts";
 import { workspaceCommand } from "./cli/commands/workspace.ts";
 import { worktreeCommand } from "./cli/commands/worktree.ts";
 import { runCli, type CommandModule } from "./cli/kit/program.ts";
-import {
-  checkForUpdateNotice,
-  noticeCacheDir,
-  noticeOptionsFromFacts,
-  readRepositoryPin,
-  resolveOwnPackageFacts,
-  shouldProbeNotice,
-} from "./cli/notice/updateNotice.ts";
+import { noticeCacheDir, resolveOwnPackageFacts, startupNotice } from "./cli/notice/updateNotice.ts";
 
 /**
  * The CLI entry — the single enumeration point of the command surface.
@@ -134,14 +127,17 @@ async function main(): Promise<void> {
   // (`noticeOptionsFromFacts`). It runs only where its banner can show
   // (`shouldProbeNotice`: stderr a terminal, no `--json`), and compares the
   // registry with the version this repository pins (`readRepositoryPin`, which
-  // never throws).
+  // never throws). `startupNotice` holds that wiring, tested there; this line
+  // only hands it the process's facts.
   const argv = process.argv.slice(2);
-  const facts = resolveOwnPackageFacts();
-  const notice = shouldProbeNotice({ stderrIsTTY: process.stderr.isTTY === true, argv })
-    ? readRepositoryPin(process.cwd(), facts.name).then((pin) =>
-        checkForUpdateNotice(noticeOptionsFromFacts(facts, process.env, noticeCacheDir(process.env, homedir()), pin)),
-      )
-    : Promise.resolve<string | null>(null);
+  const notice = startupNotice({
+    argv,
+    stderrIsTTY: process.stderr.isTTY === true,
+    cwd: process.cwd(),
+    env: process.env,
+    facts: resolveOwnPackageFacts(),
+    cacheDir: noticeCacheDir(process.env, homedir()),
+  });
 
   // Bare `stamity` is a first touch, not a mistake: show help and exit 0. The
   // explicit rewrite (rather than commander's help-as-error default, which the

@@ -9,7 +9,7 @@ import { checkPackCatalog } from "../../../src/cli/commands/check.ts";
 import { applySync, planSync } from "../../../src/cli/commands/sync/engine.ts";
 import { runUpgrade, type UpgradeDeps, type UpgradeInput } from "../../../src/cli/commands/upgrade.ts";
 import { createApp } from "../../../src/index.ts";
-import { createManifest, readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
+import { createManifest, manifestPath, readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
 import { applyPackInstall, planPackInstall } from "../../../src/pack/install.ts";
 import { computeAggregateContentSha } from "../../../src/pack/trust.ts";
 import type { Tool } from "../../../src/types/core.ts";
@@ -41,6 +41,10 @@ if (PARSED === null || PARSED.minor === 0) {
 }
 /** The release that wrote the fixture: one minor below the running one, same major. */
 const FROM = `${PARSED.major}.${PARSED.minor - 1}.0`;
+/** A release after the running one in its major, which only that release moves to. */
+const NEXT_MINOR = `${PARSED.major}.${PARSED.minor + 1}.0`;
+/** A release in the next major. */
+const OTHER_MAJOR = `${PARSED.major + 1}.0.0`;
 const T0 = new Date("2026-01-01T00:00:00.000Z");
 
 /** The user state no upgrade may touch (REQ-FLOW-034). */
@@ -92,7 +96,6 @@ function input(rootDir: string, over: Partial<UpgradeInput> = {}): UpgradeInput 
     npmChannel: true,
     allowDowngrade: false,
     allowMajor: false,
-    allowClientChange: false,
     loosen: false,
     dryRun: false,
     now: T0,
@@ -295,10 +298,42 @@ describe("upgrade — refusals write nothing", () => {
     const root = await seedSetup(tempDir());
     const before = await treeDigest(root);
 
-    const error = await refusalOf(runUpgrade(input(root, { to: "9.9.9" }), realDeps));
+    // TEST CHANGE, justified (review/13): `9.9.9` is another major than the fixture's
+    // writer, so its printed call now ends `--allow-major`; this case keeps the same-major
+    // form, matched up to the closing backtick, and the next case pins the major one.
+    const error = await refusalOf(runUpgrade(input(root, { to: NEXT_MINOR }), realDeps));
 
     expect(error.code).toBe("VALIDATION_ERROR");
-    expect(error.message).toContain(npxCommandOf({ ...ID, npmChannel: true, version: "9.9.9" }, "upgrade --to 9.9.9"));
+    expect(error.message).toContain(`\`${npxCommandOf({ ...ID, npmChannel: true, version: NEXT_MINOR }, `upgrade --to ${NEXT_MINOR}`)}\``);
+    expect(await treeDigest(root)).toEqual(before);
+  });
+
+  it("ends the printed call with --allow-major for another major than the setup's writer (review/13)", async () => {
+    const root = await seedSetup(tempDir());
+    const before = await treeDigest(root);
+
+    const error = await refusalOf(runUpgrade(input(root, { to: OTHER_MAJOR }), realDeps));
+    const offline = await refusalOf(runUpgrade(input(root, { to: OTHER_MAJOR, npmChannel: false }), realDeps));
+
+    expect(error.message).toContain(
+      `\`${npxCommandOf({ ...ID, npmChannel: true, version: OTHER_MAJOR }, `upgrade --to ${OTHER_MAJOR} --allow-major`)}\``,
+    );
+    expect(offline.message).toContain(`\`npx --no ${ID.name} upgrade --to ${OTHER_MAJOR} --allow-major\``);
+    expect(await treeDigest(root)).toEqual(before);
+  });
+
+  it("refuses a setup naming a client this release has no adapter for in the manifest reader, writing nothing (review/8)", async () => {
+    const root = await seedSetup(tempDir());
+    const onDisk = JSON.parse(await readFile(manifestPath(root), "utf8")) as Record<string, unknown>;
+    await writeFile(manifestPath(root), `${JSON.stringify({ ...onDisk, tools: ["claude", "windsurf"] }, null, 2)}\n`);
+    const before = await treeDigest(root);
+
+    // The refusal comes from `readManifest` (step 3), before any plan, so no
+    // client-set check after the plan can ever see such a setup.
+    const error = await refusalOf(runUpgrade(input(root), realDeps));
+
+    expect(error.code).toBe("CONFIG_ERROR");
+    expect(error.message).toContain('`tools` names unknown tool "windsurf"');
     expect(await treeDigest(root)).toEqual(before);
   });
 
@@ -314,9 +349,12 @@ describe("upgrade — refusals write nothing", () => {
   it("names the installed copy for a package with no npm channel", async () => {
     const root = await seedSetup(tempDir());
 
-    const error = await refusalOf(runUpgrade(input(root, { to: "9.9.9", npmChannel: false }), realDeps));
+    // TEST CHANGE, justified (review/13): a same-major target, as in the first case of this block.
+    const error = await refusalOf(runUpgrade(input(root, { to: NEXT_MINOR, npmChannel: false }), realDeps));
 
-    expect(error.message).toContain(`install 9.9.9 into this project, then \`npx --no ${ID.name} upgrade --to 9.9.9\``);
+    expect(error.message).toContain(
+      `install ${NEXT_MINOR} into this project, then \`npx --no ${ID.name} upgrade --to ${NEXT_MINOR}\``,
+    );
   });
 
   it("refuses a target that is not a version", async () => {
@@ -428,6 +466,21 @@ describe("upgrade — the verb", () => {
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("--to <version>");
     expect(result.stdout).toContain("--loosen");
+    expect(result.stdout).not.toContain("--allow-client-change");
+  });
+
+  it("offers no --allow-client-change: the flag is an unknown option, exit 2 (review/8)", async () => {
+    const root = await seedSetup(tempDir());
+    const before = await treeDigest(root);
+
+    const result = await runInProcess(COMMANDS, ["upgrade", "--to", V, "--allow-client-change"], {
+      cwd: root,
+      env: { STAMITY_NO_CLIENT_PROBE: "1" },
+    });
+
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain("--allow-client-change");
+    expect(await treeDigest(root)).toEqual(before);
   });
 
   it("exits 2 without --to", async () => {

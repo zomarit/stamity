@@ -320,43 +320,30 @@ describe("color controls", () => {
   });
 });
 
-describe("update notice (opt-out dormancy)", () => {
+describe("update notice (a piped stderr asks nothing)", () => {
   const getFixture = useCliFixture();
 
-  it("stays silent under either opt-out: empty stderr, no cache write", async () => {
+  it("asks nothing with every opt-out unset when stderr is a pipe: empty stderr, no cache write", async () => {
     const fixture = getFixture();
     // TEST CHANGE, justified: REQ-FLOW-048 — the stamp is keyed by package name, `/` and `@`
     // read as `-`, so the absent file is the one this checkout's own name would write. The
     // name is the `package.json` read `npxCommand` takes.
     const stamp = join(fixture.home.cacheDir, "stamity", `update-check-${canonical().name.replace(/[/@]/g, "-")}.json`);
 
-    // TEST CHANGE, justified: this case used to reach silence through the
-    // package.json `private: true` short-circuit. The manifest is publishable,
-    // so that step is now reachable only by a fork, a vendored copy, or a failed
-    // self-read — all three covered through the injected seam in
-    // test/cli/notice/updateNotice.test.ts. The dormant path a publishable build
-    // actually owns is the env opt-out, so that is what this pins, one arm per
-    // documented switch. Keeping the old premise would not have restored the
-    // lost coverage either: it would have made the suite probe the live registry
-    // on every run.
-
-    // Arm A: our own switch, which the harness sets by default.
-    const ours = await fixture.run(["--version"]);
-
-    expect(ours.code).toBe(0);
-    expect(ours.stderr).toBe("");
-    expect(existsSync(stamp)).toBe(false);
-
-    // Arm B: ours deleted, so silence has to come from the ecosystem-wide
-    // switch. The harness never carries CI or NO_UPDATE_NOTIFIER, so the
-    // override below is the only thing opting this run out.
-    const ecosystem = await fixture.run(["--version"], {
-      env: { STAMITY_NO_UPDATE_CHECK: undefined, NO_UPDATE_NOTIFIER: "1" },
+    // TEST CHANGE, justified (review/9, REQ-FLOW-048): this case used to hold one
+    // arm per opt-out switch. The probe now starts only when stderr is a
+    // terminal, and the harness pipes it, so both arms passed whatever the
+    // switches did. This case now proves only the non-terminal path, end to end:
+    // with no opt-out set, a probe the gate let through would write the stamp
+    // (and, only then, reach the registry). The switches themselves, and the
+    // wiring `src/cli.ts` hands its facts to, are pinned in
+    // test/cli/notice/updateNotice.test.ts (`startupNotice`, `checkForUpdateNotice`).
+    const piped = await fixture.run(["--version"], {
+      env: { STAMITY_NO_UPDATE_CHECK: undefined, NO_UPDATE_NOTIFIER: undefined, CI: undefined },
     });
 
-    expect(ecosystem.code).toBe(0);
-    expect(ecosystem.stderr).toBe("");
-    // Both opt-outs return ahead of every filesystem touch: still no stamp file.
+    expect(piped.code).toBe(0);
+    expect(piped.stderr).toBe("");
     expect(existsSync(stamp)).toBe(false);
   });
 });
