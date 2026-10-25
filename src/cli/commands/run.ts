@@ -48,9 +48,9 @@ import { runLand } from "./runLand.ts";
  * `repos/<owner>/<repo>`, the repository `resolveRepo` matches on `origin`,
  * every call naming the host it matched on); where that read gives no answer
  * (no `origin`, a host `gh` does not talk to, no `gh`, no login, any status
- * but 200), from `refs/remotes/origin/HEAD`; and where neither names one,
- * `main` and `master` both count as the default. The first source that answers
- * decides. Where REST named it, `start`, `checkpoint` and `end` point
+ * but 200), from `refs/remotes/origin/HEAD`. The first source that answers
+ * decides, and `main` and `master` always count as default beside it, alone
+ * where neither names one (`withFallbacks`). Where REST named it, `start`, `checkpoint` and `end` point
  * `refs/remotes/origin/HEAD`, the shell guard's only source, at
  * `refs/remotes/origin/<named>` when it is absent or names another branch,
  * said in the text and skipped under `--dry-run` (pr/55). Unattended, all
@@ -149,7 +149,7 @@ import { runLand } from "./runLand.ts";
  * `.stamity/run-ended.json` at every exit past the record's read, `--dry-run`
  * aside, and `start` deletes it first; the ask gate allows the final question
  * round only on the branch of the closed run it names, and only for the
- * pre-flight canary's window after `at`. A plain `end` (a chain file the next one
+ * marker's 15 minutes after `at` (`RUN_ENDED_MAX_AGE_MS`, `../../mcp/env.ts`). A plain `end` (a chain file the next one
  * follows, or a flag left out) writes none and removes one already there, so no
  * question passes between two chain files; one it cannot remove makes the exit 1,
  * its `notDone` line naming it.
@@ -630,9 +630,9 @@ const REFUSED_ENDING = "refused ending carries only the run's records";
  * `HEAD`) changes, each named. The record's `Base:` plays no part: the run folder holds it, so this ending could move
  * it. `top`-relative paths; `ownDir` and `inbox` likewise.
  */
-async function refusedEndingStray(top: string, tips: readonly string[], ownDir: string, inbox: string, paths: readonly string[]): Promise<string | null> {
+async function refusedEndingStray(top: string, tips: readonly string[], ownDir: string, inbox: string, paths: readonly string[], verb: string): Promise<string | null> {
   if (paths.length > 0) return `${REFUSED_ENDING}: --paths names ${paths.join(", ")}`;
-  const changed = [...(await pushedChanges(top, tips)), ...(await changedSince(top, "HEAD", "index"))].map((entry) => entry.path);
+  const changed = [...(await pushedChanges(top, tips, verb)), ...(await changedSince(top, "HEAD", verb, "index"))].map((entry) => entry.path);
   const stray = [...new Set(changed.filter((path) => path !== inbox && !path.startsWith(`${ownDir}/`)))].toSorted();
   return stray.length === 0 ? null : `${REFUSED_ENDING}: the commits the push would send or the index change ${stray.join(", ")}`;
 }
@@ -1028,6 +1028,12 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     result.notDone.push(`commit refused: ${FALLBACK_REFUSAL}, so an unattended run pushes nothing`);
     return finish(false);
   }
+  // review/14: only an unattended run writes the held patch --drop-held withdraws from, so an attended one refuses it
+  // rather than ignore it and exit 0.
+  if (!unattended && ((opts["dropHeld"] ?? []) as string[]).length > 0) {
+    result.notDone.push("not withdrawn: --drop-held reads only in an unattended run, where the held patch is written");
+    return finish(false);
+  }
 
   const top = (await git(cwd, ["rev-parse", "--show-toplevel"], verb)).stdout.replace(/\r?\n$/, "");
   const prefix = (await git(cwd, ["rev-parse", "--show-prefix"], verb)).stdout.replace(/\r?\n$/, "");
@@ -1039,7 +1045,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     const stray =
       typeof origin === "string"
         ? `push held: origin's branches and tags could not be read (${origin})`
-        : await refusedEndingStray(top, origin.tips, fromTop(runDir), fromTop(INBOX_PATH), (opts["paths"] ?? []) as string[]);
+        : await refusedEndingStray(top, origin.tips, fromTop(runDir), fromTop(INBOX_PATH), (opts["paths"] ?? []) as string[], verb);
     if (stray !== null) {
       result.notDone.push(stray);
       return finish(false);
@@ -1074,7 +1080,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   // --paths entry does; one whose deletion is already staged is the run's own too. A link stays out, as before.
   const runOwned = [...RUN_FILES.map((file) => `${runDir}/${file}`), INBOX_PATH];
   const gone = runOwned.filter((path) => !exists(join(cwd, path))).map(fromTop);
-  const goneTracked = await indexTracked(top, gone);
+  const goneTracked = await indexTracked(top, gone, verb);
   const own = runOwned.flatMap((path) => {
     const fromRoot = fromTop(path);
     return isRegular(join(cwd, path)) || goneTracked.has(fromRoot) ? [fromRoot] : [];
@@ -1091,9 +1097,9 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     }
   };
   const patches = [...new Set([patchRel, ...listPatches(join(cwd, heldDir)).map((name) => `${heldDir}/${name}`)])].map(fromTop);
-  const { paths: named, deleted: namedDeleted } = await namedPaths(top, cwd, prefix, base, (opts["paths"] ?? []) as string[], result.notDone);
+  const { paths: named, deleted: namedDeleted } = await namedPaths(top, cwd, prefix, base, (opts["paths"] ?? []) as string[], result.notDone, verb);
   // review/84: a deletion already staged is no ignored record, though check-ignore reads its path as untracked now.
-  const ignored = await ignoredPaths(top, [...own, ...named.filter((path) => !namedDeleted.includes(path)), ...patches]);
+  const ignored = await ignoredPaths(top, [...own, ...named.filter((path) => !namedDeleted.includes(path)), ...patches], verb);
   if (ignored === null) {
     result.notDone.push("stage failed: git check-ignore could not read the ignore rules");
     return finish(false);
@@ -1108,14 +1114,16 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
 
   if (ctx.dryRun) {
     if (unattended) {
-      const wouldStage = stage.map((path) => ({ path, link: isLink(join(top, path)), added: false }));
-      result.held = heldOf([...(await changedSince(top, base)), ...(await changedSince(top, base, "index")), ...wouldStage], hookPaths, prefix);
+      // build/103: a folder holding `.git` stages as a gitlink (mode 160000), which the real run holds as a link.
+      const gitlink = (path: string): boolean => isDirectory(join(top, path)) && exists(join(top, path, ".git"));
+      const wouldStage = stage.map((path) => ({ path, link: isLink(join(top, path)) || gitlink(path), added: false }));
+      result.held = heldOf([...(await changedSince(top, base, verb)), ...(await changedSince(top, base, verb, "index")), ...wouldStage], hookPaths, prefix);
     }
     lines.push(`would stage: ${list(stage)}`, `would hold: ${list(result.held)}`, "Dry run: nothing was staged, written, committed or pushed.");
     return finish(true, { dryRun: true });
   }
   // review/84: a --paths deletion already staged is committed as it stands; git add refuses a path no layer holds.
-  if (!(await add(top, stage.filter((path) => !namedDeleted.includes(path)), result.notDone))) return finish(false);
+  if (!(await add(top, stage.filter((path) => !namedDeleted.includes(path)), result.notDone, verb))) return finish(false);
 
   // (2) Unattended: the person-only paths' change goes to an inert patch, and those paths back to Base: in the index.
   let unsectioned: string[] = [];
@@ -1126,8 +1134,8 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   // review/156: the index is read too, since the commit takes it: a held change staged or committed and then
   // undone in the work tree alone is still held.
   if (unattended) {
-    const indexSide = await changedSince(top, base, "index");
-    const treeSide = await changedSince(top, base);
+    const indexSide = await changedSince(top, base, verb, "index");
+    const treeSide = await changedSince(top, base, verb);
     const inIndex = heldOf(indexSide, hookPaths, prefix);
     const held = heldOf([...treeSide, ...indexSide], hookPaths, prefix);
     // v21 (pr/39): a held path absent at Base: and absent from the work tree, staged and then deleted, gets no
@@ -1163,7 +1171,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
             result.notDone.push(left);
             return finish(false);
           }
-          const unwritten = left.sections.length === 0 ? await removeStalePatch(cwd, top, heldDir, fromTop(patchRel)) : await writePatch(Buffer.concat(left.sections));
+          const unwritten = left.sections.length === 0 ? await removeStalePatch(cwd, top, heldDir, fromTop(patchRel), verb) : await writePatch(Buffer.concat(left.sections));
           if (unwritten !== null) {
             result.notDone.push(unwritten);
             return finish(false);
@@ -1174,7 +1182,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
           rmSync(scratch, { recursive: true, force: true });
         }
       }
-      const stale = committed === null ? await removeStalePatch(cwd, top, heldDir, fromTop(patchRel)) : null;
+      const stale = committed === null ? await removeStalePatch(cwd, top, heldDir, fromTop(patchRel), verb) : null;
       if (stale !== null) {
         result.notDone.push(stale);
         return finish(false);
@@ -1252,7 +1260,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const written = patches.filter((path) => isRegular(join(top, path)));
   written.forEach(notCommitted);
   const patchFiles = written.filter((path) => !ignored.has(path));
-  if (!(await add(top, patchFiles, result.notDone))) return finish(false);
+  if (!(await add(top, patchFiles, result.notDone, verb))) return finish(false);
   lines.push(`staged: ${list([...stage, ...patchFiles])}`);
   const heldNames = result.held.map((path) => (unsectioned.includes(path) ? `${path} (staged, then deleted: no section)` : path));
   lines.push(
@@ -1273,11 +1281,11 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     return finish(false);
   }
   // review/159: the commits the push would send, read before the checkpoint's own, which puts held paths back to Base: only.
-  const inHistory = unattended ? await heldInHistory(top, remote.tips, hookPaths, prefix) : [];
+  const inHistory = unattended ? await heldInHistory(top, remote.tips, hookPaths, prefix, verb) : [];
 
   // pr/5: the commit takes the whole index, so a path staged before the verb ran and not in its own list refuses it.
   const isOwn = ownPath([...stage, ...gone, ...patches, ...result.held], named);
-  const stray = await strayStaged(top, isOwn);
+  const stray = await strayStaged(top, isOwn, verb);
   if (stray === null) {
     result.notDone.push("commit failed: git diff --cached could not list the staged paths");
     return finish(false);
@@ -1384,7 +1392,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   // review/159, review/156: a held path in a pushed commit, or still changed in HEAD's tree (a hook that staged it
   // again), refuses the push; the verb never rewrites history.
   if (unattended) {
-    const atTip = heldOf(await changedSince(top, base, "HEAD"), hookPaths, prefix).filter((path) => !inHistory.includes(path));
+    const atTip = heldOf(await changedSince(top, base, verb, "HEAD"), hookPaths, prefix).filter((path) => !inHistory.includes(path));
     result.notDone.push(...inHistory.map((path) => `held path in history (${path})`), ...atTip.map((path) => `held path in the pushed tree (${path})`));
     if (inHistory.length + atTip.length > 0) {
       lines.push("push: refused (a held path would be pushed)");
@@ -1423,7 +1431,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   // review/50: the commit made, a refused pre-flight's ending (or one whose record turned refused since the first
   // read) still pushes the run's records alone.
   if (refusedRecord || (surfaceNow !== null && surfaceNow.refused)) {
-    const strayNow = await refusedEndingStray(top, remote.tips, fromTop(runDir), fromTop(INBOX_PATH), refusedRecord ? [] : ((opts["paths"] ?? []) as string[]));
+    const strayNow = await refusedEndingStray(top, remote.tips, fromTop(runDir), fromTop(INBOX_PATH), refusedRecord ? [] : ((opts["paths"] ?? []) as string[]), verb);
     if (strayNow !== null) {
       result.notDone.push(strayNow);
       lines.push("push: refused (a refused pre-flight's ending carries the run's records alone)");
@@ -1437,7 +1445,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   if (tip !== null && tip === remote.branch) {
     lines.push(`push: nothing ahead of origin/${current}`);
   } else {
-    const context = { defaultBranches: defaults.names, currentBranch: current, tags: await localTags(top) };
+    const context = { defaultBranches: defaults.names, currentBranch: current, tags: await localTags(top, verb) };
     let verdict: ReturnType<typeof personOnlyVerdict>;
     try {
       verdict = personOnlyVerdict(`git push origin ${refspec}`, context);
@@ -1467,7 +1475,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   // n10: a title already reading `Refused:` (leading white space set aside) is used as given, so it is never doubled.
   const given = String(opts["title"]);
   const title = verb === END && opts["refused"] === true && !given.trimStart().startsWith("Refused:") ? `Refused: ${given}` : given;
-  const step = await draftPr(ctx, { run, runDir, recordRel, top, cwd, base, branch: current, defaults, unattended, resumes: head.resumes, title });
+  const step = await draftPr(ctx, { run, runDir, recordRel, top, cwd, base, branch: current, defaults, unattended, resumes: head.resumes, title, verb });
   result.pr = step.pr;
   result.notDone.push(...step.notDone);
   // review/165: an open pull request keeps its own title, since the step sends only a body to one.
@@ -1624,12 +1632,12 @@ const HOOK_SCRATCH: HookScratch = {
 };
 
 /** The top-level-relative paths `side` changes against `base`, committed changes included, each with its new mode's link reading. */
-async function changedSince(top: string, base: string, side: Side = "work tree"): Promise<Changed[]> {
-  const read = await git(top, ["diff", "--raw", RAW_IDS, "-z", ...DIFF_PINS, ...SIDE_ARGS[side](base), "--"], CHECKPOINT);
+async function changedSince(top: string, base: string, verb: string, side: Side = "work tree"): Promise<Changed[]> {
+  const read = await git(top, ["diff", "--raw", RAW_IDS, "-z", ...DIFF_PINS, ...SIDE_ARGS[side](base), "--"], verb);
   if (read.code !== 0) {
     throw new CliFailure({
       code: "FAILURE",
-      message: `run checkpoint could not list the ${side}'s change against the record's Base:`,
+      message: `run ${verb} could not list the ${side}'s change against the record's Base:`,
       why: `git diff answered ${read.code}: ${firstLine(read.stderr)}`,
       next: "run it inside the repository's work tree",
     });
@@ -1648,21 +1656,21 @@ async function changedSince(top: string, base: string, side: Side = "work tree")
  * prefix included (review/200, review/195), every glob read from the project
  * root too where the project lies below the git top (build/99).
  */
-async function heldInHistory(top: string, tips: readonly string[], hookPaths: readonly string[], prefix: string): Promise<string[]> {
-  return heldOf(await pushedChanges(top, tips), hookPaths, prefix);
+async function heldInHistory(top: string, tips: readonly string[], hookPaths: readonly string[], prefix: string, verb: string): Promise<string[]> {
+  return heldOf(await pushedChanges(top, tips, verb), hookPaths, prefix);
 }
 
 /**
  * Every path each commit the push would send changes (review/159, review/50): the commits `HEAD` reaches and none
  * of `tips` (origin's branches and tags, {@link remoteRefs}) does, read as {@link heldInHistory} reads them.
  */
-async function pushedChanges(top: string, tips: readonly string[]): Promise<Changed[]> {
+async function pushedChanges(top: string, tips: readonly string[], verb: string): Promise<Changed[]> {
   const range = ["--ignore-missing", "--stdin"];
-  const read = await git(top, ["log", "--root", "--format=", "--raw", RAW_IDS, "-z", "--cc", ...DIFF_PINS, ...range, "--"], CHECKPOINT, revisionLines(tips));
+  const read = await git(top, ["log", "--root", "--format=", "--raw", RAW_IDS, "-z", "--cc", ...DIFF_PINS, ...range, "--"], verb, revisionLines(tips));
   if (read.code !== 0) {
     throw new CliFailure({
       code: "FAILURE",
-      message: "run checkpoint could not list the paths the commits it would push change",
+      message: `run ${verb} could not list the paths the commits it would push change`,
       why: `git log answered ${read.code}: ${firstLine(read.stderr)}`,
       next: "run it inside the repository's work tree",
     });
@@ -1697,6 +1705,7 @@ async function namedPaths(
   base: string,
   given: readonly string[],
   notDone: string[],
+  verb: string,
 ): Promise<{ paths: string[]; deleted: string[] }> {
   const kept: string[] = [];
   const missing: string[] = [];
@@ -1711,9 +1720,9 @@ async function namedPaths(
   }
   if (missing.length === 0) return { paths: kept, deleted: [] };
   // A path the work tree no longer holds still stages as a deletion where the index tracks it.
-  const tracked = await indexTracked(top, missing);
-  const deleted = await stagedDeletions(top, missing.filter((path) => !tracked.has(path)));
-  const committed = await committedDeletions(top, base, missing.filter((path) => !tracked.has(path) && !deleted.has(path)));
+  const tracked = await indexTracked(top, missing, verb);
+  const deleted = await stagedDeletions(top, missing.filter((path) => !tracked.has(path)), verb);
+  const committed = await committedDeletions(top, base, missing.filter((path) => !tracked.has(path) && !deleted.has(path)), verb);
   for (const path of missing) {
     if (tracked.has(path) || deleted.has(path)) kept.push(path);
     else if (!committed.has(path)) notDone.push(`not staged: ${path} (no such file)`);
@@ -1727,9 +1736,9 @@ async function namedPaths(
  * the run committed it, a deletion of a file `base` held or a file the run created and later deleted, and a run's
  * ending names again what its checkpoints committed. None where git could not answer.
  */
-async function committedDeletions(top: string, base: string, paths: readonly string[]): Promise<Set<string>> {
+async function committedDeletions(top: string, base: string, paths: readonly string[], verb: string): Promise<Set<string>> {
   if (paths.length === 0) return new Set();
-  const read = await git(top, ["log", "--format=", "--name-only", "-z", "--no-show-signature", ...DIFF_PINS, `${base}..HEAD`, "--", ...paths], CHECKPOINT);
+  const read = await git(top, ["log", "--format=", "--name-only", "-z", "--no-show-signature", ...DIFF_PINS, `${base}..HEAD`, "--", ...paths], verb);
   return namedIn(paths, read.code === 0 ? read.stdout.split("\0").filter((name) => name !== "") : []);
 }
 
@@ -1737,9 +1746,9 @@ async function committedDeletions(top: string, base: string, paths: readonly str
  * The top-relative `paths` whose deletion the index already holds against `HEAD`
  * (`git rm`), as a file or as a folder holding one (review/84). None where git could not answer.
  */
-async function stagedDeletions(top: string, paths: readonly string[]): Promise<Set<string>> {
+async function stagedDeletions(top: string, paths: readonly string[], verb: string): Promise<Set<string>> {
   if (paths.length === 0) return new Set();
-  const read = await git(top, ["diff", "--cached", "--name-only", "-z", "--diff-filter=D", ...DIFF_PINS, "HEAD", "--", ...paths], CHECKPOINT);
+  const read = await git(top, ["diff", "--cached", "--name-only", "-z", "--diff-filter=D", ...DIFF_PINS, "HEAD", "--", ...paths], verb);
   return namedIn(paths, read.code === 0 ? read.stdout.split("\0").filter((name) => name !== "") : []);
 }
 
@@ -1758,9 +1767,9 @@ function namedIn(paths: readonly string[], names: readonly string[]): Set<string
  * one (`git ls-files --cached`): a path the work tree no longer holds stages as
  * its deletion when it is one of these. None where git could not answer.
  */
-async function indexTracked(top: string, paths: readonly string[]): Promise<Set<string>> {
+async function indexTracked(top: string, paths: readonly string[], verb: string): Promise<Set<string>> {
   if (paths.length === 0) return new Set();
-  const read = await git(top, ["ls-files", "-z", "--cached", "--", ...paths], CHECKPOINT);
+  const read = await git(top, ["ls-files", "-z", "--cached", "--", ...paths], verb);
   return namedIn(paths, read.code === 0 ? read.stdout.split("\0").filter((name) => name !== "") : []);
 }
 
@@ -1772,10 +1781,10 @@ async function indexTracked(top: string, paths: readonly string[]): Promise<Set<
  * cannot go after a `--`, where the write runner adds it; each goes as
  * `./<path>`, which no option and no magic starts with.
  */
-async function ignoredPaths(top: string, paths: readonly string[]): Promise<Map<string, string> | null> {
+async function ignoredPaths(top: string, paths: readonly string[], verb: string): Promise<Map<string, string> | null> {
   const ignored = new Map<string, string>();
   if (paths.length === 0) return ignored;
-  const read = await git(top, ["check-ignore", "-v", "--non-matching", ...paths.map((path) => `./${path}`)], CHECKPOINT);
+  const read = await git(top, ["check-ignore", "-v", "--non-matching", ...paths.map((path) => `./${path}`)], verb);
   const rows = read.stdout.split("\n").filter((row) => row !== "");
   if ((read.code !== 0 && read.code !== 1) || rows.length !== paths.length) return null;
   rows.forEach((row, index) => {
@@ -1788,13 +1797,32 @@ async function ignoredPaths(top: string, paths: readonly string[]): Promise<Map<
   return ignored;
 }
 
-/** `git add -- <paths>`, never `-A` or `-f`; false, with the reason in `notDone`, when git refused it. */
-async function add(top: string, paths: readonly string[], notDone: string[]): Promise<boolean> {
+/**
+ * `git add -- <paths>`, never `-A` or `-f`; false, with the reason in `notDone`, when git refused it. review/224: a
+ * path the index tracks as a file goes through `git add -u` instead, which stages it the same way, since a plain `git
+ * add` of a tracked file inside a folder a `.gitignore` folder rule ignores stages it and still exits 1 (measured with
+ * git 2.52). A folder that rule ignores never gets here: `check-ignore` names it first ({@link ignoredPaths}).
+ */
+async function add(top: string, paths: readonly string[], notDone: string[], verb: string): Promise<boolean> {
   if (paths.length === 0) return true;
-  const added = await git(top, ["add", "--", ...paths], CHECKPOINT);
-  if (added.code === 0) return true;
-  notDone.push(`stage failed: git add answered ${added.code}: ${firstLine(added.stderr)}`);
-  return false;
+  const listed = await git(top, ["ls-files", "-z", "--cached", "--", ...paths], verb);
+  if (listed.code !== 0) {
+    notDone.push(`stage failed: git ls-files answered ${listed.code}: ${firstLine(listed.stderr)}`);
+    return false;
+  }
+  const tracked = new Set(listed.stdout.split("\0"));
+  /** One `git add` over `group`, none where it is empty; false, the reason in `notDone`, where git refused it. */
+  const step = async (args: readonly string[], group: readonly string[]): Promise<boolean> => {
+    if (group.length === 0) return true;
+    const added = await git(top, [...args, ...group], verb);
+    if (added.code === 0) return true;
+    notDone.push(`stage failed: git add answered ${added.code}: ${firstLine(added.stderr)}`);
+    return false;
+  };
+  // In turn, never side by side: both take the index lock.
+  return (
+    (await step(["add", "-u", "--"], paths.filter((path) => tracked.has(path)))) && (await step(["add", "--"], paths.filter((path) => !tracked.has(path))))
+  );
 }
 
 /**
@@ -1812,8 +1840,8 @@ function ownPath(own: readonly string[], named: readonly string[]): (path: strin
  * The staged paths (the index against `HEAD`, what the commit takes) that are
  * not the verb's own (`isOwn`, pr/5); `null` when git could not list them.
  */
-async function strayStaged(top: string, isOwn: (path: string) => boolean): Promise<string[] | null> {
-  const read = await git(top, ["diff", "--cached", "--name-only", "-z", ...DIFF_PINS, "HEAD", "--"], CHECKPOINT);
+async function strayStaged(top: string, isOwn: (path: string) => boolean, verb: string): Promise<string[] | null> {
+  const read = await git(top, ["diff", "--cached", "--name-only", "-z", ...DIFF_PINS, "HEAD", "--"], verb);
   if (read.code !== 0) return null;
   return read.stdout
     .split("\0")
@@ -1977,13 +2005,13 @@ async function markerRefusal(top: string, marker: string, verb: string): Promise
  * and the patch a regular file, never through a link. `null` once it is gone
  * or was never there; else the reason, for `notDone`.
  */
-async function removeStalePatch(cwd: string, top: string, heldDir: string, patchFromTop: string): Promise<string | null> {
+async function removeStalePatch(cwd: string, top: string, heldDir: string, patchFromTop: string, verb: string): Promise<string | null> {
   const patch = join(top, patchFromTop);
-  const tracked = await git(top, ["ls-files", "-z", "--cached", "--", patchFromTop], CHECKPOINT);
+  const tracked = await git(top, ["ls-files", "-z", "--cached", "--", patchFromTop], verb);
   if (tracked.code !== 0) return `hold failed: git ls-files answered ${tracked.code}: ${firstLine(tracked.stderr)}`;
   if (tracked.stdout === "" && !isRegular(patch)) return null;
   if (tracked.stdout !== "") {
-    const removed = await git(top, ["rm", "--cached", "--quiet", "--ignore-unmatch", "--", patchFromTop], CHECKPOINT);
+    const removed = await git(top, ["rm", "--cached", "--quiet", "--ignore-unmatch", "--", patchFromTop], verb);
     if (removed.code !== 0) return `hold failed: git rm answered ${removed.code}: ${firstLine(removed.stderr)}`;
   }
   if (!isRegular(patch)) return null;
@@ -2008,11 +2036,25 @@ async function committedPatchPaths(top: string, patchFromTop: string, verb: stri
   if (blob === undefined) return null;
   const file = join(top, patchFromTop);
   let read: GitWriteResult;
+  // review/15: each section's header is checked as carriedSections checks it, before numstat names its paths, so a
+  // section the verb's own diffs never write (no prefix, custom prefixes, a rename) is refused, not listed as held.
+  const foreign = (patch: Buffer): string | null => {
+    const starts = sectionStarts(patch);
+    for (const [index, from] of starts.entries()) {
+      const why = foreignSectionHeader(patch.subarray(from, starts[index + 1] ?? patch.length));
+      if (why !== null) return `hold failed: a section of the kept ${patchFromTop} ${why}`;
+    }
+    return null;
+  };
   if (isRegular(file)) {
+    const refused = foreign(readFileSync(file));
+    if (refused !== null) return refused;
     read = await git(top, ["apply", "--numstat", "-z", file], verb);
   } else {
     const shown = await git(top, ["cat-file", "blob", blob], verb);
     if (shown.code !== 0) return `hold failed: git cat-file answered ${shown.code}: ${firstLine(shown.stderr)}`;
+    const refused = foreign(Buffer.from(shown.stdout, "utf8"));
+    if (refused !== null) return refused;
     read = await git(top, ["apply", "--numstat", "-z"], verb, shown.stdout);
   }
   if (read.code !== 0) return `hold failed: the kept ${patchFromTop} could not be read (git apply answered ${read.code}: ${firstLine(read.stderr)})`;
@@ -2169,6 +2211,26 @@ function noPrefixNames(line: string): boolean {
 }
 
 /**
+ * review/16: whether a `diff --git ` line names one path under two first folders of its own, as git writes it under
+ * `diff.srcPrefix`/`diff.dstPrefix`: two plain names (unquoted, as {@link diffGitNames} reads them), each split at its
+ * first `/`, the rest of each equal and not empty. Read after {@link diffGitNames} gave none, so at least one of those
+ * folders is not a prefix the verb's diffs write. `git apply` sets one folder aside, so a one-folder prefix lands at its
+ * path and a deeper one (`x/z/`) one folder below it; the line cannot tell which was written, so either is refused.
+ * Measured with git 2.52.
+ */
+function customPrefixNames(line: string): boolean {
+  if (!line.startsWith("diff --git ")) return false;
+  const names = line.slice("diff --git ".length);
+  if (!PLAIN_NAMES.test(names)) return false;
+  for (let at = names.indexOf(" "); at !== -1; at = names.indexOf(" ", at + 1)) {
+    const [first, second] = [names.slice(0, at), names.slice(at + 1)];
+    const [cut, cutSecond] = [first.indexOf("/"), second.indexOf("/")];
+    if (cut > 0 && cutSecond > 0 && first.length - cut > 1 && first.slice(cut) === second.slice(cutSecond)) return true;
+  }
+  return false;
+}
+
+/**
  * review/251: why a held patch section is not one the verb's own diffs write, in the words `carriedSections` gives
  * it, or null where it is one. Its header is every line before its first `@@ ` or `GIT binary patch` line, which is as
  * far as `git apply` reads one (a rename line after the `+++` line still renames), a CR before an LF read as part of
@@ -2189,6 +2251,9 @@ function foreignSectionHeader(section: Buffer): string | null {
   }
   const names = diffGitNames(lines[0] ?? "");
   if (names === null && noPrefixNames(lines[0] ?? "")) return "was written with no diff prefix, so git apply would place it one folder off";
+  if (names === null && customPrefixNames(lines[0] ?? "")) {
+    return "was written with diff prefixes other than a/ and b/ (diff.srcPrefix/diff.dstPrefix), so git apply, which sets aside one folder, could place it off its path";
+  }
   if (names === null) {
     return "does not name one path twice on its diff --git line, as every section this verb writes does, so a path git apply moves there would be carried unlisted";
   }
@@ -2268,8 +2333,8 @@ async function workTreeAddition(top: string, path: string, out: string, verb: st
 }
 
 /** The repository's local tag names, read through the write runner; `[]` where git names none. */
-async function localTags(top: string): Promise<string[]> {
-  const read = await git(top, ["for-each-ref", "--format=%(refname:strip=2)", "refs/tags/"], CHECKPOINT);
+async function localTags(top: string, verb: string): Promise<string[]> {
+  const read = await git(top, ["for-each-ref", "--format=%(refname:strip=2)", "refs/tags/"], verb);
   return read.code === 0 ? read.stdout.split(/\r?\n/).filter((name) => name !== "") : [];
 }
 
@@ -2295,6 +2360,8 @@ interface PrInputs {
   /** The record head's `Resumes:` value, as read; only an attended record's is used. */
   resumes: string | null;
   title: string;
+  /** The verb running, `checkpoint` or `end`, which every git call the step makes names (build/105). */
+  verb: string;
 }
 
 /** The morning list a pull request body is made from: its run, and the base its prerequisites are read against. */
@@ -2326,7 +2393,7 @@ interface ListSource {
  */
 async function draftPr(ctx: CliContext, at: PrInputs): Promise<PrStep> {
   const env: NodeJS.ProcessEnv = { ...ctx.app.runtime.env };
-  const origin = await git(at.top, ["remote", "get-url", "origin"], CHECKPOINT);
+  const origin = await git(at.top, ["remote", "get-url", "origin"], at.verb);
   const repo = origin.code === 0 ? resolveRepo(env, origin.stdout.trim()) : null;
   if (repo === null) return { pr: null, inferred: [], notDone: ["draft PR not opened (origin names no GitHub repository gh reaches)"] };
   const target = at.defaults.named;
@@ -2454,7 +2521,7 @@ async function resumedList(ctx: CliContext, at: PrInputs, notDone: string[]): Pr
   }
   const record = readCapped(join(at.cwd, dir, layout.RECORD_FILE), layout.RECORD_HEAD_READ_BYTES);
   const named = record === null ? null : resumeCard.readRecordHead(record.text).base;
-  const base = named === null ? null : await commitAt(at.top, named, CHECKPOINT);
+  const base = named === null ? null : await commitAt(at.top, named, at.verb);
   if (base === null) notDone.push(`prerequisites read since this run's Base: only: ${dir}/${layout.RECORD_FILE} names no Base: that is a commit here`);
   return { run: at.resumes, base: base ?? at.base };
 }

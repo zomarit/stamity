@@ -44,8 +44,12 @@ vi.mock("../../../src/cli/engine/ghRunner.ts", () => ({
   },
 }));
 
-/** Every argument vector the verb gave the write runner. */
-const writes = vi.hoisted(() => ({ argv: [] as string[][] }));
+/**
+ * Every argument vector the verb gave the write runner, and a case's choice of the calls that answer as a failed git.
+ * TEST CHANGE, justified: REQ-FLOW-092 (build/105) — `failing` joins the spy so a case can make one read fail; unset,
+ * as every other case leaves it, each call still goes to the real runner.
+ */
+const writes = vi.hoisted(() => ({ argv: [] as string[][], failing: null as ((args: readonly string[]) => boolean) | null }));
 
 // A spy, not a stand-in: each call is recorded and passed to the real runner,
 // so git still does every write; the record is how the test reads the push
@@ -56,6 +60,9 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
     ...real,
     gitWrite: (cwd: string, args: readonly string[], opts?: Parameters<typeof real.gitWrite>[2]) => {
       writes.argv.push([...args]);
+      // Mock reason (build/105): a read git answers with a failure partway through the verb, after the reads before it
+      // succeeded, cannot be brought about in a scratch repository without breaking those reads too, so a case names it.
+      if (writes.failing?.(args) === true) return Promise.resolve({ code: 128, stdout: "", stderr: "fatal: a stand-in failure" });
       // TEST CHANGE, justified: review/209 refuses a push URL naming no GitHub repository, so origin's push URL is
       // its GitHub URL; for the push call alone an `insteadOf` in the environment (read once, as the call starts)
       // sends it to the case's bare remote, `remote.git` beside the repository the push runs at the top of, so
@@ -125,6 +132,7 @@ describe("stamity run end", () => {
     rest.routes.clear();
     rest.queued.clear();
     writes.argv.length = 0;
+    writes.failing = null;
     rest.routes.set("GET repos/o/r", { status: 200, json: { default_branch: "main" } });
     rest.routes.set("GET repos/o/r/pulls", { status: 200, json: [] });
     rest.routes.set("POST repos/o/r/pulls", { status: 201, json: { number: 7, html_url: "https://github.com/o/r/pull/7" } });
@@ -1194,6 +1202,26 @@ describe("stamity run end", () => {
     expect(doc).toMatchObject({ branch: null, committed: null, pr: null, pushed: false });
     expect(pushes()).toEqual([]);
     expect(writesToGitHub()).toEqual([]);
+  });
+
+  // build/105: the helpers named `checkpoint` in every git call they made, so a failure inside `end` said
+  // `run checkpoint could not`, sending the reader to a verb that never ran.
+  it.each([
+    { read: "the change against Base:", fails: (args: readonly string[]) => args[0] === "diff" && args.includes("--raw") },
+    { read: "the commits the push would send", fails: (args: readonly string[]) => args[0] === "log" && args.includes("--stdin") },
+  ])("names run end, not run checkpoint, where git fails to list $read in an unattended end", async ({ fails }) => {
+    const { repo, remote } = await seed("unattended");
+    await writeFile(join(repo, "a.txt"), "changed\n");
+    writes.failing = fails;
+
+    const { code, stdout, stderr } = await run(repo, [...END("Overnight"), "--paths", "a.txt"]);
+
+    expect(code).toBe(1);
+    expect(`${stdout}\n${stderr}`).toMatch(/run end could not list the /);
+    expect(`${stdout}\n${stderr}`).not.toContain("run checkpoint");
+    expect(pushes()).toEqual([]);
+    expect(writesToGitHub()).toEqual([]);
+    expect(git(remote, ["for-each-ref", "--format=%(refname)", "refs/heads/"])).toBe("");
   });
 
   // review/17 (REQ-FLOW-122): the skill calls `end` with --json, which silences the text line, so the JSON names

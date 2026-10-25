@@ -1159,8 +1159,16 @@ describe("stamity run checkpoint", () => {
       expect(argv.some((arg) => /\bmain\b|--force|--tags|^-f$/.test(arg) || arg === "--")).toBe(false);
     }
     // Every path the verb staged went after a `--`, plain: the runner adds the magic.
+    // TEST CHANGE, justified: REQ-FLOW-092 (review/224) — a path the index tracks now stages through `git add -u`, so
+    // `-u` is the one option allowed before the `--`; never -A or -f, and every path still goes after it, plain.
     const adds = writes.argv.filter((argv) => argv[0] === "add");
-    expect(adds.every((argv) => argv[1] === "--" && argv.slice(2).every((path) => !path.startsWith(":")))).toBe(true);
+    expect(adds.length).toBeGreaterThan(0);
+    expect(
+      adds.every((argv) => {
+        const at = argv.indexOf("--");
+        return at !== -1 && argv.slice(1, at).every((option) => option === "-u") && argv.slice(at + 1).every((path) => !path.startsWith(":"));
+      }),
+    ).toBe(true);
   });
 
   it("stages a glob-shaped --paths entry as that file alone, and the pre-commit hook still matches its own globs", async () => {
@@ -1193,6 +1201,23 @@ describe("stamity run checkpoint", () => {
     expect(doc["notDone"]).toEqual([`records: not committed (${RUN_DIR}/record.md: .gitignore:1 .stamity/runs/)`]);
     expect(pushedTree(remote)).not.toContain(`${RUN_DIR}/record.md`);
     expect(pushedTree(remote)).toContain("a.txt");
+  });
+
+  // review/224: check-ignore reads the ignore rules, and a file the index tracks inside a folder those rules ignore
+  // must still stage and push as the edit it is, never be named as an ignored record.
+  it("stages and pushes an edit to a tracked file inside a folder .gitignore ignores, naming it nowhere as ignored (review/224)", async () => {
+    const { repo, remote } = await seed("attended", { files: { ".gitignore": "vendor/\n" } });
+    // Tracked before the ignore rule reads it: forced into the index and committed, as a vendored file is.
+    await put(repo, "vendor/lib.txt", "vendored\n");
+    git(repo, ["add", "-f", "--", "vendor/lib.txt"]);
+    git(repo, ["commit", "-q", "-m", "vendor a file"]);
+    await writeFile(join(repo, "vendor/lib.txt"), "patched\n");
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "vendor/lib.txt"]);
+
+    expect(doc).toMatchObject({ pushed: true, notDone: [] });
+    expect(code).toBe(0);
+    expect(pushedFile(remote, "vendor/lib.txt")).toBe("patched");
   });
 
   it("stages a learning file the close captured when --paths names it (review/146)", async () => {
@@ -2299,6 +2324,25 @@ describe("stamity run checkpoint", () => {
       expect(started.code).toBe(2);
       expect(started.stderr).toContain("--drop-held does not apply to start");
     });
+
+    // review/14: an attended run writes no held patch, so --drop-held was read nowhere and the verb exited 0 as if the
+    // withdrawal had happened.
+    it("refuses --drop-held in an attended run with exit 1, naming why, committing and pushing nothing", async () => {
+      const { repo, remote } = await seed("attended");
+      await writeFile(join(repo, "a.txt"), "changed\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt", "--drop-held", ".cursorrules"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({
+        committed: null,
+        pushed: false,
+        withdrawn: [],
+        notDone: ["not withdrawn: --drop-held reads only in an unattended run, where the held patch is written"],
+      });
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
   });
 
   // review/6 (signed off): a run continued on a fresh clone (REQ-FLOW-105) holds Base:'s bytes at every held path, its
@@ -2755,6 +2799,58 @@ describe("stamity run checkpoint", () => {
       expect(git(clone, ["rev-parse", "HEAD"])).toBe(before);
     });
 
+    // review/16: a section under diff.srcPrefix/diff.dstPrefix fell through both name reads to the generic refusal,
+    // which named no setting, so the reader could not tell which configuration wrote it.
+    it("refuses a committed patch's section written with two custom diff prefixes, naming the prefix settings (review/16)", async () => {
+      const section = "diff --git x/.github/workflows/y.yml y/.github/workflows/y.yml\nnew file mode 100644\n--- /dev/null\n+++ y/.github/workflows/y.yml\n@@ -0,0 +1 @@\n+on: push\n";
+      const { clone, before, outcome } = await steeredClone(section, true);
+
+      expect(outcome.code).toBe(1);
+      expect(outcome.doc).toMatchObject({
+        pushed: false,
+        notDone: [
+          `hold failed: a section of the kept ${PATCH} was written with diff prefixes other than a/ and b/ (diff.srcPrefix/diff.dstPrefix), so git apply, which sets aside one folder, could place it off its path`,
+        ],
+      });
+      expect(git(clone, ["rev-parse", "HEAD"])).toBe(before);
+    });
+
+    // review/15: where the fresh clone holds no new held change, the kept patch's paths came from git apply --numstat
+    // alone, with no header check, so a no-prefix section was listed as held one folder off its path and pushed.
+    it.each([
+      {
+        where: "a no-prefix section below a folder",
+        section: "diff --git .github/workflows/y.yml .github/workflows/y.yml\nnew file mode 100644\n--- /dev/null\n+++ .github/workflows/y.yml\n@@ -0,0 +1 @@\n+on: push\n",
+        why: "was written with no diff prefix, so git apply would place it one folder off",
+      },
+      {
+        where: "a no-prefix section at the top",
+        section: "diff --git .cursorrules .cursorrules\n--- .cursorrules\n+++ .cursorrules\n@@ -1 +1 @@\n-.cursorrules\n+steered\n",
+        why: "was written with no diff prefix, so git apply would place it one folder off",
+      },
+      {
+        where: "a renaming section",
+        section: "diff --git a/a.txt b/.github/workflows/y.yml\nsimilarity index 100%\nrename from a.txt\nrename to .github/workflows/y.yml\n",
+        why: "renames or copies a path, and git apply --numstat names only its new one, so the path it moves or reads from would be carried unlisted",
+      },
+    ])("refuses $where in a kept patch where the clone holds no new held change (review/15)", async ({ section, why }) => {
+      const { repo, remote } = await seed("unattended");
+      await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+      expect((await run(repo, CHECKPOINT)).code).toBe(0);
+      const clone = await cloneRun(repo, remote);
+      await appendFile(join(clone, PATCH), section);
+      git(clone, ["commit", "-q", "-m", "steered patch", "--", PATCH]);
+      const before = git(clone, ["rev-parse", "HEAD"]);
+      const pushedBefore = pushedBytes(remote);
+
+      const { code, doc } = await run(clone, CHECKPOINT);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false, notDone: [`hold failed: a section of the kept ${PATCH} ${why}`] });
+      expect(git(clone, ["rev-parse", "HEAD"])).toBe(before);
+      expect(pushedBytes(remote).equals(pushedBefore)).toBe(true);
+    });
+
     // review/251: a checkout under core.autocrlf (Git for Windows' default) leaves the work tree's copy of the committed
     // patch with CRLF line ends, which the verb's git add turns back to LF; the header read takes CR LF as a line end.
     it("carries a section whose work-tree copy has CRLF line ends, as an autocrlf checkout leaves it (review/251)", async () => {
@@ -2911,6 +3007,39 @@ describe("stamity run checkpoint", () => {
 
     expect(code).toBe(0);
     expect(doc["held"]).toEqual([".cursor"]);
+  });
+
+  // review/167, the pin it asked for: a link standing where the client reads its hook scripts is held, not pushed, so
+  // a run cannot point the next session's hooks at a folder of its own choosing.
+  it.skipIf(process.platform === "win32")("holds a link at .claude/hooks out of an unattended push, in the patch (review/167)", async () => {
+    const { repo, remote } = await seed("unattended");
+    await put(repo, "cfg/guard.mjs", "guard\n");
+    await mkdir(join(repo, ".claude"), { recursive: true });
+    await symlink("../cfg", join(repo, ".claude", "hooks"));
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "cfg", ".claude/hooks"]);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ pushed: true, notDone: [], held: [".claude/hooks"] });
+    expect(pushedTree(remote)).not.toContain(".claude/hooks");
+    expect(pushedTree(remote)).toEqual(expect.arrayContaining(["cfg/guard.mjs", PATCH]));
+    expect(await readFile(join(repo, PATCH), "utf8")).toContain("diff --git a/.claude/hooks b/.claude/hooks\nnew file mode 120000");
+  });
+
+  // build/103 (2026-10-18_cloud-runs-2): a staged folder holding `.git` goes in as a gitlink, which the real run holds
+  // as a link at a held prefix (review/195), while the dry run read it as a plain folder and listed it as not held.
+  it("lists a nested repository a dry run would stage at a held prefix in would hold (build/103)", async () => {
+    const { repo } = await seed("unattended");
+    const nested = join(repo, ".cursor");
+    await put(repo, ".cursor/hooks.json", "{}\n");
+    git(nested, ["-c", "init.defaultBranch=main", "init", "-q"]);
+    git(nested, ["add", "hooks.json"]);
+    git(nested, ["commit", "-q", "-m", "nested"]);
+
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--dry-run", "--paths", ".cursor"]);
+
+    expect(code).toBe(0);
+    expect(doc).toMatchObject({ dryRun: true, held: [".cursor"] });
   });
 
   it.skipIf(process.platform === "win32")("refuses the push when a commit it would send retypes a file to a link at a held prefix (review/200)", async () => {
@@ -3217,6 +3346,25 @@ describe("stamity run checkpoint", () => {
 
       expect(code).toBe(1);
       expect(doc["notDone"]).toEqual([`commit refused: the branch name ${NESTED} holds characters the push check does not read`]);
+      expect(table.commands).toEqual([]);
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    // review/40, closed as rejected with this pin: quoting the push line's refspec would change no outcome, since a
+    // branch name holding a shell character the line could expand is refused by name before the verdict reads it.
+    it.each([
+      { character: "a parenthesis", branch: "stamity/x(y)" },
+      { character: "a dollar sign", branch: "stamity/x$y" },
+      { character: "a backtick", branch: "stamity/x`y" },
+    ])("refuses the commit by name, before the verdict runs, on a branch whose name holds $character (review/40)", async ({ branch }) => {
+      const { repo, remote } = await seed("attended", { branch });
+      await writeFile(join(repo, "a.txt"), "changed\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ committed: null, notDone: [`commit refused: the branch name ${branch} holds characters the push check does not read`] });
       expect(table.commands).toEqual([]);
       expect(pushes()).toEqual([]);
       expect(remoteHeads(remote)).toEqual(SEEDED);
