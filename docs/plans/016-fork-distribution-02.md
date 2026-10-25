@@ -6,6 +6,10 @@ reads: [.apm/agents/stamity-implementer.agent.md, .apm/agents/stamity-test-runne
 depends_on: [docs/plans/016-fork-distribution-00.md, docs/plans/016-fork-distribution-01.md]
 ---
 
+> **Replaced 2026-10-23** by plan 022 (`docs/plans/022-autonomy-distribution-01.md`, `-02.md`), re-researched against
+> `main` `f9abc9c6`: this file's freshness guard failed on most paths, and its APM and plugin units left with 1.15.0. Its
+> still-needed CLI units are file 2 of plan 022; nothing here runs.
+
 # Fork and distribution polish — file 2 of 4: the three routes
 
 This file is self-contained. It is the third of four `/st-plan` artifacts for **Package 20** (stamity's fork support

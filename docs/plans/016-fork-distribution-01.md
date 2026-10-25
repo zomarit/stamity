@@ -6,6 +6,10 @@ reads: [.github/dependabot.yml, .github/workflows/ci.yml, .github/workflows/fork
 depends_on: [docs/plans/014-lean-repository-02.md, docs/plans/016-fork-distribution-00.md]
 ---
 
+> **Replaced 2026-10-23** by plan 022 (`docs/plans/022-autonomy-distribution-01.md`, `-02.md`), re-researched against
+> `main` `f9abc9c6`: this file's freshness guard failed on most paths. Its still-needed units are file 2 of plan 022,
+> its second tier sits on plan 022's follow-ups and drop list; nothing here runs.
+
 # Fork and distribution polish — file 1 of 4: fork correctness and the round trip
 
 This file is self-contained. It is the second of four `/st-plan` artifacts for **Package 20**, which makes stamity's
