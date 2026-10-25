@@ -475,18 +475,25 @@ describe("the 1.11.0 pack upgrade on Claude, by the remedy the sync refusal prin
     CASE_TIMEOUT,
   );
 
+  // TEST CHANGE, justified: build/3 — a pack's own synced copy no longer refuses its re-add;
+  // the left-behind check still does (REQ-FLOW-034). The case was "…is refused on its client
+  // copies…" and pinned the path-collision refusal and its `pack "<id>" is installed` span. The
+  // add still exits 1 with the same four commands in the same order and the same step by hand,
+  // and the remedy still runs to a green `check`; the refusal is now the 1.11.0 files this
+  // version drops, so the title, the refusal text and the line the steps are read from moved.
   it(
-    "add over the installed 1.11.0 pack is refused on its client copies, and the installed-state remedy runs to exit 0 (review/57)",
+    "add over the installed 1.11.0 pack is refused on the files this version leaves behind, and the installed-state remedy runs to exit 0 (review/57, build/3)",
     async () => {
       const repo = await syncedAt1110("collision-installed");
 
       const refused = await cli(repo, ["add", PACK, "-y"]);
       expect(refused.code, `add over the synced old pack must refuse — ${said(refused)}`).toBe(1);
-      expect(refused.output).toContain("path(s) it would write are not free");
-      expect(refused.output).toContain(`pack "${PACK}" is installed: to replace it`);
+      expect(refused.output).toContain("file(s) of the installed copy would be left behind");
+      expect(refused.output).not.toContain("path(s) it would write are not free");
 
-      const steps = collisionVerbs(refused.output, PACK);
-      expect(steps, `the collision refusal's printed remedy — ${said(refused)}`).toEqual([
+      const next = refused.output.split("\n").find((text) => text.trimStart().startsWith("next: run `"));
+      const steps = quotedVerbs(next ?? "");
+      expect(steps, `the left-behind refusal's printed remedy — ${said(refused)}`).toEqual([
         `clean --pack ${PACK}`,
         "sync",
         `add ${PACK}`,

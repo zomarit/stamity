@@ -864,17 +864,16 @@ async function collectCollisions(
       );
     }
     const plannedKey = plannedIds.get(entry.relPath);
-    // An override of this pack's own artifact is no shadow on a re-add (fix/2).
+    // An id this pack's own copy already holds is no shadow on a re-add (fix/2, build/3).
     const catalogKey =
-      plannedKey !== undefined && overridesOwnCopy(layers, packId, plannedKey) ? undefined : plannedKey;
+      plannedKey !== undefined && heldByOwnCopy(layers, packId, plannedKey) ? undefined : plannedKey;
     const idOwner = catalogKey === undefined ? undefined : claimedIds.get(catalogKey);
     const holder = catalogKey === undefined ? undefined : heldIdOwnerOf(layers, catalogKey);
     if (catalogKey !== undefined && idOwner !== undefined) {
       const [type = "", id = ""] = splitKey(catalogKey);
       // A row whose id no existing layer holds is a client copy only — left by
-      // an earlier `sync` or `clean --pack`, or projected from this pack's own
-      // installed copy — and `sync` settles it, so its line takes the paths
-      // remedy rather than the id one ({@link isIdCollision}).
+      // an earlier `sync` or `clean --pack` — and `sync` settles it, so its
+      // line takes the paths remedy rather than the id one ({@link isIdCollision}).
       collisions.add(
         holder === undefined
           ? `${entry.relPath}: ${type} id "${id}" is still claimed by the client copy ` +
@@ -916,21 +915,22 @@ interface ExistingLayers {
   /**
    * This pack's own installed copy, walked as `shipped` walks the others, on a
    * re-add only (fix/2): the ledger records the pack and its directory is on
-   * disk. Empty on a first install. Read by {@link overridesOwnCopy}.
+   * disk. Empty on a first install. Read by {@link heldByOwnCopy}.
    */
   ownCopy: ContentIndex;
 }
 
 /**
- * True when the id `key` is held by the repo's override layer alone and this
- * pack's installed copy holds it too (fix/2): the operator overrode the pack's
- * own artifact, and the override's synced client copy is the row that claims
- * the id. The user layer outranks a pack in `sync`'s walk, so a re-add keeps
- * the override on top and is no shadow. An id the old copy lacks (a new
- * version bringing it) and an id a first install brings stay refused.
+ * True when this pack's installed copy holds the id `key` and no shipped layer
+ * does, so a re-add brings no id the repo did not already take from this pack.
+ * The row that claims the id is then the pack's own synced client copy (build/3),
+ * or an override of the pack's artifact and that override's copy (fix/2): the
+ * user layer outranks a pack in `sync`'s walk, so the override stays on top.
+ * An id the core, the fork or another pack holds, an id the old copy lacks (a
+ * new version bringing it) and an id a first install brings stay refused.
  */
-function overridesOwnCopy(layers: ExistingLayers, packId: string, key: string): boolean {
-  if (layers.shipped.byKey.has(key) || !layers.overrides.byKey.has(key)) return false;
+function heldByOwnCopy(layers: ExistingLayers, packId: string, key: string): boolean {
+  if (layers.shipped.byKey.has(key)) return false;
   return layers.ownCopy.byKey.get(key)?.provenance?.pack === packId;
 }
 

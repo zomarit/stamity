@@ -1449,8 +1449,8 @@ describe("add — collisions", () => {
     // fix/2: the override of a pack's own agent is a ledger row after the next
     // sync, and `add` read that id as one another layer holds, so a re-add of
     // the same pack was refused against the operator's own customization. The
-    // pack ships the agent alone: a synced item nobody overrode is a client
-    // copy, whose line keeps the replace order (`clean --pack` first).
+    // pack ships the agent alone; a synced item nobody overrode is the build/3
+    // case below.
     await initProject();
     await seedPack({ content: { "agents/reviewer.md": AGENT_BODY } });
     expect((await run(installArgs())).code).toBe(0);
@@ -1471,6 +1471,71 @@ describe("add — collisions", () => {
     expect(resynced.code, resynced.stderr).toBe(0);
 
     expect(await readFile(agentPath, "utf8")).toBe(overriddenBytes);
+  });
+
+  it("re-adding a synced pack nobody overrode is not refused by its own client copies (build/3)", async () => {
+    // build/3: after a `sync`, each of the pack's items is a client copy with a ledger row
+    // of its own, and `add` read those rows as ids another layer holds — so the `add <id>`
+    // remedy `check` and `upgrade` print refused in every synced setup.
+    await initProject();
+    await seedPack();
+    expect((await run(installArgs())).code).toBe(0);
+    const synced = await runInProcess([syncCommand], ["sync"], { cwd: getProject().dir });
+    expect(synced.code, synced.stderr).toBe(0);
+    const copies = (await readProjectManifest()).ledger.filter(
+      (row) =>
+        (row.artifactType === "agent" && row.artifactId === "acme-reviewer") ||
+        (row.artifactType === "rule" && row.artifactId === "naming"),
+    );
+    // Both items are synced client copies, so both ids are claimed by a row the pack does not own.
+    expect(new Set(copies.map((row) => row.artifactType))).toEqual(new Set(["agent", "rule"]));
+    expect(copies.every((row) => row.adapter === "claude")).toBe(true);
+    const copyBytes = await Promise.all(copies.map((row) => readFile(getProject().path(row.path), "utf8")));
+
+    const readd = await run(installArgs("--json"));
+    expect(readd.code, `${readd.stdout}\n${readd.stderr}`).toBe(0);
+    expect((parseDoc(readd.stdout).planned as { collisions: string[] }).collisions).toEqual([]);
+    const resynced = await runInProcess([syncCommand], ["sync"], { cwd: getProject().dir });
+    expect(resynced.code, resynced.stderr).toBe(0);
+
+    expect(
+      await Promise.all(copies.map((row) => readFile(getProject().path(row.path), "utf8"))),
+    ).toEqual(copyBytes);
+  });
+
+  it("still refuses a re-add of a synced pack when another installed pack's copy holds its id (build/3)", async () => {
+    await initProject();
+    await seedPack();
+    expect((await run(installArgs())).code).toBe(0);
+    const other = AGENT_BODY.replace("id: acme-reviewer", "id: acme-other");
+    await getProject().seedFiles({
+      "packs/two/agents/other.md": other,
+      [`packs/two/${PACK_MANIFEST_FILE}`]: JSON.stringify({
+        name: "acme-two",
+        version: "1.0.0",
+        integrity: { "agents/other.md": digest(other) },
+        declaredTools: ["claude"],
+      }),
+    });
+    const second = await runInProcess([addCommand], ["add", "./packs/two", "--allow-untrusted"], {
+      cwd: getProject().dir,
+    });
+    expect(second.code, second.stderr).toBe(0);
+    const synced = await runInProcess([syncCommand], ["sync"], { cwd: getProject().dir });
+    expect(synced.code, synced.stderr).toBe(0);
+    // The second pack's installed copy now declares the first pack's agent id, so the
+    // first pack's own copy is no longer the only layer that holds it.
+    await writeFile(getProject().path(".stamity/packs/acme-two/agents/other.md"), AGENT_BODY);
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).toBe(1);
+    const collisions = (parseDoc(result.stdout).planned as { collisions: string[] }).collisions;
+    expect(collisions).toHaveLength(1);
+    expect(collisions[0]).toContain(
+      'agent id "acme-reviewer" is already owned by acme-two/agents/other.md at .stamity/packs/acme-two/agents/other.md',
+    );
+    expect(collisions[0]).toContain("installing it would shadow content this repo already has");
   });
 
   it("still refuses a first install whose agent id an override already holds (fix/2 widens only the re-add)", async () => {
