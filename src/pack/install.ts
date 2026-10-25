@@ -863,7 +863,10 @@ async function collectCollisions(
         `${entry.targetPath}: the ledger already assigns this path to ${pathOwner.artifactId}`,
       );
     }
-    const catalogKey = plannedIds.get(entry.relPath);
+    const plannedKey = plannedIds.get(entry.relPath);
+    // An override of this pack's own artifact is no shadow on a re-add (fix/2).
+    const catalogKey =
+      plannedKey !== undefined && overridesOwnCopy(layers, packId, plannedKey) ? undefined : plannedKey;
     const idOwner = catalogKey === undefined ? undefined : claimedIds.get(catalogKey);
     const holder = catalogKey === undefined ? undefined : heldIdOwnerOf(layers, catalogKey);
     if (catalogKey !== undefined && idOwner !== undefined) {
@@ -910,6 +913,25 @@ interface ExistingLayers {
   overrides: ContentIndex;
   /** The other installed packs whose directories `shipped` walked, by pack id. */
   indexedPacks: ReadonlySet<string>;
+  /**
+   * This pack's own installed copy, walked as `shipped` walks the others, on a
+   * re-add only (fix/2): the ledger records the pack and its directory is on
+   * disk. Empty on a first install. Read by {@link overridesOwnCopy}.
+   */
+  ownCopy: ContentIndex;
+}
+
+/**
+ * True when the id `key` is held by the repo's override layer alone and this
+ * pack's installed copy holds it too (fix/2): the operator overrode the pack's
+ * own artifact, and the override's synced client copy is the row that claims
+ * the id. The user layer outranks a pack in `sync`'s walk, so a re-add keeps
+ * the override on top and is no shadow. An id the old copy lacks (a new
+ * version bringing it) and an id a first install brings stay refused.
+ */
+function overridesOwnCopy(layers: ExistingLayers, packId: string, key: string): boolean {
+  if (layers.shipped.byKey.has(key) || !layers.overrides.byKey.has(key)) return false;
+  return layers.ownCopy.byKey.get(key)?.provenance?.pack === packId;
 }
 
 /**
@@ -957,11 +979,18 @@ async function readExistingLayers(
   // for one of the incoming pack's artifacts would be refused there as an
   // orphan. An overlay patches and never names, so the override tree is read
   // for its full artifacts alone (a pinned root walks no overlay).
-  const [shipped, overrides] = await Promise.all([
+  // This pack's own copy, on a re-add: the same walk over its directory alone.
+  const ownRoot = underRoot(rootDir, packLedgerRelPath(packId));
+  const recorded = (projectManifest?.ledger ?? []).some((entry) => isOwnedByPack(entry, owner));
+  const ownRoots = recorded && (await pathExists(ownRoot)) ? [{ pack: packId, root: ownRoot }] : [];
+  const [shipped, overrides, ownCopy] = await Promise.all([
     buildContentIndex({ packRoots: others }),
     buildContentIndex({ root: userContentRoot(rootDir) }),
+    ownRoots.length === 0
+      ? Promise.resolve<ContentIndex>({ items: [], byKey: new Map(), collisions: [] })
+      : buildContentIndex({ packRoots: ownRoots }),
   ]);
-  return { shipped, overrides, indexedPacks: new Set(others.map((other) => other.pack)) };
+  return { shipped, overrides, indexedPacks: new Set(others.map((other) => other.pack)), ownCopy };
 }
 
 /**

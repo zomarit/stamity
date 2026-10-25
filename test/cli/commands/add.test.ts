@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addCommand, resolveSpecThroughCatalog, retiredPackRefusal } from "../../../src/cli/commands/add.ts";
 import { cleanCommand } from "../../../src/cli/commands/clean.ts";
+import { syncCommand } from "../../../src/cli/commands/sync.ts";
 import type { CommandModule } from "../../../src/cli/kit/program.ts";
 import { estimateTokens } from "../../../src/guard/tokenEstimate.ts";
 import { createManifest, readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
@@ -155,6 +156,12 @@ tools:
 ---
 Review the change and report findings.
 `;
+
+/** The operator's override of the fixture agent: the same id, its own body (fix/2). */
+const OVERRIDDEN_AGENT_BODY = AGENT_BODY.replace(
+  "Review the change and report findings.",
+  "Review the change our way, and report findings.",
+);
 
 const RULE_BODY = `---
 id: naming
@@ -1436,6 +1443,64 @@ describe("add — collisions", () => {
     expect(rows.map((row) => row.path).toSorted()).toEqual([...writtenOf(doc)].toSorted());
     // Idempotent: the second install replaced the rows rather than doubling them.
     expect(rows).toHaveLength(3);
+  });
+
+  it("re-adding a pack whose agent the operator overrode keeps the override on top (fix/2)", async () => {
+    // fix/2: the override of a pack's own agent is a ledger row after the next
+    // sync, and `add` read that id as one another layer holds, so a re-add of
+    // the same pack was refused against the operator's own customization. The
+    // pack ships the agent alone: a synced item nobody overrode is a client
+    // copy, whose line keeps the replace order (`clean --pack` first).
+    await initProject();
+    await seedPack({ content: { "agents/reviewer.md": AGENT_BODY } });
+    expect((await run(installArgs())).code).toBe(0);
+    await getProject().seedFiles({ ".stamity/overrides/agents/reviewer.md": OVERRIDDEN_AGENT_BODY });
+    const synced = await runInProcess([syncCommand], ["sync"], { cwd: getProject().dir });
+    expect(synced.code, synced.stderr).toBe(0);
+    const agentRow = (await readProjectManifest()).ledger.find(
+      (row) => row.artifactType === "agent" && row.artifactId === "acme-reviewer",
+    );
+    expect(agentRow?.adapter).toBe("claude");
+    const agentPath = getProject().path(agentRow?.path ?? "missing");
+    const overriddenBytes = await readFile(agentPath, "utf8");
+    expect(overriddenBytes).toContain("Review the change our way");
+
+    const readd = await run(installArgs());
+    expect(readd.code, `${readd.stdout}\n${readd.stderr}`).toBe(0);
+    const resynced = await runInProcess([syncCommand], ["sync"], { cwd: getProject().dir });
+    expect(resynced.code, resynced.stderr).toBe(0);
+
+    expect(await readFile(agentPath, "utf8")).toBe(overriddenBytes);
+  });
+
+  it("still refuses a first install whose agent id an override already holds (fix/2 widens only the re-add)", async () => {
+    await initProject();
+    await getProject().seedFiles({ ".stamity/overrides/agents/reviewer.md": OVERRIDDEN_AGENT_BODY });
+    await seedPack({ content: { "agents/reviewer.md": AGENT_BODY } });
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).toBe(1);
+    const [line] = (parseDoc(result.stdout).planned as { collisions: string[] }).collisions;
+    expect(line).toContain('agent id "acme-reviewer" is already held by your override at ');
+  });
+
+  it("still refuses a re-add whose new version brings an id the old copy lacks and an override holds", async () => {
+    await initProject();
+    await seedPack({ content: { "agents/reviewer.md": AGENT_BODY } });
+    expect((await run(installArgs())).code).toBe(0);
+    const newAgent = AGENT_BODY.replace("id: acme-reviewer", "id: acme-auditor");
+    await getProject().seedFiles({
+      ".stamity/overrides/agents/auditor.md": newAgent.replace("Review the change", "Audit it our way"),
+    });
+    await seedPack({ content: { "agents/reviewer.md": AGENT_BODY, "agents/auditor.md": newAgent } });
+
+    const result = await run(installArgs("--json"));
+
+    expect(result.code).toBe(1);
+    const collisions = (parseDoc(result.stdout).planned as { collisions: string[] }).collisions;
+    expect(collisions).toHaveLength(1);
+    expect(collisions[0]).toContain('agent id "acme-auditor" is already held by your override at ');
   });
 
   it("refuses instructively when the pack's files outlive their ledger rows", async () => {
