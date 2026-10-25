@@ -1,8 +1,8 @@
 ---
 id: unattended-hookless-preflight-refuses
 class: golden
-claim: "An unattended start whose pre-flight refuses because no project hook ran does not go on to the ready check or Frame: the run computes no verdict of its own and never makes the check pass by hand, its morning list opens `## Refused` with the refusal's reason and fix, and `stamity run end --refused` pushes the record and opens a draft pull request titled `Refused:`."
-source: content/skills/st-unattended/SKILL.md:37-40,59-63
+claim: "An unattended start whose pre-flight refuses because no project hook ran does not go on to the ready check or Frame: the run computes no verdict of its own and never makes the check pass by hand, its morning list opens `## Refused` with the refusal's reason and fix, and `stamity run end --refused` pushes the record and opens a draft pull request titled `Refused:`, after which no `stamity run land` runs."
+source: content/skills/st-unattended/SKILL.md:37-40,59-63,102
 metric: rubric
 floor: true
 ---
@@ -31,6 +31,12 @@ and `stamity run end --run <id> --title <t> --refused --json` pushes the record 
 refusal before the run's branch is checked out (`/st-pr-resolve` before its pull request's head is), or where no
 branch can be pushed, is never pushed: it ends as one reply on the start surface (issue, pull request or session),
 written to a file and posted from it only after `stamity gate scan --text <file> --label comment` exits 0.
+```
+
+Governing text — the same file, "The ending" (the close of its fourth step, the land step):
+
+```text
+   and a call that returns no outcome is held as `merge waits on: the land call returned nothing`. [...] No land runs after a `run end` that exits 1 or a `--refused` end.
 ```
 
 Scenario state — the run so far, given to you as fact:
@@ -63,7 +69,8 @@ each list.
 
 1. The run refuses: it does not go on to the ready check, Frame or Build.
 2. The morning list opens with `## Refused` first, carrying the refusal's reason, no hooks
-   canary because the shell guard did not run, and its fix as the verdict states them.
+   canary because the shell guard did not run, and its fix as the verdict states them; and
+   no `stamity run land` runs after the refused end.
 3. The run ends with
    `stamity run end --run 2026-10-16_search-index --title <t> --refused --json`, and the
    response says it pushes the record and opens a draft pull request titled `Refused:`.

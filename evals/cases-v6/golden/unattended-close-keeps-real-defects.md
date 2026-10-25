@@ -99,10 +99,10 @@ Scenario state — the run so far, given to you as fact:
 > This is an unattended run with no operator present: `/st-work` run
 > `2026-10-07_refund-cap`, at its close, its record's head reading `Mode: unattended`; the
 > run follows the `st-unattended` skill. The gates are green. Every QA row is auto-proven
-> and the plan carries no spec delta, so the close's parts are the commit and the leftovers.
-> Under that mode the close asks nothing: no question is put, the leftovers take the
-> no-answer rule, and the commit part is the run's ending through `stamity run end`, which
-> this answer does not need to write.
+> and the plan carries no spec delta, so the close's one part is the leftovers; the commit is
+> no ask. Under that mode the close asks nothing: no question is put, the leftovers take the
+> no-answer rule, and the commit and the land step are the run's ending (`run end`, then
+> `run land`), which this answer does not need to write.
 > The run's ledger, `.stamity/runs/2026-10-07_refund-cap/ledger.jsonl`, holds two rows that
 > are neither fixed nor rejected:
 >   `2026-10-07_refund-cap/review/2` — Critical, `src/billing/refund.ts:88`, state

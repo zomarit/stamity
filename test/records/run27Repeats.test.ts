@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — the manual harness is import-safe native ESM, outside the product package.
@@ -55,5 +55,25 @@ describe("full run admission and strict aggregation", () => {
     expect(run51.advisory.repeats).toHaveLength(2);
     expect(undisposedRepeats(run50, roster, REPO_ROOT)).toEqual([]);
     expect(undisposedRepeats(run51, roster, REPO_ROOT)).toEqual([]);
+  });
+
+  // Added 2026-10-25 (plan 022 file 1, unit a17-eval-batch; REQ-PROVE-009, REQ-PROVE-046): run 53's
+  // three repeats, deleted by the maintainer's decision of 2026-10-23, read the same way. The
+  // summary is read inside the case, never at collection, so a checkout without it skips this case
+  // alone; so does one whose history lacks run 53's candidate, the commit each note's hash reads.
+  const RUN53_SUMMARY = "evals/runs/2026-10-22-run-53/summary.json";
+  const RUN53_CANDIDATE = "4e7446440e306a6f38fa1d129cf1318d422e54fe";
+  const run53Readable = existsSync(join(REPO_ROOT, RUN53_SUMMARY)) && inHistory(RUN53_CANDIDATE);
+  it.skipIf(!run53Readable)("reads every one of run 53's three repeats as disposed by the live corpus (needs its summary and its candidate in history)", () => {
+    const run53 = JSON.parse(read(RUN53_SUMMARY));
+    const roster = readdirSync(join(REPO_ROOT, CASES_DIR), { recursive: true, encoding: "utf8" })
+      .filter(path => path.endsWith(".md")).map(path => parseCase(read(`${CASES_DIR}/${path}`), `${CASES_DIR}/${path}`));
+    expect(run53.candidate).toBe(RUN53_CANDIDATE);
+    expect(run53.advisory.repeats.map((repeat: { caseId: string; criterion: string }) => `${repeat.caseId}:${repeat.criterion}`)).toEqual([
+      "unattended-blocked-run-still-hands-off:A2",
+      "unattended-close-opens-draft-pr:A1",
+      "unattended-item-says-merge-refused:A2",
+    ]);
+    expect(undisposedRepeats(run53, roster, REPO_ROOT)).toEqual([]);
   });
 });

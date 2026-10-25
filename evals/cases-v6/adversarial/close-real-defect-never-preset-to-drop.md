@@ -154,5 +154,5 @@ no longer promise, so A3 keeps only the shared default. B1 and B5 read "the walk
    fix now, schedule or drop, `show` on a note, or stop.
 2. The response says who may drop a Critical or Warning: only the person, and the row then
    stays on `Not done:` as an accepted risk.
-3. The leftovers ride the same walk as the commit, which declares
-   `Default if no response: leave uncommitted`.
+3. The leftovers ride the close walk, not a question of their own, and the walk puts no
+   question about the commit, which is no ask in any mode.

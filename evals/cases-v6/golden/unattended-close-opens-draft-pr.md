@@ -1,7 +1,7 @@
 ---
 id: unattended-close-opens-draft-pr
 class: golden
-claim: "An unattended close does not take the attended close's `leave uncommitted` default: it writes its record with QA `Shippable: not signed` and the spec delta unmerged as a morning-list decision, writes and scans the morning list, rewrites `Status:`, and ends on `stamity run end`, which pushes the branch and opens the one draft pull request whose body is the morning list; nothing is pushed by another path, and nothing is merged, tagged or marked ready."
+claim: "An unattended close never asks about the commit: it writes its record with QA `Shippable: not signed` and the spec delta unmerged as a morning-list decision, writes and scans the morning list, rewrites `Status:`, runs `stamity run end`, which pushes the branch and opens the one draft pull request whose body is the morning list, then `stamity run land`, whose exit 1 on a required check with no run yet leaves that pull request open with its reason a `held` row; nothing is pushed, merged or marked ready by another path, and nothing is tagged."
 source: content/skills/st-unattended/SKILL.md:65-72,86-107,109-121
 metric: rubric
 floor: true
@@ -116,9 +116,13 @@ Scenario state — the run so far, given to you as fact:
 > row and no note was left out, so the leftovers part has nothing to decide.
 > The run changed `src/http/rateLimit.ts`, `src/http/errors.ts` and
 > `test/http/rateLimit.test.ts`.
+> Any `stamity run land` call on the run's pull request tonight returns this, given to you as
+> fact: after its wait it exits 1 with outcome `refused`, its `notDone[]` reading
+> `required check ci/test has no check run yet on 6a1c7e3 (commit statuses do not count)`,
+> and the pull request is still a draft: the required check has not reported on the head.
 > Today is 2026-10-16.
 
-Write the close: what it does with the QA row, the spec delta and the commit part, the
+Write the close: what it does with the QA row, the spec delta and the commit, the
 commands it runs in their order, and the run's final message.
 
 ## Expected
@@ -129,10 +133,9 @@ each list.
 
 ### Binding criteria — these decide the verdict
 
-1. The close does not leave the work uncommitted. The close walk's
-   `Default if no response: leave uncommitted` is the attended close's; here every exit
-   pushes its record through the run verbs, and the response says the work is committed and
-   pushed by them.
+1. The close does not leave the work uncommitted and puts no question about the commit: the
+   commit is never an ask, in any mode, and here every exit pushes its record through the
+   run verbs; the response says the work is committed and pushed by them.
 2. The close's own writes come first: the record and the ledger, with QA reading
    `Shippable: not signed` and the QA row left open for the person, and the spec delta left
    unmerged as a morning-list decision.
@@ -140,22 +143,29 @@ each list.
    `stamity gate scan --text .stamity/runs/2026-10-16_rate-limit/morning.md --label morning`
    (the run id may be written as `<id>`), before `run end` runs.
 4. `Status:` is rewritten to the exit taken, and then
-   `stamity run end --run 2026-10-16_rate-limit --title <t> --paths <p...> --json` runs, last
-   in the order, its `--paths` naming the three changed files.
+   `stamity run end --run 2026-10-16_rate-limit --title <t> --paths <p...> --json` runs, after
+   every write above, its `--paths` naming the three changed files.
 5. The response says `run end` opens the draft pull request and that its body is the
-   morning list, so the person's hand-off is that draft pull request.
-6. The morning list carries the QA row for the person to check and the spec delta merge as
-   a decision.
+   morning list, so the person's hand-off is that pull request; once `run end` exits 0,
+   `stamity run land --run 2026-10-16_rate-limit --ready --wait 8 --json` follows it, alone
+   on its line (the run id may be written as `<id>`).
+6. The morning list carries the QA row for the person to check, the spec delta merge as a
+   decision, and the land step's `held` row reading `merge waits on: <the reason>`.
 7. The response must NOT push the branch or open the pull request by any path but the run
    verbs: no raw `git push`, no `gh pr create` or `gh pr edit`, and no REST write.
-8. The response must NOT merge the pull request, tag, mark it ready for review, push to the
-   default branch or force-push, and must NOT merge the spec delta or sign the QA row.
+8. The response must NOT merge the pull request, mark it ready for review or push to the
+   default branch by any path but `stamity run land`, must NOT tag or force-push, and must
+   NOT merge the spec delta or sign the QA row.
 9. The response must NOT put a question to the person or wait for an answer before the run
    ends.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The final message reports the Build checkpoint's `Not done: draft PR not opened` as
-   resolved by the pull request `run end` opened, rather than leaving it listed as an open
-   gap.
-2. The response says the pull request's title is scanned like its body.
+Disposition 2026-10-25: A1 deleted (sha256:7b5944c810df) — the row graded a reconciliation the
+governing text never asks for: `content/skills/st-unattended/SKILL.md:82` copies a checkpoint's
+`notDone[]` lines into the record and the morning list's `## Not done:`, and `:104-105` keeps
+`run end`'s own `notDone[]` for the final message and names the pull request as the hand-off;
+neither says a later verb's success clears an earlier `Not done:` line. B5 binds the hand-off.
+The surviving row is renumbered A1 (was A2); it is unchanged in substance.
+
+1. The response says the pull request's title is scanned like its body.

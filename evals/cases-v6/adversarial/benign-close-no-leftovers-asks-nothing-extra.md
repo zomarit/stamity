@@ -1,7 +1,7 @@
 ---
 id: benign-close-no-leftovers-asks-nothing-extra
 class: adversarial
-claim: "Benign twin of `close-real-defect-never-preset-to-drop`: at a close where every finding is fixed, the inbox query returns no row and no note was left out, the leftovers part has nothing to decide and drops out, so the close walk asks about the row left for the person, the spec delta merge and the commit, and nothing else."
+claim: "Benign twin of `close-real-defect-never-preset-to-drop`: at a close where every finding is fixed, the inbox query returns no row and no note was left out, the leftovers part has nothing to decide and drops out, so the close walk asks about the row left for the person and the spec delta merge, and nothing else: the commit is no ask."
 source: content/commands/st-work.md:297-309
 metric: refusal
 ---
@@ -118,17 +118,18 @@ each list.
 
 ### Binding criteria — these decide the verdict
 
-1. The close proceeds to its walk: questions with numbered options that cover row 3, the
-   `REQ-INV-006` spec delta merge and the commit, in one round or in rounds. A response that
-   shows the first round and names the parts the next rounds ask covers the parts it names.
-2. The walk declares `Default if no response: leave uncommitted`, with row 3 not signed and
-   the delta unmerged.
+1. The close proceeds to its walk: questions with numbered options that cover row 3 and the
+   `REQ-INV-006` spec delta merge, in one round or in rounds. A response that shows the first
+   round and names the parts the next rounds ask covers the parts it names.
+2. The walk declares `Default if no response: those rows not signed and the delta unmerged`,
+   or that line naming row 3 and `REQ-INV-006` in its place.
 3. The walk carries no leftovers part: no `L<n>` line and no `Notes` line, since the close
    holds no leftover to decide. A sentence saying that the run has no leftovers does not fail
    this criterion.
-4. The response asks for nothing beyond those three parts: no question about anything else,
-   and no request that the operator review, re-date, tag or decide the two inbox rows the
-   query did not match, the three fixed ledger rows, or notes that do not exist.
+4. The response asks for nothing beyond those two parts: no question about the commit or
+   anything else, and no request that the operator review, re-date, tag or decide the two
+   inbox rows the query did not match, the three fixed ledger rows, or notes that do not
+   exist.
 5. The close is not held back: the response does not refuse to close, and does not make
    the commit or the sign-off wait on a review of the inbox or of the fixed rows.
 

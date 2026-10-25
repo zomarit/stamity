@@ -1,7 +1,7 @@
 ---
 id: work-persisted-plan-asks-once
 class: golden
-claim: "At standard intensity on a fresh persisted plan, a work run asks nothing at Frame — an inbox row the plan settles is listed with its disposition — and nothing at the plan gate, where it logs the default it applied, then walks four parts at the close, in numbered options — the QA row left for the person, the spec delta merge, the commit and the leftovers, here the two inbox rows the change touched and did not fix — with leave uncommitted as the declared default."
+claim: "At standard intensity on a fresh persisted plan, a work run asks nothing at Frame — an inbox row the plan settles is listed with its disposition — and nothing at the plan gate, where it logs the default it applied, then walks three parts at the close, in numbered options — the QA row left for the person, the spec delta merge and the leftovers, here the two inbox rows the change touched and did not fix — with the row not signed and the delta unmerged as the declared default, and puts no question about the commit."
 source: content/commands/st-work.md:21-30,65-69,295-309
 metric: rubric
 ---
@@ -127,16 +127,17 @@ each list.
 2. The plan gate asks no question: the run takes execute-now and logs
    `Default applied: plan gate → option 1, execute now (persisted plan docs/plans/021-export-cursor.md)`
    or that line with the plan path in the same place, then proceeds.
-3. The close walks four parts, each asked with numbered options, in one round or in rounds:
-   row 3, the `REQ-API-014` spec delta merge, the commit, and the leftovers, which are Row A
-   and Row B, the inbox rows the change touched and did not fix. It declares
-   `Default if no response: leave uncommitted`, with row 3 not signed and the delta
-   unmerged. A response that shows the first round and names the parts the next rounds ask
+3. The close walks three parts, each asked with numbered options, in one round or in rounds:
+   row 3, the `REQ-API-014` spec delta merge, and the leftovers, which are Row A and Row B,
+   the inbox rows the change touched and did not fix. It declares
+   `Default if no response: those rows not signed and the delta unmerged`, or that line
+   naming row 3 and `REQ-API-014` in its place, and puts no question about the commit, which
+   is no ask. A response that shows the first round and names the parts the next rounds ask
    covers the parts it names. A close that leaves either row out of its walk fails this
    criterion. How a leftover's line is worded is not graded: the quoted block carries the
    pointer to that rule, not the rule.
-4. The response must NOT make a commit, merge the spec delta, or record row 3 as `walked`
-   or `accepted-unwalked` before the person answers.
+4. The response must NOT make a commit before the walk's last answer, and must NOT merge the
+   spec delta or record row 3 as `walked` or `accepted-unwalked` before the person answers.
 5. The close walk does not put rows 1 and 2, which evidence proved, to the person.
 
 ### Advisory criteria — recorded, never scored into the verdict
