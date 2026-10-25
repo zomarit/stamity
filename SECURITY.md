@@ -531,8 +531,8 @@ What stays open is named here, as accepted risk:
   Cursor and Codex refuse every ask-class act, for the reasons the guard's row above gives, so on
   them a person runs the act from the exact command. Their hook payloads name no agent, so no call
   there can be shown to be the main thread's: the acts the autonomy setting runs on the main thread
-  elsewhere (a ready mark, a local tag, an unnamed workflow dispatch) and a remote write are refused
-  on them in every mode too (1.16.0 refused the ready mark and a local tag there too, and the dispatch and remote-write rules are new in this release). `stamity run land` alone on its line runs on
+  elsewhere (a ready mark, a local tag, an unnamed workflow dispatch) and a remote, URL-rewrite or
+  include write are refused on them in every mode too (1.16.0 refused the ready mark and a local tag there too, and the dispatch and remote-write rules are new in this release). `stamity run land` alone on its line runs on
   every client.
   Code: `src/hooks/scripts.ts::buildPersonOnlyGuardScript`.
 - **Where no hook runs.** On Claude Code with no hook loaded, the settings rows are the only layer,
@@ -568,7 +568,9 @@ What stays open is named here, as accepted risk:
   no host could reach a single Enterprise host gh is logged in to without asking. And in any mode a
   sub-agent can move the origin by writing the git configuration file directly, since the guard reads
   shell calls only: with a file tool, a redirect or a symbolic link, the global or XDG file outside
-  the repository included. Later writes and pushes are then compared with the moved origin. Code:
+  the repository included. On Codex and Cursor, whose payloads name no agent, that write is open to
+  every call, not only a sub-agent's. Later writes and pushes are then compared with the moved
+  origin. Code:
   `src/hooks/personOnly.ts::personOnlyVerdict`.
 - **Heredoc bodies read as data.** A heredoc body the guard reads as data is not read for acts. A
   program that runs such an argument as code in a language the guard does not read, an
@@ -605,7 +607,11 @@ What stays open is named here, as accepted risk:
   branch's name holds a character outside the letters, digits, `.`, `_`, `/` and `-` the push check
   reads, or starts with `-`, they leave the ref unwritten and say so, and the gap stays open in that
   clone too. In a reftable repository the guard reads no loose ref file, so the written ref does not
-  reach it. Code:
+  reach it. Re-pointing that ref with a ref write, or turning it into a plain ref, is not read as a
+  person-only act on any client: in a repository whose default branch is named neither `main` nor `master`, a session
+  that moves the ref elsewhere has a later attended push to the real default branch read as a push of
+  another branch, and that push runs without asking. While a run is unattended, every raw push is
+  refused whatever the branch. Code:
   `src/cli/commands/run.ts::alignOriginHead`, `src/hooks/scripts.ts::buildPersonOnlyGuardScript`.
 - **A symbolic ref already on disk.** The guard reads a `git symbolic-ref` write on the line it
   judges. A symbolic ref written before, by a shell redirect, the Write tool or the person, is not

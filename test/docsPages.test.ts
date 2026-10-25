@@ -5400,6 +5400,12 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
       "A file written this way and run later, by another call or by a line that does not name it, is not read either",
       // a4c, with the two corrections decided for it, and the host residual.
       "And in any mode a sub-agent can move the origin by writing the git configuration file directly, since the guard reads shell calls only: with a file tool, a redirect or a symbolic link, the global or XDG file outside the repository included",
+      // Fix round 3 (a4-security-r13): on the identity-free clients the write is every call's, the remote rule holds
+      // the URL-rewrite and include writes, and re-pointing the origin's HEAD ref is no person-only act.
+      "On Codex and Cursor, whose payloads name no agent, that write is open to every call, not only a sub-agent's",
+      "and a remote, URL-rewrite or include write are refused on them in every mode too",
+      "Re-pointing that ref with a ref write, or turning it into a plain ref, is not read as a person-only act on any client",
+      "a later attended push to the real default branch read as a push of another branch, and that push runs without asking",
       "on a gh version other than 2.102.0",
       "the guard does not read gh's own configured default host",
       "A body read from a file is not screened for mentions",
@@ -5480,7 +5486,12 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
     const mapping = flowed(read(SECURITY_MAPPING));
     expect(mapping).toContain(`other than ${phrase}, which land on the evidence with the review loop their only reader`);
     expect(mapping).toContain("The ledger is a file the run itself writes and commits, so an empty or rewritten one passes");
-    expect(mapping).toContain("on Claude Code and Copilot CLI and never for a sub-agent, while Cursor and Codex, whose payloads name no agent, refuse them and a remote write in every mode");
+    // TEST CHANGE, justified (plan 022 file 1, unit a16-security-pages, fix round 3, a4-security-r13; REQ-FLOW-134): a
+    // remote write, a URL-rewrite write and an include write are one rule (src/hooks/personOnly.ts, `remoteWriteVerdict`),
+    // so the mapping names all three where it lists what Cursor and Codex refuse.
+    expect(mapping).toContain("on Claude Code and Copilot CLI and never for a sub-agent, while Cursor and Codex, whose payloads name no agent, refuse them and a remote, URL-rewrite or include write in every mode");
+    expect(mapping).toContain("any call's on Codex and Cursor");
+    expect(mapping).toContain("Re-pointing `origin/HEAD` with a ref write, or turning it into a plain ref, is no person-only act on any client");
     // TEST CHANGE, justified (fix round 2, the lens's second wording point; REQ-FLOW-145): unattended, a tag and a
     // dispatch run on Claude Code and Copilot CLI only, so the pin carries the clients.
     expect(mapping).toContain("and of the acts the setting runs only the raw ready mark: a local tag and an unnamed workflow dispatch run there too on Claude Code and Copilot CLI, Cursor and Codex refusing them in every mode");
