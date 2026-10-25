@@ -292,11 +292,13 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   which merges the pull request when its evidence holds. When the land asks (for example under `autonomy.mode: ask`,
   or a CI or guard file in the diff), the close asks you first, naming the pull request, every reason and the head
   commit, and leaves the merge held unless you say yes. On yes it runs `stamity run land --ready --approved <sha>` for
-  exactly that commit, and the guard asks again on that line; a commit pushed after your yes is asked about again. A
-  refused land waits as a held row on the summary list, and the next walk retries it with the same `--ready --wait 8`
-  line. Say "don't commit" at the close to keep the work local. Unattended runs land through
-  `stamity run land --ready --wait 8` after `run end` and never pass `--approved`. Every run writes
-  `.stamity/runs/<id>/morning.md` at its close.
+  exactly that commit, and the guard asks again on that line on Claude Code and Copilot CLI; on Codex and Cursor,
+  whose guard refuses that line, the close gives you the line to run yourself and keeps the merge held; a commit
+  pushed after your yes is asked about again. A refused land waits as a held row on the summary list, and the next
+  walk retries it with the same `--ready --wait 8` line. Say "don't commit" at the close to keep the work local.
+  Unattended runs land through `stamity run land --ready --wait 8` after `run end`, only when the summary list holds
+  no blocked or refused item, and never pass `--approved`. Every run writes `.stamity/runs/<id>/morning.md` at its
+  close.
 - **The person-only guard reads a heredoc body as data when only a data sink receives it**: `cat` or `tee` writing
   to a plain file, `cat` inside a quoted substitution that is a whole argument (a commit message), the engine's own
   CLI reading its stdin, `git commit -F -` and `gh pr create|edit|comment --body-file -`. A commit message with a `* `

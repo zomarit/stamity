@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.16.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-25T02:42:24.377Z",
+  "updatedAt": "2026-10-25T03:13:02.942Z",
   "tools": [
     "claude"
   ],
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "384d3404c3b36a585520185cd2162bc80618f68de41758c47c5bacef4b996739",
+      "contentHash": "89b599c39faf2223e460222419f04b7671787bf41bdf80ed8add98f8f665953f",
       "path": ".claude/commands/st-work.md"
     },
     {
