@@ -344,7 +344,12 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // Moved again 2026-10-25 on the a4c lane (review/147, review/148), by the measured size plus a small margin: 290,821
   // bytes / 6,178 lines (copilot, generated; 289,500 bytes before the round), past the bytes row, because the guard now
   // follows a linked git configuration file. 290,821 + 4,091 = 294,912 bytes; the lines row (6,241) holds.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 294_912, lines: 6_241 },
+  // Moved again 2026-10-26 on the b14b lane (plan 022, review/22, review/24-27), by the measured size plus a small
+  // margin: 296,333 bytes / 6,248 lines (copilot, generated; 290,822 bytes before the unit, 292,719 before the round),
+  // past both rows, because the verdict now reads every route the line shows to a remote's HEAD ref, the default branch
+  // the push check reads: a remote-tracking branch delete, a ref name the line cannot show, and the `--stdin` text raw
+  // and unquoted. 296,333 + 2,675 = 299,008 bytes; 6,248 + 93 = 6,341 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 299_008, lines: 6_341 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -4419,9 +4424,11 @@ if (told !== null) {
  * its git dir, the default branch from `refs/remotes/origin/HEAD` and the local
  * tags from `refs/tags/` and `packed-refs` in its common dir (read only when a
  * push refspec asks for them), and the verdict runs once per place. A write or
- * a delete of a remote's HEAD ref on the judged line (`git symbolic-ref`, `git
- * update-ref` with its `--stdin` text, `git remote set-head`) is read as a push
- * of the default branch (review/163), so it cannot move that read unasked. Where
+ * a delete of a remote's HEAD ref that the judged line shows (`git symbolic-ref`,
+ * `git update-ref` with the `--stdin` text the line carries, `git remote
+ * set-head`, a remote-tracking `git branch` delete), or of a ref name there the
+ * line cannot show, is read as a push of the default branch (review/163); a
+ * route to that ref the line does not show is not read. Where
  * `HEAD` cannot be read (a reftable repository's placeholder among it), an implied destination
  * counts as the default branch; `main` and `master` always count. The origin a
  * gh write is held to (REQ-FLOW-134) is the `origin` remote in the git config of

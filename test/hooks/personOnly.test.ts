@@ -4418,6 +4418,71 @@ describe("a remote's HEAD ref written or deleted (b14b, REQ-FLOW-102, review/163
     for (const ctx of CONTEXTS) expect(personOnlyVerdict(command, ctx), command).toEqual({ deny: false });
   });
 
+  // review/24: a remote-tracking branch delete of `<remote>/HEAD` deletes that ref itself.
+  it.each([
+    ["a remote-tracking delete by short options", "git branch -d -r origin/HEAD"],
+    ["a remote-tracking delete in one short cluster, forced", "git branch -Dr origin/HEAD"],
+    ["a remote-tracking delete by long options", "git branch --delete --remotes origin/HEAD"],
+    ["a remote-tracking delete by abbreviated long options", "git branch --remote --del origin/HEAD"],
+    ["a remote-tracking delete in another case", "git branch -r -d origin/head"],
+    ["a remote-tracking delete of another remote's, after another name", "git branch -r -d origin/old upstream/HEAD"],
+  ])("asks for %s of a remote's HEAD ref as a push of the default branch", (_, command) => {
+    for (const ctx of CONTEXTS) {
+      const verdict = personOnlyVerdict(command, ctx);
+      expect(verdict, command).toMatchObject({ deny: true, rule: "push-default", ask: true });
+      if (verdict.deny) expect(verdict.act, command).toContain("A remote's HEAD ref written or deleted (`git branch -d -r`)");
+    }
+  });
+
+  // review/22, review/26 (the sign-off: fail toward asking): a ref name the line cannot show as literal text, in a line
+  // that writes or deletes a ref, may be a remote's HEAD ref.
+  it.each([
+    ["a symbolic-ref write whose name the shell fills in", 'git symbolic-ref "$R" refs/remotes/origin/feat/x', "git symbolic-ref"],
+    ["a symbolic-ref write whose name a substitution gives", "git symbolic-ref $(git rev-parse --symbolic-full-name origin/HEAD) refs/heads/feat/x", "git symbolic-ref"],
+    ["a symbolic-ref write whose name is a brace expansion", "git symbolic-ref refs/remotes/origin/{HEAD,x} refs/heads/feat/x", "git symbolic-ref"],
+    ["a symbolic-ref delete whose name the shell fills in", 'git symbolic-ref -d "$R"', "git symbolic-ref"],
+    ["a symbolic-ref call whose unquoted name may split into a name and a target", "git symbolic-ref $PAIR", "git symbolic-ref"],
+    ["a symbolic-ref write after a reason that may split", "git symbolic-ref -m $WHY refs/heads/a refs/heads/feat/x", "git symbolic-ref"],
+    ["an update-ref write whose name the shell fills in", 'git update-ref "$R" 0123abc', "git update-ref"],
+    ["an update-ref delete whose name a substitution gives", "git update-ref -d `echo refs/remotes/origin/HEAD`", "git update-ref"],
+    ["a remote-tracking delete whose name the shell fills in", 'git branch -r -d "$B"', "git branch -d -r"],
+    ["a stdin symref update whose name shell quoting splits", "printf 'symref-update refs/remotes/origin/HE''AD refs/heads/feat/x\\n' | git update-ref --stdin", "git update-ref --stdin"],
+    ["a stdin symref update whose remote segment shell quoting splits", "printf 'symref-update refs/remotes/ori''gin/HEAD refs/heads/feat/x\\n' | git update-ref --stdin", "git update-ref --stdin"],
+    ["a stdin plain delete whose name shell quoting splits", "printf 'delete refs/remotes/origin/HE''AD\\n' | git update-ref --no-deref --stdin", "git update-ref --stdin"],
+    ["a stdin symref update whose name a hex escape spells", "printf 'symref-update refs/remotes/origin/HE\\x41D refs/heads/feat/x\\n' | git update-ref --stdin", "git update-ref --stdin"],
+    ["a stdin symref update whose name an octal escape spells", "printf 'symref-update refs/remotes/origin/H\\105AD refs/heads/feat/x\\n' | git update-ref --stdin", "git update-ref --stdin"],
+    ["a stdin symref update whose name an echo escape spells", "echo -e 'symref-update refs/remotes/origin/HE\\x41D refs/heads/feat/x' | git update-ref --stdin", "git update-ref --stdin"],
+    ["a stdin symref update whose name a printf placeholder gives", "printf 'symref-update %s refs/heads/feat/x\\n' \"$R\" | git update-ref --stdin", "git update-ref --stdin"],
+    ["a stdin symref update whose name a placeholder ends", "printf 'symref-update %s/HEAD refs/heads/feat/x\\n' refs/remotes/origin | git update-ref --stdin", "git update-ref --stdin"],
+    ["a stdin plain delete whose name the shell fills in", 'echo "delete $R" | git update-ref --stdin', "git update-ref --stdin"],
+    ["a stdin text whose command word and name shell quoting both split", "printf 'sym''ref-update refs/remotes/origin/HE''AD refs/heads/feat/x\\n' | git update-ref --stdin", "git update-ref --stdin"],
+    ["a stdin text the shell fills in whole", 'printf "$TEXT" | git update-ref --stdin', "git update-ref --stdin"],
+  ])("asks for %s as a push of the default branch", (_, command, via) => {
+    for (const ctx of CONTEXTS) {
+      const verdict = personOnlyVerdict(command, ctx);
+      expect(verdict, command).toMatchObject({ deny: true, rule: "push-default", ask: true });
+      if (verdict.deny) expect(verdict.act, command).toContain(`written or deleted (\`${via}\`)`);
+    }
+  });
+
+  it.each([
+    ["an update-ref write of a local branch from a remote's HEAD ref as its new value", "git update-ref refs/heads/a refs/remotes/origin/HEAD"],
+    ["an update-ref write with a reason, from that ref as its new value", "git update-ref -m why refs/heads/a refs/remotes/origin/HEAD"],
+    ["an update-ref write checking that ref as its old value", "git update-ref refs/heads/a 0123abc refs/remotes/origin/HEAD"],
+    ["an update-ref write whose literal name is not that ref, its value filled in", 'git update-ref refs/heads/a "$SHA"'],
+    ["an update-ref write whose literal name follows a quoted reason the shell fills in", 'git update-ref -m "$WHY" refs/heads/a 0123abc'],
+    ["a stdin update whose literal name is not that ref, its value a placeholder", "printf 'update refs/heads/a %s\\n' \"$SHA\" | git update-ref --stdin"],
+    ["a stdin update split by NUL whose literal name is not that ref", "printf 'update\\0refs/heads/a\\0%s\\0' \"$SHA\" | git update-ref -z --stdin"],
+    ["a stdin update whose literal name ends at a space escape", "printf 'update\\x20refs/heads/a\\x200123abc\\n' | git update-ref --stdin"],
+    ["a stdin verify of a symref", "printf 'symref-verify refs/heads/a refs/heads/main\\n' | git update-ref --stdin"],
+    ["a symbolic-ref read of a name the shell fills in", 'git symbolic-ref "$R"'],
+    ["a remote-tracking delete of a remote branch", "git branch -r -d origin/feat/x"],
+    ["a local branch delete whose name is a remote's HEAD ref", "git branch -D origin/HEAD"],
+    ["a remote-tracking branch list", "git branch -r"],
+  ])("reads %s as no act", (_, command) => {
+    for (const ctx of CONTEXTS) expect(personOnlyVerdict(command, ctx), command).toEqual({ deny: false });
+  });
+
   it("keeps the other remote writes `remote-write`, which the setting runs unasked", () => {
     for (const command of ["git remote set-url origin https://github.com/other/repo.git", "git remote rename origin old", "git remote remove origin"]) {
       expect(personOnlyVerdict(command, { ...ORIGIN, runs: RUNS }), command).toEqual({ deny: false, runs: ["remote-write"] });
@@ -4443,6 +4508,20 @@ describe("a remote's HEAD ref written or deleted (b14b, REQ-FLOW-102, review/163
     const deploying = { ...ORIGIN, deployingBranches: ["production"] };
     expect(personOnlyVerdict("git symbolic-ref refs/remotes/origin/HEAD refs/heads/production", deploying)).toMatchObject({ deny: true, rule: "push-deploying", ask: true });
     expect(personOnlyVerdict("git symbolic-ref refs/remotes/origin/HEAD refs/heads/feat/x", deploying)).toMatchObject({ deny: true, rule: "push-default", ask: true });
+  });
+
+  it("names a deploying target first on the stdin symref spelling and on a remote set-head (review/25)", () => {
+    const deploying = { ...ORIGIN, deployingBranches: ["production"] };
+    for (const command of [
+      "printf 'symref-update refs/remotes/origin/HEAD refs/heads/production\\n' | git update-ref --stdin",
+      "git remote set-head origin production",
+      // A branch the line cannot show may be a deploying one.
+      'git remote set-head origin "$B"',
+    ]) {
+      expect(personOnlyVerdict(command, deploying), command).toMatchObject({ deny: true, rule: "push-deploying", ask: true });
+    }
+    expect(personOnlyVerdict("git remote set-head origin feat/x", deploying)).toMatchObject({ deny: true, rule: "push-default", ask: true });
+    expect(personOnlyVerdict("git remote set-head origin -a", deploying)).toMatchObject({ deny: true, rule: "push-default", ask: true });
   });
 
   it("reads no act on the run verbs' own lines, whose write of origin's HEAD ref goes through the CLI's git runner", () => {

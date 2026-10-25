@@ -2773,7 +2773,13 @@ describe("a remote's HEAD ref written, on every client (b14b, review/163)", () =
 
   it.each(TOOLS)("%s: asks on the main thread where it can, and refuses a sub-agent's call and an unattended one", async (tool) => {
     const guard = await placeGuard(tool, { ".git/config": ORIGIN });
-    const lines = ["git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/feat/x", "git remote set-head origin -a"];
+    // The remote-tracking delete (review/24) and a name the line cannot show (review/26) join the first two.
+    const lines = [
+      "git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/feat/x",
+      "git remote set-head origin -a",
+      "git branch -d -r origin/HEAD",
+      'git symbolic-ref "$R" refs/remotes/origin/feat/x',
+    ];
     for (const command of lines) {
       const verdict = personOnlyVerdict(command, BAKED_DEFAULT);
       expect(verdict, command).toMatchObject({ deny: true, rule: "push-default", ask: true });
