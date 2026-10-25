@@ -378,6 +378,14 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   every option value a hook declaration names; it reads an option's `=` value, and a separate value word is read as
   an argument word. And they said a folder a declaration names is never held; one absent at `Base:` is held whole.
   Both pages now say what the hold does. The 1.16.0 notes keep their released text.
+- **`check`'s `autonomy-deploying` row now counts a deploy environment whose name YAML reads as a number or a
+  boolean.** It reads a `schedule` trigger as a push to the default branch, because a scheduled run deploys that
+  branch's latest commit. It also warns `not evaluated` on a deploy reached through a trigger it does not read, such
+  as `create` or `merge_group`, instead of passing.
+- **The `autonomy.mode` description names the land verb's merge.** `config` and
+  [`docs/configuration.md`](docs/configuration.md) said mode `autonomous` lets an agent mark a pull request ready and
+  create a local tag unasked; they now add that it lets `run land` merge and fast-forward the run's own pull request
+  on the evidence, and that mode `ask` asks for all of these.
 
 ## [1.16.0] - 2026-10-20
 
