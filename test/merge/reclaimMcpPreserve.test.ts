@@ -333,7 +333,10 @@ describe("sync lane — a full deselect over documents holding operator content"
     expect(report.reclaimed?.strippedCount).toBeGreaterThanOrEqual(MERGED_DOCS.length);
   });
 
-  it("settles: a second sync over the reduced documents changes nothing further", async () => {
+  // TEST CHANGE, justified (ledger row 2026-10-18_cloud-runs-2/prove/6, no spec id): this case and the dropped-tool
+  // case below timed out at the 20 s default while another suite loaded the machine, and passed on a re-run, so each
+  // has a budget of its own; every assertion is unchanged.
+  it("settles: a second sync over the reduced documents changes nothing further", { timeout: 60_000 }, async () => {
     // The reduction must be a fixed point. A lane that re-reduced on every run
     // would keep rewriting files it no longer owns, and `check` would report a
     // permanently dirty tree over a repo nothing is wrong with.
@@ -353,7 +356,8 @@ describe("sync lane — a full deselect over documents holding operator content"
 });
 
 describe("sync lane — a single tool removed", () => {
-  it("keeps the operator's entries in the dropped tool's document", async () => {
+  // TEST CHANGE, justified (ledger row 2026-10-18_cloud-runs-2/prove/6): the budget of the "settles" case above.
+  it("keeps the operator's entries in the dropped tool's document", { timeout: 60_000 }, async () => {
     // Deselecting a server is not the only way a merged document leaves
     // emission: dropping the tool that owned it does the same thing by the
     // `adapter-removed` route, through the same gates. The engine's server is

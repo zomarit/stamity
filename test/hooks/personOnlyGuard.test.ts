@@ -311,7 +311,10 @@ const MATRIX: readonly (readonly [command: string, rule: string | null])[] = [
 ];
 
 describe("the person-only guard, on every client", () => {
-  it.each(TOOLS)("%s: denies each person-only act and allows its neighbour, as u6's verdict says", async (tool) => {
+  // TEST CHANGE, justified (ledger row 2026-10-18_cloud-runs-2/build/84, no spec id): the case runs every MATRIX row
+  // through a spawned guard, about 4 s alone and 21-40 s under parallel lanes, so it has a budget of its own; every
+  // assertion is unchanged.
+  it.each(TOOLS)("%s: denies each person-only act and allows its neighbour, as u6's verdict says", { timeout: 60_000 }, async (tool) => {
     // TEST CHANGE, justified (REQ-FLOW-134, a4c build/21): the guard holds a REST write, gh's or curl's, to the origin of
     // the repository it sits in, so the scratch repository gets the origin `o/r` the rows write to, and the guard's own
     // context below carries it; each row still reads what it pinned.

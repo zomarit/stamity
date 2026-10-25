@@ -3203,9 +3203,10 @@ describe("stamity run checkpoint", () => {
       expect(doc["notDone"]).toEqual([expect.stringMatching(/^push refused: .*push-default/)]);
     });
 
-    // Skipped on Windows (prove/10): NTFS, through the Windows file API, cannot hold `"` in a loose ref's file name, so
-    // the seed's `git switch -c` fails there ("cannot lock ref", "Invalid argument") and no Windows checkout on git's
-    // default files backend can carry the branch this case needs. The name refusal it pins is a string check that reads
+    // Skipped on Windows (ledger row 2026-10-15_cloud-runs/prove/10; owner: the Windows CI leg): NTFS, through the
+    // Windows file API, cannot hold `"` in a loose ref's file name, so the seed's `git switch -c` fails there ("cannot
+    // lock ref", "Invalid argument") and no Windows checkout on git's default files backend can carry the branch this
+    // case needs. The name refusal it pins is a string check that reads
     // alike on every platform, proven here on the POSIX legs; the spy-driven case above hands the same name to the real
     // verdict without a checkout, so the NESTING_DEPTH catch is proven on every platform, Windows included.
     it.skipIf(process.platform === "win32")("on a checkout of that branch, refuses the commit by its name before the verdict runs", async () => {
