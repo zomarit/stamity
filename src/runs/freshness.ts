@@ -24,8 +24,9 @@ import type { GitRunner } from "../workspace/git.ts";
  * - `untracked`: a path on disk that HEAD's tree holds as no file, folder or
  *   gitlink (an untracked or ignored file, a path inside a submodule, another
  *   letter case on a case-insensitive disk), or a folder HEAD's tree holds
- *   whose disk copy holds such an entry below it (a file, a non-empty folder, a
- *   nested repository; ignored ones too). Git counts 0 for that content forever.
+ *   whose disk copy or index holds such an entry below it (a file, a non-empty
+ *   folder, a nested repository; ignored ones, and ones only staged or added
+ *   with intent-to-add, too). Git counts 0 for that content forever.
  *
  * A stamp that names no commit, or a commit HEAD does not descend from (a
  * stamp rebased away), is `unresolved` and the verdict is stale: nothing can
@@ -87,7 +88,7 @@ type DiskState = "present" | "missing" | "link" | "spelling";
 
 /**
  * What HEAD's tree holds at a read path: a file, a folder or a gitlink; a link at, above or below it; a folder
- * whose disk copy holds entries outside the tree; or nothing.
+ * whose disk copy or index holds entries outside the tree; or nothing.
  */
 type TreeState = "tracked" | "link" | "untracked" | "absent";
 
@@ -180,6 +181,10 @@ function runGit(git: GitRunner, cwd: string, args: readonly string[], noOnStatus
     if (typeof fields.status === "number") {
       throw new GitFailure(`git ${verb} exited ${fields.status}`, { cause: error });
     }
+    // Node stops a child past the runner's output bound with a signal; that is not a timeout.
+    if (fields.code === "ENOBUFS") {
+      throw new GitFailure(`git ${verb} printed more than the runner reads`, { cause: error });
+    }
     if (fields.code === "ETIMEDOUT" || typeof fields.signal === "string") {
       throw new GitFailure(`git ${verb} timed out`, { cause: error });
     }
@@ -218,9 +223,9 @@ function plainPath(path: string): boolean {
 /**
  * Read HEAD's tree at a plain `path`: one recursive listing gives the folders above it, the entry
  * itself and, for a folder, every entry below it. A folder holding no link is then listed on disk
- * ({@link untrackedBelow}), since a history count never sees what the tree does not hold. Where the
- * entry is absent, the first segment the listing does not reach as a folder is looked up alone,
- * since a link above the path hides it.
+ * and in the index ({@link untrackedBelow}), since a history count never sees what the tree does
+ * not hold. Where the entry is absent, the first segment the listing does not reach as a folder is
+ * looked up alone, since a link above the path hides it.
  */
 function treeState(git: GitRunner, cwd: string, path: string): TreeState {
   const entries = listTree(git, cwd, ["-r", "-t"], path);
@@ -253,14 +258,19 @@ function listTree(git: GitRunner, cwd: string, flags: readonly string[], path: s
 }
 
 /**
- * Whether the disk copy of the folder `path` holds any entry HEAD's index does not: `git ls-files --others`
- * with no exclude option, so ignored entries count too, read literally. `--directory` lists an untracked
- * folder as one entry, so the output stays small under a large one, and `--no-empty-directory` leaves out a
- * folder holding no file, which git could not record. A nested repository is listed as one entry.
+ * Whether the folder `path` holds any entry HEAD's tree does not, in two literal reads. First the disk against
+ * the index: `git ls-files --others` with no exclude option, so ignored entries count too. `--directory` lists
+ * an untracked folder as one entry, so the output stays small under a large one, and `--no-empty-directory`
+ * leaves out a folder holding no file, which git could not record. A nested repository is listed as one entry.
+ * Then the index against HEAD: `git diff-index --cached --diff-filter=A`, the entries the index holds and HEAD's
+ * tree does not (staged, or added with intent-to-add), which the first read counts as tracked. Only whether a
+ * read prints anything is used; one past the runner's output bound fails, as any other git failure.
  */
 function untrackedBelow(git: GitRunner, cwd: string, path: string): boolean {
-  const args = ["--literal-pathspecs", "ls-files", "--others", "--directory", "--no-empty-directory", "-z", "--", path];
-  return (runGit(git, cwd, args, false) ?? "") !== "";
+  const others = ["--literal-pathspecs", "ls-files", "--others", "--directory", "--no-empty-directory", "-z", "--", path];
+  if ((runGit(git, cwd, others, false) ?? "") !== "") return true;
+  const added = ["--literal-pathspecs", "diff-index", "--cached", "--name-only", "--diff-filter=A", "-z", "HEAD", "--", path];
+  return (runGit(git, cwd, added, false) ?? "") !== "";
 }
 
 /** The full sha `name` resolves to as a commit, or null when it names none (`--quiet` exits 1). */

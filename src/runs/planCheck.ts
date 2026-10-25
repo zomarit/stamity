@@ -458,7 +458,8 @@ const cleanCell = (cell: string): string => cell.replaceAll("`", "").replaceAll(
 const OWN_STALE_MESSAGE: Partial<Record<StaleReason, string>> = {
   link: "is a symbolic link, lies under one, or is a folder holding one at HEAD; list the files the plan read instead, and re-stamp the plan.",
   spelling: "is not a plain repository path; write it as git lists it and re-stamp the plan.",
-  untracked: "is not tracked by git at HEAD, so its history cannot be measured; commit it or drop it from reads, and re-stamp the plan.",
+  untracked:
+    "is not tracked by git at HEAD, or is a folder holding files HEAD does not (untracked, ignored or only staged), so its history cannot be measured; list the tracked files or subfolders the plan read instead, or commit or remove those files (never commit ignored output), and re-stamp the plan.",
 };
 
 async function measureFreshness(

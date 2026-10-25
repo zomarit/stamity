@@ -417,8 +417,10 @@ describe("checkPlans", () => {
 
     expect(result.ready).toBe(false);
     expect(blockersOf(result, "stale")).toEqual([{ code: "stale", line: lineOf(text, "reads:") }]);
+    // TEST CHANGE, justified (REQ-FLOW-091, Package 20's unit R3, decision D2): the message also covers a tracked
+    // folder holding files HEAD does not, and no longer points at committing ignored output.
     expect(result.plans[0]?.blockers[0]?.message).toBe(
-      "`docs/new.md` is not tracked by git at HEAD, so its history cannot be measured; commit it or drop it from reads, and re-stamp the plan.",
+      "`docs/new.md` is not tracked by git at HEAD, or is a folder holding files HEAD does not (untracked, ignored or only staged), so its history cannot be measured; list the tracked files or subfolders the plan read instead, or commit or remove those files (never commit ignored output), and re-stamp the plan.",
     );
     expect(result.plans[0]?.freshness).toMatchObject({ verdict: "stale", stale: [{ path: "docs/new.md", reason: "untracked" }] });
   });

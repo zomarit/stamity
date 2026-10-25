@@ -291,6 +291,8 @@ describe("freshness", () => {
     const stamp = await touchAndCommit(cwd, ".gitignore", "*.out");
     await writeFile(join(cwd, "docs/extra.md"), "never committed\n", "utf8");
     await writeFile(join(cwd, "src/build.out"), "ignored output\n", "utf8");
+    // The ignored case is real: git itself reads the file as ignored (check-ignore exits 0 only then).
+    expect(writeGit(cwd, ["check-ignore", "--", "src/build.out"]).trim()).toBe("src/build.out");
     const seen: string[][] = [];
     // A recording wrapper around the real runner, so the paths the added listing read can be checked.
     const recording: GitRunner = (args, dir) => {
@@ -318,6 +320,55 @@ describe("freshness", () => {
       stale: [],
       exempt: [],
       unresolved: false,
+    });
+  });
+
+  it("reads a tracked folder as untracked once its index holds an entry HEAD's tree does not, staged or intent-to-add", async (ctx) => {
+    const stamp = await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    await writeFile(join(cwd, "docs/staged.md"), "staged, never committed\n", "utf8");
+    writeGit(cwd, ["add", "--", "docs/staged.md"]);
+    await writeFile(join(cwd, "src/intent.ts"), "export const intent = 1;\n", "utf8");
+    writeGit(cwd, ["add", "--intent-to-add", "--", "src/intent.ts"]);
+
+    // The disk listing alone sees neither: both are in the index.
+    expect(writeGit(cwd, ["ls-files", "--others", "--", "docs", "src"])).toBe("");
+    expect(await freshness(git, cwd, stamp, ["docs", "src", "notes with space"])).toEqual({
+      verdict: "stale",
+      stale: [
+        { path: "docs", reason: "untracked" },
+        { path: "src", reason: "untracked" },
+      ],
+      exempt: [],
+      unresolved: false,
+    });
+    // Non-degenerate: the same staged file named as its own read path reads the same way, and a
+    // tracked file whose change is staged is not an entry outside HEAD's tree.
+    await writeFile(join(cwd, "docs/a.md"), "a staged edit\n", { encoding: "utf8", flag: "a" });
+    writeGit(cwd, ["add", "--", "docs/a.md"]);
+    expect(await freshness(git, cwd, stamp, ["docs/staged.md", "docs/a.md", "notes with space"])).toEqual({
+      verdict: "stale",
+      stale: [{ path: "docs/staged.md", reason: "untracked" }],
+      exempt: [],
+      unresolved: false,
+    });
+  });
+
+  it("names a listing past the runner's output bound as that, not as a timeout", async (ctx) => {
+    const stamp = await seededRepo(() => ctx.skip());
+    const cwd = tempDir().dir;
+    // A fake overflow for the listing alone, with the fields Node sets when it stops a child past `maxBuffer`.
+    const overflowing: GitRunner = (args, dir) => {
+      if (args.includes("ls-files")) throw Object.assign(new Error("spawnSync git ENOBUFS"), { code: "ENOBUFS", signal: "SIGTERM", status: null });
+      return git(args, dir);
+    };
+
+    expect(await freshness(overflowing, cwd, stamp, ["docs"])).toEqual({
+      verdict: "stale",
+      stale: [],
+      exempt: [],
+      unresolved: false,
+      error: "git ls-files printed more than the runner reads",
     });
   });
 
