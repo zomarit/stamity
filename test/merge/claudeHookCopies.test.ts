@@ -326,7 +326,8 @@ describe("check and clean over the copies", () => {
 
     const check = await runInProcess([checkCommand], ["check", "--json"], { cwd: root });
     const report = JSON.parse(check.stdout) as { ownedPaths: { version: number; hookRoots: string[] } };
-    expect(report.ownedPaths.version).toBe(3);
+    // TEST CHANGE, justified: REQ-FLOW-016 — the bound gains `.gitignore`, whose row records the ignore lines setup appended (version 3 -> 4).
+    expect(report.ownedPaths.version).toBe(4);
     expect(report.ownedPaths.hookRoots).toEqual([`${CLAUDE_HOOKS_DIR}/`]);
   });
 

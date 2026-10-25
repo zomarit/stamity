@@ -389,7 +389,8 @@ describe("sync — a folder the look before git refused", () => {
     // changed by it: a row holds a path, its owner and a hash.
     const ledger = (await readManifest(root))?.ledger ?? [];
     const written = plannerOutputs.value.map((output) => output.path);
-    expect(ledger.map((row) => row.path).toSorted()).toEqual(written.toSorted());
+    // TEST CHANGE, justified: REQ-FLOW-016 — the ledger also records the .gitignore lines this run appended.
+    expect(ledger.map((row) => row.path).toSorted()).toEqual([...written, ".gitignore"].toSorted());
     expect(Object.keys(ledger[0] ?? {}).toSorted()).toEqual(
       ["adapter", "artifactId", "artifactType", "contentHash", "path", "stampedVersion"],
     );

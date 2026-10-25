@@ -1124,10 +1124,19 @@ export const cleanCommand: CommandModule = {
     const gitignore = ctx.dryRun ? null : await takeBackGitignoreLines(rootDir, manifest);
 
     if (ctx.dryRun) {
+      // The take-back reads which ignored files are gone after the run, so the
+      // preview names the recorded lines and the rule, not a verdict per line.
+      const recorded = gitignoreRecordOf(manifest.ledger)?.lines ?? [];
       ctx.io.out(
         `Dry run: nothing was written and ${STATE_DIR}/ is untouched. ` +
           `A real run also deletes ${STATE_DIR}/ and everything in it.\n`,
       );
+      if (recorded.length > 0) {
+        ctx.io.out(
+          `A real run also takes back the ${GITIGNORE_FILE} line(s) this setup added, each once the file it ignores ` +
+            `is gone: ${recorded.join(", ")}.\n`,
+        );
+      }
       nextSteps(ctx, ["apply it: stamity clean"]);
     } else {
       ctx.io.out(

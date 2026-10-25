@@ -135,8 +135,9 @@ export const GOLDEN_SEED_FILES: Readonly<Record<string, string>> = Object.freeze
  * assertion can name its exemptions instead of hand-waving them:
  *   - the manifest is the ledger's own home — a row for itself would authorise
  *     a reclaim sweep to delete the record of what may be reclaimed;
- *   - `.gitignore` is a one-line rule maintained by `ensureGitignoreEntry`, not
- *     a planned emission — the engine appends to a user-owned file;
+ *   - `.gitignore` is not a planned emission — the engine appends lines to a
+ *     user-owned file; the lines it appends are recorded on `.gitignore` rows
+ *     (`coOwned.lines`, REQ-FLOW-016), which the plan never emits;
  *   - the two state-directory placeholders are scaffolding, like the
  *     directories that hold them (`src/emit/stateScaffold.ts`). Git
  *     tracks files rather than directories, so without them a clone loses

@@ -362,6 +362,20 @@ describe("clean — the .gitignore lines setup recorded", () => {
     expect(parseSingleDoc(result.stdout)["gitignoreRemoved"]).toEqual(MACHINE_LOCAL);
   });
 
+  it("says in a dry run that a real run takes back the recorded lines, and touches nothing", async () => {
+    // 2026-10-25_autonomy-distribution-02/build/13: the preview did not name the edit a real run makes.
+    const root = await initialised();
+    const before = await readFile(join(root, ".gitignore"), "utf8");
+
+    const result = await runClean(root, ["--dry-run"]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toContain(
+      `A real run also takes back the .gitignore line(s) this setup added, each once the file it ignores is gone: ${MACHINE_LOCAL.join(", ")}.`,
+    );
+    expect(await readFile(join(root, ".gitignore"), "utf8")).toBe(before);
+  });
+
   it("says which lines it took back, and deletes the .gitignore it created", async () => {
     const root = await initialised();
 

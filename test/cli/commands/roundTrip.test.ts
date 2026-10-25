@@ -48,10 +48,11 @@ function git(root: string, args: readonly string[]): { status: number | null; st
 }
 
 /**
- * The one file a four-client `clean` keeps by design today: `.claude/settings.json`, holding the
- * deny and ask rows setup added, which the engine records and never owns, so `clean` leaves them
- * (`src/manifest/claudeSettings.ts`, REQ-FLOW-036). Not this unit's to change; the `.gitignore`
- * half of REQ-FLOW-027 holds beside it, and every other file is held byte-identical.
+ * The one exception REQ-FLOW-027 names (`2026-10-25_autonomy-distribution-02/build/7`): every
+ * file that existed before is byte-identical and no other file exists, except
+ * `.claude/settings.json`, which keeps the deny and ask rows the engine recorded (REQ-FLOW-036).
+ * The engine records those rows and never owns one, so `clean` leaves them
+ * (`src/manifest/claudeSettings.ts`).
  */
 const KEPT_SETTINGS = ".claude/settings.json";
 

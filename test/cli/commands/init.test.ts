@@ -514,9 +514,10 @@ describe("init — fresh repo", () => {
     expect(countQuestions(result.stdout)).toBe(0);
     expect(existsSync(join(root, STATE_DIR))).toBe(true);
     expect(await readManifest(root)).not.toBeNull();
-    // The credential file is the entry init guarantees; the state dir is
-    // committed on purpose, so it is not one.
-    expect(await readFile(join(root, ".gitignore"), "utf8")).toContain(".env.mcp");
+    // The state dir is committed on purpose, so it is not an entry.
+    // TEST CHANGE, justified: REQ-FLOW-016 — .env.mcp is written only when a server needs a credential,
+    // and this init selects none, so the credential file gets no line.
+    expect((await readFile(join(root, ".gitignore"), "utf8")).split("\n")).not.toContain(".env.mcp");
     // REQ-FLOW-016: the review gate's runtime state is ignored beside it.
     expect((await readFile(join(root, ".gitignore"), "utf8")).split("\n")).toEqual(
       expect.arrayContaining([
@@ -549,13 +550,32 @@ describe("init — fresh repo", () => {
         ".stamity/preflight-canary.json (the shell guard's hooks canary), " +
         ".stamity/run-ended.json (the run that just ended, read by the ask gate), .stamity/context-once/ (Cursor's once-per-conversation context markers), .stamity/client-models.json (machine-local state this setup writes) — were added to your .gitignore", // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, named last. // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): the engine now ignores the client model list cache, named last with the panel's neutral reason.
     );
-    expect(result.stdout).toContain("security: these lines — .env.mcp (MCP server credentials), ");
+    // TEST CHANGE, justified: REQ-FLOW-016 — .env.mcp is written only when a server needs a credential, so the
+    // disclosure opens on the review gate's state and never names the credential file here.
+    expect(result.stdout).toContain("security: these lines — .stamity/review-gate.json (the review gate's per-run state), ");
+    expect(result.stdout).not.toContain(".env.mcp (MCP server credentials)");
     // No MCP server, so no credential file this setup uses.
     expect(result.stdout).not.toContain("credential file this setup uses");
     // The credential hint stays conditional: no server, nothing to load.
     expect(result.stdout).not.toContain("credentials:");
     // Nothing detected means nothing uncovered to disclose: no block at all.
     expect(result.stdout).not.toContain("detected stacks with no dedicated guidance");
+  });
+
+  it("names in its dry-run preview only the .gitignore lines a live init writes (REQ-FLOW-016)", async () => {
+    // 2026-10-25_autonomy-distribution-02/build/9: the preview named .env.mcp, which a live init with no
+    // MCP server never writes (decision E1).
+    const root = await makeRepo();
+
+    const result = await runInit(root, ["--dry-run", "-y"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("these lines — .stamity/review-gate.json (the review gate's per-run state), ");
+    expect(result.stdout).not.toContain(".env.mcp (MCP server credentials)");
+
+    await writeFile(join(root, ".env.mcp"), "GITHUB_PAT=\n", "utf8");
+    const withFile = await runInit(root, ["--dry-run", "-y"]);
+    expect(withFile.stdout).toContain("these lines — .env.mcp (MCP server credentials), ");
   });
 
   it("prints the stack-suggestion block for a detected stack, above the next steps", async () => {
@@ -2015,7 +2035,9 @@ describe("init --dry-run", () => {
         ".stamity/preflight-canary.json (the shell guard's hooks canary), " +
         ".stamity/run-ended.json (the run that just ended, read by the ask gate), .stamity/context-once/ (Cursor's once-per-conversation context markers), .stamity/client-models.json (machine-local state this setup writes) — would be added to your .gitignore", // TEST CHANGE, justified (v6-cursor-cloud, REQ-FLOW-115): the engine now ignores Cursor's context-once markers, named last. // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): the engine now ignores the client model list cache, named last with the panel's neutral reason.
     );
-    expect(result.stdout).toContain("security: these lines — .env.mcp (MCP server credentials), ");
+    // TEST CHANGE, justified: REQ-FLOW-016 — build/9: the preview names only the lines a live init writes, and
+    // with no MCP server that is not the credential file's.
+    expect(result.stdout).toContain("security: these lines — .stamity/review-gate.json (the review gate's per-run state), ");
     // REQ-FLOW-022: the preview names a defaulted client set as the default too.
     // build/131: before anything is written, `--tools` is the route that works.
     expect(result.stdout).toContain(

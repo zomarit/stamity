@@ -1213,6 +1213,24 @@ describe("workspace sync — the bridge", () => {
     expect(again.repos[0]).not.toHaveProperty("gitignoreAdded");
   });
 
+  it("names the recorded lines a member's sync took back from that member's .gitignore (REQ-FLOW-016)", async () => {
+    // 2026-10-25_autonomy-distribution-02/build/10: the row named appends only, so a take-back went unnamed.
+    const temp = getTemp();
+    await seedCorpus(temp);
+    const root = await seedWorkspace(temp, manifestOf([{ path: "apps/api" }], { defaults: { tools: ["claude"] } }));
+    const api = await seedSyncMember(root, "apps/api", { tools: ["claude"], patch: { mcp: { servers: ["github"] } } });
+    expect((await runSync(root)).code).toBe(0);
+    expect((await readFile(join(api, ".gitignore"), "utf8")).split("\n")).toContain(".env.mcp");
+
+    const manifest = await readManifest(api);
+    if (manifest === null) throw new Error("no member manifest");
+    await writeManifest(api, { ...manifest, mcp: { servers: [] } });
+    const result = await runSync(root, ["--json"]);
+
+    expect(singleSyncDocument(result.stdout).repos[0]).toMatchObject({ gitignoreRemoved: [".env.mcp"] });
+    expect((await readFile(join(api, ".gitignore"), "utf8")).split("\n")).not.toContain(".env.mcp");
+  });
+
   it("leaves a member the workspace declares no maturityTier for on its own tier", async () => {
     const temp = getTemp();
     await seedCorpus(temp);

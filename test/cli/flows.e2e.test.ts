@@ -70,7 +70,9 @@ async function readManifest(path: string): Promise<ObservedManifest> {
 describe("the full lifecycle journey", () => {
   const getFixture = useCliFixture({ git: true });
 
-  it("init -y through clean -y returns the tree to pre-init plus .gitignore and the engine's deny rows", {
+  // TEST CHANGE, justified: REQ-FLOW-016 — clean takes back the .gitignore lines setup recorded, and deletes the
+  // .gitignore setup created; retitled from "… returns the tree to pre-init plus .gitignore and the engine's deny rows".
+  it("init -y through clean -y returns the tree to pre-init plus the engine's deny rows", {
     timeout: 180_000,
   }, async () => {
     const fixture = getFixture();
@@ -212,7 +214,8 @@ describe("the full lifecycle journey", () => {
     // exactly the engine's deny rows and nothing else — no hook, no other key, no
     // other row — and clean's output names every one of them.
     const treeAfter = await snapshotTree(fixture.repoDir);
-    expect(treeAfter).toEqual([".claude/settings.json", ".gitignore", "history.md"]);
+    // TEST CHANGE, justified: REQ-FLOW-016 — the .gitignore setup created leaves with its lines (REQ-FLOW-027).
+    expect(treeAfter).toEqual([".claude/settings.json", "history.md"]);
     const settings: unknown = JSON.parse(await readFile(join(fixture.repoDir, ".claude", "settings.json"), "utf8"));
     // TEST CHANGE (v0a2, REQ-FLOW-123, REQ-FLOW-124): the person-only rows are split, the refused acts in
     // `deny` and the acts that can be undone in `ask`, and clean removes no row of either list, so both survive.
@@ -221,10 +224,9 @@ describe("the full lifecycle journey", () => {
     expect(settings).toStrictEqual({ permissions: { deny: [...CLAUDE_DENY_ROWS], ask: [...claudeAskRows(resolveAutonomy({}).runs)] } });
     expect(clean.stdout).toContain("clean removes no deny row, as an equal one may be yours.");
     for (const row of CLAUDE_DENY_ROWS) expect(clean.stdout, `clean did not name ${row}`).toContain(JSON.stringify(row));
-    // Beside them survive the engine's gitignore entries: the
-    // credential file and the review gate's runtime state (REQ-FLOW-016).
-    const gitignore = await readFile(join(fixture.repoDir, ".gitignore"), "utf8");
-    expect(gitignore).toContain(".env.mcp");
-    expect(gitignore).toContain(".stamity/review-gate.json.tmp-*");
+    // TEST CHANGE, justified: REQ-FLOW-016 — the engine's gitignore entries no longer survive: setup recorded
+    // each line it appended, and clean took them back with the file it created, so none is left.
+    expect(await stat(join(fixture.repoDir, ".gitignore")).then(() => true, () => false)).toBe(false);
+    expect(clean.stdout).toContain("Removed .gitignore: the setup created it, and nothing of yours was in it.");
   });
 });

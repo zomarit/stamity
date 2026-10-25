@@ -902,6 +902,8 @@ interface MemberOutcome {
   lockedApplied: string[];
   /** Lines the member's sync appended to that member's `.gitignore` (REQ-FLOW-016). */
   gitignoreAdded: string[];
+  /** Recorded lines the member's sync took back from that `.gitignore` (REQ-FLOW-016). */
+  gitignoreRemoved: string[];
 }
 
 /** One member's row: the cascade's own verdict, plus what the bridge saw. */
@@ -909,6 +911,7 @@ interface SyncRepoRow extends WorkspaceRepoSyncRow {
   patched?: PropagatedField[];
   lockedApplied?: string[];
   gitignoreAdded?: string[];
+  gitignoreRemoved?: string[];
 }
 
 /**
@@ -1062,7 +1065,7 @@ function createBridge(
     const { patch, fields } = propagationPatch(manifest, resolved);
     // Recorded whatever happens next, so a member whose apply then fails still
     // reports the patch that reached its manifest.
-    const outcome: MemberOutcome = { patched: fields, lockedApplied: [...resolved.lockedApplied], gitignoreAdded: [] };
+    const outcome: MemberOutcome = { patched: fields, lockedApplied: [...resolved.lockedApplied], gitignoreAdded: [], gitignoreRemoved: [] };
     outcomes.set(repo.path, outcome);
 
     if (fields.length > 0 && !ctx.dryRun) {
@@ -1108,6 +1111,7 @@ function createBridge(
     });
     // An append to a file the operator owns is named, as the member's own sync names it.
     outcome.gitignoreAdded = [...(applied.gitignoreAdded ?? [])];
+    outcome.gitignoreRemoved = [...(applied.gitignoreRemoved ?? [])];
     // A model list cache the member's sync could not write is named, as `sync` names it (REQ-LADDER-009).
     if (applied.modelListCacheWarning !== undefined) ctx.io.err(`warning: ${repo.path}: ${applied.modelListCacheWarning}\n`);
     if (applied.refused.length > 0) throw refusedPaths(repo.path, plan, applied.refused);
@@ -1149,6 +1153,9 @@ function renderSyncDetail(row: SyncRepoRow, dryRun: boolean): string {
   }
   if ((row.gitignoreAdded ?? []).length > 0) {
     parts.push(`.gitignore: added ${(row.gitignoreAdded ?? []).join(", ")}`);
+  }
+  if ((row.gitignoreRemoved ?? []).length > 0) {
+    parts.push(`.gitignore: removed ${(row.gitignoreRemoved ?? []).join(", ")}`);
   }
   return sanitizeLabel(parts.join("  "));
 }
@@ -1343,6 +1350,7 @@ async function runSync(
         patched: seen.patched,
         ...(seen.lockedApplied.length === 0 ? {} : { lockedApplied: seen.lockedApplied }),
         ...(seen.gitignoreAdded.length === 0 ? {} : { gitignoreAdded: seen.gitignoreAdded }),
+        ...(seen.gitignoreRemoved.length === 0 ? {} : { gitignoreRemoved: seen.gitignoreRemoved }),
       };
     }),
     journalWarnings: result.journalWarnings,

@@ -9,7 +9,7 @@ import {
   suggestStackPacks,
 } from "../../detect/stackSupport.ts";
 import { readManifest } from "../../manifest/manifest.ts";
-import { REQUIRED_GITIGNORE_ENTRIES } from "../../mcp/env.ts";
+import { collectRequiredEnvVars, presentGitignoreTargets, requiredGitignoreEntries } from "../../mcp/env.ts";
 import {
   carryPredecessorAssets,
   mapPredecessorDefaults,
@@ -874,6 +874,7 @@ function renderDryRun(
   notes: readonly string[],
   git: WorkingTreeStatus,
   gitFound: boolean,
+  gitignoreEntries: readonly string[],
 ): void {
   const { io, palette } = ctx;
   io.out(`${palette.bold("Dry run")} — nothing was written. A real run would:\n`);
@@ -887,14 +888,15 @@ function renderDryRun(
   io.out(`  write: ${emissionSummary(report, true)}\n`);
   io.out(`  manifest: ${report.manifestPath}\n`);
   // A preview writes nothing, so it cannot know which entries are missing: it
-  // names the whole required set, "wherever it lacks them".
+  // names the set a live run would need, "wherever it lacks them" (decision E1:
+  // `.env.mcp` only for a server that needs a credential, or a file on disk).
   io.out(
     `  ${gitignoreLine({
       dryRun: true,
       gitAvailable: git.available,
       ...(git.reason === undefined ? {} : { gitReason: git.reason }),
       gitFound,
-      entries: REQUIRED_GITIGNORE_ENTRIES,
+      entries: gitignoreEntries,
       mcpConfigured: mcpServers.length > 0,
     })}\n`,
   );
@@ -1294,7 +1296,12 @@ export const initCommand: CommandModule = {
     }
 
     if (ctx.dryRun) {
-      renderDryRun(ctx, effective, mcpServers, report, carry, residue, notes, git, gitFound);
+      const gitignoreEntries = requiredGitignoreEntries({
+        tools: effective.tools,
+        envVarsRequired: collectRequiredEnvVars(mcpServers).length > 0,
+        present: await presentGitignoreTargets(rootDir),
+      });
+      renderDryRun(ctx, effective, mcpServers, report, carry, residue, notes, git, gitFound, gitignoreEntries);
     } else {
       for (const note of notes) ctx.io.out(`${note}\n`);
       // The mark, once, on the one surface that is a first screen for a person.

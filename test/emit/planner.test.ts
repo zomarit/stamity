@@ -1246,7 +1246,8 @@ describe("co-owner ledger expansion", () => {
     const report = await applyInit(initOptions(root, ["claude", "codex"]));
 
     expect(report.wrote).toHaveLength(1);
-    expect(report.ledgerCount).toBe(2);
+    // TEST CHANGE, justified: REQ-FLOW-016 — each owner also records the .gitignore lines this run appended.
+    expect(report.ledgerCount).toBe(4);
     // Justification for the changed expectation: these rows previously carried
     // NO `contentHash`, because init omitted it while `sync` recorded it — the
     // two writers disagreed on the shape of a row describing the same emission.
@@ -1261,6 +1262,9 @@ describe("co-owner ledger expansion", () => {
       .update(wrapInManagedBlock("Shared charter body.\n", "AGENTS.md", ENGINE_VERSION))
       .digest("hex");
     expect((await readManifest(root))?.ledger).toEqual([
+      // TEST CHANGE, justified: REQ-FLOW-016 — the record of the .gitignore lines this run appended, one row per owner.
+      expect.objectContaining({ path: ".gitignore", adapter: "claude", artifactType: "infra" }),
+      expect.objectContaining({ path: ".gitignore", adapter: "codex", artifactType: "infra" }),
       {
         path: "AGENTS.md",
         adapter: "claude",
@@ -1308,12 +1312,17 @@ describe("co-owner ledger expansion", () => {
 
     expect(report.wrote).toHaveLength(1);
     const ledger = report.manifest?.ledger ?? [];
+    // TEST CHANGE, justified: REQ-FLOW-016 — each owner also records the .gitignore lines this run appended.
     expect(ledger.map((entry) => [entry.adapter, entry.path])).toEqual([
+      ["claude", ".gitignore"],
+      ["codex", ".gitignore"],
       ["claude", "AGENTS.md"],
       ["codex", "AGENTS.md"],
     ]);
-    // One write backs both rows: identical hash, identical stamp.
-    expect(new Set(ledger.map((entry) => entry.contentHash)).size).toBe(1);
-    expect(ledger.every((entry) => entry.stampedVersion === ENGINE_VERSION)).toBe(true);
+    // One write backs both charter rows: identical hash, identical stamp.
+    // TEST CHANGE, justified: REQ-FLOW-016 — held over the charter's rows, since the .gitignore rows hash another file.
+    const charterRows = ledger.filter((entry) => entry.path === "AGENTS.md");
+    expect(new Set(charterRows.map((entry) => entry.contentHash)).size).toBe(1);
+    expect(charterRows.every((entry) => entry.stampedVersion === ENGINE_VERSION)).toBe(true);
   });
 });
