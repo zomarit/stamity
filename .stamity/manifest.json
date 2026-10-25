@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.16.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-25T01:18:52.619Z",
+  "updatedAt": "2026-10-25T02:42:24.377Z",
   "tools": [
     "claude"
   ],
@@ -455,7 +455,7 @@
       "adapter": "claude",
       "artifactId": "st-eval-run",
       "artifactType": "skill",
-      "contentHash": "ff44b5a22a849c04c96626892149f49af783d6a8d2c884ea9dae3ba7fba93d5f",
+      "contentHash": "4921f02e0d6d9eac2d3e3aad879df38d0b2ad9004427e4314cfbb6c6e7507f24",
       "path": ".claude/skills/st-eval-run/SKILL.md"
     },
     {
@@ -532,7 +532,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "1de9853d45d60952f4e33f2a0056786f91c44fe27a91b5afaaf0c92b687c07e5",
+      "contentHash": "071c810801afa910e5544d45f3c2efa8937122bc0de471117f58af23e23e0f74",
       "path": ".claude/skills/st-unattended/SKILL.md"
     },
     {

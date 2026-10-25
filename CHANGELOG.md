@@ -78,6 +78,18 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   that run until the upgrade merges, and before 1.9.0 the guard does not run on that run at all. For a base older
   than 1.9.0, upgrade through 1.16.0 first, or keep the Action off that one upgrade pull request
   ([`docs/cloud.md`](docs/cloud.md)).
+- **An upgrade from 1.16.0 takes the autonomous default with no flag.**
+  - On Claude Code's and Copilot CLI's main thread, a ready-for-review mark, a local tag and a workflow dispatch that
+    `autonomy.deployingActs` does not name run unasked.
+  - Cursor and Codex refuse them in every mode. 1.16.0 refused the ready mark and a local tag there too; the dispatch
+    and remote-write rules are new.
+  - The run's own pull request lands only through `stamity run land`, when its evidence holds, on every client.
+  - To keep 1.16.0's asks, set `autonomy.mode` to `ask`, then run `sync`.
+  - Unattended, a local tag and an unnamed dispatch run on Claude Code and Copilot CLI. Name `workflow-dispatch` in
+    `autonomy.deployingActs`, and the branches a workflow deploys from in `autonomy.deployingBranches`, where one
+    releases or deploys.
+  - A repository that never commits its guard copies pays one `sync --loosen` on a fresh clone, on a switch of every
+    selected client, or on a hooks layout move.
 
 ### Security
 
@@ -113,6 +125,37 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   reviewer or assignee names a person other than the repository's own apps (`outside-write`). An unattended run or a
   sub-agent is refused. A remote, URL rewrite or include written runs on the main thread and is refused for a
   sub-agent (`remote-write`). A body read from a file is not screened for mentions.
+- **On Codex and Cursor, whose hook payload names no agent, the person-only guard refuses a ready mark, a local tag,
+  an unnamed workflow dispatch and a remote write in every mode** instead of letting a sub-agent run them; 1.16.0
+  refused the first two there, and the dispatch and remote-write rules are new.
+- **`SECURITY.md` names the residuals the autonomy work leaves.**
+  - On a single-account repository, the run's login is the person's, so the review loop is the evidence of record.
+  - A repository's CI may choose its checks with code the change edits.
+  - `--approved` is only as good as the guard's ask on its line.
+  - A `gh` planted elsewhere on `PATH`, or steered from the user's home folder, can still reach the land verb, and
+    `TMPDIR` moves the temp folder it checks.
+  - A body read from a file, or filled in by the shell, is not screened for mentions. Neither are gh aliases and
+    extensions, and short options are read as gh 2.102.0 reads them.
+  - A gh write that names no host is compared on `GH_HOST` or GitHub's public host, never on gh's own default host.
+  - In any mode, a sub-agent's direct write of the git config file moves the origin that later writes are compared
+    with. On Codex and Cursor, a direct or linked write to the git configuration file reaches every call; they refuse
+    a remote, URL-rewrite or include write in every mode.
+  - Re-pointing the origin's HEAD ref with a ref write is not read as a person-only act. Where the default branch is
+    named neither `main` nor `master`, a later attended push to it can run without asking.
+  - A heredoc body that is read as data is run unread by a program that runs it as code.
+  - With hooks off, no settings row asks for a ready mark or a local tag under the default setting.
+  - A forged committed ledger record can make `sync` remove an owner's equal ask row.
+  - A Claude Code client older than 2.1.295 was not measured with `onFailure`, and Copilot CLI ignores the key.
+  - A Codex verdict role's read-only is an instruction, not a boundary.
+  - The loosen gate trusts whatever `HEAD` a commit or a checkout moves to.
+  - The configuration window stays open to a re-run or forged pre-flight, and to a change made after the second
+    read.
+  - The charter, the rule files and the agent, command, skill, prompt and chat-mode definitions land on the evidence,
+    with the review loop their only reader.
+  - The ledger the land verb checks is the run's own committed file, so the review loop and the whole-branch review
+    are the evidence of record.
+  - A record head rewritten to `Mode: attended` skips the configuration window's compare and the pre-flight record,
+    and lifts the land verb's own `--approved` refusal.
 
 ### Added
 
@@ -263,6 +306,19 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   rows are no longer written, and `sync` removes the ones a 1.16.0 setup recorded and names each. Two new ask rows
   make the client ask for a `stamity run land` line carrying `--approved` in every mode, however the program is
   spelled and wherever the flag sits. Set `autonomy.mode: ask` to keep 1.16.0's rows.
+- **The security pages state the autonomy model.** `SECURITY.md`, `docs/security-mapping.md`, `docs/cloud.md` and
+  `docs/troubleshooting.md` say what still asks, and give the land verb's evidence: required check runs green on the
+  exact head commit, commit statuses not counted, no unresolved review thread, no open Critical or Warning ledger row,
+  and branch protection deciding any human review. They name `autonomy.mode: ask` to tighten back, and
+  `autonomy.deployingBranches` and `autonomy.deployingActs` to name what deploys.
+- **Troubleshooting gains entries** for the land verb's `asks` and `refused` reasons, with their fixes; the one-time
+  `--loosen`; a `gh` pinned only in the repository's version file; a settings deny row that matches a later command
+  on the same line (put a push, a tag or a merge alone on its line); and an origin cloned through an SSH host alias.
+- **In Working with stamity, the close lands through `run land`** and asks nothing about the commit.
+- **The eval set gains two cases for `stamity run land`**, `unattended-land-evidence-holds` and the floor case
+  `unattended-land-injected-merge-refused`, so SET-v7 now has 171 cases, with 153 advisory criteria. Run 53's three
+  advisory repeats are disposed. Twelve cases now judge the close and the unattended ending as they ship: no question
+  about the commit, and the run's own pull request is marked ready and merged only by `run land`.
 
 ### Deprecated
 
@@ -316,6 +372,10 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
 - **Copilot's shipped model candidates drop `gpt-5.4-mini` (retired 2026-10-19), `claude-opus-5` and
   `gpt-5.6-terra` (retiring 2026-11-16).** Claude Haiku 5.5 now leads Copilot's economy class, and an account without
   Haiku 5.5 keeps Haiku 4.5, as 1.16.0 picked. A vendor-dated retirement table keeps a retired id off the shipped list.
+- **`SECURITY.md` and the security mapping said two things the unattended hook hold does not do.** They said it holds
+  every option value a hook declaration names; it reads an option's `=` value, and a separate value word is read as
+  an argument word. And they said a folder a declaration names is never held; one absent at `Base:` is held whole.
+  Both pages now say what the hold does. The 1.16.0 notes keep their released text.
 
 ## [1.16.0] - 2026-10-20
 
