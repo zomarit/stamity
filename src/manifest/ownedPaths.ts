@@ -351,6 +351,53 @@ export function needsRenderingProof(path: string): boolean {
  */
 const LEGACY_CURSOR_GUARD_NAMES: ReadonlySet<string> = new Set([".cursor/hooks/subagent-guard.mjs", ".cursor/hooks/mcp-guard.mjs"]);
 
+/** One path {@link RETIRED_ENGINE_PATHS} names, and what a ledger row there must say. */
+export interface RetiredEnginePath {
+  /** The clients whose row may select the digest: the ones that wrote the file. */
+  readonly owners: readonly string[];
+  /** The catalog id of the touchpoint the row must name, as `artifactType: "command"`. */
+  readonly touchpoint: string;
+  /** The SHA-256 of the bytes 1.16.0 wrote at the path: frozen, never a row's own hash. */
+  readonly digest: string;
+}
+
+/** `sha256("policy:\n  allow_implicit_invocation: false\n")`, the companion's only text since `cf64788f`. */
+const TOUCHPOINT_COMPANION_1_16_0 = "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94";
+
+/** One frozen companion entry, for the touchpoint `/st-<id>`. */
+const companion = (id: string): [string, RetiredEnginePath] => [
+  `.agents/skills/st-${id}/agents/openai.yaml`,
+  Object.freeze({ owners: Object.freeze(["codex", "cursor"]), touchpoint: `cmd-${id}`, digest: TOUCHPOINT_COMPANION_1_16_0 }),
+];
+
+/**
+ * Files an earlier release wrote that the running engine may no longer render
+ * for a setup, so no plan proves them for the rendering proof
+ * ({@link needsRenderingProof}): the nine touchpoint companions
+ * `agents/openai.yaml`, which 1.16.0 wrote for Cursor and Codex alike and which
+ * only Codex plans now (REQ-FLOW-033). A closed list of literal paths, never
+ * derived from the corpus, each with the frozen digest of the bytes 1.16.0
+ * wrote there. A ledger row only selects the digest
+ * (`../cli/engine/emissionWrite.ts::retiredEngineRenderings`): it must name a
+ * listed owner, `artifactType: "command"` and the entry's touchpoint, and record
+ * that same digest; the delete still needs the bytes on disk, raw or
+ * CRLF-folded, to hash to it (`../merge/reclaim.ts`). So a forged row can only
+ * select the engine's own 1.16.0 bytes, and an edited file is kept and named.
+ * The bundled skills' own companions and a pack command's companion are not on
+ * the list, and keep the ordinary proof.
+ */
+export const RETIRED_ENGINE_PATHS: ReadonlyMap<string, RetiredEnginePath> = new Map([
+  companion("ask"),
+  companion("board"),
+  companion("debug"),
+  companion("plan"),
+  companion("pr-resolve"),
+  companion("quick"),
+  companion("rework"),
+  companion("spec"),
+  companion("work"),
+]);
+
 /**
  * True when `sha256OfBytes` is one of `renderings`, the SHA-256 of each
  * rendering the running engine produces at the path. No renderings — none

@@ -45,7 +45,7 @@ import {
 } from "../../manifest/hookDocuments.ts";
 import { memberHash, memberPointer, type MemberPointer } from "../../manifest/jsonMembers.ts";
 import type { EmittedArtifact } from "../../manifest/ledger.ts";
-import { OWNED_PATHS, needsRenderingProof } from "../../manifest/ownedPaths.ts";
+import { OWNED_PATHS, RETIRED_ENGINE_PATHS, needsRenderingProof } from "../../manifest/ownedPaths.ts";
 import { planUserMcpJson, predictMcpMergeRefusal } from "../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../mcp/catalog.ts";
 import { engineOwnedServerIds, mcpReclaimReducers } from "../../mcp/emit.ts";
@@ -1076,12 +1076,48 @@ export async function engineRenderingsFor(
   if (charter !== undefined) {
     for (const path of nestedCharters) add(path, charter.content);
   }
-  for (const [path, digest] of movedSkillRenderings(manifest.ledger, wanted, index)) {
+  const planned = new Set(outputs.map((output) => output.path));
+  for (const [path, digest] of [
+    ...movedSkillRenderings(manifest.ledger, wanted, index),
+    ...retiredEngineRenderings(manifest.ledger, wanted, planned),
+  ]) {
     const hashes = renderings.get(path) ?? new Set<string>();
     hashes.add(digest);
     renderings.set(path, hashes);
   }
   return { renderings };
+}
+
+/** Exactly 64 lowercase hex characters: the shape of a SHA-256 the ledger records. */
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+
+/**
+ * The frozen digests at the `wanted` paths an earlier release wrote and no
+ * `planned` output renders now (`../../manifest/ownedPaths.ts::RETIRED_ENGINE_PATHS`,
+ * REQ-FLOW-033): the nine touchpoint companions on a setup without Codex. A
+ * path yields its entry's digest only when a ledger row there names one of the
+ * entry's owners, `artifactType: "command"` and the entry's touchpoint, and
+ * records exactly that digest. A path any output still plans takes the
+ * ordinary proof instead, and a row's own hash is never the digest. The row
+ * only selects; the delete still needs the bytes to hash to the digest
+ * (`../../merge/reclaim.ts`), so an edited file is kept and named.
+ */
+export function retiredEngineRenderings(
+  ledger: readonly LedgerEntry[],
+  wanted: ReadonlySet<string>,
+  planned: ReadonlySet<string>,
+): [string, string][] {
+  const found = new Map<string, string>();
+  for (const row of ledger) {
+    if (!wanted.has(row.path) || planned.has(row.path)) continue;
+    const entry = RETIRED_ENGINE_PATHS.get(row.path);
+    if (entry === undefined || !entry.owners.includes(row.adapter)) continue;
+    if (row.artifactType !== "command" || row.artifactId !== entry.touchpoint) continue;
+    const recorded = row.contentHash;
+    if (recorded === undefined || !SHA256_HEX.test(recorded) || recorded !== entry.digest) continue;
+    found.set(row.path, entry.digest);
+  }
+  return [...found];
 }
 
 /**
