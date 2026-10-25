@@ -1020,7 +1020,7 @@ function normalizeUrl(url) {
 const URL_USERINFO = /^([a-z][a-z0-9+.-]*:\/\/)([^/]*)@/i
 
 /**
- * The URL without its userinfo — `https://user:token@host/x` becomes `https://host/x` — which is
+ * The URL without its userinfo — `https://<user>:<token>@host/x` becomes `https://host/x` — which is
  * the only form a document, a message or a log line carries. An scp-like `git@host:x` has no
  * `://` and is left alone: its user is not a secret. Git itself receives the URL as configured.
  */

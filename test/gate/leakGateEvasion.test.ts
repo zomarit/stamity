@@ -640,25 +640,29 @@ describe("leak-gate — credential shapes", () => {
     expect(result.stdout).toContain("src/mcp/secretScan.ts");
   });
 
-  it("still scans a shape-fixture file for every OTHER shape", () => {
-    // Per rule, not per file. `test/merge/bakEscape.test.ts` holds a deliberate
-    // OpenSSH header canary and is exempt from THAT shape alone — a suite that
-    // legitimately carries one example is not thereby licensed to carry a real
-    // credential of a different shape.
+  // TEST CHANGE, justified (REQ-PLUGIN-033): no test path is a shape fixture any more, so the
+  // per-rule exemption this case pins is re-pinned onto the one exempt file, the scanner's source.
+  // The property is the same: exempt from the credential shapes, scanned for every other rule.
+  it("still scans the scanner's own source for every rule outside the credential shapes", () => {
+    // Per rule, not per file. `src/mcp/secretScan.ts` holds the example shapes it
+    // defines and is exempt from those alone — the exemption does not license it
+    // to carry a reserved name, and a shape fixture under test/ is exempt from nothing.
     const scratch = new Scratch();
-    const file = scratch.write(
-      "test/merge/bakEscape.test.ts",
-      `const SECRET = "${OPENSSH_HEADER}"\nconst token = "${GITHUB_TOKEN}"\n`,
+    const scanner = scratch.write(
+      "src/mcp/secretScan.ts",
+      `const SECRET = "${OPENSSH_HEADER}"\nconst token = "${GITHUB_TOKEN}"\nconst name = "${RESERVED}"\n`,
     );
+    const fixture = scratch.write("test/merge/bakEscape.test.ts", `const SECRET = "${OPENSSH_HEADER}"\n`);
 
     const result = scratch.run();
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain(file);
-    expect(result.stderr).toContain("github-token");
-    // The canary it IS exempt from stays exempt, and the exemption is printed.
-    expect(result.stderr).not.toContain("pem-private-key]");
+    expect(result.stderr).toMatch(new RegExp(`${scanner.replaceAll(".", "\\.")}:3:\\d+\\s+\\[candidate-name-a\\]`));
+    // The shapes it IS exempt from stay exempt, and the exemption is printed.
+    expect(result.stderr).not.toContain("github-token]");
     expect(result.stderr).toContain("not scanned (rule pem-private-key allowlisted)");
+    // The old fixture path carries no exemption: its header is a hit like any other.
+    expect(result.stderr).toMatch(new RegExp(`${fixture.replaceAll(".", "\\.")}:1:\\d+\\s+\\[pem-private-key\\]`));
   });
 });
 

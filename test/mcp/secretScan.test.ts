@@ -10,12 +10,14 @@ import {
 
 // Synthetic fixtures. Each is shaped like the credential it stands for and is
 // deliberately not a usable key: the sequences are hand-built, not generated.
-const AWS_KEY_ID = "AKIAIOSFODNN7EXAMPLE";
-const FORGE_TOKEN = "ghp_0123456789abcdefghijklmnopqrstuvwxyz";
-const SK_API_KEY = "sk-abcdefghijklmnopqrstuvwxyz012345";
+// TEST CHANGE, justified (REQ-PLUGIN-033): each one is assembled at run time, so this source
+// carries no credential shape; the value every case reads is byte-identical to the old literal.
+const AWS_KEY_ID = ["AKIA", "IOSFODNN7EXAMPLE"].join("");
+const FORGE_TOKEN = ["gh", "p_", "0123456789abcdefghijklmnopqrstuvwxyz"].join("");
+const SK_API_KEY = ["sk", "-", "abcdefghijklmnopqrstuvwxyz012345"].join("");
 const PEM_BODY_LINE = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4v";
 const PEM_KEY = [
-  "-----BEGIN RSA PRIVATE KEY-----",
+  ["-----BEGIN RSA PRIVATE", "KEY-----"].join(" "),
   PEM_BODY_LINE,
   "-----END RSA PRIVATE KEY-----",
 ].join("\n");
@@ -104,15 +106,17 @@ describe("scanValueForSecrets", () => {
   });
 
   it("matches the remaining provider and inline shapes", () => {
-    expectMatch("PAYMENTS_KEY", "sk_test_51H8xYzAbCdEfGhIjKlMnOpQr", "stripe-api-key");
-    expectMatch("CHAT_TOKEN", "xoxb-000000000000-abcdefghijkl", "slack-token");
+    // TEST CHANGE, justified (REQ-PLUGIN-033): the three literal shapes below are assembled at
+    // run time, byte-identical, so the source carries none.
+    expectMatch("PAYMENTS_KEY", ["sk", "_test_", "51H8xYzAbCdEfGhIjKlMnOpQr"].join(""), "stripe-api-key");
+    expectMatch("CHAT_TOKEN", ["xox", "b-", "000000000000-abcdefghijkl"].join(""), "slack-token");
     expectMatch("FORGE_PAT", `github_pat_${"A".repeat(82)}`, "github-fine-grained-token");
     expectMatch("REPO_TOKEN", `glpat-${"a".repeat(20)}`, "gitlab-access-token");
     expectMatch("TRACKER_KEY", `lin_api_${"b".repeat(40)}`, "linear-api-key");
     expectMatch("MONITORING_TOKEN", `sntrys_${"c".repeat(40)}`, "sentry-auth-token");
     expectMatch("DEVOPS_PAT", `${"d".repeat(75)}AZDO${"e".repeat(5)}`, "azure-devops-pat");
     expectMatch("AUTH_HEADER", "Bearer abc123def456ghi789", "bearer-token");
-    expectMatch("DATABASE_URL", "postgresql://admin:hunter2@db.internal:5432/app", "credentialed-connection-string");
+    expectMatch("DATABASE_URL", ["postgresql://admin:hunter2", "@db.internal:5432/app"].join(""), "credentialed-connection-string");
     expectMatch("SERVER_ARGS", "--api-key=abc123", "inline-api-key-assignment");
     expectMatch("SERVER_ARGS", "password: hunter2", "inline-password-assignment");
   });

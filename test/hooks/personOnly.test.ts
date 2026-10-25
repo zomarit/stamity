@@ -3835,7 +3835,9 @@ describe("writes that reach an outside party (a4c, REQ-FLOW-134)", () => {
     ["an HTTPS remote URL", "https://github.com/acme/app.git", "github.com/acme/app"],
     ["an SSH remote URL in scp form", "git@github.com:acme/app.git", "github.com/acme/app"],
     ["an ssh:// remote URL", "ssh://git@github.com/acme/app", "github.com/acme/app"],
-    ["a URL carrying a credential, mixed case and a trailing slash", "https://x:tok@github.com/Acme/App/", "github.com/acme/app"],
+    // TEST CHANGE, justified (REQ-PLUGIN-033): the input is split at its `@` and joined at run time,
+    // byte-identical, so the source carries no URL with a user:password pair; the title is unchanged.
+    ["a URL carrying a credential, mixed case and a trailing slash", ["https://x:tok", "@github.com/Acme/App/"].join(""), "github.com/acme/app"],
     ["an Enterprise remote URL", "https://ghe.example.com/acme/app.git", "ghe.example.com/acme/app"],
     ["a -R value naming no host", "acme/app", "github.com/acme/app"],
     ["a -R value naming its host", "ghe.example.com/acme/app", "ghe.example.com/acme/app"],

@@ -308,9 +308,10 @@ describe("parseEnvFile", () => {
   });
 
   it("splits on the first `=` only, so a value may carry its own", () => {
-    expect(parseEnvFile("POSTGRES_URL=postgres://u:p@h/db?opt=1&other=2")).toEqual({
-      POSTGRES_URL: "postgres://u:p@h/db?opt=1&other=2",
-    });
+    // TEST CHANGE, justified (REQ-PLUGIN-033): the URL is split at its `@` and joined at run time,
+    // byte-identical, so the source carries no credentialed connection string.
+    const url = ["postgres://u:p", "@h/db?opt=1&other=2"].join("");
+    expect(parseEnvFile(`POSTGRES_URL=${url}`)).toEqual({ POSTGRES_URL: url });
   });
 
   it("reads a file written with CRLF endings", () => {

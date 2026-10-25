@@ -367,7 +367,9 @@ describe("ensureDraftPr", () => {
 
 describe("resolveRepo", () => {
   it("reads a github.com origin in each transport spelling", () => {
-    for (const url of ["https://github.com/acme/app.git", "git@github.com:acme/app.git", "ssh://git@github.com/acme/app", "https://x-access-token:t@github.com/acme/app"]) {
+    // TEST CHANGE, justified (REQ-PLUGIN-033): the credentialed URL is split at its `@` and joined
+    // at run time, byte-identical, so the source carries no URL with a user:password pair.
+    for (const url of ["https://github.com/acme/app.git", "git@github.com:acme/app.git", "ssh://git@github.com/acme/app", ["https://x-access-token:t", "@github.com/acme/app"].join("")]) {
       expect(resolveRepo({}, url), url).toEqual({ host: "github.com", owner: "acme", repo: "app" });
     }
   });

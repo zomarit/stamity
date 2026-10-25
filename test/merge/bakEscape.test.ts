@@ -199,7 +199,9 @@ describe("backup containment — the `.bak` sibling is a write target too", () =
   it("refuses to back up a symlinked target, so its secret never enters the tree (R5)", async () => {
     const { root, outside } = await seed();
     const secretPath = join(outside, "id_ed25519");
-    const secret = "-----BEGIN OPENSSH PRIVATE KEY-----\nPRIVATE-KEY-MATERIAL\n";
+    // TEST CHANGE, justified (REQ-PLUGIN-033): the header is assembled at run time, byte-identical,
+    // so the source carries no private-key shape.
+    const secret = [["-----BEGIN OPENSSH PRIVATE", "KEY-----"].join(" "), "PRIVATE-KEY-MATERIAL", ""].join("\n");
     await writeFile(secretPath, secret, "utf-8");
     const target = join(root, "AGENTS.md");
     await symlink(secretPath, target);
@@ -354,7 +356,9 @@ describe("backup containment — the `.bak` sibling is a write target too", () =
   );
 });
 
-const SECRET = "-----BEGIN OPENSSH PRIVATE KEY-----\nPRIVATE-KEY-MATERIAL\n";
+// TEST CHANGE, justified (REQ-PLUGIN-033): the header is assembled at run time, byte-identical,
+// so the source carries no private-key shape.
+const SECRET = [["-----BEGIN OPENSSH PRIVATE", "KEY-----"].join(" "), "PRIVATE-KEY-MATERIAL", ""].join("\n");
 
 /** The exact option shape `sync/engine.ts::writeOptions` emits for a managed
  *  body on a plain, flagless run: no `--force`, backup on, boundary threaded.

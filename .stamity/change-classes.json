@@ -182,7 +182,8 @@
         "test/ci/forkIdentity.test.ts",
         "test/ci/leakGate.test.ts",
         "test/ci/testInputsGuard.test.ts",
-        "test/docsPages.test.ts"
+        "test/docsPages.test.ts",
+        "test/gate/fixtureSecrets.test.ts"
       ]
     }
   ]

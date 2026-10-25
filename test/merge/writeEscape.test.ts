@@ -208,7 +208,9 @@ describe("write containment — a planted symlinked directory component", () => 
 });
 
 const VERSION = "1.0.0";
-const SECRET = "-----BEGIN OPENSSH PRIVATE KEY-----\nPRIVATE-KEY-MATERIAL\n";
+// TEST CHANGE, justified (REQ-PLUGIN-033): the header is assembled at run time, byte-identical,
+// so the source carries no private-key shape.
+const SECRET = [["-----BEGIN OPENSSH PRIVATE", "KEY-----"].join(" "), "PRIVATE-KEY-MATERIAL", ""].join("\n");
 
 /** The exact option shape `sync/engine.ts::writeOptions` emits for a managed
  *  body on a plain, flagless run: no `--force`, backup on, boundary threaded. */

@@ -457,30 +457,26 @@ export function normalizeWithMap(text, { preserveCase = false } = {}) {
 const PREDECESSOR_ALLOWLIST = ['src/migration/', 'test/migration/', 'docs/migration.md', 'dist/cli.js', 'dist/index.js', 'dist/src.js']
 
 /**
- * The two files that DEFINE credential shapes, and therefore carry example ones.
+ * The file that DEFINES credential shapes, and therefore carries example ones.
  *
- * A shape scanner cannot scan its own corpus of shapes without reporting every one of them. The
+ * A shape scanner cannot scan its own corpus of shapes without reporting every one of them. Its
+ * test suite is not on this list: it assembles every example at run time, as every suite does. The
  * exemption is by PATH and is printed with the files it dropped, which is the only exemption form
  * this gate has ever allowed — no file is exempt for what its bytes say or what it is called. In
  * particular there is no in-file opt-out marker and there will not be one: a comment that turns
  * the scanner off is an exemption by CONTENT, which is the mistake this gate was rebuilt twice to
  * stop making, and it is writable by whoever is committing the credential.
  */
-const SECRET_SCANNER_SOURCES = ['src/mcp/secretScan.ts', 'test/mcp/secretScan.test.ts']
+const SECRET_SCANNER_SOURCES = ['src/mcp/secretScan.ts']
 
 /**
- * Suites carrying a deliberate canary of one specific shape, exempt from THAT shape only.
+ * Files exempt from one credential shape only, `{ [ruleId]: paths }`; each entry prints on every run.
  *
- * Per rule rather than per file, so a suite that legitimately holds an example connection string
- * is still scanned for every other credential shape. Each entry is a reviewed decision about one
- * known constant — AWS's own documented example key id, a `u:p@h` placeholder, an OpenSSH header
- * over the literal text `PRIVATE-KEY-MATERIAL` — and each prints on every run.
+ * Empty is the steady state; `test/gate/fixtureSecrets.test.ts` holds the tree to run-time
+ * assembly. A suite that needs a credential shape builds it at run time (a join the shape cannot
+ * span), so no fixture is exempt here, and that guard fails at the line of any literal that lands.
  */
-const SHAPE_FIXTURES = {
-  'aws-access-key-id': ['test/cli/commands/validate.test.ts'],
-  'credentialed-connection-string': ['test/mcp/env.test.ts'],
-  'pem-private-key': ['test/merge/bakEscape.test.ts', 'test/merge/writeEscape.test.ts'],
-}
+const SHAPE_FIXTURES = {}
 
 /**
  * Reserved names, assembled from fragments at run time; `allow` is the per-rule path exemption.

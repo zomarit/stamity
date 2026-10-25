@@ -630,7 +630,9 @@ describe("runPreflight — the push identity (review/36)", () => {
   it.each([
     ["an ssh push URL", pushTo("git@github.com:o/r.git", []), fix],
     ["an ssh:// push URL", pushTo("ssh://git@github.com/o/r.git", [GH_HELPER]), fix],
-    ["an https push URL carrying credentials", pushTo("https://x-access-token:s3cr3tvalue@github.com/o/r", [GH_HELPER]), fix],
+    // TEST CHANGE, justified (REQ-PLUGIN-033): the URL is split at its `@` and joined at run time,
+    // byte-identical, so the source carries no URL with a user:password pair.
+    ["an https push URL carrying credentials", pushTo(["https://x-access-token:s3cr3tvalue", "@github.com/o/r"].join(""), [GH_HELPER]), fix],
     ["a plain http push URL", pushTo("http://github.com/o/r", [GH_HELPER]), fix],
     ["no credential helper", pushTo(FETCH_URL, []), fix],
     ["a helper list that cannot be placed", pushTo(FETCH_URL, null), fix],

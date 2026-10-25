@@ -33,6 +33,11 @@ const OWNER = "Acme-Corp";
 const REPO = "stamity-internal";
 const SCOPE = "acme-corp";
 const FORK_URL = `https://github.com/${OWNER}/${REPO}`;
+// TEST CHANGE, justified (REQ-PLUGIN-033): the two credentialed URLs the refusal cases feed were
+// literals at each case; each is now split at its `@` and joined once here, byte-identical, so the
+// source carries no URL with a user:password pair.
+const CREDENTIALED_FORK_URL = ["https://fixture-user:fixture-pass", `@github.com/${OWNER}/${REPO}`].join("");
+const CREDENTIALED_REGISTRY = ["https://fixture-user:fixture-pass", "@registry.example.invalid"].join("");
 
 /** The C1 keys, in the order the script reports them. */
 const IDENTITY_KEYS = ["name", "repository", "homepage", "bugs", "stamity.publisher", "private", "publishConfig"];
@@ -339,7 +344,7 @@ describe("scripts/fork-identity.mjs", () => {
       const imported = digests(root(), TARGETS);
       for (const url of [
         "https://gitlab.com/acme-corp/stamity-internal",
-        "https://fixture-user:fixture-pass@github.com/Acme-Corp/stamity-internal",
+        CREDENTIALED_FORK_URL,
         "https://github.com/Acme-Corp/stamity-internal/tree/main",
         "http://github.com/Acme-Corp/stamity-internal",
       ]) {
@@ -377,7 +382,7 @@ describe("scripts/fork-identity.mjs", () => {
       const imported = digests(root(), TARGETS);
       for (const registry of [
         "http://registry.example.invalid",
-        "https://fixture-user:fixture-pass@registry.example.invalid",
+        CREDENTIALED_REGISTRY,
         "https://registry.example.invalid/?token=fixture-pass",
         "https://registry.example.invalid/#fixture-pass",
         "registry.example.invalid",
@@ -408,8 +413,8 @@ describe("scripts/fork-identity.mjs", () => {
     }, SCRIPT_BUDGET);
 
     it("never echoes a value given as --flag=value or with no flag before it", () => {
-      const repository = "https://fixture-user:fixture-pass@github.com/Acme-Corp/stamity-internal";
-      const registry = "https://fixture-user:fixture-pass@registry.example.invalid";
+      const repository = CREDENTIALED_FORK_URL;
+      const registry = CREDENTIALED_REGISTRY;
       for (const args of [
         [`--repository=${repository}`],
         ["--repository", FORK_URL, `--registry=${registry}`],
@@ -512,7 +517,7 @@ describe("scripts/fork-identity.mjs", () => {
       " https://registry.example.invalid",
       "https://registry.example.invalid ",
       `https://registry.example.invalid${String.fromCharCode(10)}`,
-      "https://fixture-user:fixture-pass@registry.example.invalid",
+      CREDENTIALED_REGISTRY,
       "https://registry.example.invalid/?token=fixture-pass",
       "https://registry.example.invalid/#fixture-pass",
       "https://registry.example.invalid/My%20Project/",

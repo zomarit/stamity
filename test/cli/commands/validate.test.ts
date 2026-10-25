@@ -322,7 +322,9 @@ describe("validate — .env.mcp", () => {
   it("warns about credential shapes and placeholders without failing the run", async () => {
     const repo = getRepo();
     // The documented example key, so the fixture carries no live credential.
-    const literal = "AKIAIOSFODNN7EXAMPLE";
+    // TEST CHANGE, justified (REQ-PLUGIN-033): assembled at run time, byte-identical, so the source
+    // carries no credential shape.
+    const literal = ["AKIA", "IOSFODNN7EXAMPLE"].join("");
     await repo.seedFiles({
       ".env.mcp": ["# credentials", `AWS_ACCESS_KEY_ID=${literal}`, "GITHUB_TOKEN=", ""].join("\n"),
     });

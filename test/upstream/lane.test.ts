@@ -277,7 +277,9 @@ describe("the seams a hostile input reaches: tag shapes and URL userinfo", () =>
   });
 
   it("strips userinfo from a URL and leaves every other form alone", () => {
-    expect(redactUrl("https://x-access-token:SECRET@github.invalid/org/repo.git")).toBe("https://github.invalid/org/repo.git");
+    // TEST CHANGE, justified (REQ-PLUGIN-033): the credentialed input is split at its `@` and joined
+    // at run time, byte-identical, so the source carries no URL with a user:password pair.
+    expect(redactUrl(["https://x-access-token:SECRET", "@github.invalid/org/repo.git"].join(""))).toBe("https://github.invalid/org/repo.git");
     expect(redactUrl("https://SECRET@github.invalid/org/repo.git")).toBe("https://github.invalid/org/repo.git");
     expect(redactUrl("https://github.invalid/org/repo.git")).toBe("https://github.invalid/org/repo.git");
     expect(redactUrl("https://github.invalid/org/repo.git#a@b")).toBe("https://github.invalid/org/repo.git#a@b");
@@ -2092,7 +2094,9 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
     () => {
       const fork = createFork(upstream, forkDir());
       expectOutcome(runLane(fork, ["status"]), "update-available");
-      const secret = "https://x-access-token:SECRETTOKEN@example.invalid/org/upstream.git";
+      // TEST CHANGE, justified (REQ-PLUGIN-033): both credentialed URLs in this case are split at
+      // their `@` and joined at run time, byte-identical, so the source carries no user:password pair.
+      const secret = ["https://x-access-token:SECRETTOKEN", "@example.invalid/org/upstream.git"].join("");
       const shown = "https://example.invalid/org/upstream.git";
       // The configuration names the URL with a token, the remote is repointed to match, and the
       // runs are offline: what was fetched is read, and nothing goes to that host.
@@ -2108,7 +2112,7 @@ describe.skipIf(!GIT)("the lifecycle over temporary repositories", () => {
       expect(`${offline.stdout}${offline.stderr}`).not.toContain("SECRETTOKEN");
 
       // The mismatch refusal names both URLs, both stripped.
-      git(fork, ["remote", "set-url", "upstream", "https://other:ALSOSECRET@example.invalid/elsewhere.git"]);
+      git(fork, ["remote", "set-url", "upstream", ["https://other:ALSOSECRET", "@example.invalid/elsewhere.git"].join("")]);
       const mismatch = runLane(fork, ["status", "--offline"]);
       expect(mismatch.code).toBe(2);
       expect(mismatch.doc.messages[0]).toContain("https://example.invalid/elsewhere.git");

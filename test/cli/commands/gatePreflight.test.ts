@@ -299,8 +299,10 @@ describe("stamity gate preflight and scan --text", () => {
       expect(rest.calls).toEqual([]);
     });
 
+    // TEST CHANGE, justified (REQ-PLUGIN-033): the userinfo key is split at its `@` with this file's
+    // `AT`, byte-identical, so the source carries no URL with a user:password pair.
     it.each([
-      ["an insteadOf that puts a token in the URL's userinfo", "url.https://x-access-token:tok-q7zk@github.com/.insteadOf"],
+      ["an insteadOf that puts a token in the URL's userinfo", `url.https://x-access-token:tok-q7zk${AT}github.com/.insteadOf`],
       ["a pushInsteadOf that pushes over ssh", `url.git${AT}github.com:.pushInsteadOf`],
     ])("refuses where GIT_CONFIG_COUNT supplies %s, as the push would apply it (review/136)", async (_label, key) => {
       const repo = await seedRepo();

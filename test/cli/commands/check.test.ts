@@ -1615,7 +1615,9 @@ describe("check — MCP credentials", () => {
   });
 
   it("passes once the credentials are filled, and never prints a value", async () => {
-    const secret = "ghp_0123456789abcdefghijklmnopqrstuvwxyzAB";
+    // TEST CHANGE, justified (REQ-PLUGIN-033): assembled at run time, byte-identical, so the source
+    // carries no credential shape.
+    const secret = ["gh", "p_", "0123456789abcdefghijklmnopqrstuvwxyzAB"].join("");
     const root = await seedRepo(getRepo(), {
       mcpServers: ["github"],
       files: { ".env.mcp": `GITHUB_TOKEN=${secret}\n` },

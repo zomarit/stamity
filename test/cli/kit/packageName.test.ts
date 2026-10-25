@@ -199,8 +199,10 @@ describe("packageCommand — a renamed private downstream", () => {
   // a command, so the fork loses its channel and every call renders `npx --no`, which fetches
   // nothing. An unscoped name cannot carry a scope registry either (`--registry` would send every
   // dependency there), so it fails closed the same way.
+  // TEST CHANGE, justified (REQ-PLUGIN-033): the credentialed registry is split at its `@` and
+  // joined at run time, here and in the table below, byte-identical (the `%j` title included).
   it.each([
-    { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://u:p@npm.acme.example" } },
+    { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: ["https://u:p", "@npm.acme.example"].join("") } },
     { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "http://npm.acme.example" } },
     { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://npm.acme.example/$(id)" } },
     { name: "stamity-internal", version: "1.8.0", publishConfig: { registry: "https://npm.acme.example" } },
@@ -228,7 +230,7 @@ describe("packageCommand — a renamed private downstream", () => {
     { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://npm.acme.example:8443/npm/" } },
     { name: "@acme/stamity", version: "1.8.0", private: true, publishConfig: { registry: "https://npm.acme.example" } },
     { name: "@acme/stamity", version: "next", publishConfig: { registry: "https://npm.acme.example/" } },
-    { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://u:p@npm.acme.example" } },
+    { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: ["https://u:p", "@npm.acme.example"].join("") } },
     { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "http://npm.acme.example" } },
     { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "https://npm.acme.example/a%20b" } },
     { name: "@acme/stamity", version: "1.8.0", publishConfig: { registry: "HTTPS://npm.acme.example" } },

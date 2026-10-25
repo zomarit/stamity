@@ -199,7 +199,9 @@ describe("the scope-registry option", () => {
   it("refuses a registry outside the plain https grammar, never echoing it into a command", () => {
     for (const registry of [
       "http://r.example",
-      "https://u:p@r.example",
+      // TEST CHANGE, justified (REQ-PLUGIN-033): split at its `@` and joined at run time,
+      // byte-identical, so the source carries no URL with a user:password pair.
+      ["https://u:p", "@r.example"].join(""),
       "https://r.example/?t=1",
       "https://r.example/#x",
       "https://r.example/a%20b",

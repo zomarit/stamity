@@ -556,7 +556,9 @@ describe.skipIf(WINDOWS)("fork-release.yml — the probe, executed", () => {
   it("fails an armed fork whose registry is not a clean https URL, and never prints the value", () => {
     for (const registry of [
       "http://registry.example",
-      "https://user:secret-pass@registry.example",
+      // TEST CHANGE, justified (REQ-PLUGIN-033): split at its `@` and joined at run time,
+      // byte-identical, so the source carries no URL with a user:password pair.
+      ["https://user:secret-pass", "@registry.example"].join(""),
       "https://registry.example/npm?token=secret-query",
       "https://registry.example/npm#secret-fragment",
       "https://",
