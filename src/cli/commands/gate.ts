@@ -1969,14 +1969,18 @@ function floorCopies(root: string, manifest: SetupManifest | null): PreflightDep
 /**
  * The `usage: review r<N>` lines ({@link USAGE_REVIEW_PATTERN}) of the in-progress run on the branch `.git/HEAD`
  * names, the run the review gate rebuilds a missing counter from (REQ-FLOW-106); `0` with no such run, or no branch.
+ * review/58: the record is read whole or not at all, as the review gate reads it, so one over
+ * {@link REPORT_READ_MAX_BYTES}, or one there and unreadable, gives `null`, never a count of `0`.
  */
-export function usageReviewLines(root: string, now: Date): number {
+export function usageReviewLines(root: string, now: Date): number | null {
   const currentBranch = readCurrentBranch(root);
   if (currentBranch === null) return 0;
   const run = findCardRun(root, now, { currentBranch });
   if (run === null || run.closed) return 0;
-  const record = readRegular(join(root, runRelPath(run.runId, RECORD_FILE)), REPORT_READ_MAX_BYTES);
-  return record === undefined ? 0 : record.toString("utf8").split(/\r?\n/).filter((line) => USAGE_REVIEW_PATTERN.test(line)).length;
+  const path = join(root, runRelPath(run.runId, RECORD_FILE));
+  const record = readRegular(path, REPORT_READ_MAX_BYTES, REPORT_READ_MAX_BYTES);
+  if (record === undefined) return isRegularFile(path) ? null : 0;
+  return record.toString("utf8").split(/\r?\n/).filter((line) => USAGE_REVIEW_PATTERN.test(line)).length;
 }
 
 /**
@@ -2088,6 +2092,7 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
   const at = typeof canary === "object" && canary !== null ? (canary as { at?: unknown }).at : undefined;
   const item = opts["item"] as PreflightDeps["item"];
   const floors = floorCopies(root, manifest);
+  const usage = usageReviewLines(root, now);
   const verdict = await runPreflight({
     env,
     nodeVersion: process.versions.node,
@@ -2105,7 +2110,7 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
     ...(item === undefined ? {} : { item }),
     floors,
     pushIdentity,
-    reviewState: { counter: existsSync(join(root, REVIEW_GATE_STATE_FILE)), usageReviewLines: usageReviewLines(root, now) },
+    reviewState: { counter: existsSync(join(root, REVIEW_GATE_STATE_FILE)), usageReviewLines: usage ?? 0, recordUnread: usage === null },
   });
   // review/97: the run verbs compare against this record, so a pass the record cannot follow is no pass; a refusal
   // records too, marked refused, for its own ending alone (review/33).

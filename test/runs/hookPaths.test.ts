@@ -122,6 +122,33 @@ describe("hookPathsAt", () => {
     expect(await hookPathsAt({ git: (args) => gitWrite(repo, args), scratch: scratch() }, "", sha)).toContain("tools/guard.mjs");
   });
 
+  // review/203: a drive-relative argument has no separator, so it was read as a bare name and held as written, while a
+  // Windows hook resolves it on the drive's current folder, a file the hold never named.
+  it.each([
+    { shape: "a drive-led argument", argument: "C:x" },
+    { shape: "a drive-led option value", argument: "--out=C:x" },
+  ])("refuses the hold for $shape, naming the drive", async ({ argument }) => {
+    const { repo, sha } = await commit({
+      ".stamity/manifest.json": "{}\n",
+      ".stamity/hooks/guard.json": `${JSON.stringify({ hooks: [{ event: "pre_tool_use", command: ["node", "tools/guard.mjs", argument] }] })}\n`,
+      "tools/guard.mjs": "guard\n",
+    });
+
+    expect(await hookPathsAt({ git: gitIn(repo), scratch: scratch() }, "", sha)).toMatch(
+      /^hold refused: \.stamity\/hooks\/guard\.json at Base: names C:x, which is absolute or names a drive or a scheme/,
+    );
+  });
+
+  it("still skips a scheme value of two or more letters, neither holding nor refusing it (review/203)", async () => {
+    const { repo, sha } = await commit({
+      ".stamity/manifest.json": "{}\n",
+      ".stamity/hooks/guard.json": `${JSON.stringify({ hooks: [{ event: "pre_tool_use", command: ["node", "tools/guard.mjs", "https:x"] }] })}\n`,
+      "tools/guard.mjs": "guard\n",
+    });
+
+    expect(await hookPathsAt({ git: gitIn(repo), scratch: scratch() }, "", sha)).toEqual([".stamity/hooks", ".stamity/manifest.json", ".stamity/packs", "tools/guard.mjs"]);
+  });
+
   it("names only the hook folders where the commit declares no hook", async () => {
     const { repo, sha } = await commit({ "a.txt": "a\n" });
     const folder = scratch();

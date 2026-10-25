@@ -123,8 +123,11 @@ export interface PreflightDeps {
    * pushes to, each with its helper list and Authorization-header fact.
    */
   pushIdentity: { fetchUrl: string | null; pushUrls: readonly PushUrlFacts[] };
-  /** Whether the review gate holds a counter, and the in-progress record's `usage: review` line count. */
-  reviewState: { counter: boolean; usageReviewLines: number };
+  /**
+   * Whether the review gate holds a counter, the in-progress record's `usage: review` line count, and (review/58)
+   * whether that record is there and was not read, over the 1 MiB cap or unreadable, so its count is unknown.
+   */
+  reviewState: { counter: boolean; usageReviewLines: number; recordUnread: boolean };
 }
 
 /** The floors an unattended run loads by name; each needs at least one copy, and every listed copy must exist. */
@@ -813,7 +816,8 @@ async function inputAuthor(deps: PreflightDeps): Promise<CheckResult> {
 
 /**
  * Name segments that mark a credential: `GH_TOKEN`, `AWS_SECRET_ACCESS_KEY`,
- * `GH_PAT`; `PWD` and `SSH_AUTH_SOCK` are not.
+ * `GH_PAT`, `MYSQL_PWD` (build/43); `SSH_AUTH_SOCK` is not, and neither are the
+ * path holders `PWD` and `OLDPWD` themselves ({@link credentialName}).
  */
 const CREDENTIAL_SEGMENTS = new Set([
   "TOKEN",
@@ -826,13 +830,16 @@ const CREDENTIAL_SEGMENTS = new Set([
   "CREDENTIAL",
   "CREDENTIALS",
   "PAT",
+  "PWD",
 ]);
 
 function nameSegments(name: string): string[] {
   return name.toUpperCase().split(/[^A-Z0-9]+/).filter((segment) => segment !== "");
 }
 
+/** Whether a variable's name marks a credential; an exact path holder ({@link PATH_NAMES}, `PWD` among them) never does. */
 function credentialName(name: string): boolean {
+  if (PATH_NAMES.has(name.toUpperCase())) return false;
   const segments = nameSegments(name);
   return segments.some((segment) => CREDENTIAL_SEGMENTS.has(segment)) || segments.at(-1) === "KEY";
 }
@@ -868,7 +875,11 @@ function tokenEnvNames(env: PreflightDeps["env"]): string[] {
 function reviewStateReason(state: PreflightDeps["reviewState"], mergeBypass: boolean): string | null {
   const reasons = [
     ...(!state.counter && state.usageReviewLines === 0
-      ? ["the review gate holds no counter and the in-progress record has no `usage: review` line"]
+      ? [
+          state.recordUnread
+            ? "the review gate holds no counter and the in-progress record was not read (over 1 MiB, or unreadable), so its `usage: review` lines are unknown"
+            : "the review gate holds no counter and the in-progress record has no `usage: review` line",
+        ]
       : []),
     ...(mergeBypass
       ? ["the account's pull_requests_only bypass lets it merge a pull request without the required review"]

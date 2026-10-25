@@ -402,14 +402,18 @@ function checkSections(lines: readonly string[], blockers: PlanBlocker[]): void 
   }
 }
 
-/** A Risks bullet led by `Critical`, or a Risks table row with a cell led by it. */
+/**
+ * A Risks bullet led by `Critical`, a Risks table row with a cell led by it, or (build/42) a plain paragraph line led
+ * by it at column 0; an indented line is a bullet's continuation, which its bullet's own lead decides.
+ */
 function isCriticalRisk(text: string): boolean {
   const trimmed = text.trim();
   if (trimmed.startsWith("|")) {
     return trimmed.replace(/^\|/, "").replace(/\|$/, "").split("|").some((cell) => CRITICAL_LEAD.test(cell));
   }
   const item = BULLET.exec(trimmed)?.[1];
-  return item !== undefined && CRITICAL_LEAD.test(item);
+  if (item !== undefined) return CRITICAL_LEAD.test(item);
+  return !/^\s/.test(text) && CRITICAL_LEAD.test(trimmed);
 }
 
 /**

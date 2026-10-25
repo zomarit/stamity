@@ -208,6 +208,23 @@ describe("stamity gate preflight and scan --text", () => {
       expect(merge.doc["warnings"]).toContainEqual({ id: "review-state", reason: expect.stringContaining("pull_requests_only") as string });
     });
 
+    // review/58: a record over the read cap had its first MiB counted, so a usage: review line there passed the check
+    // the review gate itself, which refuses such a record, never would.
+    it("warns review-state that the in-progress record was not read where it is over 1 MiB, a usage: review line in its first MiB", async () => {
+      const repo = await seedRepo();
+      protectedRepo();
+      const run = "2026-10-17_night";
+      git(repo, ["switch", "-q", "-c", `stamity/${run}`]);
+      const usage = "- 2026-10-17T01:00Z usage: review r1 minutes=5 tokens=unreported (claude-code)\n";
+      await mkdir(join(repo, ".stamity", "runs", run), { recursive: true });
+      await writeFile(join(repo, ".stamity", "runs", run, "record.md"), `Status: in progress\nBranch: stamity/${run}\n\n${usage}${`${"x".repeat(99)}\n`.repeat(12_600)}`);
+
+      const { code, doc } = await gate(repo, PREFLIGHT);
+
+      expect(code).toBe(0);
+      expect(doc["warnings"]).toContainEqual({ id: "review-state", reason: expect.stringContaining("the in-progress record was not read (over 1 MiB, or unreadable)") as string });
+    });
+
     it("reaches the organization role read through its own REST read for an administrator under an organization ruleset", async () => {
       const repo = await seedRepo();
       rest.routes.set("repos/o/r", { status: 200, json: { default_branch: "main", id: 42, permissions: { admin: true, push: true } } });

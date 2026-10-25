@@ -317,11 +317,15 @@ export function hostOf(value: string): string {
     .replace(/[/:].*$/, "");
 }
 
+/** GitHub's host for SSH on port 443 (`ssh://git@ssh.github.com:443/<owner>/<repo>.git`), a github.com remote. */
+const SSH_OVER_HTTPS_HOST = "ssh.github.com";
+
 /**
  * The GitHub repository `origin` names and the host it was matched on, or
  * `null` where it names none `gh` would reach. The host `gh` talks to is
  * `GH_HOST` when it is set, `github.com` when it is not. Accepted: Claude
  * Code's proxy shape, which is `github.com`, so only while that host is
+ * `github.com`; `ssh.github.com` (SSH on port 443, build/12) likewise, read as
  * `github.com`; else a remote on that host, so a `github.com` origin under a
  * `GH_HOST` naming another host is `null`. Any other host is `null`, and so is
  * an owner or repository outside `[A-Za-z0-9._-]`. Every call made for the
@@ -340,7 +344,9 @@ export function resolveRepo(env: NodeJS.ProcessEnv, originUrl: string): { host: 
     repo = proxied[2] ?? "";
   } else {
     const parsed = parseGitRemote(originUrl);
-    if (parsed === null || parsed.host !== host) return null;
+    // build/12: GitHub's SSH-over-443 host, `ssh.github.com`, is github.com's, and only github.com's.
+    const remoteHost = parsed?.host === SSH_OVER_HTTPS_HOST && host === "github.com" ? "github.com" : parsed?.host;
+    if (parsed === null || remoteHost !== host) return null;
     ({ owner, repo } = parsed);
   }
   return HOST_NAME.test(host) && isNamePart(owner) && isNamePart(repo) ? { host, owner, repo } : null;

@@ -258,6 +258,20 @@ describe("checkPlans", () => {
     expect((await check(cwd, calm)).ready).toBe(true);
   });
 
+  // build/42: a Critical risk written as a plain paragraph, with no bullet or table, was read as prose and passed.
+  it("refuses a Critical risk written as a plain paragraph under Risks, and reads an indented continuation by its bullet", async (ctx) => {
+    const { cwd, stamp } = await seeded(() => ctx.skip());
+    const paragraph = cleanPlan(stamp).replace("- **Warning** — a retry storm.", "**Critical:** retries can double-charge.\n\n- **Warning** — a retry storm.");
+    const continued = cleanPlan(stamp).replace("- **Warning** — a retry storm.", "- **Warning** — a retry storm, which could turn\n  critical under load.");
+
+    const refused = await check(cwd, paragraph);
+    const calm = await check(cwd, continued);
+
+    expect(refused.ready).toBe(false);
+    expect(blockersOf(refused, "critical-risk")).toEqual([{ code: "critical-risk", line: lineOf(paragraph, "double-charge") }]);
+    expect(calm.ready).toBe(true);
+  });
+
   it("refuses lint-L2 on a dangling dependency and on a cycle, L2 failing", async (ctx) => {
     const { cwd, stamp } = await seeded(() => ctx.skip());
     const dangling = cleanPlan(stamp).replace("| `depends_on` | u1-guard |", "| `depends_on` | u9-gone |");

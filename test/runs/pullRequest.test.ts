@@ -387,6 +387,14 @@ describe("resolveRepo", () => {
     expect(resolveRepo({ GH_HOST: "ghe.example.com" }, "https://github.com/o/r.git")).toBeNull();
   });
 
+  // build/12: GitHub's SSH-over-443 host was read as a host of its own, so such an origin opened no draft.
+  it("reads an ssh.github.com origin on port 443 as github.com, and as nothing while GH_HOST names another host", () => {
+    const origin = "ssh://git@ssh.github.com:443/o/r.git";
+    expect(resolveRepo({}, origin)).toEqual({ host: "github.com", owner: "o", repo: "r" });
+    expect(resolveRepo({ GH_HOST: "github.com" }, origin)).toEqual({ host: "github.com", owner: "o", repo: "r" });
+    expect(resolveRepo({ GH_HOST: "ghe.example.com" }, origin)).toBeNull();
+  });
+
   it("returns null for any other host", () => {
     expect(resolveRepo({}, "https://gitlab.com/acme/app.git")).toBeNull();
     expect(resolveRepo({}, "git@bitbucket.org:acme/app.git")).toBeNull();

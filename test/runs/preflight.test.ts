@@ -138,7 +138,8 @@ function greenDeps(overrides: Partial<PreflightDeps> = {}): PreflightDeps {
       { id: "injection-screening", path: "x/rules/screening.md", exists: true },
     ],
     pushIdentity: { fetchUrl: FETCH_URL, pushUrls: [pushTo()] },
-    reviewState: { counter: true, usageReviewLines: 0 },
+    // TEST CHANGE, justified: REQ-FLOW-101 (review/58) — reviewState gains recordUnread; this case reads a record that was read.
+    reviewState: { counter: true, usageReviewLines: 0, recordUnread: false },
     ...overrides,
   };
 }
@@ -1005,6 +1006,13 @@ describe("runPreflight — warnings", () => {
     expect(JSON.stringify(verdict)).not.toContain(password);
   });
 
+  // build/43: PWD was no credential segment, so a short password in a name ending in it was named only when its value
+  // happened to match the scanner's entropy row.
+  it("a short value in a name with a PWD segment is named, and PWD and OLDPWD themselves are not (build/43)", async () => {
+    const verdict = await runPreflight(greenDeps({ env: { MYSQL_PWD: "hunter2", REDIS_PWD: "s3cret", PWD: "/w", OLDPWD: "/v" } }));
+    expect(verdict.warnings.find((warning) => warning.id === "token-env")?.names).toEqual(["MYSQL_PWD", "REDIS_PWD"]);
+  });
+
   it("no credential-shaped variable gives no token-env warning", async () => {
     const verdict = await runPreflight(greenDeps({ env: { HOME: "/home/u", PATH: "/bin", PWD: "/w", EMPTY_TOKEN: "" } }));
     expect(verdict.warnings.find((warning) => warning.id === "token-env")).toBeUndefined();
@@ -1027,16 +1035,25 @@ describe("runPreflight — warnings", () => {
         "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(7, reviews)] },
         "/repos/o/r/rulesets/7": ruleset(7, "active", "never"),
       }).rest;
+    // TEST CHANGE, justified: REQ-FLOW-101 (review/58) — reviewState gains recordUnread; this case reads a record that was read.
     const unreviewed = await runPreflight(
-      greenDeps({ rest: routes(1), reviewState: { counter: false, usageReviewLines: 0 } }),
+      greenDeps({ rest: routes(1), reviewState: { counter: false, usageReviewLines: 0, recordUnread: false } }),
     );
     const warning = unreviewed.warnings.find((entry) => entry.id === "review-state");
     expect(warning?.reason).toContain("usage: review");
     expect(unreviewed.ok).toBe(true);
-    const counted = await runPreflight(greenDeps({ rest: routes(0), reviewState: { counter: true, usageReviewLines: 0 } }));
+    const counted = await runPreflight(greenDeps({ rest: routes(0), reviewState: { counter: true, usageReviewLines: 0, recordUnread: false } }));
     expect(counted.warnings.map((entry) => entry.id)).not.toContain("review-state");
-    const recorded = await runPreflight(greenDeps({ rest: routes(0), reviewState: { counter: false, usageReviewLines: 2 } }));
+    const recorded = await runPreflight(greenDeps({ rest: routes(0), reviewState: { counter: false, usageReviewLines: 2, recordUnread: false } }));
     expect(recorded.warnings.map((entry) => entry.id)).not.toContain("review-state");
+  });
+
+  // review/58: a record past the read cap was counted as holding no usage: review line, which the record never said.
+  it("review-state says the record was not read where it is over the cap, never that it has no usage: review line (review/58)", async () => {
+    const unread = await runPreflight(greenDeps({ reviewState: { counter: false, usageReviewLines: 0, recordUnread: true } }));
+    const reason = unread.warnings.find((entry) => entry.id === "review-state")?.reason;
+    expect(reason).toContain("the in-progress record was not read (over 1 MiB, or unreadable)");
+    expect(reason).not.toContain("has no `usage: review` line");
   });
 
   it("review-state counts the usage: review r<N> lines the review gate rebuilds a missing counter from (REQ-FLOW-106)", async () => {
@@ -1057,10 +1074,11 @@ describe("runPreflight — warnings", () => {
       "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(7, 1)] },
       "/repos/o/r/rulesets/7": ruleset(7, "active", "never"),
     }).rest;
-    const recorded = await runPreflight(greenDeps({ rest: routes, reviewState: { counter: false, usageReviewLines: count(record) } }));
+    // TEST CHANGE, justified: REQ-FLOW-101 (review/58) — reviewState gains recordUnread; this case reads a record that was read.
+    const recorded = await runPreflight(greenDeps({ rest: routes, reviewState: { counter: false, usageReviewLines: count(record), recordUnread: false } }));
     expect(recorded.warnings.map((entry) => entry.id)).not.toContain("review-state");
     // Prose alone is no round: the run reads as unreviewed.
-    const prose = await runPreflight(greenDeps({ rest: routes, reviewState: { counter: false, usageReviewLines: count(record.slice(0, 2)) } }));
+    const prose = await runPreflight(greenDeps({ rest: routes, reviewState: { counter: false, usageReviewLines: count(record.slice(0, 2)), recordUnread: false } }));
     expect(prose.warnings.map((entry) => entry.id)).toContain("review-state");
   });
 
@@ -1111,5 +1129,17 @@ describe("gate preflight's review-state count reads the run on this branch (REQ-
     expect(usageReviewLines(root.dir, now)).toBe(0);
     await root.seedFiles({ ".git/HEAD": "0123456789abcdef0123456789abcdef01234567\n" });
     expect(usageReviewLines(root.dir, now)).toBe(0);
+  });
+
+  // review/58: the first 1 MiB of a larger record was read and counted, while the review gate refuses such a record.
+  it("gives null, not a count, for a record over 1 MiB, its usage: review lines inside the first MiB", async () => {
+    const root = getRoot();
+    const padding = `${"x".repeat(99)}\n`.repeat(12_600);
+    await root.seedFiles({
+      ".git/HEAD": "ref: refs/heads/stamity/2026-10-17_night\n",
+      ".stamity/runs/2026-10-17_night/record.md": `${record("stamity/2026-10-17_night", 2)}${padding}`,
+    });
+
+    expect(usageReviewLines(root.dir, new Date("2026-10-18T12:00:00Z"))).toBeNull();
   });
 });

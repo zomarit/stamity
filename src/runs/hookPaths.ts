@@ -294,7 +294,8 @@ export async function hookPathsRead(reads: HookPathReads, prefix: string, base: 
         const declaration = `${prefix}${hook.sourceFile}`;
         const values = hook.command.flatMap((argument, index) => {
           const path = !argument.startsWith("-") ? argument : argument.includes("=") ? argument.slice(argument.indexOf("=") + 1) : "";
-          const bare = !path.includes("/");
+          // review/203: a value led by a drive letter (`C:x.sh`) names a file on a Windows drive, so it is no bare name.
+          const bare = !path.includes("/") && !/^[A-Za-z]:/.test(path);
           if ((bare && (index === 0 || path === "" || path === "." || path === "..")) || (!bare && path.split("/").every((segment) => segment === "" || segment === "."))) return [];
           if (/^[A-Za-z][A-Za-z0-9+.-]+:/.test(path)) return [];
           return [{ path, declaration, bare, code: index === 0 }];
