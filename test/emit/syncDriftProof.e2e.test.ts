@@ -14,7 +14,7 @@ import { renderSyncReport, syncJsonPayload } from "../../src/cli/commands/sync/r
 import { makePalette } from "../../src/cli/kit/terminal.ts";
 import { AGENTS_MD_FILE } from "../../src/emit/agentsMd.ts";
 import { AGENT_TOOL_POLICIES_PATH, HOOKS_GENERATED_DIR } from "../../src/emit/hooksInfra.ts";
-import { SKILLS_PROJECTION_DIR } from "../../src/emit/skillsProjection.ts";
+import { SKILLS_PROJECTION_DIR, TOUCHPOINT_POLICY_FILE } from "../../src/emit/skillsProjection.ts";
 import { readManifest, writeManifest } from "../../src/manifest/manifest.ts";
 import { TOOLS, type Tool } from "../../src/types/core.ts";
 import { MANIFEST_FILE } from "../../src/types/manifest.ts";
@@ -93,6 +93,18 @@ vi.setConfig({ testTimeout: SUITE_TIMEOUT_MS, hookTimeout: SUITE_TIMEOUT_MS });
 const ALL_TOOLS: readonly Tool[] = TOOLS;
 const DESELECTED: Tool = "codex";
 const SURVIVING_TOOLS: readonly Tool[] = TOOLS.filter((tool) => tool !== DESELECTED);
+/** The nine touchpoint companions, sorted: Codex's rows alone since REQ-FLOW-033. */
+const TOUCHPOINT_COMPANIONS: readonly string[] = [
+  "ask",
+  "board",
+  "debug",
+  "plan",
+  "pr-resolve",
+  "quick",
+  "rework",
+  "spec",
+  "work",
+].map((id) => `${SKILLS_PROJECTION_DIR}/st-${id}/${TOUCHPOINT_POLICY_FILE}`);
 
 /** Heading the codex rules appendix opens with — in the Codex-only root `AGENTS.override.md` since sw18. */
 const CODEX_APPENDIX_HEADING = "## Conditional rules (Codex down-conversion)";
@@ -333,9 +345,27 @@ describe("deselection reclaim", () => {
     // (a co-owned path is not swept because one owner left) while stating the
     // one class where the path genuinely stops being emitted.
     const projected = queued.filter((path) => path.startsWith(`${SKILLS_PROJECTION_DIR}/`));
-    expect(projected.filter((path) => !path.startsWith(`${SKILLS_PROJECTION_DIR}/stamity-`))).toEqual(
-      [],
+    // TEST CHANGE, justified: REQ-FLOW-033 — the touchpoint companion
+    // `agents/openai.yaml` is Codex's row alone, so deselecting codex leaves it
+    // planned by nobody and the sweep queues the nine as `adapter-removed`. The
+    // claim this line carries is unchanged for everything else: no `st-` skill's
+    // `SKILL.md`, nor any other content-skill file, is queued.
+    const queuedCompanions = planned.reclaim.filter((candidate) =>
+      candidate.entry.path.endsWith(`/${TOUCHPOINT_POLICY_FILE}`),
     );
+    expect(queuedCompanions.map((candidate) => candidate.entry.path).toSorted()).toEqual(
+      TOUCHPOINT_COMPANIONS,
+    );
+    for (const candidate of queuedCompanions) {
+      expect(candidate.entry.adapter, candidate.entry.path).toBe(DESELECTED);
+      expect(candidate.reason, candidate.entry.path).toBe("adapter-removed");
+    }
+    expect(
+      projected.filter(
+        (path) =>
+          !path.startsWith(`${SKILLS_PROJECTION_DIR}/stamity-`) && !TOUCHPOINT_COMPANIONS.includes(path),
+      ),
+    ).toEqual([]);
     expect(projected.length).toBeGreaterThan(0);
     // The two rules claude and copilot demote on their own account keep their
     // directories, because those clients are still selected: the sweep follows
@@ -400,10 +430,19 @@ describe("deselection reclaim", () => {
     // the same way the shared charter legitimately loses codex's appendix. A
     // byte-identity assertion over those files would be asserting that a
     // per-client metadata list does not track the client set.
+    // TEST CHANGE, justified: REQ-FLOW-033 — the nine touchpoint companions are
+    // Codex's alone, so the codex deselection deletes them; they leave the
+    // byte-identity set and are pinned as removed. Every other content-skill
+    // file, each `st-` `SKILL.md` included, is still held byte-identical.
+    for (const path of TOUCHPOINT_COMPANIONS) {
+      expect(before[path], path).toBeDefined();
+      expect(removed, path).toContain(path);
+    }
     const contentSkills = Object.keys(before).filter(
       (key) =>
         key.startsWith(`${SKILLS_PROJECTION_DIR}/`) &&
-        !key.startsWith(`${SKILLS_PROJECTION_DIR}/stamity-`),
+        !key.startsWith(`${SKILLS_PROJECTION_DIR}/stamity-`) &&
+        !TOUCHPOINT_COMPANIONS.includes(key),
     );
     expect(contentSkills.length).toBeGreaterThan(0);
     for (const path of contentSkills) {
