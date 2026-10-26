@@ -90,8 +90,11 @@ generate-and-diff step, the leak gate and, on pull requests, the hygiene scan. T
 adds the CLI build and its dogfood check. The `website` lane adds the docs site build and the root
 typecheck. `scripts/ci/records-only.mjs` decides, and it reads the suites from the test-input map in
 the base commit's `.stamity/change-classes.json`, never from the change's own copy. CI runs the
-classifier itself from a worktree of the base commit too, so a change cannot pick its own checks;
-with no base commit to run it from, the change gets full CI. Any path in no
+classifier itself from a worktree of the base commit too, so a pull request cannot narrow its own
+checks through it. A pull request that edits the CI workflow runs its own workflow definition, and
+that file is a person-only path that `run land` asks about. A change to the classifier takes effect
+from the next change, which is why `run land` asks about the classifier's files too. With no base
+commit to run it from, the change gets full CI. Any path in no
 lane, an empty diff, a diff it cannot read, the weekly schedule and a manual run get the full check
 matrix. So does a change whose every path is in a lane when that map cannot answer: no valid map at
 the base commit, a changed path no entry matches, or a matching entry that selects every test. On

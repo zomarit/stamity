@@ -5644,13 +5644,24 @@ describe("file 2's SECURITY.md sentences", () => {
     expect(mapping()).toContain("`sync`, `init`, `upgrade` and `workspace sync` refuse with `AUTONOMY_LOOSENED`");
   });
 
+  // TEST CHANGE, justified (fix round 1, review/83 and review/84): the classifier runs from the base commit, an edit to
+  // the CI workflow runs its own definition, and a classifier change takes effect from the next change, so `run land`
+  // asks about the classifier's files (`src/runs/landEvidence.ts`, `DEFINES_THE_EVIDENCE`); the pages say exactly that.
   it("says this repository's CI runs its classifier from the base commit, beside the generic residual (build/5)", () => {
     const page = security();
     expect(page).toContain("A repository's CI may choose which checks run with code the change edits");
     expect(page).toContain(
-      "This repository's own CI runs its classifier from the base commit (the `changes` job in `.github/workflows/ci.yml`), so a change here cannot choose its own checks that way, and a change to that job is a CI definition, which `run land` asks about.",
+      "This repository's own CI runs its classifier from the base commit (the `changes` job in `.github/workflows/ci.yml`), so a pull request cannot narrow its own checks through it. A pull request that edits that workflow runs its own workflow definition, and the workflow is a person-only path, which `run land` asks about. A change to the classifier takes effect from the next change on, which is why `run land` asks about the classifier's files too.",
     );
-    expect(mapping()).toContain("this repository's own CI runs its classifier from the base commit");
+    expect(page).toContain(
+      "`.stamity/change-classes.json`, this repository's CI classifier and the source it loads (`scripts/ci/records-only.mjs`, `src/change/classify.ts`, `src/roster/triggers.ts`) or a hook script",
+    );
+    expect(page).not.toContain("so a change here cannot choose its own checks that way");
+    const residual =
+      "this repository's own CI runs its classifier from the base commit, so a pull request cannot narrow its own checks through it, a pull request that edits the CI workflow, a person-only path `run land` asks about, runs its own workflow definition, and a classifier change takes effect from the next change, which is why `run land` asks about the classifier's files too;";
+    const map = mapping();
+    expect(map).toContain(residual);
+    expect(map.indexOf(residual), "the mapping names the classifier residual in its row and its gap list").not.toBe(map.lastIndexOf(residual));
   });
 
   it("names the land residual an approval of the head leaves (b14c, review/174)", () => {
@@ -5689,7 +5700,12 @@ describe("the CI hand pages name the fork probe and the base-commit classifier",
     expect(text).toContain("`fork-probe`");
     expect(text).toContain("scripts/ci/fork-probe.mjs");
     expect(text).toMatch(/runs? (?:it|the classifier itself) from a worktree of the base commit/);
-    expect(text).toContain("so a change cannot pick its own checks");
+    // TEST CHANGE, justified (fix round 1, review/84): the pages name what the base-commit run does not cover.
+    expect(text).toContain("so a pull request cannot narrow its own checks through it.");
+    expect(text).toContain(
+      "A pull request that edits the CI workflow runs its own workflow definition, and that file is a person-only path that `run land` asks about. A change to the classifier takes effect from the next change, which is why `run land` asks about the classifier's files too.",
+    );
+    expect(text).not.toContain("so a change cannot pick its own checks");
   });
 
   // ADDED (build/43): both fork kinds the job runs, and how to run each locally.

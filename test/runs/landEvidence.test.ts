@@ -1,4 +1,6 @@
-import { win32 } from "node:path";
+import { readFileSync } from "node:fs";
+import { join, posix, win32 } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { PERSON_ONLY_PATHS } from "../../src/change/personOnlyPaths.ts";
 import { resolveAutonomy } from "../../src/config/autonomy.ts";
@@ -110,7 +112,35 @@ describe("LAND_ASK_PATHS (decision D2)", () => {
   it("lets the charter, a rule file and an agent definition land on the evidence", () => {
     expect(askPathsOf(["lib/AGENTS.md", "pkg/CLAUDE.md", ".claude/rules/x.md", ".cursorrules", ".claude/agents/reviewer.md", ".github/prompts/p.md"])).toEqual([]);
   });
+
+  // ADDED (plan 022 file 2, unit b1-fork-ci-job, fix round 1; review/83, ledger build/5): CI runs the classifier from the
+  // base commit, so an edit to it picks the checks of every later change. Each file of its closure, walked from the
+  // script the `changes` job runs, asks; a change beside them still lands.
+  it("asks about each file of the CI classifier's import closure, and lets a change elsewhere land", () => {
+    const closure = classifierClosure("scripts/ci/records-only.mjs");
+    expect(closure).toEqual(["scripts/ci/records-only.mjs", "src/change/classify.ts", "src/roster/triggers.ts"]);
+    for (const path of closure) expect(askPathsOf([path, "src/a.ts"]), path).toEqual([path]);
+    expect(askPathsOf(["scripts/ci/fork-probe.mjs", "src/change/personOnlyPaths.ts", "test/change/classify.test.ts"])).toEqual([]);
+  });
 });
+
+/** The script and every module it reaches through a relative import, as repository paths, sorted. */
+function classifierClosure(entry: string): string[] {
+  const root = fileURLToPath(new URL("../../", import.meta.url));
+  const specifier = /\b(?:from|import)\s*\(?\s*(["'])(\.{1,2}\/[^"'\n]+)\1/g;
+  const seen = new Set<string>([entry]);
+  const queue = [entry];
+  for (let file = queue.shift(); file !== undefined; file = queue.shift()) {
+    for (const match of readFileSync(join(root, file), "utf8").matchAll(specifier)) {
+      const target = posix.normalize(posix.join(posix.dirname(file), match[2] ?? ""));
+      if (!seen.has(target)) {
+        seen.add(target);
+        queue.push(target);
+      }
+    }
+  }
+  return [...seen].toSorted();
+}
 
 describe("ledgerEvidence", () => {
   const row = (id: string, severity: string, state: string): string =>

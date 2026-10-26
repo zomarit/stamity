@@ -42,7 +42,12 @@ export const LANDS_ON_EVIDENCE: readonly string[] = [
   ".github/chatmodes/**",
 ];
 
-/** Beside the held set, the files that decide which checks run and who reviews (D2), named even where it holds them. */
+/**
+ * Beside the held set, the files that decide which checks run and who reviews (D2), named even where it holds them.
+ * The last three are this repository's CI classifier and the source it loads (`.github/workflows/ci.yml`, "Classify
+ * the change"): CI runs the base commit's copy, so an edit to them picks the checks of every later change, and a
+ * person lands it (ledger build/5, review/83).
+ */
 const DEFINES_THE_EVIDENCE: readonly string[] = [
   ".github/actions/**",
   "**/action.yml",
@@ -51,6 +56,9 @@ const DEFINES_THE_EVIDENCE: readonly string[] = [
   ".github/CODEOWNERS",
   "docs/CODEOWNERS",
   ".stamity/change-classes.json",
+  "scripts/ci/records-only.mjs",
+  "src/change/classify.ts",
+  "src/roster/triggers.ts",
 ];
 
 /** The paths whose change makes `run land` ask: the held set less {@link LANDS_ON_EVIDENCE}, plus the evidence's own. */

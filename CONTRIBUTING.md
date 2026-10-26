@@ -118,8 +118,11 @@ and `registry`, a fork that publishes its CLI. Run it locally the same way, `--k
 A change whose every path falls in a lane takes the `lanes` job instead of the check matrix, the
 `cloud-container` job and the `fork-probe` job.
 `node scripts/ci/records-only.mjs` decides; its name is older than its three lanes. CI runs it from a
-worktree of the base commit, never from the change's own checkout, so a change cannot pick its own
-checks; with no base commit to run it from, the change gets full CI. The lanes, the
+worktree of the base commit, never from the change's own checkout, so a pull request cannot narrow
+its own checks through it. A pull request that edits the CI workflow runs its own workflow
+definition, and that file is a person-only path that `run land` asks about. A change to the
+classifier takes effect from the next change, which is why `run land` asks about the classifier's
+files too. With no base commit to run it from, the change gets full CI. The lanes, the
 engine's `.gitkeep` excepted at every location:
 
 - `specs`: the spec under `docs/specs/`.
