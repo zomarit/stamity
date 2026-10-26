@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { estimateTokens } from "../../src/guard/tokenEstimate.ts";
 import {
+  adoptInstalledPacks,
   applyPackInstall,
   packLedgerRelPath,
   planPackInstall,
@@ -1942,6 +1943,84 @@ describe("uninstall = planPackRemoval + reclaim sweep", () => {
     for (const [relPath, text] of Object.entries(content)) {
       expect(await readFile(project.path(PACK_ROOT, relPath), "utf8")).toBe(text);
     }
+  });
+});
+
+// ── Adoption after a clean that kept the pack (REQ-FLOW-028) ───
+
+describe("adoptInstalledPacks", () => {
+  /** A real install, its rows sorted as the ledger holds them, and the project with no manifest left. */
+  async function installedThenUnrecorded(): Promise<LedgerEntry[]> {
+    await seedPack();
+    const { result } = await apply(await plan(), projectManifest());
+    return result.ledgerEntries;
+  }
+
+  const byPath = (rows: readonly LedgerEntry[]): LedgerEntry[] => rows.toSorted((a, b) => a.path.localeCompare(b.path));
+
+  it("gives back exactly the rows the install recorded, the receipt's included", async () => {
+    const recorded = await installedThenUnrecorded();
+
+    const adoption = await adoptInstalledPacks(getProject().dir, new Set());
+
+    expect(adoption.refused).toEqual([]);
+    expect(adoption.adopted).toEqual([PACK_ID]);
+    expect(recorded).toHaveLength(3);
+    expect(byPath(adoption.rows)).toEqual(byPath(recorded));
+  });
+
+  it("passes over a pack the caller already holds rows for, and a folder with no receipt", async () => {
+    await installedThenUnrecorded();
+    await getProject().seedFiles({ ".stamity/packs/loose/rules/a.md": "mine\n" });
+
+    expect(await adoptInstalledPacks(getProject().dir, new Set([PACK_ID]))).toEqual({ rows: [], adopted: [], refused: [] });
+  });
+
+  it("refuses a pack whose file was edited after install, naming the file", async () => {
+    await installedThenUnrecorded();
+    await writeFile(getProject().path(PACK_ROOT, "rules/naming.md"), "my own rule\n", "utf8");
+
+    const adoption = await adoptInstalledPacks(getProject().dir, new Set());
+
+    expect(adoption.rows).toEqual([]);
+    expect(adoption.refused).toEqual([
+      { dir: PACK_ROOT, packId: PACK_ID, reason: expect.stringContaining(`${PACK_ROOT}/rules/naming.md hashes to`) as unknown },
+    ]);
+  });
+
+  it("refuses a planted receipt that lists a file outside its folder with that file's true hash (the threat line)", async () => {
+    const project = getProject();
+    const source = "export const app = 1;\n";
+    await project.seedFiles({
+      "src/index.ts": source,
+      [`${PACK_ROOT}/${RECEIPT_FILE}`]: JSON.stringify({ packId: PACK_ID, files: [{ path: "src/index.ts", sha256: digest(source) }] }),
+    });
+
+    const adoption = await adoptInstalledPacks(project.dir, new Set());
+
+    expect(adoption.rows).toEqual([]);
+    expect(adoption.refused).toHaveLength(1);
+    expect(adoption.refused[0]?.reason).toContain('"src/index.ts", which is not a file of its own under');
+  });
+
+  it("refuses a receipt naming another pack's folder, and a file reached through a link", async () => {
+    const project = getProject();
+    await installedThenUnrecorded();
+    // A copy of the real receipt in a folder its id does not map to.
+    await project.seedFiles({ ".stamity/packs/elsewhere/receipt.json": await readFile(project.path(PACK_ROOT, RECEIPT_FILE), "utf8") });
+    // The rules folder made a link to a folder outside the pack that holds the same bytes.
+    const rule = await readFile(project.path(PACK_ROOT, "rules/naming.md"), "utf8");
+    await rm(project.path(PACK_ROOT, "rules"), { recursive: true });
+    await project.seedFiles({ "outside/naming.md": rule });
+    await symlink(project.path("outside"), project.path(PACK_ROOT, "rules"));
+
+    const adoption = await adoptInstalledPacks(project.dir, new Set());
+
+    expect(adoption.rows).toEqual([]);
+    expect(adoption.refused.map((refusal) => [refusal.dir, refusal.reason])).toEqual([
+      [PACK_ROOT, expect.stringContaining("reached through no link") as unknown],
+      [".stamity/packs/elsewhere", expect.stringContaining(`installs to ${PACK_ROOT}, not .stamity/packs/elsewhere`) as unknown],
+    ]);
   });
 });
 

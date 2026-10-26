@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { lstat, readFile, rm, rmdir } from "node:fs/promises";
+import { lstat, readFile, readdir, realpath, rm, rmdir } from "node:fs/promises";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import pLimit from "p-limit";
 import {
@@ -15,6 +15,7 @@ import {
   type ContentIndex,
   type InvocableNameClash,
 } from "../content/catalog.ts";
+import { isPlainObject } from "../config/parse.ts";
 import { parseFrontmatter } from "../content/frontmatter.ts";
 import { userContentRoot } from "../content/userContent.ts";
 import { assertPassthroughKeys } from "../emit/skillsProjection.ts";
@@ -23,6 +24,7 @@ import { estimateTokens } from "../guard/tokenEstimate.ts";
 import { readHookDefinitions } from "../hooks/userHooks.ts";
 import type { ReclaimCandidate } from "../manifest/ledger.ts";
 import { readManifest } from "../manifest/manifest.ts";
+import { isSharedRegularFile } from "../merge/atomicWrite.ts";
 import { safeWriteFile } from "../merge/safeWrite.ts";
 import { grantableFootprint, resolveAgentGrant } from "../roster/agentGrants.ts";
 import type { GrantableToolCategory } from "../roster/agentPolicies.ts";
@@ -35,7 +37,7 @@ import {
   type PackOwner,
   type SetupManifest,
 } from "../types/manifest.ts";
-import { CONTENT_PREFIX } from "../types/markers.ts";
+import { CONTENT_PREFIX, STATE_DIR } from "../types/markers.ts";
 import {
   checkDeclaredTools,
   checkFootprint,
@@ -1697,4 +1699,160 @@ export function planPackRemoval(manifest: SetupManifest, packId: string): Reclai
   return manifest.ledger
     .filter((entry) => isOwnedByPack(entry, owner))
     .map((entry) => ({ entry: cloneEntry(entry), reason: "deselected" }));
+}
+
+// ── Adoption ───────────────────────────────────────────────────
+
+/** The folder under the state directory that holds the installed packs. */
+const PACKS_REL_PATH = `${STATE_DIR}/packs`;
+
+/** The largest receipt adoption reads: an install's receipt holds a few hundred bytes per file it lists. */
+const MAX_RECEIPT_BYTES = 1024 * 1024;
+
+/** A SHA-256 as a receipt records it. */
+const SHA256_HEX = /^[0-9a-f]{64}$/u;
+
+/** One installed pack folder adoption would not record, and why. */
+export interface PackAdoptionRefusal {
+  /** Repo-relative POSIX folder under `.stamity/packs/`. */
+  dir: string;
+  /** The id the receipt names, or the folder's name when it names none. */
+  packId: string;
+  reason: string;
+}
+
+/** What {@link adoptInstalledPacks} found under `.stamity/packs/`. */
+export interface PackAdoption {
+  /** The rows {@link applyPackInstall} records for each adopted pack, the receipt's included. */
+  rows: LedgerEntry[];
+  /** The ids adopted, in folder order. */
+  adopted: string[];
+  refused: PackAdoptionRefusal[];
+}
+
+/**
+ * The ledger rows of each pack still installed under `.stamity/packs/` that
+ * the setup no longer records (REQ-FLOW-028): `clean` keeps installed packs and
+ * removes the manifest, so the next `init` takes them back from their own
+ * receipts, as {@link applyPackInstall} recorded them.
+ *
+ * The receipt and the folder are repository data, so nothing is trusted that
+ * the bytes on disk do not prove. A folder is adopted only when it is a real
+ * folder (no link on the way to it) holding a regular `receipt.json`, the id
+ * the receipt names maps to that very folder (`./receipt.ts::packDirRelPath`),
+ * and every file it lists lies under that folder, once, carries a 64-hex
+ * SHA-256, is a regular file with one name reached through no link, and hashes
+ * to it. Any other answer refuses the whole pack, and the reason says which
+ * file: a planted receipt listing `src/index.ts` with its true hash is refused,
+ * so a later `clean --pack` cannot delete it. A folder with no receipt is
+ * neither adopted nor named, and so is an id in `skip` (rows the caller already
+ * holds, `init --force`'s carry). A packs folder that is a link adopts nothing.
+ */
+export async function adoptInstalledPacks(rootDir: string, skip: ReadonlySet<string>): Promise<PackAdoption> {
+  const adoption: PackAdoption = { rows: [], adopted: [], refused: [] };
+  let root: string;
+  let names: string[];
+  try {
+    root = await realpath(rootDir);
+    const packsAbs = underRoot(root, PACKS_REL_PATH);
+    if ((await realpath(packsAbs)) !== packsAbs || !(await lstat(packsAbs)).isDirectory()) return adoption;
+    names = (await readdir(packsAbs)).toSorted();
+  } catch {
+    // reason: not silent — no packs folder (or none this engine could have written) has nothing to adopt.
+    return adoption;
+  }
+  for (const name of names) {
+    const outcome = await adoptPackFolder(root, `${PACKS_REL_PATH}/${name}`, name, skip);
+    if (outcome === null) continue;
+    if ("reason" in outcome) {
+      adoption.refused.push(outcome);
+      continue;
+    }
+    adoption.rows.push(...outcome.rows);
+    adoption.adopted.push(outcome.packId);
+  }
+  return adoption;
+}
+
+/** One folder of {@link adoptInstalledPacks}: its rows, why it is refused, or `null` when it is no pack to name. */
+async function adoptPackFolder(
+  root: string,
+  dir: string,
+  name: string,
+  skip: ReadonlySet<string>,
+): Promise<{ packId: string; rows: LedgerEntry[] } | PackAdoptionRefusal | null> {
+  const dirAbs = underRoot(root, dir);
+  const receiptAbs = join(dirAbs, RECEIPT_FILE);
+  let receiptStats;
+  try {
+    if (!(await lstat(dirAbs)).isDirectory()) return null;
+    receiptStats = await lstat(receiptAbs);
+  } catch {
+    // reason: not silent — a folder with no receipt was never installed by `add`, so it is neither adopted nor named.
+    return null;
+  }
+  const refuse = (packId: string, reason: string): PackAdoptionRefusal => ({ dir, packId, reason });
+  if (!receiptStats.isFile() || isSharedRegularFile(receiptStats)) {
+    return refuse(name, `${dir}/${RECEIPT_FILE} is not a regular file with one name`);
+  }
+  if (receiptStats.size > MAX_RECEIPT_BYTES) return refuse(name, `${dir}/${RECEIPT_FILE} is past ${MAX_RECEIPT_BYTES} bytes`);
+  const receiptText = await readFile(receiptAbs, "utf8");
+  let receipt: unknown;
+  try {
+    receipt = JSON.parse(receiptText);
+  } catch {
+    return refuse(name, `${dir}/${RECEIPT_FILE} is not valid JSON`);
+  }
+  if (!isPlainObject(receipt) || typeof receipt["packId"] !== "string" || !Array.isArray(receipt["files"])) {
+    return refuse(name, `${dir}/${RECEIPT_FILE} names no pack id and file list`);
+  }
+  const packId = receipt["packId"];
+  if (skip.has(packId)) return null;
+  let expected: string;
+  try {
+    expected = packDirRelPath(packId);
+  } catch {
+    return refuse(packId, `${dir}/${RECEIPT_FILE} names ${JSON.stringify(packId)}, which is not a pack id`);
+  }
+  if (expected !== dir) return refuse(packId, `its receipt names pack "${packId}", which installs to ${expected}, not ${dir}`);
+
+  const owner = packOwner(packId);
+  const receiptPath = `${dir}/${RECEIPT_FILE}`;
+  const seen = new Set<string>([receiptPath]);
+  const rows: LedgerEntry[] = [];
+  for (const file of receipt["files"] as unknown[]) {
+    const path = isPlainObject(file) ? file["path"] : undefined;
+    const digest = isPlainObject(file) ? file["sha256"] : undefined;
+    if (typeof path !== "string" || typeof digest !== "string" || !SHA256_HEX.test(digest)) {
+      return refuse(packId, "its receipt lists a file without a path and a 64-hex sha256");
+    }
+    const segments = path.split("/");
+    if (!path.startsWith(`${dir}/`) || path.includes("\\") || segments.some((s) => s === "" || s === "." || s === "..") || seen.has(path)) {
+      return refuse(packId, `its receipt lists ${JSON.stringify(path)}, which is not a file of its own under ${dir}/`);
+    }
+    seen.add(path);
+    const abs = underRoot(root, path);
+    let stats;
+    try {
+      stats = await lstat(abs);
+      if (!stats.isFile() || isSharedRegularFile(stats) || (await realpath(abs)) !== abs) {
+        return refuse(packId, `${path} is not a regular file with one name, reached through no link`);
+      }
+    } catch {
+      return refuse(packId, `${path}, which its receipt lists, is gone`);
+    }
+    const actual = createHash("sha256").update(await readFile(abs)).digest("hex");
+    if (actual !== digest) {
+      return refuse(packId, `${path} hashes to ${actual.slice(0, 12)}…, not the ${digest.slice(0, 12)}… its receipt records, so it was edited after install`);
+    }
+    rows.push({ path, adapter: owner, artifactId: packArtifactId(packId, path.slice(dir.length + 1)), artifactType: "infra", contentHash: digest });
+  }
+  rows.push({
+    path: receiptPath,
+    adapter: owner,
+    artifactId: packArtifactId(packId, RECEIPT_FILE),
+    artifactType: "infra",
+    contentHash: createHash("sha256").update(receiptText, "utf8").digest("hex"),
+  });
+  return { packId, rows };
 }
