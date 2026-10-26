@@ -4,7 +4,7 @@ import { cp, mkdir, readFile, readdir, rename, rm, symlink, writeFile } from "no
 import { join, relative, sep } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { COMMANDS } from "../../../src/cli.ts";
-import { cleanCommand, planCleanCandidates } from "../../../src/cli/commands/clean.ts";
+import { cleanCommand, moveWithoutClobber, planCleanCandidates } from "../../../src/cli/commands/clean.ts";
 import { applySync, planSync } from "../../../src/cli/commands/sync/engine.ts";
 import { REQUIRED_GITIGNORE_ENTRIES } from "../../../src/mcp/env.ts";
 import { wrapInManagedBlock } from "../../../src/merge/managedBlocks.ts";
@@ -1744,6 +1744,24 @@ describe("clean — the backup a replace import recorded", () => {
     expect(await readFile(join(root, "AGENTS.md.bak"), "utf-8")).toBe(OWNER);
   }, 60_000);
 
+  it("never replaces a file that appears at the target between the checks and the move", async () => {
+    // The move itself is what has to refuse: a file created at the target after
+    // the checks is, at the moment of the move, simply a file that is there.
+    const temp = tempDir();
+    await temp.seedFiles({ "AGENTS.md.bak": OWNER, "AGENTS.md": "appeared after the checks\n" });
+
+    const reason = await moveWithoutClobber(temp.path("AGENTS.md.bak"), temp.path("AGENTS.md"));
+
+    expect(reason).toContain("appeared at the target");
+    expect(await readFile(temp.path("AGENTS.md"), "utf-8")).toBe("appeared after the checks\n");
+    expect(await readFile(temp.path("AGENTS.md.bak"), "utf-8")).toBe(OWNER);
+    // With nothing there the same move goes through, and the old name is gone.
+    await rm(temp.path("AGENTS.md"));
+    expect(await moveWithoutClobber(temp.path("AGENTS.md.bak"), temp.path("AGENTS.md"))).toBeNull();
+    expect(await readFile(temp.path("AGENTS.md"), "utf-8")).toBe(OWNER);
+    expect(existsSync(temp.path("AGENTS.md.bak"))).toBe(false);
+  });
+
   it("moves the backup back and says so", async () => {
     const root = await replacedRepo();
 
@@ -1790,6 +1808,13 @@ describe("clean --pack — the hooks documents leave the pack's hooks behind", (
     const documents = [".claude/settings.json", ".github/hooks/stamity.json"];
     // The setup did wire the pack's hook in both: the removal below is not a no-op.
     for (const doc of documents) expect(await readFile(join(root, doc), "utf-8")).toContain(`packs/${HOOK_PACK}/`);
+
+    // The preview names the documents the real run rewrites, and writes none of them.
+    const before = await Promise.all(documents.map((doc) => readFile(join(root, doc), "utf-8")));
+    const preview = await run(root, ["clean", "--pack", HOOK_PACK, "--dry-run"]);
+    for (const doc of documents) expect(preview.stdout).toContain(doc);
+    expect(preview.stdout).toContain("from the setup without the pack");
+    expect(await Promise.all(documents.map((doc) => readFile(join(root, doc), "utf-8")))).toEqual(before);
 
     await run(root, ["clean", "--pack", HOOK_PACK, "-y"]);
 

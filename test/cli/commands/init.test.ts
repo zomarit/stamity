@@ -923,7 +923,8 @@ describe("init — existing-config moment (import variant)", () => {
     expect(transcript()).toContain("AGENTS.md was replaced");
     // Executed and recorded, not merely rendered.
     expect((await readManifest(root))?.importChoice).toEqual([
-      { path: "AGENTS.md", mode: "replace" },
+      // TEST CHANGE, justified: REQ-FLOW-027 — a replace decision records the backup its write took.
+      { path: "AGENTS.md", mode: "replace", backup: { path: "AGENTS.md.bak", sha256: "9a26c14f87bd3de89d6a6088a7f07a7c71522e6ba400e7914a8dfeda8944dba9" } },
     ]);
     await expect(readFile(join(root, "AGENTS.md.bak"), "utf8")).resolves.toBe("# my agent notes\n");
   });
@@ -1028,7 +1029,8 @@ describe("init — existing-config moment (import variant)", () => {
     expect(result.code).toBe(0);
     // Both paths carry the replace decision — the input the write lane reads.
     expect((await readManifest(root))?.importChoice).toEqual([
-      { path: "AGENTS.md", mode: "replace" },
+      // TEST CHANGE, justified: REQ-FLOW-027 — a replace decision records the backup its write took.
+      { path: "AGENTS.md", mode: "replace", backup: { path: "AGENTS.md.bak", sha256: "9a26c14f87bd3de89d6a6088a7f07a7c71522e6ba400e7914a8dfeda8944dba9" } },
       { path: "CLAUDE.md", mode: "replace" },
     ]);
     // And the path where forcing is observable was forced: verified `.bak`

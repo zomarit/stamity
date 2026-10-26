@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Stats } from "node:fs";
-import { lstat, readFile, readdir, rename, rm, stat } from "node:fs/promises";
+import { link, lstat, readFile, readdir, rm, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { importBackupPathDefect, readManifest, writeManifest } from "../../manifest/manifest.ts";
 import {
@@ -218,10 +218,10 @@ async function lstatOrNull(absPath: string): Promise<Stats | null> {
 /**
  * Why the recorded backup of `path` may not be moved back, or `null` when it may
  * (REQ-FLOW-027). Every check the manifest reader made is made again here, since
- * this is the step that renames: `path` is an instruction file `init` imports,
+ * this is the step that moves the file: `path` is an instruction file `init` imports,
  * the backup is that file's own `.bak` name in its folder, neither name leaves
  * the tree through a link, nothing is at `path` (a file there after the sweep is
- * never a rename destination), and the backup is a regular file with one name
+ * never a move destination), and the backup is a regular file with one name
  * whose bytes hash to the recorded `sha256`.
  */
 async function restoreRefusal(rootDir: string, path: string, backup: ImportBackup): Promise<string | null> {
@@ -249,25 +249,43 @@ async function restoreRefusal(rootDir: string, path: string, backup: ImportBacku
 }
 
 /**
+ * Move `source` to `target` without ever replacing a file at `target`: a hard
+ * link, which fails with `EEXIST` when anything is there, then the old name
+ * removed. So a file that appears at `target` after the restore's checks is
+ * kept, and the backup with it. `null` when moved, else why not.
+ */
+export async function moveWithoutClobber(source: string, target: string): Promise<string | null> {
+  const messageOf = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
+  try {
+    await link(source, target);
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === "EEXIST") {
+      return "a file appeared at the target after the checks, so the backup was not moved over it";
+    }
+    return `the move failed: ${messageOf(cause)}`;
+  }
+  try {
+    await unlink(source);
+  } catch (cause) {
+    return `the file is back, but the backup could not be removed (${messageOf(cause)}); delete it by hand`;
+  }
+  return null;
+}
+
+/**
  * Move each recorded backup of a `replace` import back over the instruction
  * file it was taken of, after the sweep removed the engine's file there
  * (REQ-FLOW-027). One that fails a check ({@link restoreRefusal}) stays where
- * it is, and so does whatever is at its path; the reason is reported. A rename
- * that fails is reported the same way, so one backup never stops the rest.
+ * it is, and so does whatever is at its path; the reason is reported. A move
+ * that fails ({@link moveWithoutClobber}) is reported the same way, so one backup never stops the rest.
  */
 async function restoreImportBackups(rootDir: string, manifest: SetupManifest): Promise<RestoreOutcome> {
   const outcome: RestoreOutcome = { restored: [], restoreSkipped: [] };
   for (const { path, backup } of recordedBackups(manifest)) {
-    // oxlint-disable-next-line no-await-in-loop -- one decision per instruction file, checked and renamed in order
+    // oxlint-disable-next-line no-await-in-loop -- one decision per instruction file, checked and moved in order
     let reason = await restoreRefusal(rootDir, path, backup);
-    if (reason === null) {
-      try {
-        // oxlint-disable-next-line no-await-in-loop
-        await rename(join(rootDir, ...backup.path.split("/")), join(rootDir, ...path.split("/")));
-      } catch (cause) {
-        reason = `the rename failed: ${cause instanceof Error ? cause.message : String(cause)}`;
-      }
-    }
+    // oxlint-disable-next-line no-await-in-loop
+    if (reason === null) reason = await moveWithoutClobber(join(rootDir, ...backup.path.split("/")), join(rootDir, ...path.split("/")));
     if (reason === null) outcome.restored.push({ path, backup: backup.path });
     else outcome.restoreSkipped.push({ path, backup: backup.path, reason });
   }
@@ -918,6 +936,11 @@ interface HookDocumentRewrite {
   notes: string[];
 }
 
+/** The hooks documents this setup wrote, the ones `clean --pack` re-renders without the pack ({@link rewriteHookDocuments}). */
+function hookDocumentsOf(manifest: SetupManifest, packSupply: readonly PackSuppliedServer[]): string[] {
+  return [...hookScriptRetention(manifest, packSupply).hookDocuments].filter((path) => manifest.ledger.some((row) => row.path === path));
+}
+
 /**
  * Rewrite every hooks document the setup wrote from the setup without the pack
  * being removed (inbox `pass/1`, REQ-FLOW-027), before the sweep, so no client
@@ -940,9 +963,7 @@ async function rewriteHookDocuments(
   engineVersion: string,
 ): Promise<HookDocumentRewrite> {
   const rewrite: HookDocumentRewrite = { rows: new Map(), notes: [] };
-  const documents = [...hookScriptRetention(manifest, packSupply).hookDocuments].filter((path) =>
-    manifest.ledger.some((row) => row.path === path),
-  );
+  const documents = hookDocumentsOf(manifest, packSupply);
   if (documents.length === 0) return rewrite;
   let outputs: readonly AdapterOutput[];
   try {
@@ -1174,6 +1195,10 @@ async function runScopedClean(
         `A real run also drops its ${candidates.length} ledger row(s)${copySentence}` +
         `${mcpSentence(mcp)} and leaves the rest of ${STATE_DIR}/ intact.\n`,
     );
+    const hookDocuments = hookDocumentsOf(manifest, packSupply);
+    if (hookDocuments.length > 0) {
+      ctx.io.out(`A real run also rewrites ${hookDocuments.join(", ")} from the setup without the pack, so none still runs its hooks.\n`);
+    }
     nextSteps(ctx, [`apply it: ${packageCommand(`clean --pack ${packId}`)}`]);
   } else {
     ctx.io.out(
