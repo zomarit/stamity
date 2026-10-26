@@ -359,9 +359,10 @@ function provenanceLines(rollup: ProvenanceRollup, palette: Palette): string[] {
         `updated ${rollup.updatedAt} · schema ${rollup.manifestVersion}`,
     ),
   ];
+  // No "(stamped v…)" suffix (REQ-FLOW-032): emission writes bare BEGIN markers,
+  // so a ledger row's `stampedVersion` names no stamp any file carries.
   for (const row of rollup.perAdapter) {
-    const stamp = row.stampedVersion === null ? "" : ` (stamped v${row.stampedVersion})`;
-    lines.push(palette.dim(`  ${row.adapter}: ${row.files} file(s)${stamp}`));
+    lines.push(palette.dim(`  ${row.adapter}: ${row.files} file(s)`));
   }
   for (const pack of rollup.packs) {
     lines.push(palette.dim(`  pack ${pack.packId}: ${pack.files} file(s)`));

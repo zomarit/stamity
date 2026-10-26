@@ -834,6 +834,22 @@ describe("sync — empty-corpus honesty", () => {
     // Nothing was written, so no review next-step either.
     expect(result.stdout).not.toContain(NEXT_AFTER_WRITE_LINE);
   });
+
+  it("says the manifest is already current on a re-run that changes nothing (REQ-FLOW-032)", async () => {
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+    await runSync(root);
+    const path = manifestPath(root);
+    const before = await readFile(path, "utf8");
+
+    const result = await runSync(root);
+
+    expect(result.code).toBe(0);
+    expect(countOccurrences(result.stdout, HONESTY_LINE)).toBe(1);
+    expect(result.stdout).toContain(`manifest already current: ${path}`);
+    expect(result.stdout).not.toContain("manifest refreshed:");
+    expect(await readFile(path, "utf8")).toBe(before);
+  });
 });
 
 describe("sync — newer manifest schema", () => {
