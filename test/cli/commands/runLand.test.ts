@@ -964,7 +964,8 @@ describe("stamity run land", () => {
     const result = await run(repo, ["land", "--run", RUN, "--approved", head]);
 
     // The approval names the head, not the reasons (the SECURITY.md residual): the reason added after it does not stop
-    // the land, and the evidence line shows every reason the approval was taken over.
+    // the land. The evidence line marks every reason found when the land acted as approved, the later one too, and the
+    // land replaces the `merge waits on:` line the person was shown, so no record tells the reasons they saw apart.
     expect(result.doc).toMatchObject({ outcome: "landed", approved: { sha: head, reasons: [paths, "main is named in autonomy.deployingBranches"] } });
     expect(bodies().at(-1)).toContain(`; approved by the person for ${head} over: ${paths}; main is named in autonomy.deployingBranches`);
   });
