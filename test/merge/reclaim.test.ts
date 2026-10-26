@@ -2539,6 +2539,24 @@ describe("formatReclaimReport", () => {
     expect(text).toContain(".cursor/rules/50-stamity-testing.mdc");
   });
 
+  it("words a full clean's dry run plainly: no path called orphaned, and the clients that wrote a shared one named (cut/8)", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await temp.seedFiles({ "repo/AGENTS.md": managedWhole("engine charter") });
+    const shared = [candidate("AGENTS.md", "adapter-removed", "claude"), candidate("AGENTS.md", "adapter-removed", "codex")];
+
+    const clean = formatReclaimReport(await sweepReclaimCandidates(shared, { rootDir: root, consent: false, setupRemoved: true }));
+    expect(clean).toContain("Dry run: 1 path(s) this setup wrote inspected, nothing written.");
+    expect(clean).toContain("Written for claude and codex.");
+    expect(clean).not.toContain("orphaned");
+    expect(clean).not.toContain("adapter-removed");
+
+    // A sync's sweep keeps its words: there the rows' adapters are gone.
+    const sync = formatReclaimReport(await sweepReclaimCandidates(shared, { rootDir: root, consent: false }));
+    expect(sync).toContain("1 orphaned path(s) inspected");
+    expect(sync).toContain("Recorded by adapter-removed (claude) and adapter-removed (codex).");
+  });
+
   it("headlines an applied sweep with its tallies and lists every entry", async () => {
     const temp = tempDir();
     const root = temp.path("repo");

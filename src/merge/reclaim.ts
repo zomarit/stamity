@@ -325,7 +325,9 @@ export interface ReclaimOptions {
    * included: no row and no later `sync` outlive it, so a file kept unjudged
    * under {@link renderingsUnbuilt} (in a content folder or at a Cursor 1.11.0
    * guard name) is named for a delete by hand, unless it is the operator's,
-   * instead of promised a retry (review/87, build/60).
+   * instead of promised a retry (review/87, build/60). Its report then reads
+   * in plain words (inbox `cut/8`): every path is one the setup wrote, so none
+   * is called orphaned, and an entry several clients wrote names those clients.
    */
   setupRemoved?: boolean;
   /**
@@ -353,6 +355,8 @@ export interface ReclaimReport {
    * those scripts lives in it.
    */
   wiringKept?: { path: string; scripts: string[]; unreadable?: true }[];
+  /** The sweep ran under {@link ReclaimOptions.setupRemoved}; {@link formatReclaimReport} words its headline for it. */
+  setupRemoved?: true;
   /**
    * The `consent` the sweep ran under — `false` means nothing was written,
    * whatever the entries look like.
@@ -523,6 +527,8 @@ interface CandidateGroup {
   reason: ReclaimCandidate["reason"];
   /** `reason (adapter)` labels in ledger order, deduplicated. */
   owners: string[];
+  /** The adapters of those rows, in the same order, deduplicated. */
+  adapters: string[];
   /**
    * The distinct `contentHash` values the rows recorded for this path. Matching
    * any one of them proves the engine wrote the bytes on disk: co-owners record
@@ -553,12 +559,14 @@ function groupByPath(candidates: readonly ReclaimCandidate[]): CandidateGroup[] 
         path,
         reason: candidate.reason,
         owners: [label],
+        adapters: [candidate.entry.adapter],
         recordedHashes: new Set(hash === undefined ? [] : [hash]),
         kinds: new Set([kind]),
       });
       continue;
     }
     if (!existing.owners.includes(label)) existing.owners.push(label);
+    if (!existing.adapters.includes(candidate.entry.adapter)) existing.adapters.push(candidate.entry.adapter);
     if (hash !== undefined) existing.recordedHashes.add(hash);
     existing.kinds.add(kind);
     if (REASON_RANK[candidate.reason] < REASON_RANK[existing.reason]) {
@@ -1369,8 +1377,15 @@ export async function sweepReclaimCandidates(
 
   const sweepOne = async (group: CandidateGroup): Promise<void> => {
     const plan = await planFor(group, ctx);
+    // The full clean's rows are not orphaned: their clients are still set up, so it names them (inbox `cut/8`).
     const provenance =
-      group.owners.length > 1 ? ` Recorded by ${group.owners.join(" and ")}.` : "";
+      group.owners.length <= 1
+        ? ""
+        : ctx.setupRemoved
+          ? group.adapters.length > 1
+            ? ` Written for ${group.adapters.join(" and ")}.`
+            : ""
+          : ` Recorded by ${group.owners.join(" and ")}.`;
     const base = { path: group.path, candidateReason: group.reason };
 
     if (plan.kind === "skip") {
@@ -1526,6 +1541,7 @@ export async function sweepReclaimCandidates(
   return {
     entries,
     consent: opts.consent,
+    ...(ctx.setupRemoved ? { setupRemoved: true as const } : {}),
     ...(wiringKept.size > 0
       ? {
           // In the order the sweep met them, which follows the candidates.
@@ -1568,8 +1584,10 @@ export function formatReclaimReport(report: ReclaimReport): string {
   const refused = report.entries.length - planned;
   const refusedClause =
     refused === 0 ? "" : ` ${planned} would be acted on, ${refused} refused by a safety gate.`;
-  return [
-    `Reclaim dry run: ${report.entries.length} orphaned path(s) inspected, nothing written.${refusedClause} Re-run with consent to apply.`,
-    ...rows,
-  ].join("\n");
+  // A full clean's paths are every one the setup wrote, none of them orphaned (inbox `cut/8`).
+  const headline =
+    report.setupRemoved === true
+      ? `Dry run: ${report.entries.length} path(s) this setup wrote inspected, nothing written.${refusedClause}`
+      : `Reclaim dry run: ${report.entries.length} orphaned path(s) inspected, nothing written.${refusedClause} Re-run with consent to apply.`;
+  return [headline, ...rows].join("\n");
 }
