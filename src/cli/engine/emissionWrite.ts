@@ -200,17 +200,23 @@ export async function readIfExists(filePath: string): Promise<string | null> {
  * two writers spelled this differently — one explicit, one omitted — for no
  * behavioural reason (`../../merge/safeWrite.ts` reads only `backup === false`),
  * and a difference with no meaning is the kind a reader eventually gives one.
+ *
+ * No `version` reaches the writer (REQ-FLOW-032), so a merged block's BEGIN
+ * marker is the bare one, and only a change in the block's bytes rewrites the
+ * file. A block an earlier release stamped (`STAMITY:BEGIN v1.16.0`) differs
+ * from that by its marker alone, so it is rewritten once, as an `updated` row,
+ * and left alone after. `_engineVersion` stays in the signature for the
+ * callers that pass it and is not read.
  */
 export function outputWriteOptions(
   managedBody: string | null,
-  engineVersion: string,
+  _engineVersion: string,
   force: boolean,
   rootDir: string,
   ledgerPaths?: ReadonlySet<string>,
   ledgerHashes?: ReadonlyMap<string, ReadonlySet<string>>,
 ): SafeWriteFileOptions {
   const base: SafeWriteFileOptions = {
-    version: engineVersion,
     force,
     backup: true,
     boundaryDir: rootDir,

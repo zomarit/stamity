@@ -1225,7 +1225,7 @@ export function composeEmissionPlanner(
 
     // Last, over the finished row set: the user's pre-existing config files
     // outrank every planner's opinion about the paths they sit on.
-    applyImportDecisions(rows, importDecisionsOf(ctx.manifest), ctx.engineVersion);
+    applyImportDecisions(rows, importDecisionsOf(ctx.manifest));
     const blockWarnings = cursorBlockSkippedWarnings(tools, rows);
 
     const outputs = [...rows.values()]
@@ -1448,7 +1448,9 @@ function importDecisionsOf(manifest: SetupManifest): readonly ImportDecision[] {
  *   engine does not emit rather than an unowned collision they refuse on.
  * - **supplement** — a block-less row is wrapped in a managed block, which
  *   routes the write through the merge lane: the block lands above the user's
- *   file and every other byte is preserved verbatim. A row that already
+ *   file and every other byte is preserved verbatim. Its BEGIN marker carries
+ *   no version (REQ-FLOW-032), so a release that changes nothing in the block
+ *   changes no byte of the file. A row that already
  *   carries a block (the `CLAUDE.md` bridge) is already supplementing and is
  *   left alone, which is also what makes a second pass over the same decision
  *   set a no-op.
@@ -1465,9 +1467,8 @@ function importDecisionsOf(manifest: SetupManifest): readonly ImportDecision[] {
 function applyImportDecisions(
   rows: Map<string, PendingRow>,
   decisions: readonly ImportDecision[],
-  engineVersion: string,
 ): void {
-  for (const decision of decisions) applyImportDecision(rows, decision, engineVersion);
+  for (const decision of decisions) applyImportDecision(rows, decision);
 }
 
 /**
@@ -1495,7 +1496,6 @@ function cursorBlockSkippedWarnings(
 function applyImportDecision(
   rows: Map<string, PendingRow>,
   decision: ImportDecision,
-  engineVersion: string,
 ): void {
   const row = rows.get(decision.path);
   if (row === undefined) return;
@@ -1522,7 +1522,7 @@ function applyImportDecision(
     );
   }
   if (!hasManagedBlock(row.content, decision.path)) {
-    row.content = wrapInManagedBlock(row.content, decision.path, engineVersion);
+    row.content = wrapInManagedBlock(row.content, decision.path);
   }
 }
 

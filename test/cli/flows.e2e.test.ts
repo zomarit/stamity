@@ -133,7 +133,9 @@ describe("the full lifecycle journey", () => {
     expect(sync.stdout).toMatch(/synced: 0 created, 0 updated, [1-9]\d* unchanged, 0 skipped/);
     expect(sync.stdout).toContain("provenance (the manifest is the record)");
     const afterSync = await readManifest(manifestPath);
-    expect(Date.parse(afterSync.updatedAt)).toBeGreaterThan(Date.parse(afterInit.updatedAt));
+    // TEST CHANGE, justified: REQ-FLOW-032 — updatedAt moves only on change. A sync straight
+    // after init changes nothing, so the manifest keeps init's stamp; this asserted it moved.
+    expect(afterSync.updatedAt).toBe(afterInit.updatedAt);
     expect(afterSync.selection).toEqual(afterInit.selection);
 
     // ── check: environment healthy, drift clean ──────────────────────────

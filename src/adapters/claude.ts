@@ -562,7 +562,7 @@ export const claudeResiduePlanner: ResiduePlanner = {
     const items = await selectedItems(ctx);
     const render = bodyRenderers(ctx);
 
-    const rows: AdapterOutput[] = [buildClaudeMd(ctx.engineVersion)];
+    const rows: AdapterOutput[] = [buildClaudeMd()];
     // Re-targeted, not re-rendered: the same bytes the core already produced,
     // under the one root this client reads. Two paths, two owners, identical
     // content — the composer dedups by PATH, so both trees are written and the
@@ -781,12 +781,16 @@ function buildClaudeModelMap(
 
 // ── Builders ─────────────────────────────────────────────────────
 
-/** Import the charter once; the charter and native skill catalog provide discovery. */
-function buildClaudeMd(engineVersion: string): AdapterOutput {
+/**
+ * Import the charter once; the charter and native skill catalog provide discovery.
+ * The BEGIN marker carries no version (REQ-FLOW-032), so a release that changes
+ * nothing here changes no byte of the file.
+ */
+function buildClaudeMd(): AdapterOutput {
   const inner = `@${AGENTS_MD_FILE}`;
   return {
     path: CLAUDE_MD_PATH,
-    content: wrapInManagedBlock(inner, CLAUDE_MD_PATH, engineVersion),
+    content: wrapInManagedBlock(inner, CLAUDE_MD_PATH),
     owner: owner("claude-md-bridge", "infra"),
   };
 }

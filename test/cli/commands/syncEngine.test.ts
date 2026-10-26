@@ -686,7 +686,73 @@ describe("collisions", () => {
 });
 
 describe("only-when-stale", () => {
-  it("a same-version re-run reports all unchanged, bumps no mtimes, and still bumps the manifest", async () => {
+  // TEST CHANGE, justified: REQ-FLOW-032 — a re-run that changes nothing leaves the manifest
+  // byte-identical, `updatedAt` included, and reports `manifestWritten: false`. The case asserted
+  // the manifest's stamp moved to T2; and its output is wrapped with the bare marker the emitters
+  // write now, where it was stamped with the version.
+  it("rewrites a marker an earlier release stamped once, names it in the report, then leaves the file alone (REQ-FLOW-032)", async () => {
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+    const run = async (now: Date) => {
+      const plan = await planSync(root, ENGINE_VERSION);
+      return { plan, report: await applySync(root, plan, { engineVersion: ENGINE_VERSION, force: false, dryRun: false, now }) };
+    };
+    await run(T1);
+    const claudeMd = join(root, "CLAUDE.md");
+    const bare = await readFile(claudeMd, "utf8");
+    expect(bare.startsWith("<!-- STAMITY:BEGIN -->\n")).toBe(true);
+    // The bytes a 1.16.0 sync left: the same block, its BEGIN line stamped.
+    await writeFile(claudeMd, bare.replace("<!-- STAMITY:BEGIN -->", "<!-- STAMITY:BEGIN v1.16.0 -->"), "utf8");
+
+    const second = await run(T2);
+    const row = second.report.wrote.find((result) => result.path === "CLAUDE.md");
+    expect(row?.action).toBe("updated");
+    expect(row?.notice).toBe(
+      "Rewrote the managed-block marker in CLAUDE.md: its BEGIN line carried v1.16.0 and now carries no " +
+        "version, so a release that changes nothing in the block leaves the file alone.",
+    );
+    expect(renderSyncReport(second.plan, second.report, plainPalette)).toContain(`  ${row?.notice}`);
+    expect(await readFile(claudeMd, "utf8")).toBe(bare);
+    // The bytes the ledger records are the bare ones the first run wrote, so the manifest holds.
+    expect(second.report.manifestWritten).toBe(false);
+
+    const third = await run(new Date("2026-08-15T00:00:00.000Z"));
+    const again = third.report.wrote.find((result) => result.path === "CLAUDE.md");
+    expect(again?.action).toBe("unchanged");
+    expect(again?.notice).toBeUndefined();
+
+    // A stamp that is no version (here a terminal escape) is named, never echoed.
+    await writeFile(claudeMd, bare.replace("<!-- STAMITY:BEGIN -->", "<!-- STAMITY:BEGIN \u001B[2J -->"), "utf8");
+    const planted = (await run(new Date("2026-08-16T00:00:00.000Z"))).report.wrote.find((result) => result.path === "CLAUDE.md");
+    expect(planted?.notice).toBe(
+      "Rewrote the managed-block marker in CLAUDE.md: its BEGIN line carried a version stamp and now carries no " +
+        "version, so a release that changes nothing in the block leaves the file alone.",
+    );
+    expect(await readFile(claudeMd, "utf8")).toBe(bare);
+  });
+
+  it("stamps the manifest when a sync only refreshes what detection found (REQ-FLOW-032)", async () => {
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+    const opts = { engineVersion: ENGINE_VERSION, force: false, dryRun: false };
+    await applySync(root, await planSync(root, ENGINE_VERSION), { ...opts, now: T1 });
+    const unchanged = await applySync(root, await planSync(root, ENGINE_VERSION), { ...opts, now: T2 });
+    expect(unchanged.manifestWritten).toBe(false);
+    expect((await readManifest(root))?.updatedAt).toBe(T1.toISOString());
+
+    // A detection the repository no longer matches: the next plan refreshes it, which is content.
+    const path = manifestPath(root);
+    const onDisk = JSON.parse(await readFile(path, "utf8")) as SetupManifest;
+    await writeFile(path, `${JSON.stringify({ ...onDisk, detected: { ...onDisk.detected, languages: ["cobol"] } }, null, 2)}\n`, "utf8");
+    const refreshed = await applySync(root, await planSync(root, ENGINE_VERSION), { ...opts, now: T2 });
+
+    expect(refreshed.manifestWritten).toBe(true);
+    expect(refreshed.manifest?.updatedAt).toBe(T2.toISOString());
+    expect((await readManifest(root))?.updatedAt).toBe(T2.toISOString());
+    expect((await readManifest(root))?.detected?.languages).not.toContain("cobol");
+  });
+
+  it("a same-version re-run reports all unchanged, bumps no mtimes, and leaves the manifest byte-identical", async () => {
     const handle = tempDir();
     const root = await seedRepo(handle);
     // TEST CHANGE, justified: REQ-PLUGIN-045 — a `rule` row directly under
@@ -694,7 +760,7 @@ describe("only-when-stale", () => {
     // content folder); the guide moved into `.claude/rules/`.
     const guardPath = ".claude/rules/stamity-guide.md";
     const outputs = [
-      { ...output(guardPath, wrapInManagedBlock("guide body", guardPath, ENGINE_VERSION), "guide"), owner: { adapter: "claude" as const, artifactId: "guide", artifactType: "rule" as const } },
+      { ...output(guardPath, wrapInManagedBlock("guide body", guardPath), "guide"), owner: { adapter: "claude" as const, artifactId: "guide", artifactType: "rule" as const } },
     ];
     const base = await planSync(root, ENGINE_VERSION);
     const firstEntries = await planOutputEntries(root, outputs, ENGINE_VERSION);
@@ -706,7 +772,9 @@ describe("only-when-stale", () => {
       { engineVersion: ENGINE_VERSION, force: false, dryRun: false, now: T1 },
     );
     expect(first.created).toBe(1);
+    expect(first.manifestWritten).toBe(true);
     const statFirst = await stat(join(root, guardPath));
+    const manifestAfterFirst = await readFile(join(root, ".stamity", "manifest.json"), "utf8");
 
     const secondEntries = await planOutputEntries(root, outputs, ENGINE_VERSION);
     expect(secondEntries[0]?.action).toBe("unchanged");
@@ -724,8 +792,12 @@ describe("only-when-stale", () => {
     expect(second.updated).toBe(0);
     expect(second.unchanged).toBe(1);
     expect((await stat(join(root, guardPath))).mtimeMs).toBe(statFirst.mtimeMs);
-    // The manifest IS the provenance record, so its timestamp still moves…
-    expect((await readManifest(root))?.updatedAt).toBe(T2.toISOString());
+    // The manifest IS the provenance record, and nothing in it changed, so its
+    // bytes and its stamp stay as the first run left them…
+    expect(second.manifestWritten).toBe(false);
+    expect(await readFile(join(root, ".stamity", "manifest.json"), "utf8")).toBe(manifestAfterFirst);
+    expect((await readManifest(root))?.updatedAt).toBe(T1.toISOString());
+    expect(second.manifest?.updatedAt).toBe(T1.toISOString());
     // …and two identical runs settle on an identical ledger (idempotence; the
     // The write lock serializes concurrent manifest writers, so sequential
     // re-runs are the sanctioned stand-in for a race).
@@ -1399,6 +1471,8 @@ describe("the salvage disclosure", () => {
       refused: [],
       reclaimed,
       manifestPath: "",
+      // TEST CHANGE, justified: REQ-FLOW-032 — the report gained a required `manifestWritten`.
+      manifestWritten: false,
       dryRun,
       manifest: null,
     };

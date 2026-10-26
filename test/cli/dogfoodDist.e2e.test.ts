@@ -228,20 +228,15 @@ describe("dist-binary dogfood journey (node dist/cli.js, pseudo-home)", () => {
       const treeAfterResync = await treeHashMap(fixture.repoDir);
       const manifestAfterResync = await readFile(manifestPath, "utf8");
 
-      // The exact single-file delta: no file created or removed, no file's
-      // bytes changed but the manifest's — and within the manifest, updatedAt
-      // is the ONLY changed field. Generate-and-diff, at the binary boundary.
+      // No delta at all: no file created or removed, and no file's bytes
+      // changed, the manifest's included. Generate-and-diff, at the binary
+      // boundary.
+      // TEST CHANGE, justified: REQ-FLOW-032 — updatedAt moves only on change. The second
+      // sync changes nothing, so the manifest is byte-identical too; this asserted the
+      // manifest was the one changed path, its updatedAt the one changed field.
       expect(sortedKeys(treeAfterResync)).toEqual(sortedKeys(treeBeforeResync));
-      expect(changedPaths(treeBeforeResync, treeAfterResync)).toEqual([MANIFEST_REL]);
-      const parsedBefore = JSON.parse(manifestBeforeResync) as Record<string, unknown>;
-      const parsedAfter = JSON.parse(manifestAfterResync) as Record<string, unknown>;
-      expect(Date.parse(parsedAfter["updatedAt"] as string)).toBeGreaterThan(
-        Date.parse(parsedBefore["updatedAt"] as string),
-      );
-      expect({ ...parsedAfter, updatedAt: "(normalized)" }).toEqual({
-        ...parsedBefore,
-        updatedAt: "(normalized)",
-      });
+      expect(changedPaths(treeBeforeResync, treeAfterResync)).toEqual([]);
+      expect(manifestAfterResync).toBe(manifestBeforeResync);
 
       // ── config: get echoes the detected tier, set round-trips ──────────
       const getBefore = await fixture.run(["config", "get", "maturityTier"]);

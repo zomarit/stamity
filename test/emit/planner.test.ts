@@ -954,8 +954,13 @@ describe("fork skill directory clashing with a lower layer's skill", () => {
 // ── Persisted import decisions ───────────────────────────────────
 
 describe("import decisions over the finished row set", () => {
-  /** The HTML BEGIN marker as the wrap writes it: stamped with the engine version. */
-  const BEGIN = stampMarkerVersion(MANAGED_BLOCK_VARIANTS[0]!.start, ENGINE_VERSION);
+  // TEST CHANGE, justified: REQ-FLOW-032 — the supplement wrap writes the bare
+  // BEGIN marker, so a release that changes nothing in the block changes no
+  // byte. It pinned the marker stamped with the engine version.
+  /** The HTML BEGIN marker as the wrap writes it: bare, with no version. */
+  const BEGIN = MANAGED_BLOCK_VARIANTS[0]!.start;
+  /** The marker a release before REQ-FLOW-032 stamped, which no wrap writes now. */
+  const STAMPED_BEGIN = stampMarkerVersion(BEGIN, ENGINE_VERSION);
 
   /** A residue planner emitting one JSON row — the shape a supplement cannot wrap. */
   const settingsResidue = fakeResidue("claude", () => [
@@ -975,7 +980,8 @@ describe("import decisions over the finished row set", () => {
 
     const first = byPath(await planner.plan(ctx));
     const charter = first.get(P.agentsMd)!.content;
-    expect(charter).toContain(BEGIN);
+    expect(charter.startsWith(`${BEGIN}\n`)).toBe(true);
+    expect(charter).not.toContain(STAMPED_BEGIN);
     expect(charter).toContain("# Test Charter");
 
     // Idempotent: planning again produces the same bytes, with ONE block —
@@ -991,7 +997,9 @@ describe("import decisions over the finished row set", () => {
     // The `CLAUDE.md` bridge shape: an adapter row that is already a managed
     // block. Supplementing it again would wrap the wrapper, and the merge lane
     // would then own bytes it did not write.
-    const bridged = wrapInManagedBlock(`@${P.agentsMd}\n`, "CLAUDE.md", ENGINE_VERSION);
+    // TEST CHANGE, justified: REQ-FLOW-032 — the bridge row is wrapped as the
+    // Claude adapter now wraps it, with the bare marker.
+    const bridged = wrapInManagedBlock(`@${P.agentsMd}\n`, "CLAUDE.md");
     const claude = fakeResidue("claude", () => [
       { path: "CLAUDE.md", content: bridged, owner: ownerOf("claude", "entry", "infra") },
     ]);

@@ -28,8 +28,9 @@ import {
 } from "../../../mcp/env.ts";
 import { resolveModelLists, withModelLists, writeModelListCache, type ModelLists } from "../../engine/clientModels.ts";
 import { assertWriteTargetContained, isSharedRegularFile } from "../../../merge/atomicWrite.ts";
-import { extractManagedBlock, hasOwnerTextOutsideBlock } from "../../../merge/managedBlocks.ts";
+import { extractManagedBlock, getStampedVersion, hasOwnerTextOutsideBlock } from "../../../merge/managedBlocks.ts";
 import { sweepReclaimCandidates, type ReclaimReport } from "../../../merge/reclaim.ts";
+import { isSemverShaped } from "../../../shared/cliCall.ts";
 import {
   ledgerHashIndex,
   ledgerPathSet,
@@ -718,6 +719,12 @@ export interface SyncApplyReport {
   /** Sweep report; `null` when the plan had no reclaim candidates. */
   reclaimed: ReclaimReport | null;
   manifestPath: string;
+  /**
+   * Whether this run wrote `manifestPath` (REQ-FLOW-032): `false` when the
+   * manifest's content matched the file already there, so neither its bytes
+   * nor its `updatedAt` moved, and on a dry run.
+   */
+  manifestWritten: boolean;
   dryRun: boolean;
   /** The manifest exactly as persisted — the provenance record. `null` on a dry run. */
   manifest: SetupManifest | null;
@@ -727,6 +734,32 @@ export interface SyncApplyReport {
    * had nothing new to keep, or on a dry run.
    */
   modelListCacheWarning?: string;
+}
+
+/** The version stamped into the managed block of `content`, or `null` for none (or no file). */
+function stampedVersionAt(content: string | null, absPath: string): string | null {
+  return content === null ? null : getStampedVersion(content, absPath);
+}
+
+/**
+ * `result` with a notice naming the one-time rewrite of a stamped BEGIN marker
+ * to the bare one (REQ-FLOW-032, inbox cut/20): the file changed, and the
+ * report names that like any other overwrite of a file the owner tracks. Left
+ * as it is when the write did not update the file, or when the writer already
+ * named it with a notice or a warning of its own. The stamp is the file's own
+ * bytes, so it is printed only when it has a version's shape; any other token
+ * (a terminal escape among them) is named, not echoed.
+ */
+function withMarkerRewriteNotice(result: MergeResult, path: string, priorStamp: string | null): MergeResult {
+  if (priorStamp === null || result.action !== "updated") return result;
+  if (result.notice !== undefined || result.warning !== undefined) return result;
+  const carried = isSemverShaped(priorStamp) ? `v${priorStamp}` : "a version stamp";
+  return {
+    ...result,
+    notice:
+      `Rewrote the managed-block marker in ${path}: its BEGIN line carried ${carried} and now carries ` +
+      `no version, so a release that changes nothing in the block leaves the file alone.`,
+  };
 }
 
 function tally(entries: readonly SyncPlanEntry[], action: SyncPlanEntry["action"]): number {
@@ -1151,6 +1184,7 @@ export async function applySync(
       // as it leaves it (row 588); `check` previews without the flag.
       reclaimed: await previewReclaim(rootDir, plan, now, engineVersion, { force }),
       manifestPath: statePath,
+      manifestWritten: false,
       dryRun: true,
       manifest: null,
     };
@@ -1335,7 +1369,11 @@ export async function applySync(
       if (writtenContent !== null) written = writtenContent;
       if (writtenRecord !== null) coOwnedRecord = writtenRecord;
     } else {
+      // The stamp the block on disk carries, read only on the managed lane: the
+      // one-time rewrite to the bare marker is named below (inbox cut/20).
+      const priorStamp = managedBody === null ? null : stampedVersionAt(await readIfExists(absPath), absPath);
       result = await safeWriteFile(absPath, output.content, outputWriteOptions(managedBody, engineVersion, force, rootDir, ownedPaths, ownedHashes));
+      result = withMarkerRewriteNotice(result, output.path, priorStamp);
     }
     wrote.push({ ...result, path: output.path });
     // A skipped write left someone else's bytes in place — the engine did not
@@ -1406,14 +1444,17 @@ export async function applySync(
     plan.modelListCache === undefined ? null : await writeModelListCache(rootDir, plan.modelListCache);
 
   // Manifest LAST — the commit point. Persists the migrated shape, the
-  // refreshed selection + detection, the rebuilt ledger, and the new stamps.
-  const manifest: SetupManifest = withoutListedModels({
+  // refreshed selection + detection, the rebuilt ledger, and the version
+  // stamp. `updatedAt` is the writer's: it moves only when the content does,
+  // so a sync that changes nothing leaves the file byte-identical
+  // (REQ-FLOW-032), and the report carries the stamp the file holds.
+  const next: SetupManifest = withoutListedModels({
     ...plan.manifest,
     generatedBy: engineVersion,
-    updatedAt: now.toISOString(),
     ledger,
   });
-  await writeManifest(rootDir, manifest, { now });
+  const persisted = await writeManifest(rootDir, next, { now });
+  const manifest: SetupManifest = { ...next, updatedAt: persisted.updatedAt };
 
   const done = (action: MergeResult["action"]): number =>
     wrote.filter((result) => result.action === action).length;
@@ -1428,6 +1469,7 @@ export async function applySync(
     ...(gitignore.removed.length > 0 ? { gitignoreRemoved: gitignore.removed } : {}),
     reclaimed,
     manifestPath: statePath,
+    manifestWritten: persisted.written,
     dryRun: false,
     manifest,
     ...(modelListCacheWarning === null ? {} : { modelListCacheWarning }),

@@ -1336,6 +1336,18 @@ export async function readManifest(rootDir: string): Promise<SetupManifest | nul
  * the caller's object is not mutated, so a manifest handed to the writer twice
  * is not silently different from the one the caller still holds.
  *
+ * Only when stale (REQ-FLOW-032), as `../merge/safeWrite.ts` rewrites a block:
+ * when the file on disk holds exactly the bytes this manifest serialises to
+ * under the `updatedAt` already recorded there, nothing is written, and the
+ * result carries `written: false` and that recorded stamp. So a sync that
+ * changes nothing leaves the manifest byte-identical, mtime included. The skip
+ * is narrow on purpose, since the bytes on disk are an input anyone can plant:
+ * the recorded stamp must have the exact shape this writer produces
+ * ({@link isWriterTimestamp}), the comparison covers every other byte (CRLF
+ * line ends folded, so an autocrlf checkout is not rewritten), and the
+ * validation below runs first, so equal bytes never excuse an invalid
+ * manifest. Anything else stamps and writes.
+ *
  * `models.listed` is never written ({@link withoutListedModels}). The manifest
  * is validated first. `SetupManifest` is a type, and the defects
  * that matter here — an escaping ledger path, two rows claiming one file — are
@@ -1346,12 +1358,10 @@ export async function writeManifest(
   rootDir: string,
   manifest: SetupManifest,
   opts: { now?: Date } = {},
-): Promise<void> {
+): Promise<{ written: boolean; updatedAt: string }> {
   const path = manifestPath(rootDir);
-  const stamped: SetupManifest = {
-    ...withoutListedModels(manifest),
-    updatedAt: (opts.now ?? new Date()).toISOString(),
-  };
+  const content = withoutListedModels(manifest);
+  const stamped: SetupManifest = { ...content, updatedAt: (opts.now ?? new Date()).toISOString() };
   const errors = collectManifestErrors(stamped);
   if (errors.length > 0) {
     throw new EngineError(
@@ -1359,7 +1369,55 @@ export async function writeManifest(
       { code: "CONFIG_ERROR" },
     );
   }
+  const current = await readCurrentManifest(path);
+  if (current !== null) {
+    const kept: SetupManifest = { ...content, updatedAt: current.updatedAt };
+    if (collectManifestErrors(kept).length === 0 && serializeManifest(kept) === current.text) {
+      return { written: false, updatedAt: current.updatedAt };
+    }
+  }
   await atomicWriteFile(path, serializeManifest(stamped));
+  return { written: true, updatedAt: stamped.updatedAt };
+}
+
+/**
+ * The exact shape `Date.prototype.toISOString` gives for a year 0000-9999,
+ * which is the only shape {@link writeManifest} stamps.
+ */
+const WRITER_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+/**
+ * True for a value this writer could have stamped: its shape, and a date that
+ * round-trips through `toISOString` unchanged, so a lenient parse of an
+ * impossible date (`02-31`) does not pass.
+ */
+function isWriterTimestamp(value: unknown): value is string {
+  return typeof value === "string" && WRITER_TIMESTAMP.test(value) && new Date(value).toISOString() === value;
+}
+
+/**
+ * The manifest file's text, CRLF folded to LF, and the `updatedAt` it records,
+ * for {@link writeManifest}'s skip; `null` when there is nothing it can skip
+ * against: no file, a read that fails, text that does not parse as a JSON
+ * object, or a stamp {@link isWriterTimestamp} refuses. A failed read is left
+ * to the write that follows, which reports its own error.
+ */
+async function readCurrentManifest(path: string): Promise<{ text: string; updatedAt: string } | null> {
+  let raw: string;
+  try {
+    raw = await readFile(path, "utf8");
+  } catch {
+    return null;
+  }
+  const text = raw.replaceAll("\r\n", "\n");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!isPlainObject(parsed) || !isWriterTimestamp(parsed.updatedAt)) return null;
+  return { text, updatedAt: parsed.updatedAt };
 }
 
 /**

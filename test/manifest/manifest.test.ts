@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, utimes, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as fc from "fast-check";
@@ -1095,6 +1095,105 @@ describe("readManifest / writeManifest", () => {
     const read = await readManifest(root);
     expect(read?.updatedAt).toBe(LATER.toISOString());
     expect(read?.createdAt).toBe(FIXED_NOW.toISOString());
+  });
+
+  describe("a write that changes nothing is skipped (REQ-FLOW-032)", () => {
+    it("leaves the bytes and the mtime alone and reports the stamp on disk when only the clock moved", async () => {
+      const root = getRoot().dir;
+      const manifest = fullManifest();
+      expect(await writeManifest(root, manifest, { now: FIXED_NOW })).toEqual({
+        written: true,
+        updatedAt: FIXED_NOW.toISOString(),
+      });
+      const path = manifestPath(root);
+      const bytes = await readFile(path, "utf8");
+      // Pushed into the past, so a rewrite in the same clock tick still shows.
+      const past = new Date("2026-01-01T00:00:00.000Z");
+      await utimes(path, past, past);
+
+      expect(await writeManifest(root, manifest, { now: LATER })).toEqual({
+        written: false,
+        updatedAt: FIXED_NOW.toISOString(),
+      });
+      expect(await readFile(path, "utf8")).toBe(bytes);
+      expect((await stat(path)).mtimeMs).toBe(past.getTime());
+    });
+
+    it("stamps and writes when one field changed", async () => {
+      const root = getRoot().dir;
+      await writeManifest(root, fullManifest(), { now: FIXED_NOW });
+
+      const changed: SetupManifest = { ...fullManifest(), maturityTier: "team" };
+      expect(await writeManifest(root, changed, { now: LATER })).toEqual({
+        written: true,
+        updatedAt: LATER.toISOString(),
+      });
+      const read = await readManifest(root);
+      expect(read?.updatedAt).toBe(LATER.toISOString());
+      expect(read?.maturityTier).toBe("team");
+    });
+
+    it("leaves a CRLF copy of the same content unwritten", async () => {
+      const root = getRoot().dir;
+      await writeManifest(root, fullManifest(), { now: FIXED_NOW });
+      const path = manifestPath(root);
+      const crlf = (await readFile(path, "utf8")).replaceAll("\n", "\r\n");
+      await writeFile(path, crlf, "utf8");
+
+      expect(await writeManifest(root, fullManifest(), { now: LATER })).toEqual({
+        written: false,
+        updatedAt: FIXED_NOW.toISOString(),
+      });
+      expect(await readFile(path, "utf8")).toBe(crlf);
+    });
+
+    it.each([
+      ["a value Date.parse accepts but the writer never produces", "2026-08-13"],
+      ["a non-date string", "not a time"],
+      ["an impossible calendar date in the writer's shape", "2026-02-31T09:15:00.000Z"],
+    ])("stamps afresh over an on-disk updatedAt that is %s", async (_label, planted) => {
+      const root = getRoot().dir;
+      await writeManifest(root, fullManifest(), { now: FIXED_NOW });
+      const path = manifestPath(root);
+      const onDisk = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+      await writeFile(path, `${JSON.stringify({ ...onDisk, updatedAt: planted }, null, 2)}\n`, "utf8");
+
+      expect(await writeManifest(root, fullManifest(), { now: LATER })).toEqual({
+        written: true,
+        updatedAt: LATER.toISOString(),
+      });
+      expect((await readManifest(root))?.updatedAt).toBe(LATER.toISOString());
+    });
+
+    it("stamps afresh when the file on disk does not parse, or has no updatedAt", async () => {
+      const root = getRoot().dir;
+      await writeManifest(root, fullManifest(), { now: FIXED_NOW });
+      const path = manifestPath(root);
+      const good = await readFile(path, "utf8");
+      const onDisk = JSON.parse(good) as Record<string, unknown>;
+      delete onDisk["updatedAt"];
+      await writeFile(path, `${JSON.stringify(onDisk, null, 2)}\n`, "utf8");
+      expect((await writeManifest(root, fullManifest(), { now: LATER })).written).toBe(true);
+
+      await writeFile(path, good.slice(0, 40), "utf8");
+      const later = new Date("2026-08-15T00:00:00.000Z");
+      expect(await writeManifest(root, fullManifest(), { now: later })).toEqual({
+        written: true,
+        updatedAt: later.toISOString(),
+      });
+      expect((await readManifest(root))?.updatedAt).toBe(later.toISOString());
+    });
+
+    it("still refuses an invalid manifest when the file on disk holds the same bytes", async () => {
+      const root = getRoot().dir;
+      const broken = { ...fullManifest(), tools: [] } as SetupManifest;
+      // Planted bytes equal to what the broken manifest would serialise to: the
+      // validation runs before the compare, so equal bytes never excuse it.
+      await mkdir(dirname(manifestPath(root)), { recursive: true });
+      await writeFile(manifestPath(root), `${JSON.stringify(broken, null, 2)}\n`, "utf8");
+
+      await rejects(() => writeManifest(root, broken, { now: LATER }), "CONFIG_ERROR");
+    });
   });
 
   it("serializes byte-identically for deep-equal input written in another key order", async () => {

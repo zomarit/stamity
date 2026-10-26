@@ -154,12 +154,16 @@ async function seedRepo(handle: TempDirHandle, sub = "repo"): Promise<string> {
   return root;
 }
 
-/** A managed-block output stamped with the live engine version, so a re-run
+/** A managed-block output with the bare marker the emitters write, so a re-run
  *  against unchanged content classifies `unchanged` exactly as in production. */
 function managedOutput(path: string, body: string): AdapterOutput {
   return {
     path,
-    content: wrapInManagedBlock(body, path, VERSION),
+    // TEST CHANGE, justified: REQ-FLOW-032 — the emitters write the bare BEGIN
+    // marker now and the writer merges to it, so an output stamped with the
+    // version, as this helper wrapped it, no longer matches production and is
+    // rewritten once on the second run.
+    content: wrapInManagedBlock(body, path),
     owner: { adapter: "claude", artifactId: "guide", artifactType: "rule" },
   };
 }
@@ -223,6 +227,28 @@ describe("sync — initialised repo", () => {
     // Nothing changed on disk, so the review next-step would be noise.
     expect(second.stdout).not.toContain(NEXT_AFTER_WRITE_LINE);
     expect(second.stdout).not.toContain("next: review");
+  });
+
+  it("a --json re-run that changes nothing reports manifestWritten false and leaves the manifest byte-identical (REQ-FLOW-032)", async () => {
+    const handle = tempDir();
+    const root = await seedRepo(handle);
+    plannerOutputs.value = [managedOutput(GUIDE_PATH, "guide body")];
+
+    const first = parseSingleDoc((await runSync(root, ["--json"])).stdout);
+    expect(first["manifestWritten"]).toBe(true);
+    const bytes = await readFile(join(root, ".stamity", "manifest.json"), "utf8");
+
+    const second = parseSingleDoc((await runSync(root, ["--json"])).stdout);
+    expect(second["manifestWritten"]).toBe(false);
+    expect(await readFile(join(root, ".stamity", "manifest.json"), "utf8")).toBe(bytes);
+    // The provenance the payload carries is the stamp on disk, not the run's clock.
+    expect((second["provenance"] as { updatedAt: string }).updatedAt).toBe((await readManifest(root))?.updatedAt);
+
+    // One emitted file changed: the manifest's ledger hash moves, so it is written and stamped.
+    plannerOutputs.value = [managedOutput(GUIDE_PATH, "guide body, revised")];
+    const third = parseSingleDoc((await runSync(root, ["--json"])).stdout);
+    expect(third["manifestWritten"]).toBe(true);
+    expect(await readFile(join(root, ".stamity", "manifest.json"), "utf8")).not.toBe(bytes);
   });
 });
 
@@ -904,6 +930,8 @@ function reportFixture(overrides: Partial<SyncApplyReport> = {}): SyncApplyRepor
     refused: [],
     reclaimed: null,
     manifestPath: "unused/manifest.json",
+    // TEST CHANGE, justified: REQ-FLOW-032 — the report gained a required `manifestWritten`.
+    manifestWritten: false,
     dryRun: false,
     manifest: null,
     ...overrides,

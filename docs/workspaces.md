@@ -321,7 +321,7 @@ fields:
 |---|---|
 | `workspace status` | `root`, `members` with each row's `state`, and `journal` — an array, empty when no member is in flight |
 | `workspace init` | `path`, `created`, `dryRun`, `members`, the resolved `defaults`, and `manifest` in full |
-| `workspace sync` | `root`, `dryRun`, `outcome`, `counts`, `repos[]` with each row's `state` and error, and `journalWarnings`. Rows the cascade reached also carry `patched`, plus `lockedApplied` (the locked ids whose removal the lock refused) and `gitignoreAdded` (the `.gitignore` lines that member's sync appended), each present only when it has entries |
+| `workspace sync` | `root`, `dryRun`, `outcome`, `counts`, `repos[]` with each row's `state` and error, and `journalWarnings`. Rows the cascade reached also carry `patched`, plus `lockedApplied` (the locked ids whose removal the lock refused), `gitignoreAdded` (the `.gitignore` lines that member's sync appended) and `gitignoreRemoved` (the recorded lines it took back), each present only when it has entries |
 
 Exit statuses are 0, 1 and 2 only. The failure class travels as `error.code` rather than in the
 number. See the [CLI reference](cli-reference.md) for what each status and code means.
@@ -332,7 +332,7 @@ number. See the [CLI reference](cli-reference.md) for what each status and code 
 |---|---|
 | `workspace.json` at the root | the policy. Yours to edit by hand. Only `workspace init` and an accepted offer inside `stamity init` write it |
 | `<root>/.stamity/workspace-sync-journal.jsonl` | the crash trail, two lines appended per attempted member per run. Nothing reads it back to decide anything, so deleting it is always safe. Nothing rotates it either |
-| `<member>/.stamity/manifest.json` | the member's own record, and the propagated policy once a cascade has run. The cascade patches three fields there, plus the `updatedAt` stamp every manifest write sets. It keeps the ledger, import choice and creation stamp. The member's own sync, step 4 of the cascade, then refreshes selection, detection and version stamps exactly as plain `stamity sync` does, and keeps the member's client model lists in its git-ignored `<member>/.stamity/client-models.json`, never in the manifest |
+| `<member>/.stamity/manifest.json` | the member's own record, and the propagated policy once a cascade has run. The cascade patches three fields there, plus the `updatedAt` stamp, which moves only when the manifest's content changes. It keeps the ledger, import choice and creation stamp. The member's own sync, step 4 of the cascade, then refreshes selection, detection and version stamps exactly as plain `stamity sync` does, and keeps the member's client model lists in its git-ignored `<member>/.stamity/client-models.json`, never in the manifest |
 
 ## What do the other verbs know about a workspace?
 

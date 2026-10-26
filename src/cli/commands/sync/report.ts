@@ -408,7 +408,7 @@ export function renderSyncReport(
     lines.push(
       report.dryRun
         ? palette.dim("dry run: only the manifest refresh was previewed; nothing was written")
-        : palette.dim(`manifest refreshed: ${report.manifestPath}`),
+        : palette.dim(`manifest ${report.manifestWritten ? "refreshed" : "already current"}: ${report.manifestPath}`),
     );
   } else if (report.dryRun) {
     lines.push(
@@ -485,6 +485,9 @@ export function syncJsonPayload(plan: SyncPlan, report: SyncApplyReport): Record
     manifestMigrated: plan.manifestMigrated,
     pluginBlockDropped: plan.pluginBlockDropped === true,
     manifestPath: report.manifestPath,
+    // False when the manifest's content matched the file already there, so its
+    // bytes and its `updatedAt` stayed as they were (REQ-FLOW-032).
+    manifestWritten: report.manifestWritten,
     emptyBuild: isEmptyBuild(plan),
     counts: {
       created: report.created,

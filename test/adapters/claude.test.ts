@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -57,7 +57,9 @@ import { HOOK_SESSION_START_TIMEOUT_MS } from "../../src/hooks/model.ts";
 import { executedScript } from "../../src/manifest/coOwnedJson.ts";
 import { isKnownCodexHooksDescription } from "../../src/manifest/hookDocuments.ts";
 import { createManifest } from "../../src/manifest/manifest.ts";
-import { extractCustomContent } from "../../src/merge/managedBlocks.ts";
+import { extractCustomContent, extractManagedBlock } from "../../src/merge/managedBlocks.ts";
+import { safeWriteFile } from "../../src/merge/safeWrite.ts";
+import { outputWriteOptions } from "../../src/cli/engine/emissionWrite.ts";
 import { resolveAgentGrant } from "../../src/roster/agentGrants.ts";
 import { AGENT_POLICY_ROSTER } from "../../src/roster/agentPolicies.ts";
 import { DEFAULT_MAX_REVIEW_ITERATIONS } from "../../src/roster/reviewCaps.ts";
@@ -400,13 +402,16 @@ function agentHead(rows: readonly AdapterOutput[], runtimeId: string): Record<st
 }
 
 describe("claude residue over the real corpus", () => {
-  it("emits the CLAUDE.md bridge as one stamped managed block: charter import without a duplicated skills index", async () => {
+  it("emits the CLAUDE.md bridge as one managed block with a bare marker: charter import without a duplicated skills index", async () => {
     const { rows } = await planned();
     const row = byPath(rows).get(CLAUDE_MD_PATH);
     expect(row).toBeDefined();
 
-    const begin = stampMarkerVersion(getMarkersForPath(CLAUDE_MD_PATH).start, ENGINE_VERSION);
-    expect(row!.content.startsWith(`${begin}\n`)).toBe(true);
+    // TEST CHANGE, justified: REQ-FLOW-032 — the BEGIN marker carries no
+    // version, so a release that changes nothing in the block changes no byte
+    // of the file. It asserted the stamped marker the bridge used to open with.
+    expect(row!.content.startsWith("<!-- STAMITY:BEGIN -->\n")).toBe(true);
+    expect(row!.content).not.toContain(ENGINE_VERSION);
     expect(row!.content.endsWith("<!-- STAMITY:END -->\n")).toBe(true);
     expect(row!.content).toContain("@AGENTS.md");
 
@@ -430,6 +435,29 @@ describe("claude residue over the real corpus", () => {
       artifactId: "claude-md-bridge",
       artifactType: "infra",
     });
+  });
+
+  it("rewrites a CLAUDE.md a release stamped once to the bare marker, then leaves it alone (REQ-FLOW-032)", async () => {
+    const { rows } = await planned();
+    const row = byPath(rows).get(CLAUDE_MD_PATH);
+    expect(row).toBeDefined();
+    const dir = getTemp().dir;
+    const target = join(dir, CLAUDE_MD_PATH);
+    // The bytes a 1.16.0 sync left: the same block, its BEGIN line stamped.
+    const stamped = row!.content.replace(
+      `${getMarkersForPath(CLAUDE_MD_PATH).start}\n`,
+      `${stampMarkerVersion(getMarkersForPath(CLAUDE_MD_PATH).start, "1.16.0")}\n`,
+    );
+    expect(stamped).toContain("<!-- STAMITY:BEGIN v1.16.0 -->");
+    writeFileSync(target, stamped);
+    const body = extractManagedBlock(row!.content, target);
+    // The write options sync, init and clean hand the writer, at this test's engine version.
+    const options = outputWriteOptions(body, ENGINE_VERSION, false, dir, new Set([CLAUDE_MD_PATH]));
+
+    expect((await safeWriteFile(target, row!.content, options)).action).toBe("updated");
+    expect(readFileSync(target, "utf8")).toBe(row!.content);
+    expect((await safeWriteFile(target, row!.content, options)).action).toBe("unchanged");
+    expect(readFileSync(target, "utf8")).toBe(row!.content);
   });
 
   it("carries no plugin-container wording anywhere in the adapter source", () => {
