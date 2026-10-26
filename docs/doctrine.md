@@ -76,8 +76,8 @@ unconditionally.
   without the ceiling moving with it. The table is a measurement, never a bound with slack.
 - Every corpus artifact declares `obsolete_when`. That covers the charter, commands, agents,
   skills and rules, under both `content/` and `packs/`. The corpus invariant suite refuses a
-  `content/` artifact that does not declare it. Each pack's own suite under `test/packs/` applies
-  the same check to its pack. So no corpus artifact ships without stating the condition under
+  `content/` artifact that does not declare it. The pack suite, `test/packs/packs.test.ts`, applies
+  the same check to every pack under `packs/`. So no corpus artifact ships without stating the condition under
   which it is deleted.
 
 A hand-written page carries the same thing as a re-open trigger. A generated page carries it as

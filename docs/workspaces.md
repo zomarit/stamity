@@ -307,8 +307,11 @@ A sync preview reports the plan computed from the unpatched manifest, the one ea
 It does not invent a plan for a manifest that does not exist yet.
 
 `--force` is read by `workspace init` and `workspace sync` only, with the two meanings described
-above. `--tools` is read by `workspace init` only. Both are registered on the whole verb, so they
-appear in `--help` everywhere and are inert wherever the subcommand does not read them.
+above. `--loosen` is read by `workspace sync` only: in every member, a guard copy looser than the
+autonomy setting in force is written only with it, the person's act, and without it that member's
+row fails with `AUTONOMY_LOOSENED`, dry run included. `--tools` is read by `workspace init` only.
+All three are registered on the whole verb, so they appear in `--help` everywhere and are inert
+wherever the subcommand does not read them.
 
 ## Read the output as JSON
 

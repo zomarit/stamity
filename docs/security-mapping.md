@@ -457,16 +457,20 @@ Every gap named in a row above, collected so the list reads without the tables.
 ## What is not applicable, and why
 
 **A07 Identification and Authentication Failures, and A10 Server-Side Request Forgery.** There is
-no authentication surface, and no caller-supplied URL that the engine fetches. It has six network
+no authentication surface, and no caller-supplied URL that the engine fetches. It has seven network
 paths. One is a signed-metadata fetch at verification time. Another is a `git fetch` against a
-remote the repository already had. The third is the startup update notice, a fixed query to the
-npm registry, at most once a day. The fourth is `gh api`, which the unattended pre-flight and the
-run verbs start under the operator's own `gh` login, on REST paths in a closed alphabet, never a
-URL, at the host the repository's `origin` names. The fifth is the run verbs'
+remote the repository already had, by `worktree setup`. The third is the startup update notice, a
+fixed query to the npm registry, at most once a day. The fourth is `gh`, which the unattended
+pre-flight and the run verbs start under the operator's own `gh` login, at the host the
+repository's `origin` names. `gh api` goes to REST paths in a closed alphabet, never a URL.
+`run land` alone adds three fixed calls built from checked parts: the merge
+(`PUT …/pulls/<n>/merge`) and two constant GraphQL documents. The fifth is the run verbs'
 `git ls-remote origin`, which `run checkpoint` and `run end` run once before they commit, even where
-the push is then held, and `run start` runs, in either mode, when it continues a run whose branch
-the clone holds only as origin's, refusing when origin cannot be read. The sixth is their `git push`
-of the run's branch to that `origin`.
+the push is then held, `run start` runs, in either mode, when it continues a run whose branch the
+clone holds only as origin's, refusing when origin cannot be read, and `run land` runs to read the
+run's branch. The sixth is their `git push`: the run's branch to that `origin`, and for
+`run land --fast-forward` the default branch. The seventh is `run land`'s `git fetch` of the
+default branch where the clone lacks its tip.
 
 **A09 Security Logging and Monitoring Failures.** There is no logging or monitoring surface, by
 design. No telemetry is collected and nothing is uploaded, so the category's controls have nothing

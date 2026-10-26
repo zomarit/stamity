@@ -238,9 +238,10 @@ supplies it, so your patch survives an upstream rewrite of everything it did not
 the whole body cannot do that, because it stops tracking the original the moment it is taken.
 A pack's agents, commands and rules can be patched this way. A pack's skills cannot: their files
 ship byte-for-byte from the installed pack, so an overlay on one is refused, and so is a full
-override. Neither is dropped in silence. That includes the two skills that moved from the core
-to the `frontend` pack in 1.17.0, `design-system-detect` and `browser-evidence`, whether or not
-the pack is installed (see below).
+override. Neither is dropped in silence. The two skills that moved from the core to the
+`frontend` pack in 1.17.0, `design-system-detect` and `browser-evidence`, refuse an overlay
+whether or not the pack is installed, and refuse a full override only while the pack is installed
+(see below).
 [Overlay customization layers](specs/overlay-layers.md) is the design reference behind what
 follows: what was decided, what was dropped, and why.
 

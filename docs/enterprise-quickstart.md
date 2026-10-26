@@ -62,7 +62,7 @@ The platform team runs the update lane, and developers follow the version it pin
 - Land the update with a merge commit so the next update still finds its base, as [Land the update branch](enterprise-forks.md) explains.
 - Undo an attempt, or a release you already landed, with [Back out an attempt or a landed release](enterprise-forks.md).
 - Recover a failed scheduled run and keep its evidence, as [Recover from a failed run](enterprise-forks.md) lists.
-- Move each repository to the new version with your own package's `sync`, or keep it where it is, the way [Keeping your setup current](getting-started.md) does it with the public one.
+- Move each repository to the new version with your own package's `upgrade --to <version>`, which runs that release's `sync` and moves the `package.json` pin (a move to a release before 1.17.0 runs its `sync` instead), then run your install so the lockfile follows; or keep it where it is, the way [Keeping your setup current](getting-started.md) does it with the public one.
 
 ## Where to go next
 

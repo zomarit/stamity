@@ -47,8 +47,8 @@ the file (all checked with npm 10.9.8).
 npx @zomarit/stamity init
 ```
 
-`init` reads your repository and writes a setup and a manifest. `sync`, `check`, `config`,
-`workspace`, `clean` and `add` read that manifest. `validate` runs with or without one, and
+`init` reads your repository and writes a setup and a manifest. `sync`, `upgrade`, `check`,
+`config`, `workspace`, `clean` and `add` read that manifest. `validate` runs with or without one, and
 `learn`, `handoff` and `ledger` ask only that `.stamity/` exists. **Which verbs need the
 manifest** below states all of this in full.
 
@@ -183,8 +183,8 @@ cannot describe a verb the CLI does not have or miss one it does.
 
 Four things, because each is about how two parts fit together rather than about any one verb.
 
-- **Which verbs need the manifest.** `sync`, `check`, `config`, `workspace`, `clean` and `add`
-  all read the manifest `init` wrote. `validate` runs with or without one. `learn`, `handoff` and
+- **Which verbs need the manifest.** `sync`, `upgrade`, `check`, `config`, `workspace`, `clean`
+  and `add` all read the manifest `init` wrote. `validate` runs with or without one. `learn`, `handoff` and
   `ledger` ask only that `.stamity/` exists.
 - **Which verbs need git.** Four do. The `worktree` verbs need a `git` binary on PATH and refuse
   without one. The hidden verb `gate` reads every change from git: where git does not answer,
@@ -230,6 +230,10 @@ plan is ready for an unattended start and writes nothing. `run` is the one hidde
 changes your repository and its remote: `run start` puts an unattended run on a branch of its
 own, switching to `stamity/<run-id>` from the default branch, and `run checkpoint` and `run end`
 commit the run's records, push the branch to `origin` and open or update its draft pull request.
+`run land` merges the run's own pull request, or with `--fast-forward` pushes the default branch
+to its head, once every required check run is green on the head, no review thread is open, the
+run's ledger holds no open Critical or Warning row and `mergeable_state` reads `clean`; otherwise
+it asks or refuses ([troubleshooting](troubleshooting.md)). `--ready` marks the draft ready first.
 All six are plumbing an agent calls; the
 session-start hook prints the card after a compaction or on a resume, when the client's payload
 says so. `stamity ledger status` is the one you may run yourself — after a compaction on Cursor or
@@ -269,7 +273,10 @@ make network calls of their own.
   `origin` with `git ls-remote`, push the run's branch to it under your git credentials, and open or
   update the run's draft pull request. `run start`, attended or not, reads `origin` the same way
   when it continues a run whose branch your clone has only as `origin`'s, and refuses if `origin`
-  cannot be read or no longer has that branch at the commit your clone fetched.
+  cannot be read or no longer has that branch at the commit your clone fetched. `run land`,
+  attended or not, reads the pull request, its check runs, review threads and rules through `gh`,
+  writes an evidence line into its body, and merges it through GitHub's API, or with
+  `--fast-forward` pushes the default branch to `origin` under your git credentials.
 
 `init`, `sync` and `upgrade` (`--dry-run` included), `workspace sync` and `check`'s `model-pins` row start each
 selected client's own CLI, Claude Code's excepted, to read its model list. The engine hands each
@@ -293,7 +300,7 @@ writes says what the board may write, where, and on whose text.
 npx @zomarit/stamity check
 ```
 
-`check` is the diagnosis. It runs fourteen environment probes, plus `cloud-install` in a
+`check` is the diagnosis. It runs eighteen environment probes, plus `cloud-install` in a
 repository that targets Cursor and `change-classes` where `.stamity/change-classes.json` exists.
 Then it asks the one question that matters more than the rest: **would a sync change anything?**
 

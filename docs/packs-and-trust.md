@@ -205,7 +205,10 @@ The third is an unattended run's. `stamity gate preflight --unattended` and `run
 your git credentials, and open or update its draft pull request. `run start`, attended or not, reads
 `origin` with `git ls-remote` when it continues a run whose branch the clone holds only as
 `origin`'s, and refuses when `origin` cannot be read or no longer has that branch at the fetched
-commit. None of it fetches pack content.
+commit. `stamity run land` belongs to it too, attended or not: under the same `gh` login it reads
+the run's pull request, its checks and the default branch's rules, merges that pull request at its
+head, marks its draft ready with `--ready`, and with `--fast-forward` pushes the head to the default
+branch under your git credentials. None of it fetches pack content.
 
 One further path is network-capable and is no part of any command's work. The startup update
 notice asks the npm registry the running package publishes to — the public one for
@@ -361,7 +364,10 @@ that would take Codex's skills list past 8,000 characters is refused with its sh
 total: shorten its skill descriptions, mark a skill explicit-only, remove another installed pack
 with `stamity clean --pack <id>`, or set `ruleDelivery: "always-on"`. A retired pack name is
 refused with where each of its parts went: add the successor pack it names, or run
-`stamity add ./node_modules/<id>` to install a package of that name on purpose.
+`stamity add ./node_modules/<id>` to install a package of that name on purpose. With a
+first-party copy of the retired pack still installed, the steps it prints come first: run
+`stamity clean --pack <id>`, delete by hand each client copy it keeps and names, unless it is
+yours, then `stamity sync`, `stamity add <successor>` and `stamity sync` again.
 
 A clash can also arise after a pack is installed. The pack may come from an earlier version that
 never ran that check, or a later core upgrade, a new override or a fork-layer artifact may take one
@@ -537,7 +543,11 @@ pack's client copies leave, and two more things change. `.stamity/manifest.json`
 pack's ledger rows and its copies' rows, and has its `mcp.servers` selection trimmed. When the pack
 supplied a selected server, the merged client MCP documents that removal edited change too. Their
 adapter-owned ledger rows are re-hashed to the bytes now on disk, so the ledger keeps asserting what
-is actually there.
+is actually there. And the client documents that run the pack's hooks or name its agents or rules
+(a hooks document, Cursor's spawn guard, the model maps, Codex's `AGENTS.override.md`) are
+rewritten from the setup without the pack, an edited Copilot hooks document backed up first. When
+another stamity version last wrote the setup, or its `autonomy` setting is looser than the guard in
+force, those documents wait for the next `sync`, and the run says so.
 
 Ownership is matched on exact equality, so `@acme/frontend` can never match `@acme/frontend-extra`. The
 state directory stays, because every other owner is still live. A file the safety gates kept loses
@@ -545,8 +555,9 @@ its row anyway and becomes yours to keep or delete, and the output says so. That
 edited, and an unlink that was refused.
 
 Delete by hand each client copy it keeps and names, unless it is yours, then follow it with
-`stamity sync`, which regenerates the clients' files without the pack. Plain `stamity clean` with
-no flag removes the whole setup, packs included.
+`stamity sync`, which regenerates the clients' files without the pack. Plain `stamity clean`
+removes the generated setup and keeps the rest of `.stamity/`, installed packs included, under
+`.stamity/packs/`. `stamity clean --purge` deletes `.stamity/` whole, packs included.
 
 ## Author your own pack
 

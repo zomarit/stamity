@@ -23,13 +23,22 @@ loop, the test lanes and the regeneration commands. [README.md](README.md) descr
 One person maintains stamity. Decision, merge, publish and consent authority all sit with that
 person. There is no steering committee, no vote, and no second approver to appeal to.
 
-The maintainer merges every pull request and tags every release. The maintainer also approves
-every change to the corpus. The corpus is `content/` and `packs/`, the files stamity installs into
-other people's repositories.
+The maintainer tags every release and merges every pull request a run did not open. Outside a
+run's own pull request, the maintainer also approves every change to the corpus. The corpus is
+`content/` and `packs/`, the files stamity installs into other people's repositories.
+
+A run's own pull request, the one `/st-work`'s close or an unattended run opens, can land through
+`stamity run land` under the maintainer's login when its evidence holds: every required check run
+green on its head, no unresolved review thread, no open Critical or Warning row in the run's ledger,
+and a `clean` merge state. This repository's manifest sets no `autonomy` block, so the default mode,
+`autonomous`, applies and the land asks for no read first; a corpus change in that pull request
+lands on the same evidence. The maintainer still merges anything a land asks about, such as a diff
+to the CI definitions or the guard's own files.
 
 The branch protection on `main` says the same thing: **0 required approvals**. A rubber stamp from
 the only person who could give it would add a click and no scrutiny. What reviews a change is the
-required checks below, plus a maintainer's read.
+required checks below, plus a maintainer's read, or for a run's own pull request that lands on its
+evidence, the run's review loop.
 
 ## How do you propose a change?
 
@@ -45,8 +54,9 @@ required checks below, plus a maintainer's read.
 
 ## What does a pull request have to pass before it merges?
 
-A pull request merges when two required status checks pass and a maintainer has read it. Each
-check has one stable name, so a required check does not rotate when the matrix does.
+A pull request merges when two required status checks pass and a maintainer has read it, or, for
+a run's own pull request, when `run land`'s evidence holds. Each check has one stable name, so a
+required check does not rotate when the matrix does.
 
 ### What `all-ci-checks` covers
 

@@ -48,7 +48,7 @@ collects no telemetry, and no figure here stands in for that one.
 npx @zomarit/stamity init
 ```
 
-`init` reads your repository and writes the setup plus the manifest `sync`, `check`, `config`,
+`init` reads your repository and writes the setup plus the manifest `sync`, `upgrade`, `check`, `config`,
 `workspace`, `clean` and `add` work from. `validate` runs with or without one; `learn`, `handoff`
 and `ledger` want only `.stamity/`. Node `>= 22.22.2` is the only prerequisite; nothing installs globally.
 
@@ -57,14 +57,17 @@ from it, so without git `gate scan` exits 1 and `/st-quick` and `/st-work` list 
 `Not done:`. The engine reaches the network in four places, all in [`SECURITY.md`'s "Network and data
 handling"](SECURITY.md): `add` fetches the Sigstore trust root for a signed pack, `worktree setup` fetches your own
 `origin` for a branch with no local copy, a startup notice asks npm about newer versions until you switch it off, and an
-unattended run's pre-flight and `run` verbs call GitHub's REST API through `gh` under your login, `run start` continuing
-origin's run branch, `run checkpoint` and `run end` reading `origin` with `git ls-remote`, the last two pushing the
-run's branch to it under your git credentials. The client programs it starts to read a model list may make network calls
-of their own: `init`, `sync`, `upgrade`, `workspace sync` and `check` start each selected client's own CLI but Claude Code's, under
-your account; `STAMITY_NO_CLIENT_PROBE=1` starts none. Two touchpoints go further, through the authenticated GitHub CLI,
-`gh`: `/st-pr-resolve`, and `/st-board`, which once a board is linked files, edits and comments on its items by default
-behind one preview, and moves them only with `--move`. `/st-work`'s close walk recommends `run checkpoint --pr`.
-[Getting started](docs/getting-started.md) has the prerequisites, and what `init` asks and writes per client.
+unattended run's pre-flight and the `run` verbs, which every `/st-work` close runs too, call GitHub's API through `gh`
+under your login: `run start` continuing origin's run branch, `run checkpoint` and `run end` reading `origin` with
+`git ls-remote` and pushing the run's branch to it under your git credentials, and `run land` marking the run's own
+pull request ready and merging it when its evidence holds (with `--fast-forward`, pushing it to the default branch).
+The client programs it starts to read a model list may make network calls of their own: `init`, `sync`, `upgrade`,
+`workspace sync` and `check` start each selected client's own CLI but Claude Code's, under your account;
+`STAMITY_NO_CLIENT_PROBE=1` starts none. Two touchpoints go further, through the authenticated GitHub CLI, `gh`:
+`/st-pr-resolve`, and `/st-board`, which once a board is linked files, edits and comments on its items by default behind
+one preview, and moves them only with `--move`. `/st-work`'s close runs `run checkpoint --pr`, then `run land --ready`,
+unless you answer not to commit. [Getting started](docs/getting-started.md) has the prerequisites, and what `init` asks
+and writes per client.
 
 ## How it works
 

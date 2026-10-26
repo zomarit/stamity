@@ -309,7 +309,8 @@ properties of that file, rather than properties of a maintainer's laptop.
   credential and takes no checkout of this repository. Its whole tool surface is three SHA-pinned
   actions — harden-runner, setup-node and download-artifact — plus npm (which the job first
   upgrades by one registry download pinned to the exact version 12.0.2 and asserts against the
-  trusted-publishing floor before use), the GitHub CLI, and POSIX shell with `sha256sum` and `awk`.
+  trusted-publishing floor before use), Node's own runtime for two inline `node -e` integrity
+  reads of the tarball, the GitHub CLI, and POSIX shell with `sha256sum` and `awk`.
   It verifies the tarball's SHA-256 against the first job's OUTPUT, a channel separate from the
   artifact under verification. So a compromised build-time dependency runs in the job that has no
   credential.

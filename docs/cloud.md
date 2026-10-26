@@ -108,7 +108,11 @@ hooks, and the pre-flight's `hooks-loaded` check refuses it. Set `STAMITY_UNATTE
 cloud environment. The setup ships a readiness hook for this cloud. Where `CLAUDE_CODE_REMOTE` is
 `true` it marks the session's hooks loaded and runs `npm ci` when `node_modules` is missing and a
 lockfile is there. Locally it does nothing. The GitHub proxy refuses GraphQL, so `gh pr` and
-`gh issue` fail there; the run verbs open and update the draft pull request over REST. A machine
+`gh issue` fail there; the run verbs open and update the draft pull request over REST. `stamity run
+land` reads the review threads and marks a draft ready over GraphQL, so on this cloud it cannot
+land: it ends `refused` with "the review threads could not be read", the pull request stays a
+draft, and the merge waits as a held row. Walk it locally, where `/st-work --resume <run-id>`
+retries the land step. A machine
 that was reclaimed comes back fresh, and the review gate rebuilds its round counter from the run
 record on the branch.
 
@@ -153,7 +157,8 @@ branch, where in Claude Code each held act that can be undone asks for your clic
 Cursor's cloud agents run the repository's `.cursor/hooks.json` command hooks, except
 `sessionStart`, `sessionEnd` and the MCP hooks. So for Cursor the setup adds three things. The
 root `AGENTS.md` ends on a "Cursor Cloud specific instructions" block: what `/st-<id>` means,
-`node --version` first, and the pull request kept a draft. A `postToolUse` hook prints the session
+`node --version` first, and the pull request kept a draft until `stamity run land --ready` marks it
+ready. A `postToolUse` hook prints the session
 index once per conversation. A `stop` hook keeps an unattended run going while its record leaves
 units. `stamity check`'s `cloud-install` row prints the install lines, `node --version` and then
 the CLI's global install at the version that generated the setup. Put them in the install step of
@@ -203,8 +208,10 @@ morning walk included. Locally,
 ### Set it up
 
 The cloud agent uses a hooks file only when it is on the default branch, so `.github/hooks/`
-must be on the default branch before the first run. `copilot-setup-steps.yml` installs the CLI;
-the agent's environment also needs a `gh` that is signed in and is origin's only credential
+must be on the default branch before the first run. `copilot-setup-steps.yml` installs the CLI
+under `toolOptions.copilot.setupSteps: managed`, the default; with `user` or `off` the workflow is
+yours to write, and a project Node pin below 22.22.2 gets a comment instead of the install. The
+agent's environment also needs a `gh` that is signed in and is origin's only credential
 helper, which the pre-flight's `direct-push` check needs.
 A prompt file is not run by name on this agent, so the setup writes a thin entry agent,
 `.github/agents/stamity-run.agent.md`, that points at `/st-work`'s prompt file and the plan the

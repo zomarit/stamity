@@ -391,8 +391,16 @@ const MAX_LINES = 150;
  * under `.claude/hooks/stamity/`, and Cursor's five: two lines. Both paragraphs were rewrapped
  * inside themselves and the plumbing-verb sentence moved in place, so the budget moves by exactly
  * those five lines.
+ *
+ * TEST CHANGE, justified (2026-10-26): 165 to 168, the cost of one correction the 1.17.0 cut's
+ * re-attestation found (run 2026-10-25_autonomy-distribution-02, ledger prove/30), on the reasoning
+ * of the first move above. The git-and-network paragraph now says the run verbs reach GitHub in
+ * every `/st-work` close and not only an unattended run, names `run land`'s ready mark, merge and
+ * fast-forward push to the default branch, and says the close runs `run checkpoint --pr` and then
+ * `run land --ready` rather than recommending the first. The paragraph was rewrapped inside itself,
+ * so the budget moves by exactly those three lines.
  */
-const README_MAX_LINES = 165;
+const README_MAX_LINES = 168;
 
 /**
  * The product, its installable package, and the owner the pages name.

@@ -172,7 +172,7 @@ repository, skipped everywhere else.
 `all-pr-checks` (`.github/workflows/pr-checks.yml`) runs on pull requests only. It carries the three
 gates only a pull request can be asked. They are the DCO trailer on every commit, the
 conventional-commit title, and the dual size budget over the built `dist/`. Bundled logic is capped
-at 2.5 MiB and the staged corpus at 1.5 MiB. Both numbers are read from `tsdown.config.mjs`, so the
+at 2.75 MiB and the staged corpus at 1.5 MiB. Both numbers are read from `tsdown.config.mjs`, so the
 gate and the build cannot disagree.
 
 `npm run check` does not run that budget separately. `npm run build` already evaluates it in its own
@@ -194,8 +194,8 @@ One runner, Vitest, and three lanes:
 3. **Child-process end-to-end.** The real CLI spawned against a pseudo-home and a scratch
    repository, serialized. These are `test/cli/*.e2e.test.ts`, `test/pack/*.e2e.test.ts`,
    `test/authoring/onboardingRecovery.e2e.test.ts`, `test/hooks/personOnlyGuardDist.e2e.test.ts` and
-   `test/emit/upgradeFrom1140.e2e.test.ts`, seven files running through
-   `test/support/cliHarness.ts`. The eighth `.e2e.test.ts` file,
+   `test/emit/upgradeFrom1140.e2e.test.ts`, eight files running through
+   `test/support/cliHarness.ts`. The ninth `.e2e.test.ts` file,
    `test/emit/syncDriftProof.e2e.test.ts`, spawns nothing. It is an in-process sync-loop proof over
    the golden fixture, with the git seam stubbed.
 

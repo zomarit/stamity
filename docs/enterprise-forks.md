@@ -172,7 +172,9 @@ The CLI calls your setup writes follow the same split. `init` and `sync` pin eve
 into `AGENTS.md`, the generated bodies, the hook hints, the guard messages and `.codex/hooks.json` to your package at the version that wrote it, and the CLI's own remedies
 do the same. Two places install it rather than call it: Copilot's `copilot-setup-steps.yml` runs
 `npm install --global <your package>@<version>`, with `--@<scope>:registry=<url>` ahead of the
-package under `--registry`, and `check`'s `cloud-install` row prints that line for a Cursor cloud
+package under `--registry` (under `toolOptions.copilot.setupSteps: managed`, the default; with
+`user` or `off` the workflow is yours to write, and a project Node pin below 22.22.2 gets a comment
+instead of the install), and `check`'s `cloud-install` row prints that line for a Cursor cloud
 environment. Where your registry needs a credential to install from, as GitHub Packages does, the
 cloud agent's environment needs one too. A touchpoint body tries `npx --no stamity <verb>` first — the `stamity` bin of a copy
 the project already has installed, whatever package name that copy carries, and never a download —
@@ -312,8 +314,8 @@ JSON object, and a missing or non-`1` `version` are each a configuration error t
 [the regeneration table in CONTRIBUTING.md](../CONTRIBUTING.md) in command form, less two rows:
 the measurements row, whose `merge-ready-rate.mjs --write` freezes a dated snapshot and whose
 second command the plain `generate-docs.mjs` above already covers; and the pack-manifest
-`generate-pack-manifests.mjs --write` row, which rewrites an integrity map after a deliberate pack
-edit. `generatedPaths` is the
+`generate-pack-manifests.mjs --write` row, which rewrites each integrity map and sets each pack's
+`version` to `package.json`'s. `generatedPaths` is the
 tracked left column of the rows that remain, plus `.stamity/manifest.json`, which `sync` writes
 beside `.stamity/generated/`. The measurements page is not listed: a fork holds no records, so
 `generate-docs.mjs` skips that page there with a notice and leaves the committed page as it is.
@@ -384,6 +386,11 @@ several are integrated as **one merge of the newest one**, and that merge's ance
 every release the newest one contains. A maintenance release cut on a side branch is not covered
 and stays a candidate. The report lists every release the merge covers, so a reviewer sees each
 one.
+
+A fork that restamps its packs at each tag ([Tag a release](#tag-a-release)) meets a conflict on
+each `packs/*/pack.json` `version` line at every integration. Resolve `package.json`'s `version`
+first, then run `node scripts/generate-pack-manifests.mjs --write` in the update worktree so every
+pack reads the same version, and stage the result.
 
 The other flags:
 
