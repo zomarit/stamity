@@ -2336,6 +2336,66 @@ describe("init --force never duplicates the charter (REQ-FLOW-029)", () => {
     expect(forced.stdout).toContain("AGENTS.md keeps the decision the replaced setup recorded, so it was not asked again (skip)");
   }, 120_000);
 
+  // review/62: the explicit flag a carried decision beat is named as not applied, with the ways to choose again.
+  it("names an explicit --import-config a carried skip did not apply, and the manifest way to choose again works", async () => {
+    await getTemp().seedFiles({ "repo/AGENTS.md": OWNER });
+    const root = await makeRepo();
+    await run(root, ["init", "-y", "--tools", "claude", "--import-config", "skip"]);
+
+    const forced = await run(root, ["init", "-y", "--force", "--import-config", "replace"]);
+
+    expect(await agentsMd(root)).toBe(OWNER);
+    expect((await readManifest(root))?.importChoice).toEqual([{ path: "AGENTS.md", mode: "skip" }]);
+    expect(forced.stdout.replace(/\s+/g, " ")).toContain(
+      "existing config: --import-config replace was not applied to AGENTS.md, which keeps the decision the " +
+        "replaced setup recorded (skip). To choose again, run `stamity clean -y` and then " +
+        "`stamity init --import-config replace`, or remove .stamity/manifest.json and run " +
+        "`stamity init --force --import-config replace`",
+    );
+
+    await rm(join(root, STATE_DIR, "manifest.json"));
+    await run(root, ["init", "-y", "--force", "--import-config", "replace"]);
+    expect((await readManifest(root))?.importChoice?.[0]?.mode).toBe("replace");
+    await expect(readFile(join(root, "AGENTS.md.bak"), "utf8")).resolves.toBe(OWNER);
+  }, 120_000);
+
+  it("names an explicit --import-config a carried replace did not apply, offering only the clean way, which works", async ({ skip }) => {
+    await getTemp().seedFiles({ "repo/AGENTS.md": OWNER });
+    const root = await makeRepo();
+    try {
+      await seedGitRepo(root);
+    } catch (error) {
+      if (error instanceof Error && error.name === "GitUnavailableError") skip();
+      throw error;
+    }
+    await run(root, ["init", "-y", "--tools", "claude", "--import-config", "replace"]);
+
+    const forced = await run(root, ["init", "-y", "--force", "--import-config", "supplement"]);
+
+    const said = forced.stdout.replace(/\s+/g, " ");
+    expect(said).toContain(
+      "existing config: --import-config supplement was not applied to AGENTS.md, which keeps the decision the " +
+        "replaced setup recorded (replace). To choose again, run `stamity clean -y` and then " +
+        "`stamity init --import-config supplement`",
+    );
+    expect(said).not.toContain("manifest.json and run");
+
+    await run(root, ["clean", "-y"]);
+    await run(root, ["init", "-y", "--tools", "claude", "--import-config", "supplement"]);
+    expect((await readManifest(root))?.importChoice).toEqual([{ path: "AGENTS.md", mode: "supplement" }]);
+    expect((await agentsMd(root)).endsWith(`\n\n${OWNER}`)).toBe(true);
+  }, 120_000);
+
+  it("says in the --import-config help that a carried decision wins under --force, and how to choose again", async () => {
+    const root = await makeRepo();
+
+    const help = await run(root, ["init", "--help"]);
+
+    expect(help.stdout.replace(/\s+/g, " ")).toContain(
+      "under --force, a file the replaced setup already decided keeps that decision, so run `stamity clean -y` first to choose again",
+    );
+  });
+
   it("keeps the owner's prose byte for byte under --force --import-config supplement", async () => {
     await getTemp().seedFiles({ "repo/AGENTS.md": OWNER });
     const root = await makeRepo();
@@ -2386,6 +2446,34 @@ describe("init --force never duplicates the charter (REQ-FLOW-029)", () => {
 
     expect(await agentsMd(root)).toBe(OWNER);
     expect(await backups(root)).toEqual([]);
+  }, 120_000);
+
+  // review/63: a 1.16.0 manifest records `replace` with no backup. The `.bak` this run takes of the
+  // engine's edited charter is not the owner's file, so no record is minted from it and `clean`
+  // never moves the charter back onto AGENTS.md as the owner's.
+  it("mints no backup record for a carried replace, so clean never restores the charter as the owner's", async ({ skip }) => {
+    await getTemp().seedFiles({ "repo/AGENTS.md": OWNER });
+    const root = await makeRepo();
+    try {
+      await seedGitRepo(root);
+    } catch (error) {
+      if (error instanceof Error && error.name === "GitUnavailableError") skip();
+      throw error;
+    }
+    await run(root, ["init", "-y", "--tools", "claude", "--import-config", "replace"]);
+    const manifestPath = join(root, STATE_DIR, "manifest.json");
+    const raw = JSON.parse(await readFile(manifestPath, "utf8")) as { importChoice: { backup?: unknown }[] };
+    for (const decision of raw.importChoice) delete decision.backup;
+    await writeFile(manifestPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+    await writeFile(join(root, "AGENTS.md"), `${await agentsMd(root)}\nan edit to the charter\n`, "utf8");
+
+    await run(root, ["init", "-y", "--force"]);
+    expect((await readManifest(root))?.importChoice).toEqual([{ path: "AGENTS.md", mode: "replace" }]);
+    await run(root, ["clean", "-y"]);
+
+    await expect(readFile(join(root, "AGENTS.md.bak"), "utf8")).resolves.toBe(OWNER);
+    const left = await readFile(join(root, "AGENTS.md"), "utf8").catch(() => null);
+    expect(left === null ? 0 : charterTitles(left)).toBe(0);
   }, 120_000);
 });
 

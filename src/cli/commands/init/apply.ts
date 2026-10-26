@@ -520,9 +520,13 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
 
   // The `.bak` each `replace` write took of the owner's file, recorded on its
   // decision so a full `clean` can move it back (REQ-FLOW-027). Nothing is
-  // taken under `dryRun`, so nothing is recorded.
+  // taken under `dryRun`, so nothing is recorded. A decision a `--force`
+  // re-init carried from the setup it replaces (REQ-FLOW-029) gets no new
+  // record: the file at its path is the engine's, so a `.bak` of it is not
+  // the owner's file.
   if (manifest.importChoice !== undefined) {
-    manifest.importChoice = await withImportBackups(rootDir, manifest.importChoice, outputs, wrote);
+    const carried = new Set((previous?.importChoice ?? []).map((decision) => decision.path));
+    manifest.importChoice = await withImportBackups(rootDir, manifest.importChoice, outputs, wrote, carried);
   }
 
   // Ledger: one row per path this run actually stands behind. A skipped path
@@ -743,16 +747,19 @@ async function writeOutput(
  * SHA-256 of its bytes as read back from disk. `outputs[i]` is `wrote[i]`'s row.
  * A decision whose write took no backup, and every other mode, is kept as it
  * is; a name outside the reader's bound is never recorded, so the manifest
- * this run writes always reads back. A decision that already carries a backup
- * record — one a `--force` re-init carried from the setup it replaces
- * (REQ-FLOW-029) — keeps it: that `.bak` holds the owner's file as it was
- * before any setup, and a later backup of the engine's own file is not it.
+ * this run writes always reads back. A decision at a `carried` path — one a
+ * `--force` re-init carried from the setup it replaces (REQ-FLOW-029) — is
+ * kept as it came, with its backup record or with none: the `.bak` it records
+ * holds the owner's file as it was before any setup, and a backup this run
+ * took there is of the engine's own file, so it is never recorded as the
+ * owner's.
  */
 async function withImportBackups(
   rootDir: string,
   decisions: readonly ImportDecision[],
   outputs: readonly { path: string }[],
   wrote: readonly MergeResult[],
+  carried: ReadonlySet<string>,
 ): Promise<ImportDecision[]> {
   const backups = new Map<string, string>();
   for (const [index, output] of outputs.entries()) {
@@ -761,7 +768,7 @@ async function withImportBackups(
   }
   return Promise.all(
     decisions.map(async (decision): Promise<ImportDecision> => {
-      if (decision.backup !== undefined) return decision;
+      if (decision.backup !== undefined || carried.has(decision.path)) return decision;
       const backupPath = decision.mode === "replace" ? backups.get(decision.path) : undefined;
       if (backupPath === undefined) return decision;
       const path = relative(rootDir, backupPath).split(sep).join("/");

@@ -119,7 +119,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--tools <csv>` | target tools, comma-separated (claude, cursor, copilot, codex) | — |
 | `--maturity <tier>` | investment-calibration tier — one of `solo`, `team`, `scaleup`, `enterprise` | — |
 | `--migrate <mode>` | what to do with a detected predecessor setup — one of `full`, `skip` | — |
-| `--import-config <mode>` | what to do with an existing agent config file — one of `supplement`, `replace`, `skip` | — |
+| `--import-config <mode>` | what to do with an existing agent config file; under --force, a file the replaced setup already decided keeps that decision, so run `stamity clean -y` first to choose again — one of `supplement`, `replace`, `skip` | — |
 | `--force` | replace an existing setup in place | — |
 | `--loosen` | write a guard copy looser than the autonomy setting on disk, at HEAD or in the manifest it replaces (the person's act) | — |
 

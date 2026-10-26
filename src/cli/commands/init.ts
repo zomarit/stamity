@@ -773,15 +773,6 @@ function importNote(
  * first run that does target the path (a `stamity config` tool change, a later
  * adapter) — so the note says that rather than implying the answer was wasted.
  */
-/**
- * The line for a decision a `--force` re-init carried from the setup it
- * replaces (REQ-FLOW-029). It names the mode and says it was not asked again,
- * rather than narrating a merge or a fresh `.bak` this run may not have made.
- */
-function carriedImportNote(targetPath: string, choice: ImportMode): string {
-  return `existing config: ${targetPath} keeps the decision the replaced setup recorded, so it was not asked again (${choice})`;
-}
-
 function unwrittenImportNote(targetPath: string, choice: ImportMode, dryRun: boolean): string {
   const verb = dryRun ? "would not be written to" : "was not written to";
   const strip = dryRun ? "would still remove" : "may still have removed";
@@ -790,6 +781,33 @@ function unwrittenImportNote(targetPath: string, choice: ImportMode, dryRun: boo
     `so nothing is merged in and nothing is replaced. If a migration runs, its strip ${strip} a ` +
     `previous setup's managed block from this file; that is the only edit it sees. Your ` +
     `\`${choice}\` answer is recorded and applies to the first run that does target the path.`
+  );
+}
+
+/**
+ * The line for a decision a `--force` re-init carried from the setup it
+ * replaces (REQ-FLOW-029). It names the mode and says it was not asked again,
+ * rather than narrating a merge or a fresh `.bak` this run may not have made.
+ *
+ * An explicit `--import-config` that differs is not applied to that path, so
+ * the line says so, names the decision kept, and gives the way to choose again
+ * (review/62): a full `clean`, which puts the owner's file back, then a fresh
+ * `init`. For a carried `skip` the owner's file never moved, so removing the
+ * manifest before `--force` works too; after a `replace` it would drop the
+ * backup record that `clean` restores from, so that way is not offered there.
+ */
+function carriedImportNote(targetPath: string, choice: ImportMode, flag: ImportMode | undefined): string {
+  if (flag === undefined || flag === choice) {
+    return `existing config: ${targetPath} keeps the decision the replaced setup recorded, so it was not asked again (${choice})`;
+  }
+  const manifestWay =
+    choice === "skip"
+      ? `, or remove ${STATE_DIR}/manifest.json and run \`stamity init --force --import-config ${flag}\``
+      : "";
+  return (
+    `existing config: --import-config ${flag} was not applied to ${targetPath}, which keeps the decision ` +
+    `the replaced setup recorded (${choice}). To choose again, run \`stamity clean -y\` and then ` +
+    `\`stamity init --import-config ${flag}\`${manifestWay}`
   );
 }
 
@@ -1040,7 +1058,7 @@ export const initCommand: CommandModule = {
       .addOption(
         new Option(
           "--import-config <mode>",
-          "what to do with an existing agent config file",
+          "what to do with an existing agent config file; under --force, a file the replaced setup already decided keeps that decision, so run `stamity clean -y` first to choose again",
         ).choices([...IMPORT_MODES]),
       )
       .option("--force", "replace an existing setup in place")
@@ -1294,7 +1312,7 @@ export const initCommand: CommandModule = {
     // One line PER decided path. A single line for a multi-file decision would
     // disclose the answer while hiding most of what it did — the operator sees
     // every file their one answer reached, and the disposition each one got.
-    for (const decision of carried) notes.push(carriedImportNote(decision.path, decision.mode));
+    for (const decision of carried) notes.push(carriedImportNote(decision.path, decision.mode, importFlag));
     for (const decision of askedDecisions) {
       notes.push(
         importNote(
