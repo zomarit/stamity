@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
-import type { Stats } from "node:fs";
-import { link, lstat, readFile, readdir, rm, stat, unlink } from "node:fs/promises";
+import { constants as fsConstants, type Stats } from "node:fs";
+import { copyFile, link, lstat, readFile, readdir, rm, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
+import { resolveAutonomy } from "../../config/autonomy.ts";
+import { PERSON_ONLY_GUARD_FILE } from "../../hooks/scripts.ts";
 import { importBackupPathDefect, readManifest, writeManifest } from "../../manifest/manifest.ts";
 import {
   filterMcpJsonOnDisk,
@@ -30,6 +32,7 @@ import { discoverInstalledPacks, packMcpServers, withoutPolicyWarningPrint } fro
 import { toLedgerEntries, trustedInfraPaths, type ReclaimCandidate } from "../../manifest/ledger.ts";
 import { OWNED_PATHS, needsRenderingProof } from "../../manifest/ownedPaths.ts";
 import {
+  MANIFEST_FILE,
   PACK_OWNER_PREFIX,
   isPackOwner,
   packOwner,
@@ -59,6 +62,7 @@ import {
 } from "../engine/emissionWrite.ts";
 import { keepSavedModelLists, resolveModelLists, withModelLists } from "../engine/clientModels.ts";
 import { getEmissionPlanner } from "../engine/emission.ts";
+import { assertNotLoosened } from "../engine/autonomyGate.ts";
 import { CliFailure } from "../kit/output.ts";
 import { hasNpmChannel, packageCommand, packageName, registryOption } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
@@ -248,21 +252,37 @@ async function restoreRefusal(rootDir: string, path: string, backup: ImportBacku
   return null;
 }
 
+/** The `link` errors of a file system that keeps no hard links (exFAT, FAT32, some network mounts): the move copies instead. */
+const NO_HARD_LINKS: ReadonlySet<string> = new Set(["EPERM", "ENOTSUP", "EOPNOTSUPP", "ENOSYS", "EXDEV"]);
+
 /**
  * Move `source` to `target` without ever replacing a file at `target`: a hard
  * link, which fails with `EEXIST` when anything is there, then the old name
- * removed. So a file that appears at `target` after the restore's checks is
- * kept, and the backup with it. `null` when moved, else why not.
+ * removed. On a file system that keeps no hard links ({@link NO_HARD_LINKS})
+ * the bytes are copied with `COPYFILE_EXCL`, which refuses the same way. So a
+ * file that appears at `target` after the restore's checks is kept, and the
+ * backup with it. `null` when moved, else why not. `linkFile` is `link`; a
+ * test hands in one that refuses as such a file system does.
  */
-export async function moveWithoutClobber(source: string, target: string): Promise<string | null> {
+export async function moveWithoutClobber(
+  source: string,
+  target: string,
+  linkFile: (existing: string, created: string) => Promise<void> = link,
+): Promise<string | null> {
   const messageOf = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
+  const appeared = "a file appeared at the target after the checks, so the backup was not moved over it";
   try {
-    await link(source, target);
+    await linkFile(source, target);
   } catch (cause) {
-    if ((cause as NodeJS.ErrnoException).code === "EEXIST") {
-      return "a file appeared at the target after the checks, so the backup was not moved over it";
+    const code = (cause as NodeJS.ErrnoException).code;
+    if (code === "EEXIST") return appeared;
+    if (code === undefined || !NO_HARD_LINKS.has(code)) return `the move failed: ${messageOf(cause)}`;
+    try {
+      await copyFile(source, target, fsConstants.COPYFILE_EXCL);
+    } catch (copyCause) {
+      if ((copyCause as NodeJS.ErrnoException).code === "EEXIST") return appeared;
+      return `the move failed: ${messageOf(copyCause)}`;
     }
-    return `the move failed: ${messageOf(cause)}`;
   }
   try {
     await unlink(source);
@@ -932,13 +952,43 @@ function mcpSentence(mcp: McpUninstallReport): string {
 interface HookDocumentRewrite {
   /** Repo-relative path → the rows the written document earns, replacing the clients' rows there. */
   rows: Map<string, LedgerEntry[]>;
-  /** One line per document left as it was, or the plan that could not be built, and why. */
+  /** The documents whose bytes the write changed, the ones the run reports as rewritten. */
+  rewritten: string[];
+  /** One line per document left as it was, the plan that could not be built, or a write's notice, and why. */
   notes: string[];
 }
 
-/** The hooks documents this setup wrote, the ones `clean --pack` re-renders without the pack ({@link rewriteHookDocuments}). */
-function hookDocumentsOf(manifest: SetupManifest, packSupply: readonly PackSuppliedServer[]): string[] {
+/**
+ * The hooks documents this setup wrote that `clean --pack <id>` re-renders
+ * without the pack ({@link rewriteHookDocuments}): none when the pack ships no
+ * hooks (no ledger row of its under its `hooks/` folder), since no document
+ * runs a hook of its then.
+ */
+function hookDocumentsOf(
+  manifest: SetupManifest,
+  packSupply: readonly PackSuppliedServer[],
+  packId: string,
+  candidates: readonly ReclaimCandidate[],
+): string[] {
+  const hooksDir = `${packDirRelPath(packId)}/hooks/`;
+  if (!candidates.some((candidate) => candidate.entry.path.startsWith(hooksDir))) return [];
   return [...hookScriptRetention(manifest, packSupply).hookDocuments].filter((path) => manifest.ledger.some((row) => row.path === path));
+}
+
+/**
+ * Why `clean --pack` leaves `documents` for the next `sync`, or `null` when it
+ * rewrites them: the documents name the scripts and the pinned version of the
+ * CLI that renders them, and `clean` writes no script, so under a CLI other
+ * than the one that last wrote the setup (`generatedBy`) a document could name
+ * a script never written or drop a newer guard. The full and scoped cleans'
+ * own refusal of other renderings is {@link refuseStaleRenderings}.
+ */
+function hookRewriteHold(manifest: SetupManifest, documents: readonly string[], engineVersion: string): string | null {
+  if (documents.length === 0 || manifest.generatedBy === engineVersion) return null;
+  return (
+    `This is version ${engineVersion}, but version ${manifest.generatedBy} last wrote this setup, so ` +
+    `${documents.join(", ")} were not rewritten and still run the pack's hooks until the next sync.`
+  );
 }
 
 /**
@@ -953,17 +1003,20 @@ function hookDocumentsOf(manifest: SetupManifest, packSupply: readonly PackSuppl
  * owner's entries stay; Copilot's whole-file hooks document through the
  * merge engine with `outputWriteOptions`, whose drift rule backs up an edited
  * one. A plan that cannot be built rewrites nothing and says so: the documents
- * then wait for `sync`, as before.
+ * then wait for `sync`, as before. So does a setup whose `autonomy` is looser
+ * than the guard in force: the settings document's ask rows are rendered from
+ * it, and the loosen gate `sync` runs refuses it here too (REQ-FLOW-138), so a
+ * recorded ask row never leaves without the person's `--loosen`.
  */
 async function rewriteHookDocuments(
   rootDir: string,
   manifest: SetupManifest,
   shrunk: SetupManifest,
+  documents: readonly string[],
   packSupply: readonly PackSuppliedServer[],
   engineVersion: string,
 ): Promise<HookDocumentRewrite> {
-  const rewrite: HookDocumentRewrite = { rows: new Map(), notes: [] };
-  const documents = hookDocumentsOf(manifest, packSupply);
+  const rewrite: HookDocumentRewrite = { rows: new Map(), rewritten: [], notes: [] };
   if (documents.length === 0) return rewrite;
   let outputs: readonly AdapterOutput[];
   try {
@@ -975,6 +1028,22 @@ async function rewriteHookDocuments(
   } catch (cause) {
     const why = (cause instanceof Error ? cause.message : String(cause)).split("\n")[0] ?? "";
     rewrite.notes.push(`The setup could not be planned without the pack (${why}), so ${documents.join(", ")} still run its hooks until the next sync.`);
+    return rewrite;
+  }
+  const guardCopies = outputs.filter((output) => output.path.split("/").at(-1) === PERSON_ONLY_GUARD_FILE).map((output) => output.path);
+  try {
+    await assertNotLoosened(rootDir, resolveAutonomy(shrunk), {
+      loosen: false,
+      copies: { planned: guardCopies, baking: [] },
+      remedy: packageCommand("sync --loosen"),
+    });
+  } catch (cause) {
+    const failure = cause as { message?: unknown; why?: unknown; next?: unknown };
+    const said = [failure.message, failure.why, failure.next].filter((part): part is string => typeof part === "string" && part !== "");
+    rewrite.notes.push(
+      `${documents.join(", ")} were not rewritten, so they still run the pack's hooks: ${said.join("; ")}. ` +
+        `Put back the stricter autonomy setting in ${STATE_DIR}/${MANIFEST_FILE}, or have the person loosen it, then sync.`,
+    );
     return rewrite;
   }
   const lanes = coOwnedDocumentLanes(shrunk, packSupply, manifest.ledger, await provenLegacyCursorGuards(rootDir, manifest.ledger, legacyCursorIdentity()));
@@ -1003,7 +1072,9 @@ async function rewriteHookDocuments(
       continue;
     }
     if (written.result.warning !== undefined) rewrite.notes.push(written.result.warning);
+    if (written.result.notice !== undefined && written.result.notice !== "") rewrite.notes.push(written.result.notice);
     if (written.result.action === "skipped") continue;
+    if (written.result.action !== "unchanged") rewrite.rewritten.push(path);
     rewrite.rows.set(path, toLedgerEntries(ledgerRowsForOutput(output, written.content, managedBody, engineVersion, written.record)));
   }
   return rewrite;
@@ -1087,6 +1158,9 @@ async function runScopedClean(
   // Before the confirmation and before the client documents are touched: a
   // copy a sync with this version rewrites refuses the run (review/128).
   refuseStaleRenderings(ctx, manifest, await sweepReclaimCandidates(swept, { ...sweepOptions, consent: false }), `clean --pack ${packId}`);
+  // The hooks documents this run re-renders without the pack, and why it leaves them for `sync` instead.
+  const hookDocuments = hookDocumentsOf(manifest, packSupply, packId, candidates);
+  const hookHold = hookRewriteHold(manifest, hookDocuments, ctx.app.version);
 
   // --dry-run neither prompts nor refuses: it writes nothing, so the
   // destructive gate has nothing to gate.
@@ -1095,9 +1169,13 @@ async function runScopedClean(
       selectedFromPack.length === 0
         ? ""
         : `, plus its selected MCP server(s) (${selectedFromPack.join(", ")}) in the client config files`;
+    const alsoHooks =
+      hookDocuments.length === 0 || hookHold !== null
+        ? ""
+        : `, and rewrite ${hookDocuments.join(", ")} without its hooks (an edited one is kept as a .bak)`;
     await confirmDestruction(ctx, {
       refusedWhat: `pack "${packId}" (${candidates.length} installed file(s)${alsoCopies})`,
-      question: `Remove pack "${packId}" — ${candidates.length} installed file(s) under ${STATE_DIR}/${alsoCopies}, plus its ledger rows${alsoMcp}?`,
+      question: `Remove pack "${packId}" — ${candidates.length} installed file(s) under ${STATE_DIR}/${alsoCopies}, plus its ledger rows${alsoMcp}${alsoHooks}?`,
     });
   }
 
@@ -1120,9 +1198,18 @@ async function runScopedClean(
       ? {}
       : { mcp: { ...rendered.mcp, servers: rendered.mcp.servers.filter((id) => !selectedFromPack.includes(id)) } }),
   };
-  const hooks = ctx.dryRun
+  const hooks: HookDocumentRewrite | null = ctx.dryRun
     ? null
-    : await rewriteHookDocuments(rootDir, manifest, shrunk, packSupply.filter((server) => server.sourcePackId !== packId), ctx.app.version);
+    : hookHold !== null
+      ? { rows: new Map(), rewritten: [], notes: [hookHold] }
+      : await rewriteHookDocuments(
+          rootDir,
+          manifest,
+          shrunk,
+          hookDocuments,
+          packSupply.filter((server) => server.sourcePackId !== packId),
+          ctx.app.version,
+        );
   const report = await sweepReclaimCandidates(swept, { ...sweepOptions, consent: !ctx.dryRun });
   ctx.spinner.stop();
 
@@ -1195,8 +1282,8 @@ async function runScopedClean(
         `A real run also drops its ${candidates.length} ledger row(s)${copySentence}` +
         `${mcpSentence(mcp)} and leaves the rest of ${STATE_DIR}/ intact.\n`,
     );
-    const hookDocuments = hookDocumentsOf(manifest, packSupply);
-    if (hookDocuments.length > 0) {
+    if (hookHold !== null) ctx.io.out(`${hookHold}\n`);
+    else if (hookDocuments.length > 0) {
       ctx.io.out(`A real run also rewrites ${hookDocuments.join(", ")} from the setup without the pack, so none still runs its hooks.\n`);
     }
     nextSteps(ctx, [`apply it: ${packageCommand(`clean --pack ${packId}`)}`]);
@@ -1220,8 +1307,8 @@ async function runScopedClean(
       );
     }
     for (const refusal of mcp.refusals) ctx.io.out(`${refusal}\n`);
-    if (hooks !== null && hooks.rows.size > 0) {
-      ctx.io.out(`Rewrote ${[...hooks.rows.keys()].join(", ")} without the pack's hooks.\n`);
+    if (hooks !== null && hooks.rewritten.length > 0) {
+      ctx.io.out(`Rewrote ${hooks.rewritten.join(", ")} without the pack's hooks.\n`);
     }
     for (const note of hooks?.notes ?? []) ctx.io.out(`${note}\n`);
     if (salvaged > 0) {
@@ -1266,7 +1353,7 @@ async function runScopedClean(
       mcpServersDeselected: mcp.deselected,
       mcpDocumentsRewritten: [...mcp.rewritten.keys()],
       mcpServersKept: mcp.kept,
-      hookDocumentsRewritten: [...(hooks?.rows.keys() ?? [])],
+      hookDocumentsRewritten: hooks?.rewritten ?? [],
     },
   };
 }

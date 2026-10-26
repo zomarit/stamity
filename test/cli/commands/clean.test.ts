@@ -1,11 +1,14 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, link, mkdir, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { COMMANDS } from "../../../src/cli.ts";
 import { cleanCommand, moveWithoutClobber, planCleanCandidates } from "../../../src/cli/commands/clean.ts";
 import { applySync, planSync } from "../../../src/cli/commands/sync/engine.ts";
+import { resolveAutonomy } from "../../../src/config/autonomy.ts";
+import { claudeAskRows } from "../../../src/hooks/personOnly.ts";
+import { readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
 import { REQUIRED_GITIGNORE_ENTRIES } from "../../../src/mcp/env.ts";
 import { wrapInManagedBlock } from "../../../src/merge/managedBlocks.ts";
 import { ORG_POLICY_REL_PATH } from "../../../src/pack/orgPolicy.ts";
@@ -1772,6 +1775,66 @@ describe("clean — the backup a replace import recorded", () => {
     expect(await readFile(join(root, "AGENTS.md"), "utf-8")).toBe(OWNER);
     expect(existsSync(join(root, "AGENTS.md.bak"))).toBe(false);
   }, 60_000);
+
+  /** The one recorded backup a full clean left, and the reason it gives. */
+  async function skippedReason(root: string): Promise<string | undefined> {
+    const doc = parseSingleDoc((await runClean(root, ["-y", "--json"])).stdout);
+    expect(doc["restored"]).toEqual([]);
+    return (doc["restoreSkipped"] as { reason: string }[])[0]?.reason;
+  }
+
+  it.skipIf(process.platform === "win32")("never moves a backup that is a symbolic link, even to the owner's own bytes", async () => {
+    const root = await replacedRepo();
+    await mkdir(join(root, "notes"), { recursive: true });
+    await writeFile(join(root, "notes/owner.md"), OWNER, "utf-8");
+    await rm(join(root, "AGENTS.md.bak"));
+    await symlink(join("notes", "owner.md"), join(root, "AGENTS.md.bak"));
+
+    expect(await skippedReason(root)).toContain("is a symbolic link");
+    expect(existsSync(join(root, "AGENTS.md"))).toBe(false);
+    expect(await readFile(join(root, "notes/owner.md"), "utf-8")).toBe(OWNER);
+  }, 60_000);
+
+  it("never moves a backup that is not a regular file", async () => {
+    const root = await replacedRepo();
+    await rm(join(root, "AGENTS.md.bak"));
+    await mkdir(join(root, "AGENTS.md.bak"));
+
+    expect(await skippedReason(root)).toContain("is not a regular file");
+    expect(existsSync(join(root, "AGENTS.md"))).toBe(false);
+  }, 60_000);
+
+  it("never moves a backup that has a second name", async () => {
+    const root = await replacedRepo();
+    await mkdir(join(root, "notes"), { recursive: true });
+    await link(join(root, "AGENTS.md.bak"), join(root, "notes/second.md"));
+
+    expect(await skippedReason(root)).toContain("is a hard link");
+    expect(existsSync(join(root, "AGENTS.md"))).toBe(false);
+    expect(await readFile(join(root, "AGENTS.md.bak"), "utf-8")).toBe(OWNER);
+  }, 60_000);
+
+  it("copies the backup back, never over a file, on a file system that keeps no hard links", async () => {
+    const temp = tempDir();
+    await temp.seedFiles({ "AGENTS.md.bak": OWNER });
+    const calls: string[] = [];
+    const noHardLinks = (existing: string): Promise<void> => {
+      calls.push(existing);
+      return Promise.reject(Object.assign(new Error("operation not permitted, link"), { code: "EPERM" }));
+    };
+
+    expect(await moveWithoutClobber(temp.path("AGENTS.md.bak"), temp.path("AGENTS.md"), noHardLinks)).toBeNull();
+
+    expect(calls).toEqual([temp.path("AGENTS.md.bak")]);
+    expect(await readFile(temp.path("AGENTS.md"), "utf-8")).toBe(OWNER);
+    expect(existsSync(temp.path("AGENTS.md.bak"))).toBe(false);
+    // The copy refuses a file at the target as the link does.
+    await writeFile(temp.path("AGENTS.md.bak"), OWNER, "utf-8");
+    await writeFile(temp.path("AGENTS.md"), "appeared after the checks\n", "utf-8");
+    expect(await moveWithoutClobber(temp.path("AGENTS.md.bak"), temp.path("AGENTS.md"), noHardLinks)).toContain("appeared at the target");
+    expect(await readFile(temp.path("AGENTS.md"), "utf-8")).toBe("appeared after the checks\n");
+    expect(await readFile(temp.path("AGENTS.md.bak"), "utf-8")).toBe(OWNER);
+  });
 });
 
 /**
@@ -1790,7 +1853,14 @@ describe("clean --pack — the hooks documents leave the pack's hooks behind", (
     return result;
   }
 
-  it("leaves no entry in .claude/settings.json or .github/hooks/stamity.json that runs the pack's script, and check is green", async () => {
+  const DOCUMENTS = [".claude/settings.json", ".github/hooks/stamity.json"];
+
+  /**
+   * `init -y --tools claude,copilot`, then the pack added, with one hook unless
+   * `hooks` is false, then `sync` unless `synced` is false. With a hook and the
+   * sync, both hooks documents run the pack's script.
+   */
+  async function packedRepo(opts: { hooks?: boolean; synced?: boolean } = {}): Promise<string> {
     const temp = tempDir();
     const root = temp.path("repo");
     await mkdir(root, { recursive: true });
@@ -1798,14 +1868,30 @@ describe("clean --pack — the hooks documents leave the pack's hooks behind", (
     await run(root, ["init", "-y", "--tools", "claude,copilot"]);
     const packDir = await writeMadeUpPack(temp.path("packs"), HOOK_PACK, {
       "skills/st-acme-audit/SKILL.md": madeUpArtifact("acme-audit", "skill", "Audits the acme service."),
-      "hooks/hooks.json": `${JSON.stringify({ hooks: [{ event: "pre_tool_use", matcher: "Bash", command: ["node", HOOK_SCRIPT], timeoutMs: 3000 }] }, null, 2)}\n`,
+      ...(opts.hooks === false
+        ? {}
+        : {
+            "hooks/hooks.json": `${JSON.stringify({ hooks: [{ event: "pre_tool_use", matcher: "Bash", command: ["node", HOOK_SCRIPT], timeoutMs: 3000 }] }, null, 2)}\n`,
+          }),
     });
     // The owner's committed script, which the pack's hook names: a pack ships no script of its own.
     await mkdir(join(root, STATE_DIR, "packs", HOOK_PACK), { recursive: true });
     await writeFile(join(root, HOOK_SCRIPT), "process.exit(0)\n", "utf-8");
     await run(root, ["add", packDir, "--allow-untrusted", "-y"]);
-    await run(root, ["sync"]);
-    const documents = [".claude/settings.json", ".github/hooks/stamity.json"];
+    if (opts.synced !== false) await run(root, ["sync"]);
+    return root;
+  }
+
+  const readDocuments = (root: string): Promise<string[]> => Promise.all(DOCUMENTS.map((doc) => readFile(join(root, doc), "utf-8")));
+
+  /** The `permissions.ask` rows of `.claude/settings.json`. */
+  async function askRows(root: string): Promise<unknown> {
+    return (JSON.parse(await readFile(join(root, ".claude/settings.json"), "utf-8")) as { permissions?: { ask?: unknown } }).permissions?.ask;
+  }
+
+  it("leaves no entry in .claude/settings.json or .github/hooks/stamity.json that runs the pack's script, and check is green", async () => {
+    const root = await packedRepo();
+    const documents = DOCUMENTS;
     // The setup did wire the pack's hook in both: the removal below is not a no-op.
     for (const doc of documents) expect(await readFile(join(root, doc), "utf-8")).toContain(`packs/${HOOK_PACK}/`);
 
@@ -1821,5 +1907,119 @@ describe("clean --pack — the hooks documents leave the pack's hooks behind", (
     for (const doc of documents) expect(await readFile(join(root, doc), "utf-8")).not.toContain(`packs/${HOOK_PACK}/`);
     const check = await runInProcess(COMMANDS, ["check", "--json"], { cwd: root });
     expect(JSON.parse(check.stdout.trim()) as { ok: boolean }, check.stdout).toMatchObject({ ok: true });
+  }, 120_000);
+
+  it("rewrites nothing under a CLI other than the one that last wrote the setup, and says the documents wait for sync", async () => {
+    const root = await packedRepo();
+    const current = await readManifest(root);
+    if (current === null) throw new Error("no manifest");
+    await writeManifest(root, { ...current, generatedBy: "1.0.0" }, { now: new Date("2026-01-01T00:00:00Z") });
+    const before = await readDocuments(root);
+
+    const result = await run(root, ["clean", "--pack", HOOK_PACK, "-y"]);
+
+    expect(await readDocuments(root)).toEqual(before);
+    expect(result.stdout).toContain("version 1.0.0 last wrote this setup");
+    expect(result.stdout).toContain("still run the pack's hooks until the next sync");
+    expect(result.stdout).not.toContain("Rewrote ");
+  }, 120_000);
+
+  it("rewrites nothing for a pack that ships no hooks, and reports no document rewritten", async () => {
+    const root = await packedRepo({ hooks: false });
+    const before = await readDocuments(root);
+
+    const result = await run(root, ["clean", "--pack", HOOK_PACK, "-y", "--json"]);
+
+    expect(parseSingleDoc(result.stdout)["hookDocumentsRewritten"]).toEqual([]);
+    expect(await readDocuments(root)).toEqual(before);
+  }, 120_000);
+
+  it("names no document as rewritten when the write changed none of its bytes", async () => {
+    // Added but never synced: the documents do not run the pack's hook yet, so the rewrite changes nothing.
+    const root = await packedRepo({ synced: false });
+    for (const text of await readDocuments(root)) expect(text).not.toContain(`packs/${HOOK_PACK}/`);
+    const before = await readDocuments(root);
+
+    const result = await run(root, ["clean", "--pack", HOOK_PACK, "-y", "--json"]);
+
+    expect(parseSingleDoc(result.stdout)["hookDocumentsRewritten"]).toEqual([]);
+    expect(await readDocuments(root)).toEqual(before);
+  }, 120_000);
+
+  it("refuses the rewrite over a manifest whose autonomy was loosened, keeps every ask row, and says why", async () => {
+    const root = await packedRepo();
+    const tighten = await readManifest(root);
+    if (tighten === null) throw new Error("no manifest");
+    await writeManifest(root, { ...tighten, autonomy: { mode: "ask" } }, { now: new Date("2026-01-01T00:00:00Z") });
+    await run(root, ["sync"]);
+    const asked = await askRows(root);
+    // Mode `ask` renders an ask row for each act mode `autonomous` runs unasked: the loosening below drops some.
+    expect(Array.isArray(asked) && asked.length > 0).toBe(true);
+    const loosen = await readManifest(root);
+    if (loosen === null) throw new Error("no manifest");
+    const { autonomy: _dropped, ...rest } = loosen;
+    await writeManifest(root, rest, { now: new Date("2026-01-02T00:00:00Z") });
+    const before = await readDocuments(root);
+
+    const result = await run(root, ["clean", "--pack", HOOK_PACK, "-y"]);
+
+    expect(await askRows(root)).toEqual(asked);
+    expect(await readDocuments(root)).toEqual(before);
+    expect(result.stdout).toContain("were not rewritten");
+    expect(result.stdout).toContain("looser autonomy setting");
+    expect(result.stdout).toContain("sync --loosen");
+  }, 120_000);
+
+  it("keeps the owner's entry in .claude/settings.json and backs up an edited .github/hooks/stamity.json, naming the backup", async () => {
+    const root = await packedRepo();
+    const settingsPath = join(root, ".claude/settings.json");
+    const settings = JSON.parse(await readFile(settingsPath, "utf-8")) as { permissions: { allow?: string[] } };
+    settings.permissions.allow = [...(settings.permissions.allow ?? []), "Bash(make owner-task)"];
+    await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
+    const copilotPath = join(root, ".github/hooks/stamity.json");
+    const edited = (await readFile(copilotPath, "utf-8")).replace(/\n$/, "\n\n");
+    await writeFile(copilotPath, edited, "utf-8");
+    // The sync above may have kept a backup of its own (an uncommitted file); only the one this run takes counts.
+    const backupsOf = async (): Promise<string[]> =>
+      (await readdir(join(root, ".github/hooks"))).filter((name) => name.startsWith("stamity.json.bak"));
+    const earlier = new Set(await backupsOf());
+
+    const result = await run(root, ["clean", "--pack", HOOK_PACK, "-y"]);
+
+    const after = await readFile(settingsPath, "utf-8");
+    expect(after).toContain("Bash(make owner-task)");
+    expect(after).not.toContain(`packs/${HOOK_PACK}/`);
+    expect(await readFile(copilotPath, "utf-8")).not.toContain(`packs/${HOOK_PACK}/`);
+    const backups = (await backupsOf()).filter((name) => !earlier.has(name));
+    expect(backups).toHaveLength(1);
+    expect(await readFile(join(root, ".github/hooks", backups[0] ?? ""), "utf-8")).toBe(edited);
+    expect(result.stdout).toContain(backups[0]);
+  }, 120_000);
+
+  it("names the hooks documents it rewrites in the question it asks", async () => {
+    const root = await packedRepo();
+    const before = await readDocuments(root);
+
+    const result = await runInProcess(COMMANDS, ["clean", "--pack", HOOK_PACK], { cwd: root, stdinLines: ["n"], tty: { stdout: true, stdin: true } });
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain(`and rewrite ${DOCUMENTS.join(", ")} without its hooks`);
+    expect(await readDocuments(root)).toEqual(before);
+  }, 120_000);
+
+  it("prints the settings write's notice on an ask row equal to one the setting no longer renders", async () => {
+    const root = await packedRepo();
+    // An ask row mode `ask` renders and the default mode does not, added by the owner: kept, and named as maybe theirs.
+    const unrendered = claudeAskRows([]).find((row) => !claudeAskRows(resolveAutonomy({}).runs).includes(row));
+    if (unrendered === undefined) throw new Error("every ask row renders under the default setting");
+    const settingsPath = join(root, ".claude/settings.json");
+    const settings = JSON.parse(await readFile(settingsPath, "utf-8")) as { permissions: { ask?: string[] } };
+    settings.permissions.ask = [...(settings.permissions.ask ?? []), unrendered];
+    await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
+
+    const result = await run(root, ["clean", "--pack", HOOK_PACK, "-y"]);
+
+    expect(await readFile(settingsPath, "utf-8")).toContain(JSON.stringify(unrendered));
+    expect(result.stdout).toContain(`Kept permissions.ask ${JSON.stringify(unrendered)}`);
   }, 120_000);
 });
