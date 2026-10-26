@@ -590,9 +590,15 @@ describe("src/roster/triggers.ts — the header's consumer claim", () => {
     expect(registry).toContain('import * as rosterTriggers from "../roster/triggers.ts"');
     expect(registry).not.toMatch(/specialistsForPath|findSpecialistTrigger|SPECIALIST_TRIGGER_TABLE/);
 
-    const importers = modules.filter((relative) =>
-      readFileSync(join(srcRoot, relative), "utf8").includes("roster/triggers.ts"),
-    );
+    /*
+     * TEST CHANGE, justified: 2026-10-26, run 2026-10-25_autonomy-distribution-02, prove/10.
+     * A reader is a module that imports the table, so the match is an import specifier (`from "…"`,
+     * a side-effect `import "…"` or a dynamic `import("…")`), not any mention of the path. b1's ask-set
+     * change put `"src/roster/triggers.ts"` in `src/runs/landEvidence.ts` as a path string for
+     * `run land`; naming the file as data reads nothing from it, and a plain text search counted it.
+     */
+    const IMPORTS_TABLE = /(?:\bfrom|\bimport)\s*\(?\s*["'][^"'\n]*\/roster\/triggers\.ts["']/;
+    const importers = modules.filter((relative) => IMPORTS_TABLE.test(readFileSync(join(srcRoot, relative), "utf8")));
     // When this fails, the header is what needs the edit: name the new consumer
     // there, and this case goes green describing the truth again.
     expect(importers).toEqual(["change/classify.ts"]);
