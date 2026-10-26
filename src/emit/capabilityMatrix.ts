@@ -284,7 +284,7 @@ export const REVISIT_TRIGGERS: readonly RevisitTrigger[] = [
     action: "drop the bridge",
     watch: "claude",
     status:
-      "Fired — Claude Code 2.1.277+ reads `AGENTS.md` only where no `CLAUDE.md` exists; " +
+      "Fired — Claude Code 2.1.277+ reads `AGENTS.md`, by default only where no `CLAUDE.md` exists; " +
       "stamity emits a `CLAUDE.md`, so the `@AGENTS.md` bridge import is the vendor's " +
       "documented shape for that case and stays emitted for the one entry file.",
   },

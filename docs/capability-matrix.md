@@ -125,8 +125,8 @@ scripts/generate-capability-matrix.mjs` after a corpus change.
 
 | Fact | Declared value |
 |---|---|
-| Rule shape | `.claude/rules/<id>.md` with frontmatter `paths:` — a YAML glob list, matched when Claude reads a file; a rule with no `paths` is loaded unconditionally at launch, at CLAUDE.md priority. Also read by VS Code Copilot and by Copilot CLI |
-| Agent format | `.claude/agents/<id>.md` — frontmatter (`name`, `description`, `tools:` comma list, `model:` alias or pinned id, `effort:` level) over a markdown system prompt; the class-to-model map at `.stamity/generated/models/claude.json`. The client also takes `permissionMode`, `disallowedTools` and `autoCompactWindow` (2.1.296 or later), which this engine does not emit |
+| Rule shape | `.claude/rules/<id>.md` with frontmatter `paths:` — glob patterns as a YAML list or a comma-separated string; a path-scoped rule loads when Claude reads, writes or edits a matching file; a rule with no `paths` is loaded unconditionally at launch, at CLAUDE.md priority. Also read by VS Code Copilot and by Copilot CLI |
+| Agent format | `.claude/agents/<id>.md` — frontmatter (`name`, `description`, `tools:` comma list, `model:` alias or pinned id, `effort:` level) over a markdown system prompt; the class-to-model map at `.stamity/generated/models/claude.json`. The client also takes `permissionMode`, `disallowedTools` and `autoCompactWindow` (2.1.296 or later; sub-agents page, read 2026-10-26), which this engine does not emit |
 | Hook config | `.claude/settings.json` |
 | Reads `.agents/skills/` | no |
 | MCP dialect | `claude-json` |
@@ -146,11 +146,11 @@ Declared caps:
 
 Sources:
 
-- <https://code.claude.com/docs/en/memory> — accessed 2026-10-23
-- <https://code.claude.com/docs/en/skills> — accessed 2026-10-23
-- <https://code.claude.com/docs/en/sub-agents> — accessed 2026-10-23
+- <https://code.claude.com/docs/en/memory> — accessed 2026-10-26
+- <https://code.claude.com/docs/en/skills> — accessed 2026-10-26
+- <https://code.claude.com/docs/en/sub-agents> — accessed 2026-09-30
 - <https://code.claude.com/docs/en/hooks> — accessed 2026-10-23
-- <https://code.claude.com/docs/en/settings> — accessed 2026-10-23
+- <https://code.claude.com/docs/en/settings> — accessed 2026-10-26
 
 ### `cursor`
 
@@ -178,11 +178,11 @@ Declared caps:
 
 Sources:
 
-- <https://cursor.com/docs/context/rules> — accessed 2026-10-23
-- <https://cursor.com/docs/agent/subagents> — accessed 2026-10-23
-- <https://cursor.com/docs/hooks> — accessed 2026-10-23
-- <https://cursor.com/docs/skills> — accessed 2026-10-23
-- <https://cursor.com/docs/mcp> — accessed 2026-10-23
+- <https://cursor.com/docs/context/rules> — accessed 2026-10-26
+- <https://cursor.com/docs/agent/subagents> — accessed 2026-10-26
+- <https://cursor.com/docs/hooks> — accessed 2026-10-26
+- <https://cursor.com/docs/skills> — accessed 2026-10-26
+- <https://cursor.com/docs/mcp> — accessed 2026-10-26
 
 ### `copilot`
 
@@ -215,10 +215,10 @@ Declared caps:
 
 Sources:
 
-- <https://docs.github.com/en/copilot/reference/custom-agents-configuration> — accessed 2026-10-23
-- <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/coding-agent/customize-the-agent-environment> — accessed 2026-10-23
-- <https://docs.github.com/en/copilot/how-tos/configure-custom-instructions-in-your-ide/add-repository-instructions-in-your-ide> — accessed 2026-10-23
-- <https://code.visualstudio.com/docs/copilot/customization/prompt-files> — accessed 2026-10-23
+- <https://docs.github.com/en/copilot/reference/custom-agents-configuration> — accessed 2026-10-26
+- <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/coding-agent/customize-the-agent-environment> — accessed 2026-10-26
+- <https://docs.github.com/en/copilot/how-tos/configure-custom-instructions-in-your-ide/add-repository-instructions-in-your-ide> — accessed 2026-10-26
+- <https://code.visualstudio.com/docs/copilot/customization/prompt-files> — accessed 2026-10-26
 - <https://docs.github.com/en/copilot/reference/hooks-reference> — accessed 2026-10-23
 - <https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference> — accessed 2026-10-10
 - <https://code.visualstudio.com/docs/agent-customization/custom-agents> — accessed 2026-10-14
@@ -296,7 +296,7 @@ happen in that cloud, and reads `not run` where none has.
 | `copilot` | Project hooks | The cloud agent loads hooks from `.github/hooks/*.json` in the cloned repository, the only hook configuration its sandbox holds by default, and honours only `bash` (or `command`) entries. `sessionStart` fires once per job. | — | documented | <https://docs.github.com/en/copilot/reference/hooks-reference> — accessed 2026-10-15 | not run |
 | `copilot` | Session marker | `COPILOT_AGENT_PROMPT` holds the prompt the cloud agent's job was invoked with. | — | documented | <https://docs.github.com/en/copilot/reference/hooks-reference> — accessed 2026-10-15 | not run |
 | `copilot` | Hook timeouts | A timed-out hook fails open on every event, `preToolUse` included. | A preToolUse hook that times out fails open. | documented | <https://docs.github.com/en/copilot/reference/hooks-reference> — accessed 2026-10-15 | not run |
-| `copilot` | Ask decisions | A `preToolUse` decision of `ask` is treated as `deny`: no user is there to answer. Copilot CLI's autopilot reads it as deny too, since 1.0.97 (the CLI's changelog), so the cloud agent is not the only place an ask becomes a deny. | An ask answer is read as deny. | documented | <https://docs.github.com/en/copilot/reference/hooks-reference> — accessed 2026-10-23 | not run |
+| `copilot` | Ask decisions | A `preToolUse` decision of `ask` is treated as `deny`: no user is there to answer. Copilot CLI's autopilot reads it as deny too, since 1.0.97 (the CLI's changelog entry for 1.0.97, dated 2026-10-13, read 2026-10-26), so the cloud agent is not the only place an ask becomes a deny. | An ask answer is read as deny. | documented | <https://docs.github.com/en/copilot/reference/hooks-reference> — accessed 2026-10-23 | not run |
 | `copilot` | Default branch | The cloud agent uses a hooks file only when it is present on the repository's default branch. | Hooks run only when the hooks file is on the default branch; this clone's copy is the one loaded. | documented | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/use-hooks> — accessed 2026-10-15 | not run |
 | `copilot` | Tool arguments | `toolArgs` is typed `unknown`, and the page names no argument of `edit`, `create` or `view`. The hook runner turns a `filePath` argument into `file_path`; if these tools name it `path` (a question raised in review on 2026-10-14), an authored hook reading `file_path` finds none, in the CLI and the cloud agent alike. | — | unverified | <https://docs.github.com/en/copilot/reference/hooks-reference> — accessed 2026-10-15 | not run |
 | `copilot` | Draft pull request | The cloud agent pushes to one branch and opens a draft pull request, and cannot mark it ready for review, approve it or merge it. GitHub Actions workflows on it wait for a write-access person's approval unless the repository lets them run automatically. | — | documented | <https://docs.github.com/en/copilot/concepts/security-governance-and-network-settings/risks-and-mitigations> — accessed 2026-10-18 | not run |
@@ -330,6 +330,6 @@ can be, since nothing here re-reads a page on its own.
 |---|---|---|---|
 | Antigravity adoption/demand | adapter #5 | No adapter, so no row above carries a source for it — the trigger is adoption or demand, not a page this repo re-reads. | unwatched — no supported client carries a source for it |
 | codex#34002 resolution | native glob emission | Open — that client's declared rule shape still down-converts conditional rules into nested `AGENTS.md` files. | `codex`, oldest source read 2026-09-10 |
-| Claude Code AGENTS.md support change | drop the bridge | Fired — Claude Code 2.1.277+ reads `AGENTS.md` only where no `CLAUDE.md` exists; stamity emits a `CLAUDE.md`, so the `@AGENTS.md` bridge import is the vendor's documented shape for that case and stays emitted for the one entry file. | `claude`, oldest source read 2026-10-23 |
-| Agent Plugins scope expansion | container widens | No container is emitted: the plugin route was deleted in 1.15.0, and the CLI writes every class into the repository. A wider Agent Plugins format re-opens whether a container is worth shipping again, not the shape of one. | `claude`, oldest source read 2026-10-23 |
+| Claude Code AGENTS.md support change | drop the bridge | Fired — Claude Code 2.1.277+ reads `AGENTS.md`, by default only where no `CLAUDE.md` exists; stamity emits a `CLAUDE.md`, so the `@AGENTS.md` bridge import is the vendor's documented shape for that case and stays emitted for the one entry file. | `claude`, oldest source read 2026-09-30 |
+| Agent Plugins scope expansion | container widens | No container is emitted: the plugin route was deleted in 1.15.0, and the CLI writes every class into the repository. A wider Agent Plugins format re-opens whether a container is worth shipping again, not the shape of one. | `claude`, oldest source read 2026-09-30 |
 | VS Code deny-gate GA | recheck editor-specific hook compatibility | CLI/cloud preToolUse hooks are emitted now, with timeout fail-open. [VS Code hooks](https://code.visualstudio.com/docs/agent-customization/hooks) remain Preview. VS Code reads the repository's `.github/hooks/*.json`, and also its `.claude/settings.json` hooks, so the emitted file reaches the editor; editor-specific compatibility needs separate verification. | `copilot`, oldest source read 2026-10-10 |

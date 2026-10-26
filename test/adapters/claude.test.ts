@@ -1001,6 +1001,20 @@ describe("claude residue over the real corpus", () => {
     }
 
     expect(CLAUDE_DIALECT_FACTS.citations.length).toBeGreaterThanOrEqual(4);
+    // TEST CHANGE, justified: re-read 2026-10-26 — the one constant split. The memory, skills and
+    // settings pages were read claim by claim on 2026-10-26 (ledger row review/80); the hooks page
+    // carries 2026-10-23, the read plan 022's b18 cell names; the sub-agents page keeps 2026-09-30,
+    // its last whole read. Each citation now holds the date of the last full read of its page.
+    const lastFullRead: Record<string, string> = {
+      "https://code.claude.com/docs/en/memory": "2026-10-26",
+      "https://code.claude.com/docs/en/skills": "2026-10-26",
+      "https://code.claude.com/docs/en/sub-agents": "2026-09-30",
+      "https://code.claude.com/docs/en/hooks": "2026-10-23",
+      "https://code.claude.com/docs/en/settings": "2026-10-26",
+    };
+    expect(CLAUDE_DIALECT_FACTS.citations.map((row) => row.url).toSorted()).toEqual(
+      Object.keys(lastFullRead).toSorted(),
+    );
     for (const citation of CLAUDE_DIALECT_FACTS.citations) {
       expect(citation.url).toMatch(/^https:\/\//);
       // Re-verified in this unit's research pass; a stale date on a shipped
@@ -1009,9 +1023,7 @@ describe("claude residue over the real corpus", () => {
       // TEST CHANGE, justified: moved from 2026-09-10 to 2026-09-30. The 2026-09-30 currency
       // pass (plan 013, sw14-client-currency-sweep) re-read all five cited pages and verified
       // every claim this date covers, which is the full pass this pin asks for.
-      // TEST CHANGE, justified: re-read 2026-10-23 — plan 022's vendor-claims pass (b18) re-read the
-      // cited pages and moved the one constant; the pin still holds every citation to one full pass.
-      expect(citation.accessDate).toBe("2026-10-23");
+      expect(citation.accessDate, citation.url).toBe(lastFullRead[citation.url]);
     }
     // The skills + commands dialect has its own page, and it is the one that
     // establishes both native directories.

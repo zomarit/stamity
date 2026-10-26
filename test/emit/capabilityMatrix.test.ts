@@ -455,8 +455,8 @@ describe("currency block — the named revisit triggers", () => {
     expect(triggerFor("Claude Code AGENTS.md support change").watch).toBe("claude");
   });
 
-  // The condition fired: Claude Code 2.1.277+ reads `AGENTS.md` directly, but only where no
-  // `CLAUDE.md` exists (code.claude.com/docs/en/memory, accessed 2026-09-30). This engine emits a
+  // The condition fired: Claude Code 2.1.277+ reads `AGENTS.md` directly, but by default only where no
+  // `CLAUDE.md` exists (code.claude.com/docs/en/memory, read 2026-10-26). This engine emits a
   // `CLAUDE.md`, so the bridge import stays, and the status has to say both halves.
   it("records the Claude AGENTS.md trigger as fired, and why the bridge stays", () => {
     const status = triggerFor("Claude Code AGENTS.md support change").status;
@@ -573,10 +573,13 @@ describe("the 2026-09-30 client currency pass", () => {
 
   it("re-stamps Claude's citations, and leaves Copilot's, Codex's and Cursor's where they were", () => {
     expect(datesOf("claude").length).toBeGreaterThan(0);
-    // TEST CHANGE, justified: re-read 2026-10-23 — plan 022's vendor-claims pass (b18) re-read Claude's
-    // cited pages and re-stamped the one constant; Copilot's four-page stamp, its hooks reference, Codex's
-    // hooks page and Cursor's five pages moved with it. Every date that pass did not re-read is held below.
-    expect(new Set(datesOf("claude"))).toEqual(new Set(["2026-10-23"]));
+    // TEST CHANGE, justified: re-read 2026-10-23 — plan 022's b18 cell read Copilot's hooks reference,
+    // Codex's hooks page and Claude's hooks page on 2026-10-23, so those three dates move to that day.
+    // TEST CHANGE, justified: re-read 2026-10-26 — Copilot's four one-stamp pages, Cursor's five pages and
+    // Claude's memory, skills and settings pages were read claim by claim on 2026-10-26 (ledger row
+    // review/80), so those dates move to that day. Claude's sub-agents page was not read whole since
+    // 2026-09-30 and keeps that date. Every date neither read covered is held below.
+    expect(datesOf("claude")).toEqual(["2026-10-26", "2026-10-26", "2026-09-30", "2026-10-23", "2026-10-26"]);
     // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): Copilot's list gained a sixth
     // page, the CLI command reference, read 2026-10-10 for the effort scale and the
     // `--no-custom-instructions` flag. The five dates the pass left where they were are unchanged.
@@ -587,17 +590,17 @@ describe("the 2026-09-30 client currency pass", () => {
     // on 2026-10-14 for the model precedence (the first date, 2026-09-10 before). Every date the
     // 2026-09-30 pass left where it was and no later unit re-read is still held as it was.
     expect(datesOf("copilot")).toEqual([
-      "2026-10-23",
-      "2026-10-23",
-      "2026-10-23",
-      "2026-10-23",
+      "2026-10-26",
+      "2026-10-26",
+      "2026-10-26",
+      "2026-10-26",
       "2026-10-23",
       "2026-10-10",
       "2026-10-14",
       "2026-10-14",
     ]);
     expect(datesOf("codex")).toEqual(["2026-10-14", "2026-10-23", "2026-09-15", "2026-09-10"]);
-    expect(datesOf("cursor")).toEqual(["2026-10-23", "2026-10-23", "2026-10-23", "2026-10-23", "2026-10-23"]);
+    expect(datesOf("cursor")).toEqual(["2026-10-26", "2026-10-26", "2026-10-26", "2026-10-26", "2026-10-26"]);
   });
 
   // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): the case read "states that Copilot
@@ -1409,17 +1412,23 @@ describe("client section edges the floor holds", () => {
 
 /**
  * Plan 022 file 2, unit b18-vendor-claims (spec carries no ids for the client fact tables; nearest
- * REQ-PROVE-045, the dated-source rule). The client fact tables were re-read against the vendors' pages
- * on 2026-10-23. Red on the parent: the rows below carried 2026-09-10, 2026-09-17 and 2026-09-30, the
+ * REQ-PROVE-045, the dated-source rule). The client fact tables were checked against the vendors' pages:
+ * the pages the b18 cell names on 2026-10-23, and the pages the citation stamps cover on 2026-10-26 (ledger
+ * row review/80). Red on the parent: the rows below carried 2026-09-10, 2026-09-17 and 2026-09-30, the
  * Copilot deny-gate row named no editor, and Cursor's Questions row read "not documented".
  */
-describe("the 2026-10-23 vendor re-read (b18-vendor-claims)", () => {
+describe("the 2026-10-23 and 2026-10-26 vendor reads (b18-vendor-claims)", () => {
   const page = renderCapabilityMatrix();
   const FLOOR = "2026-10-14";
+  // Claude's sub-agents page was not read whole by either read, so it keeps 2026-09-30 and stays
+  // outside the floor; the agent row dates the one claim fetched from it on 2026-10-26 inline.
+  const CLAUDE_SUB_AGENTS = "https://code.claude.com/docs/en/sub-agents";
 
-  it("holds no access date older than 2026-10-14 on the rows the re-read covered", () => {
+  it("holds no access date older than 2026-10-14 on the rows the reads covered", () => {
     const named: { label: string; date: string }[] = [
-      ...factsFor("claude").citations.map((c) => ({ label: `claude ${c.url}`, date: c.accessDate })),
+      ...factsFor("claude")
+        .citations.filter((c) => c.url !== CLAUDE_SUB_AGENTS)
+        .map((c) => ({ label: `claude ${c.url}`, date: c.accessDate })),
       ...factsFor("cursor").citations.map((c) => ({ label: `cursor ${c.url}`, date: c.accessDate })),
       // Copilot's one-stamp pages and its hooks reference; the CLI command reference (read 2026-10-10
       // for the effort scale) was not part of the re-read and keeps its own date.
@@ -1433,14 +1442,20 @@ describe("the 2026-10-23 vendor re-read (b18-vendor-claims)", () => {
       { label: "cursor Questions", date: cloudFact("cursor", "Questions").citation.accessDate },
     ];
     // Non-degenerate: every client contributes, so a dropped citation list cannot pass vacuously.
-    expect(named.length).toBeGreaterThanOrEqual(5 + 5 + 7 + 2 + 2);
+    expect(named.length).toBeGreaterThanOrEqual(4 + 5 + 7 + 2 + 2);
     for (const { label, date } of named) expect(date >= FLOOR, `${label} read ${date}`).toBe(true);
     // The rendered page carries none of the parent's stale dates on those rows' sources.
     for (const tool of ["claude", "cursor"] as const) {
-      const sources = section(page, `### \`${tool}\``).filter((line) => line.startsWith("- <"));
+      const sources = section(page, `### \`${tool}\``).filter(
+        (line) => line.startsWith("- <") && !line.includes(CLAUDE_SUB_AGENTS),
+      );
       expect(sources.length).toBeGreaterThan(0);
       for (const line of sources) expect(line, line).not.toMatch(/accessed 2026-09-(10|17|30)$/);
     }
+    // The page no read covered keeps its last whole read, so Claude's oldest-source signal stays true.
+    expect(factsFor("claude").citations.find((c) => c.url === CLAUDE_SUB_AGENTS)?.accessDate).toBe("2026-09-30");
+    expect(triggerFor("Claude Code AGENTS.md support change").watch).toBe("claude");
+    expect(page).toContain("`claude`, oldest source read 2026-09-30");
   });
 
   it("names VS Code on Copilot's hooks rows: the deny-gate cap and the editor trigger", () => {
@@ -1472,7 +1487,19 @@ describe("the 2026-10-23 vendor re-read (b18-vendor-claims)", () => {
   it("says Copilot CLI applies the path-specific instruction files from 1.0.100", () => {
     expect(capOfFacts("copilot", "rule-activation")).toContain("Copilot CLI applies these path-specific files from 1.0.100");
     expect(factsFor("claude").ruleShape).toContain("Also read by VS Code Copilot and by Copilot CLI");
-    expect(factsFor("claude").agentsFormat).toContain("`permissionMode`, `disallowedTools` and `autoCompactWindow` (2.1.296 or later)");
+    // review/80: the memory page (read 2026-10-26) takes `paths` as a YAML list or a comma-separated
+    // string, and loads a path-scoped rule on a read, write or edit of a matching file.
+    expect(factsFor("claude").ruleShape).toContain("glob patterns as a YAML list or a comma-separated string");
+    expect(factsFor("claude").ruleShape).toContain("loads when Claude reads, writes or edits a matching file");
+    expect(factsFor("claude").ruleShape).not.toContain("a YAML glob list, matched when Claude reads a file");
+    // review/80: the sub-agents page keeps 2026-09-30, so the one claim fetched from it later is dated inline.
+    expect(factsFor("claude").agentsFormat).toContain(
+      "`permissionMode`, `disallowedTools` and `autoCompactWindow` (2.1.296 or later; sub-agents page, read 2026-10-26)",
+    );
+    // review/81: the autopilot claim names the changelog entry it rests on and when that was read.
+    expect(cloudFact("copilot", "Ask decisions").fact).toContain(
+      "(the CLI's changelog entry for 1.0.97, dated 2026-10-13, read 2026-10-26)",
+    );
   });
 });
 

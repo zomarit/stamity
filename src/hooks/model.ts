@@ -335,7 +335,8 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     subject: "Ask decisions",
     fact:
       "A `preToolUse` decision of `ask` is treated as `deny`: no user is there to answer. Copilot CLI's " +
-      "autopilot reads it as deny too, since 1.0.97 (the CLI's changelog), so the cloud agent is not the " +
+      "autopilot reads it as deny too, since 1.0.97 (the CLI's changelog entry for 1.0.97, dated " +
+      "2026-10-13, read 2026-10-26), so the cloud agent is not the " +
       "only place an ask becomes a deny.",
     status: "documented",
     citation: { url: "https://docs.github.com/en/copilot/reference/hooks-reference", accessDate: "2026-10-23" },

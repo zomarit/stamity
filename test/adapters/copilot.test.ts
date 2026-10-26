@@ -2396,14 +2396,17 @@ describe("hooks", () => {
     // re-read whole on 2026-10-14 for the camelCase event names and the `bash` key the hooks file
     // took that day (REQ-FLOW-086), every other claim its comment names re-checked with them, so
     // its one date moves; the custom-agents page keeps the list's 2026-09-10 stamp.
-    // TEST CHANGE, justified: re-read 2026-10-23 — plan 022's vendor-claims pass (b18) re-read the
-    // hooks reference and the four pages the one ACCESS_DATE stamp covers, so both move to that day.
+    // TEST CHANGE, justified: re-read 2026-10-23 — plan 022's vendor-claims cell read the hooks
+    // reference on 2026-10-23, so its date moves to that day.
+    // TEST CHANGE, justified: re-read 2026-10-26 — the four pages the one ACCESS_DATE stamp covers
+    // were read claim by claim on 2026-10-26 for ledger row review/80, so the stamp moves to that
+    // day, not to the hooks reference's 2026-10-23.
     expect(
       COPILOT_DIALECT_FACTS.citations.find((citation) => citation.url.includes("hooks-reference"))
         ?.accessDate,
     ).toBe("2026-10-23");
     const dates = new Set(COPILOT_DIALECT_FACTS.citations.map((citation) => citation.accessDate));
-    expect(dates.has("2026-10-23")).toBe(true);
+    expect(dates.has("2026-10-26")).toBe(true);
     expect(dates.has("2026-09-10")).toBe(false);
     for (const date of dates) expect(date >= "2026-08-17", date).toBe(true);
 
@@ -2493,13 +2496,14 @@ describe("hooks", () => {
     expect(row).toContain("custom-agents configuration page, accessed 2026-10-10");
 
     // Dated inline: the all-or-nothing citation stamp is not re-stamped by one claim.
-    // TEST CHANGE, justified: re-read 2026-10-23 — the whole stamp moved with plan 022's pass (b18),
-    // which re-read every page it covers; this row's inline dates stay as they were.
+    // TEST CHANGE, justified: re-read 2026-10-26 — the whole stamp moved when all four pages it
+    // covers were read claim by claim on 2026-10-26 (ledger row review/80); this row's inline
+    // dates stay as they were.
     expect(
       COPILOT_DIALECT_FACTS.citations.find((citation) =>
         citation.url.includes("custom-agents-configuration"),
       )?.accessDate,
-    ).toBe("2026-10-23");
+    ).toBe("2026-10-26");
 
     expect(renderCapabilityMatrix()).toContain(row);
   });

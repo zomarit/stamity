@@ -85,9 +85,12 @@ const TOOL: Tool = "copilot";
 const INSTRUCTIONS_DIR = ".github/instructions";
 
 /**
- * Repository-level custom agents. The org/enterprise form drops the `.github/`
- * prefix; a repository setup emits the repository form only
- * (docs.github.com/en/copilot/reference/custom-agents-configuration).
+ * Repository-level custom agents; a repository setup emits the repository form
+ * only. The custom-agents configuration page gives the order of precedence —
+ * repository-level agents over organization-level ones, organization-level over
+ * enterprise-level — and documents no path for the organization or enterprise
+ * form (docs.github.com/en/copilot/reference/custom-agents-configuration, read
+ * 2026-10-26).
  */
 const AGENTS_DIR = ".github/agents";
 
@@ -118,8 +121,11 @@ export const COPILOT_RUN_AGENT_PATH = `${AGENTS_DIR}/stamity-run.agent.md`;
 
 /**
  * The coding agent's environment-preparation workflow. Both the path and the
- * job name inside it are fixed by the platform: the agent looks for a job
- * called `copilot-setup-steps` in this file and runs nothing else from it.
+ * job name inside it are fixed by the platform: the job must be called
+ * `copilot-setup-steps` or it will not be picked up, and only that job's
+ * `steps`, `permissions`, `runs-on`, `services`, `snapshot` and
+ * `timeout-minutes` settings are honoured; other settings are ignored
+ * (customize-the-agent-environment page, read 2026-10-26).
  */
 export const COPILOT_SETUP_STEPS_PATH = ".github/workflows/copilot-setup-steps.yml";
 
@@ -291,8 +297,13 @@ const NODE_LANGUAGES: ReadonlySet<string> = new Set(["javascript", "typescript"]
  * every claim below was re-read against its cited page on this date, and a pass
  * that verified only some of them would have to split the constant rather than
  * quietly re-stamp the rest.
+ *
+ * Re-stamped 2026-10-26 (from 2026-09-10): all four pages were read claim by
+ * claim that day for ledger row review/80. Two comments said more than the
+ * pages now do and were cut to the pages' wording: the agents folder's
+ * organization path and the setup workflow's other jobs (both above).
  */
-const ACCESS_DATE = "2026-10-23";
+const ACCESS_DATE = "2026-10-26";
 
 /**
  * This client's effort key and scale, as the projection row declares them

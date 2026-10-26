@@ -5,9 +5,9 @@
  * vendor-neutral `.agents/skills/` projection, the hook scripts plus the
  * policy document, and the MCP substrate. Claude Code reads `AGENTS.md` only
  * through the bridge import, and never reads `.agents/skills/` (2.1.277+ reads
- * `AGENTS.md` directly only where no `CLAUDE.md` exists, and this adapter
- * emits one; "anything under a `.agents/` directory" is on the not-read list —
- * code.claude.com/docs/en/memory, accessed 2026-09-30), so this adapter's
+ * `AGENTS.md` directly, by default only where no `CLAUDE.md` exists, and this
+ * adapter emits one; "anything under a `.agents/` directory" is on the not-read
+ * list — code.claude.com/docs/en/memory, read 2026-10-26), so this adapter's
  * residue is the bridge, the dialects, and a NATIVE copy of rows the core
  * already rendered — never a second render:
  *
@@ -450,7 +450,8 @@ function guardFailClosedTail(cli: CliCallContext): string {
 }
 
 /**
- * Access date carried by every platform citation in {@link CLAUDE_DIALECT_FACTS}.
+ * Access date carried by the memory, skills and settings citations in
+ * {@link CLAUDE_DIALECT_FACTS} (every citation until the 2026-10-26 split below).
  *
  * Re-read on this date to settle the rule LOAD MODE, which the facts below had
  * wrong: a `.claude/rules/` file with no `paths:` is not description-pulled, it
@@ -467,13 +468,19 @@ function guardFailClosedTail(cli: CliCallContext): string {
  * it found — this file's header, which said the client reads no `AGENTS.md` —
  * is corrected above.
  *
- * Re-stamped 2026-10-23 (from 2026-09-30) by plan 022's vendor-claims pass,
- * which re-read the cited pages with the hooks and permission-modes pages. It
- * added the sub-agent keys `permissionMode`, `disallowedTools` and
- * `autoCompactWindow` (2.1.296 or later) to the agent row, and found
- * `.claude/rules/` read by Copilot CLI as well as by VS Code.
+ * Split 2026-10-26, so each citation carries the date its page was last read
+ * whole. This constant now dates the memory, skills and settings pages, read
+ * claim by claim on 2026-10-26 for ledger row review/80; the rule shape's
+ * `paths:` form and load trigger, and this file's header, were found narrower
+ * than the memory page and now say what it says. The hooks page carries
+ * 2026-10-23, the read plan 022's vendor-claims cell names (with the
+ * permission-modes page). The sub-agents page keeps 2026-09-30, its last whole
+ * read: on 2026-10-26 it was fetched for the agent row's `permissionMode`,
+ * `disallowedTools` and `autoCompactWindow` claim alone, which the row dates
+ * inline. `.claude/rules/` read by Copilot CLI rests on that CLI's changelog
+ * (1.0.89), read 2026-10-26.
  */
-const ACCESS_DATE = "2026-10-23";
+const ACCESS_DATE = "2026-10-26";
 
 // ── Dialect facts ────────────────────────────────────────────────
 
@@ -502,11 +509,11 @@ const EFFORT_SCALE_CAP =
 export const CLAUDE_DIALECT_FACTS: AdapterDialectFacts = {
   tool: TOOL,
   ruleShape:
-    "`.claude/rules/<id>.md` with frontmatter `paths:` — a YAML glob list, matched when Claude reads a file; a rule with no `paths` is loaded unconditionally at launch, at CLAUDE.md priority. Also read by VS Code Copilot and by Copilot CLI",
+    "`.claude/rules/<id>.md` with frontmatter `paths:` — glob patterns as a YAML list or a comma-separated string; a path-scoped rule loads when Claude reads, writes or edits a matching file; a rule with no `paths` is loaded unconditionally at launch, at CLAUDE.md priority. Also read by VS Code Copilot and by Copilot CLI",
   hooksConfigPath: CLAUDE_SETTINGS_PATH,
   readsAgentsSkillsDir: false,
   agentsFormat:
-    "`.claude/agents/<id>.md` — frontmatter (`name`, `description`, `tools:` comma list, `model:` alias or pinned id, `effort:` level) over a markdown system prompt; the class-to-model map at `.stamity/generated/models/claude.json`. The client also takes `permissionMode`, `disallowedTools` and `autoCompactWindow` (2.1.296 or later), which this engine does not emit",
+    "`.claude/agents/<id>.md` — frontmatter (`name`, `description`, `tools:` comma list, `model:` alias or pinned id, `effort:` level) over a markdown system prompt; the class-to-model map at `.stamity/generated/models/claude.json`. The client also takes `permissionMode`, `disallowedTools` and `autoCompactWindow` (2.1.296 or later; sub-agents page, read 2026-10-26), which this engine does not emit",
   mcpDialect: "claude-json",
   entryFile: CLAUDE_MD_PATH,
   caps: [
@@ -546,8 +553,8 @@ export const CLAUDE_DIALECT_FACTS: AdapterDialectFacts = {
   citations: [
     { url: "https://code.claude.com/docs/en/memory", accessDate: ACCESS_DATE },
     { url: "https://code.claude.com/docs/en/skills", accessDate: ACCESS_DATE },
-    { url: "https://code.claude.com/docs/en/sub-agents", accessDate: ACCESS_DATE },
-    { url: "https://code.claude.com/docs/en/hooks", accessDate: ACCESS_DATE },
+    { url: "https://code.claude.com/docs/en/sub-agents", accessDate: "2026-09-30" },
+    { url: "https://code.claude.com/docs/en/hooks", accessDate: "2026-10-23" },
     { url: "https://code.claude.com/docs/en/settings", accessDate: ACCESS_DATE },
   ],
 };
