@@ -40,6 +40,7 @@ import {
   safeWriteFile,
 } from "../../../merge/safeWrite.ts";
 import type { PredecessorDefaults } from "../../../migration/carry.ts";
+import { adoptInstalledPacks, type PackAdoptionRefusal } from "../../../pack/install.ts";
 import { packDirRelPath } from "../../../pack/receipt.ts";
 import type { ContentSelection, MergeResult } from "../../../types/content.ts";
 import type { Tool } from "../../../types/core.ts";
@@ -313,6 +314,12 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
   // packs off this ledger: the planner projects their content, and the MCP
   // ownership question at `packServers` resolves their servers.
   if (force) manifest.ledger = [...manifest.ledger, ...(await carriedPackRows(rootDir, previous))];
+  // A pack no ledger records any more — `clean` keeps installed packs and removes
+  // the manifest (REQ-FLOW-028) — comes back from its own receipt, seeded here for
+  // the same reason; one its receipt cannot prove is named below, never recorded.
+  const carriedIds = new Set(manifest.ledger.filter((row) => isPackOwner(row.adapter)).map((row) => row.adapter.slice(PACK_OWNER_PREFIX.length)));
+  const adoption = await adoptInstalledPacks(rootDir, carriedIds);
+  manifest.ledger = [...manifest.ledger, ...adoption.rows];
 
   // State directories: probe first so the report lists only what this run adds.
   const missing = await Promise.all(
@@ -595,6 +602,7 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
     await writeManifest(rootDir, manifest, { now });
   }
   if (modelLists.problem !== null) warnings.push(modelLists.problem);
+  for (const refusal of adoption.refused) warnings.push(adoptionRefusalWarning(refusal));
 
   return {
     manifestPath: manifestPath(rootDir),
@@ -791,6 +799,14 @@ async function readPreviousManifest(rootDir: string): Promise<SetupManifest | nu
  * refusing here would take the repair path away. The pack directories stay on
  * disk either way, and re-installing the pack re-records them.
  */
+/** The panel line for a kept pack its receipt could not prove: what was found, and that `add` is the way back. */
+function adoptionRefusalWarning(refusal: PackAdoptionRefusal): string {
+  return (
+    `${refusal.dir}/ was not taken back as pack ${JSON.stringify(refusal.packId)}: ${refusal.reason}. ` +
+    `Nothing records its files now; re-install it from its source with ${packageCommand("add <source>")}, or delete the folder.`
+  );
+}
+
 async function carriedPackRows(rootDir: string, previous: SetupManifest | null): Promise<LedgerEntry[]> {
   // Only for packs whose content is still on disk. `discoverInstalledPacks`
   // REFUSES a row whose directory is gone — correctly, since a ledger row is an

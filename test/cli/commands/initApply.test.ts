@@ -31,14 +31,18 @@ import {
   __resetContentRootCacheForTests,
   __setContentRootForTests,
 } from "../../../src/content/contentRoot.ts";
-import { collectManifestErrors, readManifest } from "../../../src/manifest/manifest.ts";
+import { collectManifestErrors, createManifest, readManifest } from "../../../src/manifest/manifest.ts";
+import { applyPackInstall, planPackInstall } from "../../../src/pack/install.ts";
+import { verifyInstalledPacks } from "../../../src/pack/verifyInstalled.ts";
 import { REQUIRED_GITIGNORE_ENTRIES } from "../../../src/mcp/env.ts";
 import { wrapInManagedBlock } from "../../../src/merge/managedBlocks.ts";
 import type { AdapterOutput } from "../../../src/types/content.ts";
+import type { LedgerEntry } from "../../../src/types/manifest.ts";
 import type { PredecessorDefaults } from "../../../src/migration/carry.ts";
 import type { Tool } from "../../../src/types/core.ts";
 import type { RepoInfo } from "../../../src/types/detect.ts";
 import { EngineError } from "../../../src/types/errors.ts";
+import { madeUpArtifact, writeMadeUpPack } from "../../support/packFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
 // Fixture data kept out of the test-input census: built at run time, as a literal it names this repository's own handoffs keep file.
@@ -411,6 +415,56 @@ describe("applyInit — existing setup", () => {
     );
     expect(failure).toBeInstanceOf(EngineError);
     expect((failure as EngineError).code).toBe("CONFIG_ERROR");
+  });
+});
+
+describe("applyInit — the packs a clean kept (REQ-FLOW-028)", () => {
+  const PACK_ID = "acme-kept";
+  const OWNER = `pack:${PACK_ID}`;
+
+  /** A real install of a made-up pack, as `add` lands it, with no manifest beside it: what `clean -y` leaves. */
+  async function keptPack(root: string): Promise<LedgerEntry[]> {
+    const source = await writeMadeUpPack(getTemp().path("pack-sources"), PACK_ID, {
+      "agents/stamity-acme-helper.md": madeUpArtifact("acme-helper", "agent", "Helps with acme."),
+      "rules/stamity-acme-style.md": madeUpArtifact("acme-style", "rule", "The acme style."),
+    });
+    const plan = await planPackInstall(root, source, { allowUntrusted: true });
+    const setup = createManifest({ tools: ["claude"], selection: { items: { agent: [], skill: [], rule: [], command: [] } }, generatorVersion: ENGINE_VERSION, now: FIXED_NOW });
+    const { result } = await applyPackInstall(root, plan, setup, { engineVersion: ENGINE_VERSION, now: FIXED_NOW });
+    expect(result.installed, result.errors.join("; ")).toBe(true);
+    expect(existsSync(join(root, ".stamity", "manifest.json"))).toBe(false);
+    return result.ledgerEntries;
+  }
+
+  const byPath = (rows: readonly LedgerEntry[]): LedgerEntry[] => rows.toSorted((a, b) => a.path.localeCompare(b.path));
+
+  it("records the kept pack's rows again with the hashes its install recorded, and its integrity check passes", async () => {
+    const root = await makeRepo();
+    const recorded = await keptPack(root);
+    expect(recorded).toHaveLength(3);
+
+    const report = await applyInit(optionsFor(root));
+
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("init wrote no manifest");
+    expect(byPath(manifest.ledger.filter((row) => row.adapter === OWNER))).toEqual(byPath(recorded));
+    expect(await verifyInstalledPacks(root, manifest)).toEqual({ checked: 3, findings: [] });
+    expect(report.warnings.filter((warning) => warning.includes(".stamity/packs/"))).toEqual([]);
+  });
+
+  it("records no row of a kept pack whose file was edited, and names it in one warning that points at add", async () => {
+    const root = await makeRepo();
+    await keptPack(root);
+    await writeFile(join(root, ".stamity", "packs", PACK_ID, "rules", "stamity-acme-style.md"), "my own rule\n", "utf8");
+
+    const report = await applyInit(optionsFor(root));
+
+    const manifest = await readManifest(root);
+    expect(manifest?.ledger.filter((row) => row.adapter === OWNER)).toEqual([]);
+    const named = report.warnings.filter((warning) => warning.includes(`.stamity/packs/${PACK_ID}/`));
+    expect(named).toHaveLength(1);
+    expect(named[0]).toContain("rules/stamity-acme-style.md hashes to");
+    expect(named[0]).toContain("add <source>");
   });
 });
 

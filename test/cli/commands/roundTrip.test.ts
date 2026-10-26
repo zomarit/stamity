@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { cp, lstat, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { COMMANDS } from "../../../src/cli.ts";
@@ -149,6 +150,104 @@ describe("init then clean restores .gitignore byte for byte (REQ-FLOW-027)", () 
     expect((await readFile(join(deletedFirst, ".gitignore"), "utf8")).split("\n")).toContain(".env.mcp");
     await run(deletedFirst, ["clean", "-y"]);
     expect(await readFile(join(deletedFirst, ".gitignore"), "utf8")).toBe("node_modules/\n.env.mcp\n");
+  }, 180_000);
+});
+
+/**
+ * REQ-FLOW-028 with REQ-FLOW-016: the engine's machine-local files go with the
+ * setup, so no file is left whose ignore line `clean` took back. The take-back
+ * runs last, after the files are gone, and reads the ledger from memory, since
+ * the manifest is gone by then too.
+ */
+describe("clean removes the machine-local files and then their ignore lines (REQ-FLOW-028)", () => {
+  /** The four machine-local files a session writes, as their writers leave them. */
+  const MACHINE_LOCAL: Readonly<Record<string, string>> = {
+    ".stamity/client-models.json": `${JSON.stringify({ listed: { codex: { ids: ["gpt-6-sol"], source: "codex-debug-models" } } })}\n`,
+    ".stamity/preflight-canary.json": `${JSON.stringify({ at: new Date().toISOString() })}\n`,
+    ".stamity/run-ended.json": `${JSON.stringify({ run: "2026-10-25_work", at: new Date().toISOString() })}\n`,
+    [`.stamity/context-once/${"ab".repeat(32)}`]: "",
+  };
+  const MACHINE_LOCAL_LINES = [".stamity/client-models.json", ".stamity/preflight-canary.json", ".stamity/run-ended.json", ".stamity/context-once/"];
+
+  async function writeMachineLocal(root: string): Promise<void> {
+    await mkdir(join(root, ".stamity", "context-once"), { recursive: true });
+    for (const [path, body] of Object.entries(MACHINE_LOCAL)) await writeFile(join(root, ...path.split("/")), body, "utf8");
+  }
+
+  it("leaves none of them, no ignore line for them, and git status as it was before init", async () => {
+    const root = await freshRepo();
+    const before = await snapshot(root);
+    const statusBefore = status(root);
+
+    await run(root, ["init", "-y", "--tools", FOUR_CLIENTS]);
+    await writeMachineLocal(root);
+    await run(root, ["clean", "-y"]);
+
+    for (const path of Object.keys(MACHINE_LOCAL)) expect(existsSync(join(root, ...path.split("/"))), path).toBe(false);
+    expect(existsSync(join(root, ".stamity"))).toBe(false);
+    expect(existsSync(join(root, ".gitignore"))).toBe(false);
+    expect(await snapshotBesideSettings(root)).toEqual(before);
+    expect(status(root)).toBe(statusBefore);
+  }, 120_000);
+
+  it("keeps a filled .env.mcp ignored while every machine-local line goes", async () => {
+    const root = await freshRepo();
+    await run(root, ["init", "-y", "--tools", FOUR_CLIENTS]);
+    await run(root, ["config", "mcp", "add", "github", "-y"]);
+    await run(root, ["sync"]);
+    const filled = (await readFile(join(root, ".env.mcp"), "utf8")).replace(/^(GITHUB_[A-Z_]+)=$/m, "$1=filled-by-the-owner");
+    await writeFile(join(root, ".env.mcp"), filled, "utf8");
+    await writeMachineLocal(root);
+
+    await run(root, ["clean", "-y"]);
+
+    expect(await readFile(join(root, ".env.mcp"), "utf8")).toBe(filled);
+    expect(git(root, ["check-ignore", "-q", ".env.mcp"]).status).toBe(0);
+    expect(await readFile(join(root, ".gitignore"), "utf8")).toBe(".env.mcp\n");
+  }, 180_000);
+
+  it.skipIf(process.platform === "win32")("keeps a client model cache that is a link, names it, and keeps its ignore line", async () => {
+    const root = await freshRepo();
+    await run(root, ["init", "-y", "--tools", FOUR_CLIENTS]);
+    const outside = tempDir().path("models-elsewhere.json");
+    await writeFile(outside, MACHINE_LOCAL[".stamity/client-models.json"] ?? "", "utf8");
+    await symlink(outside, join(root, ".stamity", "client-models.json"));
+
+    const out = await run(root, ["clean", "-y"]);
+
+    expect((await lstat(join(root, ".stamity", "client-models.json"))).isSymbolicLink()).toBe(true);
+    expect(await readFile(outside, "utf8")).toBe(MACHINE_LOCAL[".stamity/client-models.json"]);
+    expect(out).toContain("Left .stamity/client-models.json: it is a link, so clean did not follow it.");
+    expect((await readFile(join(root, ".gitignore"), "utf8")).split("\n")).toContain(".stamity/client-models.json");
+    for (const line of MACHINE_LOCAL_LINES.filter((entry) => entry !== ".stamity/client-models.json")) {
+      expect((await readFile(join(root, ".gitignore"), "utf8")).split("\n"), line).not.toContain(line);
+    }
+  }, 120_000);
+
+  it("keeps the take-back working across the kept manifest: lines stay while a hook still runs from .stamity/, and the re-run takes them back (b4's review/29)", async () => {
+    const root = await freshRepo();
+    const before = await snapshot(root);
+    await run(root, ["init", "-y", "--tools", "claude"]);
+    await writeMachineLocal(root);
+    const settings = join(root, KEPT_SETTINGS);
+    const wired = await readFile(settings, "utf8");
+    // The owner's comment line: the document no longer parses, so the sweep keeps it whole, still running every copy.
+    await writeFile(settings, `// team settings\n${wired}`, "utf8");
+    const ignoreDuring = await readFile(join(root, ".gitignore"), "utf8");
+
+    await run(root, ["clean", "-y"]);
+
+    expect(existsSync(join(root, ".stamity", "manifest.json"))).toBe(true);
+    expect(await readFile(join(root, ".gitignore"), "utf8")).toBe(ignoreDuring);
+    for (const path of Object.keys(MACHINE_LOCAL)) expect(existsSync(join(root, ...path.split("/"))), path).toBe(false);
+
+    // The owner takes the comment out: the wiring is the engine's again, and the re-run finishes.
+    await writeFile(settings, wired, "utf8");
+    await run(root, ["clean", "-y"]);
+
+    expect(existsSync(join(root, ".stamity"))).toBe(false);
+    expect(existsSync(join(root, ".gitignore"))).toBe(false);
+    expect(await snapshotBesideSettings(root)).toEqual(before);
   }, 180_000);
 });
 

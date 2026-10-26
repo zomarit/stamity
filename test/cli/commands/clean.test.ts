@@ -188,7 +188,8 @@ function runClean(
 describe("planCleanCandidates", () => {
   it("turns every ledger row — pack rows included — into an adapter-removed candidate", () => {
     const manifest = manifestFixture(ledgerFixture());
-    const candidates = planCleanCandidates(manifest);
+    // TEST CHANGE, justified: REQ-FLOW-028 — clean keeps user state unless --purge; the pack rows are candidates under purge only.
+    const candidates = planCleanCandidates(manifest, { purge: true });
 
     expect(candidates).toHaveLength(manifest.ledger.length);
     expect(candidates.map((candidate) => candidate.reason)).toEqual(
@@ -201,14 +202,27 @@ describe("planCleanCandidates", () => {
 
   it("returns fresh rows, so a candidate never aliases the caller's manifest", () => {
     const manifest = manifestFixture(ledgerFixture());
-    const [first] = planCleanCandidates(manifest);
+    // TEST CHANGE, justified: REQ-FLOW-028 — clean keeps user state unless --purge; the planner now takes the flag.
+    const [first] = planCleanCandidates(manifest, { purge: false });
 
     expect(first?.entry).toEqual(manifest.ledger[0]);
     expect(first?.entry).not.toBe(manifest.ledger[0]);
   });
 
   it("plans nothing for a manifest whose ledger is empty", () => {
-    expect(planCleanCandidates(manifestFixture([]))).toEqual([]);
+    // TEST CHANGE, justified: REQ-FLOW-028 — clean keeps user state unless --purge; the planner now takes the flag.
+    expect(planCleanCandidates(manifestFixture([]), { purge: false })).toEqual([]);
+  });
+
+  it("leaves the pack rows out without --purge, and keeps every client row (REQ-FLOW-028)", () => {
+    const manifest = manifestFixture(ledgerFixture());
+
+    const candidates = planCleanCandidates(manifest, { purge: false });
+
+    expect(candidates.map((candidate) => candidate.entry.path)).toEqual(
+      manifest.ledger.filter((row) => !row.adapter.startsWith("pack:")).map((row) => row.path),
+    );
+    expect(candidates.map((candidate) => candidate.entry.path)).not.toContain(PACK_FILE);
   });
 });
 
@@ -264,7 +278,8 @@ describe("clean — full removal", () => {
     const temp = tempDir();
     const root = await seedInitialisedRepo(temp);
 
-    const result = await runClean(root, ["-y"]);
+    // TEST CHANGE, justified: REQ-FLOW-028 — clean keeps user state unless --purge; removing the whole state dir is --purge's.
+    const result = await runClean(root, ["-y", "--purge"]);
 
     expect(result.code).toBe(0);
     // Whole-file engine output: gone, and its now-empty parents pruned with it.
@@ -290,7 +305,8 @@ describe("clean — full removal", () => {
     const temp = tempDir();
     const root = await seedInitialisedRepo(temp);
 
-    const result = await runClean(root, ["--json", "-y"]);
+    // TEST CHANGE, justified: REQ-FLOW-028 — clean keeps user state unless --purge; uninstall-all, packs included, is --purge's.
+    const result = await runClean(root, ["--json", "-y", "--purge"]);
 
     const entries = entriesOf(parseSingleDoc(result.stdout));
     // Proved by the sweep's own disposition, not by the state-dir removal that
@@ -463,13 +479,21 @@ describe("clean — destructive confirmation gate", () => {
     const temp = tempDir();
     const root = await seedInitialisedRepo(temp);
 
-    const result = await runClean(root, [], {
+    // TEST CHANGE, justified: REQ-FLOW-028 — clean keeps user state unless --purge; the question naming the whole
+    // state directory and the pack's row among five files is --purge's, and the default one says what stays.
+    const result = await runClean(root, ["--purge"], {
       stdinLines: ["n"],
       tty: { stdout: true, stdin: true },
     });
 
     expect(result.stdout).toContain(`${STATE_DIR}/ state directory`);
     expect(result.stdout).toContain("5 generated file(s)");
+
+    const kept = await runClean(root, [], { stdinLines: ["n"], tty: { stdout: true, stdin: true } });
+    expect(kept.stdout).toContain(
+      `Remove 4 generated file(s) and the setup's own files under ${STATE_DIR}/? Learnings, handoffs, overrides, run records ` +
+        `and installed packs under ${STATE_DIR}/ stay; --purge deletes them too.`,
+    );
   });
 
   it("proceeds when the TTY prompt is accepted", async () => {
@@ -522,13 +546,10 @@ describe("clean --dry-run", () => {
     expect(result.code).toBe(0);
     const doc = parseSingleDoc(result.stdout);
     const entries = entriesOf(doc);
-    expect(entries.map((entry) => entry.action)).toEqual([
-      "dry-run",
-      "dry-run",
-      "skipped-user-content",
-      "dry-run",
-      "skipped-missing",
-    ]);
+    // TEST CHANGE, justified: REQ-FLOW-028 — clean keeps user state unless --purge; the pack's row is no candidate,
+    // so four entries remain, the pack file's `dry-run` the one gone.
+    expect(entries.map((entry) => entry.action)).toEqual(["dry-run", "dry-run", "skipped-user-content", "skipped-missing"]);
+    expect(entries.map((entry) => entry.path)).not.toContain(PACK_FILE);
     expect(doc["stateDirRemoved"]).toBe(false);
     expect(await snapshot(root)).toEqual(before);
   });
@@ -550,7 +571,9 @@ describe("clean --json", () => {
     const temp = tempDir();
     const root = await seedInitialisedRepo(temp);
 
-    const result = await runClean(root, ["--json", "-y"]);
+    // TEST CHANGE, justified: REQ-FLOW-028 — clean keeps user state unless --purge; these counts (the pack file
+    // deleted, the state dir removed) are --purge's.
+    const result = await runClean(root, ["--json", "-y", "--purge"]);
 
     expect(result.code).toBe(0);
     const doc = parseSingleDoc(result.stdout);
@@ -779,7 +802,9 @@ describe("clean --pack — scoped removal", () => {
     const root = await seedScopedRepo(temp);
 
     await runClean(root, ["--pack", OPS_ID, "-y"]);
-    const result = await runClean(root, ["-y"]);
+    // TEST CHANGE, justified: REQ-FLOW-028 — clean keeps user state unless --purge; a plain clean keeps the other
+    // pack, so "everything else" is --purge's.
+    const result = await runClean(root, ["-y", "--purge"]);
 
     expect(result.code).toBe(0);
     expect(Object.keys(await snapshot(root)).filter((key) => key.startsWith(STATE_DIR))).toEqual(
@@ -1292,6 +1317,25 @@ describe("clean --pack — the pack's projected copies", () => {
   );
 
   it(
+    "leaves no empty class folder after the class's only file was moved out of the pack by hand (build/5)",
+    async () => {
+      const root = await copyOf(shipSynced);
+      const packDir = join(root, STATE_DIR, "packs", SHIP_ID);
+      await rename(join(packDir, ...SHIP_COMMAND_REL.split("/")), join(root, "st-acme-ship.moved.md"));
+      expect(await readdir(join(packDir, "commands"))).toEqual([]);
+
+      const result = await runClean(root, ["--pack", SHIP_ID, "-y"]);
+
+      expect(result.code, `${result.stdout}\n${result.stderr}`).toBe(0);
+      expect(result.stdout).toContain(`skipped-missing  ${STATE_DIR}/packs/${SHIP_ID}/${SHIP_COMMAND_REL}`);
+      expect(existsSync(join(packDir, "commands"))).toBe(false);
+      expect(existsSync(packDir)).toBe(false);
+      expect(await readFile(join(root, "st-acme-ship.moved.md"), "utf-8")).toBe(SHIP_FILES[SHIP_COMMAND_REL]);
+    },
+    60_000,
+  );
+
+  it(
     "leaves another installed pack's copies and rows untouched",
     async () => {
       const root = await copyOf(twoPacksSynced);
@@ -1572,7 +1616,10 @@ describe("a 1.14 plugin block under clean", () => {
     expect(result.code).toBe(0);
     expect(result.stdout).not.toContain(LEFTOVER);
     expect(result.stdout).not.toContain("plugin uninstall");
-    expect(existsSync(join(root, STATE_DIR))).toBe(false);
+    // TEST CHANGE, justified: REQ-FLOW-028 — clean keeps user state unless --purge; the manifest carrying the
+    // block goes, and the fixture's learning keeps .stamity/.
+    expect(existsSync(join(root, STATE_DIR, "manifest.json"))).toBe(false);
+    expect(existsSync(join(root, LEARNING_FILE))).toBe(true);
 
     const preview = await runClean(await seedWithPlugin(tempDir()), ["--dry-run"]);
     expect(preview.code).toBe(0);
@@ -1612,7 +1659,10 @@ describe("a 1.14 plugin block under clean", () => {
     expect(result.code).toBe(0);
     expect(result.stdout).not.toContain(LEFTOVER);
     expect(result.stdout).not.toContain("plugin uninstall");
-    expect(existsSync(join(root, STATE_DIR))).toBe(false);
+    // TEST CHANGE, justified: REQ-FLOW-028 — clean keeps user state unless --purge; the manifest carrying the
+    // block goes, and the fixture's learning keeps .stamity/.
+    expect(existsSync(join(root, STATE_DIR, "manifest.json"))).toBe(false);
+    expect(existsSync(join(root, LEARNING_FILE))).toBe(true);
   });
 });
 
@@ -2022,4 +2072,232 @@ describe("clean --pack — the hooks documents leave the pack's hooks behind", (
     expect(await readFile(settingsPath, "utf-8")).toContain(JSON.stringify(unrendered));
     expect(result.stdout).toContain(`Kept permissions.ask ${JSON.stringify(unrendered)}`);
   }, 120_000);
+});
+
+// ── REQ-FLOW-028: clean keeps user state unless --purge ─────────────────
+//
+// Real `init`, `add` and `sync` through the funnel: what stays is decided by the
+// ledger `init` and `sync` write and by what the engine itself puts under
+// `.stamity/`, which a hand-built fixture would only restate.
+describe("clean keeps the user's state under .stamity/ (REQ-FLOW-028)", () => {
+  /** One of each kind of user state, at the path a person or a flow writes it. */
+  const USER_STATE: Readonly<Record<string, string>> = {
+    [`${STATE_DIR}/learnings/2026-10-25-lesson.md`]: "a learning\n",
+    [`${STATE_DIR}/handoffs/session.json`]: '{ "next": "finish" }\n',
+    [`${STATE_DIR}/overrides/rules/team-style.md`]: madeUpArtifact("team-style", "rule", "The team's own style rule."),
+    [`${STATE_DIR}/hooks/probe.mjs`]: "// the owner's own hook script\n",
+    [`${STATE_DIR}/runs/2026-10-25_work/record.md`]: "# run record\n",
+    [`${STATE_DIR}/inbox.md`]: "| id | row |\n|---|---|\n| 1 | a row |\n",
+    [`${STATE_DIR}/verify/security-0123abc.json`]: '{ "axis": "security" }\n',
+  };
+  /** The review gate's state as a run leaves it: the counter, a held lock and an interrupted publish. */
+  const GATE_STATE: Readonly<Record<string, string>> = {
+    [`${STATE_DIR}/review-gate.json`]: '{ "rounds": 2 }\n',
+    [`${STATE_DIR}/review-gate.json.lock/owner`]: "12345\n",
+    [`${STATE_DIR}/review-gate.json.tmp-0123456789abcdef`]: '{ "rounds": 3 }\n',
+  };
+
+  let templates: TempDirHandle;
+  /** `init -y --tools claude`, the made-up pack added, the user state written, then `sync`. */
+  let withState: string;
+  /** `init -y --tools claude` and nothing else. */
+  let bare: string;
+
+  async function run(cwd: string, argv: readonly string[]): Promise<void> {
+    const result = await runInProcess(COMMANDS, argv, { cwd });
+    expect(result.code, `${argv.join(" ")}: ${result.stdout}\n${result.stderr}`).toBe(0);
+  }
+
+  beforeAll(async () => {
+    templates = await makeTempDir("stamity-clean-keeps");
+    bare = templates.path("bare");
+    await mkdir(bare, { recursive: true });
+    await seedGitRepo(bare);
+    await run(bare, ["init", "-y", "--tools", "claude"]);
+    withState = templates.path("state");
+    await cp(bare, withState, { recursive: true });
+    await run(withState, await shipPackArgs(templates.path("packs")));
+    for (const [path, body] of Object.entries(USER_STATE)) {
+      await mkdir(join(withState, ...path.split("/").slice(0, -1)), { recursive: true });
+      await writeFile(join(withState, ...path.split("/")), body, "utf-8");
+    }
+    await run(withState, ["sync"]);
+  }, 180_000);
+
+  afterAll(async () => {
+    await templates.cleanup();
+  });
+
+  async function copyOf(template: string): Promise<string> {
+    const root = tempDir().path("repo");
+    await cp(template, root, { recursive: true });
+    return root;
+  }
+
+  async function seedGateState(root: string): Promise<void> {
+    for (const [path, body] of Object.entries(GATE_STATE)) {
+      await mkdir(join(root, ...path.split("/").slice(0, -1)), { recursive: true });
+      await writeFile(join(root, ...path.split("/")), body, "utf-8");
+    }
+  }
+
+  /** Every file under the pack's folder, as `path -> content`. */
+  async function packFiles(root: string): Promise<Record<string, string>> {
+    return Object.fromEntries(
+      Object.entries(await snapshot(root)).filter(([path]) => path.startsWith(`${STATE_DIR}/packs/`) && !path.endsWith("/")),
+    );
+  }
+
+  it(
+    "keeps each kind of user state and the installed pack byte for byte, and removes the setup's own files (red on the parent)",
+    async () => {
+      const root = await copyOf(withState);
+      await seedGateState(root);
+      const ledger = await readLedgerOnDisk(root);
+      const copies = ledger.filter((row) => row.adapter === "claude" && row.path.includes("acme")).map((row) => row.path);
+      expect(copies.length).toBeGreaterThan(0);
+      expect(existsSync(join(root, STATE_DIR, "generated"))).toBe(true);
+      const packBefore = await packFiles(root);
+      expect(Object.keys(packBefore).length).toBeGreaterThan(Object.keys(SHIP_FILES).length);
+
+      const result = await runClean(root, ["-y", "--json"]);
+
+      expect(result.code, `${result.stdout}\n${result.stderr}`).toBe(0);
+      for (const [path, body] of Object.entries(USER_STATE)) expect(await readIfPresent(join(root, path)), path).toBe(body);
+      expect(await packFiles(root)).toEqual(packBefore);
+      for (const copy of copies) expect(existsSync(join(root, copy)), copy).toBe(false);
+      expect(existsSync(join(root, STATE_DIR, "manifest.json"))).toBe(false);
+      expect(existsSync(join(root, STATE_DIR, "generated"))).toBe(false);
+      expect((await readdir(join(root, STATE_DIR))).filter((name) => name.startsWith("review-gate.json"))).toEqual([]);
+      const doc = parseSingleDoc(result.stdout);
+      expect(doc["kept"]).toEqual(["handoffs/", "hooks/", "inbox.md", "learnings/", "overrides/", "packs/", "runs/", "verify/"]);
+      expect(doc["packsKept"]).toEqual([SHIP_ID]);
+      expect(doc["purge"]).toBe(false);
+      expect(doc["stateDirRemoved"]).toBe(false);
+    },
+    90_000,
+  );
+
+  it(
+    "says what it kept and that the next init takes the pack back",
+    async () => {
+      const root = await copyOf(withState);
+
+      const result = await runClean(root, ["-y"]);
+
+      expect(result.code, result.stderr).toBe(0);
+      expect(result.stdout).toContain(
+        `Kept under ${STATE_DIR}/: handoffs/, hooks/, inbox.md, learnings/, overrides/, packs/, runs/, verify/. ${npxCommand("clean --purge")} deletes these too.`,
+      );
+      expect(result.stdout).toContain(
+        `The installed pack(s) ${SHIP_ID} stay under ${STATE_DIR}/packs/: the next ${npxCommand("init")} records them again from their receipts.`,
+      );
+      expect(result.stdout).not.toContain(`${STATE_DIR}/ removed`);
+    },
+    60_000,
+  );
+
+  it(
+    "lets a later init take the kept pack back with the hashes its install recorded, and check pass",
+    async () => {
+      const root = await copyOf(withState);
+      const packRows = (ledger: readonly LedgerEntry[]): LedgerEntry[] =>
+        ledger.filter((row) => row.adapter === `pack:${SHIP_ID}`).toSorted((a, b) => a.path.localeCompare(b.path));
+      const recorded = packRows(await readLedgerOnDisk(root));
+      expect(recorded.length).toBeGreaterThan(Object.keys(SHIP_FILES).length);
+
+      expect((await runClean(root, ["-y"])).code).toBe(0);
+      await run(root, ["init", "-y", "--tools", "claude"]);
+
+      expect(packRows(await readLedgerOnDisk(root))).toEqual(recorded);
+      const check = await runInProcess(COMMANDS, ["check", "--json"], { cwd: root });
+      expect(check.code, check.stdout).toBe(0);
+    },
+    120_000,
+  );
+
+  it(
+    "removes .stamity/ whole with --purge",
+    async () => {
+      const root = await copyOf(withState);
+
+      const result = await runClean(root, ["-y", "--purge", "--json"]);
+
+      expect(result.code, result.stderr).toBe(0);
+      expect(existsSync(join(root, STATE_DIR))).toBe(false);
+      const doc = parseSingleDoc(result.stdout);
+      expect(doc["stateDirRemoved"]).toBe(true);
+      expect(doc["purge"]).toBe(true);
+      expect(doc["kept"]).toEqual([]);
+      expect(doc["packsKept"]).toEqual([]);
+    },
+    60_000,
+  );
+
+  it(
+    "removes .stamity/ on a setup that holds no user state, so a fresh init then clean leaves none",
+    async () => {
+      const root = await copyOf(bare);
+
+      const result = await runClean(root, ["-y", "--json"]);
+
+      expect(result.code, result.stderr).toBe(0);
+      expect(parseSingleDoc(result.stdout)["stateDirRemoved"]).toBe(true);
+      expect(existsSync(join(root, STATE_DIR))).toBe(false);
+    },
+    60_000,
+  );
+
+  it(
+    "refuses --purge with --pack as a VALIDATION_ERROR and changes nothing",
+    async () => {
+      const root = await copyOf(withState);
+      const before = await snapshot(root);
+
+      const result = await runClean(root, ["-y", "--purge", "--pack", SHIP_ID, "--json"]);
+
+      expect(result.code).toBe(1);
+      const error = parseSingleDoc(result.stdout)["error"] as { code: string; message: string };
+      expect(error.code).toBe("VALIDATION_ERROR");
+      expect(error.message).toBe("--purge deletes the whole state directory and cannot be combined with --pack");
+      expect(await snapshot(root)).toEqual(before);
+    },
+    60_000,
+  );
+
+  it(
+    "keeps a placeholder the owner edited, and the store folder with it",
+    async () => {
+      const root = await copyOf(bare);
+      const keep = join(root, STATE_DIR, "handoffs", ".gitkeep");
+      await writeFile(keep, "# we commit handoffs on purpose\n", "utf-8");
+
+      const result = await runClean(root, ["-y", "--json"]);
+
+      expect(result.code, result.stderr).toBe(0);
+      expect(await readIfPresent(keep)).toBe("# we commit handoffs on purpose\n");
+      expect(existsSync(join(root, STATE_DIR, "learnings"))).toBe(false);
+      expect(parseSingleDoc(result.stdout)["kept"]).toEqual(["handoffs/"]);
+    },
+    60_000,
+  );
+
+  it(
+    "says in a dry run what a real run removes and keeps, and touches nothing",
+    async () => {
+      const root = await copyOf(withState);
+      const before = await snapshot(root);
+
+      const result = await runClean(root, ["--dry-run"]);
+
+      expect(result.code, result.stderr).toBe(0);
+      expect(result.stdout).toContain(
+        `A real run also removes the setup's own files under ${STATE_DIR}/ (the manifest, the review gate's state and the ` +
+          `machine-local files) and keeps the rest: learnings, handoffs, overrides, run records and installed packs.`,
+      );
+      expect(result.stdout).not.toContain("orphaned");
+      expect(await snapshot(root)).toEqual(before);
+    },
+    60_000,
+  );
 });
