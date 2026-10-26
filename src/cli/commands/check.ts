@@ -13,6 +13,7 @@ import { slugOf } from "../../content/catalog.ts";
 import { discoverUserContent } from "../../content/userContent.ts";
 import { pinnedCliInstall } from "../../adapters/copilot.ts";
 import { AGENTS_MD_FILE, CURSOR_CLOUD_BLOCK_HEADING } from "../../emit/agentsMd.ts";
+import { SKILLS_PROJECTION_DIR, TOUCHPOINT_POLICY_FILE } from "../../emit/skillsProjection.ts";
 import { renderInvariantsVersion, type CliCallContext } from "../../emit/substitution.ts";
 import { deployingBranchDefect, MAX_DEPLOYING_BRANCHES, readGates } from "../../manifest/manifest.ts";
 import { OWNED_PATHS } from "../../manifest/ownedPaths.ts";
@@ -1363,6 +1364,78 @@ async function checkMovedSkills(
 }
 
 /**
+ * Where Copilot's legacy prompt files sit, `.github/prompts/st-<id>.prompt.md`.
+ * Spelled here rather than imported from `../../adapters/copilot.ts`, whose
+ * prompt-file constants leave with the prompt files themselves.
+ */
+const LEGACY_PROMPTS_DIR = ".github/prompts";
+
+/** The engine names a legacy file carries: `st-<id>`, as a folder or before `.prompt.md`. */
+const LEGACY_PREFIX = "st-";
+const PROMPT_SUFFIX = ".prompt.md";
+
+/** The names of the entries of `dir` that `keep` admits, sorted; none when `dir` is not a readable folder. */
+async function entryNames(dir: string, keep: (entry: { name: string; isFile(): boolean; isDirectory(): boolean }) => boolean): Promise<string[]> {
+  try {
+    return (await readdir(dir, { withFileTypes: true })).filter(keep).map((entry) => entry.name).toSorted();
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Engine files an earlier release wrote that this setup no longer writes, and
+ * that a `sync` kept because it could not prove them the engine's unedited
+ * output: each `.github/prompts/st-*.prompt.md` and each touchpoint or
+ * pack-command companion `.agents/skills/st-*\/agents/openai.yaml` that is on
+ * disk while no ledger row holds its path. The sweep that keeps such a file
+ * names it once and drops its row in the same run, so after that sync only
+ * this row names it again.
+ *
+ * Read from the folders and the ledger directly: names only, never a file's
+ * bytes. A path a ledger row still holds — a client that plans it, or a 1.16.0
+ * row the next `sync` has yet to sweep — is not a leftover. Without a manifest
+ * there is no ledger to compare with, so the row passes.
+ *
+ * - `warn` — one or more such files, each named with the remedy: the owner
+ *   deletes it, unless it is theirs.
+ * - `pass` — none.
+ */
+async function checkLegacyFiles(rootDir: string, manifest: SetupManifest | null): Promise<DoctorCheck> {
+  const id = "legacy-files";
+  if (manifest === null) return { id, status: "pass", detail: "no readable manifest, so no ledger to compare" };
+  const root = resolve(rootDir);
+  const held = new Set(manifest.ledger.map((row) => row.path));
+  const prompts = (
+    await entryNames(join(root, ...LEGACY_PROMPTS_DIR.split("/")), (entry) =>
+      entry.isFile() && entry.name.startsWith(LEGACY_PREFIX) && entry.name.endsWith(PROMPT_SUFFIX),
+    )
+  ).map((name) => `${LEGACY_PROMPTS_DIR}/${name}`);
+  const skillsDir = join(root, ...SKILLS_PROJECTION_DIR.split("/"));
+  const skillFolders = await entryNames(skillsDir, (entry) => entry.isDirectory() && entry.name.startsWith(LEGACY_PREFIX));
+  const companions = (
+    await Promise.all(
+      skillFolders.map(async (folder) => {
+        const stat = await lstat(join(skillsDir, folder, ...TOUCHPOINT_POLICY_FILE.split("/"))).catch(() => null);
+        return stat?.isFile() === true ? [`${SKILLS_PROJECTION_DIR}/${folder}/${TOUCHPOINT_POLICY_FILE}`] : [];
+      }),
+    )
+  ).flat();
+  const left = [...prompts, ...companions].filter((path) => !held.has(path)).map(sanitizeLabel);
+  if (left.length === 0) {
+    return { id, status: "pass", detail: "no legacy prompt file or companion an earlier release wrote is left untracked" };
+  }
+  return {
+    id,
+    status: "warn",
+    detail:
+      `${left.length} file(s) an earlier release wrote that this setup no longer writes or tracks: ` +
+      `${left.join(", ")}. \`${packageCommand("sync")}\` kept each one because it could not prove the ` +
+      "bytes are the engine's unedited output. Delete each one by hand, unless it is yours.",
+  };
+}
+
+/**
  * Which version of the floor invariants this install's corpus carries.
  *
  * A `pass` row with no failing case of its own: the values are validated at
@@ -1861,10 +1934,10 @@ async function modelPinsRow(rootDir: string, manifest: SetupManifest | null, env
 /**
  * The `cloud-install` row (REQ-FLOW-111), printed only with Cursor selected: the
  * lines a Cursor cloud environment's install step needs, for a person to set in
- * Cursor's saved environment. No `.cursor/environment.json` is written — a
- * repository file overrides every saved environment — so this row is where the
- * lines live. They pin the version the setup was generated with
- * (`generatedBy`), the one the committed hooks and bodies call, through
+ * Cursor's saved environment. No `.cursor/environment.json` is written — Cursor
+ * resolves a saved environment ahead of a repository file (its cloud agent setup
+ * page, read 2026-10-26) — so this row is where the lines live. They pin the
+ * version the setup was generated with (`generatedBy`), the one the committed hooks and bodies call, through
  * {@link pinnedCliInstall}, the line Copilot's setup workflow runs; a package
  * with no npm channel gets no registry line. The row informs and never fails: a
  * local session has no install step to judge. It warns, its first line ahead of
@@ -2438,6 +2511,7 @@ export async function runDoctor(
     packReach,
     packCatalog,
     movedSkills,
+    legacyFiles,
     modelPins,
     autonomyDeploying,
     changeClasses,
@@ -2454,6 +2528,7 @@ export async function runDoctor(
       checkPackCatalog(rootDir, manifest, engine.pack.retired.RETIRED_PACKS),
     ),
     guarded("moved-skills", () => checkMovedSkills(rootDir, manifest)),
+    guarded("legacy-files", () => checkLegacyFiles(rootDir, manifest)),
     guarded("model-pins", async () => modelPinsRow(rootDir, manifest, app.runtime.env)),
     // Through the pinned runner, as `config detect` reads the same ref.
     guarded("autonomy-deploying", () =>
@@ -2498,6 +2573,10 @@ export async function runDoctor(
     // Whether a skill that moved from the core to a pack is still overlaid,
     // overridden or recorded as a core copy here; read without the plan.
     movedSkills,
+    // Whether an earlier release left a prompt file or a companion here that no
+    // setup writes or tracks now: beside `moved-skills`, the other release-boundary
+    // leftover, and read without the plan too.
+    legacyFiles,
     // Whether a workflow deploys on a push to a branch the autonomy setting
     // lets the land verb merge into unasked. It answers about this repository,
     // and sits before `model-pins`, which `cloud-install` follows.
@@ -2960,8 +3039,9 @@ function renderProvenance(ctx: CliContext, provenance: ProvenanceRollup | null):
     )}\n`,
   );
   for (const row of provenance.perAdapter) {
-    const stamp = row.stampedVersion === null ? "" : ` (stamped v${row.stampedVersion})`;
-    ctx.io.out(palette.dim(`  ${row.adapter}: ${row.files} file(s)${stamp}\n`));
+    // No "(stamped v…)" suffix (REQ-FLOW-032), as in the sync report: emission writes
+    // bare BEGIN markers, so a ledger row's `stampedVersion` names no stamp any file carries.
+    ctx.io.out(palette.dim(`  ${row.adapter}: ${row.files} file(s)\n`));
   }
   for (const pack of provenance.packs) {
     ctx.io.out(palette.dim(`  pack ${pack.packId}: ${pack.files} file(s)\n`));

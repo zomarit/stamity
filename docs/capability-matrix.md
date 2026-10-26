@@ -303,7 +303,7 @@ happen in that cloud, and reads `not run` where none has.
 | `copilot` | Session limit | Each cloud agent session stops at 59 minutes, a limit that cannot be extended, so a long run is a chain of sessions, each ending in a pushed checkpoint. | — | documented | <https://docs.github.com/en/copilot/concepts/copilot-surfaces/copilot-on-github> — accessed 2026-10-18 | not run |
 | `copilot` | Next session | A write-access person's `@copilot` comment on the pull request starts a new session there, which remembers the earlier sessions on that pull request; the agent answers no comment from anyone without write access. | — | documented | <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/use-cloud-agent-on-github> — accessed 2026-10-18 | not run |
 | `codex` | Project hooks | The Codex Cloud page documents no project hooks, so assume none run there: the task's sandbox is the enforcement. | — | not documented, read 2026-10-15 | <https://learn.chatgpt.com/docs/cloud> — accessed 2026-10-15 | not run |
-| `codex` | Cloud orchestration | The hooks page says command hooks and hooks from local configuration are not supported under cloud orchestration (its Work Cloud section), and names no Codex Cloud behaviour. | — | documented | <https://learn.chatgpt.com/docs/hooks> — accessed 2026-10-15 | not run |
+| `codex` | Cloud orchestration | The hooks page says command hooks and hooks from local configuration are not supported under cloud orchestration (its "Managed hooks from requirements.toml" section), and names no Codex Cloud behaviour. | — | documented | <https://learn.chatgpt.com/docs/hooks> — accessed 2026-10-26 | not run |
 
 ## Agent tool-allowlist enforcement coverage
 

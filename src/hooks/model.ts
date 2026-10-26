@@ -484,9 +484,10 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     subject: "Cloud orchestration",
     fact:
       "The hooks page says command hooks and hooks from local configuration are not supported under " +
-      "cloud orchestration (its Work Cloud section), and names no Codex Cloud behaviour.",
+      "cloud orchestration (its \"Managed hooks from requirements.toml\" section), and names no Codex Cloud " +
+      "behaviour.",
     status: "documented",
-    citation: { url: "https://learn.chatgpt.com/docs/hooks", accessDate: "2026-10-15" },
+    citation: { url: "https://learn.chatgpt.com/docs/hooks", accessDate: "2026-10-26" },
   },
 ];
 

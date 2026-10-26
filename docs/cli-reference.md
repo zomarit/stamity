@@ -102,7 +102,7 @@ string — there is no second numbering to read.
 | `NETWORK_ERROR` | a git transport failed — `worktree setup` could not reach `origin` to plan its branch; a remote with no such branch is not this |
 | `LOCK_TIMEOUT` | a write lock could not be taken before the retry schedule ran out; another `stamity` run was holding it |
 | `EXPECTATION_ERROR` | `check` was told which release, clients or install mode to expect (`--expect-*`), and the repository records another |
-| `AUTONOMY_LOOSENED` | a `sync`, `init` or `workspace sync` would write a guard looser than the one on disk, the setting committed at `HEAD` or the manifest it replaces; nothing was written, and the person runs the command with `--loosen` |
+| `AUTONOMY_LOOSENED` | a `sync`, `init`, `workspace sync` or `upgrade` would write a guard looser than the one on disk, the setting committed at `HEAD` or the manifest it replaces; nothing was written, and the person runs the command with `--loosen` |
 
 Two more codes exist only at the CLI edge and never come from the engine:
 `USAGE` for a rejected command line, and `FAILURE` for a fault that
@@ -369,7 +369,7 @@ Reads only. Nothing is written, so there is no preview mode to need.
 | Argument | What it is |
 |---|---|
 | `<subcommand>` | which plan action to run — one of `check` |
-| `<plan>` | one or more plan files, in chain order with --chain |
+| `<plan...>` | one or more plan files, in chain order with --chain |
 
 | Flag | What it does | Default |
 |---|---|---|

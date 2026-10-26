@@ -546,7 +546,7 @@ delta's amended text from `build/65`, `build/66` and `review/113`).
 - **Codex.** `.codex/agents/*.toml` carries `model_reasoning_effort`, and `model` whenever the class resolves; a saved
   list holding none of a class's candidates writes no `model` (`buildAgentToml`, `src/adapters/codex.ts`).
 - **The map.** Every client gets `.stamity/generated/models/<client>.json`,
-  `{ "classes": { "<class>": { "model"?, "fallbacks": [...] } }, "roles": { "stamity-<id>": "<class>" } }`, every ladder
+  `{ "classes": { "<class>": { "model"?, "fallbacks": [...], "pinReplaced"? } }, "roles": { "stamity-<id>": "<class>" } }` (`pinReplaced` on Codex's and Copilot's maps only, REQ-LADDER-009), every ladder
   class in ladder order and every emitted role; `fallbacks` lists the class's other shipped candidates on the list,
   Claude's and Cursor's are empty. Each is an `infra` row of its client. (Amended 2026-10-15, ledger row `qa/1` and
   `f575afb1`; it read "Claude's is empty".)

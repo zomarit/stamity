@@ -1318,7 +1318,9 @@ describe("init — the no-git note", () => {
   it.each([
     { name: "a real run", argv: ["-y"], tense: "were written" },
     { name: "the dry-run preview", argv: ["--dry-run", "-y"], tense: "would be written" },
-  ])("names the two verbs that need git on $name", async ({ argv, tense }) => {
+    // TEST CHANGE, justified: close/5 (plan 022 file 2, b16) — the title only: it said two verbs
+    // while the body asserts "Four verbs need git"; the assertions are unchanged.
+  ])("names the four verbs that need git on $name", async ({ argv, tense }) => {
     const root = await makeRepo();
 
     const result = await runInit(root, argv);

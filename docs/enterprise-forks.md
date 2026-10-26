@@ -793,6 +793,10 @@ starts with it, gets `STAMITY_REGISTRY_TOKEN` instead. On GitHub Packages the sc
 this repository's owner, and the gates refuse any other. GitHub's *Working with the npm registry*
 page gives that registry's URL.
 
+The published package carries a production `npm-shrinkwrap.json`. npm honours it only where the
+registry marks the version `_hasShrinkwrap`; whether GitHub Packages does was not measured, so a
+consumer there may resolve dependencies fresh, as before.
+
 ### Tag a release
 
 Set `version` in `package.json` and commit it on the release branch. Rehearse next: dispatch the

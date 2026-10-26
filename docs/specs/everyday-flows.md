@@ -2076,7 +2076,7 @@ one pins a text or a behaviour that did not move: `test/cli/engine/gitStatus.tes
 git, at the folder and below it, and reads no history there" and "marks the runner's own refusal for a caller that
 words the failure, and no other error"); `test/cli/commands/check.test.ts` ("says the folder was kept from git, with
 no hint to run git there, where the look before git refused it", which compares the row whole, the whole-row
-comparison of "names the two verbs that need git on the git-available row where git does not answer", which also
+comparison of "names the four verbs that need git on the git-available row where git does not answer", which also
 holds the row to naming no git command, "says the engine found no git to start, and names no other cause, where no
 PATH entry it takes git from holds one", both red before the row asked the walk, and "passes the git-available row,
 and warns of nothing, for a folder of that layout below the setup root"); `test/cli/commands/sync.test.ts` (the describe "sync — a folder the look before git refused", and in
@@ -2088,7 +2088,7 @@ text for that state);
 `test/cli/commands/syncEngine.test.ts` ("carries the three working-tree facts and nothing more, whatever the
 status says of why git did not answer"); `test/cli/commands/init.test.ts` ("says the engine found no git to start, and
 names no git command, where no PATH entry it takes git from holds one, on $name" and the whole-note comparison of
-"names the two verbs that need git on $name", both red before the note asked the walk, "states the cause and names
+"names the four verbs that need git on $name", both red before the note asked the walk, "states the cause and names
 no git command where the look before git refused the folder, on $name", "refuses a declined question there with that cause, and
 names no git command", "states that cause on the security line there, and no text of the run names a git command, on
 $name", "asks the question on that cause there, and Enter still takes the default and writes", "opens the ready
@@ -3593,7 +3593,7 @@ kept, with no `.bak` under a recorded ledger (`walkUpStarterScript`, `src/manife
 amended 2026-10-15). A command with no `node` on `PATH` exits 127 from the shell, as before.
 
 - **As built, beyond the delta:** where `.github/hooks/stamity.json` is not tracked and clean in git, each upgrade's
-  overwrite leaves a `.bak` by the rendering proof, since the entries now name the version (`build/45`, open).
+  overwrite leaves a `.bak` by the rendering proof, since the entries now name the version (`build/45`, decided in plan 021: kept pinned).
   `CURSOR_PROJECT_DIR` on every Cursor hook rests on the plan's vendor read of 2026-10-14 (`build/43`, open).
 - **Proof:** `test/hooks/portableRunner.test.ts` ("the walk-up starter on Cursor and Copilot"),
   `test/manifest/hookDocuments.test.ts`, `test/merge/hookFilesOwnership.test.ts`, `test/adapters/cursor.test.ts`,

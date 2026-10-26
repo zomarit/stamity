@@ -1,4 +1,5 @@
 import { countSelectionItems } from "../../../content/selection.ts";
+import { GITIGNORE_FILE } from "../../../mcp/env.ts";
 import { formatReclaimReport } from "../../../merge/reclaim.ts";
 import { MOVED_CORE_SKILLS, movedCoreSkill, movedRenderingAt } from "../../../pack/moved.ts";
 import {
@@ -52,12 +53,16 @@ const EMPTY_BUILD_LINE =
  * files still gets a row, because "0 files" is an answer — followed by any
  * ledger owner the tools list no longer names. `stampedVersion` is the single
  * version stamped across that adapter's rows, or `null` when rows disagree or
- * carry no stamp.
+ * carry no stamp. The `.gitignore` rows are left out of both counts: they
+ * record lines in a file the repository owns, not a client file.
  */
 export function provenanceFromManifest(manifest: SetupManifest): ProvenanceRollup {
   const adapterRows = new Map<string, LedgerEntry[]>();
   const packRows = new Map<string, number>();
   for (const entry of manifest.ledger) {
+    // The `.gitignore` rows record the lines the engine owns there, one per
+    // client (REQ-FLOW-016): no client file of their own, and no stamp.
+    if (entry.path === GITIGNORE_FILE) continue;
     if (isPackOwner(entry.adapter)) {
       const packId = entry.adapter.slice(PACK_OWNER_PREFIX.length);
       packRows.set(packId, (packRows.get(packId) ?? 0) + 1);

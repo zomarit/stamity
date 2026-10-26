@@ -1895,7 +1895,7 @@ export function copilotMatcherWarnings(rows: readonly HookInterchange[]): string
  */
 export function buildCopilotHooksJson(rows: readonly HookInterchange[], cli?: CliCallContext): string {
   // The walk-up starter (REQ-FLOW-084) names this pinned call when its runner is missing.
-  // Pinned on purpose (inbox row 257, decided in plan 021): an upgrade rewrites this file.
+  // Pinned on purpose (ledger row `build/45` of run `2026-10-14_cli-native`, decided in plan 021): an upgrade rewrites this file.
   const starter = cli === undefined ? {} : { syncCall: pinnedCliCall(cli.packageName, cli.version, "sync", cli) };
   const hooks: Record<string, object[]> = {};
   for (const row of rows) {

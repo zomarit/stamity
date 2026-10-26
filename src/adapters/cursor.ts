@@ -334,7 +334,7 @@ export const CURSOR_CONTINUE_HOOK_PATH = `${HOOKS_GENERATED_DIR}/cursor/${CURSOR
 
 /**
  * The continue hook's `loop_limit`: the most follow-ups Cursor runs from it in
- * one conversation (cursor.com/docs/hooks). Fixed and emitted, so a planted
+ * one conversation (cursor.com/docs/hooks, read 2026-10-26). Fixed and emitted, so a planted
  * record cannot keep an agent looping past it.
  */
 export const CURSOR_CONTINUE_LOOP_LIMIT = 50;

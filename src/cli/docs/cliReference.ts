@@ -163,10 +163,10 @@ const CODE_MEANINGS: Record<ErrorCode, string> = {
   EXPECTATION_ERROR:
     "`check` was told which release, clients or install mode to expect (`--expect-*`), and the " +
     "repository records another",
-  // Thrown by the two write loops behind `sync`, `init` and `workspace sync` (REQ-FLOW-138): a guard copy
-  // would bake a looser autonomy setting than the guard on disk, `HEAD` or the replaced manifest holds.
+  // Thrown by the two write loops behind `sync`, `init`, `workspace sync` and `upgrade` (REQ-FLOW-138): a guard
+  // copy would bake a looser autonomy setting than the guard on disk, `HEAD` or the replaced manifest holds.
   AUTONOMY_LOOSENED:
-    "a `sync`, `init` or `workspace sync` would write a guard looser than the one on disk, the setting committed " +
+    "a `sync`, `init`, `workspace sync` or `upgrade` would write a guard looser than the one on disk, the setting committed " +
     "at `HEAD` or the manifest it replaces; nothing was written, and the person runs the command with `--loosen`",
 };
 
@@ -194,6 +194,8 @@ interface ArgFacts {
   readonly name: string;
   readonly description: string;
   readonly required: boolean;
+  /** Takes one or more values (`<name...>`); commander's `variadic`. */
+  readonly variadic: boolean;
   readonly choices: readonly string[];
 }
 
@@ -238,12 +240,15 @@ export function introspectCommand(module: CommandModule): CommandFacts {
     name: arg.name,
     description: arg.description,
     required: arg.required,
+    // The kit registers a declared argument as one bare slot (`kit/program.ts`).
+    variadic: false,
     choices: [],
   }));
   const configured: ArgFacts[] = probe.registeredArguments.map((arg) => ({
     name: arg.name(),
     description: arg.description,
     required: arg.required,
+    variadic: arg.variadic,
     choices: arg.argChoices ?? [],
   }));
   const args = [...declared, ...configured];
@@ -285,9 +290,10 @@ export function introspectCommand(module: CommandModule): CommandFacts {
 
 // ── Cell renderers ───────────────────────────────────────────────
 
-/** `<name>` when required, `[name]` when optional — the shape help prints. */
+/** `<name>` when required, `[name]` when optional, with `...` when variadic — the shape help prints. */
 function argSlot(arg: ArgFacts): string {
-  return code(arg.required ? `<${arg.name}>` : `[${arg.name}]`);
+  const name = arg.variadic ? `${arg.name}...` : arg.name;
+  return code(arg.required ? `<${name}>` : `[${name}]`);
 }
 
 /** A description with its closed value set appended, when it has one. */

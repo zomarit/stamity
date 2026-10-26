@@ -1457,8 +1457,10 @@ describe("report payload", () => {
     // Post-apply provenance: the persisted manifest carries the new stamp.
     // TEST CHANGE, justified: REQ-FLOW-016 — claude's rows gain the .gitignore row, which records lines
     // and carries no version stamp, so the rollup counts two files and names no single stamp.
+    // TEST CHANGE, justified: build/12 (plan 022 file 2, b16; REQ-FLOW-016) — the rollup leaves the
+    // .gitignore row out, so claude counts its one file again and names that file's single stamp.
     expect((payload.provenance as { perAdapter: unknown[] }).perAdapter).toEqual([
-      { adapter: "claude", files: 2, stampedVersion: null },
+      { adapter: "claude", files: 1, stampedVersion: "1.0.0" },
     ]);
   });
 

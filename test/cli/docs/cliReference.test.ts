@@ -216,7 +216,10 @@ describe("command coverage", () => {
         }
       }
       for (const arg of facts.args) {
-        const slot = arg.required ? `<${arg.name}>` : `[${arg.name}]`;
+        // TEST CHANGE, justified: build/82 (plan 022 file 2, b16) — a variadic positional now
+        // renders with its ellipsis, as help prints it (`plan`'s `<plan...>`).
+        const name = arg.variadic ? `${arg.name}...` : arg.name;
+        const slot = arg.required ? `<${name}>` : `[${name}]`;
         expect(page, `${command.name} is missing argument ${slot}`).toContain(`| \`${slot}\` |`);
       }
     }
@@ -291,6 +294,28 @@ describe("introspection safety", () => {
     );
     expect(facts.args.map((arg) => arg.name)).toEqual(["declared", "extra"]);
     expect(facts.args.map((arg) => arg.required)).toEqual([true, false]);
+  });
+
+  // Plan 022 file 2, ledger row build/82: a variadic positional rendered as a
+  // single slot, so `plan`'s `<plan...>` read as one file.
+  it("reads a variadic positional off commander and renders it with its ellipsis, as help prints it", () => {
+    const facts = introspectCommand(
+      moduleOf({
+        args: [{ name: "declared", description: "declared on the module", required: true }],
+        configure: (cmd: Command) => {
+          cmd.argument("<files...>", "one or more files");
+        },
+      }),
+    );
+    expect(facts.args.map((arg) => [arg.name, arg.variadic])).toEqual([
+      ["declared", false],
+      ["files", true],
+    ]);
+
+    const plan = renderCliReference().split("## `stamity plan`")[1]?.split("\n## ")[0] ?? "";
+    expect(plan).toContain("| `<plan...>` | one or more plan files, in chain order with --chain |");
+    // The single positional beside it keeps its bare slot.
+    expect(plan).toContain("| `<subcommand>` | which plan action to run — one of `check` |");
   });
 
   /**

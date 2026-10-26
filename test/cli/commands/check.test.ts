@@ -27,6 +27,7 @@ import {
 } from "../../../src/content/contentRoot.ts";
 import { applySync, planSync } from "../../../src/cli/commands/sync/engine.ts";
 import { AGENTS_MD_FILE } from "../../../src/emit/agentsMd.ts";
+import { TOUCHPOINT_POLICY } from "../../../src/emit/skillsProjection.ts";
 import { createApp, createEngine } from "../../../src/index.ts";
 import { applyPackInstall, planPackInstall } from "../../../src/pack/install.ts";
 import { lookupCatalogEntry, resolveBundledPackRoot } from "../../../src/pack/curated.ts";
@@ -476,12 +477,18 @@ describe("check — a healthy repository", () => {
     // Was `files: 0`. Counted off the ledger rather than pinned to a literal so
     // the rollup stays asserted without this suite owning the adapter's file
     // count; the guard below keeps it from passing vacuously at zero.
+    // TEST CHANGE, justified: build/12 (plan 022 file 2, b16) — the rollup leaves the `.gitignore`
+    // row out: it records lines in a file the repository owns, not one of the client's files, so
+    // the count is the ledger's other rows. The guard below keeps that row present, so the
+    // count is not the whole ledger's by accident.
     const ledgerRows = (await readManifest(root))?.ledger ?? [];
-    expect(ledgerRows.length).toBeGreaterThan(0);
+    const clientRows = ledgerRows.filter((entry) => entry.path !== ".gitignore");
+    expect(clientRows.length).toBeGreaterThan(0);
+    expect(clientRows.length).toBe(ledgerRows.length - 1);
     expect(doc.provenance?.perAdapter).toEqual([
       // `null` because the emitted set mixes stamped (managed-block) and
       // unstamped (whole-file) artifacts, which is what a null stamp means.
-      { adapter: "claude", files: ledgerRows.length, stampedVersion: null },
+      { adapter: "claude", files: clientRows.length, stampedVersion: null },
     ]);
   });
 
@@ -537,7 +544,9 @@ describe("check — a healthy repository", () => {
   // REQ-PACK-009, REQ-PLUGIN-016): fifteen to sixteen with the `moved-skills` row below.
   // TEST CHANGE, justified (2026-10-23, plan 022 file 1, unit a3-autonomy-config,
   // REQ-FLOW-139): sixteen to seventeen with the `autonomy-deploying` row below.
-  it("returns the seventeen doctor rows in a fixed order", async () => {
+  // TEST CHANGE, justified (2026-10-26, plan 022 file 2, unit b16-docs-pointers-batch, review/6):
+  // seventeen to eighteen with the `legacy-files` row below.
+  it("returns the eighteen doctor rows in a fixed order", async () => {
     const root = await seedRepo(getRepo());
 
     const doctor = await runDoctor(root, createEngine(), createApp({ cwd: root, env: {} }));
@@ -600,6 +609,11 @@ describe("check — a healthy repository", () => {
       // or a core ledger row of a skill that moved into a pack — so it sits beside the pack rows,
       // before `model-pins`. No other row moved.
       "moved-skills",
+      // TEST CHANGE, justified (2026-10-26, plan 022 file 2, unit b16-docs-pointers-batch,
+      // review/6): `legacy-files` joined after `moved-skills`. It answers about the same release
+      // boundary from the file side — a prompt file or a companion an earlier release wrote that
+      // no ledger row holds now — so it sits beside `moved-skills`. No other row moved.
+      "legacy-files",
       // TEST CHANGE, justified (2026-10-23, plan 022 file 1, unit a3-autonomy-config,
       // REQ-FLOW-139): `autonomy-deploying` joined after `moved-skills`. It answers about this
       // repository's autonomy setting against its own workflows, so it sits with the repository
@@ -1242,7 +1256,9 @@ describe("check — advisory warnings", () => {
     expect(row(doc, "learnings").detail).toContain(npxCommand("validate"));
   });
 
-  it("names the two verbs that need git on the git-available row where git does not answer", async () => {
+  // TEST CHANGE, justified: close/5 (plan 022 file 2, b16) — the title only: it said two verbs
+  // while the body asserts "Four verbs need git"; the assertions are unchanged.
+  it("names the four verbs that need git on the git-available row where git does not answer", async () => {
     // The row said "Nothing in stamity requires it". Two verbs do: `worktree` refuses outside a
     // repository, and `gate scan` exits 1 there, so a flow's report lists the secret scan as not
     // run (run 2026-10-11_release-1-14-0, build/12 — both exits read on the built CLI in a
@@ -3380,14 +3396,15 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
       status: "pass",
       detail: `release ${RUNNING} — as expected`,
     });
-    // Outside `runDoctor`: the eighteenth row exists only because a flag asked for it.
+    // Outside `runDoctor`: the nineteenth row exists only because a flag asked for it.
     // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
     // TEST CHANGE, justified (2026-10-14, plan 020 file 2, unit e4-check-model-row): one row more — `model-pins` joined the doctor.
     // TEST CHANGE, justified (v16-manifest-plugin-block, REQ-PLUGIN-016): one row fewer — `plugin-duplicates` left.
     // TEST CHANGE, justified (2026-10-21, u3-retired-names, REQ-PACK-003): one row more — `pack-catalog` joined the doctor.
     // TEST CHANGE, justified (2026-10-21, u15-moved-customizations, REQ-PACK-009): one row more — `moved-skills` joined the doctor.
     // TEST CHANGE, justified (2026-10-23, a3-autonomy-config, REQ-FLOW-139): one row more — `autonomy-deploying` joined the doctor.
-    expect(doc.doctor.map((entry) => entry.id).indexOf("expectations")).toBe(17);
+    // TEST CHANGE, justified (2026-10-26, b16-docs-pointers-batch, review/6): one row more — `legacy-files` joined the doctor.
+    expect(doc.doctor.map((entry) => entry.id).indexOf("expectations")).toBe(18);
   });
 
   it("fails another --expect-version naming the running release and generatedBy", async () => {
@@ -3757,7 +3774,8 @@ describe("check — the caller's expectations (REQ-PLUGIN-047)", () => {
     // TEST CHANGE, justified (2026-10-21, u3-retired-names, REQ-PACK-003): one row more — `pack-catalog` joined the doctor.
     // TEST CHANGE, justified (2026-10-21, u15-moved-customizations, REQ-PACK-009): one row more — `moved-skills` joined the doctor.
     // TEST CHANGE, justified (2026-10-23, a3-autonomy-config, REQ-FLOW-139): one row more — `autonomy-deploying` joined the doctor.
-    expect(doc.doctor).toHaveLength(17);
+    // TEST CHANGE, justified (2026-10-26, b16-docs-pointers-batch, review/6): one row more — `legacy-files` joined the doctor.
+    expect(doc.doctor).toHaveLength(18);
     expect(human.stdout).not.toContain("expectations");
   });
 });
@@ -3777,7 +3795,8 @@ describe("check — change-classes (p2a-class-file, REQ-FLOW-061)", () => {
     // TEST CHANGE, justified (2026-10-21, u3-retired-names, REQ-PACK-003): one row more — `pack-catalog` joined the doctor.
     // TEST CHANGE, justified (2026-10-21, u15-moved-customizations, REQ-PACK-009): one row more — `moved-skills` joined the doctor.
     // TEST CHANGE, justified (2026-10-23, a3-autonomy-config, REQ-FLOW-139): one row more — `autonomy-deploying` joined the doctor.
-    expect(doc.doctor).toHaveLength(17);
+    // TEST CHANGE, justified (2026-10-26, b16-docs-pointers-batch, review/6): one row more — `legacy-files` joined the doctor.
+    expect(doc.doctor).toHaveLength(18);
   });
 
   // TEST CHANGE, justified (2026-10-14, plan 020 file 1, unit d7-engine): one row fewer — `plugin-runtime` left with the plugin route.
@@ -3786,7 +3805,8 @@ describe("check — change-classes (p2a-class-file, REQ-FLOW-061)", () => {
   // TEST CHANGE, justified (2026-10-21, u3-retired-names, REQ-PACK-003): one row more — `pack-catalog` joined the doctor.
   // TEST CHANGE, justified (2026-10-21, u15-moved-customizations, REQ-PACK-009): one row more — `moved-skills` joined the doctor.
   // TEST CHANGE, justified (2026-10-23, a3-autonomy-config, REQ-FLOW-139): one row more — `autonomy-deploying` joined the doctor.
-  it("passes a valid class file, as the eighteenth row before invariants", async () => {
+  // TEST CHANGE, justified (2026-10-26, b16-docs-pointers-batch, review/6): one row more — `legacy-files` joined the doctor.
+  it("passes a valid class file, as the nineteenth row before invariants", async () => {
     const root = await seedRepo(getRepo(), {
       files: {
         [CLASS_FILE]: JSON.stringify({
@@ -3806,7 +3826,7 @@ describe("check — change-classes (p2a-class-file, REQ-FLOW-061)", () => {
       detail: `${CLASS_FILE} is valid: 3 glob(s) across 2 class(es), 1 test-input entry(ies)`,
     });
     const ids = doc.doctor.map((entry) => entry.id);
-    expect(ids).toHaveLength(18);
+    expect(ids).toHaveLength(19);
     expect(ids.indexOf("change-classes")).toBe(ids.indexOf("invariants") - 1);
   });
 
@@ -4535,7 +4555,10 @@ describe("check — model-pins", () => {
     expect(ids.indexOf("moved-skills")).toBe(ids.indexOf("pack-catalog") + 1);
     // TEST CHANGE, justified (2026-10-23, a3-autonomy-config, REQ-FLOW-139): `autonomy-deploying`
     // now sits between `moved-skills` and `model-pins`, so it is the row directly before `model-pins`.
-    expect(ids.indexOf("autonomy-deploying")).toBe(ids.indexOf("moved-skills") + 1);
+    // TEST CHANGE, justified (2026-10-26, b16-docs-pointers-batch, review/6): `legacy-files` now
+    // sits between `moved-skills` and `autonomy-deploying`.
+    expect(ids.indexOf("legacy-files")).toBe(ids.indexOf("moved-skills") + 1);
+    expect(ids.indexOf("autonomy-deploying")).toBe(ids.indexOf("legacy-files") + 1);
     expect(ids.indexOf("model-pins")).toBe(ids.indexOf("autonomy-deploying") + 1);
     const verdict = row(doc, "model-pins");
     expect(verdict.status).toBe("warn");
@@ -5463,6 +5486,133 @@ describe("check — moved-skills", () => {
         "refuses it. Remove or rename it, or remove the pack " +
         `(\`${npxCommand("clean --pack frontend")}\`).`,
     });
+  });
+});
+
+/**
+ * `legacy-files` (plan 022 file 2, unit b16-docs-pointers-batch; ledger row review/6):
+ * an engine file an earlier release wrote that this setup no longer writes, kept
+ * by a `sync` that could not prove it unedited. That sync names it once and
+ * drops its ledger row, so this row is what names it afterwards. Real filesystem
+ * and the real sweep: the subject is what the sync left on disk and in the ledger.
+ */
+describe("check — legacy-files", () => {
+  const COMPANION = ".agents/skills/st-ask/agents/openai.yaml";
+
+  it("passes on a repository with no leftover prompt file or companion", async () => {
+    const root = await seedRepo(getRepo());
+
+    expect(await doctorRow(root, "legacy-files")).toEqual({
+      id: "legacy-files",
+      status: "pass",
+      detail: "no legacy prompt file or companion an earlier release wrote is left untracked",
+    });
+  });
+
+  it("lists an edited companion a sync kept on a setup without Codex, with its remedy", async () => {
+    // The row a 1.16.0 sync recorded for Cursor at the touchpoint companion, and
+    // the file on disk edited since, so the sweep cannot prove it the engine's.
+    const edited = `${TOUCHPOINT_POLICY}interface:\n  display_name: "Ask"\n`;
+    const root = await seedRepo(getRepo(), {
+      tools: ["cursor"],
+      ledger: [
+        {
+          path: COMPANION,
+          adapter: "cursor",
+          artifactId: "cmd-ask",
+          artifactType: "command",
+          contentHash: createHash("sha256").update(TOUCHPOINT_POLICY).digest("hex"),
+        },
+      ],
+      files: { [COMPANION]: edited },
+    });
+    // Before the sync the ledger holds the path, so it is no leftover yet.
+    expect((await doctorRow(root, "legacy-files")).status).toBe("pass");
+
+    await resyncAt(root);
+
+    // The sync kept the file and dropped its row: nothing else records it now.
+    expect(await readFile(join(root, COMPANION), "utf8")).toBe(edited);
+    expect(((await readManifest(root))?.ledger ?? []).some((entry) => entry.path === COMPANION)).toBe(false);
+    expect(await doctorRow(root, "legacy-files")).toEqual({
+      id: "legacy-files",
+      status: "warn",
+      detail:
+        `1 file(s) an earlier release wrote that this setup no longer writes or tracks: ${COMPANION}. ` +
+        `\`${npxCommand("sync")}\` kept each one because it could not prove the bytes are the engine's ` +
+        "unedited output. Delete each one by hand, unless it is yours.",
+    });
+  });
+
+  it("lists an untracked st- prompt file and a pack command's companion, and no held, unprefixed or folder path", async () => {
+    const root = await seedRepo(getRepo(), {
+      ledger: [
+        // A path a ledger row holds is not a leftover, whatever the file holds.
+        {
+          path: ".github/prompts/st-plan.prompt.md",
+          adapter: "copilot",
+          artifactId: "cmd-plan",
+          artifactType: "command",
+          contentHash: createHash("sha256").update("held\n").digest("hex"),
+        },
+      ],
+      files: {
+        ".github/prompts/st-work.prompt.md": "left behind\n",
+        ".github/prompts/st-plan.prompt.md": "held\n",
+        // Not an engine name, so the owner's own.
+        ".github/prompts/team.prompt.md": "ours\n",
+        ".agents/skills/st-release/agents/openai.yaml": "policy: {}\n",
+        ".agents/skills/house/agents/openai.yaml": "policy: {}\n",
+        // A folder at the companion's name is not a file.
+        ".agents/skills/st-quick/agents/openai.yaml/keep.txt": "x\n",
+      },
+    });
+
+    const found = await doctorRow(root, "legacy-files");
+
+    expect(found.status).toBe("warn");
+    expect(found.detail).toContain(
+      "2 file(s) an earlier release wrote that this setup no longer writes or tracks: " +
+        ".github/prompts/st-work.prompt.md, .agents/skills/st-release/agents/openai.yaml. ",
+    );
+  });
+
+  it("passes with no readable manifest, which leaves no ledger to compare", async () => {
+    const root = await seedRepo(getRepo(), { files: { ".github/prompts/st-work.prompt.md": "left behind\n" } });
+    await rm(manifestPath(root));
+
+    expect(await doctorRow(root, "legacy-files")).toEqual({
+      id: "legacy-files",
+      status: "pass",
+      detail: "no readable manifest, so no ledger to compare",
+    });
+  });
+});
+
+/**
+ * Provenance (plan 022 file 2, unit b16-docs-pointers-batch; ledger rows build/12 and
+ * review/55): the rollup counts a client's own files, never the `.gitignore` row, and
+ * `check` prints no "(stamped v…)" beside the count, since no emitted file carries a stamp.
+ */
+describe("check — provenance", () => {
+  it("leaves the .gitignore row out of a client's rollup and prints no stamp beside its count", async () => {
+    const root = await seedRepo(getRepo());
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("fixture lost its manifest");
+    // Every client row agrees on one stamp; the `.gitignore` row records lines and carries none.
+    const ledger = manifest.ledger.map((entry) =>
+      entry.path === ".gitignore" ? entry : { ...entry, stampedVersion: "1.16.0" },
+    );
+    expect(ledger.filter((entry) => entry.path === ".gitignore" && entry.stampedVersion === undefined)).toHaveLength(1);
+    await writeManifest(root, { ...manifest, ledger }, { now: T0 });
+    const files = ledger.length - 1;
+
+    const { doc } = await runJson(root);
+    const human = await runHuman(root);
+
+    expect(doc.provenance?.perAdapter).toEqual([{ adapter: "claude", files, stampedVersion: "1.16.0" }]);
+    expect(human.stdout).toContain(`  claude: ${files} file(s)\n`);
+    expect(human.stdout).not.toContain("stamped");
   });
 });
 
