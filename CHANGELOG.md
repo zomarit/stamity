@@ -90,6 +90,12 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
     releases or deploys.
   - A repository that never commits its guard copies pays one `sync --loosen` on a fresh clone, on a switch of every
     selected client, or on a hooks layout move.
+- **The first `sync` rewrites three kinds of file once.** Each managed block's markers lose the engine version they
+  carried, and the `sync` names each rewrite; every generated Codex agent file gains a line; and Copilot's
+  `.github/agents/stamity-run.agent.md` marks two of its rules as the cloud agent's. A 1.16.0 `check` over a tree a
+  newer `sync` wrote reads the bare markers as drift, so a team on mixed versions upgrades together.
+- **`clean` now keeps your own state under `.stamity/`.** A script that ran `clean` to remove `.stamity/` whole needs
+  `clean --purge` (Changed).
 
 ### Security
 
@@ -132,6 +138,10 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   - On a single-account repository, the run's login is the person's, so the review loop is the evidence of record.
   - A repository's CI may choose its checks with code the change edits.
   - `--approved` is only as good as the guard's ask on its line.
+  - An approval to `run land` names the head commit, not the reasons the land asked about. The land reads its reasons
+    again when it acts, so a reason added after the person approved does not stop it, a fast-forward onto a branch
+    named in `autonomy.deployingBranches` later included, and its evidence line marks every reason it found as
+    approved.
   - A `gh` planted elsewhere on `PATH`, or steered from the user's home folder, can still reach the land verb, and
     `TMPDIR` moves the temp folder it checks.
   - A body read from a file, or filled in by the shell, is not screened for mentions. Neither are gh aliases and
@@ -140,8 +150,11 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   - In any mode, a sub-agent's direct write of the git config file moves the origin that later writes are compared
     with. On Codex and Cursor, a direct or linked write to the git configuration file reaches every call; they refuse
     a remote, URL-rewrite or include write in every mode.
-  - Re-pointing the origin's HEAD ref with a ref write is not read as a person-only act. Where the default branch is
-    named neither `main` nor `master`, a later attended push to it can run without asking.
+  - A route to the origin's HEAD ref that the judged line does not show is not read as a person-only act, such as a
+    file written into `.git/`, a `--stdin` text read from a file, a `git remote rename` or `remove`, or a move to
+    reftable.
+    Where the default branch is named neither `main` nor `master`, a later attended push to it can then run without
+    asking.
   - A heredoc body that is read as data is run unread by a program that runs it as code.
   - With hooks off, no settings row asks for a ready mark or a local tag under the default setting.
   - A forged committed ledger record can make `sync` remove an owner's equal ask row.
@@ -248,6 +261,16 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   manifest's `generatedBy`) and names `upgrade --to <version>`, or `sync` below 1.17.0. It checks only when stderr is a
   terminal and the run is not `--json`. `STAMITY_NO_UPDATE_CHECK` takes `1`, `true` or `yes` in any case, and the
   check's stamp file is named after the package, so a fork and the canonical package keep separate stamps.
+- **`copilot.setupSteps` says who owns Copilot's setup workflow.** `stamity config set copilot.setupSteps <mode>`
+  (`toolOptions.copilot.setupSteps`) takes three modes. `managed`, the default, keeps writing
+  `.github/workflows/copilot-setup-steps.yml`. `user` hands the file to you: no ledger row and no reclaim, so `sync`,
+  `check` and `clean` leave it. `off` stops writing it and takes back an unedited copy, one an earlier release wrote
+  included, reading it only as a regular file of at most 1 MiB reached through no link. Any other value is refused,
+  naming the three.
+- **A `legacy-files` row in `check`.** It warns, and never fails, on each Copilot prompt file
+  (`.github/prompts/st-*.prompt.md`) and each `agents/openai.yaml` companion of a touchpoint or a pack command under
+  `.agents/skills/` that an earlier release wrote and no ledger row tracks now, so you can delete it by hand. It reads
+  names only and never follows a link. [`docs/troubleshooting.md`](docs/troubleshooting.md) lists it.
 
 ### Changed
 
@@ -308,9 +331,9 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   commit, and leaves the merge held unless you say yes. On yes it runs `stamity run land --ready --approved <sha>` for
   exactly that commit, and the guard asks again on that line on Claude Code and Copilot CLI; on Codex and Cursor,
   whose guard refuses that line, the close gives you the line to run yourself and keeps the merge held; a commit
-  pushed after your yes is asked about again. A refused land waits as a held row on the summary list, and the next
+  pushed after your yes is asked about again. A refused land waits as a held row on the morning list, and the next
   walk retries it with the same `--ready --wait 8` line. Say "don't commit" at the close to keep the work local.
-  Unattended runs land through `stamity run land --ready --wait 8` after `run end`, only when the summary list holds
+  Unattended runs land through `stamity run land --ready --wait 8` after `run end`, only when the morning list holds
   no blocked or refused item, and never pass `--approved`. Every run writes `.stamity/runs/<id>/morning.md` at its
   close.
 - **The person-only guard reads a heredoc body as data when only a data sink receives it**: `cat` or `tee` writing
@@ -348,12 +371,64 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
 - **A local test run caps its parallel workers at 4**, never more than the machine's cores less one, and
   `STAMITY_TEST_MAX_WORKERS` sets another number. Two workers on a checkout with no `dist/` start one build between
   them.
+- **The published package carries a production `npm-shrinkwrap.json`**, written at pack time from the committed lock
+  with no development rows, so an install from the registry resolves the dependency tree the release was tested with.
+  Both release workflows pack through `scripts/pack-release.mjs`, which refuses a lock that differs from the commit.
+- **A `sync` that changes nothing leaves `.stamity/manifest.json` byte for byte**, `updatedAt` included, prints
+  `manifest already current`, and reports `manifestWritten` in `--json`. Managed-block markers no longer carry the
+  engine version (Upgrading from 1.16.0). The provenance lines of `sync` and `check` no longer print a `(stamped v…)`
+  that no file carries, and a client's file count there leaves out the `.gitignore` record; the JSON rollup keeps
+  `stampedVersion`.
+- **`clean` keeps your own state, and `clean --purge` deletes `.stamity/` whole.** A default `clean` removes the setup
+  and keeps, byte for byte, the learnings, handoffs, overrides, your own hooks, run records, the inbox, verify
+  artifacts and installed packs under `.stamity/`. It removes the engine's machine-local files, the review gate's
+  state, each `.gitkeep` that still holds the setup's bytes and, last, the manifest, then every folder left empty. It
+  never follows a link, and names each path it left that way (`left` in `--json`, beside `kept` and `packsKept`). Its
+  closing line names what it kept and says that, with the setup's record gone, you delete `.stamity/` yourself to
+  remove the rest. While a hooks document `clean` keeps still runs a script under `.stamity/`, the manifest stays too,
+  and `clean --purge` deletes the rest once that wiring is gone. A step that fails after the sweep leaves the manifest,
+  so a re-run finishes. A later `init` takes a kept pack back from its own receipt, and a guard that a kept settings
+  file still runs keeps the policy copy it reads. `--purge` with `--pack` is refused.
+- **`clean` gives back the instruction files `init --import-config` took in.** After `supplement` it takes the
+  engine's block out and keeps your text. After `replace` it moves your own file back from the `.bak` the setup
+  recorded (`importChoice[].backup`), after the sweep and never over a file already there, copying it where the file
+  system cannot link; a `.bak` that is a link, a folder or a file with a second hard link stays, and the run says why.
+- **`clean --pack <id>` rewrites, in the same run, every client document that still names the removed pack**: the
+  hooks documents that ran its hooks, Cursor's subagent guard and model pins, the model maps and Codex's
+  `AGENTS.override.md`, so `check` reads clean after it (`documentsRewritten` in `--json`). It writes them as `sync`
+  does, keeping an edited one as a `.bak`, and names them in its question and its dry run. It rewrites none, and says
+  why and what to run next, where another version last wrote the setup or the manifest's autonomy setting is looser
+  than the guard on disk.
+- **The person-only guard reads a write or a delete of a remote's HEAD ref as a push of the default branch**, since it
+  reads the default branch from that ref: `git symbolic-ref`, `git update-ref` (with the `--stdin` text the line
+  carries, under any abbreviation git accepts), `git remote set-head`, and a remote-tracking `git branch` delete. So
+  does such a call holding, after its subcommand, a word the line cannot show as literal text, and a `git remote` call
+  holding such a word up to its own subcommand. It asks on Claude Code's main thread and Copilot CLI's main agent, and
+  is refused for a sub-agent, on Cursor and Codex, and while a run is unattended. A person's own `git remote set-head`
+  now asks on the main thread (Security).
+- **`run land --fast-forward` lands onto a default branch that `autonomy.deployingBranches` names once the person
+  approves the head with `--approved <sha>`**; without the approval it still asks. The land checks its push against
+  the guard before it writes the evidence line, so a refused land leaves only its `merge waits on:` line in the pull
+  request; before, it wrote the evidence line first.
+- **`run land` also asks before landing a change to the files stamity's own CI uses to pick a change's checks**:
+  `scripts/ci/records-only.mjs`, `src/change/classify.ts` and `src/roster/triggers.ts`. CI runs the base commit's
+  copy, so an edit there picks the checks of every later change, and a person lands it. In any repository with a file
+  at one of these paths, a change to it asks too.
+- **Every pull request here runs the tree as a renamed fork.** The `fork-probe` job copies the tree, renames it to a
+  made-up scope with a `-fork.1` version and runs a fork's gates on it, once as a private fork (the fork guide's
+  default) and once as a fork that publishes to a registry, as a required check on a full run; the opt-in
+  `STAMITY_FORK_SUITE` witness is retired. The `changes` job runs its classifier from the base commit, so a pull
+  request cannot narrow its own checks through it. The fork guide's "Tag a release" now says to run
+  `node scripts/generate-pack-manifests.mjs --write` after setting the version, since the gates hold each bundled
+  pack to the package's version.
 
 ### Deprecated
 
 - **`createEngine().pack.curated.CURATED_PACKS`.** The constant left `src/pack/curated.ts`; the registry keeps the
   member as a getter that derives the catalog from the packs folder on its first read, and a broken packs folder makes
   that read throw `CONFIG_ERROR`. Call `createEngine().pack.curated.curatedPacks()` instead.
+- **The `st` command.** It still runs the same CLI, with the same output and exit code, and prints one line on stderr
+  saying it is deprecated and is removed in 2.0.0. Run `stamity` instead.
 
 ### Removed
 
@@ -440,6 +515,33 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   table row; a bullet's unindented wrapped line is still read by its bullet. The pre-flight's `token-env` names a
   `*_PWD` variable such as `MYSQL_PWD`, never `PWD` or `OLDPWD`, and `review-state` says when the in-progress record
   was not read (over 1 MiB, or unreadable), where it counted the record's first MiB.
+- **A release re-run no longer fails at the publish.** `release.yml` skips the publish of a version npm already serves
+  with the same tarball, as `fork-release.yml` does, and refuses a version another tarball holds. Both release
+  workflows then read the registry's integrity for the version back, and create no GitHub release unless it matches
+  the verified tarball; when no answer comes, the error names npm's last exit code.
+- **`init --force` no longer writes a second charter into `AGENTS.md`.** It recognises the engine's own instruction
+  files, also after `.stamity/` was deleted, and over a corrupt manifest with `--loosen`. It keeps the import
+  decisions the setup it replaces recorded, a `replace` backup's record included, so a later `clean` still gives your
+  own file back. Where `--import-config` asks for another mode than a kept decision, `init` says the flag was not
+  applied to that file, and its note says how to choose again: whether `clean` puts your file back, or the rename to
+  do yourself.
+- **Copilot's setup workflow stays green on an old Node pin.** Where the project's Node pin can only resolve below
+  the CLI's floor, Node 22.22.2, the workflow writes a comment naming the pin instead of installing the CLI. The
+  CLI's install step reads a root `.npmrc` through `NPM_CONFIG_USERCONFIG` only when that file is committed. The
+  `stamity-run` agent marks its prompt-file and 59-minute rules as the cloud agent's.
+- **The CLI reference shows `stamity plan`'s file argument as `<plan...>`**, since it takes one or more, and names
+  `upgrade` among the commands that raise `AUTONOMY_LOOSENED`.
+- **The client fact tables were re-read against the vendors' pages** on 2026-10-23 and, for the pages a second read
+  covered, on 2026-10-26, and each citation carries the date of the read that covered it.
+  - Copilot CLI's autopilot reads an `ask` as deny too, since 1.0.97, and a `permissionRequest` hook's exit 2 is a
+    deny. VS Code reads `.github/hooks/*.json` and `.claude/settings.json` hooks.
+  - Cursor's cloud agents never ask for approval. Its page says a pinned subagent model holds unless a team, Max Mode
+    or plan limit applies, and the fact table keeps beside it a fork's run where the pin did not bind.
+  - Claude Code 2.1.277+ reads `AGENTS.md` by default only where no `CLAUDE.md` exists, and the agent row names
+    `permissionMode`, `disallowedTools` and `autoCompactWindow`.
+  - Every generated Codex agent file now says a spawned role also gets the parent's tools that act on the host, so
+    the next `sync` rewrites each one once.
+  - `docs/cloud.md` no longer says a repository `.cursor/environment.json` replaces Cursor's saved environments.
 
 ## [1.16.0] - 2026-10-20
 
