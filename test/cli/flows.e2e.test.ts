@@ -205,7 +205,8 @@ describe("the full lifecycle journey", () => {
     // every ledger row as sync already did (`init/apply.ts`), so a repo that
     // was only ever inited can be cleaned. A user-edited file still survives —
     // the hash no longer matches, which is asserted in test/merge/reclaim.test.ts.
-    const clean = await fixture.run(["clean", "-y"]);
+    // TEST CHANGE, justified: REQ-FLOW-028 — clean keeps user state unless --purge
+    const clean = await fixture.run(["clean", "-y", "--purge"]);
     expect(clean.code).toBe(0);
     expect(clean.stdout).toContain(".stamity/ removed");
 

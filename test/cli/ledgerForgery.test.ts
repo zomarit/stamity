@@ -806,7 +806,8 @@ describe("a pack the org policy denies leaves the clients' folders", () => {
     await denyEveryPack(root);
     await rm(join(root, ".stamity", "packs", "frontend"), { recursive: true, force: true });
 
-    const clean = await runInProcess([cleanCommand], ["clean", "-y", "--json"], { cwd: root });
+    // TEST CHANGE, justified: REQ-FLOW-028 — clean keeps user state unless --purge
+    const clean = await runInProcess([cleanCommand], ["clean", "-y", "--json", "--purge"], { cwd: root });
 
     expect(clean.code, clean.stderr).toBe(0);
     const doc = JSON.parse(clean.stdout.trim()) as {
@@ -1433,7 +1434,8 @@ describe("clean refuses while a file it would keep is one a sync with this versi
     const ledger = (JSON.parse(await readFile(join(root, ".stamity", "manifest.json"), "utf8")) as { ledger: LedgerEntry[] })
       .ledger;
 
-    const clean = await runInProcess([cleanCommand], ["clean", "-y"], { cwd: root });
+    // TEST CHANGE, justified: REQ-FLOW-028 — clean keeps user state unless --purge
+    const clean = await runInProcess([cleanCommand], ["clean", "-y", "--purge"], { cwd: root });
 
     expect(clean.code, clean.stderr).toBe(0);
     const left = ledger.map((row) => row.path).filter((path) => existsSync(join(root, path)));
