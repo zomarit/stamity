@@ -622,6 +622,13 @@ type ReclaimPlan =
       unproven?: true;
       /** A sync with this version rewrites the file ({@link ReclaimActionEntry.staleRendering}). */
       staleRendering?: true;
+      /**
+       * A missing file whose emptied folders a consented sweep prunes (build/5):
+       * `resolved` when `from` sits under the symlink-resolved parent, else the
+       * recorded spelling, pruned only from the nearest folder still there
+       * ({@link pruneBelowMissing}).
+       */
+      prune?: { from: string; resolved: boolean };
     };
 
 interface SweepContext {
@@ -821,7 +828,7 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
     }
   } catch (err) {
     if (errnoCode(err) === "ENOENT") {
-      return skip("skipped-missing", "The parent directory is already gone.");
+      return { ...skip("skipped-missing", "The parent directory is already gone."), prune: { from: recordedTarget, resolved: false } };
     }
     return skip(
       "skipped-unsafe-path",
@@ -871,7 +878,7 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
       }
     }
   } catch (err) {
-    if (errnoCode(err) === "ENOENT") return skip("skipped-missing", "Already absent from disk.");
+    if (errnoCode(err) === "ENOENT") return { ...skip("skipped-missing", "Already absent from disk."), prune: { from: target, resolved: true } };
     return skip("skipped-unsafe-path", `The file could not be inspected: ${describeError(err)}.`);
   }
   if (stats.isDirectory()) {
@@ -914,7 +921,7 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
     bytes = await readFile(target);
   } catch (err) {
     if (errnoCode(err) === "ENOENT") {
-      return skip("skipped-missing", "Removed between the inspection and the read.");
+      return { ...skip("skipped-missing", "Removed between the inspection and the read."), prune: { from: target, resolved: true } };
     }
     return skip(
       "skipped-unsafe-path",
@@ -1229,6 +1236,32 @@ async function pruneEmptyParents(target: string, ctx: SweepContext): Promise<voi
   }
 }
 
+/**
+ * {@link pruneEmptyParents} for a missing file whose own folder is gone too
+ * (build/5): the walk starts at the nearest folder above `target` still there,
+ * and only when that folder is its own real path, so no link on the recorded
+ * spelling carries an `rmdir` out of the repository.
+ */
+async function pruneBelowMissing(target: string, ctx: SweepContext): Promise<void> {
+  let dir = dirname(target);
+  while (dir !== ctx.stateDir && isWithin(dir, ctx.root) && dir !== ctx.root) {
+    try {
+      await lstat(dir);
+    } catch (err) {
+      const code = errnoCode(err);
+      if (code !== "ENOENT" && code !== "ENOTDIR") return;
+      dir = dirname(dir);
+      continue;
+    }
+    try {
+      if ((await realpath(dir)) === dir) await pruneEmptyParents(join(dir, basename(target)), ctx);
+    } catch {
+      // reason: a folder that cannot be resolved is not pruned; the walk only ever removes an empty folder.
+    }
+    return;
+  }
+}
+
 /** A document that wires hooks, left in place by this sweep, with its text or `null` when it may not be read. */
 interface HookDocumentLeft {
   path: string;
@@ -1349,6 +1382,10 @@ export async function sweepReclaimCandidates(
         ...(plan.unproven ? { unproven: true as const } : {}),
         ...(plan.staleRendering ? { staleRendering: true as const } : {}),
       });
+      // A missing file leaves no folder emptied by hand behind it (build/5); a preview prunes nothing.
+      if (opts.consent && plan.prune !== undefined) {
+        await (plan.prune.resolved ? pruneEmptyParents(plan.prune.from, ctx) : pruneBelowMissing(plan.prune.from, ctx));
+      }
       return;
     }
     if (!opts.consent) {
@@ -1421,6 +1458,7 @@ export async function sweepReclaimCandidates(
                 detail: `The unlink failed and the file is still on disk: ${describeError(err)}.${provenance}`,
               },
         );
+        if (errnoCode(err) === "ENOENT") await pruneEmptyParents(plan.target, ctx);
         return;
       }
       await pruneEmptyParents(plan.target, ctx);

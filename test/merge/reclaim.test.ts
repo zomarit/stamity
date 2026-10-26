@@ -689,6 +689,54 @@ describe("sweepReclaimCandidates — deletion and directory pruning", () => {
     });
   });
 
+  /** A pack's recorded row at `path`, as `add` writes it: the pack owns it and its hash proves the delete. */
+  const packRow = (path: string): ReclaimCandidate => {
+    const row = recorded(candidate(path, "adapter-removed"), "pack body\n");
+    return { ...row, entry: { ...row.entry, adapter: "pack:acme/ops", artifactId: `acme/ops/${path}` } };
+  };
+
+  it("prunes the folders a missing file leaves empty on a live sweep, and on a preview touches none (build/5)", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    // The class's only file was moved out of the pack folder by hand: its folder is left empty.
+    await mkdir(join(root, ".stamity/packs/acme__ops/rules"), { recursive: true });
+    await temp.seedFiles({ "repo/.stamity/packs/acme__ops/receipt.json": "{}\n" });
+    const rows = [packRow(".stamity/packs/acme__ops/rules/ops.md")];
+
+    const preview = await sweepReclaimCandidates(rows, { rootDir: root, consent: false });
+    expect(onlyEntry(preview).action).toBe("skipped-missing");
+    expect(await snapshot(root)).toHaveProperty([".stamity/packs/acme__ops/rules/"]);
+
+    const report = await sweepReclaimCandidates(rows, { rootDir: root, consent: true });
+    expect(onlyEntry(report).action).toBe("skipped-missing");
+    // The emptied class folder goes; the pack folder still holds its receipt, so the walk stops there.
+    expect(await snapshot(root)).toEqual({
+      ".stamity/": "",
+      ".stamity/packs/": "",
+      ".stamity/packs/acme__ops/": "",
+      ".stamity/packs/acme__ops/receipt.json": "{}\n",
+    });
+  });
+
+  it("prunes from the nearest folder still there when a missing file's own folder is gone too, never through a link", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    // A skill folder removed whole: its file and its folder are gone, the class folder is left empty.
+    await mkdir(join(root, ".stamity/packs/acme__ops/skills"), { recursive: true });
+    const gone = await sweepReclaimCandidates([packRow(".stamity/packs/acme__ops/skills/ops/SKILL.md")], { rootDir: root, consent: true });
+    expect(onlyEntry(gone).action).toBe("skipped-missing");
+    expect(await snapshot(root)).toEqual({ ".stamity/": "" });
+
+    // The same shape with the class folder a link to an empty folder outside the repository: nothing there is removed.
+    const linked = temp.path("linked");
+    await mkdir(join(linked, ".stamity/packs/acme__ops"), { recursive: true });
+    await mkdir(temp.path("outside/skills"), { recursive: true });
+    await symlink(temp.path("outside/skills"), join(linked, ".stamity/packs/acme__ops/skills"));
+    await sweepReclaimCandidates([packRow(".stamity/packs/acme__ops/skills/ops/SKILL.md")], { rootDir: linked, consent: true });
+    expect((await lstat(temp.path("outside/skills"))).isDirectory()).toBe(true);
+    expect((await lstat(join(linked, ".stamity/packs/acme__ops/skills"))).isSymbolicLink()).toBe(true);
+  });
+
   it("deletes a skill body through its prefixed directory and prunes the directory", async () => {
     const temp = tempDir();
     const root = temp.path("repo");
