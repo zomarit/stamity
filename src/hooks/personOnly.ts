@@ -2159,25 +2159,22 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       `${shown ? "A remote's HEAD ref" : "A ref the line cannot show, which may be a remote's HEAD ref,"} written or deleted (\`${via}\`), which moves the branch the guard reads as the default`,
     );
   /**
-   * Whether the ref name word at `at` (-1: none) is one the line cannot show (review/22, review/26): a word the shell
-   * fills in, globs or brace-expands, or one an earlier word that may split into more words can push out.
+   * Whether every word of a call is literal text the line shows (review/35). A word the shell fills in, globs or
+   * brace-expands may be any option word or any name git takes there, and more than one where it may split.
    */
-  const hiddenName = (marks: readonly WordMark[], at: number): boolean =>
-    marks.slice(0, at < 0 ? marks.length : at + 1).some((mark, index) => (index === at ? mark.kinds !== "" : /[sgb]/.test(mark.kinds)));
+  const shownWords = (marks: readonly WordMark[]): boolean => marks.every((mark) => mark.kinds === "");
 
   /**
    * `git symbolic-ref`'s writes (pr/70), and `git update-ref --stdin`'s symref commands read as its arguments (pr/82). A
-   * write or a delete of a remote's HEAD ref, or of a name the line cannot show, is a push of the default branch
-   * whatever the target (review/163, review/26).
+   * write or a delete of a remote's HEAD ref is a push of the default branch whatever the target (review/163), and so
+   * is a call holding a word the line cannot show, which may be the delete flag or that ref (review/26, review/35).
    */
   function symbolicRefVerdict(args: string[], via = "git symbolic-ref", marks: readonly WordMark[] = []): PersonOnlyVerdict | null {
     let remove = false;
-    let at = -1;
     const positionals: string[] = [];
     for (let j = 0; j < args.length; j += 1) {
       const arg = args[j] ?? "";
       if (arg === "--") {
-        if (at < 0 && j + 1 < args.length) at = j + 1;
         positionals.push(...args.slice(j + 1));
         break;
       }
@@ -2192,10 +2189,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
             break;
           }
         }
-      } else {
-        if (at < 0) at = j;
-        positionals.push(arg);
-      }
+      } else positionals.push(arg);
     }
     const [name = "", target] = positionals;
     if (remove && /^(refs\/)?tags\//i.test(name)) return deny("tag-delete", `A symbolic tag ref deleted (\`${via}\`)`);
@@ -2203,20 +2197,19 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       return deny("tag", `A symbolic tag ref written or deleted (\`${via}\`)`);
     }
     const remoteHead = REMOTE_HEAD.test(name);
-    // A name the line cannot show may be that ref (review/26), and a word that may split may make a read a write.
-    const hidden = !remoteHead && hiddenName(marks, at);
-    const splits = hidden && marks.slice(0, at < 0 ? marks.length : at + 1).some((mark) => /[sgb]/.test(mark.kinds));
+    // A word the line cannot show, an option word or a name, may be the delete flag or that ref (review/35).
+    const hidden = !shownWords(marks);
     if (remove || target === undefined || name === "HEAD") {
-      return (remove || splits) && (remoteHead || hidden) ? remoteHeadVerdict(via, remoteHead) : null;
+      return (remove && remoteHead) || hidden ? remoteHeadVerdict(via, remoteHead) : null;
     }
     if (deploys(/[$`]/.test(target) ? null : target.replace(/^(refs\/)?heads\//i, ""))) {
       deny("push-deploying", `A symbolic ref pointed at a deploying branch, or at a branch the line cannot show (\`${via}\`)`);
     }
-    if (remoteHead || hidden) return remoteHeadVerdict(via, remoteHead);
+    if (remoteHead) return remoteHeadVerdict(via);
     if (/[$`]/.test(target) || defaults.has(target.replace(/^(refs\/)?heads\//i, "").toLowerCase())) {
       return deny("push-default", `A symbolic ref pointed at the default branch, or at a branch the line cannot show (\`${via}\`)`);
     }
-    return null;
+    return hidden ? remoteHeadVerdict(via, false) : null;
   }
 
   /** Every act of one gh call (v0a): each flag is read, the refuse-class ones before the call's ask-class act. */
@@ -3152,7 +3145,42 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   const refCommand = String.raw`${before}(?:symref-)?(?:update|create|delete)(?:[ \t]|\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|[0-7]{1,4}))+`;
   const plain = String.raw`[^\s'"\\$\`%{}*?[\]|;&<>()]`;
   const ends = String.raw`$|[\s|;&<>()]|['"](?=$|[\s|;&<>()])|\\(?:[nrt]|0{1,4}(?![0-7])|0?0(?:1[125]|40)(?![0-7])|x(?:[09adAD](?![\da-fA-F])|0[09adAD]|20)|u00(?:0[09adAD]|20))`;
-  const unshownRef = new RegExp(String.raw`(?:${refCommand}|(?<![\w-])(?=(?:refs\/)?remotes\/))${plain}*(?!${plain})(?!${ends})`, "i");
+  const unshownCommand = new RegExp(String.raw`${refCommand}${plain}*(?!${plain})(?!${ends})`, "i");
+  // A `remotes/…` word's run, scanned once from its first start, since every start in a run shares the run's end, which
+  // decides (review/36): a rescan from each start grows with the square of the line.
+  const remotesStart = /(?<![\w-])(?:refs\/)?remotes\//gi;
+  const plainRun = new RegExp(String.raw`${plain}*`, "y");
+  const runEnd = new RegExp(String.raw`(?:${ends})`, "iy");
+  const unshownRemote = (text: string): boolean => {
+    let end = -1;
+    for (const { index } of text.matchAll(remotesStart)) {
+      if (index < end) continue;
+      plainRun.lastIndex = index;
+      plainRun.exec(text);
+      end = plainRun.lastIndex;
+      runEnd.lastIndex = end;
+      if (!runEnd.test(text)) return true;
+    }
+    return false;
+  };
+  /** `git update-ref`'s `--stdin`, by a unique prefix too, as git accepts it (review/35). */
+  const stdinFlag = (arg: string): boolean => arg.length > 2 && "--stdin".startsWith(arg);
+  // The `--stdin` text the line carries, read once for the line however many calls take it (review/36), raw and as each
+  // command's unquoted words: whether it names a remote's HEAD ref (in excess, as the tag read does), and whether it
+  // names one it cannot show or, with no command shown, is a text the shell or printf fills in (review/22, review/26).
+  let stdinRead: { named: boolean; unshown: boolean } | undefined;
+  let symrefsRead = false;
+  const stdinText = (): { named: boolean; unshown: boolean } => {
+    if (stdinRead !== undefined) return stdinRead;
+    const texts = [command, ...read.map((words) => words.join(" "))];
+    stdinRead = {
+      named: texts.some((text) => /remotes\/[^\s/'"\\]+\/HEAD(?![\w-])/i.test(text)),
+      unshown:
+        texts.some((text) => unshownCommand.test(text) || unshownRemote(text)) ||
+        (!texts.some((text) => stdinCommand.test(text)) && /[$`%\\]/.test(command)),
+    };
+    return stdinRead;
+  };
   for (const cmd of read) {
     const program = cmd[0] ?? "";
     if (program === "git") {
@@ -3194,7 +3222,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         // command is read wherever it stands: the line break before it may be an escape or a `%b` placeholder ending in a
         // letter or a digit, and a command read in excess only adds a denial.
         const word = String.raw`(?:[\s'"]|\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|U[\da-fA-F]{1,8}|[0-7]{1,4}|[a-z]))+([^\s'"\\|;&<>()]+)`;
-        for (const [, op, ref = "", target] of command.matchAll(new RegExp(String.raw`symref-(create|update|delete)${word}(?:${word})?`, "g"))) {
+        // Read once for the line (review/36): each later call would record the same acts again.
+        const symrefs = symrefsRead ? [] : command.matchAll(new RegExp(String.raw`symref-(create|update|delete)${word}(?:${word})?`, "g"));
+        symrefsRead = true;
+        for (const [, op, ref = "", target] of symrefs) {
           const shown = target === undefined || target.includes("%") ? "$" : target;
           symbolicRefVerdict(op === "delete" ? ["-d", ref] : [ref, shown], "git update-ref --stdin");
         }
@@ -3208,34 +3239,29 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         if (words[0] === "push") pushRead(words.slice(1), config, keptMarks.slice(1));
       }
       // After the readers above, so a tag or a deploying target is named first (review/25): `git update-ref` whose ref
-      // (its first word, review/27) is a remote's HEAD ref or one the line cannot show, or a `--stdin` text on the line,
-      // raw or unquoted, naming one (in excess, as the tag read does) or one it cannot show, or, with no command shown,
-      // a text the shell or printf fills in (review/22, review/26). A text read from a file is the residual.
+      // (its first word, review/27) is a remote's HEAD ref, or a call holding a word the line cannot show, which may be
+      // any option or that ref (review/26, review/35), or a `--stdin` text on the line naming one, or one it cannot show
+      // (`stdinText`, review/22). A text read from a file is the residual.
       if (sub === "update-ref") {
         const at = args.findIndex((arg, index) => !arg.startsWith("-") && !/^-[^-]*m$/.test(args[index - 1] ?? ""));
-        const stdin = at < 0 && args.includes("--stdin");
-        const texts = stdin ? [command, ...read.map((words) => words.join(" "))] : [];
+        const stdin = at < 0 && args.some(stdinFlag);
+        const text = stdin ? stdinText() : undefined;
         const via = stdin ? "git update-ref --stdin" : "git update-ref";
-        if (at >= 0 ? REMOTE_HEAD.test(args[at] ?? "") : texts.some((text) => /remotes\/[^\s/'"\\]+\/HEAD(?![\w-])/i.test(text))) {
-          remoteHeadVerdict(via);
-        } else if (
-          at >= 0
-            ? hiddenName(argMarks, at)
-            : stdin &&
-              (texts.some((text) => unshownRef.test(text)) ||
-                (!texts.some((text) => stdinCommand.test(text)) && /[$`%\\]/.test(command)))
-        ) {
-          remoteHeadVerdict(via, false);
-        }
+        if (at >= 0 ? REMOTE_HEAD.test(args[at] ?? "") : text?.named === true) remoteHeadVerdict(via);
+        else if (!shownWords(argMarks) || text?.unshown === true) remoteHeadVerdict(via, false);
       }
       // A remote-tracking branch delete (`-d`/`-D`/`--delete` with `-r`/`--remotes`) of `<remote>/HEAD` deletes that ref
-      // itself (review/24); a name the line cannot show may be it.
+      // itself (review/24). A word the line cannot show may be any one word git takes there, a flag cluster or a name,
+      // and any number where it may split (review/35), so the call may be that delete where such words can supply each
+      // part the line does not show.
       if (sub === "branch") {
         const flag = (short: RegExp, long: string): boolean => args.some((arg) => (arg.startsWith("--") ? arg.length > 2 && long.startsWith(arg) : short.test(arg)));
-        if (flag(/^-[^-]*[dD]/, "--delete") && flag(/^-[^-]*r/, "--remotes")) {
-          const names = args.flatMap((arg, index) => (arg.startsWith("-") ? [] : [index]));
-          const head = names.some((index) => /^(?:(?:refs\/)?remotes\/)?[^/]+\/HEAD$/i.test(args[index] ?? ""));
-          if (head || names.some((index) => hiddenName(argMarks, index))) remoteHeadVerdict("git branch -d -r", head);
+        const flags = flag(/^-[^-]*[dD]/, "--delete") && flag(/^-[^-]*r/, "--remotes");
+        const head = args.some((arg) => !arg.startsWith("-") && /^(?:(?:refs\/)?remotes\/)?[^/]+\/HEAD$/i.test(arg));
+        const hidden = argMarks.filter((mark) => mark.kinds !== "").length;
+        if (flags && head) remoteHeadVerdict("git branch -d -r");
+        else if (hidden > 0 && (argMarks.some((mark) => /[sgb]/.test(mark.kinds)) || hidden >= (flags ? 0 : 1) + (head ? 0 : 1))) {
+          remoteHeadVerdict("git branch -d -r", false);
         }
       }
     } else if (program === "gh") {

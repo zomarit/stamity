@@ -4469,18 +4469,74 @@ describe("a remote's HEAD ref written or deleted (b14b, REQ-FLOW-102, review/163
     ["an update-ref write of a local branch from a remote's HEAD ref as its new value", "git update-ref refs/heads/a refs/remotes/origin/HEAD"],
     ["an update-ref write with a reason, from that ref as its new value", "git update-ref -m why refs/heads/a refs/remotes/origin/HEAD"],
     ["an update-ref write checking that ref as its old value", "git update-ref refs/heads/a 0123abc refs/remotes/origin/HEAD"],
-    ["an update-ref write whose literal name is not that ref, its value filled in", 'git update-ref refs/heads/a "$SHA"'],
-    ["an update-ref write whose literal name follows a quoted reason the shell fills in", 'git update-ref -m "$WHY" refs/heads/a 0123abc'],
+    // TEST CHANGE, justified (review/35, the sign-off: close the class): two update-ref rows and the symbolic-ref read
+    // of a name the shell fills in moved to the asking rows below, since a word the line cannot show on these calls is
+    // read as one that may be any option or that ref.
     ["a stdin update whose literal name is not that ref, its value a placeholder", "printf 'update refs/heads/a %s\\n' \"$SHA\" | git update-ref --stdin"],
     ["a stdin update split by NUL whose literal name is not that ref", "printf 'update\\0refs/heads/a\\0%s\\0' \"$SHA\" | git update-ref -z --stdin"],
     ["a stdin update whose literal name ends at a space escape", "printf 'update\\x20refs/heads/a\\x200123abc\\n' | git update-ref --stdin"],
     ["a stdin verify of a symref", "printf 'symref-verify refs/heads/a refs/heads/main\\n' | git update-ref --stdin"],
-    ["a symbolic-ref read of a name the shell fills in", 'git symbolic-ref "$R"'],
     ["a remote-tracking delete of a remote branch", "git branch -r -d origin/feat/x"],
     ["a local branch delete whose name is a remote's HEAD ref", "git branch -D origin/HEAD"],
     ["a remote-tracking branch list", "git branch -r"],
+    // review/35: one quoted word the shell fills in on a git branch call stands for one word, so it cannot be both the
+    // missing flags and that ref's name.
+    ["a local branch delete whose one name the shell fills in", 'git branch -D "$B"'],
+    ["a branch created under a name the shell fills in", 'git branch "$NEW"'],
+    ["a branch created under a name the shell fills in, from a literal start point", 'git branch "$NEW" feat/x'],
+    ["an update-ref stdin text read under a literal option that is no prefix of it", "printf 'update refs/remotes/origin/feat/x 0123abc\\n' | git update-ref --stdin -z"],
   ])("reads %s as no act", (_, command) => {
     for (const ctx of CONTEXTS) expect(personOnlyVerdict(command, ctx), command).toEqual({ deny: false });
+  });
+
+  // review/35 (the sign-off: close the class, not each spelling): on these calls, any word the line cannot show as
+  // literal text, an option word or a name, may be the delete, remotes or `--stdin` flag or that ref, and a unique
+  // prefix of a long option is read as that option, as git reads it. Each row but the last two is red on fff9c815.
+  it.each([
+    ["a symbolic-ref call of that ref after a dash word the shell fills in", 'git symbolic-ref -"$O" refs/remotes/origin/HEAD', "A remote's HEAD ref written or deleted (`git symbolic-ref`)"],
+    ["a symbolic-ref call of that ref after a quoted reason the shell fills in", 'git symbolic-ref -m "$WHY" refs/remotes/origin/HEAD', "A remote's HEAD ref written or deleted (`git symbolic-ref`)"],
+    ["a symbolic-ref read of a name the shell fills in", 'git symbolic-ref "$R"', "may be a remote's HEAD ref, written or deleted (`git symbolic-ref`)"],
+    ["an update-ref stdin text under an abbreviated stdin option", "printf 'update refs/remotes/origin/HEAD 0123abc\\n' | git update-ref --std", "A remote's HEAD ref written or deleted (`git update-ref --stdin`)"],
+    ["an update-ref stdin symref text under the shortest prefix of the stdin option", "printf 'symref-update refs/remotes/origin/HEAD refs/heads/feat/x\\n' | git update-ref --s", "A remote's HEAD ref written or deleted (`git update-ref --stdin`)"],
+    ["an update-ref stdin text whose name quoting splits, under an abbreviated stdin option", "printf 'delete refs/remotes/origin/HE''AD\\n' | git update-ref --stdi", "written or deleted (`git update-ref --stdin`)"],
+    ["an update-ref call whose only option is a dash word the shell fills in", "printf 'symref-delete refs/remotes/origin/HEAD\\n' | git update-ref -\"$O\"", "may be a remote's HEAD ref, written or deleted (`git update-ref`)"],
+    ["an update-ref write whose literal name is not that ref, its value filled in", 'git update-ref refs/heads/a "$SHA"', "may be a remote's HEAD ref, written or deleted (`git update-ref`)"],
+    ["an update-ref write whose literal name follows a quoted reason the shell fills in", 'git update-ref -m "$WHY" refs/heads/a 0123abc', "may be a remote's HEAD ref, written or deleted (`git update-ref`)"],
+    ["a remote-tracking delete of that ref whose remotes flag the shell fills in", 'git branch -d "$F" origin/HEAD', "may be a remote's HEAD ref, written or deleted (`git branch -d -r`)"],
+    ["a remote-tracking delete of that ref whose delete flag is a dash word the shell fills in", 'git branch -"$F" -r origin/HEAD', "may be a remote's HEAD ref, written or deleted (`git branch -d -r`)"],
+    ["a branch call of that ref whose one flag word the shell fills in", 'git branch "$F" origin/HEAD', "may be a remote's HEAD ref, written or deleted (`git branch -d -r`)"],
+    ["a branch delete whose unquoted name may split into a remotes flag and that ref", "git branch -D $B", "may be a remote's HEAD ref, written or deleted (`git branch -d -r`)"],
+    ["a branch call whose unquoted word may split into every part", "git branch $ARGS", "may be a remote's HEAD ref, written or deleted (`git branch -d -r`)"],
+    // Pins, asking on fff9c815 too: a quoted word the shell fills in where an update-ref ref stands, and both flags shown.
+    ["an update-ref call whose first word is an option the shell fills in whole", "printf 'delete refs/remotes/origin/HEAD\\n' | git update-ref \"$O\"", "may be a remote's HEAD ref, written or deleted (`git update-ref`)"],
+    ["a remote-tracking delete by both flags whose name the shell fills in", 'git branch -dr "$B"', "may be a remote's HEAD ref, written or deleted (`git branch -d -r`)"],
+  ])("asks for %s as a push of the default branch", (_, command, act) => {
+    for (const ctx of CONTEXTS) {
+      const verdict = personOnlyVerdict(command, ctx);
+      expect(verdict, command).toMatchObject({ deny: true, rule: "push-default", ask: true });
+      if (verdict.deny) expect(verdict.act, command).toContain(act);
+    }
+  });
+
+  // review/36: each reader of these calls is linear in the line's length, so a line at the 64 KiB cap, built to the
+  // worst class each reader has, decides well inside the hook's timeout. The stdin rows took 5 to 37 s on fff9c815, the
+  // remote-tracking delete 7 s, and the symref text under many calls 0.9 s; each is under 0.1 s here.
+  it.each([
+    ["a stdin text of one long run of remote-tracking prefixes", () => `printf '${"remotes/".repeat(8_187)}' | git update-ref --stdin`, null],
+    ["many stdin calls, then one long run of remote-tracking prefixes", () => `${"git update-ref --stdin;".repeat(10)}printf '${"remotes/".repeat(8_160)}'`, null],
+    ["many stdin calls over one text", () => "git update-ref --stdin;".repeat(2_849), null],
+    ["many stdin calls over many symref deletes of that ref", () => `${"git update-ref --stdin;".repeat(1_365)}${"symref-delete remotes/o/HEAD ".repeat(1_160)}`, "push-default"],
+    ["a remote-tracking delete of many names", () => `git branch -d -r ${"a ".repeat(32_750)}`, null],
+    ["a symbolic-ref call of many words", () => `git symbolic-ref ${"a ".repeat(32_750)}`, null],
+    ["an update-ref call of many words the shell fills in", () => `git update-ref ${'"$a" '.repeat(13_100)}`, "push-default"],
+  ])("decides %s at the cap in under a second", (_, build, rule) => {
+    const command = build();
+    expect(command.length).toBeLessThanOrEqual(65_536);
+    expect(command.length).toBeGreaterThan(65_000);
+    const started = performance.now();
+    const verdict = personOnlyVerdict(command, ORIGIN);
+    expect(performance.now() - started).toBeLessThan(1_000);
+    expect(verdict).toMatchObject(rule === null ? { deny: false } : { deny: true, rule, ask: true });
   });
 
   it("keeps the other remote writes `remote-write`, which the setting runs unasked", () => {

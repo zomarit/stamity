@@ -4426,8 +4426,8 @@ if (told !== null) {
  * push refspec asks for them), and the verdict runs once per place. A write or
  * a delete of a remote's HEAD ref that the judged line shows (`git symbolic-ref`,
  * `git update-ref` with the `--stdin` text the line carries, `git remote
- * set-head`, a remote-tracking `git branch` delete), or of a ref name there the
- * line cannot show, is read as a push of the default branch (review/163); a
+ * set-head`, a remote-tracking `git branch` delete), or a call there holding a
+ * word the line cannot show, is read as a push of the default branch (review/163); a
  * route to that ref the line does not show is not read. Where
  * `HEAD` cannot be read (a reftable repository's placeholder among it), an implied destination
  * counts as the default branch; `main` and `master` always count. The origin a
