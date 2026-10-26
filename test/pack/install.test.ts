@@ -2141,10 +2141,12 @@ describe("adoptInstalledPacks", () => {
   it.skipIf(process.platform === "win32")(
     "cleans a planted folder name and an unlisted file name before either enters a refusal (prove/66)",
     async () => {
-      // Built at run time so the source holds no control character: ESC, U+202E (right-to-left override), a newline.
+      // Built at run time so the source holds no control or format character: ESC, U+202E (right-to-left override), a
+      // newline; the bidi ranges U+202A-U+202E and U+2066-U+2069 in `unprintable` are built from their code points too.
       const hostile = `x${String.fromCodePoint(0x1b)}[2K${String.fromCodePoint(0x202e)}y\nz`;
       const cleaned = "x[2Ky z";
-      const unprintable = /[\p{Cc}‪-‮⁦-⁩]/u;
+      const cp = (point: number): string => String.fromCodePoint(point);
+      const unprintable = new RegExp(`[\\p{Cc}${cp(0x202a)}-${cp(0x202e)}${cp(0x2066)}-${cp(0x2069)}]`, "u");
       await keptCatalogPack();
       await getProject().seedFiles({
         [`.stamity/packs/${hostile}/${RECEIPT_FILE}`]: "not json",

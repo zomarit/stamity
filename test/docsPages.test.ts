@@ -5775,27 +5775,36 @@ describe("the CI hand pages name the fork probe and the base-commit classifier",
 
 /**
  * ADDED (run 2026-10-25_autonomy-distribution-02, ledger prove/44 and prove/64): since the adoption fix, `init` takes a
- * kept pack back only after every gate `add` runs passes again on its kept bytes (`src/pack/install.ts::keptPackGateRefusal`),
- * so only a bundled catalog pack can come back, and any other kept pack is named and re-installed with `add <source>`.
- * The pages that state the install routes, the planted-pack residual and `clean`'s kept packs say so, clause for clause.
+ * kept pack back only after `add`'s trust and install gates pass again on its kept bytes
+ * (`src/pack/install.ts::keptPackGateRefusal`), so only a bundled catalog pack can come back, and any other kept pack is
+ * named and re-installed with `add <source>`. The pages that state the install routes, the planted-pack residual and
+ * `clean`'s kept packs say so, clause for clause. TEST CHANGE, justified (prove/68): the pages said "every gate `add`
+ * runs", but the take-back stops at `planInstall` and never runs `add`'s Codex skills-list fit check, so each page now
+ * names the gates it runs and says the fit check is not re-run (the projection's ceiling refuses an over-budget list).
  */
 describe("the pages say init takes a kept pack back only through add's gates (prove/44)", () => {
-  const takeBack = "`init` takes a kept pack back only after every gate `add` runs passes again on the same bytes";
+  const takeBack = "`init` takes a kept pack back only after `add`'s trust and install gates pass again on the same bytes";
+  const noFit =
+    "The take-back does not re-run `add`'s Codex skills-list fit check: with Codex selected, a kept pack that takes the skills list past its ceiling makes `init` and `sync` refuse when they project the setup.";
   const refused =
     "A kept pack a gate refuses, or one whose gates cannot run from its kept folder (a local or `node_modules` pack, signed or not), is refused: `init` names it in a warning and records none of its files,";
   const residual =
-    "A planted pack folder with a `receipt.json` and no `pack:` rows does not become an installed pack at the next `init`: `init` takes a kept pack back only after every gate `add` runs passes again on the same bytes, so only a first-party pack whose files are the bundled catalog's own comes back, and any other is named in a warning with none of its files recorded.";
+    "A planted pack folder with a `receipt.json` and no `pack:` rows does not become an installed pack at the next `init`: `init` takes a kept pack back only after `add`'s trust and install gates pass again on the same bytes, so only a first-party pack whose files are the bundled catalog's own comes back, and any other is named in a warning with none of its files recorded.";
+  const overClaim = "every gate `add` runs";
 
   it("SECURITY.md states the take-back beside the three sources, the gate chain and residual (2)", () => {
     const page = flowed(read(SECURITY));
     expect(page).toContain(
-      "A kept pack is not a fourth source. A default `clean` keeps each pack folder under `.stamity/packs/`, and the next `init` takes one back only after every gate `add` runs passes again on the same bytes (`src/pack/install.ts::keptPackGateRefusal`).",
+      `A kept pack is not a fourth source. A default \`clean\` keeps each pack folder under \`.stamity/packs/\`, and the next \`init\` takes one back only after \`add\`'s trust and install gates pass again on the same bytes (\`src/pack/install.ts::keptPackGateRefusal\`). ${noFit}`,
     );
+    expect(page).not.toContain(overClaim);
     expect(page).toContain(
       "An install keeps neither `pack.json` nor a signature beside the pack, so those gates can run only for a first-party pack from the bundled catalog: `init` plans it from the copy inside this package under the catalog's pin, as `stamity add <id>` does, and takes it back only when its receipt lists every file in the folder, those files hash to the catalog pack's own bytes, and the receipt records the source kind, trust tier and tool footprint the install would.",
     );
     expect(page).toContain(`${refused} and \`stamity add <source>\` re-installs it through the gates.`);
-    expect(page).toContain("Every route runs the same gate chain, and `init` runs it again before it takes a kept pack back.");
+    expect(page).toContain(
+      "Every route runs the same gate chain, and `init` runs its trust and install gates again before it takes a kept pack back.",
+    );
     expect(page).toContain(residual);
   });
 
@@ -5803,8 +5812,9 @@ describe("the pages say init takes a kept pack back only through add's gates (pr
     const page = flowed(read(SECURITY_MAPPING));
     expect(page).toContain(
       "| Any repository writer, a pull request included | Commits a pack folder with a `receipt.json` under `.stamity/packs/`, so the next `init` records it as installed with no gate run on it | A kept pack is not a fourth source: " +
-        takeBack,
+        `${takeBack}. ${noFit}`,
     );
+    expect(page).not.toContain(overClaim);
     expect(page).toContain(
       `${refused} and \`stamity add <source>\` re-installs it through the gates. Code: \`src/pack/install.ts::adoptInstalledPacks\`, \`src/pack/install.ts::keptPackGateRefusal\` | A local or \`node_modules\` pack does not come back at \`init\` after a default \`clean\`; only \`add <source>\` installs it again |`,
     );
@@ -5814,8 +5824,9 @@ describe("the pages say init takes a kept pack back only through add's gates (pr
   it("docs/packs-and-trust.md says what the next init does with the packs a plain clean keeps", () => {
     const page = flowed(read(PACKS_AND_TRUST));
     expect(page).toContain(
-      "Plain `stamity clean` removes the generated setup and keeps the rest of `.stamity/`, installed packs included, under `.stamity/packs/`. The next `stamity init` takes a kept pack back only after every gate `add` runs passes again on the same bytes.",
+      `Plain \`stamity clean\` removes the generated setup and keeps the rest of \`.stamity/\`, installed packs included, under \`.stamity/packs/\`. The next \`stamity init\` takes a kept pack back only after \`add\`'s trust and install gates pass again on the same bytes. ${noFit}`,
     );
+    expect(page).not.toContain(overClaim);
     expect(page).toContain(
       "so those gates can run only for a first-party pack from the bundled catalog, and only one whose kept files are that pack's own bytes comes back.",
     );
@@ -5825,8 +5836,16 @@ describe("the pages say init takes a kept pack back only through add's gates (pr
   it("CHANGELOG.md's clean entry says which kept packs init takes back, and no longer that it takes every one", () => {
     const page = flowed(read("CHANGELOG.md"));
     expect(page).toContain(
-      "A later `init` takes a kept first-party pack back once `add`'s gates pass again on it; any other kept pack is named, and `add <source>` re-installs it.",
+      "A later `init` takes a kept first-party pack back once `add`'s trust and install gates pass again on it, without `add`'s Codex skills-list fit check (with Codex selected, a kept pack that takes that list past its ceiling makes `init` and `sync` refuse); any other kept pack is named, and `add <source>` re-installs it.",
     );
     expect(page).not.toContain("A later `init` takes a kept pack back from its own receipt");
+  });
+
+  it("REQ-FLOW-028's prove/44 entry names the gates the take-back runs and the fit check it does not (prove/68)", () => {
+    const page = flowed(read("docs/specs/everyday-flows.md"));
+    expect(page).toContain(
+      `a kept pack is taken back only when \`add\`'s trust and install gates pass on its kept bytes; a receipt's hashes alone no longer make a pack live. ${noFit}`,
+    );
+    expect(page).not.toContain(overClaim);
   });
 });

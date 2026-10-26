@@ -557,8 +557,10 @@ edited, and an unlink that was refused.
 Delete by hand each client copy it keeps and names, unless it is yours, then follow it with
 `stamity sync`, which regenerates the clients' files without the pack. Plain `stamity clean`
 removes the generated setup and keeps the rest of `.stamity/`, installed packs included, under
-`.stamity/packs/`. The next `stamity init` takes a kept pack back only after every gate `add` runs
-passes again on the same bytes. An install keeps neither `pack.json` nor a signature beside the pack,
+`.stamity/packs/`. The next `stamity init` takes a kept pack back only after `add`'s trust and
+install gates pass again on the same bytes. The take-back does not re-run `add`'s Codex skills-list
+fit check: with Codex selected, a kept pack that takes the skills list past its ceiling makes `init`
+and `sync` refuse when they project the setup. An install keeps neither `pack.json` nor a signature beside the pack,
 so those gates can run only for a first-party pack from the bundled catalog, and only one whose kept
 files are that pack's own bytes comes back. A kept pack a gate refuses, or one whose gates cannot
 run from its kept folder (a local or `node_modules` pack, signed or not), is refused: `init` names it

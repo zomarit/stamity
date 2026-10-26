@@ -1143,8 +1143,9 @@ points at `add` (`adoptInstalledPacks`, `src/pack/install.ts`, called before the
     `test/cli/commands/initPanel.test.ts` (the line, with a control and a bidi character in the id),
     `test/cli/commands/init.test.ts` (the real command's preview and panel).
 - **Amended 2026-10-26** (the 1.17.0 page re-attestation's fix round, ledger row `prove/44`). Given a later `init`, Then
-  a kept pack is taken back only when every gate `add` runs passes on its kept bytes; a receipt's hashes alone no
-  longer make a pack live. After the receipt's own checks, adoption refuses a folder holding any file its receipt does
+  a kept pack is taken back only when `add`'s trust and install gates pass on its kept bytes; a receipt's hashes alone
+  no longer make a pack live. The take-back does not re-run `add`'s Codex skills-list fit check: with Codex selected,
+  a kept pack that takes the skills list past its ceiling makes `init` and `sync` refuse when they project the setup. After the receipt's own checks, adoption refuses a folder holding any file its receipt does
   not list; a pack id the bundled catalog does not hold, since the install keeps neither `pack.json` nor a signature
   and so the trust ladder, signature, lifecycle-name and footprint checks cannot run; and a catalog pack whose
   `planPackInstall` chain, run as `add <id>` runs it on the bundled root under the catalog's pin (trust tier, org

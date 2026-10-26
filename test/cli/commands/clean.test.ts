@@ -2388,6 +2388,8 @@ describe("clean keeps the user's state under .stamity/ (REQ-FLOW-028)", () => {
     // TEST CHANGE, justified (2026-10-25_autonomy-distribution-02/prove/64): since prove/44 the next init takes a kept
     // pack back only when it is a bundled catalog pack and add's gates pass again on its bytes, and names any other one
     // with `add <source>` as its route; the closing line said every kept pack came back, so the pin and title follow it.
+    // TEST CHANGE, justified (prove/68): the take-back runs add's trust and install gates, not its Codex skills-list fit
+    // check, so the line names the gates it runs and the one it leaves to the projection's ceiling.
     "says what it kept and which kept packs the next init takes back",
     async () => {
       const root = await copyOf(withState);
@@ -2403,7 +2405,8 @@ describe("clean keeps the user's state under .stamity/ (REQ-FLOW-028)", () => {
       expect(result.stdout).not.toContain(`${npxCommand("clean --purge")} deletes these too`);
       expect(result.stdout).toContain(
         `The installed pack(s) ${SHIP_ID} stay under ${STATE_DIR}/packs/. The next ${npxCommand("init")} takes one back only ` +
-          `if it is a first-party pack from the bundled catalog and every gate add runs passes again on its kept files; ` +
+          `if it is a first-party pack from the bundled catalog and add's trust and install gates pass again on its kept files ` +
+          `(not add's Codex skills-list fit check: with Codex selected, init and sync refuse a skills list over its ceiling); ` +
           `it names any other kept pack and records none of its files, so re-install that one with ${npxCommand("add <source>")}.`,
       );
       expect(result.stdout).not.toContain("records them again from their receipts");
@@ -2479,7 +2482,7 @@ describe("clean keeps the user's state under .stamity/ (REQ-FLOW-028)", () => {
 
   it(
     // TEST CHANGE, justified (2026-10-25_autonomy-distribution-02/prove/44): init takes a kept pack back only when
-    // every gate `add` runs passes on its bytes, which needs the pack.json and pin only the bundled catalog keeps. The
+    // `add`'s trust and install gates pass on its bytes, which needs the pack.json and pin only the bundled catalog keeps. The
     // catalog's `frontend` is added beside the made-up pack and comes back; the made-up pack, added with
     // --allow-untrusted, is named in a warning and not recorded.
     "lets a later init take a kept catalog pack back with the hashes its install recorded, refuse the untrusted one, and check pass",
