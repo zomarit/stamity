@@ -19,6 +19,7 @@ import {
   __setContentRootForTests,
 } from "../../../src/content/contentRoot.ts";
 import { createManifest, readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
+import { lookupCatalogEntry, resolveBundledPackRoot } from "../../../src/pack/curated.ts";
 import type * as CuratedModule from "../../../src/pack/curated.ts";
 import { applyPackInstall, planPackInstall } from "../../../src/pack/install.ts";
 import type { Tool } from "../../../src/types/core.ts";
@@ -28,7 +29,6 @@ import { readWorkspaceManifest } from "../../../src/workspace/manifest.ts";
 import { WORKSPACE_MANIFEST_FILE } from "../../../src/workspace/model.ts";
 import { npxCommand } from "../../support/identity.ts";
 import { runInProcess, type InProcessResult } from "../../support/inProcess.ts";
-import { madeUpArtifact, writeMadeUpPack } from "../../support/packFixtures.ts";
 import { MENU_KEYS, MenuTtyInput, waitForOutput } from "../../support/menuTty.ts";
 import { carriedProcessEnv, NO_GIT_CONFIG, seedGitRepo } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -584,12 +584,13 @@ describe("init — fresh repo", () => {
 
   // 2026-10-25_autonomy-distribution-02/prove/12: after a default clean, init takes a kept pack back from its receipt;
   // the preview and the panel each name it on one plain line, never as a warning.
+  // TEST CHANGE, justified (prove/44): adoption runs `add`'s gates, which only a bundled catalog pack can clear from
+  // what an install keeps, so the kept pack is the catalog's own `frontend`, installed as `add frontend` installs it.
   it("names a kept pack it takes back from its receipt, in the dry-run preview and the panel", async () => {
     const root = await makeRepo();
-    const source = await writeMadeUpPack(getTemp().path("pack-sources"), "acme-kept", {
-      "rules/stamity-acme-style.md": madeUpArtifact("acme-style", "rule", "The acme style."),
-    });
-    const plan = await planPackInstall(root, source, { allowUntrusted: true });
+    const entry = lookupCatalogEntry("frontend");
+    if (entry === undefined) throw new Error("the bundled catalog holds no frontend pack");
+    const plan = await planPackInstall(root, resolveBundledPackRoot("frontend"), { catalogPin: entry.pin });
     const setup = createManifest({
       tools: ["claude"],
       selection: { items: { agent: [], skill: [], rule: [], command: [] } },
@@ -601,11 +602,11 @@ describe("init — fresh repo", () => {
 
     const preview = await runInit(root, ["--dry-run", "-y"]);
     expect(preview.code).toBe(0);
-    expect(preview.stdout).toContain('\n  would take back the kept pack "acme-kept" from its receipt under .stamity/packs/\n');
+    expect(preview.stdout).toContain('\n  would take back the kept pack "frontend" from its receipt under .stamity/packs/\n');
 
     const live = await runInit(root, ["-y"]);
     expect(live.code).toBe(0);
-    expect(live.stdout).toContain('\n  took back the kept pack "acme-kept" from its receipt under .stamity/packs/\n');
+    expect(live.stdout).toContain('\n  took back the kept pack "frontend" from its receipt under .stamity/packs/\n');
     expect(live.stdout).not.toContain("warning: took back");
   });
 

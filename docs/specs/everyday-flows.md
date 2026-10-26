@@ -1142,6 +1142,22 @@ points at `add` (`adoptInstalledPacks`, `src/pack/install.ts`, called before the
   - Proof: `test/cli/commands/initApply.test.ts` (the report field: live, dry run, a refused pack),
     `test/cli/commands/initPanel.test.ts` (the line, with a control and a bidi character in the id),
     `test/cli/commands/init.test.ts` (the real command's preview and panel).
+- **Amended 2026-10-26** (the 1.17.0 page re-attestation's fix round, ledger row `prove/44`). Given a later `init`, Then
+  a kept pack is taken back only when every gate `add` runs passes on its kept bytes; a receipt's hashes alone no
+  longer make a pack live. After the receipt's own checks, adoption refuses a folder holding any file its receipt does
+  not list; a pack id the bundled catalog does not hold, since the install keeps neither `pack.json` nor a signature
+  and so the trust ladder, signature, lifecycle-name and footprint checks cannot run; and a catalog pack whose
+  `planPackInstall` chain, run as `add <id>` runs it on the bundled root under the catalog's pin (trust tier, org
+  policy, signing, lifecycle scripts, integrity map, body scan, MCP servers, hooks, footprint, declared tools, rule
+  activation, permissions, agent capabilities), throws or finds a collision, name clash or left-behind file, or whose
+  receipt differs from the one the install writes in its file list, source kind, trust tier or footprint. Each refusal
+  is the same one-line warning pointing at `add <source>`. So a made-up pack added with `--allow-untrusted` is named,
+  not taken back, which replaces "the pack's rows return" for such a pack in the acceptance row below
+  (`keptPackGateRefusal` and `planInstall`, `src/pack/install.ts`).
+  - Proof: `test/pack/install.test.ts` (`adoptInstalledPacks`: the catalog round trip; a pack from outside the catalog;
+    a listed file, a footprint, a source kind and a tier the catalog's pack does not have; an unlisted file; an org
+    policy deny; an override's id), `test/cli/commands/initApply.test.ts`, `test/cli/commands/init.test.ts`,
+    `test/cli/commands/clean.test.ts`.
 - **Proof:** `test/cli/commands/clean.test.ts`, `test/cli/commands/roundTrip.test.ts`, `test/cli/commands/initApply.test.ts`,
   `test/pack/install.test.ts`, `test/emit/stateScaffold.test.ts`, `test/merge/reclaim.test.ts`,
   `test/cli/ledgerForgery.test.ts` and `test/cli/flows.e2e.test.ts` (re-pinned to `--purge`).

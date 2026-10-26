@@ -12,6 +12,7 @@ import {
   type PackInstallPlan,
   type PlanPackInstallOptions,
 } from "../../src/pack/install.ts";
+import { lookupCatalogEntry, resolveBundledPackRoot } from "../../src/pack/curated.ts";
 import { PACK_MANIFEST_FILE } from "../../src/pack/manifest.ts";
 import {
   describePackIntegrityFinding,
@@ -1956,17 +1957,128 @@ describe("adoptInstalledPacks", () => {
     return result.ledgerEntries;
   }
 
+  /** The first-party pack every adoption that succeeds is made of: the bundled catalog's own. */
+  const CATALOG_ID = "frontend";
+  const CATALOG_ROOT = `.stamity/packs/${CATALOG_ID}`;
+  const CATALOG_RECEIPT = `${CATALOG_ROOT}/${RECEIPT_FILE}`;
+
+  /** `add frontend` as the command lands it — the bundled root under the catalog's pin — with no manifest left beside it. */
+  async function keptCatalogPack(): Promise<LedgerEntry[]> {
+    const entry = lookupCatalogEntry(CATALOG_ID);
+    if (entry === undefined) throw new Error(`the bundled catalog holds no ${CATALOG_ID} pack`);
+    const catalogPlan = await planPackInstall(getProject().dir, resolveBundledPackRoot(CATALOG_ID), { catalogPin: entry.pin });
+    const { result } = await apply(catalogPlan, projectManifest());
+    expect(result.installed, result.errors.join("; ")).toBe(true);
+    return result.ledgerEntries;
+  }
+
+  /** Rewrite the kept receipt through `edit`, keeping its rows' bytes honest only where the test says so. */
+  async function editReceipt(edit: (receipt: PackReceipt) => void): Promise<void> {
+    const path = getProject().path(CATALOG_RECEIPT);
+    const receipt = JSON.parse(await readFile(path, "utf8")) as PackReceipt;
+    edit(receipt);
+    await writeFile(path, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+  }
+
   const byPath = (rows: readonly LedgerEntry[]): LedgerEntry[] => rows.toSorted((a, b) => a.path.localeCompare(b.path));
 
-  it("gives back exactly the rows the install recorded, the receipt's included", async () => {
-    const recorded = await installedThenUnrecorded();
+  // TEST CHANGE, justified (2026-10-25_autonomy-distribution-02/prove/44): adoption now runs `add`'s gates on the kept
+  // bytes, and only the bundled catalog keeps the pack.json and pin they need, so the round trip is made of the
+  // catalog's own pack; the made-up pack it used is now the refusal case below.
+  it("gives back exactly the rows a bundled catalog pack's install recorded, the receipt's included", async () => {
+    const recorded = await keptCatalogPack();
 
     const adoption = await adoptInstalledPacks(getProject().dir, new Set());
 
     expect(adoption.refused).toEqual([]);
-    expect(adoption.adopted).toEqual([PACK_ID]);
-    expect(recorded).toHaveLength(3);
+    expect(adoption.adopted).toEqual([CATALOG_ID]);
+    expect(recorded.length).toBeGreaterThan(1);
     expect(byPath(adoption.rows)).toEqual(byPath(recorded));
+  });
+
+  it("refuses a kept pack from outside the bundled catalog: its pack.json and signature are not kept, so the trust ladder cannot run", async () => {
+    // Installed on a pin no catalog of this engine issues; its receipt says curator-verified all the same.
+    await installedThenUnrecorded();
+
+    const adoption = await adoptInstalledPacks(getProject().dir, new Set());
+
+    expect(adoption.rows).toEqual([]);
+    expect(adoption.adopted).toEqual([]);
+    expect(adoption.refused).toEqual([
+      { dir: PACK_ROOT, packId: PACK_ID, reason: expect.stringContaining("outside the bundled catalog") as unknown },
+    ]);
+  });
+
+  it("refuses a kept catalog pack whose receipt lists a file the catalog's pack does not ship, with that file's true hash", async () => {
+    await keptCatalogPack();
+    const hook = '{ "hooks": [] }\n';
+    await getProject().seedFiles({ [`${CATALOG_ROOT}/hooks/hooks.json`]: hook });
+    await editReceipt((receipt) => {
+      receipt.files.push({ path: `${CATALOG_ROOT}/hooks/hooks.json`, class: "hooks", sha256: digest(hook), bytes: hook.length, tokens: 1 });
+    });
+
+    const adoption = await adoptInstalledPacks(getProject().dir, new Set());
+
+    expect(adoption.adopted).toEqual([]);
+    expect(adoption.refused).toEqual([
+      { dir: CATALOG_ROOT, packId: CATALOG_ID, reason: expect.stringContaining(`${CATALOG_ROOT}/hooks/hooks.json`) as unknown },
+    ]);
+    expect(adoption.refused[0]?.reason).toMatch(/^its files are not the bytes the bundled catalog's pack "frontend" ships/u);
+  });
+
+  it.each([
+    ["a wider tool footprint", (receipt: PackReceipt) => void (receipt.permissions = { toolFootprint: ["read", "edit", "execute", "spawn", "network"] }), "footprint"],
+    ["another source kind", (receipt: PackReceipt) => void (receipt.source = { ...receipt.source, kind: "npm-package" }), "source kind"],
+    ["another trust tier", (receipt: PackReceipt) => void (receipt.trustTier = "publisher-signed"), "trust tier"],
+  ])("refuses a kept catalog pack whose receipt records %s than add records", async (_label, edit, named) => {
+    await keptCatalogPack();
+    await editReceipt(edit);
+
+    const adoption = await adoptInstalledPacks(getProject().dir, new Set());
+
+    expect(adoption.adopted).toEqual([]);
+    expect(adoption.refused).toEqual([{ dir: CATALOG_ROOT, packId: CATALOG_ID, reason: expect.stringContaining(named) as unknown }]);
+  });
+
+  it("refuses a kept catalog pack whose folder holds a file its receipt does not list, naming it", async () => {
+    await keptCatalogPack();
+    await getProject().seedFiles({ [`${CATALOG_ROOT}/agents/stamity-extra.md`]: "---\nid: extra\ntype: agent\n---\nDo more.\n" });
+
+    const adoption = await adoptInstalledPacks(getProject().dir, new Set());
+
+    expect(adoption.adopted).toEqual([]);
+    expect(adoption.refused).toEqual([
+      { dir: CATALOG_ROOT, packId: CATALOG_ID, reason: expect.stringContaining(`${CATALOG_ROOT}/agents/stamity-extra.md`) as unknown },
+    ]);
+  });
+
+  it("refuses a kept catalog pack the org policy denies, in one line, as add would", async () => {
+    await keptCatalogPack();
+    await getProject().seedFiles({ ".stamity/policy.json": JSON.stringify({ version: 1, packs: { deny: [CATALOG_ID] } }) });
+
+    const adoption = await adoptInstalledPacks(getProject().dir, new Set());
+
+    expect(adoption.adopted).toEqual([]);
+    expect(adoption.refused).toEqual([
+      { dir: CATALOG_ROOT, packId: CATALOG_ID, reason: expect.stringContaining("denied by the org trust policy") as unknown },
+    ]);
+    expect(adoption.refused[0]?.reason).toMatch(/^add's gates refuse it: /u);
+    expect(adoption.refused[0]?.reason).not.toContain("\n");
+  });
+
+  it("refuses a kept catalog pack whose command id an override already holds, as add's collision gate would", async () => {
+    await keptCatalogPack();
+    await getProject().seedFiles({
+      ".stamity/overrides/commands/ui-review.md": "---\nid: ui-review\ntype: command\ndescription: Mine.\n---\nMy own review.\n",
+    });
+
+    const adoption = await adoptInstalledPacks(getProject().dir, new Set());
+
+    expect(adoption.adopted).toEqual([]);
+    expect(adoption.refused).toEqual([
+      { dir: CATALOG_ROOT, packId: CATALOG_ID, reason: expect.stringContaining('"ui-review"') as unknown },
+    ]);
+    expect(adoption.refused[0]?.reason).toMatch(/^add refuses it: /u);
   });
 
   it("passes over a pack the caller already holds rows for, and a folder with no receipt", async () => {

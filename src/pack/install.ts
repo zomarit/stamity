@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, realpath, rm, rmdir } from "node:fs/promises";
-import { dirname, extname, join, resolve, sep } from "node:path";
+import { dirname, extname, join, relative, resolve, sep } from "node:path";
 import pLimit from "p-limit";
 import {
   applyCommandPrefix,
   buildContentIndex,
+  describeInvocableNameClash,
   findInvocableNameClashes,
   replacedClaimantOf,
   slugOf,
@@ -63,6 +64,7 @@ import {
   ORG_POLICY_REL_PATH,
   type OrgPolicyDecision,
 } from "./orgPolicy.ts";
+import { lookupCatalogEntry, resolveBundledPackRoot } from "./curated.ts";
 import { checkAgentCapabilities, checkPermissions } from "./permissions.ts";
 import {
   buildReceipt,
@@ -835,6 +837,7 @@ async function collectCollisions(
   ledger: readonly LedgerEntry[],
   artifacts: readonly PackArtifactFile[],
   layers: ExistingLayers,
+  kept: ReadonlySet<string>,
 ): Promise<string[]> {
   const owner = packOwner(packId);
   const foreign = ledger.filter((entry) => !isOwnedByPack(entry, owner));
@@ -845,9 +848,12 @@ async function collectCollisions(
       .filter((artifact) => artifact.catalogKey !== null)
       .map((artifact) => [artifact.relPath, artifact.catalogKey as string]),
   );
-  const ownedPaths = new Set(
-    ledger.filter((entry) => isOwnedByPack(entry, owner)).map((entry) => entry.path),
-  );
+  // `kept`: the files adoption already proved are this pack's own install
+  // ({@link adoptInstalledPacks}), which stand where the plan would write them.
+  const ownedPaths = new Set([
+    ...ledger.filter((entry) => isOwnedByPack(entry, owner)).map((entry) => entry.path),
+    ...kept,
+  ]);
 
   const strays = await Promise.all(
     writeSet.map(async (entry) =>
@@ -1340,6 +1346,20 @@ export async function planPackInstall(
   spec: string,
   opts: PlanPackInstallOptions = {},
 ): Promise<PackInstallPlan> {
+  return planInstall(projectRoot, spec, opts, new Set());
+}
+
+/**
+ * {@link planPackInstall}'s chain, with `kept`: repo-relative paths adoption
+ * proved hold this pack's own earlier install, so the stray-file collision does
+ * not refuse the very bytes it is re-checking. Every gate runs as it does for `add`.
+ */
+async function planInstall(
+  projectRoot: string,
+  spec: string,
+  opts: PlanPackInstallOptions,
+  kept: ReadonlySet<string>,
+): Promise<PackInstallPlan> {
   const rootDir = resolve(projectRoot);
   const source = await resolvePackSource(rootDir, spec);
   const packManifest = await readPackManifest(source.packRoot);
@@ -1406,6 +1426,7 @@ export async function planPackInstall(
     projectManifest?.ledger ?? [],
     artifacts,
     layers,
+    kept,
   );
   const nameClashes = collectNameClashes(packManifest.name, source.packRoot, artifacts, layers);
   const leftBehind = await collectLeftBehind(
@@ -1744,7 +1765,10 @@ export interface PackAdoption {
  * SHA-256, is a regular file with one name reached through no link, and hashes
  * to it. Any other answer refuses the whole pack, and the reason says which
  * file: a planted receipt listing `src/index.ts` with its true hash is refused,
- * so a later `clean --pack` cannot delete it. A folder with no receipt is
+ * so a later `clean --pack` cannot delete it. A pack that passes all of that
+ * then clears every gate `add` runs, on these bytes, or is refused
+ * ({@link keptPackGateRefusal}): only a bundled catalog pack can, since the
+ * install keeps neither `pack.json` nor a signature. A folder with no receipt is
  * neither adopted nor named, and so is an id in `skip` (rows the caller already
  * holds, `init --force`'s carry). A packs folder that is a link adopts nothing.
  */
@@ -1847,6 +1871,8 @@ async function adoptPackFolder(
     }
     rows.push({ path, adapter: owner, artifactId: packArtifactId(packId, path.slice(dir.length + 1)), artifactType: "infra", contentHash: digest });
   }
+  const gated = await keptPackGateRefusal(root, dir, packId, receipt, seen);
+  if (gated !== null) return refuse(packId, gated);
   rows.push({
     path: receiptPath,
     adapter: owner,
@@ -1855,4 +1881,101 @@ async function adoptPackFolder(
     contentHash: createHash("sha256").update(receiptText, "utf8").digest("hex"),
   });
   return { packId, rows };
+}
+
+/** A gate's refusal as one plain line: no control character, no line break, no closing full stop. */
+function oneLine(text: string): string {
+  return withoutControlCharacters(text).replace(/\s+/gu, " ").trim().replace(/\.$/u, "");
+}
+
+/** The first entry under the kept folder that is not a directory and not a path `listed` holds, or `null`. */
+async function unlistedEntry(root: string, dir: string, listed: ReadonlySet<string>): Promise<string | null> {
+  const dirAbs = underRoot(root, dir);
+  // `recursive` lists a link as itself and never follows it, so a linked folder is an unlisted entry too.
+  const entries = await readdir(dirAbs, { recursive: true, withFileTypes: true });
+  const paths = entries
+    .filter((entry) => !entry.isDirectory())
+    .map((entry) => `${dir}/${relative(dirAbs, join(entry.parentPath, entry.name)).split(sep).join("/")}`)
+    .toSorted();
+  return paths.find((path) => !listed.has(path)) ?? null;
+}
+
+/**
+ * Why `add`'s gates refuse the kept pack `packId` at `dir`, or `null` when
+ * they pass on these very bytes (2026-10-25_autonomy-distribution-02/prove/44).
+ * Runs after the receipt's own checks above proved every listed file.
+ *
+ * The receipt is repository data, so trust is never read from it: the gates
+ * need the pack's `pack.json` (its integrity map, signing claim, footprint and
+ * hook and server declarations) and, for a signed pack, its signature bundle,
+ * and neither is part of the install write set. Only the bundled catalog keeps
+ * them, in the engine itself, under the pin `add` installs it on. So:
+ *
+ * - every entry in the folder must be one the receipt lists, since the
+ *   projection walks the folder and an unlisted file would go live unchecked;
+ * - a pack id the bundled catalog does not hold is refused, as one whose
+ *   gates cannot run from what was kept — `add <source>` re-runs them;
+ * - a catalog pack is planned exactly as `add <id>` plans it
+ *   ({@link planInstall}: trust ladder and pin, org policy, signing,
+ *   lifecycle-name ban, integrity, body scan, MCP and hook definitions,
+ *   footprint, declared tools, rule activation, permissions, agent
+ *   capabilities), and refused on any throw, collision, name clash or left-behind
+ *   file, as `add` refuses;
+ * - the receipt must then be the one {@link buildReceipt} writes for that plan
+ *   in every field a later reader trusts: the file list (so the kept bytes are
+ *   the gated bytes), the footprint the grants are bounded by, the source kind
+ *   the policy judges, and the trust tier.
+ */
+async function keptPackGateRefusal(
+  root: string,
+  dir: string,
+  packId: string,
+  receipt: Record<string, unknown>,
+  listed: ReadonlySet<string>,
+): Promise<string | null> {
+  const unlisted = await unlistedEntry(root, dir, listed);
+  if (unlisted !== null) return `${unlisted} lies in its folder but its receipt does not list it, so no gate read it`;
+
+  let plan: PackInstallPlan;
+  try {
+    const entry = lookupCatalogEntry(packId);
+    if (entry?.source.kind !== "bundled") {
+      return (
+        "it came from outside the bundled catalog, and its pack.json and any signature are not kept beside it, " +
+        "so add's trust ladder, signature, lifecycle-name and footprint checks cannot run on these bytes"
+      );
+    }
+    plan = await planInstall(root, resolveBundledPackRoot(entry.id), { catalogPin: entry.pin }, listed);
+  } catch (cause) {
+    if (!(cause instanceof EngineError)) throw cause;
+    return `add's gates refuse it: ${oneLine(cause.message)}`;
+  }
+  const blocked = [
+    ...plan.collisions,
+    ...(plan.nameClashes ?? []).map(describeInvocableNameClash),
+    ...(plan.leftBehind ?? []).map((path) => `${path} would be left behind`),
+  ];
+  if (blocked.length > 0) return `add refuses it: ${oneLine(blocked.join("; "))}`;
+
+  const expected = buildReceipt(plan, new Date(0), "");
+  const fileKey = (file: unknown): string =>
+    isPlainObject(file) ? `${String(file["path"])} (${String(file["class"])}, ${String(file["sha256"])})` : "";
+  const want = expected.files.map(fileKey);
+  const have = (receipt["files"] as unknown[]).map(fileKey);
+  const differs = [...have.filter((key) => !want.includes(key)), ...want.filter((key) => !have.includes(key))].toSorted();
+  if (differs.length > 0) {
+    return `its files are not the bytes the bundled catalog's pack ${JSON.stringify(packId)} ships: ${oneLine(differs.join("; "))}`;
+  }
+  const source = receipt["source"];
+  const fields: readonly [string, unknown, unknown][] = [
+    ["source kind", isPlainObject(source) ? source["kind"] : undefined, expected.source.kind],
+    ["trust tier", receipt["trustTier"], expected.trustTier],
+    ["footprint", receipt["permissions"], expected.permissions],
+  ];
+  for (const [field, recorded, planned] of fields) {
+    if (JSON.stringify(recorded) !== JSON.stringify(planned)) {
+      return `its receipt records the ${field} ${oneLine(JSON.stringify(recorded) ?? "none")}, where add records ${JSON.stringify(planned) ?? "none"}`;
+    }
+  }
+  return null;
 }

@@ -2472,18 +2472,27 @@ describe("clean keeps the user's state under .stamity/ (REQ-FLOW-028)", () => {
   );
 
   it(
-    "lets a later init take the kept pack back with the hashes its install recorded, and check pass",
+    // TEST CHANGE, justified (2026-10-25_autonomy-distribution-02/prove/44): init takes a kept pack back only when
+    // every gate `add` runs passes on its bytes, which needs the pack.json and pin only the bundled catalog keeps. The
+    // catalog's `frontend` is added beside the made-up pack and comes back; the made-up pack, added with
+    // --allow-untrusted, is named in a warning and not recorded.
+    "lets a later init take a kept catalog pack back with the hashes its install recorded, refuse the untrusted one, and check pass",
     async () => {
       const root = await copyOf(withState);
-      const packRows = (ledger: readonly LedgerEntry[]): LedgerEntry[] =>
-        ledger.filter((row) => row.adapter === `pack:${SHIP_ID}`).toSorted((a, b) => a.path.localeCompare(b.path));
-      const recorded = packRows(await readLedgerOnDisk(root));
-      expect(recorded.length).toBeGreaterThan(Object.keys(SHIP_FILES).length);
+      await run(root, ["add", "frontend", "-y"]);
+      const packRows = (ledger: readonly LedgerEntry[], id: string): LedgerEntry[] =>
+        ledger.filter((row) => row.adapter === `pack:${id}`).toSorted((a, b) => a.path.localeCompare(b.path));
+      const recorded = packRows(await readLedgerOnDisk(root), "frontend");
+      expect(recorded.length).toBeGreaterThan(1);
+      expect(packRows(await readLedgerOnDisk(root), SHIP_ID).length).toBeGreaterThan(Object.keys(SHIP_FILES).length);
 
       expect((await runClean(root, ["-y"])).code).toBe(0);
-      await run(root, ["init", "-y", "--tools", "claude"]);
+      const init = await runInProcess(COMMANDS, ["init", "-y", "--tools", "claude"], { cwd: root });
+      expect(init.code, `${init.stdout}\n${init.stderr}`).toBe(0);
 
-      expect(packRows(await readLedgerOnDisk(root))).toEqual(recorded);
+      expect(packRows(await readLedgerOnDisk(root), "frontend")).toEqual(recorded);
+      expect(packRows(await readLedgerOnDisk(root), SHIP_ID)).toEqual([]);
+      expect(`${init.stdout}${init.stderr}`).toContain(`${STATE_DIR}/packs/${SHIP_ID}/ was not taken back as pack "${SHIP_ID}": it came from outside the bundled catalog`);
       const check = await runInProcess(COMMANDS, ["check", "--json"], { cwd: root });
       expect(check.code, check.stdout).toBe(0);
     },

@@ -32,6 +32,8 @@ import {
   __setContentRootForTests,
 } from "../../../src/content/contentRoot.ts";
 import { collectManifestErrors, createManifest, readManifest } from "../../../src/manifest/manifest.ts";
+import { packageCommand } from "../../../src/cli/kit/packageName.ts";
+import { lookupCatalogEntry, resolveBundledPackRoot } from "../../../src/pack/curated.ts";
 import { applyPackInstall, planPackInstall } from "../../../src/pack/install.ts";
 import { verifyInstalledPacks } from "../../../src/pack/verifyInstalled.ts";
 import { REQUIRED_GITIGNORE_ENTRIES } from "../../../src/mcp/env.ts";
@@ -423,21 +425,36 @@ describe("applyInit — existing setup", () => {
 });
 
 describe("applyInit — the packs a clean kept (REQ-FLOW-028)", () => {
-  const PACK_ID = "acme-kept";
+  // TEST CHANGE, justified (2026-10-25_autonomy-distribution-02/prove/44): adoption runs `add`'s gates on the kept
+  // bytes, and only the bundled catalog keeps the pack.json and pin they need, so the pack taken back is the
+  // catalog's own `frontend`; the made-up pack installed with --allow-untrusted is now refused (last case).
+  const PACK_ID = "frontend";
   const OWNER = `pack:${PACK_ID}`;
+  const UNTRUSTED_ID = "acme-kept";
 
-  /** A real install of a made-up pack, as `add` lands it, with no manifest beside it: what `clean -y` leaves. */
+  /** A setup manifest the install folds its rows into; never written, as after `clean -y`. */
+  const setup = () => createManifest({ tools: ["claude"], selection: { items: { agent: [], skill: [], rule: [], command: [] } }, generatorVersion: ENGINE_VERSION, now: FIXED_NOW });
+
+  /** `add frontend` as the command lands it, with no manifest beside it: what `clean -y` leaves. */
   async function keptPack(root: string): Promise<LedgerEntry[]> {
-    const source = await writeMadeUpPack(getTemp().path("pack-sources"), PACK_ID, {
+    const entry = lookupCatalogEntry(PACK_ID);
+    if (entry === undefined) throw new Error(`the bundled catalog holds no ${PACK_ID} pack`);
+    const plan = await planPackInstall(root, resolveBundledPackRoot(PACK_ID), { catalogPin: entry.pin });
+    const { result } = await applyPackInstall(root, plan, setup(), { engineVersion: ENGINE_VERSION, now: FIXED_NOW });
+    expect(result.installed, result.errors.join("; ")).toBe(true);
+    expect(existsSync(join(root, ".stamity", "manifest.json"))).toBe(false);
+    return result.ledgerEntries;
+  }
+
+  /** A made-up pack installed as `add <dir> --allow-untrusted` lands it, with no manifest beside it. */
+  async function keptUntrustedPack(root: string): Promise<void> {
+    const source = await writeMadeUpPack(getTemp().path("pack-sources"), UNTRUSTED_ID, {
       "agents/stamity-acme-helper.md": madeUpArtifact("acme-helper", "agent", "Helps with acme."),
       "rules/stamity-acme-style.md": madeUpArtifact("acme-style", "rule", "The acme style."),
     });
     const plan = await planPackInstall(root, source, { allowUntrusted: true });
-    const setup = createManifest({ tools: ["claude"], selection: { items: { agent: [], skill: [], rule: [], command: [] } }, generatorVersion: ENGINE_VERSION, now: FIXED_NOW });
-    const { result } = await applyPackInstall(root, plan, setup, { engineVersion: ENGINE_VERSION, now: FIXED_NOW });
+    const { result } = await applyPackInstall(root, plan, setup(), { engineVersion: ENGINE_VERSION, now: FIXED_NOW });
     expect(result.installed, result.errors.join("; ")).toBe(true);
-    expect(existsSync(join(root, ".stamity", "manifest.json"))).toBe(false);
-    return result.ledgerEntries;
   }
 
   const byPath = (rows: readonly LedgerEntry[]): LedgerEntry[] => rows.toSorted((a, b) => a.path.localeCompare(b.path));
@@ -445,14 +462,14 @@ describe("applyInit — the packs a clean kept (REQ-FLOW-028)", () => {
   it("records the kept pack's rows again with the hashes its install recorded, and its integrity check passes", async () => {
     const root = await makeRepo();
     const recorded = await keptPack(root);
-    expect(recorded).toHaveLength(3);
+    expect(recorded.length).toBeGreaterThan(1);
 
     const report = await applyInit(optionsFor(root));
 
     const manifest = await readManifest(root);
     if (manifest === null) throw new Error("init wrote no manifest");
     expect(byPath(manifest.ledger.filter((row) => row.adapter === OWNER))).toEqual(byPath(recorded));
-    expect(await verifyInstalledPacks(root, manifest)).toEqual({ checked: 3, findings: [] });
+    expect(await verifyInstalledPacks(root, manifest)).toEqual({ checked: recorded.length, findings: [] });
     expect(report.warnings.filter((warning) => warning.includes(".stamity/packs/"))).toEqual([]);
     // prove/12: the pack taken back is named, so the panel can say so.
     expect(report.adoptedPacks).toEqual([PACK_ID]);
@@ -471,7 +488,7 @@ describe("applyInit — the packs a clean kept (REQ-FLOW-028)", () => {
   it("records no row of a kept pack whose file was edited, and names it in one warning that points at add", async () => {
     const root = await makeRepo();
     await keptPack(root);
-    await writeFile(join(root, ".stamity", "packs", PACK_ID, "rules", "stamity-acme-style.md"), "my own rule\n", "utf8");
+    await writeFile(join(root, ".stamity", "packs", PACK_ID, "commands", "st-ui-review.md"), "my own command\n", "utf8");
 
     const report = await applyInit(optionsFor(root));
 
@@ -479,9 +496,29 @@ describe("applyInit — the packs a clean kept (REQ-FLOW-028)", () => {
     expect(manifest?.ledger.filter((row) => row.adapter === OWNER)).toEqual([]);
     const named = report.warnings.filter((warning) => warning.includes(`.stamity/packs/${PACK_ID}/`));
     expect(named).toHaveLength(1);
-    expect(named[0]).toContain("rules/stamity-acme-style.md hashes to");
+    expect(named[0]).toContain("commands/st-ui-review.md hashes to");
     expect(named[0]).toContain("add <source>");
     // A refused pack is a warning only, never named as taken back.
+    expect(report.adoptedPacks).toEqual([]);
+  });
+
+  // prove/44: a kept pack whose receipt proves its hashes is still refused when `add`'s gates cannot run on it,
+  // which for a pack from outside the bundled catalog is always: its pack.json and signature are not kept.
+  it("records no row of a kept pack from outside the bundled catalog, and names it in one warning that points at add", async () => {
+    const root = await makeRepo();
+    await keptUntrustedPack(root);
+
+    const report = await applyInit(optionsFor(root));
+
+    const manifest = await readManifest(root);
+    expect(manifest?.ledger.filter((row) => row.adapter === `pack:${UNTRUSTED_ID}`)).toEqual([]);
+    const named = report.warnings.filter((warning) => warning.includes(`.stamity/packs/${UNTRUSTED_ID}/`));
+    expect(named).toEqual([
+      `.stamity/packs/${UNTRUSTED_ID}/ was not taken back as pack "${UNTRUSTED_ID}": it came from outside the bundled catalog, ` +
+        "and its pack.json and any signature are not kept beside it, so add's trust ladder, signature, lifecycle-name and " +
+        "footprint checks cannot run on these bytes. Nothing records its files now; re-install it from its source with " +
+        `${packageCommand("add <source>")}, or delete the folder.`,
+    ]);
     expect(report.adoptedPacks).toEqual([]);
   });
 });
