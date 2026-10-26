@@ -56,7 +56,8 @@ const MCP_ROWS = new Map([["mcp__github__merge_pull_request",true],["mcp__github
 // unasked (a workflow dispatch among them unless named as deploying), and whether it is stricter than the default.
 const AUTONOMY = {"mode":"autonomous","runs":["pr-ready","tag"],"deployingBranches":[],"deploying":[]};
 // A remote or URL rewrite written runs on the main thread in every mode and is refused for a sub-agent (REQ-FLOW-134,
-// review/129): it moves the origin the outside-party rule holds writes to.
+// review/129): it moves the origin the outside-party rule holds writes to. A `git remote set-head` is also read as a
+// push of the default branch (review/163), which asks, so it never runs unasked.
 const RUNS = [...AUTONOMY.runs, ...(AUTONOMY.deploying.includes("workflow-dispatch") ? [] : ["workflow-dispatch"]), "remote-write"];
 const STRICTER = AUTONOMY.mode === "ask" || AUTONOMY.deploying.length > 0 || AUTONOMY.deployingBranches.length > 0;
 // This package as emission found it (review/44, review/53): the program words that run it (its bins and unscoped name,
@@ -1471,7 +1472,14 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			if (key === "" || key !== origin) return outside();
 		}
 	};
-	function remoteWriteVerdict(sub, args) {
+	function remoteWriteVerdict(sub, args, marks) {
+		const [verb, , head] = args.filter((arg) => !arg.startsWith("-"));
+		const at = args.findIndex((arg) => !arg.startsWith("-"));
+		const hidden = sub === "remote" && verb !== "set-head" && !shownWords(marks.slice(0, at < 0 ? void 0 : at + 1));
+		if (sub === "remote" && (verb === "set-head" || hidden)) {
+			if (hidden ? deploys(null) : head !== void 0 && deploys(/[$`]/.test(head) ? null : head)) deny("push-deploying", "A remote's HEAD ref pointed at a deploying branch, or at a branch the line cannot show (`git remote set-head`)");
+			remoteHeadVerdict("git remote set-head", !hidden);
+		}
 		if (ctx.originRepo === void 0) return;
 		if (sub === "remote") {
 			const action = args.find((arg) => !arg.startsWith("-")) ?? "";
@@ -1716,7 +1724,10 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		if (written) return deny("tag", "A tag write (`git tag`)");
 		return list || positionals.length === 0 ? null : deny("tag", "A tag created (`git tag <name>`)");
 	}
-	function symbolicRefVerdict(args, via = "git symbolic-ref") {
+	const REMOTE_HEAD = /^(?:refs\/)?remotes\/[^/]+\/HEAD$/i;
+	const remoteHeadVerdict = (via, shown = true) => deny("push-default", `${shown ? "A remote's HEAD ref" : "A ref the line cannot show, which may be a remote's HEAD ref,"} written or deleted (\`${via}\`), which moves the branch the guard reads as the default`);
+	const shownWords = (marks) => marks.every((mark) => mark.kinds === "");
+	function symbolicRefVerdict(args, via = "git symbolic-ref", marks = []) {
 		let remove = false;
 		const positionals = [];
 		for (let j = 0; j < args.length; j += 1) {
@@ -1739,10 +1750,13 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const [name = "", target] = positionals;
 		if (remove && /^(refs\/)?tags\//i.test(name)) return deny("tag-delete", `A symbolic tag ref deleted (\`${via}\`)`);
 		if (target !== void 0 && /^(refs\/)?tags\//i.test(name)) return deny("tag", `A symbolic tag ref written or deleted (\`${via}\`)`);
-		if (remove || target === void 0 || name === "HEAD") return null;
+		const remoteHead = REMOTE_HEAD.test(name);
+		const hidden = !shownWords(marks);
+		if (remove || target === void 0 || name === "HEAD") return remove && remoteHead || hidden ? remoteHeadVerdict(via, remoteHead) : null;
 		if (deploys(/[$`]/.test(target) ? null : target.replace(/^(refs\/)?heads\//i, ""))) deny("push-deploying", `A symbolic ref pointed at a deploying branch, or at a branch the line cannot show (\`${via}\`)`);
+		if (remoteHead) return remoteHeadVerdict(via);
 		if (/[$`]/.test(target) || defaults.has(target.replace(/^(refs\/)?heads\//i, "").toLowerCase())) return deny("push-default", `A symbolic ref pointed at the default branch, or at a branch the line cannot show (\`${via}\`)`);
-		return null;
+		return hidden ? remoteHeadVerdict(via, false) : null;
 	}
 	function ghVerdict(cmd) {
 		const [group, sub] = ghPositionals(cmd);
@@ -2448,12 +2462,45 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	}
 	if (command.length > 65536) return deny("line-too-long", "A line too long for the guard to read (over 65,536 characters), which may hold an act that");
 	const read = commandsOf(command, 0, false);
+	const before = String.raw`(?<=^|[^\w-]|\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|U[\da-fA-F]{1,8}|[0-7]{1,4}|[a-zA-Z])|%[-#0+ \d.]*[a-zA-Z])`;
+	const stdinCommand = new RegExp(String.raw`${before}(?:(?:symref-)?(?:update|create|delete|verify)|option|start|prepare|commit|abort)(?![\w-])`, "i");
+	const refCommand = String.raw`${before}(?:symref-)?(?:update|create|delete)(?:[ \t]|\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|[0-7]{1,4}))+`;
+	const plain = String.raw`[^\s'"\\$\`%{}*?[\]|;&<>()]`;
+	const ends = String.raw`$|[\s|;&<>()]|['"](?=$|[\s|;&<>()])|\\(?:[nrt]|0{1,4}(?![0-7])|0?0(?:1[125]|40)(?![0-7])|x(?:[09adAD](?![\da-fA-F])|0[09adAD]|20)|u00(?:0[09adAD]|20))`;
+	const unshownCommand = new RegExp(String.raw`${refCommand}${plain}*(?!${plain})(?!${ends})`, "i");
+	const remotesStart = /(?<![\w-])(?:refs\/)?remotes\//gi;
+	const plainRun = new RegExp(String.raw`${plain}*`, "y");
+	const runEnd = new RegExp(String.raw`(?:${ends})`, "iy");
+	const unshownRemote = (text) => {
+		let end = -1;
+		for (const { index } of text.matchAll(remotesStart)) {
+			if (index < end) continue;
+			plainRun.lastIndex = index;
+			plainRun.exec(text);
+			end = plainRun.lastIndex;
+			runEnd.lastIndex = end;
+			if (!runEnd.test(text)) return true;
+		}
+		return false;
+	};
+	const stdinFlag = (arg) => arg.length > 2 && "--stdin".startsWith(arg);
+	let stdinRead;
+	let symrefsRead = false;
+	const stdinText = () => {
+		if (stdinRead !== void 0) return stdinRead;
+		const texts = [command, ...read.map((words) => words.join(" "))];
+		stdinRead = {
+			named: texts.some((text) => /remotes\/[^\s/'"\\]+\/HEAD(?![\w-])/i.test(text)),
+			unshown: texts.some((text) => unshownCommand.test(text) || unshownRemote(text)) || !texts.some((text) => stdinCommand.test(text)) && /[$`%\\]/.test(command)
+		};
+		return stdinRead;
+	};
 	for (const cmd of read) {
 		const program = cmd[0] ?? "";
 		if (program === "git") {
 			const { sub, args, config } = gitParts(cmd);
-			remoteWriteVerdict(sub, args);
 			const argMarks = (markMap.get(cmd) ?? []).slice(cmd.length - args.length);
+			remoteWriteVerdict(sub, args, argMarks);
 			if (sub === "push") pushRead(args, config, argMarks);
 			else if (sub === "send-pack") pushRead(args, [...config, "push.default=matching"], argMarks);
 			else if (sub === "tag") tagVerdict(args);
@@ -2462,17 +2509,18 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				const [, value = ""] = args.filter((arg, index) => !arg.startsWith("-") && args[index - 1] !== "-m");
 				const word = String.raw`[^\s'"\\|;&<>()]`;
 				const separator = String.raw`(?: |\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|[0-7]{1,4}))`;
-				const before = String.raw`(?<=^|[^\w-]|\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|U[\da-fA-F]{1,8}|[0-7]{1,4}|[a-zA-Z])|%[-#0+ \d.]*[a-zA-Z])`;
 				const emptied = new RegExp(String.raw`${before}update${separator}+refs\/tags\/${word}+(?!${word})(?!${separator}${word})`, "i");
 				if (args.some((arg) => /^-[^-m]*d/.test(arg)) || zero.test(value) || args.includes("--stdin") && (/\bdelete\b/.test(command) || zero.test(command) || emptied.test(command))) deny("tag-delete", "A tag ref deleted (`git update-ref`)");
 				else deny("tag", "A tag ref write (`git update-ref`)");
 			} else if (sub === "update-ref" && args.includes("--stdin")) {
 				const word = String.raw`(?:[\s'"]|\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|U[\da-fA-F]{1,8}|[0-7]{1,4}|[a-z]))+([^\s'"\\|;&<>()]+)`;
-				for (const [, op, ref = "", target] of command.matchAll(new RegExp(String.raw`symref-(create|update|delete)${word}(?:${word})?`, "g"))) {
+				const symrefs = symrefsRead ? [] : command.matchAll(new RegExp(String.raw`symref-(create|update|delete)${word}(?:${word})?`, "g"));
+				symrefsRead = true;
+				for (const [, op, ref = "", target] of symrefs) {
 					const shown = target === void 0 || target.includes("%") ? "$" : target;
 					symbolicRefVerdict(op === "delete" ? ["-d", ref] : [ref, shown], "git update-ref --stdin");
 				}
-			} else if (sub === "symbolic-ref") symbolicRefVerdict(args);
+			} else if (sub === "symbolic-ref") symbolicRefVerdict(args, void 0, argMarks);
 			else if (sub === "subtree") {
 				const valued = /* @__PURE__ */ new Set([
 					"-P",
@@ -2491,6 +2539,22 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					kinds: ""
 				});
 				if (words[0] === "push") pushRead(words.slice(1), config, keptMarks.slice(1));
+			}
+			if (sub === "update-ref") {
+				const at = args.findIndex((arg, index) => !arg.startsWith("-") && !/^-[^-]*m$/.test(args[index - 1] ?? ""));
+				const stdin = at < 0 && args.some(stdinFlag);
+				const text = stdin ? stdinText() : void 0;
+				const via = stdin ? "git update-ref --stdin" : "git update-ref";
+				if (at >= 0 ? REMOTE_HEAD.test(args[at] ?? "") : text?.named === true) remoteHeadVerdict(via);
+				else if (!shownWords(argMarks) || text?.unshown === true) remoteHeadVerdict(via, false);
+			}
+			if (sub === "branch") {
+				const flag = (short, long) => args.some((arg) => arg.startsWith("--") ? arg.length > 2 && long.startsWith(arg) : short.test(arg));
+				const flags = flag(/^-[^-]*[dD]/, "--delete") && flag(/^-[^-]*r/, "--remotes");
+				const head = args.some((arg) => !arg.startsWith("-") && /^(?:(?:refs\/)?remotes\/)?[^/]+\/HEAD$/i.test(arg));
+				const hidden = argMarks.filter((mark) => mark.kinds !== "").length;
+				if (flags && head) remoteHeadVerdict("git branch -d -r");
+				else if (hidden > 0 && (argMarks.some((mark) => /[sgb]/.test(mark.kinds)) || hidden >= (flags ? 0 : 1) + (head ? 0 : 1))) remoteHeadVerdict("git branch -d -r", false);
 			}
 		} else if (program === "gh") {
 			ghVerdict(cmd);
