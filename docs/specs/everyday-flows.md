@@ -1049,7 +1049,11 @@ Given a fixture repository, When `init -y` for all four clients and then `clean 
 before is byte-identical, a pre-existing `.gitignore` included, with or without a final newline and CRLF kept, and no
 other file exists, except `.claude/settings.json`'s recorded deny and ask rows (REQ-FLOW-036) and a `.env.mcp` ignore
 line once written (REQ-FLOW-016); `git status --porcelain --ignored` prints what it printed before, after the engine
-wrote its machine-local files too (REQ-FLOW-028). Given `--import-config supplement`, Then `AGENTS.md` and `CLAUDE.md`
+wrote its machine-local files too (REQ-FLOW-028), apart from the kept settings file's own line: on a fixture with no
+`.claude/` folder before setup it shows `?? .claude/`, because `clean` keeps `.claude/settings.json` holding the deny
+and ask rows the engine recorded, which it records and never owns, so no verb removes them (REQ-FLOW-036;
+`src/manifest/claudeSettings.ts`), and the round-trip test drops that one line before it compares
+(`test/cli/commands/roundTrip.test.ts:60-67`). Given `--import-config supplement`, Then `AGENTS.md` and `CLAUDE.md`
 come back byte for byte, leading whitespace, a byte-order mark and a missing final newline included: the prepend keeps
 the owner's bytes below one blank line, and the sweep's strip of a block at byte 0 takes the END line's break and one
 separator line (`prependManagedBlock`, `src/merge/safeWrite.ts`; `stripManagedBlock`, `src/merge/managedBlocks.ts`).
@@ -6955,10 +6959,10 @@ above.
 
 **REQ-FLOW-027** (added 2026-10-26)
 
-- GIVEN a fixture with no `.gitignore` WHEN `init -y` for four clients and then `clean -y` run THEN every file is
-  byte-identical but the recorded settings rows, no `.gitignore` is left, and `git status --porcelain --ignored` is
-  unchanged; GIVEN a pre-existing `node_modules/` line, with or without a final newline, or a CRLF file, THEN it comes
-  back byte-identical. *(test: `test/cli/commands/roundTrip.test.ts`)*
+- GIVEN a fixture with no `.gitignore` WHEN `init -y` for four clients and then `clean -y` run THEN every file but the
+  kept `.claude/settings.json` is byte-identical, no `.gitignore` is left, and `git status --porcelain --ignored` is
+  unchanged apart from that file's `?? .claude/` line; GIVEN a pre-existing `node_modules/` line, with or without a final
+  newline, or a CRLF file, THEN it comes back byte-identical. *(test: `test/cli/commands/roundTrip.test.ts`)*
 - GIVEN an owner `AGENTS.md` of `\n\n  # Team\n\nno final newline` and an owner `CLAUDE.md` opening with a byte-order mark
   WHEN `init -y --tools claude --import-config supplement` and then `clean -y` run THEN both come back byte-identical;
   GIVEN `--import-config replace` THEN the manifest records `backup: { path: "AGENTS.md.bak", sha256 }`, and after
