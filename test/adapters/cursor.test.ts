@@ -856,8 +856,15 @@ describe("`.cursor/agents` definitions", () => {
     it("tells the capability matrix the agent file's model is a default the dispatch and a hook carry, re-dated", () => {
       // An enterprise fork measured on Cursor 3.13.25 that the file's `model:`
       // does not bind and the model on the Task call does (the plan's Context).
+      // TEST CHANGE, justified: re-read 2026-10-26 (ledger row review/80, K7) — the subagents page
+      // does not call a pinned model a default, so the row names the measured run as the claim's
+      // source and puts the page's own sentence (its fallback conditions) beside it.
       expect(cursorDialectFacts.agentsFormat).toContain(
-        "is a default, not a hard limit; Stamity carries it on the dispatch and by a hook",
+        "A pinned model is a default, not a hard limit: in an enterprise fork's run on Cursor 3.13.25",
+      );
+      expect(cursorDialectFacts.agentsFormat).toContain(
+        "then falls back to a compatible model (cursor.com/docs/agent/subagents, read 2026-10-26). " +
+          "Stamity carries the pin on the dispatch and by a hook",
       );
       expect(cursorDialectFacts.agentsFormat).toContain(".stamity/generated/models/cursor.json");
       // Re-dated inline: a citation's own date moves only when every claim it covers was
