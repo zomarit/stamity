@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-pre-tool-use-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@1.16.0 sync`, which needs the npm registry' >&2; exit 2; }",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-pre-tool-use-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@1.17.0 sync`, which needs the npm registry' >&2; exit 2; }",
             "onFailure": "block"
           }
         ]
@@ -45,7 +45,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-person-only-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@1.16.0 sync`, which needs the npm registry' >&2; exit 2; }",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-person-only-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@1.17.0 sync`, which needs the npm registry' >&2; exit 2; }",
             "onFailure": "block"
           }
         ]
@@ -64,7 +64,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-person-only-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@1.16.0 sync`, which needs the npm registry' >&2; exit 2; }",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stamity/stamity-person-only-guard.mjs\" || { s=$?; [ \"$s\" -eq 2 ] && exit 2; echo 'stamity: the pre-tool-use guard could not run; run `stamity sync` where the CLI is installed, else `npx -y @zomarit/stamity@1.17.0 sync`, which needs the npm registry' >&2; exit 2; }",
             "onFailure": "block"
           }
         ]

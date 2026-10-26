@@ -1,8 +1,8 @@
 {
   "version": "2.0.0",
-  "generatedBy": "1.16.0",
+  "generatedBy": "1.17.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-26T08:48:14.597Z",
+  "updatedAt": "2026-10-26T16:14:01.671Z",
   "tools": [
     "claude"
   ],
@@ -141,35 +141,35 @@
       "adapter": "claude",
       "artifactId": "cmd-board",
       "artifactType": "command",
-      "contentHash": "01d492d77a11f8d93ca99deb2b03cb0502fc244eb1e03d2d48bfb336b05a9c8c",
+      "contentHash": "12d09613b69b6ec2ebd8c86f7b56f6035e990d82019abc441bf6324fe422cae2",
       "path": ".claude/commands/st-board.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-debug",
       "artifactType": "command",
-      "contentHash": "3956ae966b32aa1b03785caf6e166861b8980e208738519a5746f330c738637a",
+      "contentHash": "b4b9ed3c558af82c65a0c2042525e7129418228ccb0e788afcfa65b463f05863",
       "path": ".claude/commands/st-debug.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-plan",
       "artifactType": "command",
-      "contentHash": "1e06de97ca2e7ad4bdfb2fbd8d5322661fba3a749d5a22d49d4acaeaf630ea51",
+      "contentHash": "3588ccaddbba7a55bdfaa13f53fc42851574be3f478daa958116f38e7cf873eb",
       "path": ".claude/commands/st-plan.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-pr-resolve",
       "artifactType": "command",
-      "contentHash": "b74854d99d8003768d7a07b6a47d09359592ad97c4391f3c6f85fb5b19a53501",
+      "contentHash": "7b1cd9ed8408c69a31bb199ad27bd90bbdfdb449e57b0c855db3064d52e0c5d4",
       "path": ".claude/commands/st-pr-resolve.md"
     },
     {
       "adapter": "claude",
       "artifactId": "cmd-quick",
       "artifactType": "command",
-      "contentHash": "2c933484b2d935d1e6105f8cd4c26888e02d3d8653a61a03b9b2cbb6d602fc00",
+      "contentHash": "eb148e8d26dd9781fbecbb34617b199cc2b422b471c0034587a13877a9305f9d",
       "path": ".claude/commands/st-quick.md"
     },
     {
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "89b599c39faf2223e460222419f04b7671787bf41bdf80ed8add98f8f665953f",
+      "contentHash": "e3356a6c51a650aa4451766b64c639e8fa7befeaf4fa2b3c40276094d9cac034",
       "path": ".claude/commands/st-work.md"
     },
     {
@@ -204,14 +204,14 @@
       "adapter": "claude",
       "artifactId": "claude-hook-cloud-readiness",
       "artifactType": "infra",
-      "contentHash": "f7415512cba01b6bc95aca0f69a21662752fe40663ac8c7174ea5249c6b5a7a4",
+      "contentHash": "c6fe140ccea94e35c5fc43f18c98df160eef9e584f975edb72e02d0a6aa15058",
       "path": ".claude/hooks/stamity/stamity-cloud-readiness.mjs"
     },
     {
       "adapter": "claude",
       "artifactId": "stamity-config-tamper-notice",
       "artifactType": "infra",
-      "contentHash": "1edf79634d39ed4d7738a806305afdb1f35c1bd08e719ce5ba9a618931c66b48",
+      "contentHash": "482d90f4628b19a5eb2e351fee6605656acd2be4c11ef9048a243b514a501f9d",
       "path": ".claude/hooks/stamity/stamity-config-tamper-notice.mjs"
     },
     {
@@ -330,10 +330,10 @@
             "242925ec7f7b2a4898a0b7157d96f529525f9bb236b66d876049fbc2643223fe"
           ],
           "/hooks/PreToolUse": [
-            "47bf97ef9f5a80301790817af93a3698bf958cf827eb3e72cf08ba2693e6f398",
-            "13754fa9faff415fdaa92a8617d27c76e7ca6819dc31bad485eb8ea7fc80eb2c",
+            "572994326285da8b3345b09b7b19f9f50008c5391505514171f61acd05ceb86f",
+            "2ecb21d07e349ae470e471609a3e2cb59f382e95b3aafffa52f30b40ff4a97b6",
             "7116ff1c12b274d4580c1710f1a401287b40f00f0bfcea09c9dd7503a6ad9f3b",
-            "b0cfe5bb0d2dbfd4333ef374f7d007b941ab1e01eff9c4f3dec70144e92f2687"
+            "177999482ee46536005af9d2c242cd92fce6b317f24cfac26cc908567776f61c"
           ],
           "/hooks/SessionStart": [
             "e49db8343a3a390290586dd9dc1a9a3b7f60e1678d5da09370ea6bd981ef374b",
@@ -434,7 +434,7 @@
           ]
         }
       },
-      "contentHash": "f535dcd57b2b21931e4526abb1223fb358a5ff5aec0defaa70f8d09e90b7cfc4",
+      "contentHash": "db3212a64a8f609fe9ef33f38b1f1d915d91e5e98d758f27de7fd06572a31877",
       "path": ".claude/settings.json"
     },
     {
@@ -462,7 +462,7 @@
       "adapter": "claude",
       "artifactId": "handoff",
       "artifactType": "skill",
-      "contentHash": "86ba76f3b2f7e24feae0a8913d5d565ee2fd9f70ed0793aa52085d68dec0da48",
+      "contentHash": "5f0eb479d2d9ca01dcf284d5806d4573ada5f20b523b53ffa9bd3b1dca7889cf",
       "path": ".claude/skills/st-handoff/SKILL.md"
     },
     {
@@ -476,7 +476,7 @@
       "adapter": "claude",
       "artifactId": "learn",
       "artifactType": "skill",
-      "contentHash": "74f21e87b8f325600f53af89beeb548cab1f199128fd4dff7a2d987014a0bdb4",
+      "contentHash": "d0dfa525e5740b2f935efce676796cabafa8d21f0ee92ac77b25714e852fa7c2",
       "path": ".claude/skills/st-learn/SKILL.md"
     },
     {
@@ -532,7 +532,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "071c810801afa910e5544d45f3c2efa8937122bc0de471117f58af23e23e0f74",
+      "contentHash": "febba2b0217966d1d42e056dd3c11be9569f69edc63b4be265a5c309901a798b",
       "path": ".claude/skills/st-unattended/SKILL.md"
     },
     {
@@ -679,9 +679,9 @@
       "adapter": "claude",
       "artifactId": "charter",
       "artifactType": "infra",
-      "contentHash": "5fc6b886adc9e44672c56d9ea857b6f2581d2622c853beef6453b0b174584086",
+      "contentHash": "bc8d807c736756abaf0ef21685d0162752de077fce9c871df5d2167c703cbaae",
       "path": "AGENTS.md",
-      "stampedVersion": "1.16.0"
+      "stampedVersion": "1.17.0"
     },
     {
       "adapter": "claude",
@@ -689,7 +689,7 @@
       "artifactType": "infra",
       "contentHash": "697c902a89fcffe97474d8ca71b309c303c3989f9c87dbbf2c6fb12d12e95bc4",
       "path": "CLAUDE.md",
-      "stampedVersion": "1.16.0"
+      "stampedVersion": "1.17.0"
     }
   ],
   "gates": {

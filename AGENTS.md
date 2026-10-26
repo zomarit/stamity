@@ -14,7 +14,7 @@ means detection found nothing — treat that item as unconfigured and report it;
 - Linter: eslint, oxlint
 - Test framework: vitest
 - CI provider: github-actions
-- Maturity tier: solo — git history at init, or the default; `npx -y @zomarit/stamity@1.16.0 config` changes it.
+- Maturity tier: solo — git history at init, or the default; `npx -y @zomarit/stamity@1.17.0 config` changes it.
 
 ### Verification gates
 
