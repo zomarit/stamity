@@ -2865,6 +2865,42 @@ describe("stamity run checkpoint", () => {
       expect(pushedBytes(remote).equals(pushedBefore)).toBe(true);
     });
 
+    // build/15, review/33: the kept patch's paths came from one git apply --numstat over the whole file, with no
+    // held-path check and no count per section, so a path no person-only glob holds was listed in held, exit 0.
+    it.each([
+      {
+        where: "a section naming a path the hold does not hold",
+        steer: (patch: string): string => `${patch}diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-a.txt\n+steered\n`,
+        refusal: `hold failed: a section of the kept ${PATCH} names a.txt, which the hold does not hold`,
+      },
+      {
+        where: "a second file patch after a section's hunks",
+        steer: (patch: string): string => `${patch}--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-a.txt\n+steered\n`,
+        refusal: `hold failed: a section of the kept ${PATCH} carries more than one file patch, so a path past its first would be carried unlisted`,
+      },
+      {
+        where: "a file patch before the first diff --git line",
+        steer: (patch: string): string => `--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-a.txt\n+steered\n${patch}`,
+        refusal: `hold failed: the kept ${PATCH} does not start at a diff --git line, as every patch this verb writes does, so a file patch git apply reads before its first section would be carried unlisted`,
+      },
+    ])("refuses $where in a kept patch where the clone holds no new held change (build/15, review/33)", async ({ steer, refusal }) => {
+      const { repo, remote } = await seed("unattended");
+      await writeFile(join(repo, ".cursorrules"), "steered rules\n");
+      expect((await run(repo, CHECKPOINT)).code).toBe(0);
+      const clone = await cloneRun(repo, remote);
+      await writeFile(join(clone, PATCH), steer(await readFile(join(clone, PATCH), "utf8")));
+      git(clone, ["commit", "-q", "-m", "steered patch", "--", PATCH]);
+      const before = git(clone, ["rev-parse", "HEAD"]);
+      const pushedBefore = pushedBytes(remote);
+
+      const { code, doc } = await run(clone, CHECKPOINT);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false, notDone: [refusal] });
+      expect(git(clone, ["rev-parse", "HEAD"])).toBe(before);
+      expect(pushedBytes(remote).equals(pushedBefore)).toBe(true);
+    });
+
     // review/251: a checkout under core.autocrlf (Git for Windows' default) leaves the work tree's copy of the committed
     // patch with CRLF line ends, which the verb's git add turns back to LF; the header read takes CR LF as a line end.
     it("carries a section whose work-tree copy has CRLF line ends, as an autocrlf checkout leaves it (review/251)", async () => {

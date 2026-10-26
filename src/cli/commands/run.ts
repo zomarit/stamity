@@ -1156,7 +1156,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
       // new one (which keeps its sections for paths not held then, n14), never dropped because the work tree holds no
       // held change: a run continued on a fresh clone (REQ-FLOW-105) has its person-only change in that patch alone.
       // One no commit carries leaves the folder.
-      const committed = await committedPatchPaths(top, fromTop(patchRel), verb);
+      const committed = await committedPatchPaths(top, fromTop(patchRel), isHeld, verb);
       if (typeof committed === "string") {
         result.notDone.push(committed);
         return finish(false);
@@ -2027,45 +2027,43 @@ async function removeStalePatch(cwd: string, top: string, heldDir: string, patch
 }
 
 /**
- * review/6: the paths the held patch `HEAD` carries names (`git apply --numstat`, which applies nothing), read from
- * the copy the commit takes: the work tree's where it is a regular file, else `HEAD`'s. `null` where `HEAD` carries
- * none; else the reason it could not be read, for `notDone`.
+ * review/6: the paths the held patch `HEAD` carries names, read from the copy the commit takes: the work tree's where
+ * it is a regular file, else `HEAD`'s. `null` where `HEAD` carries none; else the reason it could not be read, for
+ * `notDone`. Each section is read as {@link carriedSections} reads one ({@link sectionPathsOf}): review/15, its header
+ * checked first; review/33, refused where git reads it as more than one file patch; build/15, refused where it names a
+ * path `isHeld` does not hold, so `held` never names a path the hold does not hold. review/33: a patch that does not
+ * start at a `diff --git` line is refused, since a file patch git reads before the first section lies in none of them.
  */
-async function committedPatchPaths(top: string, patchFromTop: string, verb: string): Promise<string[] | string | null> {
+async function committedPatchPaths(
+  top: string,
+  patchFromTop: string,
+  isHeld: (path: string, link: boolean) => boolean,
+  verb: string,
+): Promise<string[] | string | null> {
   const listed = await git(top, ["ls-tree", "-z", "HEAD", "--", patchFromTop], verb);
   if (listed.code !== 0) return `hold failed: git ls-tree answered ${listed.code}: ${firstLine(listed.stderr)}`;
   const blob = /^100(?:644|755) blob ([0-9a-f]{40,64})\t/.exec(listed.stdout)?.[1];
   if (blob === undefined) return null;
   const file = join(top, patchFromTop);
-  let read: GitWriteResult;
-  // review/15: each section's header is checked as carriedSections checks it, before numstat names its paths, so a
-  // section the verb's own diffs never write (no prefix, custom prefixes, a rename) is refused, not listed as held.
-  const foreign = (patch: Buffer): string | null => {
-    const starts = sectionStarts(patch);
-    for (const [index, from] of starts.entries()) {
-      const why = foreignSectionHeader(patch.subarray(from, starts[index + 1] ?? patch.length));
-      if (why !== null) return `hold failed: a section of the kept ${patchFromTop} ${why}`;
-    }
-    return null;
-  };
+  let patch: Buffer;
   if (isRegular(file)) {
-    const refused = foreign(readFileSync(file));
-    if (refused !== null) return refused;
-    read = await git(top, ["apply", "--numstat", "-z", file], verb);
+    patch = readFileSync(file);
   } else {
     const shown = await git(top, ["cat-file", "blob", blob], verb);
     if (shown.code !== 0) return `hold failed: git cat-file answered ${shown.code}: ${firstLine(shown.stderr)}`;
-    const refused = foreign(Buffer.from(shown.stdout, "utf8"));
-    if (refused !== null) return refused;
-    read = await git(top, ["apply", "--numstat", "-z"], verb, shown.stdout);
+    patch = Buffer.from(shown.stdout, "utf8");
   }
-  if (read.code !== 0) return `hold failed: the kept ${patchFromTop} could not be read (git apply answered ${read.code}: ${firstLine(read.stderr)})`;
-  // One `<added>\t<deleted>\t<path>` record per section, NUL-terminated; a path deleted and added again is named once.
-  const paths = read.stdout.split("\0").flatMap((row) => {
-    const fields = row.replace(/^\n+/, "").split("\t");
-    return fields.length < 3 ? [] : [fields.slice(2).join("\t")];
-  });
-  return [...new Set(paths)].filter((path) => path !== "").toSorted();
+  const starts = sectionStarts(patch);
+  if (starts[0] !== 0) {
+    return `hold failed: the kept ${patchFromTop} does not start at a diff --git line, as every patch this verb writes does, so a file patch git apply reads before its first section would be carried unlisted`;
+  }
+  const scratch = mkdtempSync(join(tmpdir(), "stamity-held-"));
+  try {
+    const mapped = await sectionPathsOf(top, patchFromTop, starts.map((from, index) => patch.subarray(from, starts[index + 1] ?? patch.length)), isHeld, scratch, verb);
+    return typeof mapped === "string" ? mapped : [...new Set(mapped.flat())].toSorted();
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
 }
 
 /** Where each section of a patch starts: its offset, at a line-start `diff --git ` header. */
@@ -2117,6 +2115,26 @@ async function carriedSections(
   }
   const starts = sectionStarts(patch);
   const sections = starts.map((from, index) => patch.subarray(from, starts[index + 1] ?? patch.length));
+  const mapped = await sectionPathsOf(top, patchFromTop, sections, isHeld, scratch, verb);
+  if (typeof mapped === "string") return mapped;
+  const keep = mapped.map((paths) => !paths.some((path) => heldNow.includes(path)));
+  const named = (kept: boolean): string[] => [...new Set(mapped.flatMap((paths, index) => ((keep[index] === true) === kept ? paths : [])))].toSorted();
+  return { sections: sections.filter((_, index) => keep[index] === true), paths: named(true), dropped: named(false) };
+}
+
+/**
+ * The paths each section of the kept `patchFromTop` names, in order, as {@link carriedSections} documents its
+ * refusals (review/249, review/250, review/251), each section's numstat written to `scratch`; else the first
+ * section's reason, for `notDone`.
+ */
+async function sectionPathsOf(
+  top: string,
+  patchFromTop: string,
+  sections: readonly Buffer[],
+  isHeld: (path: string, link: boolean) => boolean,
+  scratch: string,
+  verb: string,
+): Promise<string[][] | string> {
   const mapped = await Promise.all(
     sections.map(async (section, index): Promise<string[] | string> => {
       const foreign = foreignSectionHeader(section);
@@ -2147,10 +2165,7 @@ async function carriedSections(
   );
   const failed = mapped.find((paths) => typeof paths === "string");
   if (typeof failed === "string") return failed;
-  const keep = mapped.map((paths) => typeof paths !== "string" && !paths.some((path) => heldNow.includes(path)));
-  const named = (kept: boolean): string[] =>
-    [...new Set(mapped.flatMap((paths, index) => ((keep[index] === true) === kept && typeof paths !== "string" ? paths : [])))].toSorted();
-  return { sections: sections.filter((_, index) => keep[index] === true), paths: named(true), dropped: named(false) };
+  return mapped.filter((paths) => typeof paths !== "string");
 }
 
 /** review/251: an extended header line the verb's own diffs write (renames pinned off, `--full-index`), whole. */
