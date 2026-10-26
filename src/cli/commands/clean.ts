@@ -125,15 +125,16 @@ import { confirm, promptGate } from "../kit/prompts.ts";
  * block is stripped instead), unsafe paths are refused, missing files are
  * reported rather than fatal. After the sweep, on a live run, the default scope
  * removes the engine's machine-local files ({@link removeMachineLocalFiles}),
- * then the review gate's state and the manifest ({@link removeSetupRecord}),
- * then the store placeholders, and prunes each folder left empty, `.stamity/`
- * itself included; a link at any of those names is left and named. `--purge`
- * removes the directory whole instead. `.gitignore` is not the sweep's: last of
- * all, the full clean takes back each ignore line the ledger records the setup
+ * then the review gate's state ({@link removeSetupRecord}), then the store
+ * placeholders, and prunes each folder left empty; a link at any of those
+ * names, a linked store folder included, is left and named. `--purge` removes
+ * the directory whole instead. `.gitignore` is not the sweep's: after those,
+ * the full clean takes back each ignore line the ledger records the setup
  * appending (`coOwned.lines`, REQ-FLOW-016) whose ignored file is gone, and
  * deletes the file when the setup created it and nothing else is left. The
- * ledger was read before the manifest went, so the take-back reads it from
- * memory. A line it never recorded — every line of a setup from 1.16.0 or
+ * manifest goes last of all, with `.stamity/` once empty
+ * ({@link removeSetupManifest}), so a step that fails before it leaves the
+ * ledger a re-run finishes from. A line it never recorded — every line of a setup from 1.16.0 or
  * earlier — stays, and so does `.env.mcp`'s, which no verb takes back
  * (review/28). While a hook still runs from the state directory (below), every
  * line stays.
@@ -186,7 +187,8 @@ export function planCleanCandidates(manifest: SetupManifest, opts: { purge: bool
  *
  * Its refusals (a linked `.gitignore`, a block-severity injection pattern in
  * the bytes it would keep) fail the run after the rest of the clean is done,
- * and name the lines left, since the manifest that recorded them is gone.
+ * and name the lines left, since the caller removes the manifest that recorded
+ * them before it rethrows the refusal.
  */
 async function takeBackGitignoreLines(rootDir: string, manifest: SetupManifest): Promise<GitignoreReconcile | null> {
   const previous = gitignoreRecordOf(manifest.ledger);
@@ -333,10 +335,18 @@ async function restoreImportBackups(rootDir: string, manifest: SetupManifest): P
   return outcome;
 }
 
-/** The closing lines on what a default clean kept under the state directory: what is left, the packs, and each name it left. */
-function keptStateLines(kept: readonly string[], packsKept: readonly string[], state: StateRemoval | null): string[] {
+/**
+ * The closing lines on what a default clean kept under the state directory: what is left, the packs, and each name it left.
+ * How to remove the rest depends on the manifest (review/57): once it is gone no `clean --purge` finds a record, so the
+ * line says to delete the folder by hand; while a hook still runs from the state directory it stays, and `--purge`
+ * deletes the rest once that wiring is gone.
+ */
+function keptStateLines(kept: readonly string[], packsKept: readonly string[], state: StateRemoval | null, wiringHeld: boolean): string[] {
+  const removeRest = wiringHeld
+    ? `Once that wiring is gone, ${packageCommand("clean --purge")} deletes these too.`
+    : `To remove these too, delete ${STATE_DIR}/ yourself: the setup's record is gone, so no clean removes them now.`;
   return [
-    ...(kept.length === 0 ? [] : [`Kept under ${STATE_DIR}/: ${kept.join(", ")}. ${packageCommand("clean --purge")} deletes these too.`]),
+    ...(kept.length === 0 ? [] : [`Kept under ${STATE_DIR}/: ${kept.join(", ")}. ${removeRest}`]),
     ...(packsKept.length === 0
       ? []
       : [`The installed pack(s) ${packsKept.join(", ")} stay under ${STATE_DIR}/packs/: the next ${packageCommand("init")} records them again from their receipts.`]),
@@ -652,9 +662,21 @@ function nextSteps(ctx: CliContext, steps: readonly string[]): void {
   }
 }
 
-/** Nothing to clean: a repo with no manifest is already in the target state. */
-function nothingToClean(ctx: CliContext): CommandResult {
-  ctx.io.out(`Nothing to clean — this repo has no ${STATE_DIR}/ manifest.\n`);
+/**
+ * Nothing to clean: a repo with no manifest is already in the target state. A
+ * `--purge` that finds a state directory but no manifest (a default clean ran
+ * first) says it removes nothing without that record, and what does (review/57).
+ */
+async function nothingToClean(ctx: CliContext, rootDir: string, purge: boolean): Promise<CommandResult> {
+  const stateLeft = purge && (await lstatOrNull(join(rootDir, STATE_DIR))) !== null;
+  ctx.io.out(
+    `Nothing to clean — this repo has no ${STATE_DIR}/ manifest.` +
+      (stateLeft
+        ? ` ${packageCommand("clean --purge")} removes ${STATE_DIR}/ only by the setup's record, and there is none, so what is ` +
+          `under ${STATE_DIR}/ stays: delete ${STATE_DIR}/ yourself to remove it.`
+        : "") +
+      "\n",
+  );
   nextSteps(ctx, [REINIT_OFFER]);
   return {
     exitCode: 0,
@@ -777,6 +799,9 @@ interface StateRemoval {
   left: { path: string; why: string }[];
 }
 
+/** Why a linked store folder is left: its placeholder is not under this repository (review/60). */
+const LINK_NOT_FOLLOWED = "it is a link, so clean did not follow it";
+
 /** The engine's machine-local files directly under the state directory (REQ-FLOW-028, plan round 1's W-5). */
 const MACHINE_LOCAL_FILES: readonly string[] = [PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE, CLIENT_MODELS_CACHE_FILE];
 
@@ -846,11 +871,11 @@ async function removeMachineLocalFiles(rootDir: string, removal: StateRemoval): 
 /**
  * The setup's own record under the state directory (REQ-FLOW-028): the review
  * gate's counter, its lock folder (removed even while held: it is machine-local
- * and no run outlives the setup) and its publish temp files, then the manifest
- * unless `keepManifest` (a hook still runs from the state directory, so the
- * re-run needs the ledger). Only regular files and a real lock folder go.
+ * and no run outlives the setup) and its publish temp files. Only regular files
+ * and a real lock folder go. The manifest is not among them: it goes last of all
+ * ({@link removeSetupManifest}).
  */
-async function removeSetupRecord(rootDir: string, keepManifest: boolean, removal: StateRemoval): Promise<void> {
+async function removeSetupRecord(rootDir: string, removal: StateRemoval): Promise<void> {
   await unlinkRegularFile(rootDir, REVIEW_GATE_STATE_FILE, removal);
   const lockPath = `${REVIEW_GATE_STATE_FILE}${REVIEW_GATE_LOCK_SUFFIX}`;
   const lockAbs = join(rootDir, ...lockPath.split("/"));
@@ -872,7 +897,6 @@ async function removeSetupRecord(rootDir: string, keepManifest: boolean, removal
     // oxlint-disable-next-line no-await-in-loop -- one temp file per interrupted publish
     await unlinkRegularFile(rootDir, `${STATE_DIR}/${name}`, removal);
   }
-  if (!keepManifest) await unlinkRegularFile(rootDir, `${STATE_DIR}/${MANIFEST_FILE}`, removal);
 }
 
 /**
@@ -911,23 +935,40 @@ async function keptStateEntries(rootDir: string): Promise<string[]> {
   }
 }
 
+/** Whether the state directory is a real folder: no step of the default scope works over one that is a link, which no setup writes. */
+async function isRealStateDir(rootDir: string): Promise<boolean> {
+  return (await lstatOrNull(join(rootDir, STATE_DIR)))?.isDirectory() === true;
+}
+
 /**
  * The default scope's state step (REQ-FLOW-028), on a live run after the sweep:
- * the machine-local files, the review gate's state and the manifest, the store
- * placeholders, then each folder left empty, `.stamity/` itself included, which
- * keeps every held hook script with its folders. Not over a state directory
- * that is itself a link, which no setup writes.
+ * the machine-local files, the review gate's state, the store placeholders (a
+ * store folder that is a link is left and named, review/60), then each folder
+ * left empty, which keeps every held hook script with its folders. The manifest
+ * stays for {@link removeSetupManifest}, so a failure here leaves the ledger a
+ * re-run finishes from (review/58).
  */
-async function removeSetupState(rootDir: string, keepManifest: boolean): Promise<StateRemoval> {
+async function removeSetupState(rootDir: string): Promise<StateRemoval> {
   const removal: StateRemoval = { removed: [], left: [] };
-  const stateAbs = join(rootDir, STATE_DIR);
-  const state = await lstatOrNull(stateAbs);
-  if (state === null || !state.isDirectory()) return removal;
+  if (!(await isRealStateDir(rootDir))) return removal;
   await removeMachineLocalFiles(rootDir, removal);
-  await removeSetupRecord(rootDir, keepManifest, removal);
-  removal.removed.push(...(await removeStateScaffold(rootDir)));
-  await pruneEmptyFolders(stateAbs);
+  await removeSetupRecord(rootDir, removal);
+  const scaffold = await removeStateScaffold(rootDir);
+  removal.removed.push(...scaffold.removed);
+  removal.left.push(...scaffold.linked.map((path) => ({ path, why: LINK_NOT_FOLLOWED })));
+  await pruneEmptyFolders(join(rootDir, STATE_DIR));
   return removal;
+}
+
+/**
+ * The default scope's last step: the manifest, after the `.gitignore` take-back,
+ * then `.stamity/` itself once empty. Every earlier step can fail with the
+ * ledger still on disk, so a re-run finishes the clean (review/58, review/61).
+ */
+async function removeSetupManifest(rootDir: string, removal: StateRemoval): Promise<void> {
+  if (!(await isRealStateDir(rootDir))) return;
+  await unlinkRegularFile(rootDir, `${STATE_DIR}/${MANIFEST_FILE}`, removal);
+  await pruneEmptyFolders(join(rootDir, STATE_DIR));
 }
 
 /**
@@ -1585,7 +1626,7 @@ export const cleanCommand: CommandModule = {
     // message already names every defect and offers delete-and-reinitialise,
     // which is the better repair path than anything this command could add.
     const manifest = await readManifest(rootDir);
-    if (manifest === null) return nothingToClean(ctx);
+    if (manifest === null) return await nothingToClean(ctx, rootDir, purge);
     const rendered = await renderingManifest(rootDir, manifest);
 
     if (packId !== undefined) return await runScopedClean(ctx, rootDir, manifest, packId, rendered);
@@ -1638,7 +1679,8 @@ export const cleanCommand: CommandModule = {
               refusedWhat: `${candidates.length} generated file(s)`,
               question:
                 `Remove ${candidates.length} generated file(s) and the setup's own files under ${STATE_DIR}/? ` +
-                `Learnings, handoffs, overrides, run records and installed packs under ${STATE_DIR}/ stay; --purge deletes them too.`,
+                `Learnings, handoffs, overrides, run records and installed packs under ${STATE_DIR}/ stay; ` +
+                `to delete them too, run ${packageCommand("clean --purge")} instead of this run.`,
             },
       );
     }
@@ -1668,15 +1710,11 @@ export const cleanCommand: CommandModule = {
     const keepsState = (path: string): boolean => underStateDir(path) || underHookRoot(path);
     const wiringKept = (report.wiringKept ?? []).filter((doc) => doc.scripts.some(keepsState));
     const stateDirKept = [...new Set(wiringKept.flatMap((doc) => doc.scripts.filter(keepsState)))];
-    // The machine-local files, the review gate's state, the manifest and the
-    // placeholders, in that order, then the empty folders (REQ-FLOW-028); live runs only.
-    const state = ctx.dryRun || purge ? null : await removeSetupState(rootDir, stateDirKept.length > 0);
-    const stateDirRemoved = ctx.dryRun
-      ? false
-      : purge
-        ? stateDirKept.length === 0 && (await removeStateDir(rootDir))
-        : !(await exists(join(rootDir, STATE_DIR)));
-    const kept = ctx.dryRun || purge ? [] : await keptStateEntries(rootDir);
+    // The machine-local files, the review gate's state and the placeholders, in
+    // that order, then the empty folders (REQ-FLOW-028); live runs only. The
+    // manifest goes last, after the ignore lines below (review/58).
+    const state = ctx.dryRun || purge ? null : await removeSetupState(rootDir);
+    const purgeRemoved = !ctx.dryRun && purge && stateDirKept.length === 0 && (await removeStateDir(rootDir));
 
     const formatted = formatReclaimReport(report);
     if (formatted !== "") ctx.io.out(`${formatted}\n`);
@@ -1700,7 +1738,24 @@ export const cleanCommand: CommandModule = {
     // Not while a hook still runs from the state directory: it can write the files
     // those lines ignore (review/29), and the re-run, which still has the manifest, takes them back.
     const gitignoreHeld = stateDirKept.length > 0;
-    const gitignore = ctx.dryRun || gitignoreHeld ? null : await takeBackGitignoreLines(rootDir, manifest);
+    let gitignore: GitignoreReconcile | null = null;
+    let refused: CliFailure | null = null;
+    try {
+      gitignore = ctx.dryRun || gitignoreHeld ? null : await takeBackGitignoreLines(rootDir, manifest);
+    } catch (cause) {
+      if (!(cause instanceof CliFailure)) throw cause;
+      refused = cause;
+    }
+    // The manifest last of all, unless a hook still runs from the state directory: an error
+    // before this line leaves the ledger a re-run finishes from (review/58, review/61). The
+    // take-back's own refusal still ends the clean here: it names the lines to delete by
+    // hand, and a re-run would only meet the same refusal.
+    if (state !== null && !gitignoreHeld) await removeSetupManifest(rootDir, state);
+    if (refused !== null) throw refused;
+    const stateDirRemoved = ctx.dryRun ? false : purge ? purgeRemoved : !(await exists(join(rootDir, STATE_DIR)));
+    // What is left directly under the state directory, less each name clean left on purpose, which `left` names (review/59).
+    const leftNames = new Set((state?.left ?? []).map(({ path }) => path.slice(STATE_DIR.length + 1).split("/")[0]));
+    const kept = ctx.dryRun || purge ? [] : (await keptStateEntries(rootDir)).filter((entry) => !leftNames.has(entry.replace(/\/$/, "")));
 
     if (ctx.dryRun) {
       // The take-back reads which ignored files are gone after the run, so the
@@ -1711,7 +1766,8 @@ export const cleanCommand: CommandModule = {
           ? `Dry run: nothing was written and ${STATE_DIR}/ is untouched. A real run also deletes ${STATE_DIR}/ and everything in it.\n`
           : `Dry run: nothing was written and ${STATE_DIR}/ is untouched. A real run also removes the setup's own files ` +
               `under ${STATE_DIR}/ (the manifest, the review gate's state and the machine-local files) and keeps the rest: ` +
-              `learnings, handoffs, overrides, run records and installed packs. --purge deletes those too.\n`,
+              `learnings, handoffs, overrides, run records and installed packs. To delete those too, run ` +
+              `${packageCommand("clean --purge")} instead of this run.\n`,
       );
       if (recorded.length > 0) {
         ctx.io.out(
@@ -1732,7 +1788,7 @@ export const cleanCommand: CommandModule = {
           `${report.strippedCount} rewritten to keep user content, ${report.skippedCount} skipped` +
           `${stateDirRemoved ? `, ${STATE_DIR}/ removed` : ""}.\n`,
       );
-      for (const line of keptStateLines(kept, packsKept, state)) ctx.io.out(`${line}\n`);
+      for (const line of keptStateLines(kept, packsKept, state, gitignoreHeld)) ctx.io.out(`${line}\n`);
       ctx.io.out(`${gitignoreOutcomeLine(gitignore, gitignoreHeld)}\n`);
       for (const line of restore === null ? [] : restoreLines(restore)) ctx.io.out(`${line}\n`);
       nextSteps(ctx, [REINIT_OFFER]);
@@ -1748,6 +1804,8 @@ export const cleanCommand: CommandModule = {
         purge,
         // What is left directly under the state directory, folders ending in `/` (REQ-FLOW-028).
         kept,
+        // Each name the default scope left on purpose (a link, or not the kind of file it wrote), and why; never in `kept` (review/59).
+        left: state?.left ?? [],
         packsKept,
         // The held-back scripts that kept the state directory, when any did (S17).
         ...(stateDirKept.length > 0 ? { stateDirKept } : {}),

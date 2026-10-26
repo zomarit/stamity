@@ -156,8 +156,7 @@ describe("init then clean restores .gitignore byte for byte (REQ-FLOW-027)", () 
 /**
  * REQ-FLOW-028 with REQ-FLOW-016: the engine's machine-local files go with the
  * setup, so no file is left whose ignore line `clean` took back. The take-back
- * runs last, after the files are gone, and reads the ledger from memory, since
- * the manifest is gone by then too.
+ * runs after the files are gone, and the manifest goes only after it (review/58).
  */
 describe("clean removes the machine-local files and then their ignore lines (REQ-FLOW-028)", () => {
   /** The four machine-local files a session writes, as their writers leave them. */

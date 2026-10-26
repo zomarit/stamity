@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { chmod, lstat, mkdir, readFile, readdir, symlink, unlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, readFile, readdir, rmdir, symlink, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -176,7 +176,7 @@ describe("removeStateScaffold (REQ-FLOW-028)", () => {
 
     const removed = await removeStateScaffold(root);
 
-    expect(removed).toEqual(stateKeepPaths());
+    expect(removed).toEqual({ removed: stateKeepPaths(), linked: [] });
     for (const name of STATE_SUBDIRS) {
       expect(existsSync(keepIn(root, name))).toBe(false);
       // The folder is the caller's to prune once it is empty: a learning beside the placeholder keeps it.
@@ -195,13 +195,55 @@ describe("removeStateScaffold (REQ-FLOW-028)", () => {
     await unlink(keepIn(root, "learnings"));
     await symlink(outside, keepIn(root, "learnings"));
 
-    expect(await removeStateScaffold(root)).toEqual([]);
+    expect(await removeStateScaffold(root)).toEqual({ removed: [], linked: [] });
     expect(await readFile(keepIn(root, "handoffs"), "utf-8")).toBe(edited);
     expect((await lstat(keepIn(root, "learnings"))).isSymbolicLink()).toBe(true);
     expect(await readFile(outside, "utf-8")).toBe(KEEP_BODY);
 
     const bare = getTemp().path("bare");
     await mkdir(bare, { recursive: true });
-    expect(await removeStateScaffold(bare)).toEqual([]);
+    expect(await removeStateScaffold(bare)).toEqual({ removed: [], linked: [] });
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "never looks into a store folder that is a link, and returns it as linked (review/60)",
+    async () => {
+      const root = getTemp().dir;
+      await ensureStateScaffold(root);
+      // Another checkout's store, holding a placeholder with the scaffold's very bytes.
+      const shared = getTemp().path("shared-learnings");
+      await mkdir(shared, { recursive: true });
+      await writeFile(join(shared, STATE_KEEP_FILE), KEEP_BODY, "utf-8");
+      await unlink(keepIn(root, "learnings"));
+      await rmdir(dirIn(root, "learnings"));
+      await symlink(shared, dirIn(root, "learnings"));
+
+      expect(await removeStateScaffold(root)).toEqual({ removed: [`${STATE_DIR}/handoffs/${STATE_KEEP_FILE}`], linked: [`${STATE_DIR}/learnings/`] });
+      expect(await readFile(join(shared, STATE_KEEP_FILE), "utf-8")).toBe(KEEP_BODY);
+    },
+  );
+
+  it("passes over a store name that is a file, and a store folder with no placeholder", async () => {
+    const root = getTemp().dir;
+    await mkdir(join(root, STATE_DIR), { recursive: true });
+    await writeFile(dirIn(root, "learnings"), "the owner's own file\n", "utf-8");
+    await mkdir(dirIn(root, "handoffs"));
+
+    expect(await removeStateScaffold(root)).toEqual({ removed: [], linked: [] });
+    expect(await readFile(dirIn(root, "learnings"), "utf-8")).toBe("the owner's own file\n");
+    expect(existsSync(dirIn(root, "handoffs"))).toBe(true);
+  });
+
+  it.skipIf(!CAN_TEST_PERMISSIONS)("rethrows a removal failure that is not ENOENT", async () => {
+    const root = getTemp().dir;
+    await ensureStateScaffold(root);
+    await chmod(dirIn(root, "handoffs"), 0o555);
+
+    try {
+      await expect(removeStateScaffold(root)).rejects.toMatchObject({ code: "EACCES" });
+      expect(await readFile(keepIn(root, "handoffs"), "utf-8")).toBe(KEEP_BODY);
+    } finally {
+      await chmod(dirIn(root, "handoffs"), 0o755);
+    }
   });
 });

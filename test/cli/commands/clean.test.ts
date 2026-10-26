@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { cp, link, mkdir, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, cp, link, lstat, mkdir, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { COMMANDS } from "../../../src/cli.ts";
@@ -49,6 +49,9 @@ import { makeTempDir, useTempDir, type TempDirHandle } from "../../support/tempD
 /* oxlint-disable no-await-in-loop */
 
 const tempDir = useTempDir("stamity-clean");
+
+/** chmod-based failure fixtures are meaningless as root, which bypasses the bits, and on Windows, which has none. */
+const CAN_TEST_PERMISSIONS = typeof process.getuid === "function" && process.getuid() !== 0;
 
 const AGENT_FILE = ".claude/agents/stamity-implementer.md";
 const RULE_FILE = ".cursor/rules/50-stamity-testing.mdc";
@@ -427,7 +430,38 @@ describe("clean — the .gitignore lines setup recorded", () => {
     expect(existsSync(join(root, STATE_DIR))).toBe(true);
     expect(await readFile(join(root, ".gitignore"), "utf8")).toBe(before);
     expect(result.stdout).toContain(`Left your .gitignore untouched: ${STATE_DIR}/ is kept`);
+    // review/57: the manifest stays here, but --purge keeps .stamity/ whole while that wiring runs, so the line says when it works.
+    const keptLine = result.stdout.split("\n").find((line) => line.startsWith(`Kept under ${STATE_DIR}/: `)) ?? "";
+    expect(keptLine).toContain("manifest.json");
+    expect(keptLine.endsWith(`. Once that wiring is gone, ${npxCommand("clean --purge")} deletes these too.`), keptLine).toBe(true);
   });
+
+  it.skipIf(!CAN_TEST_PERMISSIONS)(
+    "keeps the manifest when a step after the sweep fails, so the re-run takes the lines back (review/58, review/61)",
+    async () => {
+      const root = await initialised();
+      const learnings = join(root, STATE_DIR, "learnings");
+      // The placeholder's folder refuses the unlink: the step after the machine-local files and the gate state fails.
+      await chmod(learnings, 0o555);
+      let first;
+      try {
+        first = await runClean(root, ["-y"]);
+      } finally {
+        await chmod(learnings, 0o755);
+      }
+
+      expect(first.code).not.toBe(0);
+      expect(existsSync(join(root, STATE_DIR, "manifest.json"))).toBe(true);
+      expect(await readIfPresent(join(root, ".gitignore"))).toBe(`${MACHINE_LOCAL.join("\n")}\n`);
+
+      const second = await runClean(root, ["-y", "--json"]);
+
+      expect(second.code, second.stderr).toBe(0);
+      expect(parseSingleDoc(second.stdout)["gitignoreRemoved"]).toEqual(MACHINE_LOCAL);
+      expect(existsSync(join(root, ".gitignore"))).toBe(false);
+      expect(existsSync(join(root, STATE_DIR))).toBe(false);
+    },
+  );
 
   it("says which lines it took back, and deletes the .gitignore it created", async () => {
     const root = await initialised();
@@ -455,6 +489,8 @@ describe("clean — the .gitignore lines setup recorded", () => {
       expect(result.stderr).toContain(".gitignore lines this setup added were not taken back");
       expect(result.stderr).toContain(MACHINE_LOCAL[0]);
       expect(await readFile(outside, "utf8")).toBe(victim);
+      // The refusal still ends the clean: it names the lines to delete by hand, and the manifest goes (review/58's order).
+      expect(existsSync(join(root, STATE_DIR, "manifest.json"))).toBe(false);
     },
   );
 });
@@ -490,9 +526,11 @@ describe("clean — destructive confirmation gate", () => {
     expect(result.stdout).toContain("5 generated file(s)");
 
     const kept = await runClean(root, [], { stdinLines: ["n"], tty: { stdout: true, stdin: true } });
+    // review/57: --purge is offered as the alternative to this run, never as a step after it (a default clean
+    // removes the manifest, and a later `clean --purge` then finds no record to remove anything by).
     expect(kept.stdout).toContain(
       `Remove 4 generated file(s) and the setup's own files under ${STATE_DIR}/? Learnings, handoffs, overrides, run records ` +
-        `and installed packs under ${STATE_DIR}/ stay; --purge deletes them too.`,
+        `and installed packs under ${STATE_DIR}/ stay; to delete them too, run ${npxCommand("clean --purge")} instead of this run.`,
     );
   });
 
@@ -2186,13 +2224,81 @@ describe("clean keeps the user's state under .stamity/ (REQ-FLOW-028)", () => {
       const result = await runClean(root, ["-y"]);
 
       expect(result.code, result.stderr).toBe(0);
+      // review/57: the manifest is gone now, so no later `clean --purge` can remove these; the line says what can.
       expect(result.stdout).toContain(
-        `Kept under ${STATE_DIR}/: handoffs/, hooks/, inbox.md, learnings/, overrides/, packs/, runs/, verify/. ${npxCommand("clean --purge")} deletes these too.`,
+        `Kept under ${STATE_DIR}/: handoffs/, hooks/, inbox.md, learnings/, overrides/, packs/, runs/, verify/. ` +
+          `To remove these too, delete ${STATE_DIR}/ yourself: the setup's record is gone, so no clean removes them now.`,
       );
+      expect(result.stdout).not.toContain(`${npxCommand("clean --purge")} deletes these too`);
       expect(result.stdout).toContain(
         `The installed pack(s) ${SHIP_ID} stay under ${STATE_DIR}/packs/: the next ${npxCommand("init")} records them again from their receipts.`,
       );
       expect(result.stdout).not.toContain(`${STATE_DIR}/ removed`);
+    },
+    60_000,
+  );
+
+  it(
+    "says on a clean --purge after a default clean that no record is left, and how to remove what stays (review/57)",
+    async () => {
+      const root = await copyOf(withState);
+      expect((await runClean(root, ["-y"])).code).toBe(0);
+      const before = await snapshot(root);
+
+      const result = await runClean(root, ["-y", "--purge"]);
+
+      expect(result.code, result.stderr).toBe(0);
+      expect(result.stdout).toContain(
+        `Nothing to clean — this repo has no ${STATE_DIR}/ manifest. ${npxCommand("clean --purge")} removes ${STATE_DIR}/ ` +
+          `only by the setup's record, and there is none, so what is under ${STATE_DIR}/ stays: delete ${STATE_DIR}/ yourself to remove it.`,
+      );
+      expect(await snapshot(root)).toEqual(before);
+      // Without --purge, or with no state directory, the bare line stays: there is nothing a purge would add.
+      expect((await runClean(root, ["-y"])).stdout).not.toContain("delete .stamity/ yourself");
+      await rm(join(root, STATE_DIR), { recursive: true });
+      expect((await runClean(root, ["-y", "--purge"])).stdout).not.toContain("delete .stamity/ yourself");
+    },
+    60_000,
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "never removes a placeholder through a linked store folder, and leaves and names the link (review/60)",
+    async () => {
+      const root = await copyOf(bare);
+      const scaffold = await readFile(join(root, STATE_DIR, "learnings", ".gitkeep"), "utf-8");
+      // Another checkout's store, with its own tracked placeholder holding the scaffold's very bytes.
+      const shared = tempDir().path("shared-learnings");
+      await mkdir(shared, { recursive: true });
+      await writeFile(join(shared, ".gitkeep"), scaffold, "utf-8");
+      await rm(join(root, STATE_DIR, "learnings"), { recursive: true });
+      await symlink(shared, join(root, STATE_DIR, "learnings"));
+
+      const result = await runClean(root, ["-y"]);
+
+      expect(result.code, result.stderr).toBe(0);
+      expect(await readIfPresent(join(shared, ".gitkeep"))).toBe(scaffold);
+      expect((await lstat(join(root, STATE_DIR, "learnings"))).isSymbolicLink()).toBe(true);
+      expect(result.stdout).toContain(`Left ${STATE_DIR}/learnings/: it is a link, so clean did not follow it.`);
+      expect(existsSync(join(root, STATE_DIR, "handoffs"))).toBe(false);
+    },
+    60_000,
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "names in --json each name it left, apart from kept, which lists only what is the owner's (review/59)",
+    async () => {
+      const root = await copyOf(withState);
+      const outside = tempDir().path("models-elsewhere.json");
+      await writeFile(outside, "{}\n", "utf-8");
+      await symlink(outside, join(root, STATE_DIR, "client-models.json"));
+
+      const result = await runClean(root, ["-y", "--json"]);
+
+      expect(result.code, result.stderr).toBe(0);
+      const doc = parseSingleDoc(result.stdout);
+      expect(doc["left"]).toEqual([{ path: `${STATE_DIR}/client-models.json`, why: "it is a link, so clean did not follow it" }]);
+      expect(doc["kept"]).toEqual(["handoffs/", "hooks/", "inbox.md", "learnings/", "overrides/", "packs/", "runs/", "verify/"]);
+      expect((await lstat(join(root, STATE_DIR, "client-models.json"))).isSymbolicLink()).toBe(true);
     },
     60_000,
   );
@@ -2293,8 +2399,10 @@ describe("clean keeps the user's state under .stamity/ (REQ-FLOW-028)", () => {
       expect(result.code, result.stderr).toBe(0);
       expect(result.stdout).toContain(
         `A real run also removes the setup's own files under ${STATE_DIR}/ (the manifest, the review gate's state and the ` +
-          `machine-local files) and keeps the rest: learnings, handoffs, overrides, run records and installed packs.`,
+          `machine-local files) and keeps the rest: learnings, handoffs, overrides, run records and installed packs. ` +
+          `To delete those too, run ${npxCommand("clean --purge")} instead of this run.`,
       );
+      expect(result.stdout).not.toContain("--purge deletes those too");
       expect(result.stdout).not.toContain("orphaned");
       expect(await snapshot(root)).toEqual(before);
     },

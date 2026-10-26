@@ -95,24 +95,35 @@ export async function ensureStateScaffold(
  * directory's user content, so the scaffold that marks an empty store is the
  * setup's to remove, and only as the bytes it wrote. Each placeholder that is a
  * regular file holding exactly the scaffold's body is unlinked; an edited one,
- * a link at its name and a missing one are left. The folders stay for the
+ * a link at its name and a missing one are left. A store folder that is a link
+ * is never looked into, since its placeholder is not under this repository: it
+ * is left, and returned in `linked` (review/60). The folders stay for the
  * caller, which prunes them once empty.
  *
- * Returns the repo-relative placeholders it removed, in creation order.
+ * Returns the repo-relative placeholders it removed and the linked store
+ * folders (ending in `/`) it left, each in creation order.
  */
-export async function removeStateScaffold(rootDir: string): Promise<string[]> {
-  const removed = await Promise.all(
-    stateKeepPaths().map(async (path) => {
-      const absPath = join(rootDir, ...path.split("/"));
+export async function removeStateScaffold(rootDir: string): Promise<{ removed: string[]; linked: string[] }> {
+  const outcomes = await Promise.all(
+    STATE_SUBDIRS.map(async (name): Promise<{ removed?: string; linked?: string }> => {
+      const dir = join(rootDir, STATE_DIR, name);
+      const path = `${stateDirPath(name)}/${STATE_KEEP_FILE}`;
       try {
-        if (!(await lstat(absPath)).isFile() || (await readFile(absPath, "utf8")) !== STATE_KEEP_CONTENT) return null;
+        const folder = await lstat(dir);
+        if (folder.isSymbolicLink()) return { linked: `${stateDirPath(name)}/` };
+        if (!folder.isDirectory()) return {};
+        const absPath = join(dir, STATE_KEEP_FILE);
+        if (!(await lstat(absPath)).isFile() || (await readFile(absPath, "utf8")) !== STATE_KEEP_CONTENT) return {};
         await unlink(absPath);
-        return path;
+        return { removed: path };
       } catch (err) {
-        if ((err as NodeJS.ErrnoException | null)?.code === "ENOENT") return null;
+        if ((err as NodeJS.ErrnoException | null)?.code === "ENOENT") return {};
         throw err;
       }
     }),
   );
-  return removed.filter((path): path is string => path !== null);
+  return {
+    removed: outcomes.flatMap(({ removed }) => (removed === undefined ? [] : [removed])),
+    linked: outcomes.flatMap(({ linked }) => (linked === undefined ? [] : [linked])),
+  };
 }
