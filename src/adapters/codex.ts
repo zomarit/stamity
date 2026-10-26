@@ -2,7 +2,7 @@
  * Codex residue: TOML agents, native hooks and AGENTS.md rule down-conversion.
  * Hook command strings launch validated exec-form rows from the nearest initialized
  * project. Native hook trust belongs to /hooks; Stamity's ledger detects drift.
- * Current contract: https://learn.chatgpt.com/docs/hooks (2026-09-10).
+ * Current contract: https://learn.chatgpt.com/docs/hooks (read 2026-10-23).
  */
 
 import { join } from "node:path";
@@ -179,7 +179,11 @@ export const CODEX_AGENTS_MD_BUDGET_BYTES = 32_768;
  * most 2% of the model's context window, or 8,000 characters when the context
  * window is unknown" (learn.chatgpt.com/docs/build-skills, accessed
  * 2026-09-14). The engine takes the character bound because the context size
- * is not known at emission.
+ * is not known at emission. That figure is the default: a
+ * `skills.max_context_tokens` key in Codex's config sets the list's budget in
+ * tokens instead, up to 10,000, and so can raise it
+ * (learn.chatgpt.com/docs/config-file/config-reference, read 2026-10-23). This
+ * engine does not read an operator's own value, so it holds to the default.
  *
  * It measures the rows Codex SHOWS its model ({@link shownSkillRows}), content
  * skills, rule-skills and pack skills alike, because the client does not
@@ -361,6 +365,7 @@ const CODEX_FACTS: AdapterDialectFacts = {
         "exit 2 denies supported tool calls after native /hooks trust; the core role guard is telemetry because PreToolUse has no agent identity. Hosted tools and specialized paths may bypass hooks; use native sandbox/permissions for enforcement. " +
         "Three steps stand between the emitted hooks.json and a hook that runs — the hooks feature, which Codex turns on by default and this engine renders as `[features] hooks = true` in .codex/config.toml, though an owner's own `[features]` table is kept in its place and `check` fails while a kept key sets hooks false (`hooks`, `\"hooks\"` or `'hooks'` in `[features]`, a root `features.hooks`, or the `codex_hooks` alias); `projects.<path>.trust_level = \"trusted\"` in the operator's own Codex home config; and a per-hook hash review through the interactive /hooks command, or --dangerously-bypass-hook-trust for automation that cannot take that step. Headless `codex exec` ran no project hook on codex-cli 0.154.0 in this repository's 2026-09-15 measurement, with the feature on, the project trusted through a per-invocation `-c` override and hook trust bypassed. " +
         "On codex-cli 0.155.1 (measured 2026-09-30) the hooks feature is on by default, a project-file `hooks = false` did not turn it off under that same override, and `codex exec` again ran no project hook in 3 of 3 runs; because the override may leave the project `.codex/` layer unloaded, the cause is not isolated (exec itself, or a layer that never loaded), and a run with the project trusted in the home config is unmeasured. " +
+        "codex-cli 0.155.1 is still the installed version at the 2026-10-23 re-read of the hooks page, so that measurement is the current one. " +
         "So a hook is enforcement in the interactive client, and nothing measured in the headless lane.",
     },
     {
@@ -369,6 +374,7 @@ const CODEX_FACTS: AdapterDialectFacts = {
         "no native per-agent tools list is documented; no placeholder key is emitted. A spawned role runs in the parent turn's sandbox, and its file's `sandbox_mode` does not override it (subagents page, read 2026-10-23). " +
         "Measured on codex-cli 0.155.1 (2026-10-23), in `codex exec`: a role whose file sets `sandbox_mode = \"read-only\"`, spawned under a `workspace-write` parent, created files through both its shell and its patch tool; " +
         "a per-agent `[features] shell_tool = false` took its shell away but not its patch writes, and left it no way to read a file, so no `features.*` key is emitted. " +
+        "It also got the parent's tools that act on the host: in that measurement a desktop-control attempt was refused only by that tool's own policy. " +
         "A role's grant, read-only included, is prompt-level; re-measure on each newer Codex.",
     },
     {
@@ -415,7 +421,8 @@ const CODEX_FACTS: AdapterDialectFacts = {
     // the entry keys (`type`, `command`, `commandWindows`, `timeout`) and the
     // SessionEnd default, the plaintext UserPromptSubmit channel, and trust
     // recorded against the hook DEFINITION's hash — not the script's bytes.
-    { url: "https://learn.chatgpt.com/docs/hooks", accessDate: "2026-09-17" },
+    // Re-read 2026-10-23; the file header's contract line carries the same date.
+    { url: "https://learn.chatgpt.com/docs/hooks", accessDate: "2026-10-23" },
     // `project_doc_max_bytes`, default 32768 — the budget shaped below.
     { url: "https://learn.chatgpt.com/docs/config-file/config-reference", accessDate: "2026-09-15" },
     // Custom prompts: home-directory scope, deprecated — why the touchpoints ship as skills.
@@ -1289,11 +1296,12 @@ export function buildAgentToml(
     `stamity — Codex subagent "${runtimeId}". Generated file: regenerate rather than`,
     "editing it; local edits are overwritten.",
     "",
-    "Key set: learn.chatgpt.com/docs/agent-configuration/subagents (accessed 2026-09-10).",
+    "Key set: learn.chatgpt.com/docs/agent-configuration/subagents (accessed 2026-10-14).",
     `Stamity role grant: ${toCodexToolsFrontmatter(allow) || "none"}. No native tools key is documented.`,
     "A spawned role runs in the parent turn's sandbox; its sandbox_mode does not override it",
     "(subagents page, read 2026-10-23; on codex-cli 0.155.1 (2026-10-23) a read-only role wrote",
-    "under a workspace-write parent). The grant, read-only included, is prompt-level.",
+    "under a workspace-write parent). It also got the parent's tools that act on the host.",
+    "The grant, read-only included, is prompt-level.",
   ];
   if (grant.source === "none") {
     comments.push(

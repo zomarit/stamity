@@ -621,15 +621,20 @@ describe("subagent TOML", () => {
         '# stamity — Codex subagent "stamity-reviewer". Generated file: regenerate rather than',
         "# editing it; local edits are overwritten.",
         "#",
-        "# Key set: learn.chatgpt.com/docs/agent-configuration/subagents (accessed 2026-09-10).",
+        // TEST CHANGE, justified: re-read 2026-10-23 — the key-set line carried 2026-09-10 while the
+        // subagents citation it names reads 2026-10-14 (`codexResiduePlanner.facts.citations`), so
+        // the line now carries the citation's date.
+        "# Key set: learn.chatgpt.com/docs/agent-configuration/subagents (accessed 2026-10-14).",
         `# Stamity role grant: ${toolsValue}. No native tools key is documented.`,
         // TEST CHANGE, justified: REQ-FLOW-150 — the line read "sandbox_mode binds the filesystem
         // boundary". A spawned role runs in the parent turn's sandbox (subagents page, read
         // 2026-10-23), and on codex-cli 0.155.1 a read-only role wrote under a workspace-write
         // parent, so the comment now says where the boundary comes from; every other line holds.
+        // TEST CHANGE, justified: review/12 — the header names the host-tool reach the measurement found.
         "# A spawned role runs in the parent turn's sandbox; its sandbox_mode does not override it",
         "# (subagents page, read 2026-10-23; on codex-cli 0.155.1 (2026-10-23) a read-only role wrote",
-        "# under a workspace-write parent). The grant, read-only included, is prompt-level.",
+        "# under a workspace-write parent). It also got the parent's tools that act on the host.",
+        "# The grant, read-only included, is prompt-level.",
         "",
         'name = "stamity-reviewer"',
         'description = "Reviews a change set and returns a verdict."',
@@ -669,6 +674,10 @@ describe("subagent TOML", () => {
     expect(cap).toMatch(/codex-cli \d+\.\d+\.\d+ \(\d{4}-\d{2}-\d{2}\)/);
     expect(cap).not.toContain("carries the supported filesystem boundary");
     expect(cap).toContain("runs in the parent");
+    // review/12 (2026-10-23_autonomy-distribution-01): the role also got the parent's tools that act on the
+    // host, so the agent file and the cap both say so (SECURITY.md names the same measurement).
+    expect(reviewer).toContain("tools that act on the host");
+    expect(cap).toContain("tools that act on the host");
 
     const parity = LIVE_CAPABILITY_INPUTS.coverage.find((row) => row.tool === "codex")?.mechanism ?? "";
     expect(parity).not.toContain("inside the `read-only` sandbox");

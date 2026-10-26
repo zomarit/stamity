@@ -2344,7 +2344,9 @@ describe("hooks", () => {
     const fallback = (emission.warnings ?? []).find((warning) => warning.startsWith("hook fallback [copilot]"));
     expect(fallback).toBeDefined();
     expect(fallback).toContain("injected as additionalContext");
-    expect(fallback).toContain("docs.github.com hooks reference, 2026-09-17");
+    // TEST CHANGE, justified: re-read 2026-10-23 — the hooks reference was re-read that day
+    // (plan 022, b18-vendor-claims), so the warning carries the new date; the claim is unchanged.
+    expect(fallback).toContain("docs.github.com hooks reference, read 2026-10-23");
     expect(fallback).not.toMatch(/manually|does not inject/);
     // The honest half of the row is unchanged: timeouts still fail open.
     expect(fallback).toContain("fail-open");
@@ -2352,6 +2354,9 @@ describe("hooks", () => {
     const guarantee = CLIENT_HOOK_GUARANTEES.find((row) => row.tool === "copilot");
     expect(guarantee?.notes).toContain("injected as additionalContext");
     expect(guarantee?.notes).not.toContain("does not inject");
+    // b18-vendor-claims (re-read 2026-10-23): the reference reads a permissionRequest hook's exit 2 as deny.
+    expect(guarantee?.notes).toContain("a permissionRequest hook's exit 2 is read as deny too");
+    expect(guarantee?.notes).toContain("docs.github.com hooks reference, read 2026-10-23");
   });
 
   it("records timeout fail-open honesty in the dialect facts, sourced from CLIENT_HOOK_GUARANTEES", () => {
@@ -2366,6 +2371,11 @@ describe("hooks", () => {
     // Runtime timeout behavior qualifies the native deny guarantee.
     expect(COPILOT_DIALECT_FACTS.caps.find((row) => row.name === "deny-gate")?.value).toContain(
       "timeouts fail-open",
+    );
+    // b18-vendor-claims (VS Code hooks page, read 2026-10-23): VS Code reads the repository hooks file
+    // (Preview) and Claude's settings hooks beside it, so the row names the editor too.
+    expect(COPILOT_DIALECT_FACTS.caps.find((row) => row.name === "deny-gate")?.value).toContain(
+      "VS Code also reads `.github/hooks/*.json` (Preview), and `.claude/settings.json` hooks beside it",
     );
   });
 
@@ -2386,12 +2396,15 @@ describe("hooks", () => {
     // re-read whole on 2026-10-14 for the camelCase event names and the `bash` key the hooks file
     // took that day (REQ-FLOW-086), every other claim its comment names re-checked with them, so
     // its one date moves; the custom-agents page keeps the list's 2026-09-10 stamp.
+    // TEST CHANGE, justified: re-read 2026-10-23 — plan 022's vendor-claims pass (b18) re-read the
+    // hooks reference and the four pages the one ACCESS_DATE stamp covers, so both move to that day.
     expect(
       COPILOT_DIALECT_FACTS.citations.find((citation) => citation.url.includes("hooks-reference"))
         ?.accessDate,
-    ).toBe("2026-10-14");
+    ).toBe("2026-10-23");
     const dates = new Set(COPILOT_DIALECT_FACTS.citations.map((citation) => citation.accessDate));
-    expect(dates.has("2026-09-10")).toBe(true);
+    expect(dates.has("2026-10-23")).toBe(true);
+    expect(dates.has("2026-09-10")).toBe(false);
     for (const date of dates) expect(date >= "2026-08-17", date).toBe(true);
 
     // Every surface this adapter emits for has a page behind it.
@@ -2433,6 +2446,8 @@ describe("hooks", () => {
     // A live run on 1.0.89 has loaded an agent carrying the key (QA row 2 of 2026-10-10_next-tier).
     expect(effortAxis).toContain("a live run on Copilot CLI 1.0.89 (2026-10-11) loaded an agent carrying");
     expect(effortAxis).toContain("on the `records` branch");
+    // b18-vendor-claims: the row names the CLI installed at the 2026-10-23 re-read, and that the run was not repeated on it.
+    expect(effortAxis).toContain("that run has not been repeated on 1.0.100, the CLI installed at the 2026-10-23 re-read");
 
     // Both rows reach the published matrix verbatim — a declaration nothing
     // renders is a claim only this file can read.
@@ -2471,16 +2486,20 @@ describe("hooks", () => {
         "unverified on 1.0.89, where no live run passed the flag)",
     );
     expect(row).not.toContain("still overrides it");
+    // b18-vendor-claims: the live checks name the CLI installed at the 2026-10-23 re-read, unrepeated there.
+    expect(row).toContain("neither check has been repeated on 1.0.100, the CLI installed at the 2026-10-23 re-read");
     // Never a claim that the cloud agent honours the key.
     expect(row).toContain("the cloud agent's handling of the key is undocumented");
     expect(row).toContain("custom-agents configuration page, accessed 2026-10-10");
 
     // Dated inline: the all-or-nothing citation stamp is not re-stamped by one claim.
+    // TEST CHANGE, justified: re-read 2026-10-23 — the whole stamp moved with plan 022's pass (b18),
+    // which re-read every page it covers; this row's inline dates stay as they were.
     expect(
       COPILOT_DIALECT_FACTS.citations.find((citation) =>
         citation.url.includes("custom-agents-configuration"),
       )?.accessDate,
-    ).toBe("2026-09-10");
+    ).toBe("2026-10-23");
 
     expect(renderCapabilityMatrix()).toContain(row);
   });

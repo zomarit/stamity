@@ -423,12 +423,14 @@ export const cursorDialectFacts: AdapterDialectFacts = {
     { name: "effort-scale", value: EFFORT_SCALE_CAP },
   ],
   // Revalidated against every cited page; unsupported historical caps are removed.
+  // Re-read 2026-10-23 by plan 022's vendor-claims pass. A claim dated inline above
+  // keeps its own date, since that date names the read the claim rests on.
   citations: [
-    { url: "https://cursor.com/docs/context/rules", accessDate: "2026-09-10" },
-    { url: "https://cursor.com/docs/agent/subagents", accessDate: "2026-09-10" },
-    { url: "https://cursor.com/docs/hooks", accessDate: "2026-09-17" },
-    { url: "https://cursor.com/docs/skills", accessDate: "2026-09-10" },
-    { url: "https://cursor.com/docs/mcp", accessDate: "2026-09-10" },
+    { url: "https://cursor.com/docs/context/rules", accessDate: "2026-10-23" },
+    { url: "https://cursor.com/docs/agent/subagents", accessDate: "2026-10-23" },
+    { url: "https://cursor.com/docs/hooks", accessDate: "2026-10-23" },
+    { url: "https://cursor.com/docs/skills", accessDate: "2026-10-23" },
+    { url: "https://cursor.com/docs/mcp", accessDate: "2026-10-23" },
   ],
 };
 

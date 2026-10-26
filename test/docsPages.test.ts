@@ -5203,6 +5203,26 @@ describe("docs/cloud.md", () => {
       "on 2026-10-19 Cursor's origin push URL carried its own credentials, which cannot be tied to `gh`'s identity, and `direct-push` refused",
     );
   });
+
+  // ADDED 2026-10-26 (plan 022 file 2, unit b18-vendor-claims; ledger build/38, review/78, review/79; REQ-FLOW-111).
+  // Cursor's cloud agent setup page (read 2026-10-26) resolves a personal, then a team saved environment before a
+  // repository's `.cursor/environment.json`, and a saved environment reads that file only when its location points at
+  // it. The page and the `cloud-install` row said opposite things; both now say what the page says, and the old
+  // "replaces every environment" claim is gone from each.
+  it("says Cursor uses a saved environment before a repository's environment.json, on the page and the check row", () => {
+    const cursor = flowed(sectionOf(sectionOf(cloudPage(), "## Cursor's cloud agents"), "### Set it up"));
+    expect(cursor).toContain(
+      "Cursor uses a personal or team environment saved in its settings before a repository file, and a saved " +
+        "environment reads that file only when its environment.json location points at it (Cursor's cloud agent " +
+        "setup page, read 2026-10-26)",
+    );
+    const troubleshooting = flowed(read(TROUBLESHOOTING));
+    expect(troubleshooting).toContain(
+      "because Cursor uses a saved environment before a repository file, and a saved environment reads the file only " +
+        "when it points at it (Cursor's cloud agent setup page, read 2026-10-26)",
+    );
+    for (const page of [cursor, troubleshooting]) expect(page).not.toContain("replaces every environment");
+  });
 });
 
 // ADDED 2026-10-19 (plan 021 file 2, unit w7-action-pages; REQ-FLOW-113, REQ-FLOW-104). Since w6 Claude Code's hook

@@ -163,8 +163,9 @@ check needs. The saved environment's origin URL must not carry credentials: in t
 set origin's URL, and its push URL where one is set, to the repository's plain https URL, then run
 `gh auth setup-git`. The first check showed why: on 2026-10-19 Cursor's origin push URL carried its
 own credentials, which cannot be tied to `gh`'s identity, and `direct-push` refused. `init` and
-`sync` write no `.cursor/environment.json`, because a repository file replaces every environment
-saved there.
+`sync` write no `.cursor/environment.json`. Cursor uses a personal or team environment saved in its
+settings before a repository file, and a saved environment reads that file only when its
+environment.json location points at it (Cursor's cloud agent setup page, read 2026-10-26).
 
 ### Protect the default branch
 

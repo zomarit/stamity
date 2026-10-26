@@ -304,7 +304,9 @@ export const REVISIT_TRIGGERS: readonly RevisitTrigger[] = [
     status:
       "CLI/cloud preToolUse hooks are emitted now, with timeout fail-open. " +
       "[VS Code hooks](https://code.visualstudio.com/docs/agent-customization/hooks) " +
-      "remain Preview; editor-specific compatibility needs separate verification.",
+      "remain Preview. VS Code reads the repository's `.github/hooks/*.json`, and also its " +
+      "`.claude/settings.json` hooks, so the emitted file reaches the editor; editor-specific " +
+      "compatibility needs separate verification.",
   },
 ];
 

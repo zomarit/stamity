@@ -292,7 +292,7 @@ const NODE_LANGUAGES: ReadonlySet<string> = new Set(["javascript", "typescript"]
  * that verified only some of them would have to split the constant rather than
  * quietly re-stamp the rest.
  */
-const ACCESS_DATE = "2026-09-10";
+const ACCESS_DATE = "2026-10-23";
 
 /**
  * This client's effort key and scale, as the projection row declares them
@@ -352,7 +352,8 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
         `\`${EFFORT_SCALE.at(-1)}\` (Copilot CLI reference, accessed 2026-10-10; the key in the ` +
         "1.0.89 loader and its changelog, 1.0.66 and 1.0.88); a live run on Copilot CLI 1.0.89 " +
         "(2026-10-11) loaded an agent carrying `reasoning-effort: high` and its sub-agent ran at " +
-        "that level (`.stamity/runs/2026-10-10_next-tier/record.md` on the `records` branch, QA row 2); " +
+        "that level (`.stamity/runs/2026-10-10_next-tier/record.md` on the `records` branch, QA row 2), " +
+        "and that run has not been repeated on 1.0.100, the CLI installed at the 2026-10-23 re-read; " +
         "a level the model " +
         "does not offer is reported and falls back to the session's; the cloud agent's handling of " +
         "the key is undocumented (custom-agents configuration page, accessed 2026-10-10)",
@@ -372,7 +373,8 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
         "Copilot CLI 1.0.89 (2026-10-10) found that an agent without it loads no `AGENTS.md`, and " +
         "a live run on 1.0.89 (2026-10-11) with the key emitted loaded it: the sub-agent quoted the " +
         "charter's version line (`.stamity/runs/2026-10-10_next-tier/record.md` on the `records` " +
-        "branch, QA row 2); " +
+        "branch, QA row 2); neither check has been repeated on 1.0.100, the CLI installed at the " +
+        "2026-10-23 re-read; " +
         "`--no-custom-instructions` overrides it (Copilot CLI command reference, accessed " +
         "2026-10-10; unverified on 1.0.89, where no live run passed the flag); the cloud agent's " +
         "handling of the key is undocumented (custom-agents configuration page, accessed 2026-10-10)",
@@ -416,11 +418,14 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
     {
       name: "deny-gate",
       value:
-        "Repository hooks target Copilot CLI/cloud. preToolUse denies via native JSON or nonzero exit; timeouts fail-open. The core role guard has no calling-agent identity and remains telemetry.",
+        "Repository hooks target Copilot CLI/cloud; VS Code also reads `.github/hooks/*.json` (Preview), and `.claude/settings.json` hooks beside it (VS Code hooks page, read 2026-10-23). preToolUse denies via native JSON or nonzero exit; timeouts fail-open. The core role guard has no calling-agent identity and remains telemetry.",
     },
     {
       name: "rule-activation",
-      value: "glob only; no description-pull mode, so an agent-requested rule emits applyTo: \"**\"",
+      value:
+        "glob only; no description-pull mode, so an agent-requested rule emits applyTo: \"**\". " +
+        "Copilot CLI applies these path-specific files from 1.0.100, when the agent reads or edits a " +
+        "matching file (the CLI's changelog, read 2026-10-23)",
     },
     { name: "rule-precedence", value: "not expressible — Copilot has no ordering primitive" },
     {
@@ -480,7 +485,8 @@ export const COPILOT_DIALECT_FACTS: AdapterDialectFacts = {
     // sessionStart `additionalContext` injection the portable runner writes.
     // Re-read whole on 2026-10-14, when the hooks file took the camelCase names
     // and the `bash` key, and every claim in this comment re-checked with them.
-    { url: "https://docs.github.com/en/copilot/reference/hooks-reference", accessDate: "2026-10-14" },
+    // Re-read 2026-10-23, adding that a permissionRequest hook's exit 2 is read as deny.
+    { url: "https://docs.github.com/en/copilot/reference/hooks-reference", accessDate: "2026-10-23" },
     // The `--reasoning-effort` levels (`low` through `max`), the fallback for
     // a model or effort that cannot be honoured, the default that a sub-agent
     // receives no repository instruction files, and the priority of
@@ -577,7 +583,7 @@ export const copilotResiduePlanner: ResiduePlanner = {
     // Placed verbatim: the core rendered these documents and chose their paths,
     // and an adapter that re-derived either would be a second writer.
     for (const emission of core.mcpFor(TOOL)) rows.push(mcpRow(emission));
-    return { outputs: rows, warnings: [...copilotMatcherWarnings(core.hooks.interchangeFor(TOOL)), ...displayNamePinWarnings(pins), "hook fallback [copilot]: sessionStart output is injected as additionalContext (docs.github.com hooks reference, 2026-09-17), so the learning/handoff index reaches the session. Hook timeouts remain fail-open; use native permission controls for mandatory enforcement."] };
+    return { outputs: rows, warnings: [...copilotMatcherWarnings(core.hooks.interchangeFor(TOOL)), ...displayNamePinWarnings(pins), "hook fallback [copilot]: sessionStart output is injected as additionalContext (docs.github.com hooks reference, read 2026-10-23), so the learning/handoff index reaches the session. Hook timeouts remain fail-open; use native permission controls for mandatory enforcement."] };
   },
 };
 
@@ -1661,7 +1667,10 @@ function yamlScalar(value: string): string {
  * format (hooks reference, casing re-read 2026-09-20). Every example for
  * Copilot's cloud agent is camelCase, and that agent reads no
  * `.claude/settings.json` hooks (the plan's decision D16, 2026-10-14), so the
- * camelCase keys are the ones that reach it. Two names are not the mechanical
+ * camelCase keys are the ones that reach it. VS Code reads this file too
+ * (Preview), and it also reads `.claude/settings.json` hooks, as Copilot CLI
+ * 1.0.100 does (VS Code's hooks page, dated 2026-10-21 and read 2026-10-23;
+ * `./claude.ts`'s note on the guard entry). Two names are not the mechanical
  * rename: the prompt event is `userPromptSubmitted` and the end of the
  * agent's turn is `agentStop`.
  *

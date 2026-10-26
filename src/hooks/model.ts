@@ -133,7 +133,7 @@ export const CLIENT_HOOK_GUARANTEES: readonly ClientHookGuarantee[] = [
     failMode: "fail-closed",
     blockingExitCode: 2,
     notes:
-      "preToolUse exit 2, errors and JSON deny block. Timeouts always fail-open; other events are advisory unless documented. The identity-free core role guard is telemetry. sessionStart output reaches the session: it is injected as additionalContext (docs.github.com hooks reference, 2026-09-17).",
+      "preToolUse exit 2, errors and JSON deny block, and a permissionRequest hook's exit 2 is read as deny too. Timeouts always fail-open; other events are advisory unless documented. The identity-free core role guard is telemetry. sessionStart output reaches the session: it is injected as additionalContext (docs.github.com hooks reference, read 2026-10-23).",
   },
   {
     tool: "cursor",
@@ -333,9 +333,12 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
   {
     tool: "copilot",
     subject: "Ask decisions",
-    fact: "A `preToolUse` decision of `ask` is treated as `deny`: no user is there to answer.",
+    fact:
+      "A `preToolUse` decision of `ask` is treated as `deny`: no user is there to answer. Copilot CLI's " +
+      "autopilot reads it as deny too, since 1.0.97 (the CLI's changelog), so the cloud agent is not the " +
+      "only place an ask becomes a deny.",
     status: "documented",
-    citation: { url: "https://docs.github.com/en/copilot/reference/hooks-reference", accessDate: "2026-10-15" },
+    citation: { url: "https://docs.github.com/en/copilot/reference/hooks-reference", accessDate: "2026-10-23" },
     sessionStart: "An ask answer is read as deny.",
   },
   {
@@ -463,11 +466,13 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     tool: "cursor",
     subject: "Questions",
     fact:
-      "A cloud agent waits on a person only through a subscription its prompt describes, such as " +
-      "asking in Slack and continuing once someone replies. The page says nothing of a question asked " +
-      "without one, so an unattended run asks nothing and takes its declared default.",
-    status: "not documented",
-    citation: { url: "https://cursor.com/docs/cloud-agent/capabilities", accessDate: "2026-10-18" },
+      "A cloud agent never asks a person to approve an action: it runs inside its own dedicated " +
+      "machine, and the run modes apply to local agents only. It waits on a person only through a " +
+      "subscription its prompt describes, such as asking in Slack and continuing once someone replies " +
+      "(cloud agent capabilities page, read 2026-10-18), so an unattended run asks nothing and takes " +
+      "its declared default.",
+    status: "documented",
+    citation: { url: "https://cursor.com/docs/agent/security/run-modes", accessDate: "2026-10-23" },
   },
   {
     tool: "codex",

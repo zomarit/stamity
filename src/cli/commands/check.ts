@@ -1969,8 +1969,9 @@ async function modelPinsRow(rootDir: string, manifest: SetupManifest | null, env
  * The `cloud-install` row (REQ-FLOW-111), printed only with Cursor selected: the
  * lines a Cursor cloud environment's install step needs, for a person to set in
  * Cursor's saved environment. No `.cursor/environment.json` is written — Cursor
- * resolves a saved environment ahead of a repository file (its cloud agent setup
- * page, read 2026-10-26) — so this row is where the lines live. They pin the
+ * uses a saved environment before a repository file, and a saved environment
+ * reads that file only when it points at it (Cursor's cloud agent setup page,
+ * read 2026-10-26) — so this row is where the lines live. They pin the
  * version the setup was generated with (`generatedBy`), the one the committed hooks and bodies call, through
  * {@link pinnedCliInstall}, the line Copilot's setup workflow runs; a package
  * with no npm channel gets no registry line. The row informs and never fails: a

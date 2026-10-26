@@ -573,7 +573,10 @@ describe("the 2026-09-30 client currency pass", () => {
 
   it("re-stamps Claude's citations, and leaves Copilot's, Codex's and Cursor's where they were", () => {
     expect(datesOf("claude").length).toBeGreaterThan(0);
-    expect(new Set(datesOf("claude"))).toEqual(new Set(["2026-09-30"]));
+    // TEST CHANGE, justified: re-read 2026-10-23 — plan 022's vendor-claims pass (b18) re-read Claude's
+    // cited pages and re-stamped the one constant; Copilot's four-page stamp, its hooks reference, Codex's
+    // hooks page and Cursor's five pages moved with it. Every date that pass did not re-read is held below.
+    expect(new Set(datesOf("claude"))).toEqual(new Set(["2026-10-23"]));
     // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): Copilot's list gained a sixth
     // page, the CLI command reference, read 2026-10-10 for the effort scale and the
     // `--no-custom-instructions` flag. The five dates the pass left where they were are unchanged.
@@ -584,17 +587,17 @@ describe("the 2026-09-30 client currency pass", () => {
     // on 2026-10-14 for the model precedence (the first date, 2026-09-10 before). Every date the
     // 2026-09-30 pass left where it was and no later unit re-read is still held as it was.
     expect(datesOf("copilot")).toEqual([
-      "2026-09-10",
-      "2026-09-10",
-      "2026-09-10",
-      "2026-09-10",
-      "2026-10-14",
+      "2026-10-23",
+      "2026-10-23",
+      "2026-10-23",
+      "2026-10-23",
+      "2026-10-23",
       "2026-10-10",
       "2026-10-14",
       "2026-10-14",
     ]);
-    expect(datesOf("codex")).toEqual(["2026-10-14", "2026-09-17", "2026-09-15", "2026-09-10"]);
-    expect(datesOf("cursor")).toEqual(["2026-09-10", "2026-09-10", "2026-09-17", "2026-09-10", "2026-09-10"]);
+    expect(datesOf("codex")).toEqual(["2026-10-14", "2026-10-23", "2026-09-15", "2026-09-10"]);
+    expect(datesOf("cursor")).toEqual(["2026-10-23", "2026-10-23", "2026-10-23", "2026-10-23", "2026-10-23"]);
   });
 
   // TEST CHANGE, justified (2026-10-10, q6c-copilot-effort-key): the case read "states that Copilot
@@ -606,6 +609,8 @@ describe("the 2026-09-30 client currency pass", () => {
   // e8 added the live run that proved the key, Copilot CLI 1.0.89 on 2026-10-11, and where its
   // record lives. Every other word of the row is held as before, the cloud agent's undocumented
   // handling included.
+  // TEST CHANGE, justified: re-read 2026-10-23 — the row names the CLI installed at that re-read
+  // (1.0.100) and that the 1.0.89 run was not repeated on it; every other word is held.
   it("states that Copilot agents carry `reasoning-effort`, on what scale and from which sources", () => {
     const value = capOf("copilot", "effort-axis");
     expect(value).toBe(
@@ -613,7 +618,8 @@ describe("the 2026-09-30 client currency pass", () => {
         "reference, accessed 2026-10-10; the key in the 1.0.89 loader and its changelog, 1.0.66 and " +
         "1.0.88); a live run on Copilot CLI 1.0.89 (2026-10-11) loaded an agent carrying " +
         "`reasoning-effort: high` and its sub-agent ran at that level " +
-        "(`.stamity/runs/2026-10-10_next-tier/record.md` on the `records` branch, QA row 2); a level " +
+        "(`.stamity/runs/2026-10-10_next-tier/record.md` on the `records` branch, QA row 2), and that " +
+        "run has not been repeated on 1.0.100, the CLI installed at the 2026-10-23 re-read; a level " +
         "the model does not offer is reported and falls back to the session's; the " +
         "cloud agent's handling of the key is undocumented (custom-agents configuration page, " +
         "accessed 2026-10-10)",
@@ -861,10 +867,12 @@ describe("the cloud column and the Cloud sessions section", () => {
     expect(cloudFact("copilot", "Draft pull request").fact).toContain("cannot mark it ready for review");
     expect(cloudFact("claude", "Draft pull request").fact).toContain("refuses a tag push");
     expect(cloudFact("claude", "Questions").fact).toContain("until a person answers");
-    // Cursor's pages are silent on whether its pull request is a draft and on a question
-    // asked with no subscription, so those rows state the assumption and are dated as such.
+    // Cursor's pages are silent on whether its pull request is a draft, so that row states the
+    // assumption and is dated as such.
     expect(cloudFact("cursor", "Draft pull request").status).toBe("not documented");
-    expect(cloudFact("cursor", "Questions").status).toBe("not documented");
+    // TEST CHANGE, justified: re-read 2026-10-23 — Cursor's run-modes page says a cloud agent never
+    // asks a person to approve an action, so the Questions row is documented from that page.
+    expect(cloudFact("cursor", "Questions").status).toBe("documented");
     // Cursor's own push meets no guard, so its row names the wall, as Claude's does.
     expect(cloudFact("cursor", "Draft pull request").fact).toContain("meet no shell guard, held-path hold or scan");
     expect(cloudFact("cursor", "Draft pull request").fact).toContain("branch protection on the default branch");
@@ -1398,3 +1406,77 @@ describe("client section edges the floor holds", () => {
     expect(page).toContain("Declared caps: none.");
   });
 });
+
+/**
+ * Plan 022 file 2, unit b18-vendor-claims (spec carries no ids for the client fact tables; nearest
+ * REQ-PROVE-045, the dated-source rule). The client fact tables were re-read against the vendors' pages
+ * on 2026-10-23. Red on the parent: the rows below carried 2026-09-10, 2026-09-17 and 2026-09-30, the
+ * Copilot deny-gate row named no editor, and Cursor's Questions row read "not documented".
+ */
+describe("the 2026-10-23 vendor re-read (b18-vendor-claims)", () => {
+  const page = renderCapabilityMatrix();
+  const FLOOR = "2026-10-14";
+
+  it("holds no access date older than 2026-10-14 on the rows the re-read covered", () => {
+    const named: { label: string; date: string }[] = [
+      ...factsFor("claude").citations.map((c) => ({ label: `claude ${c.url}`, date: c.accessDate })),
+      ...factsFor("cursor").citations.map((c) => ({ label: `cursor ${c.url}`, date: c.accessDate })),
+      // Copilot's one-stamp pages and its hooks reference; the CLI command reference (read 2026-10-10
+      // for the effort scale) was not part of the re-read and keeps its own date.
+      ...factsFor("copilot")
+        .citations.filter((c) => !c.url.endsWith("/cli-command-reference"))
+        .map((c) => ({ label: `copilot ${c.url}`, date: c.accessDate })),
+      ...factsFor("codex")
+        .citations.filter((c) => c.url.endsWith("/docs/hooks") || c.url.endsWith("/subagents"))
+        .map((c) => ({ label: `codex ${c.url}`, date: c.accessDate })),
+      { label: "copilot Ask decisions", date: cloudFact("copilot", "Ask decisions").citation.accessDate },
+      { label: "cursor Questions", date: cloudFact("cursor", "Questions").citation.accessDate },
+    ];
+    // Non-degenerate: every client contributes, so a dropped citation list cannot pass vacuously.
+    expect(named.length).toBeGreaterThanOrEqual(5 + 5 + 7 + 2 + 2);
+    for (const { label, date } of named) expect(date >= FLOOR, `${label} read ${date}`).toBe(true);
+    // The rendered page carries none of the parent's stale dates on those rows' sources.
+    for (const tool of ["claude", "cursor"] as const) {
+      const sources = section(page, `### \`${tool}\``).filter((line) => line.startsWith("- <"));
+      expect(sources.length).toBeGreaterThan(0);
+      for (const line of sources) expect(line, line).not.toMatch(/accessed 2026-09-(10|17|30)$/);
+    }
+  });
+
+  it("names VS Code on Copilot's hooks rows: the deny-gate cap and the editor trigger", () => {
+    const cap = capOfFacts("copilot", "deny-gate");
+    expect(cap).toContain("VS Code also reads `.github/hooks/*.json` (Preview)");
+    expect(cap).toContain("`.claude/settings.json` hooks beside it");
+    expect(section(page, "### `copilot`").join("\n")).toContain(cap);
+    const trigger = triggerFor("VS Code deny-gate GA").status;
+    expect(trigger).toContain("VS Code reads the repository's `.github/hooks/*.json`");
+    // The renderer holds no ISO date literal, so the trigger carries none either.
+    expect(trigger).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+  });
+
+  it("reads Cursor's Questions row as documented from the run-modes page, and Copilot's ask as deny in autopilot too", () => {
+    const questions = cloudFact("cursor", "Questions");
+    expect(questions.status).toBe("documented");
+    expect(questions.citation.url).toBe("https://cursor.com/docs/agent/security/run-modes");
+    expect(questions.fact).toContain("never asks a person to approve an action");
+    const row = tableRows(section(page, "## Cloud sessions")).find(
+      (line) => cells(line)[0] === "`cursor`" && cells(line)[1] === "Questions",
+    );
+    expect(cells(row ?? "")[4]).toBe("documented");
+    const ask = cloudFact("copilot", "Ask decisions");
+    expect(ask.fact).toContain("autopilot reads it as deny too, since 1.0.97");
+    // The printed session line is unchanged: it answers in the cloud agent's session only.
+    expect(ask.sessionStart).toBe("An ask answer is read as deny.");
+  });
+
+  it("says Copilot CLI applies the path-specific instruction files from 1.0.100", () => {
+    expect(capOfFacts("copilot", "rule-activation")).toContain("Copilot CLI applies these path-specific files from 1.0.100");
+    expect(factsFor("claude").ruleShape).toContain("Also read by VS Code Copilot and by Copilot CLI");
+    expect(factsFor("claude").agentsFormat).toContain("`permissionMode`, `disallowedTools` and `autoCompactWindow` (2.1.296 or later)");
+  });
+});
+
+/** One declared cap's value, or the empty string. */
+function capOfFacts(tool: Tool, name: string): string {
+  return factsFor(tool).caps.find((row) => row.name === name)?.value ?? "";
+}

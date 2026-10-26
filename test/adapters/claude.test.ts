@@ -1009,7 +1009,9 @@ describe("claude residue over the real corpus", () => {
       // TEST CHANGE, justified: moved from 2026-09-10 to 2026-09-30. The 2026-09-30 currency
       // pass (plan 013, sw14-client-currency-sweep) re-read all five cited pages and verified
       // every claim this date covers, which is the full pass this pin asks for.
-      expect(citation.accessDate).toBe("2026-09-30");
+      // TEST CHANGE, justified: re-read 2026-10-23 — plan 022's vendor-claims pass (b18) re-read the
+      // cited pages and moved the one constant; the pin still holds every citation to one full pass.
+      expect(citation.accessDate).toBe("2026-10-23");
     }
     // The skills + commands dialect has its own page, and it is the one that
     // establishes both native directories.

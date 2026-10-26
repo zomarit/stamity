@@ -466,8 +466,14 @@ function guardFailClosedTail(cli: CliCallContext): string {
  * `ConfigChange`, and the merged `permissions.allow` lists. The one stale line
  * it found — this file's header, which said the client reads no `AGENTS.md` —
  * is corrected above.
+ *
+ * Re-stamped 2026-10-23 (from 2026-09-30) by plan 022's vendor-claims pass,
+ * which re-read the cited pages with the hooks and permission-modes pages. It
+ * added the sub-agent keys `permissionMode`, `disallowedTools` and
+ * `autoCompactWindow` (2.1.296 or later) to the agent row, and found
+ * `.claude/rules/` read by Copilot CLI as well as by VS Code.
  */
-const ACCESS_DATE = "2026-09-30";
+const ACCESS_DATE = "2026-10-23";
 
 // ── Dialect facts ────────────────────────────────────────────────
 
@@ -496,11 +502,11 @@ const EFFORT_SCALE_CAP =
 export const CLAUDE_DIALECT_FACTS: AdapterDialectFacts = {
   tool: TOOL,
   ruleShape:
-    "`.claude/rules/<id>.md` with frontmatter `paths:` — a YAML glob list, matched when Claude reads a file; a rule with no `paths` is loaded unconditionally at launch, at CLAUDE.md priority. Also read by VS Code Copilot",
+    "`.claude/rules/<id>.md` with frontmatter `paths:` — a YAML glob list, matched when Claude reads a file; a rule with no `paths` is loaded unconditionally at launch, at CLAUDE.md priority. Also read by VS Code Copilot and by Copilot CLI",
   hooksConfigPath: CLAUDE_SETTINGS_PATH,
   readsAgentsSkillsDir: false,
   agentsFormat:
-    "`.claude/agents/<id>.md` — frontmatter (`name`, `description`, `tools:` comma list, `model:` alias or pinned id, `effort:` level) over a markdown system prompt; the class-to-model map at `.stamity/generated/models/claude.json`",
+    "`.claude/agents/<id>.md` — frontmatter (`name`, `description`, `tools:` comma list, `model:` alias or pinned id, `effort:` level) over a markdown system prompt; the class-to-model map at `.stamity/generated/models/claude.json`. The client also takes `permissionMode`, `disallowedTools` and `autoCompactWindow` (2.1.296 or later), which this engine does not emit",
   mcpDialect: "claude-json",
   entryFile: CLAUDE_MD_PATH,
   caps: [
