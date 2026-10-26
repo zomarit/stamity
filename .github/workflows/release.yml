@@ -344,12 +344,14 @@ jobs:
 
       # Pack the exact bytes the publish job will ship, and record their digest on the job-output
       # channel. The publish job compares against that output, never against a file riding inside
-      # the artifact it is verifying.
+      # the artifact it is verifying. The pack writes a production npm-shrinkwrap.json from the lock
+      # `npm ci` installed above (scripts/pack-release.mjs), ships it inside the tarball, and removes it
+      # from the checkout again.
       - name: Pack tarball
         id: pack
         run: |
           set -euo pipefail
-          TARBALL="$(npm pack --json --pack-destination . | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s)[0].filename))')"
+          TARBALL="$(node scripts/pack-release.mjs --pack-destination . --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s)[0].filename))')"
           test -f "$TARBALL"
           SHA="$(sha256sum "$TARBALL" | awk '{print $1}')"
           {

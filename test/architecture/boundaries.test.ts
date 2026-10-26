@@ -134,8 +134,17 @@ const GENERATOR_ENTRYPOINTS: readonly string[] = [
   "src/cli/docs/measurements.ts",
 ];
 
+/**
+ * The shipped launchers: a bin entry that loads the CLI through a computed specifier, so no import
+ * edge leads to it or from it. TEST CHANGE, justified (plan 022 file 2, b10-shrinkwrap-st,
+ * REQ-FLOW-049): `src/st.ts` is the `st` bin's own entry, a root the package publishes, so the
+ * reachability walk starts there too. It imports no internal module, so it holds no rule-5
+ * composition privilege and stays out of {@link ENTRYPOINTS}.
+ */
+const LAUNCHER_ENTRYPOINTS: readonly string[] = ["src/st.ts"];
+
 /** Every root the reachability walk starts from. */
-const REACHABILITY_ROOTS: readonly string[] = [...ENTRYPOINTS, ...GENERATOR_ENTRYPOINTS];
+const REACHABILITY_ROOTS: readonly string[] = [...ENTRYPOINTS, ...LAUNCHER_ENTRYPOINTS, ...GENERATOR_ENTRYPOINTS];
 
 const KERNEL_DIRS: readonly string[] = [
   "src/config/",
@@ -710,6 +719,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // `src/cli.ts`, which registers it: a file at wave 16 under another unit is one `cli.ts` could not
   // import (`checkWaveLayering`).
   "src/cli/commands/upgrade.ts": { unit: "p2-16", wave: 16 },
+  // TEST CHANGE, justified (plan 022 file 2, b10-shrinkwrap-st, REQ-FLOW-049): the `st` bin's own
+  // entry. It imports Node builtins only and loads `src/cli.ts` through a computed specifier, so it
+  // has no internal edge; it sits beside the entry it launches.
+  "src/st.ts": { unit: "b10-shrinkwrap-st", wave: 16 },
 
   // ---- phase 6 (p6-plan.json): the docs generators, wave 17 ----
   // Above the CLI entry because `cliReference` reads `COMMANDS` off it, which

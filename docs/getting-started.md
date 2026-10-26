@@ -171,7 +171,9 @@ The npm route is proved before it ships, on a clean machine, lane by lane, on
 `init` · `sync` · `upgrade` · `check` · `validate` · `add` · `config` · `workspace` ·
 `worktree` · `clean`
 
-The package installs two names for one binary: `stamity` and the shorter alias `st`.
+The package installs two names: `stamity` and the shorter alias `st`. The alias is going: it
+runs the same CLI, prints one deprecation line on stderr first, and is removed in 2.0.0, so use
+`stamity` in scripts.
 
 What each verb does, every flag it takes and every status it exits with is
 [the CLI reference](cli-reference.md)'s to state. That page renders from the program, so it

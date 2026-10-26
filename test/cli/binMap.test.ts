@@ -7,9 +7,11 @@ import { describe, expect, it } from "vitest";
  * The published `bin` map, pinned — the one contract in package.json that no
  * test in this repository could previously see.
  *
- * Two names, one entry point: `stamity` is the long name and `st` is the short
- * alias added with the `st-` command rename, and both resolve to the built CLI.
- * That much a reader sees in package.json. What a reader does NOT see is why
+ * Two names, two entries: `stamity` is the long name and resolves to the built
+ * CLI; `st` is the short alias added with the `st-` command rename, and since
+ * REQ-FLOW-049 it resolves to its own small entry, which prints one deprecation
+ * line and then runs that same CLI. The alias goes at 2.0.0. That much a reader
+ * sees in package.json. What a reader does NOT see is why
  * the long key cannot be dropped once the short one exists: npm resolves a bare
  * `npx <package>` to the bin whose KEY EQUALS THE UNSCOPED PACKAGE NAME, and a
  * package whose bin map has no such key makes `npx @zomarit/stamity init`
@@ -41,8 +43,11 @@ const UNSCOPED_NAME = pkg.name.replace(/^@[^/]+\//, "");
 /** The short alias the `st-` command surface is named after. */
 const SHORT_NAME = "st";
 
-/** The built entry both names resolve to. */
+/** The built entry the long name resolves to. */
 const CLI_ENTRY = "./dist/cli.js";
+
+/** The built entry the short alias resolves to: a deprecation line, then the CLI above. */
+const ALIAS_ENTRY = "./dist/st.js";
 
 describe("package.json bin map", () => {
   it("declares a map rather than a single string, so a second name can exist at all", () => {
@@ -60,10 +65,11 @@ describe("package.json bin map", () => {
     expect(Object.keys(pkg.bin)).toEqual([UNSCOPED_NAME, SHORT_NAME]);
   });
 
-  it("resolves every installed name to the same built CLI entry", () => {
-    const entries = Object.entries(pkg.bin);
-    expect(entries.length, "the bin map is empty, so this case would assert nothing").toBe(2);
-    for (const [name, target] of entries) expect(target, name).toBe(CLI_ENTRY);
+  // TEST CHANGE, justified (plan 022 file 2, b10-shrinkwrap-st, REQ-FLOW-049): `st` gets its own
+  // entry, which says once on stderr that the alias goes at 2.0.0 and then runs the same CLI, so the
+  // two names no longer point at one file. `stamity` still resolves to the built CLI.
+  it("resolves the long name to the built CLI and the alias to its own deprecation entry", () => {
+    expect(pkg.bin).toEqual({ [UNSCOPED_NAME]: CLI_ENTRY, [SHORT_NAME]: ALIAS_ENTRY });
   });
 
   it("keeps a bin key equal to the unscoped package name, which is what `npx <package>` runs", () => {
@@ -81,7 +87,17 @@ describe("package.json bin map", () => {
     // `files` is an allowlist: a bin pointing outside it installs as a symlink
     // to a path npm never unpacked, and the failure surfaces on a user's
     // machine rather than in this repository.
-    const [top] = CLI_ENTRY.replace(/^\.\//, "").split("/");
-    expect(pkg.files, `bin targets ${CLI_ENTRY}, which \`files\` does not ship`).toContain(top);
+    // TEST CHANGE, justified (plan 022 file 2, b10-shrinkwrap-st, REQ-FLOW-049): both entries are
+    // checked now that the alias has its own.
+    for (const entry of [CLI_ENTRY, ALIAS_ENTRY]) {
+      const [top] = entry.replace(/^\.\//, "").split("/");
+      expect(pkg.files, `bin targets ${entry}, which \`files\` does not ship`).toContain(top);
+    }
+  });
+
+  // ADDED by plan 022 file 2, b10-shrinkwrap-st (REQ-FLOW-049): npm packs a shrinkwrap only when
+  // `files` names it, so the release pack's production npm-shrinkwrap.json would be left out without it.
+  it("ships the release pack's npm-shrinkwrap.json beside dist", () => {
+    expect(pkg.files).toEqual(["dist", "npm-shrinkwrap.json"]);
   });
 });

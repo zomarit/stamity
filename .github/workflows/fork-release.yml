@@ -328,7 +328,7 @@ jobs:
         id: pack
         run: |
           set -euo pipefail
-          TARBALL="$(npm pack --json --pack-destination . | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s)[0].filename))')"
+          TARBALL="$(node scripts/pack-release.mjs --pack-destination . --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s)[0].filename))')"
           test -f "$TARBALL"
           SHA="$(sha256sum "$TARBALL" | awk '{print $1}')"
           {

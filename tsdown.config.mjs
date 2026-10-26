@@ -332,7 +332,7 @@ async function reportSizeBudgets(outDir) {
 }
 
 export default defineConfig({
-  entry: ["src/cli.ts", "src/index.ts"],
+  entry: ["src/cli.ts", "src/index.ts", "src/st.ts"],
   outDir: "dist",
   format: ["esm"],
   platform: "node",

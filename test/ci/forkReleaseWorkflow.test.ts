@@ -468,6 +468,22 @@ describe("fork-release.yml — what it copies from release.yml stays equal to it
     expect(names.indexOf("Prove the fork release")).toBeLessThan(names.indexOf("Install"));
   });
 
+  // ADDED by plan 022 file 2, unit b10-shrinkwrap-st (REQ-FLOW-049): the fork ships the same
+  // production shrinkwrap, so its pack goes through scripts/pack-release.mjs too, still as `id: pack`
+  // with the `tarball` and `tarball_sha256` outputs the rehearsal and the publish job read.
+  it("packs through pack-release.mjs, keeps the pack step's id and outputs, and no gates step runs npm pack itself", () => {
+    const steps = jobOf(WORKFLOW, "gates").steps;
+    const pack = stepOf(WORKFLOW, "gates", "Pack tarball");
+    expect(pack.id).toBe("pack");
+    expect(pack.run).toContain("node scripts/pack-release.mjs --pack-destination . --json");
+    expect(pack.run).toContain('echo "tarball=$TARBALL"');
+    expect(pack.run).toContain('echo "tarball_sha256=$SHA"');
+    expect(
+      steps.filter((step) => /\bnpm pack\b/.test(step.run ?? "")).map((step) => step.name),
+      "a direct npm pack ships no shrinkwrap",
+    ).toEqual([]);
+  });
+
   // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): one artifact,
   // not two. The plugin distribution's upload and download left with the plugin route, which
   // 1.15.0 deletes; the tarball still crosses for seven days, and it is the only artifact that does.

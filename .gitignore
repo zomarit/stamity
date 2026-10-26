@@ -63,6 +63,10 @@ __pycache__/
 
 # `npm pack` output at the root; a tarball deeper in the tree is not pack output.
 /*.tgz
+# The release pack's production shrinkwrap (scripts/pack-release.mjs). It lives at the root only
+# for the pack and is removed after it; a leftover from an interrupted pack stays out of a commit,
+# and the next pack refuses it.
+/npm-shrinkwrap.json
 
 # Root-level session scratch. The leak gate walks tracked AND
 # untracked-but-not-ignored files (scripts/leak-gate.mjs, `listFromGit`), so a local

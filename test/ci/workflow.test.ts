@@ -3085,6 +3085,20 @@ describe("release.yml — the only publishing path", () => {
     expect(indexOf(gatesSteps, "Set up Python"), "no release job runs setup-python").toBe(-1);
   });
 
+  // ADDED by plan 022 file 2, unit b10-shrinkwrap-st (REQ-FLOW-049): the shipped tarball carries a
+  // production npm-shrinkwrap.json derived from the lock `npm ci` installed in this job, so the
+  // pack goes through scripts/pack-release.mjs and no gates step packs around it.
+  it("packs the shipped tarball through pack-release.mjs, and no gates step runs npm pack itself", () => {
+    const pack = runOf(gatesSteps, "Pack tarball");
+    expect(pack).toContain("node scripts/pack-release.mjs --pack-destination . --json");
+    expect(stepOf(gatesSteps, "Pack tarball").id).toBe("pack");
+    expect(indexOf(gatesSteps, "Install")).toBeLessThan(indexOf(gatesSteps, "Pack tarball"));
+    expect(
+      gatesSteps.filter((step) => /\bnpm pack\b/.test(step.run ?? "")).map((step) => step.name),
+      "a direct npm pack ships no shrinkwrap",
+    ).toEqual([]);
+  });
+
   // ADDED by run 2026-10-13_records-branch, unit r5-ci-records-job (2026-10-14; REQ-PROVE-025): the
   // release gates restore the records from the `origin/records` ref the depth-0 checkout already
   // fetched, and run the records suite beside `npm test`. No fetch: after checkout there is no

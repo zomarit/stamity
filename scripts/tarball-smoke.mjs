@@ -26,6 +26,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isMain } from './native-typescript.mjs'
+import { packRelease, SHRINKWRAP } from './pack-release.mjs'
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const GATE = join(ROOT, 'scripts', 'leak-gate.mjs')
@@ -78,6 +79,25 @@ export function packVersionMismatches(installedPacksRoot, ids, version) {
   })
 }
 
+/**
+ * Why the installed package's shrinkwrap is not the production tree the release ships, or
+ * null when it is: present, parseable, and no row marked `dev` or `devOptional` (REQ-FLOW-049).
+ */
+export function installedShrinkwrapProblem(installed) {
+  let shrinkwrap
+  try {
+    shrinkwrap = JSON.parse(readFileSync(join(installed, SHRINKWRAP), 'utf8'))
+  } catch (error) {
+    return `is missing or unreadable (${error.message})`
+  }
+  const rows = Object.entries(shrinkwrap?.packages ?? {})
+  if (rows.length === 0) return 'holds no packages'
+  const dev = rows.filter(([, row]) => row?.dev === true || row?.devOptional === true).map(([path]) => path)
+  if (dev.length > 0) return `ships ${dev.length} dev row(s): ${dev.slice(0, 5).join(', ')}`
+  if (shrinkwrap.packages['']?.devDependencies !== undefined) return 'root row still lists devDependencies'
+  return null
+}
+
 function run(command, args, options = {}) {
   return execFileSync(command, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...options })
 }
@@ -112,9 +132,10 @@ export function scanPackedArtifact(installed, gateSource = GATE) {
 function main() {
   const work = realpathSync(mkdtempSync(join(tmpdir(), 'stamity-tarball-smoke-')))
   try {
-    // 1. Pack. `npm pack` honours `files`, `.npmignore`, and the publish-time filters, so the
-    //    tarball here is byte-for-byte what a publish would upload.
-    const packed = JSON.parse(run('npm', ['pack', '--json', '--pack-destination', work], { cwd: ROOT }))
+    // 1. Pack, the way the release packs (scripts/pack-release.mjs): `npm pack` with the
+    //    production shrinkwrap written for it. `npm pack` honours `files`, `.npmignore`, and the
+    //    publish-time filters, so the tarball here is byte-for-byte what a publish would upload.
+    const { packed } = packRelease({ root: ROOT, destination: work })
     const filename = packed[0]?.filename
     if (typeof filename !== 'string') return fail('npm pack produced no filename')
     const tarball = join(work, filename)
@@ -146,6 +167,10 @@ function main() {
         `Staged content lives under dist/ (tsdown.config.mjs "copy"); package.json "files" only ships dist.\n` +
           `Present under dist/: ${readdirSync(join(installed, 'dist')).join(', ')}`,
       )
+    }
+    const shrinkwrapProblem = installedShrinkwrapProblem(installed)
+    if (shrinkwrapProblem !== null) {
+      return fail(`the installed package's ${SHRINKWRAP} ${shrinkwrapProblem}`, 'The release pack writes it from the gated lock (scripts/pack-release.mjs).')
     }
     const packageVersion = JSON.parse(readFileSync(join(installed, 'package.json'), 'utf8')).version
     const unstamped = packVersionMismatches(join(installed, 'dist', 'packs'), packDirs, packageVersion)
@@ -220,11 +245,16 @@ export type { Reachable };
     } catch (error) {
       return fail('`check` failed on the tree `init` just produced', `${error.stdout ?? ''}\n${error.stderr ?? ''}`)
     }
+    // The `st` bin is its own entry (REQ-FLOW-049): it must find the CLI beside it in the
+    // installed tree and answer as `stamity` does.
+    const alias = run('node', [join(installed, 'dist', 'st.js'), '--version'], { cwd: target })
+    const direct = run('node', [bin, '--version'], { cwd: target })
+    if (alias !== direct) return fail('`st --version` does not answer as `stamity --version`', `st: ${alias}\nstamity: ${direct}`)
 
     console.log(
-      `tarball-smoke: PASS - ${filename} installs, carries ${REQUIRED_CONTENT_DIRS.length} content ` +
+      `tarball-smoke: PASS - ${filename} installs with a production ${SHRINKWRAP}, carries ${REQUIRED_CONTENT_DIRS.length} content ` +
         `class(es) and ${packDirs.length} pack(s) at version ${packageVersion} under dist/, passes the leak gate ` +
-        `over the packed tree, compiles its external TypeScript consumer, preserves JavaScript imports, and completes init + check`,
+        `over the packed tree, compiles its external TypeScript consumer, preserves JavaScript imports, completes init + check, and answers st --version as stamity does`,
     )
     return 0
   } finally {
