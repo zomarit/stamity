@@ -35,19 +35,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Upgrading from 1.16.0
 
-The items below are read from the code and the tests on the branch that carries them. No upgrade of a setup the
-published 1.16.0 wrote has been walked yet; the release cut walks one and restates what it reads.
+Upgrade with `npx -y @zomarit/stamity@1.17.0 upgrade --to 1.17.0`, from a committed tree. It runs 1.17.0's `sync`
+and moves a `package.json` pin (an exact, `^` or `~` spec) to 1.17.0; where a lockfile sits beside it, run your
+install (`npm install`, say) afterwards so the lockfile follows the pin, as the upgrade's own note says. `--dry-run`
+previews the files and the pin move, but not the `moved:` lines or the marker rewrites below. `sync` at 1.17.0 does
+the same without moving the pin. Where an item below says "the first `sync`", the first `upgrade` (or `sync`) at
+1.17.0 is that run.
+
+On 2026-10-26 the release cut walked the upgrade with the 1.17.0 build, before its publish, on setups the published
+1.16.0 wrote with all four clients selected: a plain repository; one pinning `^1.16.0` with a committed
+`package-lock.json` and one edited skill copy; one set to `autonomy.mode: ask`; and one with the retired `ops` and
+`scaffold` packs. The plain, pinned and retired-pack setups each ended with `check` exiting 0 and no drift, and on
+the plain and pinned ones a second `sync` changed nothing. The install step after the pin move is measured only
+after the publish: before it, `npm install` finds no 1.17.0 to install. Claude Code's GitHub Action on an upgrade
+pull request, a repository that never commits its guard copies, an overlay of a moved skill and a string
+`user-invocable` were not walked; those items are read from the code and its tests.
 
 - **Two skills leave the core for the new `frontend` pack.** `st-design-system-detect` and `st-browser-evidence` ship
   in the `frontend` pack now, not in the core corpus. The first `sync` deletes each copy under `.claude/skills/` and
   `.agents/skills/` whose bytes are still the core rendering 1.9.0 through 1.16.0 wrote, keeps a copy you edited, and
-  prints one `moved:` line per skill naming what it removed or kept and the pinned `add frontend` call. To keep the
+  prints one `moved:` line per skill naming what it removed or kept and the pinned `add frontend` call. That line is
+  the only place a kept copy is named: once its ledger row is dropped, `check` does not list it. To keep the
   skills, work in this order: `sync`; delete by hand each copy a `moved:` line names as kept, unless it is yours, in
   which case move it aside; `stamity add frontend`; `sync`. The pack's copies then stand at the same paths. Running
   `add frontend` before that first `sync` is refused, because the ledger rows 1.16.0 wrote still claim both skill ids,
   and the refusal names this order. A kept copy left in place makes the last `sync` refuse that one file by name and
-  exit 1 after writing the rest; once the copy is gone, the next `sync` writes it. This repository's own `sync`
-  printed the `moved:` line for both skills and removed their four copies.
+  exit 1 after writing the rest (`sync --force` overwrites it after a verified `.bak`); once the copy is gone, the
+  next `sync` writes it. This repository's own `sync` printed the `moved:` line for both skills and removed their
+  four copies.
 - **An overlay of either skill is refused.** A `.customize.yaml` or `.customize.md` under
   `.stamity/overrides/skills/design-system-detect/` or `.stamity/overrides/skills/browser-evidence/` stops `sync`,
   `check`'s drift gate and `validate` with `VALIDATION_ERROR`, naming the move and `add frontend`, with the
@@ -86,16 +101,27 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   - Cursor and Codex refuse them in every mode. 1.16.0 refused the ready mark and a local tag there too; the dispatch
     and remote-write rules are new.
   - The run's own pull request lands only through `stamity run land`, when its evidence holds, on every client.
-  - To keep 1.16.0's asks, set `autonomy.mode` to `ask`, then run `sync`.
+  - To keep 1.16.0's asks, run `npx -y @zomarit/stamity@1.17.0 config set autonomy.mode ask` before the upgrade
+    (1.16.0's `config` does not know the key and refuses it), then `upgrade --to 1.17.0`. Setting it after the
+    upgrade and running `sync` also works, but the time between the two runs on the autonomous default.
   - Unattended, a local tag and an unnamed dispatch run on Claude Code and Copilot CLI. Name `workflow-dispatch` in
     `autonomy.deployingActs`, and the branches a workflow deploys from in `autonomy.deployingBranches`, where one
     releases or deploys.
   - A repository that never commits its guard copies pays one `sync --loosen` on a fresh clone, on a switch of every
     selected client, or on a hooks layout move.
 - **The first `sync` rewrites three kinds of file once.** Each managed block's markers lose the engine version they
-  carried, and the `sync` names each rewrite; every generated Codex agent file gains a line; and Copilot's
-  `.github/agents/stamity-run.agent.md` marks two of its rules as the cloud agent's. A 1.16.0 `check` over a tree a
-  newer `sync` wrote reads the bare markers as drift, so a team on mixed versions upgrades together.
+  carried, and the `sync` names each rewrite; every generated Codex agent file's header comment is rewritten to say a
+  role runs in the parent's sandbox; and Copilot's `.github/agents/stamity-run.agent.md` marks two of its rules as
+  the cloud agent's.
+- **A team upgrades together.** A 1.16.0 `check` over a tree 1.17.0 wrote fails: it reports every file the release
+  changed as drift, cannot read a manifest that sets `autonomy`, and cannot build its plan once the `frontend` pack is
+  installed. On a tree with neither, a 1.16.0 `sync` exits 0 and writes the tree back to 1.16.0's output, the old
+  guard and hook copies included, with no word that it went back a release.
+- **Codex asks you to trust its hooks again.** The upgrade rewrites `.codex/hooks.json`, and Codex records hook trust
+  against that file's hash, so no stamity hook runs in Codex, the person-only guard included, until you open `/hooks`
+  and review each one. The upgrade prints a note saying so. Cursor's and Copilot's hook files change too.
+- **`.gitignore` is not touched.** The upgrade adds no line. The lines 1.16.0 added stay, and since no release before
+  1.17.0 recorded them, `clean` leaves them in place.
 - **`clean` now keeps your own state under `.stamity/`.** A script that ran `clean` to remove `.stamity/` whole needs
   `clean --purge` (Changed).
 
@@ -116,8 +142,8 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   `--loosen`; a `--loosen` run names on stderr each guard copy it loosened and what it dropped. A repository that
   never commits its guard copies meets the refusal on a fresh clone's first `sync` and passes `--loosen` once. A
   1.16.0 guard carries no baked setting, and a setup from a release before the guard owns no guard copy at all, so the
-  first `sync` after upgrading adopts the `autonomous` default with no flag; set `autonomy.mode` to `ask` before that
-  `sync` to keep 1.16.0's asks.
+  first `sync` after upgrading adopts the `autonomous` default with no flag; set `autonomy.mode` to `ask` with
+  1.17.0's `config` before that `sync` to keep 1.16.0's asks, since 1.16.0's `config` refuses the key.
 - **The run verbs, `run land` and the loosen gate read git with replace refs off**, by the `GIT_NO_REPLACE_OBJECTS`
   variable and the `-c core.useReplaceRefs=false` command-line key, so a `git replace` ref, a local ref write that
   needs no commit, cannot make the ledger, the hook declarations, the guard copies or a tree they read at a commit
@@ -259,8 +285,10 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   (`sync` for a release below 1.17.0, which has no `upgrade`); a repository with no setup; a downgrade without
   `--allow-downgrade`; a move to another major without `--allow-major`; and an autonomy setting looser than the guard
   on disk without `--loosen`, the same gate `sync` holds. A `sync` that refuses a file leaves the pin where it was.
-  The update banner now compares with the repository's pin (`devDependencies`, then `dependencies`, then the
-  manifest's `generatedBy`) and names `upgrade --to <version>`, or `sync` below 1.17.0. It checks only when stderr is a
+  It runs no package manager: where it moves the pin and a lockfile sits beside `package.json`, it names the
+  project's install (`npm install`, `pnpm install`, …) in a `note:` line and in `--json`'s `notices`, since a
+  lockfile still at the old release fails the next `npm ci`. The update banner now compares with the repository's
+  pin (`devDependencies`, then `dependencies`, then the manifest's `generatedBy`) and names `upgrade --to <version>`, or `sync` below 1.17.0. It checks only when stderr is a
   terminal and the run is not `--json`. `STAMITY_NO_UPDATE_CHECK` takes `1`, `true` or `yes` in any case, and the
   check's stamp file is named after the package, so a fork and the canonical package keep separate stamps.
 - **`copilot.setupSteps` says who owns Copilot's setup workflow.** `stamity config set copilot.setupSteps <mode>`
@@ -377,7 +405,9 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   with no development rows, so an install from the registry resolves the dependency tree the release was tested with.
   Both release workflows pack through `scripts/pack-release.mjs`, which refuses a lock that differs from the commit.
 - **A `sync` that changes nothing leaves `.stamity/manifest.json` byte for byte**, `updatedAt` included, prints
-  `manifest already current`, and reports `manifestWritten` in `--json`. Managed-block markers no longer carry the
+  `manifest already current`, and reports `manifestWritten` in `--json`. An `updatedAt` with the stamp's shape but no
+  real date, such as a month 13, counts as stale, so any manifest write (`init --force` included) replaces it.
+  Managed-block markers no longer carry the
   engine version (Upgrading from 1.16.0). The provenance lines of `sync` and `check` no longer print a `(stamped v…)`
   that no file carries, and a client's file count there leaves out the `.gitignore` record; the JSON rollup keeps
   `stampedVersion`.
