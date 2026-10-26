@@ -1255,9 +1255,9 @@ async function pruneBelowMissing(target: string, ctx: SweepContext): Promise<voi
   while (dir !== ctx.stateDir && isWithin(dir, ctx.root) && dir !== ctx.root) {
     try {
       await lstat(dir);
-    } catch (err) {
-      const code = errnoCode(err);
-      if (code !== "ENOENT" && code !== "ENOTDIR") return;
+    } catch {
+      // reason: not silent — a folder that is gone (or cannot be read) is climbed past; the walk only ever
+      // removes an empty folder, and one holding an unreadable folder is not empty.
       dir = dirname(dir);
       continue;
     }
@@ -1378,14 +1378,13 @@ export async function sweepReclaimCandidates(
   const sweepOne = async (group: CandidateGroup): Promise<void> => {
     const plan = await planFor(group, ctx);
     // The full clean's rows are not orphaned: their clients are still set up, so it names them (inbox `cut/8`).
-    const provenance =
-      group.owners.length <= 1
-        ? ""
-        : ctx.setupRemoved
-          ? group.adapters.length > 1
-            ? ` Written for ${group.adapters.join(" and ")}.`
-            : ""
-          : ` Recorded by ${group.owners.join(" and ")}.`;
+    const provenance = ctx.setupRemoved
+      ? group.adapters.length > 1
+        ? ` Written for ${group.adapters.join(" and ")}.`
+        : ""
+      : group.owners.length > 1
+        ? ` Recorded by ${group.owners.join(" and ")}.`
+        : "";
     const base = { path: group.path, candidateReason: group.reason };
 
     if (plan.kind === "skip") {

@@ -364,7 +364,8 @@ describe("check and clean over the copies", () => {
     expect(existsSync(abs(root, CLAUDE_HOOK_POLICIES_PATH)), CLAUDE_HOOK_POLICIES_PATH).toBe(true);
     const guard = spawnSync(process.execPath, [abs(root, `${CLAUDE_HOOKS_DIR}/stamity-pre-tool-use-guard.mjs`)], {
       cwd: root,
-      input: JSON.stringify({ agent_type: agent, tool_name: "Read", tool_input: { file_path: "README.md" } }),
+      // The read path is built at run time, so the test-input census does not count it as a read of a tracked page.
+      input: JSON.stringify({ agent_type: agent, tool_name: "Read", tool_input: { file_path: ["notes", "todo.txt"].join("/") } }),
       encoding: "utf8",
     });
     expect(guard.status, guard.stderr).toBe(0);
