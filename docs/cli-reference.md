@@ -27,7 +27,7 @@ mistake.
 | `stamity config` | yes | writes | inspect and change the setup: keys, detection refresh, MCP servers |
 | `stamity workspace` | yes | writes | one policy across several repositories: status, guided creation, and the cascade |
 | `stamity worktree` | yes | writes | parallel checkouts of this repository: the inventory, guided setup, and receipt-based teardown |
-| `stamity clean` | yes | writes | remove every generated file and the .stamity/ state directory |
+| `stamity clean` | yes | writes | remove every generated file and the setup's own state, keeping yours under .stamity/ |
 | `stamity learn` | plumbing | writes | capture a learning through the engine's write gates, or read them through its screen (plumbing) |
 | `stamity handoff` | plumbing | writes | prepare, resume, list, complete and prune handoffs through the engine's gates (plumbing) |
 | `stamity ledger` | plumbing | writes | append findings to a run's ledger, close its rows, print its resume card, and read and write the deferral inbox (plumbing) |
@@ -237,13 +237,14 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 ## `stamity clean`
 
-remove every generated file and the .stamity/ state directory
+remove every generated file and the setup's own state, keeping yours under .stamity/
 
 May write when it runs, so `--dry-run` previews any change without making it.
 
 | Flag | What it does | Default |
 |---|---|---|
 | `--pack <id>` | remove one installed pack — its files and ledger rows — and keep everything else | — |
+| `--purge` | also delete the whole .stamity/ directory: learnings, handoffs, overrides, installed packs and run records | — |
 
 ## `stamity learn`
 
