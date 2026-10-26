@@ -271,7 +271,12 @@ export interface LoadValidatedLearningsOptions {
   now?: Date;
   /**
    * The read verb's two added screens, off by default so the session-start
-   * banner and {@link formatLearningsIndex} stay line-for-line twins. On, each
+   * banner and {@link formatLearningsIndex} stay line-for-line twins on a clean
+   * corpus. The banner does the field and name screens itself: it screens each
+   * field it prints as decoded and as printed, and strips and screens each name
+   * it prints (`../hooks/scripts.ts`), under its own screen, which leaves
+   * out the rows that name a network scheme. It prints no body, so it does not
+   * screen one. On, each
    * field the index prints is screened again as its YAML-decoded value — the
    * raw screen reads `\u…` escapes as literal ASCII, and the parser decodes
    * them after it — and a hit skips the file `injection-detected` under its

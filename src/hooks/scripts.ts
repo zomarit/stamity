@@ -466,6 +466,15 @@ export const SESSION_START_SCREEN: readonly DenyPattern[] = [
   ...INJECTION_PATTERNS,
 ].filter((entry) => entry.severity === "block" && !NETWORK_VOCABULARY.test(entry.pattern.source));
 
+/**
+ * The head fields the session-start banner prints, screened again as decoded and
+ * as printed (REQ-FLOW-021). A learning's are the read verb's own printed set
+ * (`PRINTED_FIELDS` in `../learnings/store.ts`); a handoff's are the four its
+ * active line prints.
+ */
+const LEARNING_PRINTED_FIELDS: readonly string[] = ["id", "confidence", "summary", "reviewBy"];
+const HANDOFF_PRINTED_FIELDS: readonly string[] = ["id", "summary", "expires", "fromTool"];
+
 /** Pattern ids embedded in the session-start script, for docs and drift checks. */
 export const SESSION_START_SCREEN_PATTERN_IDS: readonly string[] = SESSION_START_SCREEN.map(
   (entry) => entry.id,
@@ -929,6 +938,9 @@ ${CLOUD_SESSIONS.map((session) => `  ${json(session)},`).join("\n")}
 // The session detector, as its source text (src/session/detect.ts in the engine that wrote this file).
 ${MATCH_SESSIONS_SOURCE}
 const INVISIBLE = new RegExp(${json(INVISIBLE_SMUGGLING_CHARS.source)}, "g");
+const UNPRINTABLE = new RegExp(${json(UNPRINTABLE_CHARS.source)}, ${json(UNPRINTABLE_CHARS.flags)});
+const LEARNING_FIELDS = ${json(LEARNING_PRINTED_FIELDS)};
+const HANDOFF_FIELDS = ${json(HANDOFF_PRINTED_FIELDS)};
 const SCREEN = [
 ${screen}
 ];
@@ -955,8 +967,9 @@ function listMarkdown(dir) {
  * One document, screened. Checks run in the order that keeps a refusal
  * attributable: size before read, injection before shape, then shape, then
  * integrity — so a poisoned file reports as poisoned rather than as malformed.
+ * \`fields\` are the head fields the banner prints, screened again once parsed.
  */
-function inspect(dir, name, maxBytes, coversSummary) {
+function inspect(dir, name, maxBytes, coversSummary, fields) {
   let stats;
   try {
     stats = statSync(join(dir, name));
@@ -980,6 +993,15 @@ function inspect(dir, name, maxBytes, coversSummary) {
   if (screened(raw)) return { ...doc, skip: "injection-detected" };
   const parsed = parseDocument(raw);
   if (parsed === null) return { ...doc, skip: "invalid-frontmatter" };
+  // The raw screen above read each escape as its literal characters; the parser
+  // decoded them. Each printed field is screened as decoded and as \`text\` prints
+  // it, field by field, as \`learn read\` screens them.
+  for (const field of fields) {
+    const value = parsed.head[field];
+    if (typeof value === "string" && (screened(value) || screened(text(value, "")))) {
+      return { ...doc, skip: "injection-detected" };
+    }
+  }
   const covered = coversSummary
     ? String(parsed.head.summary ?? "").trim() + "\\n" + parsed.body.trim()
     : parsed.body.trim();
@@ -1012,15 +1034,15 @@ function declaredDay(raw) {
  * lookalike or a combining mark hid, and the raw copy keeps the ones NFKC
  * destroys by composing a trailing mark into the letter before it.
  *
- * Returns the first matching pattern id in SCREEN order, or "" when none
- * matches: a refusal that names its pattern is one somebody can attribute.
+ * Returns every matching pattern id in SCREEN order, empty when none matches:
+ * a refusal that names its pattern is one somebody can attribute.
  */
-function screenHit(raw) {
+function screenIds(raw) {
   const stripped = raw.replace(INVISIBLE, "");
   const copies = [raw, stripped];
   const normalized = normalizeForScreen(stripped);
   if (normalized !== stripped) copies.push(normalized);
-  const hit = SCREEN.find((entry) =>
+  return SCREEN.filter((entry) =>
     copies.some((copy) => {
       // A \`g\`-flagged row carries \`lastIndex\` between calls, and this now tests
       // three copies per row: without the reset the second copy would resume
@@ -1028,8 +1050,12 @@ function screenHit(raw) {
       entry.re.lastIndex = 0;
       return entry.re.test(copy);
     }),
-  );
-  return hit === undefined ? "" : hit.id;
+  ).map((entry) => entry.id);
+}
+
+/** The first matching pattern id in SCREEN order, or "" when none matches. */
+function screenHit(raw) {
+  return screenIds(raw)[0] ?? "";
 }
 
 /** Whether any screen pattern matches. */
@@ -1163,7 +1189,7 @@ function append(out, items, noun) {
 
 const learningsDir = join(STATE_ROOT, "learnings");
 const learnings = listMarkdown(learningsDir)
-  .map((name) => inspect(learningsDir, name, MAX_LEARNING_BYTES, false))
+  .map((name) => inspect(learningsDir, name, MAX_LEARNING_BYTES, false, LEARNING_FIELDS))
   .filter((doc) => doc !== null)
   // Newest declared date first — a learning written today outranks one from six
   // months ago, and a date survives a clone where an mtime does not — with a
@@ -1185,7 +1211,7 @@ const skipped = learnings.filter((doc) => doc.skip !== "");
 
 const handoffsDir = join(STATE_ROOT, "handoffs");
 const handoffDocs = listMarkdown(handoffsDir)
-  .map((name) => inspect(handoffsDir, name, MAX_HANDOFF_BYTES, true))
+  .map((name) => inspect(handoffsDir, name, MAX_HANDOFF_BYTES, true, HANDOFF_FIELDS))
   .filter((doc) => doc !== null);
 
 // Partitioned, not filtered away. A refusal and a handoff that is merely
@@ -1199,7 +1225,7 @@ const handoffs = handoffDocs
     (doc) => doc.skip === "" && RESUMABLE.includes(doc.head.status) && Date.parse(doc.head.expires) > NOW,
   )
   .map((doc) => ({
-    id: text(doc.head.id, text(stem(doc.name), "(unnamed)")),
+    id: text(doc.head.id, nameId(doc)),
     summary: text(doc.head.summary, "(no summary)"),
     expires: text(doc.head.expires, ""),
     from: text(doc.head.fromTool, ""),
@@ -1215,7 +1241,7 @@ function render() {
   const bytes = loaded.reduce((total, doc) => total + doc.size, 0);
   // The file name is payload too: it is attacker-chosen on any file that
   // reached the directory, and it is concatenated into a line an agent reads.
-  const ids = loaded.map((doc) => text(doc.head.id, text(stem(doc.name), "(unnamed)")));
+  const ids = loaded.map((doc) => text(doc.head.id, nameId(doc)));
   const duplicated = new Set(ids.filter((id, index) => ids.indexOf(id) !== index));
   const section = [];
   append(
@@ -1266,7 +1292,29 @@ function skipLine(doc) {
 
 /** A file name as one bounded, control-character-free line. */
 function fileName(doc) {
-  return text(doc.name, "(unnamed file)");
+  return text(printedName(doc.name), "(unnamed file)");
+}
+
+/** The id a learning or handoff with none takes from its file's name, as \`printedName\` gives it. */
+function nameId(doc) {
+  const shown = printedName(doc.name);
+  return text(shown.endsWith(".md") ? stem(shown) : shown, "(unnamed)");
+}
+
+/**
+ * A file name as the banner prints it, as \`learn read\` prints a skip's: C0
+ * controls and DEL to spaces, the rest of the resume card's unprintable set and
+ * the invisible class dropped. A name the screen matches, raw or printed, its
+ * stem included, prints as a placeholder naming the pattern ids, never the name.
+ */
+function printedName(name) {
+  const shown = name
+    .replace(UNPRINTABLE, (char) => (char < " " || char === "\\u007f" ? " " : ""))
+    .replace(INVISIBLE, "");
+  const copies = [name, stem(name), text(shown, ""), text(stem(shown), "")];
+  const ids = [...new Set(copies.flatMap(screenIds))].sort();
+  if (ids.length === 0) return shown;
+  return "(name withheld: " + (ids.length === 1 ? "pattern " : "patterns ") + ids.join(", ") + ")";
 }
 
 /** The first cloud or CI session by priority, its lines, then the others by name. */

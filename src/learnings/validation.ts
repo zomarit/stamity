@@ -189,6 +189,9 @@ export const LEARNINGS_SCREEN_PATTERNS: readonly DenyPattern[] = [
   ...INJECTION_PATTERNS,
 ];
 
+/** The transport set's invisible-character row; its id keys the strip advisory, said once per file. */
+const INVISIBLE_ROW = "invisible-chars";
+
 // ── Single-file validation ───────────────────────────────────────
 
 export interface LearningValidationResult {
@@ -261,9 +264,20 @@ export function validateLearningContent(
   checkFrontmatter(parsed.frontmatter, source, options.now ?? new Date(), errors, warnings);
   checkBody(parsed.body, source, errors);
 
-  const screened = screen(raw, source);
+  const named = new Set<string>();
+  const screened = screen(raw, source, named);
   errors.push(...screened.errors);
   warnings.push(...screened.warnings);
+  // The values this gate accepts are the YAML-decoded ones, and the raw screen
+  // reads an escape as its literal characters: each string field is screened
+  // again as decoded, alone, so the gate refuses what the read verb refuses. A
+  // pattern id already named is not named again.
+  for (const [field, value] of Object.entries(parsed.frontmatter)) {
+    if (typeof value !== "string") continue;
+    const decoded = screen(value, `${source}, \`${field}\` as decoded`, named);
+    errors.push(...decoded.errors);
+    warnings.push(...decoded.warnings);
+  }
 
   // ── Gate 4: integrity ──
   checkIntegrity(parsed, source, errors);
@@ -426,20 +440,23 @@ function escapeRegExp(literal: string): string {
  *    `../handoffs/validation.ts` and `./store.ts` both state that rule; this one
  *    quoted `hit.snippet` anyway, which for a warn row is the matched text
  *    verbatim.
+ *
+ * `seen` carries the ids already named across calls, the invisible-character
+ * advisory under its row's id, so one file names each id once.
  */
-function screen(text: string, source: string): { errors: string[]; warnings: string[] } {
+function screen(text: string, source: string, seen: Set<string>): { errors: string[]; warnings: string[] } {
   const errors: string[] = [];
   const warnings: string[] = [];
 
   const stripped = text.replace(INVISIBLE_SMUGGLING_CHARS, "");
-  if (stripped.length !== text.length) {
+  if (stripped.length !== text.length && !seen.has(INVISIBLE_ROW)) {
+    seen.add(INVISIBLE_ROW);
     warnings.push(
       `${source}: ${text.length - stripped.length} invisible character(s) present. ` +
         `They were removed before screening; persist the sanitized body.`,
     );
   }
 
-  const seen = new Set<string>();
   for (const hit of scanNormalized(stripped, LEARNINGS_SCREEN_PATTERNS)) {
     if (seen.has(hit.patternId)) continue;
     seen.add(hit.patternId);
