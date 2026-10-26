@@ -673,7 +673,7 @@ function describeError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function skip(action: Extract<ReclaimPlan, { kind: "skip" }>["action"], detail: string): ReclaimPlan {
+function skip(action: Extract<ReclaimPlan, { kind: "skip" }>["action"], detail: string): Extract<ReclaimPlan, { kind: "skip" }> {
   return { kind: "skip", action, detail };
 }
 
