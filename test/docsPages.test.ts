@@ -3396,18 +3396,32 @@ describe("the night units' pages (n2, n3, n4, n5)", () => {
     for (const claim of [
       // setupRootsAt and setupsNamed (src/runs/hookPaths.ts, src/cli/commands/run.ts): every setup root, not only the run's own.
       "The hold reads every setup in the repository, not only the run's own: the person-only paths are matched from each folder that holds a `.stamity/manifest.json`, or whose `.stamity` is a link or a submodule, at `Base:` or in the tree the push sends, as from the run's own project, and the hook declarations of each such folder at `Base:` are read as the run's own are, so one whose `.stamity` is a link or a submodule there refuses the call, and such a link or submodule the run adds is held.",
-      // rootHookPaths (src/runs/hookPaths.ts): a bare name the resolver refuses is held as written, not refused.
-      "a byte-order mark is read as the manifest reader reads it, and a bare name, an option's `=` value or an argument word past the launcher with no separator and no leading drive letter, that the resolver refuses is held as written instead, as a held path matches without case and in one Unicode normalization form.",
-      // carriedSections and committedPatchPaths (src/cli/commands/run.ts): the work tree's copy, else HEAD's.
-      "A later checkpoint that holds a new change keeps the earlier sections of the held patch `HEAD` carries for paths not held again, in order, before its own, and a path held again takes the current diff, its earlier section left out. Those sections, and the paths a patch kept with no new change names, are read from the patch as the commit will take it: the work tree's copy where it is a regular file, else `HEAD`'s.",
+      // TEST CHANGE, justified (this change's review round 1): the pins below that this change added follow its
+      // reworded clauses, each now naming what the code does; the old wording is checked absent after the loop.
+      // hookPathsRead (src/runs/hookPaths.ts, `values` and the resolve loop): a word with no separator and no drive
+      // letter the resolver refuses is held as written (`bare`); the script checkLauncherArgv picks is resolved with
+      // `bare: false` and refuses (src/shared/launcherAllowlist.ts, `script = program`).
+      "a byte-order mark is read as the manifest reader reads it, and one case is held rather than refused: a word with no separator and no leading drive letter, written as an argument past the launcher or as an option's `=` value, that the resolver refuses is held as written, as a held path matches without case and in one Unicode normalization form, except the script the declaration runs, which refuses.",
+      // carriedSections and committedPatchPaths (src/cli/commands/run.ts): the work tree's copy, else HEAD's; the kept
+      // patch alone is read where no new change is held (`sectioned.length === 0`).
+      "A later checkpoint that holds a new change keeps the earlier sections of the held patch `HEAD` carries for paths not held again, in order, before its own, and a path held again takes the current diff, its earlier section left out. Those sections, and the paths a kept patch names when no new change is held, are read from the patch as the commit will take it: the work tree's copy where it is a regular file, else `HEAD`'s.",
       "A run can write the work tree's copy of its held patch, so a kept section is the run's own text, bound only by the verb's section shape and by naming a held path, and the person reads it before applying it.",
-      "A run continued on a fresh clone, whose kept held patch holds a setup the run added, its manifest only in the patch, refuses each later checkpoint and the run's end, since the hold reads setup roots from `Base:`, the index and the work tree, not from the kept patch: it fails closed, and the run stops until a person applies or drops the patch |",
+      // The kept-section check refuses a section naming a path the hold does not hold (run.ts, `outside`); applying the
+      // patch makes the setup a root again, and --drop-held withdraws a section, so neither waits on a person alone.
+      "A run continued on a fresh clone, whose kept held patch holds a setup the run added, its manifest only in the patch, refuses each later checkpoint and the run's end, since the hold reads setup roots from `Base:`, the index and the work tree, not from the kept patch: it fails closed, and those calls refuse until the patch is applied or the sections the hold refuses are dropped |",
+      // The chosen default: only setup roots are read, and the client globs are top-anchored (src/change/personOnlyPaths.ts, PERSON_ONLY_PATHS and heldPaths), so a folder with no setup keeps
+      // its client files unheld; the editor and charter globs match at any depth.
+      "A folder below the top that has no setup of its own is not one of the hold's roots, so the client files the held set names only at a project's top, its `.claude/`, `.cursor/` and `.codex/` files and its `.mcp.json` among them, are pushed from it as any other file, and a session a client starts in that folder can read them. Holding them in every folder was the stronger choice, not taken, since it would also hold folders that keep such files only as test data.",
+      "`src/runs/hookPaths.ts::hookPathsAt`, `src/runs/hookPaths.ts::setupRootsAt`,",
     ]) {
       expect(verbs, `the run verbs' row does not state: ${claim}`).toContain(claim);
     }
     // The refusal list no longer ends the sentence unqualified, and the kept patch is no longer called the committed one.
     expect(verbs).not.toContain("a byte-order mark is read as the manifest reader reads it. ");
     expect(verbs).not.toContain("keeps the committed patch's earlier sections");
+    // Neither page says the bare-word case covers every word, nor that only a person ends the fresh-clone refusal.
+    expect(security).not.toContain("and a bare name, an option's `=` value or an argument word past the launcher");
+    expect(security).not.toContain("until a person applies or drops the patch");
     expect(security).toContain(
       "or a hook script the repository's declarations name at `Base:`, at the head or at the default branch's tip, each matched and read from every setup root those three trees hold as well as from the run's own project;",
     );
@@ -3415,11 +3429,19 @@ describe("the night units' pages (n2, n3, n4, n5)", () => {
     for (const claim of [
       "read the person-only paths from every setup root at `Base:` or in the tree the push sends and the hook declarations from every setup root at `Base:`, as from the run's own project,",
       "keep a held patch's earlier sections read from the work tree's copy where it is a regular file, else `HEAD`'s,",
-      "A kept section of the held patch is the run's own text, bound only by the verb's section shape and by naming a held path. A run continued on a fresh clone whose kept patch holds a setup it added refuses until a person applies or drops the patch |",
       "A kept section of the held patch is the run's own text, read from the work tree's copy, bound only by the verb's section shape and by naming a held path, so the person reads it before applying it.",
+      // The mapping row follows SECURITY.md's: the bare-word case is held, not refused, the script excepted.
+      "and no value with a URL-like scheme, hold as written, rather than refuse, a word with no separator and no leading drive letter, written as an argument past the launcher or as an option's `=` value, that they cannot resolve cleanly, except the script the declaration runs, which refuses, read the person-only paths",
+      "`src/runs/hookPaths.ts::hookPathsAt`, `src/runs/hookPaths.ts::setupRootsAt` |",
+      // The row's residual cell and the collected list (item 18) name the fresh-clone refusal and the no-setup folder alike.
+      "A kept section of the held patch is the run's own text, bound only by the verb's section shape and by naming a held path. A run continued on a fresh clone whose kept patch holds a setup it added refuses until the patch is applied or the sections the hold refuses are dropped. A folder below the top with no setup of its own is not a setup root: the client files the held set names only at a project's top, its `.claude/`, `.cursor/` and `.codex/` files and its `.mcp.json` among them, are pushed from it as any other file, and a session a client starts in that folder can read them |",
+      "so the person reads it before applying it. A run continued on a fresh clone whose kept patch holds a setup it added refuses until the patch is applied or the sections the hold refuses are dropped. A folder below the top with no setup of its own is not a setup root: the client files the held set names only at a project's top, its `.claude/`, `.cursor/` and `.codex/` files and its `.mcp.json` among them, are pushed from it as any other file, and a session a client starts in that folder can read them.",
+      // runLand.ts (declaredHookPaths) and landEvidence.ts (askPathsOf): land matches from every setup root of the three trees.
+      "or to the files that choose checks and reviewers, each matched from every setup root at `Base:`, the head and the default branch's tip as well as from the run's own project, for a held patch",
     ]) {
       expect(mapping, `the mapping page does not state: ${claim}`).toContain(claim);
     }
+    expect(mapping).not.toContain("until a person applies or drops the patch");
   });
 
   it("states Copilot's record lock and its race on SECURITY.md", () => {
