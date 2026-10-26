@@ -52,9 +52,10 @@ import {
   type PromptGate,
   type PromptIo,
 } from "../kit/prompts.ts";
-import { applyInit, type InitApplyReport } from "./init/apply.ts";
+import { applyInit, readPreviousManifest, type InitApplyReport } from "./init/apply.ts";
 import {
   buildInitDecisions,
+  carriedImportDecisions,
   workspaceOfferArmed,
   type InitDecisions,
   type InitOverrides,
@@ -772,6 +773,15 @@ function importNote(
  * first run that does target the path (a `stamity config` tool change, a later
  * adapter) — so the note says that rather than implying the answer was wasted.
  */
+/**
+ * The line for a decision a `--force` re-init carried from the setup it
+ * replaces (REQ-FLOW-029). It names the mode and says it was not asked again,
+ * rather than narrating a merge or a fresh `.bak` this run may not have made.
+ */
+function carriedImportNote(targetPath: string, choice: ImportMode): string {
+  return `existing config: ${targetPath} keeps the decision the replaced setup recorded, so it was not asked again (${choice})`;
+}
+
 function unwrittenImportNote(targetPath: string, choice: ImportMode, dryRun: boolean): string {
   const verb = dryRun ? "would not be written to" : "was not written to";
   const strip = dryRun ? "would still remove" : "may still have removed";
@@ -1069,10 +1079,17 @@ export const initCommand: CommandModule = {
     // of the message); a corrupt manifest surfaces `readManifest`'s own
     // repair guidance here.
     const alreadyInitialised = !force && (await readManifest(rootDir)) !== null;
+    // The setup a `--force` re-init replaces, read once for the decision step
+    // (REQ-FLOW-029): the files its client rows record are the engine's, not
+    // the owner's, and its import decisions carry over. Unreadable reads as
+    // `null`, so only the charter's own text tells the engine's file apart.
+    // `applyInit` reads the same file again for what it carries.
+    const previous = force ? await readPreviousManifest(rootDir) : null;
     const [decisions, predecessor] = await Promise.all([
       buildInitDecisions(rootDir, readOverrides(opts), {
         history,
         skipWorkspaceProbe: alreadyInitialised,
+        previous,
       }),
       detectPredecessorState(rootDir),
     ]);
@@ -1106,8 +1123,11 @@ export const initCommand: CommandModule = {
     // asked about the whole set (below) and the one answered mode is mapped
     // over the whole set (further below) — a path detected here and dropped
     // from the decision would be emitted as an ordinary engine-owned row the
-    // operator was never asked about.
-    const importTargets = settled.existingConfigPaths;
+    // operator was never asked about. A path the replaced setup already decided
+    // keeps that decision (REQ-FLOW-029) and is neither asked nor defaulted.
+    const carried = await carriedImportDecisions(rootDir, previous);
+    const carriedPaths = new Set(carried.map((decision) => decision.path));
+    const importTargets = settled.existingConfigPaths.filter((path) => !carriedPaths.has(path));
 
     let migrate: MigrateMode | null = null;
     let importChoice: ImportMode | null = null;
@@ -1128,8 +1148,9 @@ export const initCommand: CommandModule = {
     // exactly as far as the question that produced it. Built here as a `const`
     // so the mode is narrowed once, before the map closure reads it.
     const importMode = importChoice;
-    const importDecisions: ImportDecision[] =
+    const askedDecisions: ImportDecision[] =
       importMode === null ? [] : importTargets.map((path) => ({ path, mode: importMode }));
+    const importDecisions: ImportDecision[] = [...carried, ...askedDecisions];
 
     const migrating = predecessor !== null && migrate === "full" ? predecessor : null;
     const defaults = migrating !== null ? mapPredecessorDefaults(migrating.manifestRaw) : undefined;
@@ -1273,7 +1294,8 @@ export const initCommand: CommandModule = {
     // One line PER decided path. A single line for a multi-file decision would
     // disclose the answer while hiding most of what it did — the operator sees
     // every file their one answer reached, and the disposition each one got.
-    for (const decision of importDecisions) {
+    for (const decision of carried) notes.push(carriedImportNote(decision.path, decision.mode));
+    for (const decision of askedDecisions) {
       notes.push(
         importNote(
           decision.path,

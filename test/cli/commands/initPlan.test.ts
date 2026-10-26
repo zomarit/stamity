@@ -1,9 +1,10 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { applyInit } from "../../../src/cli/commands/init/apply.ts";
-import { buildInitDecisions, fullCoreSelection } from "../../../src/cli/commands/init/plan.ts";
+import { buildInitDecisions, carriedImportDecisions, fullCoreSelection } from "../../../src/cli/commands/init/plan.ts";
 import { planSync } from "../../../src/cli/commands/sync/engine.ts";
 import type { HistoryFacts } from "../../../src/cli/engine/gitStatus.ts";
 import type { CatalogItem, ContentIndex } from "../../../src/content/catalog.ts";
@@ -12,8 +13,9 @@ import {
   __setContentRootForTests,
 } from "../../../src/content/contentRoot.ts";
 import { suggestStackPacks } from "../../../src/detect/stackSupport.ts";
-import { readManifest } from "../../../src/manifest/manifest.ts";
+import { createManifest, readManifest } from "../../../src/manifest/manifest.ts";
 import { OWNED_PATHS } from "../../../src/manifest/ownedPaths.ts";
+import type { ImportDecision, SetupManifest } from "../../../src/types/manifest.ts";
 import type { ContentClass } from "../../../src/types/content.ts";
 import type { Tool } from "../../../src/types/core.ts";
 import { EngineError } from "../../../src/types/errors.ts";
@@ -344,6 +346,90 @@ describe("buildInitDecisions — existing config paths", () => {
 
     expect(decisions.detectedTools).toEqual(["claude"]);
     expect(decisions.existingConfigPaths).toEqual([]);
+  });
+});
+
+/** A charter with the shape every release renders: the title, then the four headings in order. */
+const ENGINE_CHARTER = ["# Charter", "", "## Repo facts", "", "## Invariants", "", "## Touchpoints", "", "## Conditional layer", ""].join("\n");
+
+/** A manifest of the setup a `--force` re-init replaces, with the ledger rows and decisions a case names. */
+function previousSetup(ledger: SetupManifest["ledger"], importChoice?: ImportDecision[]): SetupManifest {
+  return {
+    ...createManifest({ tools: ["claude"], selection: { items: { agent: [], skill: [], rule: [], command: [] } }, generatorVersion: "0.0.0-test" }),
+    ledger,
+    ...(importChoice === undefined ? {} : { importChoice }),
+  };
+}
+
+/** A client row at `path`, the record a first init leaves of a file it wrote. */
+const clientRow = (path: string): SetupManifest["ledger"][number] => ({ path, adapter: "claude", artifactId: "charter", artifactType: "infra" });
+
+describe("buildInitDecisions — the engine's own instruction files are not offered for import (REQ-FLOW-029)", () => {
+  it("leaves out an engine charter, BOM and CRLF included, and keeps a user AGENTS.md", async () => {
+    const engine = await seedRepo({ "AGENTS.md": ENGINE_CHARTER, "AGENT.md": `﻿${ENGINE_CHARTER.replaceAll("\n", "\r\n")}` });
+    expect((await buildInitDecisions(engine, {}, { history: null })).existingConfigPaths).toEqual([]);
+
+    const owner = await seedRepo({ "AGENTS.md": "# Charter\n\nour own rules\n", "AGENT.md": ENGINE_CHARTER });
+    expect((await buildInitDecisions(owner, {}, { history: null })).existingConfigPaths).toEqual(["AGENTS.md"]);
+  });
+
+  it("leaves out a path a client row of the replaced setup records, and keeps the owner's file beside it", async () => {
+    const root = await seedRepo({ "AGENTS.md": "# Team\n", "CLAUDE.md": "# Instructions\n", ".claude/settings.json": "{}" });
+    const previous = previousSetup([clientRow("CLAUDE.md")]);
+
+    expect((await buildInitDecisions(root, {}, { history: null })).existingConfigPaths).toEqual(["AGENTS.md", "CLAUDE.md"]);
+    expect((await buildInitDecisions(root, {}, { history: null, previous })).existingConfigPaths).toEqual(["AGENTS.md"]);
+  });
+
+  it("reads a pack's row at an instruction path as no record of the engine's file", async () => {
+    const root = await seedRepo({ "AGENTS.md": "# Team\n" });
+    const previous = previousSetup([{ path: "AGENTS.md", adapter: "pack:demo", artifactId: "x", artifactType: "rule" }]);
+
+    expect((await buildInitDecisions(root, {}, { history: null, previous })).existingConfigPaths).toEqual(["AGENTS.md"]);
+  });
+});
+
+describe("carriedImportDecisions — what a --force re-init keeps of the replaced setup's answers (REQ-FLOW-029)", () => {
+  const OWNER = "# Team\n\nour own instructions\n";
+  const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
+
+  it("carries nothing without a readable previous setup", async () => {
+    const root = await seedRepo({ "AGENTS.md": OWNER });
+    expect(await carriedImportDecisions(root, null)).toEqual([]);
+  });
+
+  it("keeps a skip and a supplement over the owner's file, and drops a decision whose file is gone", async () => {
+    const root = await seedRepo({ "AGENTS.md": OWNER, "CLAUDE.md": `<!-- STAMITY:BEGIN -->\n@AGENTS.md\n<!-- STAMITY:END -->\n\n${OWNER}` });
+    const previous = previousSetup([], [
+      { path: "AGENTS.md", mode: "skip" },
+      { path: "AGENT.md", mode: "supplement" },
+      { path: "CLAUDE.md", mode: "supplement" },
+    ]);
+
+    expect(await carriedImportDecisions(root, previous)).toEqual([
+      { path: "AGENTS.md", mode: "skip" },
+      { path: "CLAUDE.md", mode: "supplement" },
+    ]);
+  });
+
+  it("drops a supplement whose file now reads as the engine's charter, so the charter is not supplemented onto itself", async () => {
+    const root = await seedRepo({ "AGENTS.md": `${ENGINE_CHARTER}\n# Team\n` });
+    const previous = previousSetup([], [{ path: "AGENTS.md", mode: "supplement" }]);
+
+    expect(await carriedImportDecisions(root, previous)).toEqual([]);
+  });
+
+  it("keeps a replace's backup record whole while the .bak hashes as recorded, and drops the record alone otherwise", async () => {
+    const backup = { path: "AGENTS.md.bak", sha256: sha(OWNER) };
+    const intact = await seedRepo({ "AGENTS.md": ENGINE_CHARTER, "AGENTS.md.bak": OWNER });
+    const previous = previousSetup([], [{ path: "AGENTS.md", mode: "replace", backup }]);
+    expect(await carriedImportDecisions(intact, previous)).toEqual([{ path: "AGENTS.md", mode: "replace", backup }]);
+
+    const edited = await seedRepo({ "AGENTS.md": ENGINE_CHARTER, "AGENTS.md.bak": `${OWNER}edited\n` });
+    expect(await carriedImportDecisions(edited, previous)).toEqual([{ path: "AGENTS.md", mode: "replace" }]);
+
+    const gone = await seedRepo({ "AGENTS.md": ENGINE_CHARTER });
+    expect(await carriedImportDecisions(gone, previous)).toEqual([{ path: "AGENTS.md", mode: "replace" }]);
   });
 });
 

@@ -1,4 +1,5 @@
-import { stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { lstat, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { ContentIndex } from "../../../content/catalog.ts";
 import { analyzeRepo, isGreenfield, summarizeDetection } from "../../../detect/repoAnalyzer.ts";
@@ -14,8 +15,8 @@ import {
 } from "../../../types/core.ts";
 import type { DetectedSummary, PackageEntry, RepoInfo } from "../../../types/detect.ts";
 import { EngineError } from "../../../types/errors.ts";
-import { IMPORT_TARGET } from "../../../manifest/ownedPaths.ts";
-import type { GatesConfig } from "../../../types/manifest.ts";
+import { IMPORT_TARGET, isEngineCharterDocument } from "../../../manifest/ownedPaths.ts";
+import type { GatesConfig, ImportDecision, SetupManifest } from "../../../types/manifest.ts";
 import {
   detectSubRepos,
   detectWorkspaceContext,
@@ -76,7 +77,9 @@ export interface InitDecisions {
   /**
    * Existing instruction files an init could import: root `AGENTS.md` /
    * `AGENT.md`, plus each detected tool's own instruction file. Feeds the
-   * command's conditional import prompt.
+   * command's conditional import prompt. The engine's own files are left out
+   * (REQ-FLOW-029): a path a client row of the setup being replaced records,
+   * and a file whose text is the engine's charter.
    */
   existingConfigPaths: string[];
   /** The manifest-persisted detection subset. */
@@ -212,11 +215,15 @@ const TOOL_INSTRUCTION_FILES: Record<Tool, readonly string[]> = {
  * paying for the walk and discarding the result was pure waste on exactly the
  * run where the operator is about to be told "already initialised" and
  * nothing else.
+ *
+ * `deps.previous` is the setup a `--force` re-init replaces, `null` when it is
+ * missing or unreadable (REQ-FLOW-029). A path one of its client rows records is
+ * the engine's own file, so it is not offered for import.
  */
 export async function buildInitDecisions(
   rootDir: string,
   overrides: InitOverrides,
-  deps: { history?: HistoryFacts | null; skipWorkspaceProbe?: boolean } = {},
+  deps: { history?: HistoryFacts | null; skipWorkspaceProbe?: boolean; previous?: SetupManifest | null } = {},
 ): Promise<InitDecisions> {
   // Two independent walks of the same tree, so they run concurrently under the
   // spinner the command already started rather than one after the other.
@@ -243,7 +250,7 @@ export async function buildInitDecisions(
 
   const detected = summarizeDetection(info);
   const [existingConfigPaths, gatePins] = await Promise.all([
-    collectExistingConfigPaths(rootDir, detectedTools),
+    collectExistingConfigPaths(rootDir, detectedTools, deps.previous ?? null),
     plainVenvGatePins(rootDir, detected),
   ]);
 
@@ -413,22 +420,89 @@ function detectPlatform(rootDir: string): Platform | undefined {
 }
 
 /**
- * The instruction files that actually exist, as repo-relative POSIX paths in a
- * fixed order: the cross-tool root files first, then each detected tool's own
- * file in {@link TOOLS} order.
+ * The instruction files that actually exist and are the owner's, as
+ * repo-relative POSIX paths in a fixed order: the cross-tool root files first,
+ * then each detected tool's own file in {@link TOOLS} order.
+ *
+ * Two kinds of file are the engine's own and are left out, so a re-init never
+ * asks about them nor supplements the charter onto itself (REQ-FLOW-029): a
+ * path a client row of `previous` records, and a file whose text is the
+ * engine's charter ({@link isEngineCharterDocument}). The second holds with no
+ * readable manifest at all, which is what a corrupt manifest or a deleted state
+ * folder leaves.
  */
 async function collectExistingConfigPaths(
   rootDir: string,
   detectedTools: readonly Tool[],
+  previous: SetupManifest | null,
 ): Promise<string[]> {
+  const recorded = new Set(
+    (previous?.ledger ?? []).filter((row) => VALID_TOOLS.has(row.adapter)).map((row) => row.path),
+  );
   const candidates = [
     ...CROSS_TOOL_CONFIG_FILES,
     ...detectedTools.flatMap((tool) => TOOL_INSTRUCTION_FILES[tool]),
-  ];
-  const present = await Promise.all(
-    candidates.map((relative) => fileExists(join(rootDir, ...relative.split("/")))),
+  ].filter((relative) => !recorded.has(relative));
+  const owners = await Promise.all(
+    candidates.map(async (relative) => {
+      const path = join(rootDir, ...relative.split("/"));
+      return (await fileExists(path)) && !(await readsAsEngineCharter(path));
+    }),
   );
-  return candidates.filter((_candidate, index) => present[index] === true);
+  return candidates.filter((_candidate, index) => owners[index] === true);
+}
+
+/**
+ * The import decisions a `--force` re-init carries from the setup it replaces
+ * (REQ-FLOW-029), so an earlier answer binds again rather than being asked or
+ * defaulted a second time. In the recorded order; `[]` for no `previous`.
+ *
+ * - A decision whose file is gone is dropped: there is nothing left to decide.
+ * - A `supplement` whose file now reads as the engine's charter is dropped too
+ *   (its markers were removed): supplementing it again would put a second
+ *   charter above the first.
+ * - A `replace` keeps its backup record whole while the `.bak` is still a
+ *   regular file hashing as recorded, so a later full `clean` can still give
+ *   the owner's file back (REQ-FLOW-027); otherwise the backup record alone is
+ *   dropped, and the decision stays.
+ */
+export async function carriedImportDecisions(
+  rootDir: string,
+  previous: SetupManifest | null,
+): Promise<ImportDecision[]> {
+  const carried = await Promise.all(
+    (previous?.importChoice ?? []).map(async (decision): Promise<ImportDecision | null> => {
+      const target = join(rootDir, ...decision.path.split("/"));
+      if (!(await fileExists(target))) return null;
+      if (decision.mode === "supplement" && (await readsAsEngineCharter(target))) return null;
+      if (decision.backup === undefined) return { path: decision.path, mode: decision.mode };
+      const { backup } = decision;
+      const intact = await hashesAs(join(rootDir, ...backup.path.split("/")), backup.sha256);
+      return intact
+        ? { path: decision.path, mode: decision.mode, backup: { path: backup.path, sha256: backup.sha256 } }
+        : { path: decision.path, mode: decision.mode };
+    }),
+  );
+  return carried.filter((decision): decision is ImportDecision => decision !== null);
+}
+
+/** True when the file at `path` is the engine's charter. A file that cannot be read is the owner's. */
+async function readsAsEngineCharter(path: string): Promise<boolean> {
+  try {
+    return isEngineCharterDocument(await readFile(path, "utf8"));
+  } catch {
+    return false;
+  }
+}
+
+/** True when `path` is a regular file, not a link, whose bytes hash to `sha256`. Any refusal reads as false. */
+async function hashesAs(path: string, sha256: string): Promise<boolean> {
+  try {
+    if (!(await lstat(path)).isFile()) return false;
+    return createHash("sha256").update(await readFile(path)).digest("hex") === sha256;
+  } catch {
+    return false;
+  }
 }
 
 /** True when `path` names a regular file. Any filesystem refusal reads as absent. */

@@ -43,6 +43,7 @@ import type { Tool } from "../../../src/types/core.ts";
 import type { RepoInfo } from "../../../src/types/detect.ts";
 import { EngineError } from "../../../src/types/errors.ts";
 import { madeUpArtifact, writeMadeUpPack } from "../../support/packFixtures.ts";
+import { seedGitRepo } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
 // Fixture data kept out of the test-input census: built at run time, as a literal it names this repository's own handoffs keep file.
@@ -690,6 +691,83 @@ describe("applyInit — planned emission (planner seam)", () => {
       const report = await applyInit(optionsFor(previewed, { dryRun: true, importChoice: [{ path: "AGENTS.md", mode: "replace" }] }));
       expect(report.wrote[0]).not.toHaveProperty("backupPath");
       expect(existsSync(join(previewed, "AGENTS.md.bak"))).toBe(false);
+    });
+  });
+
+  /**
+   * REQ-FLOW-029: under `--force`, the replaced setup's client rows at the
+   * instruction files join the ownership index, so the charter it wrote is
+   * judged by its recorded hash rather than as an unknown file.
+   */
+  describe("the replaced setup's instruction rows under --force (REQ-FLOW-029)", () => {
+    /** A charter whose bytes pass the engine's fingerprint (`isEngineCharterDocument`), with one varying line. */
+    const charterText = (line: string): string =>
+      ["# Charter", "", line, "", "## Repo facts", "", "## Invariants", "", "## Touchpoints", "", "## Conditional layer", ""].join("\n");
+    const charterOutput = (line: string): AdapterOutput => ({
+      path: "AGENTS.md",
+      content: charterText(line),
+      owner: { adapter: "claude", artifactId: "charter", artifactType: "infra" },
+    });
+    const backupsIn = async (root: string): Promise<string[]> =>
+      (await readdir(root)).filter((name) => name.startsWith("AGENTS.md.bak")).toSorted();
+
+    it("overwrites an unedited, committed charter with no .bak", async ({ skip }) => {
+      const root = await makeRepo();
+      plannerOutputs.value = [charterOutput("Maturity tier: solo")];
+      await applyInit(optionsFor(root));
+      // Committed, because at an instruction file the recorded hash is not the
+      // whole licence: git must also hold the bytes the overwrite replaces
+      // (REQ-PLUGIN-046, `merge/safeWrite.ts::overwriteNeedsRecovery`).
+      try {
+        await seedGitRepo(root);
+      } catch (error) {
+        if (error instanceof Error && error.name === "GitUnavailableError") skip();
+        throw error;
+      }
+
+      plannerOutputs.value = [charterOutput("Maturity tier: team")];
+      const report = await applyInit(optionsFor(root, { force: true, now: LATER_NOW }));
+
+      expect(report.wrote[0]?.action).toBe("updated");
+      expect(report.wrote[0]).not.toHaveProperty("backupPath");
+      expect(report.wrote[0]?.notice).toContain("its previous content is in git history");
+      expect(await readFile(join(root, "AGENTS.md"), "utf8")).toBe(charterText("Maturity tier: team"));
+      expect(await backupsIn(root)).toEqual([]);
+    });
+
+    it("still backs up a charter edited since it was written", async () => {
+      const root = await makeRepo();
+      plannerOutputs.value = [charterOutput("Maturity tier: solo")];
+      await applyInit(optionsFor(root));
+      const edited = charterText("Maturity tier: solo, and our own line");
+      await writeFile(join(root, "AGENTS.md"), edited, "utf8");
+
+      plannerOutputs.value = [charterOutput("Maturity tier: team")];
+      const report = await applyInit(optionsFor(root, { force: true, now: LATER_NOW }));
+
+      expect(report.wrote[0]?.backupPath).toBe(join(root, "AGENTS.md.bak"));
+      await expect(readFile(join(root, "AGENTS.md.bak"), "utf8")).resolves.toBe(edited);
+    });
+
+    it("keeps a carried backup record whole when the forced write backs up the engine's edited charter", async () => {
+      const OWNER = "# Team\n\nour own instructions\n";
+      const root = await makeRepo();
+      await writeFile(join(root, "AGENTS.md"), OWNER, "utf8");
+      plannerOutputs.value = [charterOutput("Maturity tier: solo")];
+      await applyInit(optionsFor(root, { importChoice: [{ path: "AGENTS.md", mode: "replace" }] }));
+      const recorded = (await readManifest(root))?.importChoice ?? [];
+      const ownerBackup = { path: "AGENTS.md.bak", sha256: createHash("sha256").update(OWNER).digest("hex") };
+      expect(recorded).toEqual([{ path: "AGENTS.md", mode: "replace", backup: ownerBackup }]);
+      await writeFile(join(root, "AGENTS.md"), charterText("Maturity tier: solo, and our own line"), "utf8");
+
+      plannerOutputs.value = [charterOutput("Maturity tier: team")];
+      const report = await applyInit(optionsFor(root, { force: true, now: LATER_NOW, importChoice: recorded }));
+
+      // The forced write took a second backup, of the edited charter, under its own name…
+      expect(report.wrote[0]?.backupPath).toMatch(/AGENTS\.md\.bak\.[0-9a-f]{8}$/);
+      // …and the record still names the owner's file, the one a full clean gives back.
+      expect((await readManifest(root))?.importChoice).toEqual([{ path: "AGENTS.md", mode: "replace", backup: ownerBackup }]);
+      await expect(readFile(join(root, "AGENTS.md.bak"), "utf8")).resolves.toBe(OWNER);
     });
   });
 

@@ -6,6 +6,7 @@ import { PassThrough, Writable } from "node:stream";
 import { stripVTControlCharacters } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CLAUDE_SETTINGS_PATH } from "../../../src/adapters/claude.ts";
+import { cleanCommand } from "../../../src/cli/commands/clean.ts";
 import { initCommand } from "../../../src/cli/commands/init.ts";
 import { buildInitDecisions } from "../../../src/cli/commands/init/plan.ts";
 import { planSync } from "../../../src/cli/commands/sync/engine.ts";
@@ -2234,6 +2235,158 @@ describe("init — repeat runs", () => {
     expect(forced.code).toBe(0);
     expect(forced.stdout).toContain("stamity is ready.");
   });
+});
+
+/**
+ * REQ-FLOW-029: `init --force` recognises the engine's own charter and keeps
+ * the earlier import decisions, so a re-init never supplements the charter
+ * onto itself.
+ *
+ * The real bundled corpus, not this file's fixture charter: the recognition
+ * reads the charter's own headings (`isEngineCharterDocument`), which only the
+ * shipped charter carries. The client CLIs are not probed
+ * (`STAMITY_NO_CLIENT_PROBE=1`), so no case starts a program the machine may
+ * not have.
+ */
+describe("init --force never duplicates the charter (REQ-FLOW-029)", () => {
+  beforeEach(() => {
+    __resetContentRootCacheForTests();
+  });
+
+  const OWNER = "# Team\n\nour own instructions\n";
+
+  async function run(
+    root: string,
+    argv: readonly string[],
+    opts: { stdinLines?: readonly string[]; ttyStdin?: boolean } = {},
+  ): Promise<InProcessResult> {
+    const result = await runInProcess([initCommand, cleanCommand], argv, {
+      cwd: root,
+      env: { STAMITY_NO_CLIENT_PROBE: "1" },
+      ...(opts.stdinLines === undefined ? {} : { stdinLines: opts.stdinLines }),
+      ...(opts.ttyStdin === true ? { tty: { stdin: true } } : {}),
+    });
+    expect(result.code, `${argv.join(" ")}: ${result.stdout}\n${result.stderr}`).toBe(0);
+    return result;
+  }
+
+  const charterTitles = (text: string): number => text.split(/\r?\n/).filter((line) => line === "# Charter").length;
+  const agentsMd = (root: string): Promise<string> => readFile(join(root, "AGENTS.md"), "utf8");
+  const backups = async (root: string): Promise<string[]> =>
+    (await readdir(root)).filter((name) => name.startsWith("AGENTS.md.bak")).toSorted();
+
+  it("leaves AGENTS.md byte-identical, with one charter, no .bak and no import decision", async () => {
+    const root = await makeRepo();
+    await run(root, ["init", "-y", "--tools", "claude,cursor,copilot"]);
+    const first = await agentsMd(root);
+    expect(charterTitles(first)).toBe(1);
+
+    await run(root, ["init", "-y", "--force"]);
+
+    expect(await agentsMd(root)).toBe(first);
+    expect(await backups(root)).toEqual([]);
+    expect((await readManifest(root))?.importChoice).toBeUndefined();
+  }, 120_000);
+
+  // A manifest that cannot be read is a leg the loosen gate reads as the
+  // strictest setting (REQ-FLOW-138), so the repair over it is the person's
+  // `--loosen`; a deleted state folder leaves no such leg.
+  it.each([
+    ["a corrupt manifest", async (root: string) => writeFile(join(root, STATE_DIR, "manifest.json"), "{ not json", "utf8"), ["--loosen"]],
+    ["a deleted state folder", async (root: string) => rm(join(root, STATE_DIR), { recursive: true, force: true }), []],
+  ] as const)("still writes one charter over %s", async (_label, damage, extra) => {
+    const root = await makeRepo();
+    await run(root, ["init", "-y", "--tools", "claude"]);
+    await damage(root);
+
+    await run(root, ["init", "-y", "--force", ...extra]);
+
+    expect(charterTitles(await agentsMd(root))).toBe(1);
+    expect((await readManifest(root))?.importChoice?.map((decision) => decision.path) ?? []).not.toContain("AGENTS.md");
+  }, 120_000);
+
+  it("still writes one charter once a supplemented charter's markers are removed, the owner's lines kept in a .bak", async () => {
+    await getTemp().seedFiles({ "repo/AGENTS.md": OWNER });
+    const root = await makeRepo();
+    await run(root, ["init", "-y", "--tools", "claude"]);
+    expect((await readManifest(root))?.importChoice).toEqual([{ path: "AGENTS.md", mode: "supplement" }]);
+    const unmarked = (await agentsMd(root))
+      .split("\n")
+      .filter((line) => !line.startsWith("<!-- STAMITY:"))
+      .join("\n");
+    await writeFile(join(root, "AGENTS.md"), unmarked, "utf8");
+
+    await run(root, ["init", "-y", "--force"]);
+
+    expect(charterTitles(await agentsMd(root))).toBe(1);
+    const kept = await backups(root);
+    expect(kept).toHaveLength(1);
+    await expect(readFile(join(root, kept[0] ?? ""), "utf8")).resolves.toBe(unmarked);
+  }, 120_000);
+
+  it("keeps a first skip after --force, AGENTS.md byte-identical", async () => {
+    await getTemp().seedFiles({ "repo/AGENTS.md": OWNER });
+    const root = await makeRepo();
+    await run(root, ["init", "-y", "--tools", "claude", "--import-config", "skip"]);
+
+    const forced = await run(root, ["init", "-y", "--force"]);
+
+    expect(await agentsMd(root)).toBe(OWNER);
+    expect((await readManifest(root))?.importChoice).toEqual([{ path: "AGENTS.md", mode: "skip" }]);
+    expect(forced.stdout).toContain("AGENTS.md keeps the decision the replaced setup recorded, so it was not asked again (skip)");
+  }, 120_000);
+
+  it("keeps the owner's prose byte for byte under --force --import-config supplement", async () => {
+    await getTemp().seedFiles({ "repo/AGENTS.md": OWNER });
+    const root = await makeRepo();
+    await run(root, ["init", "-y", "--tools", "claude", "--import-config", "supplement"]);
+    const first = await agentsMd(root);
+    expect(first.endsWith(`\n\n${OWNER}`)).toBe(true);
+
+    await run(root, ["init", "-y", "--force", "--import-config", "supplement"]);
+
+    expect(await agentsMd(root)).toBe(first);
+    expect(charterTitles(first)).toBe(1);
+  }, 120_000);
+
+  it("asks an interactive --force only about the file no earlier decision covers", async () => {
+    await getTemp().seedFiles({ "repo/AGENTS.md": OWNER });
+    const root = await makeRepo();
+    await run(root, ["init", "-y", "--tools", "claude", "--import-config", "skip"]);
+    await writeFile(join(root, "AGENT.md"), OWNER, "utf8");
+
+    const forced = await run(root, ["init", "--force"], { ttyStdin: true, stdinLines: [""] });
+
+    expect(countQuestions(forced.stdout)).toBe(1);
+    expect((await readManifest(root))?.importChoice).toEqual([
+      { path: "AGENTS.md", mode: "skip" },
+      { path: "AGENT.md", mode: "supplement" },
+    ]);
+    expect(await agentsMd(root)).toBe(OWNER);
+  }, 120_000);
+
+  // build/23 (b5's M-4): the backup record `replace` writes survives the re-init, so `clean` still gives the file back.
+  it("gives the owner's file back on clean after replace, then --force", async ({ skip }) => {
+    await getTemp().seedFiles({ "repo/AGENTS.md": OWNER });
+    const root = await makeRepo();
+    try {
+      await seedGitRepo(root);
+    } catch (error) {
+      if (error instanceof Error && error.name === "GitUnavailableError") skip();
+      throw error;
+    }
+    await run(root, ["init", "-y", "--tools", "claude", "--import-config", "replace"]);
+    const recorded = (await readManifest(root))?.importChoice;
+    expect(recorded?.[0]?.backup?.path).toBe("AGENTS.md.bak");
+
+    await run(root, ["init", "-y", "--force"]);
+    expect((await readManifest(root))?.importChoice).toEqual(recorded);
+    expect(charterTitles(await agentsMd(root))).toBe(1);
+    await run(root, ["clean", "-y"]);
+
+    expect(await agentsMd(root)).toBe(OWNER);
+    expect(await backups(root)).toEqual([]);
+  }, 120_000);
 });
 
 // ── Prompt ceiling (matrix) ────────────────────────────────────────

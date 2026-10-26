@@ -19,6 +19,7 @@ import {
   readManifest,
   writeManifest,
 } from "../../../manifest/manifest.ts";
+import { IMPORT_TARGET } from "../../../manifest/ownedPaths.ts";
 import { ensureStateScaffold, stateKeepPaths } from "../../../emit/stateScaffold.ts";
 import type { CoOwnedMergeResult, CoOwnedOwnership } from "../../../manifest/coOwnedJson.ts";
 import { materializeUserMcpJson, type McpMergeResult } from "../../../manifest/mcpFilter.ts";
@@ -378,30 +379,36 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
     await ensureStateScaffold(rootDir);
   }
 
-  // Ownership as this run knows it — which on a `--force` re-init is the PACK
-  // rows and nothing else. The manifest above is freshly composed with an empty
-  // ledger ({@link composeManifest} → `manifest/manifest.ts::createManifest`),
-  // and `--force` carries forward only the `pack:<id>` rows of the setup being
-  // replaced ({@link carriedPackRows}), so a pack-owned path is the only kind
-  // these two indexes reach. For those the pair does its whole job: ownership
-  // says the engine wrote the path, the recorded hash says whether the bytes
-  // there are still the ones it wrote, and a pack file the operator has since
-  // hand-edited takes the verified `.bak` rather than the no-backup fast path
-  // (`merge/safeWrite.ts::hasLedgerDrift`).
+  // Ownership as this run knows it. The manifest above is freshly composed with
+  // an empty ledger ({@link composeManifest} → `manifest/manifest.ts::createManifest`),
+  // so on a first init these two indexes reach only the rows of kept packs, and
+  // on a `--force` re-init they reach two kinds of row of the setup being
+  // replaced: its `pack:<id>` rows ({@link carriedPackRows}), and its client
+  // rows at the four instruction files (`IMPORT_TARGET`, REQ-FLOW-029). For
+  // those the pair does its whole job: ownership says the engine wrote the
+  // path, the recorded hash says whether the bytes there are still the ones it
+  // wrote, and a file the operator has since hand-edited takes the verified
+  // `.bak` rather than the no-backup fast path (`merge/safeWrite.ts::hasLedgerDrift`).
+  // At an instruction file the writer also asks the bytes to read as the
+  // engine's (`needsByteProof`) and git to hold them (`overwriteNeedsRecovery`),
+  // so an unedited, committed charter is overwritten with no `.bak`, as `sync`
+  // overwrites it.
   //
   // A co-owned document (`.claude/settings.json`) is judged off the PREVIOUS
   // ledger instead, in its own lane below, because `--force` does not reach it.
   //
-  // A core output — AGENTS.md, the hook scripts — is in
-  // neither index here, so drift decides nothing for it on a re-init. That does
-  // not leave it unprotected: `--force` reaches the writer for every output
-  // below, so a marker-less file the engine cannot prove it wrote takes the
-  // writer's force-overwrite `.bak` instead, and one carrying STAMITY markers is
-  // merged rather than replaced. What differs is the account the operator reads:
-  // a re-init reports the force-overwrite warning, never the drift warning's
-  // "it was edited by hand since".
-  const ownedPaths = ledgerPathSet(rootDir, manifest.ledger.map((row) => row.path));
-  const ownedHashes = ledgerHashIndex(rootDir, manifest.ledger);
+  // Every other core output — the hook scripts, the rules — is in neither index
+  // here, so drift decides nothing for it on a re-init. That does not leave it
+  // unprotected: `--force` reaches the writer for every output below, so a
+  // marker-less file the engine cannot prove it wrote takes the writer's
+  // force-overwrite `.bak` instead, and one carrying STAMITY markers is merged
+  // rather than replaced. What differs is the account the operator reads: a
+  // re-init reports the force-overwrite warning there, never the drift
+  // warning's "it was edited by hand since".
+  const instructionRows = force ? previousInstructionRows(previous) : [];
+  const ownedRows = [...manifest.ledger, ...instructionRows];
+  const ownedPaths = ledgerPathSet(rootDir, ownedRows.map((row) => row.path));
+  const ownedHashes = ledgerHashIndex(rootDir, ownedRows);
 
   // `replace` is the one mode that executes in the WRITE lane rather than in
   // the plan: the bytes are the ordinary generated document, and what the user
@@ -736,7 +743,10 @@ async function writeOutput(
  * SHA-256 of its bytes as read back from disk. `outputs[i]` is `wrote[i]`'s row.
  * A decision whose write took no backup, and every other mode, is kept as it
  * is; a name outside the reader's bound is never recorded, so the manifest
- * this run writes always reads back.
+ * this run writes always reads back. A decision that already carries a backup
+ * record — one a `--force` re-init carried from the setup it replaces
+ * (REQ-FLOW-029) — keeps it: that `.bak` holds the owner's file as it was
+ * before any setup, and a later backup of the engine's own file is not it.
  */
 async function withImportBackups(
   rootDir: string,
@@ -751,6 +761,7 @@ async function withImportBackups(
   }
   return Promise.all(
     decisions.map(async (decision): Promise<ImportDecision> => {
+      if (decision.backup !== undefined) return decision;
       const backupPath = decision.mode === "replace" ? backups.get(decision.path) : undefined;
       if (backupPath === undefined) return decision;
       const path = relative(rootDir, backupPath).split(sep).join("/");
@@ -767,15 +778,32 @@ async function withImportBackups(
  * is not a failure here: the only things dropped are the pack record, which
  * `stamity add <pack>` rebuilds, and the record of the engine's entries in a
  * co-owned document, whose absence reads as adoption (only a recognised entry
- * is the engine's, and the owner's stay).
+ * is the engine's, and the owner's stay), and the record of which instruction
+ * files the engine wrote, whose absence leaves only the charter's own text to
+ * tell them apart (REQ-FLOW-029).
+ *
+ * Exported for `../init.ts`'s decision step, which reads the same file before
+ * this module does.
  */
-async function readPreviousManifest(rootDir: string): Promise<SetupManifest | null> {
+export async function readPreviousManifest(rootDir: string): Promise<SetupManifest | null> {
   try {
     return await readManifest(rootDir);
   } catch {
     // reason: not silent by omission — see the doc comment.
     return null;
   }
+}
+
+/** The four instruction files `init` imports, as a set (`IMPORT_TARGET`). */
+const INSTRUCTION_PATHS: ReadonlySet<string> = new Set(Object.values(IMPORT_TARGET));
+
+/**
+ * The client rows of the setup a `--force` re-init replaces at the four
+ * instruction files (REQ-FLOW-029), for the ownership index only: this run's
+ * ledger is rebuilt from its own writes, so nothing here is recorded again.
+ */
+function previousInstructionRows(previous: SetupManifest | null): LedgerEntry[] {
+  return (previous?.ledger ?? []).filter((row) => !isPackOwner(row.adapter) && INSTRUCTION_PATHS.has(row.path));
 }
 
 /**
