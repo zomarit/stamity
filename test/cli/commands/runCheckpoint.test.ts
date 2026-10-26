@@ -2469,7 +2469,9 @@ describe("stamity run checkpoint", () => {
       // One at a time: each run swaps HOME and the identity variables in this process for its length.
       expect((await run(utf8.repo, CHECKPOINT)).code).toBe(0);
       expect((await run(latin1.repo, CHECKPOINT)).code).toBe(0);
-      const clones = await Promise.all([utf8, latin1].map(({ repo, remote }) => cloneRun(repo, remote)));
+      // TEST CHANGE, justified (build/42): the clones one at a time too, since each clone's pre-flight record swaps the
+      // same variables; side by side, the first to finish put the host's HOME back while the other still read git.
+      const clones = [await cloneRun(utf8.repo, utf8.remote), await cloneRun(latin1.repo, latin1.remote)];
       await Promise.all(clones.map(async (clone) => Promise.all([rm(join(clone, PATCH)), put(clone, ".github/workflows/x.yml", "on: push\n")])));
       const [read, refused] = clones as [string, string];
       const before = git(refused, ["rev-parse", "HEAD"]);
