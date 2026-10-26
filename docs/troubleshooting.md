@@ -357,8 +357,10 @@ it holds for on its `approve with:` line. The reasons, and what each needs:
   lands it.
 - `the diff touches paths that define the evidence: <paths>`: the change edits a CI definition, a
   hook or guard file, a client's settings, the manifest, the MCP configuration, a composite action,
-  a `CODEOWNERS` file, `.stamity/change-classes.json` or a hook script the repository declares. A
-  person reads that diff and decides.
+  a `CODEOWNERS` file, `.stamity/change-classes.json`, the files stamity's own CI uses to pick a
+  change's checks (`scripts/ci/records-only.mjs`, `src/change/classify.ts` and
+  `src/roster/triggers.ts`, asked about in any repository that has a file at one of these paths) or
+  a hook script the repository declares. A person reads that diff and decides.
 - `the diff carries a held patch`: an unattended run held a person-only change. A person applies
   the patch or drops it, then decides.
 - `<branch> is named in autonomy.deployingBranches`, or `autonomy.deployingActs names <act>`: the

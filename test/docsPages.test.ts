@@ -5582,6 +5582,13 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
       expect(page, `troubleshooting does not quote: ${reason}`).toContain(reason);
       expect(verb, `the land verb no longer says: ${reason}`).toContain(reason);
     }
+    // Added (ledger review/85): the land asks about the CI classifier's files too (`DEFINES_THE_EVIDENCE`,
+    // review/83), so the `define the evidence` reason names each one, and each is still in the verb's ask set.
+    expect(page).toContain("the files stamity's own CI uses to pick a change's checks");
+    for (const path of ["scripts/ci/records-only.mjs", "src/change/classify.ts", "src/roster/triggers.ts"]) {
+      expect(page, `troubleshooting does not name the classifier file: ${path}`).toContain(`\`${path}\``);
+      expect(verb, `the land verb no longer asks about: ${path}`).toContain(`"${path}"`);
+    }
     expect(page).toContain("on a fresh clone, on a switch of every selected client, and on a hooks layout move");
     expect(page).toContain("Put a push, a tag or a merge alone on its line");
     expect(page).toContain("It applies git's URL rewrites, but not your SSH configuration");
