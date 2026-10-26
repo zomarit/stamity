@@ -4180,6 +4180,15 @@ jobs:
       - run: npm install --global @zomarit/stamity@1.0.0-golden
       - run: stamity --version
 ",
+  ".gitignore": ".env.mcp
+.stamity/review-gate.json
+.stamity/review-gate.json.lock
+.stamity/review-gate.json.tmp-*
+.stamity/preflight-canary.json
+.stamity/run-ended.json
+.stamity/context-once/
+.stamity/client-models.json
+",
   ".mcp.json": "{
   "mcpServers": {
     "github": {
@@ -5265,7 +5274,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "ce262c2d18454cd72ff3505dc4efc47ce5f868af28f524e5bea365197ee7a3f8 91653 bytes",
+  ".stamity/manifest.json": "0abce185ffa36c9181db6df11af2ec7fda3d81ceb99617177ce0d8bee12b1e26 94105 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
@@ -8906,6 +8915,15 @@ if (refusal !== null) {
   }
 }
 ",
+  ".gitignore": ".env.mcp
+.stamity/review-gate.json
+.stamity/review-gate.json.lock
+.stamity/review-gate.json.tmp-*
+.stamity/preflight-canary.json
+.stamity/run-ended.json
+.stamity/context-once/
+.stamity/client-models.json
+",
   ".mcp.json": "{
   "mcpServers": {
     "github": {
@@ -9131,7 +9149,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "0dd73c4afccef36c6a987cd870f8d0b0846aec6d2db8071c56cab69675aaa3d9 28002 bytes",
+  ".stamity/manifest.json": "b2550c2cc0de73ada27b0a3a489b439e5565dfdaf9202fe62375943917d9efb1 28615 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -9243,6 +9261,15 @@ env_vars = ["GITHUB_PAT"]
     ]
   }
 }
+",
+  ".gitignore": ".env.mcp
+.stamity/review-gate.json
+.stamity/review-gate.json.lock
+.stamity/review-gate.json.tmp-*
+.stamity/preflight-canary.json
+.stamity/run-ended.json
+.stamity/context-once/
+.stamity/client-models.json
 ",
   ".stamity/generated/models/codex.json": "{
   "classes": {
@@ -10002,7 +10029,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "d7c65bfd9fd0c6e5bba2a26a2a101cc3c213675252876256bfaaec590ed86480 22156 bytes",
+  ".stamity/manifest.json": "d8de611a1d72f3fd1904c8f2b47a8f7c284f409df3817f772ee08cd4c9214e98 22768 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "AGENTS.override.md": "122504f41cc40a99c65cba4995c228bf4a5137d738324bbe3a847c6aaa5192db 25872 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -10102,6 +10129,15 @@ jobs:
       # \`gate scan\` and \`ledger status\` then find \`stamity\` on PATH with no registry fetch.
       - run: npm install --global @zomarit/stamity@1.0.0-golden
       - run: stamity --version
+",
+  ".gitignore": ".env.mcp
+.stamity/review-gate.json
+.stamity/review-gate.json.lock
+.stamity/review-gate.json.tmp-*
+.stamity/preflight-canary.json
+.stamity/run-ended.json
+.stamity/context-once/
+.stamity/client-models.json
 ",
   ".stamity/generated/models/copilot.json": "{
   "classes": {
@@ -10352,7 +10388,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "359acc4552c3ea347f0e5682d53a7fa34ee2d2a283ac5759302ca235b13e59e5 20257 bytes",
+  ".stamity/manifest.json": "7e06dae27cb9b12e0f25429150a57a56a2fb34a80fa6e9d12db7a72db897bc5c 20871 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
@@ -10755,6 +10791,15 @@ if (agentId === "") {
   }
 }
 ",
+  ".gitignore": ".env.mcp
+.stamity/review-gate.json
+.stamity/review-gate.json.lock
+.stamity/review-gate.json.tmp-*
+.stamity/preflight-canary.json
+.stamity/run-ended.json
+.stamity/context-once/
+.stamity/client-models.json
+",
   ".stamity/generated/models/cursor.json": "{
   "classes": {
     "frontier": {
@@ -10968,7 +11013,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "48e4fce74da0e9968f63cc6c66ed11cf7a07e15fd2448e8a5ba089008072c244 21813 bytes",
+  ".stamity/manifest.json": "043b50e15ed40733be69225d936f8ce93f7fb161be0115f250b97918707e28f1 22426 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
