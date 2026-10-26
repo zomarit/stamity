@@ -3389,6 +3389,39 @@ describe("the night units' pages (n2, n3, n4, n5)", () => {
     expect(security).not.toContain("a module a held script loads from outside");
   });
 
+  // REQ-FLOW-093, REQ-FLOW-102 (page accuracy): the hold's reach over every setup root, the bare-name case of its
+  // refusal list, where a kept patch section is read from, and the residuals both leave.
+  it("states the hold's setup roots, its bare names and its kept sections' source on SECURITY.md and the mapping page", () => {
+    const verbs = between(security, "`stamity run start` puts an unattended run", "| Anyone whose text an unattended run sends out");
+    for (const claim of [
+      // setupRootsAt and setupsNamed (src/runs/hookPaths.ts, src/cli/commands/run.ts): every setup root, not only the run's own.
+      "The hold reads every setup in the repository, not only the run's own: the person-only paths are matched from each folder that holds a `.stamity/manifest.json`, or whose `.stamity` is a link or a submodule, at `Base:` or in the tree the push sends, as from the run's own project, and the hook declarations of each such folder at `Base:` are read as the run's own are, so one whose `.stamity` is a link or a submodule there refuses the call, and such a link or submodule the run adds is held.",
+      // rootHookPaths (src/runs/hookPaths.ts): a bare name the resolver refuses is held as written, not refused.
+      "a byte-order mark is read as the manifest reader reads it, and a bare name, an option's `=` value or an argument word past the launcher with no separator and no leading drive letter, that the resolver refuses is held as written instead, as a held path matches without case and in one Unicode normalization form.",
+      // carriedSections and committedPatchPaths (src/cli/commands/run.ts): the work tree's copy, else HEAD's.
+      "A later checkpoint that holds a new change keeps the earlier sections of the held patch `HEAD` carries for paths not held again, in order, before its own, and a path held again takes the current diff, its earlier section left out. Those sections, and the paths a patch kept with no new change names, are read from the patch as the commit will take it: the work tree's copy where it is a regular file, else `HEAD`'s.",
+      "A run can write the work tree's copy of its held patch, so a kept section is the run's own text, bound only by the verb's section shape and by naming a held path, and the person reads it before applying it.",
+      "A run continued on a fresh clone, whose kept held patch holds a setup the run added, its manifest only in the patch, refuses each later checkpoint and the run's end, since the hold reads setup roots from `Base:`, the index and the work tree, not from the kept patch: it fails closed, and the run stops until a person applies or drops the patch |",
+    ]) {
+      expect(verbs, `the run verbs' row does not state: ${claim}`).toContain(claim);
+    }
+    // The refusal list no longer ends the sentence unqualified, and the kept patch is no longer called the committed one.
+    expect(verbs).not.toContain("a byte-order mark is read as the manifest reader reads it. ");
+    expect(verbs).not.toContain("keeps the committed patch's earlier sections");
+    expect(security).toContain(
+      "or a hook script the repository's declarations name at `Base:`, at the head or at the default branch's tip, each matched and read from every setup root those three trees hold as well as from the run's own project;",
+    );
+    const mapping = flowed(read(SECURITY_MAPPING));
+    for (const claim of [
+      "read the person-only paths from every setup root at `Base:` or in the tree the push sends and the hook declarations from every setup root at `Base:`, as from the run's own project,",
+      "keep a held patch's earlier sections read from the work tree's copy where it is a regular file, else `HEAD`'s,",
+      "A kept section of the held patch is the run's own text, bound only by the verb's section shape and by naming a held path. A run continued on a fresh clone whose kept patch holds a setup it added refuses until a person applies or drops the patch |",
+      "A kept section of the held patch is the run's own text, read from the work tree's copy, bound only by the verb's section shape and by naming a held path, so the person reads it before applying it.",
+    ]) {
+      expect(mapping, `the mapping page does not state: ${claim}`).toContain(claim);
+    }
+  });
+
   it("states Copilot's record lock and its race on SECURITY.md", () => {
     const guard = between(security, "| The main thread of any session", "| An unattended run, or the text that steers one | Pushing a change");
     expect(guard).toContain(
