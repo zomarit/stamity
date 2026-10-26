@@ -5689,6 +5689,19 @@ describe("file 2's SECURITY.md sentences", () => {
     }
   });
 
+  // ADDED (fix round, prove/17): the Copilot adapter's tracked-`.npmrc` read runs on the merge layer's pinned runner
+  // (`src/adapters/copilot.ts::hasCommittedNpmrc` calls `src/merge/safeWrite.ts::runGitCheck`), so the bare-shape row's
+  // list of the git the verbs start names it, and the residual that says "and no other" stays true.
+  it("names the tracked-.npmrc read among the git the verbs start (prove/17), on both pages", () => {
+    const clause =
+      "the read of whether git's index holds the setup root's `.npmrc`, which a verb planning Copilot's files takes wherever that file is present, whatever `copilot.setupSteps` is set to,";
+    expect(security()).toContain(`the reads of \`plan check\`, ${clause} and the tracked-and-clean check before an overwrite.`);
+    expect(security()).toContain(
+      "the overwrite takes the `.bak`, the `.npmrc` read takes the file's presence as its answer, and a `worktree` verb refuses",
+    );
+    expect(mapping()).toContain(`\`handoff\` and \`gate\`, ${clause} and the tracked-and-clean check before an overwrite)`);
+  });
+
   it("names what a hand-edited ledger row reaches under copilot.setupSteps off (b8, review/70), on both pages", () => {
     const sentence =
       "With `copilot.setupSteps` set to `off`, an edit to `.stamity/manifest.json` that records the hash of an owner's own `.github/workflows/copilot-setup-steps.yml` which carries the engine's header line gets that file deleted at the next `sync` or `clean`, the same exposure the overwrite path already has there, and the manifest is a person-only path that `run land` asks about.";
