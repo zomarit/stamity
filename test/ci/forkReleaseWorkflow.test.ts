@@ -1067,6 +1067,7 @@ describe.skipIf(WINDOWS)("fork-release.yml — the registry read-back, executed 
     writeFileSync(counter, "0");
     // A stub npm: the real one would ask a registry, which a suite may not reach. It answers from
     // a list by call number, so a late answer, a wrong one and none at all are each reachable.
+    // With NPM_VIEW_STATUS set it also refuses as npm does, an error on stderr and that exit code.
     stubCommand(
       bin,
       "npm",
@@ -1074,6 +1075,10 @@ describe.skipIf(WINDOWS)("fork-release.yml — the registry read-back, executed 
         'if [ "$1" = "view" ]; then',
         `  n="$(cat '${counter}')"; echo $((n + 1)) > '${counter}'`,
         `  "$NODE_BIN" -e 'const a = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(a[Math.min(Number(process.argv[2]), a.length - 1)] ?? "")' '${answersPath}' "$n"`,
+        '  if [ -n "${NPM_VIEW_STATUS:-}" ]; then',
+        "    echo 'npm error code E401 ::warning::planted by npm' >&2",
+        '    exit "$NPM_VIEW_STATUS"',
+        "  fi",
         "fi",
       ].join("\n"),
     );
@@ -1128,10 +1133,27 @@ describe.skipIf(WINDOWS)("fork-release.yml — the registry read-back, executed 
     const run = verify([""]);
     expect(run.status).toBe(1);
     expect(run.out).toContain("::error::the registry serves");
+    expect(run.out).toContain("(no answer after 12 tries, 10 s apart; the last npm view exited 0)");
     expect(run.out).toContain(`and the packed tarball is ${INTEGRITY}. Nothing further is published.`);
     expect(run.calls.filter((call) => call === VIEW)).toHaveLength(12);
     expect(run.calls.filter((call) => call === SLEEP)).toHaveLength(11);
     expect(run.calls.at(-1)).toBe(VIEW);
+  });
+
+  // ADDED (run 2026-10-25_autonomy-distribution-02, unit b11-publish-integrity, fix round 1,
+  // review/50): an auth refusal, a blocked host and a 404 all leave no answer. The error names the
+  // last `npm view` exit code, a number, so a maintainer can tell a refusal from registry lag;
+  // npm's own stderr, which can carry text the registry controls, stays hidden.
+  it("names the last npm view exit code, and none of npm's output, when every read is refused", () => {
+    const run = verify([""], { NPM_VIEW_STATUS: "1" });
+    expect(run.status).toBe(1);
+    expect(run.out).toContain(
+      `::error::the registry serves ${FORK_PACKAGE}@${FORK_VERSION} with integrity (no answer after 12 tries, 10 s apart; the last npm view exited 1), and the packed tarball is ${INTEGRITY}. Nothing further is published.`,
+    );
+    expect(run.out).not.toContain("planted by npm");
+    expect(run.out).not.toContain("E401");
+    expect(run.calls.filter((call) => call === VIEW)).toHaveLength(12);
+    expect(run.calls.filter((call) => call === SLEEP)).toHaveLength(11);
   });
 
   it("never prints an answer that is not an integrity string, so it cannot carry a workflow command", () => {

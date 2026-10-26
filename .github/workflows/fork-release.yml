@@ -585,6 +585,7 @@ jobs:
       # answer is only compared, and printed only when it has an integrity string's shape. The
       # script is release.yml's, byte for byte (a test holds the two equal); the env is the publish
       # step's credential, registry and identity, because GitHub Packages answers no anonymous read.
+      # npm's own output is never shown; when no answer comes, the error names npm's last exit code.
       - name: Verify the registry tarball
         env:
           NODE_AUTH_TOKEN: ${{ (needs.probe.outputs.registry == 'https://npm.pkg.github.com' || startsWith(needs.probe.outputs.registry, 'https://npm.pkg.github.com/')) && secrets.GITHUB_TOKEN || secrets.STAMITY_REGISTRY_TOKEN }}
@@ -597,7 +598,8 @@ jobs:
           ANSWER=""
           TRY=1
           while :; do
-            ANSWER="$(npm view "$PACKAGE_NAME@$VERSION" dist.integrity ${REGISTRY:+--registry "$REGISTRY"} 2>/dev/null || true)"
+            VIEW_STATUS=0
+            ANSWER="$(npm view "$PACKAGE_NAME@$VERSION" dist.integrity ${REGISTRY:+--registry "$REGISTRY"} 2>/dev/null)" || VIEW_STATUS=$?
             if [ "$ANSWER" = "$EXPECTED" ]; then
               echo "The registry serves $PACKAGE_NAME@$VERSION with the packed tarball's integrity, $EXPECTED (try $TRY of 12)."
               exit 0
@@ -609,7 +611,7 @@ jobs:
             sleep 10
           done
           case "$ANSWER" in
-            '') SHOWN='(no answer after 12 tries, 10 s apart)' ;;
+            '') SHOWN="(no answer after 12 tries, 10 s apart; the last npm view exited $VIEW_STATUS)" ;;
             *[!A-Za-z0-9+/=-]*) SHOWN='(an answer that is not an integrity string, not shown)' ;;
             *) SHOWN="$ANSWER" ;;
           esac
