@@ -2,7 +2,7 @@
 id: fork-layer
 # A design document, authored outside the spec command, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-14_cli-native on 2026-10-14, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
-status: shipped-with-1.15.0
+status: shipped-with-1.17.0
 obsolete_when: the enterprise-forks guide and the customization page stop carrying the fork layer's behaviour, or a decision cuts the surface
 ---
 # The fork layer
@@ -37,7 +37,8 @@ file 1, run `2026-10-23_autonomy-distribution-01`, unit `a11-release-workflows`)
 for them; REQ-PLUGIN-031 is one of the ids `docs/specs/plugin-lifecycle.md` held for plan 016's later files, and
 REQ-PLUGIN-050 is reduced from plan 016's text. That run reached `main` as pull request #125 without this merge; pass
 `spec1` of run `2026-10-25_autonomy-distribution-02` made it afterwards, and every `path:line` in that text reads at
-`864d0111`, `main` after #125. A ledger id in that text (`review/11`) is that run's own. It is not in a release yet.
+`864d0111`, `main` after #125. A ledger id in that text (`review/11`) is that run's own. That merge reached `main`
+through pull request #128 and shipped with 1.17.0.
 
 REQ-PLUGIN-033 and REQ-PLUGIN-054, and the text dated 2026-10-26 under REQ-FORK-011 and REQ-PLUGIN-028, come from the
 spec delta of `docs/plans/022-autonomy-distribution-02.md` (plan 022 file 2, run `2026-10-25_autonomy-distribution-02`,
@@ -46,7 +47,8 @@ declared, merged by that run's pass `spec2`. Where a delta entry and the code di
 line headed "As built" says what moved. `b1`'s citations read on its lane `p20/b1` at `9bdbde48`, the rest at the
 integration head `1fe7d915`. REQ-PLUGIN-033 is another of the ids `docs/specs/plugin-lifecycle.md` held for plan 016's
 later files, and REQ-PLUGIN-054 sits beside REQ-PLUGIN-027's workflow, as decision E7 places it. A ledger id in that
-text (`review/19`, `build/43`) is that run's own. It is not in a release yet.
+text (`review/19`, `build/43`) is that run's own. It reached `main` through pull request #128 and shipped with 1.17.0,
+which set `status: shipped-with-1.17.0`; 1.16.0 moved nothing here, so the status read `shipped-with-1.15.0` until then.
 
 ## Intent
 

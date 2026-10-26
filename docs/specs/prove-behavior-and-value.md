@@ -2,7 +2,7 @@
 id: prove-behavior-and-value
 # A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023).
-status: shipped-with-1.16.0
+status: shipped-with-1.17.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
 ---
 # Prove behavior and value
@@ -103,27 +103,27 @@ The text dated 2026-10-21 under REQ-PROVE-002, REQ-PROVE-004 and REQ-PROVE-033 c
 `u18-spec-docs`, with the clauses its units' reports declared under a line headed "As built". It reads at the
 integration head `936350cb`, but for the unit `u4-pack-fit`, which landed on its own lane and is cited by file and
 symbol, since the integration lane's cherry-pick gives its commits new shas; its REQ-PACK ids are in
-`docs/specs/packs.md`. It is not in a release yet.
+`docs/specs/packs.md`. It reached `main` through pull request #118 and shipped with 1.17.0.
 
 The text dated 2026-10-22 under REQ-PROVE-004, REQ-PROVE-005, REQ-PROVE-006 and REQ-PROVE-008 comes from the spec delta
 of `docs/plans/018-packs-rebuilt-02.md` (plan 018 file 2, run `2026-10-21_packs-rebuilt-02`), merged by its unit
 `u18-spec`, with the clauses its units' reports declared under a line headed "As built". It reads at the integration
 head `67c36a63` and names each unit by its id; its REQ-PACK and REQ-FLOW ids are in `docs/specs/packs.md` and
 `docs/specs/everyday-flows.md`. REQ-PROVE-033 is unchanged: a case whose `source:` lies under `packs/` already triggers
-a full run. It is not in a release yet.
+a full run. It reached `main` through pull request #124 and shipped with 1.17.0.
 
 REQ-PROVE-046, and the text dated 2026-10-25 under REQ-PROVE-045, come from the spec delta of
 `docs/plans/022-autonomy-distribution-01.md` (plan 022 file 1, run `2026-10-23_autonomy-distribution-01`, units
 `a17-eval-batch` and `a11-release-workflows`). That run reached `main` as pull request #125 without this merge; pass
 `spec1` of run `2026-10-25_autonomy-distribution-02` made it afterwards, and every `path:line` in that text reads at
-`864d0111`, `main` after #125. REQ-PROVE-046 stands beside REQ-PROVE-009, as the delta places it, out of id order. It
-is not in a release yet.
+`864d0111`, `main` after #125. REQ-PROVE-046 stands beside REQ-PROVE-009, as the delta places it, out of id order.
+That merge reached `main` through pull request #128 and shipped with 1.17.0.
 
 The text dated 2026-10-26 under REQ-PROVE-031, REQ-PROVE-041 and REQ-PROVE-042 comes from plan 022 file 2
 (`docs/plans/022-autonomy-distribution-02.md`, run `2026-10-25_autonomy-distribution-02`), units `b1-fork-ci-job` and
 `b15-qa-ci-tooling-batch`, whose reports declared these deltas where the plan's said "spec carries no ids"; merged by
-that run's pass `spec2`. `b1`'s citations read on its lane `p20/b1`, `b15`'s at the integration head `1fe7d915`. It is
-not in a release yet.
+that run's pass `spec2`. `b1`'s citations read on its lane `p20/b1`, `b15`'s at the integration head `1fe7d915`. It
+reached `main` through pull request #128 and shipped with 1.17.0, which set `status: shipped-with-1.17.0`.
 
 ## Intent
 

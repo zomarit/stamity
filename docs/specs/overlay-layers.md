@@ -1,7 +1,7 @@
 ---
 id: overlay-layers
 # A design document, authored outside the spec command, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, and excluded from the site build.
-status: shipped-with-1.1.0
+status: shipped-with-1.17.0
 obsolete_when: the published customization page stops carrying the overlay behaviour this spec designed, or a decision cuts the surface
 ---
 # Overlay customization layers
@@ -24,7 +24,9 @@ The paragraph headed "Amended 2026-10-21", its table row and the criterion marke
 "added 2026-10-21" come from the spec delta of `docs/plans/018-packs-rebuilt-01.md`
 (run `2026-10-20_packs-rebuilt`), merged by its unit `u18-spec-docs`. They cite
 the unit `u15-moved-customizations` by file and symbol, since the integration
-lane's cherry-pick gives its commits new shas, and are not in a release yet.
+lane's cherry-pick gives its commits new shas. They reached `main` through pull
+request #118 and shipped with 1.17.0, which set `status: shipped-with-1.17.0`; it
+read `shipped-with-1.1.0`, the release this spec first shipped with, until then.
 
 ## Intent
 

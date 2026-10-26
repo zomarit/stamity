@@ -2,7 +2,7 @@
 id: enterprise-upstream-lane
 # A design document, authored outside the spec command, amended in run 2026-10-14_cli-native on 2026-10-14, one locator amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md).
-status: shipped-with-1.4.0
+status: shipped-with-1.17.0
 obsolete_when: the lane's behaviour moves into the CLI reference and the enterprise-forks guide carries every requirement below, or a decision cuts the surface
 ---
 # The enterprise upstream lane
@@ -21,7 +21,7 @@ Every claim about existing behaviour below carries a `path:line` citation taken 
 The amendments dated 2026-10-13 to REQ-UPSTREAM-002 and REQ-UPSTREAM-014 (run `2026-10-13_lean-repository`, plan 014 file 1, units `f2-lane-release-tags-only`
 and `f1-import-recipe`) cite the tree at `7327f435`. The amendments dated 2026-10-14 to REQ-UPSTREAM-001 and REQ-UPSTREAM-007 (run `2026-10-13_records-branch`, plan 014 file 2,
 unit `r3-hand-page-links`) cite the tree at `4d003d60`. The amendments dated 2026-10-14 that name run `2026-10-14_cli-native` (plan 020 file 1,
-`docs/plans/020-cli-native-01.md`) record the deletion of the APM and plugin distribution routes in 1.15.0, and cite the tree at `d590a266`. The amendment dated 2026-10-26 to REQ-UPSTREAM-016 comes from the spec delta of `docs/plans/022-autonomy-distribution-02.md` (plan 022 file 2, run `2026-10-25_autonomy-distribution-02`, unit `b7-manifest-stable`), merged by that run's pass `spec2` and read at `1fe7d915`; it is not in a release yet. Citations are code spans rather than links: they address lines, which no link form can resolve.
+`docs/plans/020-cli-native-01.md`) record the deletion of the APM and plugin distribution routes in 1.15.0, and cite the tree at `d590a266`. The amendment dated 2026-10-26 to REQ-UPSTREAM-016 comes from the spec delta of `docs/plans/022-autonomy-distribution-02.md` (plan 022 file 2, run `2026-10-25_autonomy-distribution-02`, unit `b7-manifest-stable`), merged by that run's pass `spec2` and read at `1fe7d915`; it reached `main` through pull request #128 and shipped with 1.17.0, which set `status: shipped-with-1.17.0` (it read `shipped-with-1.4.0`, the release this spec first shipped with, until then; the locator amended in run `2026-10-20_packs-rebuilt` shipped with 1.17.0 too). Citations are code spans rather than links: they address lines, which no link form can resolve.
 
 ## Intent
 

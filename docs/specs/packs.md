@@ -2,14 +2,15 @@
 id: packs
 # A design document, authored from docs/plans/018-packs-rebuilt-01.md on 2026-10-21 at the Prove phase of run 2026-10-20_packs-rebuilt, by its unit u18-spec-docs against the integration head 936350cb, amended from docs/plans/018-packs-rebuilt-02.md on 2026-10-22 in run 2026-10-21_packs-rebuilt-02, by its unit u18-spec against the integration head 67c36a63, amended from docs/plans/022-autonomy-distribution-01.md on 2026-10-25 in run 2026-10-25_autonomy-distribution-02, read at 864d0111, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
-status: design
+status: shipped-with-1.17.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the packs reference carries it, or a decision row cuts the surface
 ---
 # Packs
 
 What the pack engine does with the packs this package bundles, how a skill leaves the core for a pack, and what the
-per-pack suite and lint hold. The area code is `PACK`. The change is Package 22's two files, which ship together in the
-next minor after 1.16.0 with Package 20's cut; the cut flips `status: design`.
+per-pack suite and lint hold. The area code is `PACK`. The change is Package 22's two files, `docs/plans/018-packs-rebuilt-01.md`
+(pull request #118) and `docs/plans/018-packs-rebuilt-02.md` (pull request #124), which shipped together with 1.17.0,
+Package 20's cut, which set `status: shipped-with-1.17.0` (it read `design` until then).
 
 The requirement text comes from the `## Spec delta` of `docs/plans/018-packs-rebuilt-01.md` (REQ-PACK-001 to
 REQ-PACK-014), with REQ-PACK-003 as the plan amended it at the build (ledger `review/23` of run
@@ -41,8 +42,8 @@ The text dated 2026-10-25 under REQ-PACK-018, REQ-PACK-019 and REQ-PACK-021 come
 which fixed the two findings the review bot left open on pull request #124 and run 53's Ready-line row. That run reached
 `main` as pull request #125 without this merge; pass `spec1` of run `2026-10-25_autonomy-distribution-02` made it
 afterwards. A bullet headed "Amended 2026-10-25" says what moved and what it read; every citation in it reads at
-`864d0111`, `main` after #125, and a ledger id there (`review/2`) is that run's own. The status line stays as it is:
-the cut flips it.
+`864d0111`, `main` after #125, and a ledger id there (`review/2`) is that run's own. That merge reached `main` through
+pull request #128 and shipped with 1.17.0.
 
 ## Intent
 

@@ -2,7 +2,7 @@
 id: everyday-flows
 # A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
-status: shipped-with-1.16.0
+status: shipped-with-1.17.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
 ---
 # Everyday flows
@@ -149,8 +149,8 @@ unit `u18-spec-docs`; the same delta writes the packs spec, `docs/specs/packs.md
 cites. Where a unit's or fixer's report declared a clause the delta is silent on, a line headed "As built" adds it.
 Every `path:line` in that text reads at the integration head `936350cb`, but for the units `u15-moved-customizations`
 and `u4-pack-fit`, which landed on their own lanes and are cited by unit, file and symbol: the integration lane's
-cherry-pick gives each lane commit a new sha. That text is not in a release yet; it ships with the next minor after
-1.16.0.
+cherry-pick gives each lane commit a new sha. That text reached `main` through pull request #118 and shipped with
+1.17.0.
 
 REQ-FLOW-129 and REQ-FLOW-130, and the text dated 2026-10-22 under REQ-FLOW-063, REQ-FLOW-064, REQ-FLOW-080,
 REQ-FLOW-088 and REQ-FLOW-113, come from the spec delta of `docs/plans/018-packs-rebuilt-02.md` (plan 018 file 2,
@@ -159,7 +159,7 @@ spec, `docs/specs/packs.md`, whose REQ-PACK ids the text here cites. Where a uni
 is silent on, a line headed "As built" adds it. Every `path:line` in that text reads at the integration head
 `67c36a63`; a unit is cited by its id, since the integration lane's cherry-pick and one rebase onto `main` gave its
 commits new shas. Where that text rewrote a sentence in place, the sentence says "amended 2026-10-22" and quotes what
-it read. That text is not in a release yet; it ships with the next minor after 1.16.0, with REQ-FLOW-125 to
+it read. That text reached `main` through pull request #124 and shipped with 1.17.0, with REQ-FLOW-125 to
 REQ-FLOW-128.
 
 REQ-FLOW-131 to REQ-FLOW-134, REQ-FLOW-137 to REQ-FLOW-145 and REQ-FLOW-150, and the text dated 2026-10-25 under
@@ -173,8 +173,8 @@ lockfiles. Where a delta entry and the code differ, a declared default taken lat
 states the code, and a line headed "As built" says what moved. Citations into `src/hooks/personOnly.ts`,
 `src/hooks/scripts.ts` and the other modules that run rewrote by hundreds of lines name the file and the symbol, as
 before, but for a rule table or a short block cited by its lines. A ledger id in that text (`review/158`, `build/9`) is
-that run's own. This merge allocates none of REQ-FLOW-135, REQ-FLOW-136 and REQ-FLOW-146 to REQ-FLOW-149. That text
-is not in a release yet; it ships with the next minor after 1.16.0.
+that run's own. This merge allocates none of REQ-FLOW-135, REQ-FLOW-136 and REQ-FLOW-146 to REQ-FLOW-149. That merge
+reached `main` through pull request #128 and shipped with 1.17.0.
 
 REQ-FLOW-027 to REQ-FLOW-029, REQ-FLOW-032 to REQ-FLOW-034, REQ-FLOW-048, REQ-FLOW-049 and REQ-FLOW-149, and the text
 dated 2026-10-26 under REQ-FLOW-016, REQ-FLOW-022, REQ-FLOW-026, REQ-FLOW-036, REQ-PLUGIN-016, REQ-PLUGIN-046,
@@ -193,8 +193,8 @@ name the file and the symbol, as before. A ledger id in that text (`review/28`, 
 run is named beside it. Of the ids plan 016 held here, REQ-FLOW-030, REQ-FLOW-031, REQ-FLOW-035 and REQ-FLOW-039 to
 REQ-FLOW-047 stay unallocated, and REQ-FLOW-050, Copilot's touchpoints as shared skills, is held with its unit
 `b13-copilot-touchpoints-skills` for the maintainer's decision: neither it nor the delta's sentences on Copilot's prompt
-files under REQ-FLOW-026 and REQ-FLOW-118 are merged. That text is not in a release yet; it ships with the next minor
-after 1.16.0.
+files under REQ-FLOW-026 and REQ-FLOW-118 are merged. That text reached `main` through pull request #128 and shipped
+with 1.17.0, which set `status: shipped-with-1.17.0`.
 
 ## Intent
 

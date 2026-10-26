@@ -2,7 +2,7 @@
 id: model-ladder
 # A design document, authored from docs/plans/008-plugin-lifecycle-02.md on 2026-09-17, extended from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18 and 2026-10-20, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
-status: shipped-with-1.16.0
+status: shipped-with-1.17.0
 obsolete_when: every supported client publishes one effort scale the ladder can name without a per-client table and resumes, waits out and reports a sub-agent's capacity stop on its own, or a decision row cuts the surface
 ---
 # Model ladder
@@ -50,7 +50,9 @@ The paragraph and criteria dated 2026-10-25 under REQ-LADDER-006 come from the s
 `docs/plans/022-autonomy-distribution-01.md` (plan 022 file 1, run `2026-10-23_autonomy-distribution-01`, unit
 `a9-model-defaults-refresh`). That run reached `main` as pull request #125 without this merge; pass `spec1` of run
 `2026-10-25_autonomy-distribution-02` made it afterwards, and every `path:line` in that text reads at `864d0111`,
-`main` after #125. A ledger id in that text (`review/31`, `cut/11`) is that run's own. It is not in a release yet.
+`main` after #125. A ledger id in that text (`review/31`, `cut/11`) is that run's own. That merge reached `main`
+through pull request #128 and shipped with 1.17.0, which set `status` to `shipped-with-1.17.0`; plan 018
+(`docs/plans/018-packs-rebuilt-01.md` and `-02.md`, pull requests #118 and #124) moved nothing here.
 
 ## Intent
 
