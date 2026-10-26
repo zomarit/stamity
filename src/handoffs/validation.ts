@@ -155,6 +155,9 @@ const HANDOFF_DENY_PATTERNS: readonly DenyPattern[] = [
   ...INJECTION_PATTERNS,
 ];
 
+/** The transport set's invisible-character row; its id keys the strip advisory, said once per document. */
+const INVISIBLE_ROW = "invisible-chars";
+
 /** Null byte — the tell for a non-UTF-8 payload wearing a `.md` extension. */
 const BINARY_CONTENT_PATTERN = /\0/;
 
@@ -339,17 +342,21 @@ function fileCapMessage(source: string, bytes: number): string {
  *
  * Findings are reported per pattern with an occurrence count and the matched
  * text is never echoed: repeating an injection payload into a log or a report
- * puts it back in front of a model.
+ * puts it back in front of a model. `named` carries the ids already named
+ * across calls, the invisible-character advisory under its row's id, so one
+ * document names each id once.
  */
 function screenDocument(
   raw: string,
   source: string,
+  named: Set<string>,
 ): { errors: string[]; warnings: string[] } {
   const errors: string[] = [];
   const warnings: string[] = [];
 
   const stripped = raw.replace(INVISIBLE_SMUGGLING_CHARS, "");
-  if (stripped.length !== raw.length) {
+  if (stripped.length !== raw.length && !named.has(INVISIBLE_ROW)) {
+    named.add(INVISIBLE_ROW);
     warnings.push(
       `${source}: ${raw.length - stripped.length} invisible character(s) present. They were ` +
         `removed before screening; rewrite the handoff without them.`,
@@ -363,6 +370,8 @@ function screenDocument(
     else seen.count += 1;
   }
   for (const [patternId, { severity, count }] of bySeverity) {
+    if (named.has(patternId)) continue;
+    named.add(patternId);
     const message =
       `${source}: handoff matches injection pattern "${patternId}" (${count}x). ` +
       `A handoff is read straight into another agent's context; sanitize it before resuming.`;
@@ -385,7 +394,8 @@ function parseHandoff(raw: string, filePath: string): ParsedHandoff {
 
   // Whole-document screen before any field is trusted: a frontmatter value is
   // not safer than a body line just because YAML parsed it.
-  const screened = screenDocument(raw, filePath);
+  const named = new Set<string>();
+  const screened = screenDocument(raw, filePath, named);
   errors.push(...screened.errors);
   warnings.push(...screened.warnings);
 
@@ -399,6 +409,22 @@ function parseHandoff(raw: string, filePath: string): ParsedHandoff {
   }
 
   const fm = parsed.frontmatter;
+  // The values this gate accepts are the YAML-decoded ones, and the screen
+  // above read each escape as its literal characters; the session-start banner
+  // then prints a field with controls turned to spaces, which can form a row
+  // the decoded text does not. Each string field is screened again in both
+  // forms, alone, so the gate refuses what the banner refuses.
+  for (const [field, value] of Object.entries(fm)) {
+    if (typeof value !== "string") continue;
+    // oxlint-disable-next-line no-control-regex -- the control range IS the subject: it is what the banner flattens.
+    const flat = value.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
+    for (const [form, text] of [["decoded", value], ["printed", flat]] as const) {
+      if (form === "printed" && text === value) continue;
+      const copied = screenDocument(text, `${filePath}, \`${field}\` as ${form}`, named);
+      errors.push(...copied.errors);
+      warnings.push(...copied.warnings);
+    }
+  }
   const opts = { source: filePath };
   const id = collect(errors, () => requireString(fm, "id", opts));
   const status = collect(errors, () => requireEnum(fm, "status", HANDOFF_STATUSES, opts));

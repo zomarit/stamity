@@ -14,7 +14,6 @@ import {
   scanNormalized,
 } from "../denyscan/denyScan.ts";
 import { atomicWriteFile } from "../merge/atomicWrite.ts";
-import { UNICODE_TAG_CHARS, UNPRINTABLE_CHARS } from "../runs/layout.ts";
 import { EngineError } from "../types/errors.ts";
 import { STATE_DIR } from "../types/markers.ts";
 import {
@@ -23,9 +22,11 @@ import {
   MAX_LEARNING_FILE_BYTES,
   MAX_LEARNING_SUMMARY_LENGTH,
   orderingDay,
+  printableText,
   resolveLearningsCaps,
   reviewDueSoon,
   sanitizeLearningsContent,
+  screenedCopies,
   validateLearningContent,
   verifyLearningIntegrity,
   type ResolvedLearningsCaps,
@@ -270,28 +271,27 @@ export interface LoadValidatedLearningsOptions {
   /** Clock for the review-horizon check. Defaults to now. */
   now?: Date;
   /**
-   * The read verb's two added screens, off by default so the session-start
-   * banner and {@link formatLearningsIndex} stay line-for-line twins on a clean
-   * corpus. The banner does the field and name screens itself: it screens each
-   * field it prints as decoded and as printed, and strips and screens each name
-   * it prints (`../hooks/scripts.ts`), under its own screen, which leaves
-   * out the rows that name a network scheme. It prints no body, so it does not
-   * screen one. On, each
-   * field the index prints is screened again as its YAML-decoded value — the
-   * raw screen reads `\u…` escapes as literal ASCII, and the parser decodes
-   * them after it — and a hit skips the file `injection-detected` under its
-   * pattern ids, before the budget is charged. What the verb prints is then
-   * stripped of the unprintable set ({@link printableText}) and screened again
-   * in that printed form, since a strip can join or space a row's words: each
-   * printed field, collapsed as the index collapses it and carried so by the
-   * loaded learning, and the body as {@link printableBody} gives it. Every
-   * skip's file name passes the same screen, raw and as the index prints it; a
-   * name that hits prints as a withheld placeholder naming the pattern ids.
+   * The read verb's added screens and strips, off by default so the
+   * session-start banner and {@link formatLearningsIndex} stay line-for-line
+   * twins on a clean corpus. In both modes every string head field is screened
+   * as decoded and as printed, and the body as printed, as the write gate
+   * screens them (`screenedCopies` in `./validation.ts`); a hit skips the file
+   * `injection-detected` under its pattern ids, before the budget is charged.
+   * The banner does its own field and name screens: it screens each field it
+   * prints as decoded and as printed, and strips and screens each name it
+   * prints (`../hooks/scripts.ts`), under its own screen, which leaves out the
+   * rows that name a network scheme. It prints no body and no unprinted field,
+   * so it screens neither. On, each printed field is carried stripped of the
+   * unprintable set ({@link printableText}) and collapsed as the index
+   * collapses it, and the body is screened again as {@link printableBody}
+   * gives it. Every skip's file name passes the same screen, raw and as the
+   * index prints it; a name that hits prints as a withheld placeholder naming
+   * the pattern ids.
    */
   screenPrinted?: boolean;
 }
 
-/** The fields the index prints from a learning's head — what the decoded screen reads. */
+/** The fields the index prints from a learning's head — what the read verb carries stripped. */
 const PRINTED_FIELDS = ["id", "confidence", "summary", REVIEW_BY_FIELD] as const;
 
 /**
@@ -451,24 +451,29 @@ async function examine(dir: string, candidate: Candidate, now: Date, screenPrint
     // stamp, it is a markdown file that landed in the directory.
     return skip(fileName, "invalid-frontmatter", `${source} has no \`---\` frontmatter block.`);
   }
+  // The copies the write gate screens beyond the raw bytes (`screenedCopies`):
+  // each string field after the parser decoded every escape the raw screen
+  // above read as literal ASCII, again as each printer shows it, and the body
+  // as printed. Screened in both modes and before the digest, so a hit the
+  // gate below would refuse reads as the poisoning it is, under its pattern
+  // ids, not as a schema defect.
+  const copied = { head: new Set<string>(), body: new Set<string>() };
+  for (const copy of screenedCopies(parsed)) {
+    for (const id of blockedPatternIds(copy.text)) copied[copy.part].add(id);
+  }
+  if (copied.head.size > 0) return injectionSkip(fileName, [...copied.head].toSorted(), "decoded head field ");
+  if (copied.body.size > 0) return injectionSkip(fileName, [...copied.body].toSorted(), "printed body ");
   let frontmatter = parsed.frontmatter;
   if (screenPrinted) {
-    // The values as printed, after the parser decoded every escape the raw
-    // screen above read as literal ASCII, then stripped of what a terminal
-    // would run and collapsed as {@link fieldText} collapses it at print: each
-    // screened decoded and again as that exact printed string, since the strip
-    // spaces a control run the collapse then closes. Each field alone, so no
-    // hit is made of two fields the index prints apart.
+    // The values as printed — stripped of what a terminal would run and
+    // collapsed as {@link fieldText} collapses it at print, the form screened
+    // above — carried so by the loaded learning.
     const shown: Record<string, unknown> = { ...frontmatter };
-    const decoded: string[] = [];
     for (const field of PRINTED_FIELDS) {
       const value = fieldText(frontmatter, field);
-      if (value === undefined) continue;
-      const printed = fieldText({ [field]: printableText(value) }, field) ?? "";
-      if (typeof frontmatter[field] === "string") shown[field] = printed;
-      decoded.push(...blockedPatternIds(value), ...blockedPatternIds(printed));
+      if (value === undefined || typeof frontmatter[field] !== "string") continue;
+      shown[field] = fieldText({ [field]: printableText(value) }, field) ?? "";
     }
-    if (decoded.length > 0) return injectionSkip(fileName, [...new Set(decoded)].toSorted(), "decoded head field ");
     const body = blockedPatternIds(printableBody(parsed.body).text);
     if (body.length > 0) return injectionSkip(fileName, body, "printed body ");
     frontmatter = shown;
@@ -700,25 +705,6 @@ function lineSafe(name: string): string {
   const flat = name.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
   if (flat === "") return "(unnamed file)";
   return flat.length > MAX_LEARNING_SUMMARY_LENGTH ? `${flat.slice(0, MAX_LEARNING_SUMMARY_LENGTH - 1)}…` : flat;
-}
-
-/**
- * Text as the read verb prints it, with nothing a terminal would run or hide:
- * C0 controls and DEL to spaces, as the resume card turns them, and the rest of
- * its strip set (`UNPRINTABLE_CHARS`: the C1 controls, bidi controls,
- * zero-width marks, line separators), the Unicode tag block and the
- * default-ignorable class dropped. `keep` names the controls a body's layout is
- * made of; a carriage return is kept only before a line feed, so it cannot
- * rewrite a printed line. A strip can complete a row the unstripped text did
- * not, so every caller screens what this returns.
- */
-function printableText(text: string, keep = ""): string {
-  return text
-    .replace(UNPRINTABLE_CHARS, (char, at: number, whole: string) =>
-      keep.includes(char) && (char !== "\r" || whole[at + 1] === "\n") ? char : char < " " || char === "\u007f" ? " " : "",
-    )
-    .replace(UNICODE_TAG_CHARS, "")
-    .replace(INVISIBLE_SMUGGLING_CHARS, "");
 }
 
 /**

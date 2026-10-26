@@ -13,6 +13,7 @@ import {
   scanNormalized,
   type DenyPattern,
 } from "../denyscan/denyScan.ts";
+import { UNICODE_TAG_CHARS, UNPRINTABLE_CHARS } from "../runs/layout.ts";
 import { EngineError } from "../types/errors.ts";
 
 /**
@@ -269,14 +270,15 @@ export function validateLearningContent(
   errors.push(...screened.errors);
   warnings.push(...screened.warnings);
   // The values this gate accepts are the YAML-decoded ones, and the raw screen
-  // reads an escape as its literal characters: each string field is screened
-  // again as decoded, alone, so the gate refuses what the read verb refuses. A
-  // pattern id already named is not named again.
-  for (const [field, value] of Object.entries(parsed.frontmatter)) {
-    if (typeof value !== "string") continue;
-    const decoded = screen(value, `${source}, \`${field}\` as decoded`, named);
-    errors.push(...decoded.errors);
-    warnings.push(...decoded.warnings);
+  // reads an escape as its literal characters; a reader then prints them with
+  // controls turned to spaces, which can form a row the decoded text does not.
+  // Each copy a reader screens is screened here too, so the gate refuses what
+  // the read verb and the banner refuse. A pattern id already named is not
+  // named again.
+  for (const copy of screenedCopies(parsed)) {
+    const copied = screen(copy.text, `${source}, ${copy.label}`, named);
+    errors.push(...copied.errors);
+    warnings.push(...copied.warnings);
   }
 
   // ── Gate 4: integrity ──
@@ -467,6 +469,65 @@ function screen(text: string, source: string, seen: Set<string>): { errors: stri
     else warnings.push(message);
   }
   return { errors, warnings };
+}
+
+/** One text the screens read beyond the raw file, and which part of the file it came from. */
+export interface ScreenedCopy {
+  /** `head` for a frontmatter field, `body` for the body. */
+  part: "head" | "body";
+  /** Names the field and the form in a message, never the text. */
+  label: string;
+  text: string;
+}
+
+/**
+ * The copies of a parsed learning the screens read beyond its raw bytes: each
+ * string head field as YAML decoded it and as each printer shows it — the read
+ * verb's strip between two whitespace collapses (`fieldText` around
+ * {@link printableText} in `./store.ts`), and the session-start banner's
+ * `text()`, which turns C0 controls and DEL to spaces and collapses — and the
+ * body as the read verb prints it. Each field alone, so no hit is made of two
+ * fields printed apart. The write gate and the loader both screen this list,
+ * so a file refused at write is refused on read under the same pattern id.
+ */
+export function screenedCopies(parsed: ParsedFrontmatter): ScreenedCopy[] {
+  const copies: ScreenedCopy[] = [];
+  for (const [field, value] of Object.entries(parsed.frontmatter)) {
+    if (typeof value !== "string") continue;
+    copies.push({ part: "head", label: `\`${field}\` as decoded`, text: value });
+    const shown = collapse(printableText(collapse(value)));
+    // oxlint-disable-next-line no-control-regex -- the control range IS the subject: it is what the banner flattens.
+    const flat = collapse(value.replace(/[\u0000-\u001f\u007f]+/g, " "));
+    for (const text of new Set([shown, flat])) {
+      if (text !== value) copies.push({ part: "head", label: `\`${field}\` as printed`, text });
+    }
+  }
+  const body = printableText(parsed.body, "\t\n\r");
+  if (body !== parsed.body) copies.push({ part: "body", label: "the body as printed", text: body });
+  return copies;
+}
+
+function collapse(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Text as the read verb prints it, with nothing a terminal would run or hide:
+ * C0 controls and DEL to spaces, as the resume card turns them, and the rest of
+ * its strip set (`UNPRINTABLE_CHARS`: the C1 controls, bidi controls,
+ * zero-width marks, line separators), the Unicode tag block and the
+ * default-ignorable class dropped. `keep` names the controls a body's layout is
+ * made of; a carriage return is kept only before a line feed, so it cannot
+ * rewrite a printed line. A strip can complete a row the unstripped text did
+ * not, so every caller screens what this returns.
+ */
+export function printableText(text: string, keep = ""): string {
+  return text
+    .replace(UNPRINTABLE_CHARS, (char, at: number, whole: string) =>
+      keep.includes(char) && (char !== "\r" || whole[at + 1] === "\n") ? char : char < " " || char === "\u007f" ? " " : "",
+    )
+    .replace(UNICODE_TAG_CHARS, "")
+    .replace(INVISIBLE_SMUGGLING_CHARS, "");
 }
 
 function checkIntegrity(parsed: ParsedFrontmatter, source: string, errors: string[]): void {

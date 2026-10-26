@@ -1192,8 +1192,13 @@ describe("learn read — the screened read", () => {
     for (const output of [json.stdout, json.stderr, human.stdout, human.stderr]) {
       expect(output.includes(tail), "a refused span reached the output").toBe(false);
     }
-    // The shared loader, which the session-start twin mirrors, is unchanged: it reads no decoded field.
-    expect(shared.learnings.map((learning) => learning.fileName)).toEqual(["run-note.md"]);
+    // TEST CHANGE, justified (REQ-FLOW-088): this asserted the shared loader loads the file, reading no decoded field.
+    // The write gate now screens each field as printed and refuses it, and the loader screens what the gate screens,
+    // so it skips the file as the poisoning it is, as the session-start banner does, rather than as a schema defect.
+    expect(shared.learnings).toEqual([]);
+    expect(shared.skips).toEqual([
+      expect.objectContaining({ fileName: "run-note.md", reason: "injection-detected", patternIds: expected }),
+    ]);
   });
 
   it("withholds a skipped file's name whose space run the printed collapse joins into a row", async () => {
