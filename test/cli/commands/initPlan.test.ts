@@ -399,7 +399,8 @@ describe("carriedImportDecisions — what a --force re-init keeps of the replace
   });
 
   it("keeps a skip and a supplement over the owner's file, and drops a decision whose file is gone", async () => {
-    const root = await seedRepo({ "AGENTS.md": OWNER, "CLAUDE.md": `<!-- STAMITY:BEGIN -->\n@AGENTS.md\n<!-- STAMITY:END -->\n\n${OWNER}` });
+    const claudeMd = ["<!-- STAMITY:BEGIN -->", "@AGENTS.md", "<!-- STAMITY:END -->", "", OWNER].join("\n");
+    const root = await seedRepo({ "AGENTS.md": OWNER, "CLAUDE.md": claudeMd });
     const previous = previousSetup([], [
       { path: "AGENTS.md", mode: "skip" },
       { path: "AGENT.md", mode: "supplement" },
