@@ -1,4 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -3195,7 +3196,15 @@ describe("release.yml — the only publishing path", () => {
     // Upgrading is not the same as clearing the floor; assert the version the upgrade produced.
     expect(upgrade).toContain("11.5.1");
     const step = stepOf(publishSteps, "Publish to npm with provenance");
-    expect(step.run).toBe('npm publish "./$TARBALL" --provenance --access public');
+    // TEST CHANGE, justified: REQ-PLUGIN-054 — the canonical publish is idempotent on a re-run.
+    // The step first compares the registry's integrity for the version (plan 022 file 2, unit
+    // b11-publish-integrity), so the publish line is now its last line rather than its whole run;
+    // the flags it carries are unchanged, and the executed cases below pin the control flow.
+    expect((step.run ?? "").trimEnd().split("\n").at(-1)).toBe('npm publish "./$TARBALL" --provenance --access public');
+    expect(step.env).toEqual({
+      PACKAGE_NAME: "${{ needs.gates.outputs.package_name }}",
+      VERSION: "${{ needs.gates.outputs.version }}",
+    });
     // No token env anywhere in the publish job: authentication is the OIDC token this job mints.
     for (const publishStep of publishSteps) {
       expect(Object.keys(publishStep.env ?? {}), publishStep.name).not.toContain("NODE_AUTH_TOKEN");
@@ -3220,6 +3229,25 @@ describe("release.yml — the only publishing path", () => {
     expect(indexOf(publishSteps, "Create GitHub release")).toBeGreaterThan(
       indexOf(publishSteps, "Publish to npm with provenance"),
     );
+  });
+
+  // ADDED by plan 022 file 2, unit b11-publish-integrity (REQ-PLUGIN-054): the release is created
+  // only once the registry serves the bytes the digest check verified. The read-back sits between
+  // the publish and the release, carries no credential, and ships nothing itself (the shipping
+  // list in the case below stays the publish and the release).
+  it("reads the registry's integrity back after the publish and before the GitHub release", () => {
+    const at = indexOf(publishSteps, "Verify the registry tarball");
+    expect(at).toBe(indexOf(publishSteps, "Publish to npm with provenance") + 1);
+    expect(at).toBeLessThan(indexOf(publishSteps, "Create GitHub release"));
+    expect(at).toBeGreaterThan(indexOf(publishSteps, "Verify tarball digest"));
+    const step = stepOf(publishSteps, "Verify the registry tarball");
+    expect(step.env).toEqual({
+      PACKAGE_NAME: "${{ needs.gates.outputs.package_name }}",
+      VERSION: "${{ needs.gates.outputs.version }}",
+    });
+    expect(step.if).toBeUndefined();
+    expect(step["continue-on-error"]).toBeUndefined();
+    expect(step.run, "a `${{ }}` value inside a run: is a template injection").not.toContain("${{");
   });
 
 
@@ -3750,6 +3778,79 @@ describe.skipIf(WINDOWS)("release.yml — the records pin, executed", () => {
     expect(run.calls).toEqual([["restore", "--ref", "refs/remotes/origin/records", "--no-fetch", "--force"]]);
     // The `origin/records` tag on main's commit stands in for nothing: the commit printed is the branch's.
     expect(run.out).toContain(`Restored the records commit ${tip}`);
+  });
+});
+
+// ── release.yml: the npm publish, executed ───────────────────────────────────
+
+/**
+ * ADDED by plan 022 file 2, unit b11-publish-integrity (REQ-PLUGIN-054). "Publish to npm with
+ * provenance", RUN with `npm` stubbed, in the shape test/ci/forkReleaseWorkflow.test.ts runs the
+ * fork's publish: a re-run over a version npm already serves with this tarball's integrity skips
+ * the publish, and one held by another tarball refuses, never publishes.
+ */
+describe.skipIf(WINDOWS)("release.yml — the npm publish, executed with npm stubbed", () => {
+  const PUBLISH = runOf(stepsOf(release, "publish"), "Publish to npm with provenance");
+  // A made-up name: the step reads it from the gates job's output, and the stub answers any name.
+  const PACKAGE = "@example-scope/release-under-test";
+  const VERSION = "1.17.0";
+  const TARBALL = `example-scope-release-under-test-${VERSION}.tgz`;
+  const TARBALL_BYTES = "the packed tarball's bytes\n";
+  const INTEGRITY = `sha512-${createHash("sha512").update(TARBALL_BYTES).digest("base64")}`;
+  const root = mkdtempSync(join(tmpdir(), "stamity-release-publish-"));
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+  let count = 0;
+
+  function publish(view: string): { status: number | null; out: string; calls: readonly string[] } {
+    count += 1;
+    const dir = join(root, String(count));
+    const bin = join(dir, "bin");
+    mkdirSync(bin, { recursive: true });
+    // A stub npm on PATH that records each argv: the real one would ask registry.npmjs.org and
+    // publish there, which a suite may not do. The step's control flow around it is under test.
+    const npm = join(bin, "npm");
+    writeFileSync(npm, `#!/bin/sh\nprintf '%s\\n' "$*" >> "$STUB_LOG"\nif [ "$1" = "view" ]; then printf '%s' "$NPM_VIEW"; fi\n`);
+    chmodSync(npm, 0o755);
+    writeFileSync(join(dir, TARBALL), TARBALL_BYTES);
+    const log = join(dir, "calls");
+    const result = spawnSync("bash", ["-c", PUBLISH], {
+      cwd: dir,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: [bin, dirname(process.execPath), process.env["PATH"] ?? ""].join(delimiter),
+        STUB_LOG: log,
+        PACKAGE_NAME: PACKAGE,
+        VERSION,
+        TARBALL,
+        NPM_VIEW: view,
+      },
+    });
+    const calls = existsSync(log) ? readFileSync(log, "utf8").split("\n").filter((line) => line !== "") : [];
+    return { status: result.status, out: `${result.stdout}${result.stderr}`, calls };
+  }
+
+  const VIEW = `view ${PACKAGE}@${VERSION} dist.integrity`;
+
+  it("publishes with provenance when npm does not serve the version yet", () => {
+    const run = publish("");
+    expect(run.status, run.out).toBe(0);
+    expect(run.calls).toEqual([VIEW, `publish ./${TARBALL} --provenance --access public`]);
+  });
+
+  it("skips the publish on a re-run whose version npm serves with this tarball's integrity", () => {
+    const run = publish(INTEGRITY);
+    expect(run.status, run.out).toBe(0);
+    expect(run.out).toContain("already published with this tarball's integrity; nothing to publish (an idempotent re-run)");
+    expect(run.calls).toEqual([VIEW]);
+  });
+
+  it("refuses, and publishes nothing, when another tarball holds the version", () => {
+    const run = publish("sha512-another-tarball");
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("::error::");
+    expect(run.out).toContain("already published from another tarball");
+    expect(run.calls).toEqual([VIEW]);
   });
 });
 
@@ -4443,18 +4544,24 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
     // STAMITY_REGISTRY_TOKEN secret otherwise. Exactly one scope is admitted: that step's env, in
     // `fork-release.yml`'s publish job, which checks nothing out. Every other scope, and every
     // other forbidden name everywhere, still fails.
+    // TEST CHANGE, justified (plan 022 file 2, unit b11-publish-integrity, REQ-PLUGIN-054): the fork
+    // reads its registry back after the publish, and GitHub Packages answers no anonymous read, so
+    // the publish job's "Verify the registry tarball" step carries the same credential expression
+    // (forkReleaseWorkflow.test.ts holds the two equal). The admitted set stays closed: those two
+    // named steps of that one job, and no other scope or name anywhere.
     const FORK_PUBLISH_STEP = "fork-release.yml:publish (step env)";
-    let admitted = 0;
+    const FORK_CREDENTIAL_STEPS = ["Publish to the registry", "Verify the registry tarball"];
     for (const [where, env] of scopes) {
       for (const key of Object.keys(env ?? {})) {
-        if (where === FORK_PUBLISH_STEP && key === "NODE_AUTH_TOKEN") {
-          admitted += 1;
-          continue;
-        }
+        if (where === FORK_PUBLISH_STEP && key === "NODE_AUTH_TOKEN") continue;
         expect(FORBIDDEN.has(key), `${where} declares ${key}`).toBe(false);
       }
     }
-    expect(admitted, "the fork publish step's credential, and no second copy of it").toBe(1);
+    const holders = ALL_STEPS.filter(([, , step]) => step.env?.["NODE_AUTH_TOKEN"] !== undefined);
+    expect(
+      holders.map(([file, job, step]) => `${file}:${job}:${step.name ?? "?"}`),
+      "the fork publish job's two credential steps, and no other copy",
+    ).toEqual(FORK_CREDENTIAL_STEPS.map((name) => `fork-release.yml:publish:${name}`));
     // And the bytes, because a credential can also arrive as a `with:` input or a `run:` line.
     for (const { file, source } of ALL_WORKFLOWS) {
       expect(source, file).not.toMatch(/NPM_TOKEN|secrets\.NPM/);
@@ -4462,15 +4569,15 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
         expect(source, file).not.toMatch(/NODE_AUTH_TOKEN/);
         continue;
       }
-      // In the fork file the name appears only in the admitted step: its env key and the one
-      // emptiness check its script makes.
-      const holder = ALL_STEPS.find(
-        ([stepFile, job, step]) =>
-          stepFile === file && job === "publish" && step.env?.["NODE_AUTH_TOKEN"] !== undefined,
-      )?.[2];
-      expect(holder, "the fork publish step must hold the credential it is admitted for").toBeDefined();
-      const inStep = 1 + ((holder?.run ?? "").match(/NODE_AUTH_TOKEN/g)?.length ?? 0);
-      expect(source.match(/NODE_AUTH_TOKEN/g)?.length ?? 0, file).toBe(inStep);
+      // In the fork file the name appears only in the admitted steps: each one's env key, plus the
+      // one emptiness check the publish step's script makes (the read-back's script does not name it).
+      const admitted = holders.filter(([stepFile]) => stepFile === file).map(([, , step]) => step);
+      expect(admitted, "the fork publish job must hold the credential it is admitted for").toHaveLength(2);
+      const inSteps = admitted.reduce(
+        (total, step) => total + 1 + ((step.run ?? "").match(/NODE_AUTH_TOKEN/g)?.length ?? 0),
+        0,
+      );
+      expect(source.match(/NODE_AUTH_TOKEN/g)?.length ?? 0, file).toBe(inSteps);
     }
   });
 

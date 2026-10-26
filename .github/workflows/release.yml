@@ -580,7 +580,7 @@ jobs:
       #   github.com                    — the same
       #   nodejs.org                    — the Node download setup-node performs
       #   objects.githubusercontent.com — GitHub's object and manifest CDN
-      #   registry.npmjs.org            — the global npm upgrade and `npm publish`
+      #   registry.npmjs.org            — the global npm upgrade, `npm publish` and its `npm view` reads
       #   token.actions.githubusercontent.com — the GitHub OIDC token (id-token: write)
       #   fulcio.sigstore.dev, rekor.sigstore.dev, tuf-repo-cdn.sigstore.dev
       #                                 — the provenance attestation npm publishes: its signing
@@ -688,8 +688,64 @@ jobs:
       #
       # `--provenance` is explicit as a fallback for a local emergency publish; the trusted
       # publisher entry is the attestation mechanism of record.
+      #
+      # Idempotent, in fork-release.yml's shape: a version npm already serves with this tarball's
+      # sha512 integrity is skipped, so a re-run after a later step failed does not fail here, and
+      # one held by another tarball is refused, never published over. The registry's answer is
+      # only compared, never run.
       - name: Publish to npm with provenance
-        run: npm publish "./$TARBALL" --provenance --access public
+        env:
+          PACKAGE_NAME: ${{ needs.gates.outputs.package_name }}
+          VERSION: ${{ needs.gates.outputs.version }}
+        run: |
+          set -euo pipefail
+          INTEGRITY="$(node -e 'const fs = require("node:fs"); const crypto = require("node:crypto"); process.stdout.write("sha512-" + crypto.createHash("sha512").update(fs.readFileSync(process.argv[1])).digest("base64"))' "$TARBALL")"
+          existing="$(npm view "$PACKAGE_NAME@$VERSION" dist.integrity 2>/dev/null || true)"
+          if [ "$existing" = "$INTEGRITY" ]; then
+            echo "$PACKAGE_NAME@$VERSION is already published with this tarball's integrity; nothing to publish (an idempotent re-run)."
+            exit 0
+          fi
+          if [ -n "$existing" ]; then
+            echo "::error::$PACKAGE_NAME@$VERSION is already published from another tarball. A published version is never replaced; release a new version."
+            exit 1
+          fi
+          npm publish "./$TARBALL" --provenance --access public
+
+      # The registry serves what this job verified, or the release is not created. After any
+      # publish, the skip above included, npm's own `dist.integrity` for the version is read back,
+      # up to 12 times 10 s apart while the registry has not served it yet, and must equal the sha512
+      # integrity of the tarball the digest check verified. Another answer fails at once. The answer
+      # is only compared, and printed only when it has an integrity string's shape. The script is
+      # fork-release.yml's, byte for byte (a test holds the two equal); the env is this job's own,
+      # with no credential, because npm serves this public package to an anonymous read.
+      - name: Verify the registry tarball
+        env:
+          PACKAGE_NAME: ${{ needs.gates.outputs.package_name }}
+          VERSION: ${{ needs.gates.outputs.version }}
+        run: |
+          set -euo pipefail
+          EXPECTED="$(node -e 'const fs = require("node:fs"); const crypto = require("node:crypto"); process.stdout.write("sha512-" + crypto.createHash("sha512").update(fs.readFileSync(process.argv[1])).digest("base64"))' "$TARBALL")"
+          ANSWER=""
+          TRY=1
+          while :; do
+            ANSWER="$(npm view "$PACKAGE_NAME@$VERSION" dist.integrity ${REGISTRY:+--registry "$REGISTRY"} 2>/dev/null || true)"
+            if [ "$ANSWER" = "$EXPECTED" ]; then
+              echo "The registry serves $PACKAGE_NAME@$VERSION with the packed tarball's integrity, $EXPECTED (try $TRY of 12)."
+              exit 0
+            fi
+            if [ -n "$ANSWER" ] || [ "$TRY" -ge 12 ]; then
+              break
+            fi
+            TRY=$((TRY + 1))
+            sleep 10
+          done
+          case "$ANSWER" in
+            '') SHOWN='(no answer after 12 tries, 10 s apart)' ;;
+            *[!A-Za-z0-9+/=-]*) SHOWN='(an answer that is not an integrity string, not shown)' ;;
+            *) SHOWN="$ANSWER" ;;
+          esac
+          echo "::error::the registry serves $PACKAGE_NAME@$VERSION with integrity $SHOWN, and the packed tarball is $EXPECTED. Nothing further is published."
+          exit 1
 
       # The tarball and the SBOM ride the release so a consumer can fetch the exact bytes and the
       # component inventory without re-running anything. `gh` is preinstalled on the runner, so

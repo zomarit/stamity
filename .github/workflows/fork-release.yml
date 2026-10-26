@@ -578,6 +578,44 @@ jobs:
           fi
           npm publish "./$TARBALL" --registry "$REGISTRY" --tag "$DIST_TAG"
 
+      # The registry serves what this job verified, or the release is not created. After any
+      # publish, the skip above included, the registry's own `dist.integrity` for the version is
+      # read back, up to 12 times 10 s apart while it has not served it yet, and must equal the
+      # sha512 integrity of the tarball the digest check verified. Another answer fails at once. The
+      # answer is only compared, and printed only when it has an integrity string's shape. The
+      # script is release.yml's, byte for byte (a test holds the two equal); the env is the publish
+      # step's credential, registry and identity, because GitHub Packages answers no anonymous read.
+      - name: Verify the registry tarball
+        env:
+          NODE_AUTH_TOKEN: ${{ (needs.probe.outputs.registry == 'https://npm.pkg.github.com' || startsWith(needs.probe.outputs.registry, 'https://npm.pkg.github.com/')) && secrets.GITHUB_TOKEN || secrets.STAMITY_REGISTRY_TOKEN }}
+          REGISTRY: ${{ needs.probe.outputs.registry }}
+          PACKAGE_NAME: ${{ needs.gates.outputs.package_name }}
+          VERSION: ${{ needs.gates.outputs.version }}
+        run: |
+          set -euo pipefail
+          EXPECTED="$(node -e 'const fs = require("node:fs"); const crypto = require("node:crypto"); process.stdout.write("sha512-" + crypto.createHash("sha512").update(fs.readFileSync(process.argv[1])).digest("base64"))' "$TARBALL")"
+          ANSWER=""
+          TRY=1
+          while :; do
+            ANSWER="$(npm view "$PACKAGE_NAME@$VERSION" dist.integrity ${REGISTRY:+--registry "$REGISTRY"} 2>/dev/null || true)"
+            if [ "$ANSWER" = "$EXPECTED" ]; then
+              echo "The registry serves $PACKAGE_NAME@$VERSION with the packed tarball's integrity, $EXPECTED (try $TRY of 12)."
+              exit 0
+            fi
+            if [ -n "$ANSWER" ] || [ "$TRY" -ge 12 ]; then
+              break
+            fi
+            TRY=$((TRY + 1))
+            sleep 10
+          done
+          case "$ANSWER" in
+            '') SHOWN='(no answer after 12 tries, 10 s apart)' ;;
+            *[!A-Za-z0-9+/=-]*) SHOWN='(an answer that is not an integrity string, not shown)' ;;
+            *) SHOWN="$ANSWER" ;;
+          esac
+          echo "::error::the registry serves $PACKAGE_NAME@$VERSION with integrity $SHOWN, and the packed tarball is $EXPECTED. Nothing further is published."
+          exit 1
+
       # The release carries the tarball and its checksum, exactly as the gates job built and this
       # job verified it. `--verify-tag` and `--target` keep `gh` from inventing a tag on the
       # default branch's head. A re-run finds the release and uploads only the assets it is

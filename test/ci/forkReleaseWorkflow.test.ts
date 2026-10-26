@@ -364,6 +364,9 @@ describe("fork-release.yml — the trust split", () => {
     const steps = jobOf(WORKFLOW, "publish").steps;
     expect(steps.some((step) => (step.uses ?? "").startsWith("actions/checkout@"))).toBe(false);
     const names = steps.map((step) => step.name);
+    // TEST CHANGE, justified (plan 022 file 2, unit b11-publish-integrity, REQ-PLUGIN-054): after
+    // any publish the registry's own integrity is read back and compared before the release is
+    // created, so "Verify the registry tarball" joins the list between the publish and the release.
     expect(names).toEqual([
       "Refuse an unarmed destination",
       "Download release artifacts",
@@ -371,6 +374,7 @@ describe("fork-release.yml — the trust split", () => {
       "Verify the tarball's identity",
       "Set up Node",
       "Publish to the registry",
+      "Verify the registry tarball",
       "Create GitHub release",
     ]);
     const setupNode = stepOf(WORKFLOW, "publish", "Set up Node");
@@ -431,6 +435,18 @@ describe("fork-release.yml — the trust split", () => {
     }
     expect(chosen("https://NPM.PKG.GITHUB.COM.EXAMPLE", both)).toBe("STAMITY_REGISTRY_TOKEN");
     expect(chosen("https://NPM.PKG.GITHUB.COM.EXAMPLE", perRunOnly)).toBe("none");
+  });
+
+  // ADDED by plan 022 file 2, unit b11-publish-integrity (REQ-PLUGIN-054): the read-back after the
+  // publish needs the registry's credential (GitHub Packages answers no anonymous read), and it
+  // gets exactly the publish step's expression, so the lookalike-host routing above holds for it.
+  it("hands the registry read-back the publish step's credential, registry and identity, unchanged", () => {
+    const publishEnv = stepOf(WORKFLOW, "publish", "Publish to the registry").env ?? {};
+    const verifyEnv = stepOf(WORKFLOW, "publish", "Verify the registry tarball").env ?? {};
+    expect(Object.keys(verifyEnv).toSorted()).toEqual(["NODE_AUTH_TOKEN", "PACKAGE_NAME", "REGISTRY", "VERSION"]);
+    for (const key of ["NODE_AUTH_TOKEN", "REGISTRY", "PACKAGE_NAME", "VERSION"]) {
+      expect(verifyEnv[key], key).toBe(publishEnv[key]);
+    }
   });
 });
 
@@ -508,6 +524,22 @@ describe("fork-release.yml — what it copies from release.yml stays equal to it
       expect(fork.run, name).toBe(canonical.run);
       expect(fork.env, name).toEqual(canonical.env);
     }
+  });
+
+  // ADDED by plan 022 file 2, unit b11-publish-integrity (REQ-PLUGIN-054): one read-back script in
+  // both files, so a fix to it reaches both. The env differs on purpose: the canonical step reads
+  // the public registry with no credential (release.yml's publish job holds none), while the fork's
+  // carries its own registry and token.
+  it("reads the registry back with release.yml's own script, byte for byte, under its own env", () => {
+    const fork = stepOf(WORKFLOW, "publish", "Verify the registry tarball");
+    const canonical = stepOf(RELEASE, "publish", "Verify the registry tarball");
+    expect(fork.run).toBeTypeOf("string");
+    expect(fork.run).toBe(canonical.run);
+    expect(canonical.env).toEqual({
+      PACKAGE_NAME: "${{ needs.gates.outputs.package_name }}",
+      VERSION: "${{ needs.gates.outputs.version }}",
+    });
+    expect(fork.env).not.toEqual(canonical.env);
   });
 });
 
@@ -1005,6 +1037,116 @@ describe.skipIf(WINDOWS)("fork-release.yml — the registry publish, executed wi
   it("publishes with neither provenance nor an access flag", () => {
     expect(PUBLISH).not.toContain("--provenance");
     expect(PUBLISH).not.toContain("--access");
+  });
+});
+
+// ADDED by plan 022 file 2, unit b11-publish-integrity (REQ-PLUGIN-054): after any publish, the
+// registry's own `dist.integrity` is read back and must equal the verified tarball's before the
+// release is created. The answer is outside data: it is only compared, and printed only when it has
+// an integrity string's shape.
+describe.skipIf(WINDOWS)("fork-release.yml — the registry read-back, executed with npm and sleep stubbed", () => {
+  const VERIFY = runOf(WORKFLOW, "publish", "Verify the registry tarball");
+  const TARBALL = `acme-corp-stamity-${FORK_VERSION} copy.tgz`;
+  const TARBALL_BYTES = "the packed tarball's bytes\n";
+  const INTEGRITY = `sha512-${createHash("sha512").update(TARBALL_BYTES).digest("base64")}`;
+
+  /**
+   * The step with `npm view` answering the lines of `answers` in turn, one per call (the last one
+   * repeating), and `sleep` recorded but not slept: twelve real tries would take two minutes.
+   */
+  function verify(
+    answers: readonly string[],
+    env: Readonly<Record<string, string>> = {},
+  ): { status: number | null; out: string; calls: readonly string[] } {
+    const dir = scratchDir("read-back");
+    const bin = join(dir, "bin");
+    mkdirSync(bin);
+    const answersPath = join(dir, "answers.json");
+    writeFileSync(answersPath, JSON.stringify(answers));
+    const counter = join(dir, "count");
+    writeFileSync(counter, "0");
+    // A stub npm: the real one would ask a registry, which a suite may not reach. It answers from
+    // a list by call number, so a late answer, a wrong one and none at all are each reachable.
+    stubCommand(
+      bin,
+      "npm",
+      [
+        'if [ "$1" = "view" ]; then',
+        `  n="$(cat '${counter}')"; echo $((n + 1)) > '${counter}'`,
+        `  "$NODE_BIN" -e 'const a = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(a[Math.min(Number(process.argv[2]), a.length - 1)] ?? "")' '${answersPath}' "$n"`,
+        "fi",
+      ].join("\n"),
+    );
+    stubCommand(bin, "sleep", "exit 0");
+    writeFileSync(join(dir, TARBALL), TARBALL_BYTES);
+    const log = join(dir, "calls");
+    const result = spawnSync("bash", ["-c", VERIFY], {
+      cwd: dir,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: childPath(bin),
+        NODE_BIN: process.execPath,
+        STUB_LOG: log,
+        NODE_AUTH_TOKEN: "company-token",
+        REGISTRY: GITHUB_PACKAGES,
+        PACKAGE_NAME: FORK_PACKAGE,
+        VERSION: FORK_VERSION,
+        TARBALL,
+        ...env,
+      },
+    });
+    return { status: result.status, out: `${result.stdout}${result.stderr}`, calls: logOf(log) };
+  }
+
+  const VIEW = `view ${FORK_PACKAGE}@${FORK_VERSION} dist.integrity --registry ${GITHUB_PACKAGES}`;
+  const SLEEP = "10";
+
+  it("passes on the first try when the registry serves the tarball's integrity", () => {
+    const run = verify([INTEGRITY]);
+    expect(run.status, run.out).toBe(0);
+    expect(run.calls).toEqual([VIEW]);
+    expect(run.out).toContain(INTEGRITY);
+  });
+
+  it("waits for a registry that has not served the version yet, then passes", () => {
+    const run = verify(["", "", INTEGRITY]);
+    expect(run.status, run.out).toBe(0);
+    expect(run.calls).toEqual([VIEW, SLEEP, VIEW, SLEEP, VIEW]);
+  });
+
+  it("fails at once, naming both values, when the registry serves another integrity", () => {
+    const run = verify(["sha512-another-tarball"]);
+    expect(run.status).toBe(1);
+    expect(run.out).toContain(
+      `::error::the registry serves ${FORK_PACKAGE}@${FORK_VERSION} with integrity sha512-another-tarball, and the packed tarball is ${INTEGRITY}. Nothing further is published.`,
+    );
+    expect(run.calls).toEqual([VIEW]);
+  });
+
+  it("fails after twelve tries ten seconds apart when the registry never answers", () => {
+    const run = verify([""]);
+    expect(run.status).toBe(1);
+    expect(run.out).toContain("::error::the registry serves");
+    expect(run.out).toContain(`and the packed tarball is ${INTEGRITY}. Nothing further is published.`);
+    expect(run.calls.filter((call) => call === VIEW)).toHaveLength(12);
+    expect(run.calls.filter((call) => call === SLEEP)).toHaveLength(11);
+    expect(run.calls.at(-1)).toBe(VIEW);
+  });
+
+  it("never prints an answer that is not an integrity string, so it cannot carry a workflow command", () => {
+    const run = verify(["sha512-x\n::warning::planted by the registry"]);
+    expect(run.status).toBe(1);
+    expect(run.out).not.toContain("planted by the registry");
+    expect(run.out).toContain("not an integrity string");
+    expect(run.calls).toEqual([VIEW]);
+  });
+
+  it("reads the default registry, with no --registry flag, when the step names none", () => {
+    // release.yml's step carries no REGISTRY: it reads the registry setup-node configured.
+    const run = verify([INTEGRITY], { REGISTRY: "", NODE_AUTH_TOKEN: "" });
+    expect(run.status, run.out).toBe(0);
+    expect(run.calls).toEqual([`view ${FORK_PACKAGE}@${FORK_VERSION} dist.integrity`]);
   });
 });
 
