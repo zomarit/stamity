@@ -2,6 +2,7 @@ import { lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Command } from "commander";
 import semver from "semver";
+import { detectPackageManager } from "../../detect/packageManager.ts";
 import { readManifest } from "../../manifest/manifest.ts";
 import { isSemverShaped, pinnedCliCall } from "../../shared/cliCall.ts";
 import { EngineError } from "../../types/errors.ts";
@@ -254,6 +255,21 @@ function reclaimedPaths(report: SyncApplyReport): string[] {
 const CODEX_HOOKS_NOTICE =
   "Codex records trust against `.codex/hooks.json`'s hash; review each stamity hook in `/hooks`.";
 
+/**
+ * The step a moved pin leaves when a lockfile sits beside `package.json`
+ * (review/87): the lockfile still records the old release, so the next
+ * `npm ci` (or its peer) refuses until the project's own install runs.
+ * `upgrade` runs no package manager; it names the install instead. The
+ * lockfile and the manager come from `../../detect/packageManager.ts`, whose
+ * `packageManager` pin outranks the lockfile's kind. `null` with no lockfile.
+ */
+async function lockfileInstallNotice(rootDir: string, dryRun: boolean): Promise<string | null> {
+  const { name, lockfile } = await detectPackageManager(rootDir);
+  if (lockfile === null) return null;
+  const records = dryRun ? "would still record" : "still records";
+  return `${lockfile} ${records} the old release: run \`${name} install\` so the lockfile follows the pin (upgrade runs no package manager).`;
+}
+
 /** Move the setup at `input.rootDir` to the running release. See the module header for the order. */
 export async function runUpgrade(input: UpgradeInput, deps: UpgradeDeps): Promise<UpgradeReport> {
   const { rootDir, to, runningVersion } = input;
@@ -325,6 +341,10 @@ export async function runUpgrade(input: UpgradeInput, deps: UpgradeDeps): Promis
   if (catalog.status === "warn") notices.push(catalog.detail);
   if (plan.manifest.tools.includes("codex") && changed.length > 0) notices.push(CODEX_HOOKS_NOTICE);
   const pinMoves = prepared.pin !== null && prepared.pin.from !== prepared.pin.to;
+  if (pinMoves) {
+    const install = await lockfileInstallNotice(rootDir, input.dryRun);
+    if (install !== null) notices.push(install);
+  }
   const noop = changed.length === 0 && reclaimed.length === 0 && !pinMoves;
   return { ...base, noop, pin: prepared.pin, pinNote: prepared.pinNote, notices };
 }

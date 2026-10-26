@@ -405,13 +405,15 @@ npx -y @zomarit/stamity@<version> upgrade --to <version>
 
 `upgrade` runs that release's own `sync`, which regenerates every managed file from its bundled
 content, and moves the `package.json` pin to it, so running it at a newer version is how you take
-an engine update. Name the exact version you are moving to, in both places; when a newer release
-exists, the update notice prints this command with it filled in. A release before 1.17.0 has no
-`upgrade`, so a move to one runs its `sync` instead. `sync` at a newer version regenerates the same
-files and leaves the pin where it is. Staying on the version you have needs nothing — the setup
-keeps the version it was generated with until you run a newer one. Your own edits outside a
-managed block survive; the block itself is rewritten. Run `check` afterwards to confirm the tree
-is clean.
+an engine update. `upgrade` runs no package manager: when it moves the pin and a lockfile sits
+beside `package.json`, it says so, and you run your project's install (`npm install`, say) so the
+lockfile follows the pin before the next `npm ci`. Name the exact version you are moving to, in
+both places; when a newer release exists, the update notice prints this command with it filled
+in. A release before 1.17.0 has no `upgrade`, so a move to one runs its `sync` instead. `sync` at a
+newer version regenerates the same files and leaves the pin where it is. Staying on the version
+you have needs nothing — the setup keeps the version it was generated with until you run a newer
+one. Your own edits outside a managed block survive; the block itself is rewritten. Run `check`
+afterwards to confirm the tree is clean.
 
 ## Where to go next
 

@@ -244,6 +244,34 @@ describe("upgrade — moves a setup to the running release", () => {
     expect(await treeDigest(root)).toEqual(before);
   });
 
+  it("names the install that brings a lockfile beside package.json up to the moved pin (review/87)", async () => {
+    const handle = tempDir();
+    const root = await seedSetup(handle);
+    await handle.seedFiles({ "package-lock.json": '{"lockfileVersion":3}\n' });
+
+    const report = await runUpgrade(input(root), realDeps);
+
+    expect(report.pin).toEqual({ field: "devDependencies", from: FROM, to: V });
+    expect(report.notices.filter((line) => line.includes("package-lock.json"))).toEqual([
+      "package-lock.json still records the old release: run `npm install` so the lockfile follows the pin " +
+        "(upgrade runs no package manager).",
+    ]);
+  });
+
+  it("names no install step when no lockfile sits beside package.json, or the pin does not move (review/87)", async () => {
+    const handle = tempDir();
+    const root = await seedSetup(handle);
+
+    const moved = await runUpgrade(input(root), realDeps);
+    expect(moved.pin).toEqual({ field: "devDependencies", from: FROM, to: V });
+    expect(moved.notices.some((line) => line.includes("install"))).toBe(false);
+
+    await handle.seedFiles({ "package-lock.json": '{"lockfileVersion":3}\n' });
+    const again = await runUpgrade(input(root), realDeps);
+    expect(again.pin).toEqual({ field: "devDependencies", from: V, to: V });
+    expect(again.notices.some((line) => line.includes("install"))).toBe(false);
+  });
+
   it("tells a Codex setup to review its hooks in /hooks", async () => {
     const root = await seedSetup(tempDir(), { tools: ["codex"] });
 
@@ -526,5 +554,24 @@ describe("upgrade — the verb", () => {
     expect(result.code, result.stderr).toBe(0);
     expect(result.stdout).toContain(`pin: package.json devDependencies moved ${FROM} -> ${V}`);
     expect(JSON.parse(await readFile(join(root, "package.json"), "utf8")).devDependencies[ID.name]).toBe(V);
+  });
+
+  it("names the lockfile's install in --json and in the printed lines (review/87)", async () => {
+    const handle = tempDir();
+    const text = `${JSON.stringify({ name: "fixture-repo", private: true, packageManager: "pnpm@9.0.0", ...DEFAULT_PIN }, null, 2)}\n`;
+    const root = await seedSetup(handle, { packageJson: text });
+    await handle.seedFiles({ "pnpm-lock.yaml": "lockfileVersion: '9.0'\n" });
+    const env = { STAMITY_NO_CLIENT_PROBE: "1" };
+    const step = "pnpm-lock.yaml would still record the old release: run `pnpm install` so the lockfile follows the pin";
+
+    const preview = await runInProcess(COMMANDS, ["upgrade", "--to", V, "--dry-run", "--json"], { cwd: root, env });
+    expect(preview.code, preview.stderr).toBe(0);
+    expect(preview.stdout).toContain(step);
+
+    const result = await runInProcess(COMMANDS, ["upgrade", "--to", V], { cwd: root, env });
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toContain(
+      "note: pnpm-lock.yaml still records the old release: run `pnpm install` so the lockfile follows the pin",
+    );
   });
 });
