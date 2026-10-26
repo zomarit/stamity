@@ -954,23 +954,23 @@ so where it says which edition each id belongs to.
 
 ## What is still open
 
-Two advisories, in three Dependabot alerts, are open and watched rather than fixed. Each alert is
-rated high, and none names a patched version (read live on 2026-10-20). They are known residuals
-in 1.16.0, tracked in `.stamity/inbox.md` (on the `records` branch) as the row
-`2026-10-08_product-core/close/1`:
+One advisory, in one Dependabot alert, is open (read live on 2026-10-26). It is a known residual
+in 1.17.0, in the documentation site's lockfile only:
 
-- `http-cache-semantics` <= 4.2.0 (GHSA-ch52-4w7c-c8xp, high, max-stale handling can disclose
-  cross-user cached responses), alerts #23 and #27, no patched version. #23 is `package-lock.json`,
-  the root lockfile, where the package is locked at 4.2.0 and reaches the published CLI through
-  the optional `sigstore` dependency's signing path; #27 is `website/package-lock.json`, the docs
-  site's lockfile, which ships in no package. The advisory names no fix: 4.3.0, the one release
-  since, changes Vary matching and exposes the response status.
-- `braces` <= 3.0.3 (GHSA-vfj7-8cjw-p6xm, high, stack exhaustion through deeply nested patterns),
-  alert #26, no patched version, in `website/package-lock.json` only: the published CLI does not
-  reach it.
+- `serialize-javascript` < 7.1.3 (GHSA-m5mm-p8h7-m29v, low, cross-site scripting through an
+  unescaped `</script` at the end of a serialized function body), alert #50, patched in 7.1.3.
+  It is in `website/package-lock.json` only, locked at 7.1.2: the docs site's lockfile ships in
+  no package, so the published CLI does not reach it.
 
-Each lockfile moves once its advisory names a patched version. Neither advisory is an accepted
-risk: no decision recorded here accepts one, and both stay tracked as the row above names. One
+The two advisories this page named at 1.16.0 are no longer open. `http-cache-semantics`
+(GHSA-ch52-4w7c-c8xp, alerts #23 and #27) moved from 4.2.0 to 4.3.0 in the root lockfile and the
+site's on 2026-10-21, outside the advisory's range of 4.2.0 and below, and both alerts read fixed;
+the advisory itself still names no patched version. The `braces` advisory (GHSA-vfj7-8cjw-p6xm,
+alert #26) was withdrawn, and its alert with it. Both were tracked in `.stamity/inbox.md` (on the
+`records` branch) as the row `2026-10-08_product-core/close/1`.
+
+The site's lockfile moves to `serialize-javascript` 7.1.3 with a dependency update; this cut does
+not move it. The advisory is not an accepted risk: no decision recorded here accepts it. One
 item was recorded on this page as an accepted risk, in those words and with its reasons, and it
 is retired: the documentation site's `image-size` dependency, reached through Docusaurus's MDX
 loader, where two high-severity advisories described denial of service through infinite loops in
