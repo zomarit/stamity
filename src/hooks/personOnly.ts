@@ -1891,18 +1891,22 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * or section (an include can carry a remote, the lens's W-2), which moves the
    * origin later writes are held to. A config call reads only where it carries a read option or subcommand (`--get`,
    * `--list`, `get`, `list`, …) or names a key and no value; `--edit` writes whatever it opens. The guard runs the act on
-   * the main thread and refuses it for a sub-agent; unattended the push rule refuses it. `set-head`, in every form and
-   * whatever the origin, also writes or deletes the remote's HEAD ref, the default branch the push check reads, so it is
-   * read as the push it steers too (`push-default`, review/163), which asks rather than running unasked; a branch it
-   * names that deploys, or that the line cannot show, names `push-deploying` first (review/25).
+   * the main thread and refuses it for a sub-agent; unattended the push rule refuses it. `set-head`, whatever the
+   * origin, also writes or deletes the remote's HEAD ref, the default branch the push check reads, so it is read as the
+   * push it steers too (`push-default`, review/163), which asks rather than running unasked; a branch it names that
+   * deploys, or that the line cannot show, names `push-deploying` first (review/25). So does a `git remote` call holding
+   * a word the line cannot show at or before its subcommand's place, which may be an option, vanish or be `set-head`
+   * itself (review/51), its branch one the line cannot show.
    */
-  function remoteWriteVerdict(sub: string, args: string[]): void {
+  function remoteWriteVerdict(sub: string, args: string[], marks: readonly WordMark[]): void {
     const [verb, , head] = args.filter((arg) => !arg.startsWith("-"));
-    if (sub === "remote" && verb === "set-head") {
-      if (head !== undefined && deploys(/[$`]/.test(head) ? null : head)) {
+    const at = args.findIndex((arg) => !arg.startsWith("-"));
+    const hidden = sub === "remote" && verb !== "set-head" && !shownWords(marks.slice(0, at < 0 ? undefined : at + 1));
+    if (sub === "remote" && (verb === "set-head" || hidden)) {
+      if (hidden ? deploys(null) : head !== undefined && deploys(/[$`]/.test(head) ? null : head)) {
         deny("push-deploying", "A remote's HEAD ref pointed at a deploying branch, or at a branch the line cannot show (`git remote set-head`)");
       }
-      remoteHeadVerdict("git remote set-head");
+      remoteHeadVerdict("git remote set-head", !hidden);
     }
     if (ctx.originRepo === undefined) return;
     if (sub === "remote") {
@@ -3185,10 +3189,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const program = cmd[0] ?? "";
     if (program === "git") {
       const { sub, args, config } = gitParts(cmd);
-      remoteWriteVerdict(sub, args);
+      const argMarks = (markMap.get(cmd) ?? []).slice(cmd.length - args.length);
+      remoteWriteVerdict(sub, args, argMarks);
       // `git send-pack` pushes as `git push` does, its options and refspecs laid out the same (pr/16); with
       // no ref it updates the refs both sides have, the default branch among them, read as a matching push.
-      const argMarks = (markMap.get(cmd) ?? []).slice(cmd.length - args.length);
       if (sub === "push") pushRead(args, config, argMarks);
       else if (sub === "send-pack") pushRead(args, [...config, "push.default=matching"], argMarks);
       else if (sub === "tag") tagVerdict(args);

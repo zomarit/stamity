@@ -4485,6 +4485,10 @@ describe("a remote's HEAD ref written or deleted (b14b, REQ-FLOW-102, review/163
     ["a branch created under a name the shell fills in", 'git branch "$NEW"'],
     ["a branch created under a name the shell fills in, from a literal start point", 'git branch "$NEW" feat/x'],
     ["an update-ref stdin text read under a literal option that is no prefix of it", "printf 'update refs/remotes/origin/feat/x 0123abc\\n' | git update-ref --stdin -z"],
+    // review/51: a word the shell fills in after a shown `git remote` subcommand, and a fully literal line, keep their
+    // verdict; git refuses a literal empty subcommand.
+    ["a remote read of a name the shell fills in, after a shown subcommand", 'git remote get-url "$R"'],
+    ["a remote call whose subcommand is a literal empty word", 'git remote "" set-head origin -a'],
   ])("reads %s as no act", (_, command) => {
     for (const ctx of CONTEXTS) expect(personOnlyVerdict(command, ctx), command).toEqual({ deny: false });
   });
@@ -4518,6 +4522,28 @@ describe("a remote's HEAD ref written or deleted (b14b, REQ-FLOW-102, review/163
     }
   });
 
+  // review/51 (the sign-off: round 2's class rule on this route too): on a `git remote` call, a word the line cannot
+  // show at or before the subcommand's place may be an option, vanish, or be `set-head` itself, as git 2.52 runs each
+  // spelling, so the call may write that ref. Each row is red on e54aa59c, which reads it as no act.
+  it.each([
+    ["a remote set-head after a quoted word the shell fills in", 'git remote "$X" set-head origin feat/x'],
+    ["a remote set-head after an unquoted word the shell fills in, which may vanish", "git remote $X set-head origin -a"],
+    ["a remote set-head after a command substitution", "git remote $(echo -v) set-head origin -d"],
+    ["a remote set-head after a glob", "git remote * set-head origin feat/x"],
+    ["a remote set-head after a brace expansion", "git remote {-v,} set-head origin feat/x"],
+    ["a remote set-head after a literal option and a word the shell fills in", 'git remote -v "$X" set-head origin -a'],
+    ["a remote set-head after a global option and a word the shell fills in", 'git -C /tmp/repo remote "$X" set-head origin --delete'],
+    ["a remote call whose subcommand the shell fills in", 'git remote "$SUB" origin feat/x'],
+    ["a remote call whose unquoted word may split into the whole call", "git remote $ARGS"],
+    ["a remote call whose unquoted dash word may split into an option and the subcommand", "git remote -$X origin feat/x"],
+  ])("asks for %s as a push of the default branch", (_, command) => {
+    for (const ctx of CONTEXTS) {
+      const verdict = personOnlyVerdict(command, ctx);
+      expect(verdict, command).toMatchObject({ deny: true, rule: "push-default", ask: true });
+      if (verdict.deny) expect(verdict.act, command).toContain("may be a remote's HEAD ref, written or deleted (`git remote set-head`)");
+    }
+  });
+
   // review/36: each reader of these calls is linear in the line's length, so a line at the 64 KiB cap, built to the
   // worst class each reader has, decides well inside the hook's timeout. The stdin rows took 5 to 37 s on fff9c815, the
   // remote-tracking delete 7 s, and the symref text under many calls 0.9 s; each is under 0.1 s here.
@@ -4540,7 +4566,8 @@ describe("a remote's HEAD ref written or deleted (b14b, REQ-FLOW-102, review/163
   });
 
   it("keeps the other remote writes `remote-write`, which the setting runs unasked", () => {
-    for (const command of ["git remote set-url origin https://github.com/other/repo.git", "git remote rename origin old", "git remote remove origin"]) {
+    // review/51: a word the shell fills in after a shown subcommand leaves the call that write alone.
+    for (const command of ["git remote set-url origin https://github.com/other/repo.git", "git remote rename origin old", "git remote remove origin", 'git remote add "$NAME" "$URL"']) {
       expect(personOnlyVerdict(command, { ...ORIGIN, runs: RUNS }), command).toEqual({ deny: false, runs: ["remote-write"] });
       expect(personOnlyVerdict(command, ORIGIN), command).toMatchObject({ deny: true, rule: "remote-write", ask: true });
     }
@@ -4573,6 +4600,8 @@ describe("a remote's HEAD ref written or deleted (b14b, REQ-FLOW-102, review/163
       "git remote set-head origin production",
       // A branch the line cannot show may be a deploying one.
       'git remote set-head origin "$B"',
+      // A word the line cannot show before the subcommand leaves the branch one it cannot show too (review/51).
+      'git remote "$X" set-head origin feat/x',
     ]) {
       expect(personOnlyVerdict(command, deploying), command).toMatchObject({ deny: true, rule: "push-deploying", ask: true });
     }
