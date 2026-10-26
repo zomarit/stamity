@@ -10,8 +10,10 @@
 //
 // What it is derived from. The gated `package-lock.json`, the lock `npm ci` installed in the same
 // job, with every dev row dropped: a shrinkwrap copied from the dev lock would ship the
-// devDependencies to every user. The file exists only between the write and the pack; a `finally`
-// removes it, `.gitignore` keeps a leftover out of a commit, and the next pack refuses a leftover
+// devDependencies to every user. The pack refuses a lock whose bytes differ from the one `HEAD`
+// commits, since steps that run code sit between the job's lock check and the pack. The file
+// exists only between the write and the pack; a `finally` removes it, also on SIGINT, SIGTERM and
+// SIGHUP, `.gitignore` keeps a leftover out of a commit, and the next pack refuses a leftover
 // rather than trusting bytes it did not write.
 //
 // Usage: node scripts/pack-release.mjs --pack-destination <dir> --json
@@ -64,16 +66,65 @@ export function productionShrinkwrap(lock) {
 }
 
 /**
+ * The bytes of `<root>/package-lock.json` as `HEAD` holds them. The release's lock check runs
+ * right after `npm ci`, and build, tests and smoke run code after it, so the pack compares the lock
+ * it derives from with the commit itself rather than trusting that nothing wrote it since.
+ */
+function committedLock(root) {
+  try {
+    return execFileSync('git', ['cat-file', 'blob', 'HEAD:./package-lock.json'], {
+      cwd: root,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      maxBuffer: 256 * 1024 * 1024,
+    })
+  } catch (error) {
+    const detail = typeof error?.stderr?.toString === 'function' ? error.stderr.toString().trim() : ''
+    throw new Error(`cannot read the committed package-lock.json from git (HEAD:./package-lock.json)${detail === '' ? '' : `: ${detail}`}; the release shrinkwrap is derived only from a committed lock`, { cause: error })
+  }
+}
+
+const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP']
+
+/**
+ * Keep an interrupt from skipping the `finally`. With no listener, SIGINT, SIGTERM or SIGHUP ends
+ * Node at once, inside the synchronous pack, and the shrinkwrap stays at the root. With one, Node
+ * lives on, the `finally` removes the file, and the signal waits for the event loop. The listener
+ * then removes the file again, stands down and raises the signal once more, so the process still
+ * ends by it. The returned release waits two turns of the loop, so a poll phase, where the waiting
+ * signal is read, always comes first.
+ */
+function holdSignals(target) {
+  const onSignal = (signal) => {
+    stand()
+    rmSync(target, { force: true })
+    process.kill(process.pid, signal)
+  }
+  const stand = () => {
+    for (const signal of SIGNALS) process.removeListener(signal, onSignal)
+  }
+  for (const signal of SIGNALS) process.on(signal, onSignal)
+  return () => {
+    setImmediate(() => setImmediate(stand))
+  }
+}
+
+/**
  * Pack `root` into `destination` with its production shrinkwrap inside. Refuses a leftover
- * `<root>/npm-shrinkwrap.json` before any write, removes the file it wrote in a `finally`, and
- * refuses pack JSON that does not list it. `run` is `execFileSync`'s shape; tests pass a stub.
+ * `<root>/npm-shrinkwrap.json` before any write, and a `package-lock.json` whose bytes differ from
+ * the committed one. Removes the file it wrote in a `finally`, on SIGINT, SIGTERM and SIGHUP too,
+ * and refuses pack JSON that does not list it. `run` is `execFileSync`'s shape; tests pass a stub.
  */
 export function packRelease({ root, destination, run = execFileSync }) {
   const target = join(root, SHRINKWRAP)
   if (existsSync(target)) {
     throw new Error(`${target} is a leftover from an earlier pack; the release writes its own and refuses one it did not write. Remove it and pack again.`)
   }
-  const shrinkwrap = productionShrinkwrap(JSON.parse(readFileSync(join(root, 'package-lock.json'), 'utf8')))
+  const lockBytes = readFileSync(join(root, 'package-lock.json'))
+  if (!lockBytes.equals(committedLock(root))) {
+    throw new Error(`${join(root, 'package-lock.json')} differs from the committed one (HEAD); the release shrinkwrap is derived only from the lock as committed. Commit or restore it and pack again.`)
+  }
+  const shrinkwrap = productionShrinkwrap(JSON.parse(lockBytes.toString('utf8')))
+  const release = holdSignals(target)
   let stdout
   try {
     writeFileSync(target, `${JSON.stringify(shrinkwrap, null, 2)}\n`, { flag: 'wx' })
@@ -84,6 +135,7 @@ export function packRelease({ root, destination, run = execFileSync }) {
     })
   } finally {
     rmSync(target, { force: true })
+    release()
   }
   const packed = JSON.parse(stdout)
   const files = Array.isArray(packed) ? packed[0]?.files : undefined

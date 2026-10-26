@@ -1,9 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
-import { useTempDir } from "../support/tempDir.ts";
+import { seedGitRepo } from "../support/repoFixtures.ts";
+import { type TempDirHandle, useTempDir } from "../support/tempDir.ts";
 // @ts-expect-error — the release pack is a native ESM source-checkout script with no type declarations.
 import { packRelease, productionShrinkwrap, SHRINKWRAP } from "../../scripts/pack-release.mjs";
 // @ts-expect-error — the smoke remains a native ESM source-checkout script.
@@ -70,6 +71,12 @@ function packJson(paths: readonly string[]): string {
   return `${JSON.stringify([{ filename: "fixture-1.2.3.tgz", files: paths.map((path) => ({ path, size: 1, mode: 420 })) }], null, 2)}\n`;
 }
 
+/** A git repository in `temp` whose one commit holds `lock` as package-lock.json, the release's input. */
+async function seedCommittedLock(temp: TempDirHandle, lock: unknown = fixtureLock()): Promise<void> {
+  await temp.seedFiles({ "package-lock.json": JSON.stringify(lock) });
+  await seedGitRepo(temp.dir);
+}
+
 describe("productionShrinkwrap", () => {
   it("drops every dev row, reads devOptional as optional, strips the root's devDependencies, and keeps the rest", () => {
     const lock = fixtureLock();
@@ -127,7 +134,7 @@ describe("productionShrinkwrap", () => {
 describe("packRelease", () => {
   it("writes the shrinkwrap for the pack, runs npm pack --json into the destination, and removes it", async () => {
     const temp = getTemp();
-    await temp.seedFiles({ "package-lock.json": JSON.stringify(fixtureLock()) });
+    await seedCommittedLock(temp);
     const shrinkwrapPath = temp.path(SHRINKWRAP);
     const calls: RunCall[] = [];
     let seen: unknown;
@@ -154,7 +161,7 @@ describe("packRelease", () => {
 
   it("removes the shrinkwrap when the pack throws, and passes the failure on", async () => {
     const temp = getTemp();
-    await temp.seedFiles({ "package-lock.json": JSON.stringify(fixtureLock()) });
+    await seedCommittedLock(temp);
     let present = false;
     const run = (): string => {
       present = existsSync(temp.path(SHRINKWRAP));
@@ -183,7 +190,7 @@ describe("packRelease", () => {
 
   it("refuses pack JSON whose file list lacks the shrinkwrap, and still removes it", async () => {
     const temp = getTemp();
-    await temp.seedFiles({ "package-lock.json": JSON.stringify(fixtureLock()) });
+    await seedCommittedLock(temp);
     const run = (): string => packJson(["package.json", "dist/cli.js"]);
 
     expect(() => packRelease({ root: temp.dir, destination: temp.dir, run })).toThrow(/npm-shrinkwrap\.json/);
@@ -192,7 +199,7 @@ describe("packRelease", () => {
 
   it("writes nothing when the lock is not version 3", async () => {
     const temp = getTemp();
-    await temp.seedFiles({ "package-lock.json": JSON.stringify({ ...fixtureLock(), lockfileVersion: 2 }) });
+    await seedCommittedLock(temp, { ...fixtureLock(), lockfileVersion: 2 });
     let called = false;
     const run = (): string => {
       called = true;
@@ -203,6 +210,89 @@ describe("packRelease", () => {
     expect(called).toBe(false);
     expect(existsSync(temp.path(SHRINKWRAP))).toBe(false);
   });
+
+  // The release's lock check runs right after `npm ci`; build, tests and smoke run code before the
+  // pack. A pin written in that window would ship, so the pack compares the lock with the commit.
+  it("refuses a lock changed after the commit, before any write or pack", async () => {
+    const temp = getTemp();
+    await seedCommittedLock(temp);
+    const swapped = fixtureLock();
+    swapped.packages["node_modules/prod"] = { ...swapped.packages["node_modules/prod"], resolved: "https://elsewhere/prod", integrity: "sha512-z" };
+    writeFileSync(temp.path("package-lock.json"), JSON.stringify(swapped));
+    let called = false;
+    const run = (): string => {
+      called = true;
+      return packJson([SHRINKWRAP]);
+    };
+
+    expect(() => packRelease({ root: temp.dir, destination: temp.dir, run })).toThrow(/differs from the committed one/);
+    // One byte is enough: a trailing newline the commit does not hold is refused as well.
+    writeFileSync(temp.path("package-lock.json"), `${JSON.stringify(fixtureLock())}\n`);
+    expect(() => packRelease({ root: temp.dir, destination: temp.dir, run })).toThrow(/differs from the committed one/);
+    expect(called).toBe(false);
+    expect(existsSync(temp.path(SHRINKWRAP))).toBe(false);
+  });
+
+  it("refuses a root with no committed lock to compare with, before any write or pack", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({ "package-lock.json": JSON.stringify(fixtureLock()) });
+    let called = false;
+    const run = (): string => {
+      called = true;
+      return packJson([SHRINKWRAP]);
+    };
+
+    expect(() => packRelease({ root: temp.dir, destination: temp.dir, run })).toThrow(/cannot read the committed package-lock\.json/);
+    expect(called).toBe(false);
+    expect(existsSync(temp.path(SHRINKWRAP))).toBe(false);
+  });
+
+  // An interrupt during the slow `npm pack` (Ctrl-C in a local smoke) used to end Node before the
+  // `finally`, leaving a git-ignored shrinkwrap a plain `npm pack` or `npm publish` would ship. The
+  // driver's stub `run` sends its own process the signal, inside the synchronous pack. Windows has
+  // no POSIX signal delivery to a process from itself, so these cases run elsewhere.
+  it.skipIf(process.platform === "win32")(
+    "removes the shrinkwrap on SIGINT, SIGTERM and SIGHUP, still ends by the signal, and the next pack refuses an uncatchable kill's leftover",
+    async () => {
+      const temp = getTemp();
+      await seedCommittedLock(temp);
+      const driver = temp.path("driver.mjs");
+      writeFileSync(
+        driver,
+        [
+          `import { existsSync } from "node:fs";`,
+          `import { join } from "node:path";`,
+          `import { packRelease } from ${JSON.stringify(pathToFileURL(join(REPO_ROOT, "scripts", "pack-release.mjs")).href)};`,
+          `const [root, signal] = process.argv.slice(2);`,
+          `const run = () => {`,
+          `  process.stdout.write(\`present:\${existsSync(join(root, ${JSON.stringify(SHRINKWRAP)}))}\\n\`);`,
+          `  process.kill(process.pid, signal);`,
+          `  return ${JSON.stringify(packJson([SHRINKWRAP]))};`,
+          `};`,
+          `packRelease({ root, destination: root, run });`,
+          `process.stdout.write("returned\\n");`,
+          ``,
+        ].join("\n"),
+      );
+      const drive = (signal: string): ReturnType<typeof spawnSync> =>
+        spawnSync(process.execPath, [driver, temp.dir, signal], { cwd: temp.dir, encoding: "utf8" });
+
+      for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+        const result = drive(signal);
+        expect(result.stdout, signal).toContain("present:true");
+        expect(existsSync(temp.path(SHRINKWRAP)), `${signal} left the shrinkwrap at the root`).toBe(false);
+        // The signal is held, not swallowed: the pack finishes its clean-up, then the process ends by it.
+        expect(result.signal, signal).toBe(signal);
+      }
+
+      // SIGKILL cannot be caught, so its leftover stays, and the next pack refuses it untouched.
+      const killed = drive("SIGKILL");
+      expect(killed.signal).toBe("SIGKILL");
+      const leftover = readFileSync(temp.path(SHRINKWRAP), "utf8");
+      expect(() => packRelease({ root: temp.dir, destination: temp.dir, run: () => packJson([SHRINKWRAP]) })).toThrow(/leftover/);
+      expect(readFileSync(temp.path(SHRINKWRAP), "utf8")).toBe(leftover);
+    },
+  );
 });
 
 describe("installedShrinkwrapProblem, the smoke's read of the installed package", () => {
