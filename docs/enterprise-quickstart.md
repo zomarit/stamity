@@ -2,7 +2,7 @@
 title: Enterprise quickstart
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.16.0 release cut (2026-10-20). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.17.0 release cut (2026-10-26). -->
 <!-- Re-open when: a section this page links is renamed, moved or removed in `docs/enterprise-forks.md` or
      `docs/getting-started.md`. `test/docsPages.test.ts` holds this page to the hand-page contract and
      holds every link text here to a heading in the guide it names. Re-open it too when either guide

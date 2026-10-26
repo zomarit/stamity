@@ -511,7 +511,20 @@ const CURRENCY_HEADER =
  * so the constant has to move on the next cut or the assertion fails, and no page claims a
  * verification later than the cut it shipped in.
  */
-// TEST CHANGE, justified: MOVED 2026-10-20, from "2026-10-15" (the 1.15.0 cut) to the 1.16.0 cut.
+// TEST CHANGE, justified: MOVED 2026-10-26, from "2026-10-20" (the 1.16.0 cut) to the 1.17.0 cut.
+// Five read-only reviewers re-read every hand page claim by claim against the 1.17.0 candidate
+// 172fb04f (run 2026-10-25_autonomy-distribution-02, units c5a to c5e, ledger prove/24 to
+// prove/50), every row but prove/44 was applied against the tree, and the whole bucket,
+// GOVERNANCE.md with it, was restamped onto the cut form — the six pages the between-cuts passes of
+// 2026-10-23 and 2026-10-25 had moved onto the commit form (SECURITY.md, docs/security-mapping.md,
+// docs/cloud.md, docs/troubleshooting.md, docs/working-with-stamity.md and docs/enterprise-forks.md)
+// included, since the cut re-read them with everything else. prove/44 (pack adoption at `init`) is
+// left to the fixer changing that code: SECURITY.md's pack-source and gate-chain sentences and the
+// manifest row's residual (2) are not moved here. Troubleshooting's sample `check` transcript,
+// README's run of record and merge-ready figure, and SECURITY.md's open alerts (read live for this
+// cut in their own commit) are not moved here.
+//
+// MOVED 2026-10-20, from "2026-10-15" (the 1.15.0 cut) to the 1.16.0 cut.
 // Five read-only reviewers re-read every hand page claim by claim against the 1.16.0 candidate
 // 035f078d (run 2026-10-18_cloud-runs-2, units c4a to c4e, ledger review/209 to review/236 and
 // review/238 to review/242), every row was applied against the tree, and the whole bucket,
@@ -621,7 +634,7 @@ const CURRENCY_HEADER =
 // REATTESTATION_DATE below, and each form's newest date is pinned to its own constant. The
 // direction the pin is written for is unchanged — it fails a re-cut that restamps nothing, never
 // one that restamps honestly.
-const RELEASE_CUT_DATE = "2026-10-20";
+const RELEASE_CUT_DATE = "2026-10-26";
 
 /**
  * The date the current re-verification pass re-read the hand bucket on.
@@ -815,8 +828,18 @@ const RELEASE_CUT_DATE = "2026-10-20";
  * 2026-10-25`. A page re-read today can honestly carry only today's date, which the 2026-10-23 pin
  * refused as later than the pass it ships in. `docs/enterprise-forks.md` keeps its 2026-10-23 clause and
  * every other page its cut date.
+ *
+ * TEST CHANGE, justified: MOVED 2026-10-26, from 2026-10-25, to the 1.17.0 cut date. The cut
+ * re-attested every page (run 2026-10-25_autonomy-distribution-02, units c5a to c5e) and restamped
+ * all fifteen onto the cut form, the six commit-form pages of 2026-10-23 and 2026-10-25 among them
+ * (SECURITY.md, docs/security-mapping.md, docs/cloud.md, docs/troubleshooting.md,
+ * docs/working-with-stamity.md and docs/enterprise-forks.md; GOVERNANCE.md sits outside the bucket
+ * and was restamped with them), so the commit form has no members and the assertion's else branch
+ * requires this constant to equal RELEASE_CUT_DATE. Their `Re-attested 2026-10-23` and
+ * `Re-attested 2026-10-25` clauses are not carried: each page now says it was verified at the cut,
+ * and the cut is the later pass.
  */
-const REATTESTATION_DATE = "2026-10-25";
+const REATTESTATION_DATE = "2026-10-26";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");

@@ -2,7 +2,7 @@
 title: Security mapping
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 89e088f9. Re-attested 2026-10-25 for the autonomy setting, the land verb and the rows plan 022 file 1 moved. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.17.0 release cut (2026-10-26). -->
 <!-- Re-open when: a catalogue edition below moves, a control's implementing symbol moves, or a
      surface is added to or removed from the engine. `test/docsPages.test.ts` resolves every
      `file::symbol` address and pins the surface count, so it catches the last two, not the first. -->
