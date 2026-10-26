@@ -335,6 +335,19 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   `unattended-land-injected-merge-refused`, so SET-v7 now has 171 cases, with 153 advisory criteria. Run 53's three
   advisory repeats are disposed. Twelve cases now judge the close and the unattended ending as they ship: no question
   about the commit, and the run's own pull request is marked ready and merged only by `run land`.
+- **Setup writes only the `.gitignore` lines it needs, and `clean` takes back the ones it added.** The `.env.mcp` line
+  is written only when a selected MCP server needs a credential or the file exists, and each line setup appends is
+  recorded on the ledger's `.gitignore` row. `clean` takes a recorded line back once the file it ignores is gone after
+  its sweep, and deletes a `.gitignore` setup created when nothing else is left in it; while it keeps `.stamity/` for
+  a hook still wired to it, it takes back no line. The `.env.mcp` line is never taken back once written, by `sync` or
+  `clean`, so a filled token file in another checkout stays ignored. Lines a 1.16.0 setup wrote carry no record, and
+  `clean` leaves them.
+- **`run checkpoint` and `run end` refuse `--drop-held` in an attended run**, with exit 1 and
+  `not withdrawn: --drop-held reads only in an unattended run, where the held patch is written`, before staging
+  anything. Before, they ignored it and exited 0.
+- **A local test run caps its parallel workers at 4**, never more than the machine's cores less one, and
+  `STAMITY_TEST_MAX_WORKERS` sets another number. Two workers on a checkout with no `dist/` start one build between
+  them.
 
 ### Deprecated
 
@@ -403,6 +416,9 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
 - **`add` keeps an override of a pack's own artifact on a re-add.** Re-adding an installed pack one of whose artifacts
   you overrode under `.stamity/overrides/` was refused as an id clash; now the override stays on top, as `sync` reads
   it. An id that only the new version brings is still refused.
+- **Re-adding a synced pack is no longer refused by its own client copies**, so the `add <id>` remedy that `check` and
+  `upgrade` print runs in a synced setup. An id another pack holds, a new id an override holds and a first install
+  are still refused, and a re-add whose version drops files is still refused by the left-behind check.
 - **A setup without Codex no longer writes the nine touchpoint `agents/openai.yaml` companions.** The next `sync`
   deletes each one an earlier release wrote whose bytes are still as written, and keeps and names one you edited.
 - **The QA tools name the code they packed and the agent that was asked.** `cloud-check.mjs setup` refuses a checkout
@@ -410,6 +426,20 @@ published 1.16.0 wrote has been walked yet; the release cut walks one and restat
   the folders the build copies whole, so the commit it prints is the code it packed. `hook-runs.mjs --ask` reads a
   run where only a helper's call was asked as not run, and reads a main session id the guard would not accept as a
   change.
+- **A kept held patch is read section by section, as a carried one is.** `run checkpoint` and `run end` refuse a
+  kept section with no prefix, a custom prefix (naming `diff.srcPrefix` and `diff.dstPrefix`) or a rename, a section
+  naming a path the hold does not hold, a section git reads as more than one file patch, and a patch that does not
+  start at a `diff --git` line. Each exits 1 and pushes nothing, where the verb listed the path in `held`, sometimes
+  one folder off, and exited 0.
+- **The run verbs read more of what a run meets.** A git failure inside `run end` names `run end`, not
+  `run checkpoint`. A tracked file inside a folder `.gitignore` ignores now stages, where the verb stopped with
+  `stage failed`. The dry run's `would hold` lists a nested repository at a held prefix. An `ssh.github.com` origin opens its
+  draft while `gh`'s host is `github.com`. A hook declaration value led by a drive letter, such as `C:x`, refuses the
+  hold, where it was held as written.
+- **`plan check` refuses a Critical risk written as a plain paragraph line under Risks**, as it refuses a bullet or a
+  table row; a bullet's unindented wrapped line is still read by its bullet. The pre-flight's `token-env` names a
+  `*_PWD` variable such as `MYSQL_PWD`, never `PWD` or `OLDPWD`, and `review-state` says when the in-progress record
+  was not read (over 1 MiB, or unreadable), where it counted the record's first MiB.
 
 ## [1.16.0] - 2026-10-20
 
