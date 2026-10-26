@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-10-27
+
 ### Upgrading from 1.16.0
 
 The items below are read from the code and the tests on the branch that carries them. No upgrade of a setup the
@@ -3524,7 +3526,8 @@ as its item below says.
   emission (Claude, Cursor, Copilot, and Codex); the first-party packs; and the documentation
   site.
 
-[Unreleased]: https://github.com/zomarit/stamity/compare/v1.16.0...HEAD
+[Unreleased]: https://github.com/zomarit/stamity/compare/v1.17.0...HEAD
+[1.17.0]: https://github.com/zomarit/stamity/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/zomarit/stamity/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/zomarit/stamity/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/zomarit/stamity/compare/v1.12.0...v1.14.0
