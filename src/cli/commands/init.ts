@@ -1106,7 +1106,7 @@ export const initCommand: CommandModule = {
       .addOption(
         new Option(
           "--import-config <mode>",
-          "what to do with an existing agent config file; under --force, a file the replaced setup already decided keeps that decision, so run `stamity clean -y` first to choose again",
+          "what to do with an existing agent config file; under --force, a file the replaced setup already decided keeps that decision, and the note init prints for that file says how to choose again",
         ).choices([...IMPORT_MODES]),
       )
       .option("--force", "replace an existing setup in place")

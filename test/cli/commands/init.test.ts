@@ -9,6 +9,7 @@ import { CLAUDE_SETTINGS_PATH } from "../../../src/adapters/claude.ts";
 import { cleanCommand } from "../../../src/cli/commands/clean.ts";
 import { initCommand } from "../../../src/cli/commands/init.ts";
 import { buildInitDecisions } from "../../../src/cli/commands/init/plan.ts";
+import { renderCliReference } from "../../../src/cli/docs/cliReference.ts";
 import { planSync } from "../../../src/cli/commands/sync/engine.ts";
 import { renderWordmark } from "../../../src/cli/kit/banner.ts";
 import { runCli, type CommandIo } from "../../../src/cli/kit/program.ts";
@@ -2387,14 +2388,24 @@ describe("init --force never duplicates the charter (REQ-FLOW-029)", () => {
     expect((await agentsMd(root)).endsWith(`\n\n${OWNER}`)).toBe(true);
   }, 120_000);
 
-  it("says in the --import-config help that a carried decision wins under --force, and how to choose again", async () => {
+  // review/73: the help and the CLI reference point at the note, which names the
+  // route for the file at hand, rather than giving `clean -y` first as the whole
+  // route, which fails for a carried `replace` with no backup record.
+  it("says in the --import-config help and the CLI reference that a carried decision wins under --force, and points at the note", async () => {
     const root = await makeRepo();
+    const clause =
+      "under --force, a file the replaced setup already decided keeps that decision, and the note init prints for that file says how to choose again";
 
     const help = await run(root, ["init", "--help"]);
+    const flat = help.stdout.replace(/\s+/g, " ");
+    expect(flat).toContain(clause);
+    expect(flat).not.toContain("first to choose again");
 
-    expect(help.stdout.replace(/\s+/g, " ")).toContain(
-      "under --force, a file the replaced setup already decided keeps that decision, so run `stamity clean -y` first to choose again",
-    );
+    const row = renderCliReference()
+      .split("\n")
+      .find((line) => line.startsWith("| `--import-config <mode>` |"));
+    expect(row).toContain(clause);
+    expect(row).not.toContain("first to choose again");
   });
 
   it("keeps the owner's prose byte for byte under --force --import-config supplement", async () => {
