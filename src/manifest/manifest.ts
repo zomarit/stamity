@@ -34,12 +34,15 @@ import { GITIGNORE_FILE, REQUIRED_GITIGNORE_ENTRIES } from "../mcp/env.ts";
 import { EngineError } from "../types/errors.ts";
 import {
   AUTONOMY_MODES,
+  COPILOT_SETUP_STEPS_DEFAULT,
+  COPILOT_SETUP_STEPS_MODES,
   DEPLOYING_ACTS,
   MANIFEST_FILE,
   MANIFEST_VERSION,
   PACK_OWNER_PREFIX,
   RULE_DELIVERIES,
   RULE_DELIVERY_DEFAULT,
+  type CopilotSetupStepsMode,
   type GatesConfig,
   type ImportDecision,
   type LearningsConfig,
@@ -257,6 +260,9 @@ const VALID_PLATFORMS = new Set(Object.keys(PLATFORM_MEMBERS));
 
 /** Rule-delivery membership set, from the sanctioned list the types leaf publishes. */
 const VALID_RULE_DELIVERIES = new Set<string>(RULE_DELIVERIES);
+
+/** Copilot setup-workflow modes (REQ-FLOW-149), from the list the types leaf publishes. */
+const VALID_COPILOT_SETUP_STEPS = new Set<string>(COPILOT_SETUP_STEPS_MODES);
 
 /** Ledger `artifactType` values: the content classes plus the infra bucket. */
 const VALID_ARTIFACT_TYPES = new Set<string>([...CONTENT_CLASSES, "infra"]);
@@ -1015,7 +1021,16 @@ function collectToolOptionsErrors(value: unknown, errors: string[]): void {
     }
     // The bag's keys stay opaque — the engine passes them through — but the bag
     // itself has to be an object, or the pass-through has nothing to carry.
-    if (!isPlainObject(bag)) errors.push(`\`toolOptions.${key}\` must be an object`);
+    if (!isPlainObject(bag)) {
+      errors.push(`\`toolOptions.${key}\` must be an object`);
+      continue;
+    }
+    // The one key the engine reads (REQ-FLOW-149): a value outside the three
+    // would otherwise fall back to `managed` in silence and rewrite a workflow
+    // the operator meant to own.
+    if (key === "copilot") {
+      collectEnumError(bag["setupSteps"], VALID_COPILOT_SETUP_STEPS, "toolOptions.copilot.setupSteps", errors);
+    }
   }
 }
 
@@ -1531,6 +1546,20 @@ export function readRuleDelivery(manifest: SetupManifest | null | undefined): Ru
   return value !== undefined && VALID_RULE_DELIVERIES.has(value)
     ? value
     : RULE_DELIVERY_DEFAULT;
+}
+
+/**
+ * Resolve who owns Copilot's setup workflow (REQ-FLOW-149), defaulting on
+ * absence — the one reader the adapter, `sync`, `clean` and `stamity config`
+ * go through. Same re-check as {@link readRuleDelivery}: a hand-edited value
+ * outside the three falls back to the default here, and the persistence
+ * boundary refuses it in {@link collectManifestErrors}.
+ */
+export function readCopilotSetupSteps(manifest: SetupManifest | null | undefined): CopilotSetupStepsMode {
+  const value = manifest?.toolOptions?.copilot?.["setupSteps"];
+  return typeof value === "string" && VALID_COPILOT_SETUP_STEPS.has(value)
+    ? (value as CopilotSetupStepsMode)
+    : COPILOT_SETUP_STEPS_DEFAULT;
 }
 
 /**

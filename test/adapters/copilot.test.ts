@@ -20,8 +20,10 @@ import {
   buildPromptFile,
   buildRunAgentFile,
   buildSetupSteps,
+  copilotReleasedPaths,
   copilotResiduePlanner,
   engineRangeFloor,
+  isBelowFloor,
   NO_SETUP_STEPS_PINS,
   readSetupStepsPins,
   runAgentRows,
@@ -36,6 +38,7 @@ import { buildCoreEmissionPlan, composeEmissionPlanner, type EmissionContext } f
 import { CLIENT_HOOK_GUARANTEES } from "../../src/hooks/model.ts";
 import { sanitizeLabel } from "../../src/cli/kit/prompts.ts";
 import { createManifest } from "../../src/manifest/manifest.ts";
+import { CLI_NODE_FLOOR } from "../../src/shared/cliCall.ts";
 import { ownedPathKind } from "../../src/manifest/ownedPaths.ts";
 import { ledgerHashIndex, ledgerPathSet, safeWriteFile } from "../../src/merge/safeWrite.ts";
 import { resolveAgentGrant, type ResolvedAgentGrant } from "../../src/roster/agentGrants.ts";
@@ -853,6 +856,18 @@ describe("Copilot's entry agent (REQ-FLOW-117, REQ-FLOW-118)", () => {
     expect(prompt).toContain("the proof block says so");
     // Built once, byte-stable: a second sync writes the same file.
     expect(buildRunAgentFile().content).toBe(buildRunAgentFile().content);
+  });
+
+  it("opens its prompt-file sentence and its session step with the cloud agent's name (review/50)", () => {
+    const prompt = promptOf(buildRunAgentFile().content);
+
+    // A CLI or editor user who picks this agent reads the cloud-only rules as the cloud's.
+    expect(prompt).toContain("On Copilot's cloud agent, a prompt file is not run by name");
+    expect(prompt).toContain("4. On Copilot's cloud agent, a session stops at 59 minutes.");
+    expect(prompt.indexOf("On Copilot's cloud agent")).toBeLessThan(prompt.indexOf("59 minutes"));
+    expect(prompt).not.toContain("on this agent");
+    expect(prompt).not.toContain("A session here");
+    expect(prompt.length).toBeLessThan(2_000);
   });
 
   it("is not emitted without the work prompt it names, and is with it", async () => {
@@ -1772,6 +1787,100 @@ describe("copilot-setup-steps.yml", () => {
     expect(yaml).not.toContain("npm install --global");
     expect(yaml).toContain("has no npm channel");
     expect(parseYaml(yaml)).toBeTypeOf("object");
+  });
+
+  // ── The Node floor (build/34) and the project's .npmrc (review/68) ──────
+
+  it("drops the CLI steps for a Node pin below the CLI's floor and names the pin, its source and the floor (build/34)", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({ "repo/package-lock.json": "{}\n", "repo/.nvmrc": "20\n" });
+
+    const yaml = rowAt(await planResidue({ rootDir: temp.path("repo") }), COPILOT_SETUP_STEPS_PATH).content;
+
+    // The project's own install stays; the CLI's install and its version check go.
+    expect(runSteps(yaml)).toEqual(["npm ci"]);
+    expect(yaml).not.toContain("npm install --global");
+    expect(yaml).not.toContain("stamity --version");
+    expect(yaml).toContain('Node pin "20" (from .nvmrc)');
+    expect(yaml).toContain("Node 22.22.2");
+    expect(parseYaml(yaml)).toBeTypeOf("object");
+  });
+
+  it("keeps the CLI steps for a Node pin that can resolve to the floor or above (build/34)", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({ "repo/package-lock.json": "{}\n", "repo/.nvmrc": "22\n" });
+
+    const yaml = rowAt(await planResidue({ rootDir: temp.path("repo") }), COPILOT_SETUP_STEPS_PATH).content;
+
+    expect(runSteps(yaml)).toEqual(["npm ci", `npm install --global @zomarit/stamity@${ENGINE_VERSION}`, "stamity --version"]);
+    expect(yaml).not.toContain("22.22.2");
+  });
+
+  it("reads a pin's largest resolvable version against the floor, and leaves an alias alone (build/34)", () => {
+    expect(isBelowFloor("20", CLI_NODE_FLOOR)).toBe(true);
+    expect(isBelowFloor("22.12", CLI_NODE_FLOOR)).toBe(true);
+    expect(isBelowFloor("v22.22.1", CLI_NODE_FLOOR)).toBe(true);
+    expect(isBelowFloor("22", CLI_NODE_FLOOR)).toBe(false);
+    expect(isBelowFloor("22.x", CLI_NODE_FLOOR)).toBe(false);
+    expect(isBelowFloor("22.22", CLI_NODE_FLOOR)).toBe(false);
+    expect(isBelowFloor("22.22.2", CLI_NODE_FLOOR)).toBe(false);
+    expect(isBelowFloor("24.1.0", CLI_NODE_FLOOR)).toBe(false);
+    expect(isBelowFloor("lts/*", CLI_NODE_FLOOR)).toBe(false);
+    expect(isBelowFloor("lts/iron", CLI_NODE_FLOOR)).toBe(false);
+    expect(isBelowFloor("node", CLI_NODE_FLOOR)).toBe(false);
+  });
+
+  it("points the CLI's global install at the project's .npmrc when one exists, and writes no env without it (review/68)", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({
+      "with/package-lock.json": "{}\n",
+      "with/.npmrc": "registry=https://npm.mirror.example/\n",
+      "without/package-lock.json": "{}\n",
+    });
+
+    const withRc = rowAt(await planResidue({ rootDir: temp.path("with") }), COPILOT_SETUP_STEPS_PATH).content;
+    const withoutRc = rowAt(await planResidue({ rootDir: temp.path("without") }), COPILOT_SETUP_STEPS_PATH).content;
+
+    type Step = { run?: string; env?: Record<string, string> };
+    const stepsOf = (yaml: string): Step[] =>
+      (parseYaml(yaml) as { jobs: Record<string, { steps: Step[] }> }).jobs["copilot-setup-steps"]?.steps ?? [];
+    const install = (yaml: string): Step | undefined => stepsOf(yaml).find((step) => step.run?.startsWith("npm install --global") === true);
+
+    expect(install(withRc)?.env).toEqual({ NPM_CONFIG_USERCONFIG: "${{ github.workspace }}/.npmrc" });
+    expect(install(withoutRc)).toBeDefined();
+    expect(install(withoutRc)?.env).toBeUndefined();
+    expect(withoutRc).not.toContain("env:");
+    // Only the CLI's install reads it: the project's own install is left as it was.
+    expect(stepsOf(withRc).filter((step) => step.env !== undefined)).toHaveLength(1);
+  });
+
+  // ── Who owns the workflow (REQ-FLOW-149) ─────────────────────────────
+
+  /** A context whose manifest carries `toolOptions.copilot.setupSteps`. */
+  function ctxWithSetupSteps(mode: string): EmissionContext {
+    const ctx = ctxOf();
+    return { ...ctx, manifest: { ...ctx.manifest, toolOptions: { copilot: { setupSteps: mode } } } };
+  }
+
+  it("emits the workflow under managed and when the key is absent, and none under user or off (REQ-FLOW-149)", async () => {
+    expect(pathsOf(await planResidue())).toContain(COPILOT_SETUP_STEPS_PATH);
+    expect(pathsOf(await planResidueFor(ctxWithSetupSteps("managed")))).toContain(COPILOT_SETUP_STEPS_PATH);
+
+    const plans = await Promise.all(["user", "off"].map((mode) => planResidueFor(ctxWithSetupSteps(mode))));
+    for (const plan of plans) {
+      const paths = pathsOf(plan);
+      expect(paths).not.toContain(COPILOT_SETUP_STEPS_PATH);
+      // Only the workflow goes: the hooks file and the agents are still planned.
+      expect(paths).toContain(COPILOT_HOOKS_PATH);
+      expect(paths).toContain(COPILOT_RUN_AGENT_PATH);
+    }
+  });
+
+  it("releases the workflow's path under user alone (REQ-FLOW-149)", () => {
+    expect([...copilotReleasedPaths(ctxWithSetupSteps("user").manifest)]).toEqual([COPILOT_SETUP_STEPS_PATH]);
+    expect(copilotReleasedPaths(ctxWithSetupSteps("off").manifest).size).toBe(0);
+    expect(copilotReleasedPaths(ctxWithSetupSteps("managed").manifest).size).toBe(0);
+    expect(copilotReleasedPaths(ctxOf().manifest).size).toBe(0);
   });
 
   it("keeps naming the pinned version in the hook entries (inbox row 257, decided in v10)", async () => {

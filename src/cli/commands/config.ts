@@ -16,6 +16,7 @@ import { resolveLearningsCaps } from "../../learnings/validation.ts";
 import {
   collectManifestErrors,
   readCommunicationStyle,
+  readCopilotSetupSteps,
   readMaturityTier,
   readReviewCap,
   readRuleDelivery,
@@ -63,6 +64,7 @@ import { DETECTION_UNKNOWN } from "../../emit/substitution.ts";
 import type { DetectedSummary } from "../../types/detect.ts";
 import {
   AUTONOMY_MODES,
+  COPILOT_SETUP_STEPS_MODES,
   DEPLOYING_ACTS,
   RULE_DELIVERIES,
   type AutonomyConfig,
@@ -720,6 +722,27 @@ function applyAutonomy(
   else draft.autonomy = next;
 }
 
+// ── Copilot's setup workflow ─────────────────────────────────────────
+
+/** The persisted `toolOptions.copilot.setupSteps`, or null when the bag carries none. */
+function readSetupStepsOption(manifest: SetupManifest): string | null {
+  const value = manifest.toolOptions?.copilot?.["setupSteps"];
+  return typeof value === "string" ? value : null;
+}
+
+/**
+ * Write `toolOptions.copilot.setupSteps`, keeping every other key of both bags,
+ * as {@link applyAutonomy} keeps the rest of its block. Membership is the
+ * schema's call, so a value outside the three comes back from validation
+ * naming them.
+ */
+function applySetupStepsOption(draft: SetupManifest, raw: string): void {
+  draft.toolOptions = {
+    ...draft.toolOptions,
+    copilot: { ...draft.toolOptions?.copilot, setupSteps: raw },
+  };
+}
+
 /**
  * The closed key registry. Adding a row is the only way to make a key
  * addressable — `set` refuses anything else by name, so a typo can never write
@@ -1000,6 +1023,18 @@ export const KEY_SPECS: readonly ConfigKeySpec[] = [
       applyAutonomy(draft, {
         deployingActs: raw === NONE ? undefined : (parseCsv(raw) as DeployingAct[]),
       }),
+  },
+  {
+    key: "copilot.setupSteps",
+    hint:
+      `one of ${COPILOT_SETUP_STEPS_MODES.join(" | ")} — managed writes ` +
+      `\`.github/workflows/copilot-setup-steps.yml\` on every sync; user hands it to you ` +
+      `(no ledger row, no reclaim, \`clean\` leaves it); off writes none and takes back an ` +
+      `unedited copy, so the cloud agent's flows find no \`stamity\` on PATH and fetch it with \`npx -y\``,
+    choices: COPILOT_SETUP_STEPS_MODES,
+    read: readSetupStepsOption,
+    resolve: (manifest) => readCopilotSetupSteps(manifest),
+    apply: applySetupStepsOption,
   },
 ];
 

@@ -2395,3 +2395,53 @@ describe("config — the autonomy keys", () => {
     expect(() => setConfigValue(manifest, "autonomy.mode", "lax")).toThrow(CliFailure);
   });
 });
+
+/** Copilot's setup workflow, managed, handed over or turned off (REQ-FLOW-149). */
+describe("config — copilot.setupSteps", () => {
+  it("is the last key, after the autonomy rows, so their menu numbers hold", () => {
+    expect(CONFIG_KEYS.at(-1)).toBe("copilot.setupSteps");
+    expect(CONFIG_KEYS.at(-2)).toBe("autonomy.deployingActs");
+  });
+
+  it("reads managed by default", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+
+    expect((await run(handle, ["get", "copilot.setupSteps"])).stdout).toContain("(default: managed)");
+    expect(rowFor((await run(handle, ["list"])).stdout, "copilot.setupSteps")).toMatch(/managed\s+\(default\)/);
+  });
+
+  it("writes user into Copilot's bag, keeps its other keys, and closes on the plain sync line", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { toolOptions: { copilot: { other: 1 }, claude: { plugin: true } } });
+
+    const written = await run(handle, ["set", "copilot.setupSteps", "user"]);
+
+    expect(written.code).toBe(0);
+    expect((await readManifest(handle.dir))?.toolOptions).toEqual({
+      copilot: { other: 1, setupSteps: "user" },
+      claude: { plugin: true },
+    });
+    expect(rowFor((await run(handle, ["list"])).stdout, "copilot.setupSteps")).toMatch(/user\s+\(set\)/);
+    // Handing the workflow over loosens nothing, so it never names the loosen line.
+    expect(written.stdout).toContain("next: run stamity sync to apply");
+    expect(written.stdout).not.toContain("--loosen");
+  });
+
+  it("refuses a value outside the three, naming them, and writes nothing", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { toolOptions: { copilot: { setupSteps: "off" } } });
+    const before = await manifestBytes(handle);
+
+    const human = await run(handle, ["set", "copilot.setupSteps", "bogus"]);
+    const json = await run(handle, ["set", "copilot.setupSteps", "bogus", "--json"]);
+
+    expect(human.code).toBe(1);
+    expect(human.stderr).toContain("managed | user | off");
+    expect(human.stderr).toContain("bogus");
+    expect(json.code).toBe(1);
+    expect(singleDoc(json.stdout)["error"]).toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(await manifestBytes(handle)).toBe(before);
+    expect(() => setConfigValue(baseManifest(), "copilot.setupSteps", "bogus")).toThrow(CliFailure);
+  });
+});

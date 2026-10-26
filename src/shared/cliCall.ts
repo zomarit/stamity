@@ -34,6 +34,15 @@ import { EngineError } from "../types/errors.ts";
 export const DEFAULT_CLI_PACKAGE_NAME = "@zomarit/stamity";
 
 /**
+ * The lowest Node version the CLI runs on: the floor of `package.json`'s
+ * `engines.node`, a literal twin held equal by `test/shared/cliCall.test.ts`
+ * (this leaf reads no file). Copilot's setup workflow drops its CLI steps for a
+ * project whose Node pin can only resolve below it (REQ-FLOW-111), so the
+ * install does not turn the run red.
+ */
+export const CLI_NODE_FLOOR = "22.22.2";
+
+/**
  * A runnable npm package name: an optional `@scope/` and a name, lower-case,
  * each part opening on a letter or digit. Stricter than the registry's legacy
  * grammar on purpose — the name is written into a shell command in every

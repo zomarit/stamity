@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { constants as fsConstants, type Stats } from "node:fs";
 import { copyFile, link, lstat, readFile, readdir, rm, rmdir, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
+import { copilotReleasedPaths, withSetupStepsRendered } from "../../adapters/copilot.ts";
 import { resolveAutonomy } from "../../config/autonomy.ts";
 import { PERSON_ONLY_GUARD_FILE } from "../../hooks/scripts.ts";
 import { importBackupPathDefect, readManifest, writeManifest } from "../../manifest/manifest.ts";
@@ -168,11 +169,15 @@ function cloneEntry(entry: LedgerEntry): LedgerEntry {
  * and it is the literal truth here — after this run no owner emits anything.
  *
  * Every row but the `.gitignore` rows: their lines are taken back last of all
- * ({@link takeBackGitignoreLines}), never by the sweep.
+ * ({@link takeBackGitignoreLines}), never by the sweep. And no row at a path the
+ * operator took over (REQ-FLOW-149, `copilotReleasedPaths`): a row a sync has
+ * not yet dropped still names a file that is theirs now, `--purge` or not.
  */
 export function planCleanCandidates(manifest: SetupManifest, opts: { purge: boolean }): ReclaimCandidate[] {
+  const released = copilotReleasedPaths(manifest);
   return manifest.ledger
     .filter((entry) => entry.path !== GITIGNORE_FILE && (opts.purge || !isPackOwner(entry.adapter)))
+    .filter((entry) => !released.has(entry.path))
     .map((entry) => ({ entry: cloneEntry(entry), reason: "adapter-removed" }));
 }
 
@@ -412,7 +417,8 @@ async function cleanRenderings(
 ): Promise<RenderingProof & { syncRenderings: ReadonlyMap<string, ReadonlySet<string>> }> {
   const paths = candidates.map((candidate) => candidate.entry.path);
   const [proof, syncRenderings] = await Promise.all([
-    engineRenderingsFor(rootDir, manifest, paths, cleanPlanner(rootDir, engineVersion), legacyCursorIdentity()),
+    // Under `off` the plan renders no setup workflow, which an unedited copy's delete needs (REQ-FLOW-149).
+    engineRenderingsFor(rootDir, withSetupStepsRendered(manifest), paths, cleanPlanner(rootDir, engineVersion), legacyCursorIdentity()),
     syncRenderingsFor(rootDir, manifest, paths, cleanPlanner(rootDir, engineVersion)),
   ]);
   return { ...proof, syncRenderings };

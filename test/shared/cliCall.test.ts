@@ -1,7 +1,11 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { engineRangeFloor } from "../../src/adapters/copilot.ts";
 import { CANONICAL_PACKAGE_NAME } from "../../src/cli/kit/packageName.ts";
 import {
+  CLI_NODE_FLOOR,
   cliCallHint,
   DEFAULT_CLI_PACKAGE_NAME,
   pinnedCliCall,
@@ -102,6 +106,20 @@ describe("DEFAULT_CLI_PACKAGE_NAME", () => {
     // kernel at wave 1, so the value is restated here and held equal by test.
     expect(DEFAULT_CLI_PACKAGE_NAME).toBe(CANONICAL_PACKAGE_NAME);
     expect(pinnedCliPrefix(DEFAULT_CLI_PACKAGE_NAME, "1.11.0")).toBe("npx -y @zomarit/stamity@1.11.0");
+  });
+});
+
+describe("CLI_NODE_FLOOR", () => {
+  it("is the floor of package.json's engines.node, a literal twin this leaf cannot read (build/34)", () => {
+    const manifest = JSON.parse(readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8")) as {
+      engines?: { node?: string };
+    };
+    const range = manifest.engines?.node;
+
+    expect(range).toBeTypeOf("string");
+    // The floor the Copilot setup workflow reads a project pin against (REQ-FLOW-111).
+    expect(CLI_NODE_FLOOR).toBe(engineRangeFloor(range ?? ""));
+    expect(CLI_NODE_FLOOR).toBe("22.22.2");
   });
 });
 

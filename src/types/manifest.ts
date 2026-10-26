@@ -371,10 +371,32 @@ export interface GatesConfig {
 /**
  * Open per-tool option bag. Adapters narrow their own bag; the engine passes
  * it through and never reads unknown keys.
+ *
+ * One key is known and validated: `toolOptions.copilot.setupSteps`
+ * ({@link CopilotSetupStepsMode}, REQ-FLOW-149). Every other key stays opaque.
  */
 export interface ToolOptions {
   [key: string]: unknown;
 }
+
+/**
+ * Who owns Copilot's setup workflow (`.github/workflows/copilot-setup-steps.yml`,
+ * REQ-FLOW-149). `managed` emits it on every sync. `user` emits nothing and
+ * releases the path: no ledger row, no reclaim, `clean` leaves it, `check`
+ * reports no drift. `off` emits nothing and the ordinary reclaim takes back an
+ * unedited copy.
+ */
+export const COPILOT_SETUP_STEPS_MODES = ["managed", "user", "off"] as const;
+
+/** One of {@link COPILOT_SETUP_STEPS_MODES}. */
+export type CopilotSetupStepsMode = (typeof COPILOT_SETUP_STEPS_MODES)[number];
+
+/**
+ * What binds when the manifest carries no `toolOptions.copilot.setupSteps`:
+ * the workflow every release before the key wrote, so an older manifest reads
+ * unchanged and {@link MANIFEST_VERSION} does not move.
+ */
+export const COPILOT_SETUP_STEPS_DEFAULT: CopilotSetupStepsMode = "managed";
 
 /**
  * The persisted setup manifest — schema generation {@link MANIFEST_VERSION}.

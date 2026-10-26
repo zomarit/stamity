@@ -21,6 +21,7 @@ import { sweepReclaimCandidates, type ReclaimActionEntry, type ReclaimReport } f
 import { trustedInfraPaths } from "../../../src/manifest/ledger.ts";
 import { HOOKS_GENERATED_DIR } from "../../../src/types/markers.ts";
 import { syncCommand } from "../../../src/cli/commands/sync.ts";
+import { runDriftGate } from "../../../src/cli/commands/check.ts";
 import {
   provenanceFromManifest,
   renderSyncReport,
@@ -1939,5 +1940,109 @@ describe("the byte proof in the write lane", () => {
     expect(warning).toContain("init --force --import-config replace");
     expect(await readFile(join(root, "AGENTS.md"), "utf8")).toBe(supplemented);
     expect(existsSync(join(root, "AGENTS.md.bak"))).toBe(false);
+  });
+});
+
+/**
+ * REQ-FLOW-149: `toolOptions.copilot.setupSteps` decides who owns Copilot's
+ * setup workflow. Each case starts from a real managed sync, so the workflow
+ * and its ledger row exist before the mode moves.
+ */
+describe("Copilot's setup workflow: managed, user, off", () => {
+  const WORKFLOW = ".github/workflows/copilot-setup-steps.yml";
+  const OWNER_LINE = "# the operator's own step notes\n";
+
+  const syncOnce = async (root: string, now: Date) => {
+    const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
+    return { plan, report: await applySync(root, plan, { engineVersion: ENGINE_VERSION, force: false, dryRun: false, now }) };
+  };
+
+  /** A Copilot setup synced once in the default mode, then moved to `mode`. */
+  async function syncedThenSwitched(handle: TempDirHandle, mode: string, dir = "repo"): Promise<string> {
+    const root = await seedRepo(handle, { tools: ["copilot"], dir });
+    await syncOnce(root, T1);
+    expect(existsSync(join(root, WORKFLOW))).toBe(true);
+    const synced = await readManifest(root);
+    expect(synced?.ledger.some((row) => row.path === WORKFLOW)).toBe(true);
+    await writeManifest(root, { ...synced!, toolOptions: { copilot: { setupSteps: mode } } }, { now: T1 });
+    return root;
+  }
+
+  it("user: an edited workflow keeps its bytes through sync, takes no .bak, loses its row, and check reports no drift", async () => {
+    const handle = tempDir();
+    const root = await syncedThenSwitched(handle, "user");
+    const edited = `${await readFile(join(root, WORKFLOW), "utf8")}${OWNER_LINE}`;
+    await writeFile(join(root, WORKFLOW), edited, "utf8");
+
+    // Before the sync drops the row, the drift gate already reads the path as released.
+    const early = await runDriftGate(root, ENGINE_VERSION);
+    expect(early.changes.map((entry) => entry.path)).not.toContain(WORKFLOW);
+    expect(early.missing).not.toContain(WORKFLOW);
+    expect(early.reclaim.map((entry) => entry.path)).not.toContain(WORKFLOW);
+
+    const { plan, report } = await syncOnce(root, T2);
+
+    expect(plan.reclaim.map((candidate) => candidate.entry.path)).not.toContain(WORKFLOW);
+    expect(plan.entries.map((entry) => entry.path)).not.toContain(WORKFLOW);
+    expect(report.wrote.map((result) => result.path)).not.toContain(join(root, WORKFLOW));
+    expect(await readFile(join(root, WORKFLOW), "utf8")).toBe(edited);
+    expect(existsSync(join(root, `${WORKFLOW}.bak`))).toBe(false);
+    expect((await readManifest(root))?.ledger.some((row) => row.path === WORKFLOW)).toBe(false);
+
+    const drift = await runDriftGate(root, ENGINE_VERSION);
+    expect(drift.clean).toBe(true);
+    expect(await readFile(join(root, WORKFLOW), "utf8")).toBe(edited);
+  });
+
+  it("user, deleted by its owner: check names no missing file, and the row goes at the next sync", async () => {
+    const handle = tempDir();
+    const root = await syncedThenSwitched(handle, "user");
+    await rm(join(root, WORKFLOW));
+
+    expect((await runDriftGate(root, ENGINE_VERSION)).missing).not.toContain(WORKFLOW);
+    await syncOnce(root, T2);
+    expect(existsSync(join(root, WORKFLOW))).toBe(false);
+    expect((await readManifest(root))?.ledger.some((row) => row.path === WORKFLOW)).toBe(false);
+  });
+
+  it("off: the next sync takes back an unedited workflow, and keeps an edited one as skipped-user-content", async () => {
+    const handle = tempDir();
+    const unedited = await syncedThenSwitched(handle, "off", "unedited");
+    const editedRoot = await syncedThenSwitched(handle, "off", "edited");
+    const edited = `${await readFile(join(editedRoot, WORKFLOW), "utf8")}${OWNER_LINE}`;
+    await writeFile(join(editedRoot, WORKFLOW), edited, "utf8");
+
+    const clean = await syncOnce(unedited, T2);
+    const kept = await syncOnce(editedRoot, T2);
+
+    expect(clean.plan.reclaim.map((candidate) => candidate.entry.path)).toContain(WORKFLOW);
+    expect(clean.report.reclaimed?.entries.find((entry) => entry.path === WORKFLOW)?.action).toBe("deleted");
+    expect(existsSync(join(unedited, WORKFLOW))).toBe(false);
+    expect((await readManifest(unedited))?.ledger.some((row) => row.path === WORKFLOW)).toBe(false);
+
+    expect(kept.report.reclaimed?.entries.find((entry) => entry.path === WORKFLOW)?.action).toBe("skipped-user-content");
+    expect(await readFile(join(editedRoot, WORKFLOW), "utf8")).toBe(edited);
+  });
+
+  it("user, then managed with the file still there: an unmanaged-name collision, and sync exits 1", async () => {
+    const handle = tempDir();
+    const root = await syncedThenSwitched(handle, "user");
+    const edited = `${await readFile(join(root, WORKFLOW), "utf8")}${OWNER_LINE}`;
+    await writeFile(join(root, WORKFLOW), edited, "utf8");
+    await syncOnce(root, T2);
+    const released = await readManifest(root);
+    await writeManifest(root, { ...released!, toolOptions: { copilot: { setupSteps: "managed" } } }, { now: T2 });
+
+    const plan = await planSync(root, ENGINE_VERSION, { runner: () => "" });
+    expect(plan.entries.find((entry) => entry.path === WORKFLOW)).toMatchObject({
+      action: "collision",
+      collisionKind: "unmanaged-name",
+    });
+
+    const result = await runInProcess([syncCommand], ["sync", "-y"], { cwd: root });
+
+    expect(result.code).toBe(1);
+    expect(await readFile(join(root, WORKFLOW), "utf8")).toBe(edited);
+    expect(existsSync(join(root, `${WORKFLOW}.bak`))).toBe(false);
   });
 });

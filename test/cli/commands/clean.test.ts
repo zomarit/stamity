@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { chmod, cp, link, lstat, mkdir, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { COPILOT_SETUP_STEPS_PATH } from "../../../src/adapters/copilot.ts";
 import { COMMANDS } from "../../../src/cli.ts";
 import { cleanCommand, moveWithoutClobber, planCleanCandidates } from "../../../src/cli/commands/clean.ts";
 import { applySync, planSync } from "../../../src/cli/commands/sync/engine.ts";
@@ -226,6 +227,67 @@ describe("planCleanCandidates", () => {
       manifest.ledger.filter((row) => !row.adapter.startsWith("pack:")).map((row) => row.path),
     );
     expect(candidates.map((candidate) => candidate.entry.path)).not.toContain(PACK_FILE);
+  });
+
+  it("skips the Copilot setup workflow's row under setupSteps user, --purge included, and keeps it under off (REQ-FLOW-149)", () => {
+    const workflow: LedgerEntry = {
+      path: COPILOT_SETUP_STEPS_PATH,
+      adapter: "copilot",
+      artifactId: "copilot-setup-steps",
+      artifactType: "infra",
+    };
+    const withMode = (setupSteps: string): SetupManifest => ({
+      ...manifestFixture([...ledgerFixture(), workflow]),
+      toolOptions: { copilot: { setupSteps } },
+    });
+    const pathsOf = (manifest: SetupManifest, purge: boolean): string[] =>
+      planCleanCandidates(manifest, { purge }).map((candidate) => candidate.entry.path);
+
+    expect(pathsOf(withMode("user"), false)).not.toContain(COPILOT_SETUP_STEPS_PATH);
+    expect(pathsOf(withMode("user"), true)).not.toContain(COPILOT_SETUP_STEPS_PATH);
+    // Only that row goes: every other client row is still a candidate.
+    expect(pathsOf(withMode("user"), false)).toContain(AGENT_FILE);
+    expect(pathsOf(withMode("off"), false)).toContain(COPILOT_SETUP_STEPS_PATH);
+    expect(pathsOf(withMode("managed"), false)).toContain(COPILOT_SETUP_STEPS_PATH);
+  });
+});
+
+/**
+ * REQ-FLOW-149 through the command: a real Copilot setup, its mode moved by
+ * `config set`, then `clean -y` with no sync between, so the ledger still
+ * records the workflow.
+ */
+describe("clean — Copilot's setup workflow", () => {
+  async function initialisedCopilot(mode: string): Promise<string> {
+    const root = tempDir().path("repo");
+    await mkdir(root, { recursive: true });
+    const init = await runInProcess(COMMANDS, ["init", "-y", "--tools", "copilot"], { cwd: root });
+    expect(init.code, init.stderr).toBe(0);
+    expect(existsSync(join(root, COPILOT_SETUP_STEPS_PATH))).toBe(true);
+    const set = await runInProcess(COMMANDS, ["config", "set", "copilot.setupSteps", mode], { cwd: root });
+    expect(set.code, set.stderr).toBe(0);
+    return root;
+  }
+
+  it("leaves the workflow under user, byte for byte", async () => {
+    const root = await initialisedCopilot("user");
+    const before = await readFile(join(root, COPILOT_SETUP_STEPS_PATH), "utf8");
+
+    const result = await runClean(root, ["-y"]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(await readFile(join(root, COPILOT_SETUP_STEPS_PATH), "utf8")).toBe(before);
+    // The rest of the setup went, so the workflow's survival is the mode's doing.
+    expect(existsSync(join(root, ".github/hooks/stamity.json"))).toBe(false);
+  });
+
+  it("takes the unedited workflow back under off", async () => {
+    const root = await initialisedCopilot("off");
+
+    const result = await runClean(root, ["-y"]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(existsSync(join(root, COPILOT_SETUP_STEPS_PATH))).toBe(false);
   });
 });
 

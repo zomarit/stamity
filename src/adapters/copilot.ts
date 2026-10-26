@@ -7,7 +7,7 @@
  * (2026-10-14).
  */
 
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import {
   buildPortableHookRunner,
@@ -43,6 +43,7 @@ import {
 } from "../emit/substitution.ts";
 import { CLIENT_HOOK_GUARANTEES } from "../hooks/model.ts";
 import { printableName } from "../manifest/coOwnedJson.ts";
+import { readCopilotSetupSteps } from "../manifest/manifest.ts";
 import type { McpEmission } from "../mcp/emit.ts";
 import {
   grantableFootprint,
@@ -62,7 +63,7 @@ import {
   type ModelPickSource,
   type ModelPinMap,
 } from "../roster/modelLadder.ts";
-import { pinnedCliCall, pinnedCliPrefix } from "../shared/cliCall.ts";
+import { CLI_NODE_FLOOR, pinnedCliCall, pinnedCliPrefix } from "../shared/cliCall.ts";
 import {
   substituteCanonicalPlatformMarker,
   toCopilotToolsFrontmatter,
@@ -70,6 +71,7 @@ import {
 import type { AdapterOutput, ContentClass, EmissionOwner } from "../types/content.ts";
 import type { ModelClass, Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
+import type { SetupManifest } from "../types/manifest.ts";
 
 // ── Client layout ────────────────────────────────────────────────
 
@@ -117,6 +119,41 @@ export const COPILOT_RUN_AGENT_PATH = `${AGENTS_DIR}/stamity-run.agent.md`;
  * called `copilot-setup-steps` in this file and runs nothing else from it.
  */
 export const COPILOT_SETUP_STEPS_PATH = ".github/workflows/copilot-setup-steps.yml";
+
+/** No path released: every mode but `user`. */
+const NO_RELEASED_PATHS: ReadonlySet<string> = new Set();
+
+/** The workflow alone, released under `user`. */
+const RELEASED_SETUP_STEPS: ReadonlySet<string> = new Set([COPILOT_SETUP_STEPS_PATH]);
+
+/**
+ * The paths this setup hands to the operator (REQ-FLOW-149): the setup
+ * workflow under `toolOptions.copilot.setupSteps: user`, else none. A released
+ * path is outside the engine's ownership entirely: `sync` drops its ledger row
+ * and never queues it for reclaim, `clean` skips it, and `check` therefore
+ * reports no drift there. `off` releases nothing, so its unedited copy takes the
+ * ordinary reclaim.
+ */
+export function copilotReleasedPaths(manifest: SetupManifest): ReadonlySet<string> {
+  return readCopilotSetupSteps(manifest) === "user" ? RELEASED_SETUP_STEPS : NO_RELEASED_PATHS;
+}
+
+/**
+ * `manifest` as the reclaim's rendering proof plans it: the setup workflow
+ * rendered whatever the mode. The workflow is a path whose delete needs the
+ * running engine's own rendering (`../manifest/ownedPaths.ts::needsRenderingProof`),
+ * and under `off` the plan renders none, so an unedited copy `off` queued for
+ * reclaim would be kept as unproven. Bytes equal to the managed rendering are
+ * the engine's, the proof a managed setup's reclaim reads too; an edited copy
+ * still matches nothing and is kept.
+ */
+export function withSetupStepsRendered(manifest: SetupManifest): SetupManifest {
+  if (readCopilotSetupSteps(manifest) === "managed") return manifest;
+  return {
+    ...manifest,
+    toolOptions: { ...manifest.toolOptions, copilot: { ...manifest.toolOptions?.copilot, setupSteps: "managed" } },
+  };
+}
 
 /** Job name the coding agent runs. Not a convention — the platform matches on it. */
 const SETUP_STEPS_JOB = "copilot-setup-steps";
@@ -448,11 +485,15 @@ export const copilotResiduePlanner: ResiduePlanner = {
     const cli = cliCallContextOf(ctx);
     rows.push({ path: COPILOT_HOOKS_PATH, content: buildCopilotHooksJson(core.hooks.interchangeFor(TOOL), cli), owner: owner("copilot-hooks", "infra") });
     rows.push({ path: `.stamity/generated/hooks/copilot/${PORTABLE_RUNNER_FILE}`, content: buildPortableHookRunner("copilot"), owner: owner("copilot-portable-hook", "infra") });
-    rows.push({
-      path: COPILOT_SETUP_STEPS_PATH,
-      content: buildSetupSteps(packageManager, ctx.manifest.detected?.languages ?? [], setupPins, cli),
-      owner: owner(SETUP_STEPS_JOB, "infra"),
-    });
+    // `user` and `off` emit no workflow (REQ-FLOW-149); the two differ only in
+    // what happens to a recorded copy, which is the sync engine's call.
+    if (readCopilotSetupSteps(ctx.manifest) === "managed") {
+      rows.push({
+        path: COPILOT_SETUP_STEPS_PATH,
+        content: buildSetupSteps(packageManager, ctx.manifest.detected?.languages ?? [], setupPins, cli),
+        owner: owner(SETUP_STEPS_JOB, "infra"),
+      });
+    }
     // Placed verbatim: the core rendered these documents and chose their paths,
     // and an adapter that re-derived either would be a second writer.
     for (const emission of core.mcpFor(TOOL)) rows.push(mcpRow(emission));
@@ -670,18 +711,20 @@ export function runAgentRows(rows: readonly AdapterOutput[]): AdapterOutput[] {
  * `model:` is unset: the cloud agent picks its model when the task starts.
  *
  * The 59-minute session cap, `@copilot continue`, and the prompt-file rule are
- * vendor-documented and not run here, with no cloud-agent account.
+ * vendor-documented and not run here, with no cloud-agent account. Each opens
+ * with "On Copilot's cloud agent" (review/50), so a CLI or editor user who
+ * picks this agent is not handed cloud-only rules as their own.
  */
 export function buildRunAgentFile(): AdapterOutput {
   const prompt = [
     "# Run a planned change",
     "",
-    "A prompt file is not run by name on this agent, so this file is the entry point. It carries no copy of the flow.",
+    "On Copilot's cloud agent, a prompt file is not run by name, so this file is the entry point. It carries no copy of the flow.",
     "",
     `1. Read \`${WORK_PROMPT_PATH}\` whole and follow it as your instructions.`,
     "2. Read the plan file the issue names, and work it through that flow. An issue that names no plan is itself the request.",
     "3. When the run record reads `Mode: unattended`, follow the `st-unattended` skill as well.",
-    "4. A session here stops at 59 minutes. Size each unit to one session, and commit and push a checkpoint " +
+    "4. On Copilot's cloud agent, a session stops at 59 minutes. Size each unit to one session, and commit and push a checkpoint " +
       "before about minute 45 (in an unattended run, through `stamity run checkpoint`). The next session starts " +
       "on a person's `@copilot continue` on the same pull request and resumes from the committed record.",
     "5. Where no sub-agent tool is available, run the flow's roles in line, one at a time in their order, " +
@@ -987,9 +1030,13 @@ function effortLine(item: CatalogItem, efforts: EffortMap): string[] {
  * CLI globally, in both lanes ({@link pinnedCliInstall}), and run
  * `stamity --version`, so the flows' `gate scan` and `ledger status` find
  * `stamity` on `PATH` with no registry fetch
- * (REQ-FLOW-111). A package with no npm channel gets a comment instead of the
- * install. Without `cli` no CLI step is written, which is what the direct calls
- * that pin the lanes alone rely on.
+ * (REQ-FLOW-111). A package with no npm channel, and a Node pin that resolves
+ * below the CLI's floor, get a comment instead of the install ({@link cliSteps}).
+ * Without `cli` no CLI step is written, which is what the direct calls that pin
+ * the lanes alone rely on.
+ *
+ * The planner emits this file only under `toolOptions.copilot.setupSteps:
+ * managed`, the default (REQ-FLOW-149, {@link copilotReleasedPaths}).
  */
 export function buildSetupSteps(
   packageManager: PackageManagerInfo,
@@ -1062,17 +1109,23 @@ export function buildSetupSteps(
     ...refNote,
     `      - uses: ${actionUse("checkout", pins.checkout)}`,
     ...steps,
-    ...(cli === undefined ? [] : cliSteps(cli)),
+    ...(cli === undefined ? [] : cliSteps(cli, pins)),
     "",
   ].join("\n");
 }
 
 /**
  * The pinned CLI's steps: its global install and the proof that `stamity`
- * resolves, or, for a package with no npm channel, a comment saying why there
- * is no install.
+ * resolves, or a comment saying why there is none — a package with no npm
+ * channel, or a project Node pin that can only resolve below the CLI's floor
+ * ({@link CLI_NODE_FLOOR}, build/34), where the install or the version check
+ * would turn every run of this workflow red.
+ *
+ * With a root `.npmrc` the install reads it as its user config (review/68):
+ * npm skips the project config in global mode (inferred, not measured), so a
+ * registry mirror the project routes through would otherwise be bypassed.
  */
-function cliSteps(cli: CliCallContext): string[] {
+function cliSteps(cli: CliCallContext, pins: SetupStepsPins): string[] {
   const install = pinnedCliInstall(cli);
   if (install === null) {
     return [
@@ -1080,12 +1133,61 @@ function cliSteps(cli: CliCallContext): string[] {
       "      # `npx --no` calls run a copy the project installs, and `gate scan` and `ledger status` stop without one.",
     ];
   }
+  if (pins.node !== null && isBelowFloor(pins.node.version, CLI_NODE_FLOOR)) {
+    return [
+      `      # No stamity CLI step: this project's Node pin ${JSON.stringify(pins.node.version)} (from ${pins.node.source})`,
+      `      # resolves below the CLI's floor, Node ${CLI_NODE_FLOOR}, so its install would fail this run. Raise the pin`,
+      "      # to install it here; until then the flows' `gate scan` and `ledger status` find no `stamity` on PATH.",
+    ];
+  }
   return [
     "      # The pinned stamity CLI, at the version this file was generated with: the flows'",
     "      # `gate scan` and `ledger status` then find `stamity` on PATH with no registry fetch.",
     `      - run: ${install}`,
+    ...(pins.npmrc
+      ? [
+          "        # The project's .npmrc, so a global install reads the registry it routes to.",
+          "        env:",
+          "          NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc",
+        ]
+      : []),
     "      - run: stamity --version",
   ];
+}
+
+/**
+ * One component of a Node version pin: a number, or `null` where the pin
+ * leaves it open (`22` and `22.x` leave the minor and the patch open).
+ */
+type PinComponent = number | null;
+
+/** `22`, `v22.12`, `22.12.0`, `22.x`, `22.*`: up to three components, the open ones as wildcards. */
+const NUMERIC_NODE_PIN = /^v?(\d+)(?:\.(\d+|[xX*]))?(?:\.(\d+|[xX*]))?$/u;
+
+/**
+ * True only when the largest version `pin` can resolve to sits below `floor`
+ * (both `MAJOR[.MINOR[.PATCH]]`): `20` and `22.12` are below `22.22.2`, `22`
+ * is not, since it resolves to the newest 22.x. An alias (`lts/*`, `node`,
+ * `lts/iron`) or any other shape answers `false`: what it resolves to moves
+ * with the release line, so the CLI steps stay and the run says what it got.
+ */
+export function isBelowFloor(pin: string, floor: string): boolean {
+  const pinMatch = NUMERIC_NODE_PIN.exec(pin.trim());
+  const floorMatch = NUMERIC_NODE_PIN.exec(floor);
+  if (pinMatch === null || floorMatch === null) return false;
+  const component = (value: string | undefined): PinComponent =>
+    value === undefined || !/^\d+$/u.test(value) ? null : Number(value);
+  const highest = [component(pinMatch[1]), component(pinMatch[2]), component(pinMatch[3])];
+  const lowest = [component(floorMatch[1]), component(floorMatch[2]), component(floorMatch[3])];
+  for (let index = 0; index < 3; index += 1) {
+    const top = highest[index] ?? null;
+    // An open component resolves as high as it goes, so it reaches past any floor value.
+    if (top === null) return false;
+    const bound = lowest[index] ?? 0;
+    if (top !== bound) return top < bound;
+  }
+  // Equal to the floor is at it, not below it.
+  return false;
 }
 
 /**
@@ -1172,10 +1274,12 @@ export interface SetupStepsPins {
   readonly checkout: ActionPin | null;
   /** The `actions/setup-node` ref; `null` renders the major tag. */
   readonly setupNode: ActionPin | null;
+  /** True when a root `.npmrc` file exists: the CLI's global install then reads it (review/68). */
+  readonly npmrc: boolean;
 }
 
 /** No project pins: every value at its default. */
-export const NO_SETUP_STEPS_PINS: SetupStepsPins = { node: null, checkout: null, setupNode: null };
+export const NO_SETUP_STEPS_PINS: SetupStepsPins = { node: null, checkout: null, setupNode: null, npmrc: false };
 
 /** The version files read before `engines.node`, in precedence order. */
 const NODE_PIN_FILES = [".nvmrc", ".node-version"] as const;
@@ -1208,8 +1312,21 @@ const ACTION_USE_LINE =
  * and lines in file order; the first `uses:` of each action wins.
  */
 export async function readSetupStepsPins(rootDir: string): Promise<SetupStepsPins> {
-  const [node, actions] = await Promise.all([readNodePin(rootDir), readActionPins(rootDir)]);
-  return { node, ...actions };
+  const [node, actions, npmrc] = await Promise.all([
+    readNodePin(rootDir),
+    readActionPins(rootDir),
+    isFileAt(join(rootDir, ".npmrc")),
+  ]);
+  return { node, ...actions, npmrc };
+}
+
+/** True when `path` is a regular file (a link to one counts); any read failure answers `false`. */
+async function isFileAt(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isFile();
+  } catch {
+    return false;
+  }
 }
 
 /** `.nvmrc`, then `.node-version`, then `engines.node`'s floor. */

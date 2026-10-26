@@ -1,6 +1,7 @@
 import { lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import pLimit from "p-limit";
+import { copilotReleasedPaths, withSetupStepsRendered } from "../../../adapters/copilot.ts";
 import { buildContentIndex } from "../../../content/catalog.ts";
 import { analyzeRepo, summarizeDetection } from "../../../detect/repoAnalyzer.ts";
 import {
@@ -599,6 +600,13 @@ export async function planSync(
   );
   planningManifest.selection = fullCorpusSelection(index);
   planningManifest.detected = detected;
+  // A path the operator took over (REQ-FLOW-149) leaves the ledger here, before
+  // anything reads it: no reclaim candidate, no missing-file row in `check`,
+  // and the apply's rebuild, which starts from this ledger, records none.
+  const released = copilotReleasedPaths(manifest);
+  if (released.size > 0) {
+    planningManifest.ledger = planningManifest.ledger.filter((row) => !released.has(row.path));
+  }
 
   const planner = getEmissionPlanner();
   // `planWithWarnings`, not `plan`: sync prints a report, so it takes the view
@@ -663,7 +671,7 @@ export async function planSync(
   // `.gitignore` is planned too: the apply's own lane reconciles its lines
   // (REQ-FLOW-016), so its rows are never the sweep's.
   const reclaim = computeReclaimCandidates(
-    [...manifest.ledger, ...rows],
+    [...planningManifest.ledger, ...rows],
     new Set([...outputs.map((output) => output.path), GITIGNORE_FILE]),
     new Set<Tool>(manifest.tools),
   );
@@ -836,7 +844,8 @@ async function reclaimRenderings(
   if (engineVersion === undefined) return { renderings: new Map() };
   return engineRenderingsFor(
     rootDir,
-    plan.manifest,
+    // Under `off` the plan renders no setup workflow, which an unedited copy's delete needs (REQ-FLOW-149).
+    withSetupStepsRendered(plan.manifest),
     plan.reclaim.map((candidate) => candidate.entry.path),
     renderingPlanner(rootDir, engineVersion),
     legacyCursorIdentity(),

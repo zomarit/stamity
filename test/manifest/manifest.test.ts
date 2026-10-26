@@ -15,6 +15,7 @@ import {
   maturityDirective,
   migrateManifest,
   readCommunicationStyle,
+  readCopilotSetupSteps,
   readGates,
   readManifest,
   readMaturityTier,
@@ -39,7 +40,12 @@ import {
   type Tool,
 } from "../../src/types/core.ts";
 import { EngineError, type ErrorCode } from "../../src/types/errors.ts";
-import { MANIFEST_VERSION, type SetupManifest } from "../../src/types/manifest.ts";
+import {
+  COPILOT_SETUP_STEPS_DEFAULT,
+  COPILOT_SETUP_STEPS_MODES,
+  MANIFEST_VERSION,
+  type SetupManifest,
+} from "../../src/types/manifest.ts";
 import { STATE_DIR } from "../../src/types/markers.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -1448,6 +1454,36 @@ describe("scalar dials", () => {
   it("defaults the communication style", () => {
     expect(readCommunicationStyle(null)).toBe("plain");
     expect(readCommunicationStyle({ ...fullManifest() })).toBe("technical");
+  });
+
+  it("reads Copilot's setup-workflow mode, managed when absent or unsanctioned (REQ-FLOW-149)", () => {
+    const withMode = (setupSteps: unknown): SetupManifest => ({ ...fullManifest(), toolOptions: { copilot: { setupSteps } } });
+
+    expect(COPILOT_SETUP_STEPS_DEFAULT).toBe("managed");
+    expect(readCopilotSetupSteps(null)).toBe("managed");
+    expect(readCopilotSetupSteps(fullManifest())).toBe("managed");
+    // Each of the three reads back as itself, so the default above is not the only answer.
+    for (const mode of COPILOT_SETUP_STEPS_MODES) expect(readCopilotSetupSteps(withMode(mode))).toBe(mode);
+    // A hand-edited value the persistence gate would refuse still resolves to the default here.
+    expect(readCopilotSetupSteps(withMode("bogus"))).toBe("managed");
+    expect(readCopilotSetupSteps(withMode(1))).toBe("managed");
+  });
+
+  it("refuses a setup-workflow mode outside the three, naming them, and accepts each of the three (REQ-FLOW-149)", () => {
+    const withMode = (setupSteps: unknown): SetupManifest => ({
+      ...fullManifest(),
+      toolOptions: { claude: { plugin: true }, copilot: { setupSteps, other: "kept" } },
+    });
+
+    expect(collectManifestErrors(withMode("bogus"))).toContain(
+      '`toolOptions.copilot.setupSteps` must be one of managed | user | off (got "bogus")',
+    );
+    expect(collectManifestErrors(withMode(true))).toContain(
+      "`toolOptions.copilot.setupSteps` must be one of managed | user | off (got true)",
+    );
+    for (const mode of COPILOT_SETUP_STEPS_MODES) expect(collectManifestErrors(withMode(mode))).toEqual([]);
+    // The key belongs to Copilot's bag alone: another client's bag stays opaque.
+    expect(collectManifestErrors({ ...fullManifest(), toolOptions: { claude: { setupSteps: "bogus" } } })).toEqual([]);
   });
 
   it("carries NO confidence-floor dial on any surface — the gate is fixed, not settable", async () => {
