@@ -1300,9 +1300,16 @@ describe("clean --pack — the pack's projected copies", () => {
       for (const copy of shipCopies) expect(after.map((row) => row.path), copy).not.toContain(copy);
       expect(rowsOwnedBy(after, `pack:${SHIP_ID}`)).toEqual([]);
       // Every other row is byte-unchanged: the corpus's own content did not move.
+      // TEST CHANGE, justified (2026-10-26, build/40, the orchestrator's sign-off): this asserted every
+      // row byte-unchanged, the claude model map's included, so it held the map still naming the
+      // removed deployer agent, the drift the next `check` failed on. `clean --pack` now re-renders that
+      // map without the pack, so its row carries the new bytes' hash and is the one row allowed to move.
+      const MODEL_MAP = `${STATE_DIR}/generated/models/claude.json`;
+      expect(doc["documentsRewritten"]).toEqual([MODEL_MAP]);
+      expect(await readFile(join(root, MODEL_MAP), "utf-8")).not.toContain('"stamity-acme-deployer"');
       const untouched = (rows: readonly Row[]): Row[] =>
-        rows.filter((row) => row.adapter !== `pack:${SHIP_ID}` && !shipCopies.includes(row.path));
-      expect(after).toEqual(untouched(before));
+        rows.filter((row) => row.adapter !== `pack:${SHIP_ID}` && !shipCopies.includes(row.path) && row.path !== MODEL_MAP);
+      expect(after.filter((row) => row.path !== MODEL_MAP)).toEqual(untouched(before));
       expect(doc["removedRows"]).toBe(before.length - after.length);
     },
     60_000,
@@ -2192,6 +2199,84 @@ describe("clean --pack — the hooks documents leave the pack's hooks behind", (
 
     expect(await readFile(settingsPath, "utf-8")).toContain(JSON.stringify(unrendered));
     expect(result.stdout).toContain(`Kept permissions.ask ${JSON.stringify(unrendered)}`);
+  }, 120_000);
+});
+
+/**
+ * build/40: `clean --pack <id>` re-renders, in the same run, the client documents
+ * that name the pack's agents or rules without being a copy of them, so Cursor's
+ * spawn guard stops admitting the pack's agents and the next `check` finds no drift.
+ */
+describe("clean --pack — the documents naming the pack's agents leave them behind", () => {
+  const PACK = "acme-crew";
+  const AGENT = "stamity-acme-crew-lead";
+  const GUARD = ".cursor/hooks/stamity-subagent-guard.mjs";
+
+  async function run(cwd: string, argv: readonly string[]): Promise<Awaited<ReturnType<typeof runInProcess>>> {
+    const result = await runInProcess(COMMANDS, argv, { cwd });
+    expect(result.code, `${argv.join(" ")}: ${result.stdout}\n${result.stderr}`).toBe(0);
+    return result;
+  }
+
+  /** `init -y --tools <tools>`, the pack added with `files`, then `sync`. */
+  async function crewRepo(tools: string, files: Record<string, string>): Promise<string> {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await mkdir(root, { recursive: true });
+    await seedGitRepo(root);
+    await run(root, ["init", "-y", "--tools", tools]);
+    await run(root, ["add", await writeMadeUpPack(temp.path("packs"), PACK, files), "--allow-untrusted", "-y"]);
+    await run(root, ["sync"]);
+    return root;
+  }
+
+  async function checkOk(root: string): Promise<void> {
+    const check = await runInProcess(COMMANDS, ["check", "--json"], { cwd: root });
+    expect(JSON.parse(check.stdout.trim()) as { ok: boolean }, check.stdout).toMatchObject({ ok: true });
+  }
+
+  it("rewrites Cursor's spawn guard without the pack's agents, and check is green", async () => {
+    const root = await crewRepo("claude,cursor", {
+      [`agents/${AGENT}.md`]: madeUpArtifact("acme-crew-lead", "agent", "Leads the acme crew."),
+      "skills/st-acme-crew/SKILL.md": madeUpArtifact("acme-crew", "skill", "Runs the acme crew."),
+    });
+    // The setup did admit the pack's agent: the removal below is not a no-op.
+    expect(await readFile(join(root, GUARD), "utf-8")).toContain(`"${AGENT}"`);
+
+    const result = await run(root, ["clean", "--pack", PACK, "-y", "--json"]);
+
+    expect(await readFile(join(root, GUARD), "utf-8")).not.toContain(`"${AGENT}"`);
+    expect(parseSingleDoc(result.stdout)["documentsRewritten"]).toEqual([GUARD]);
+    expect(parseSingleDoc(result.stdout)["hookDocumentsRewritten"]).toEqual([]);
+    await checkOk(root);
+  }, 120_000);
+
+  it("rewrites the model maps, Cursor's pins hook and Codex's override file too, and check is green", async () => {
+    const root = await crewRepo("claude,cursor,codex", {
+      [`agents/${AGENT}.md`]: madeUpArtifact("acme-crew-lead", "agent", "Leads the acme crew.").replace(
+        "load: on-demand\n",
+        "load: on-demand\nmodel_class: advanced\n",
+      ),
+      "rules/stamity-acme-crew-style.md": madeUpArtifact("acme-crew-style", "rule", "Styles the acme crew."),
+    });
+    const named = [
+      GUARD,
+      `${STATE_DIR}/generated/hooks/cursor/stamity-model-pins.mjs`,
+      `${STATE_DIR}/generated/models/claude.json`,
+      `${STATE_DIR}/generated/models/codex.json`,
+      `${STATE_DIR}/generated/models/cursor.json`,
+    ];
+    for (const path of named) expect(await readFile(join(root, path), "utf-8"), path).toContain(`"${AGENT}"`);
+    expect(await readFile(join(root, "AGENTS.override.md"), "utf-8")).toContain("acme-crew-style");
+
+    const preview = await run(root, ["clean", "--pack", PACK, "--dry-run"]);
+    expect(preview.stdout).toContain("from the setup without the pack, so none still carries what it added");
+    const result = await run(root, ["clean", "--pack", PACK, "-y", "--json"]);
+
+    for (const path of named) expect(await readFile(join(root, path), "utf-8"), path).not.toContain(`"${AGENT}"`);
+    expect(await readFile(join(root, "AGENTS.override.md"), "utf-8")).not.toContain("acme-crew-style");
+    expect(parseSingleDoc(result.stdout)["documentsRewritten"]).toEqual(expect.arrayContaining([...named, "AGENTS.override.md"]));
+    await checkOk(root);
   }, 120_000);
 });
 

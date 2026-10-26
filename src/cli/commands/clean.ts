@@ -447,9 +447,10 @@ function legacyCursorIdentity(): LegacyCursorIdentity {
   return { packageName: packageName(), npmChannel: hasNpmChannel() };
 }
 
-/** What one planner run showed: every path it renders, or `null` when it could not be built. */
+/** What one planner run showed: every path it renders, or `null` when it could not be built, and each path's bytes. */
 interface PlanSeen {
   paths: Set<string> | null;
+  contents?: Map<string, string>;
 }
 
 /**
@@ -470,7 +471,10 @@ function cleanPlanner(rootDir: string, engineVersion: string, seen?: PlanSeen): 
       ...registryOption({}),
       facts,
     });
-    if (seen !== undefined) seen.paths = new Set(outputs.map((output) => output.path));
+    if (seen !== undefined) {
+      seen.paths = new Set(outputs.map((output) => output.path));
+      seen.contents = new Map(outputs.map((output) => [output.path, output.content]));
+    }
     return outputs;
   };
 }
@@ -563,6 +567,15 @@ interface PackCopies {
   unplanned: string | null;
   /** Why the plan without the pack could not be built, so no copy was looked for, or `null`. */
   unexamined: string | null;
+  /**
+   * The client documents both plans render, but with other bytes: each names
+   * something of the pack's (Cursor's spawn guard and the model maps list its
+   * agents, Codex's override file inlines its rules), so `clean --pack`
+   * re-renders them without it ({@link rewriteHookDocuments}). The merged MCP
+   * documents are not among them: {@link removePackMcpEntries} takes the pack
+   * out of those.
+   */
+  rerendered: string[];
 }
 
 /**
@@ -592,6 +605,9 @@ interface PackCopies {
  * back to the recorded hash, which a forged row could match. When the second
  * plan cannot be built, no copy can be told from a shared path, none is
  * taken, and the run says so.
+ *
+ * The same two plans name the documents the pack changes without owning
+ * (`rerendered`): a client row's path both render with other bytes.
  */
 async function findPackCopies(
   rootDir: string,
@@ -611,7 +627,7 @@ async function findPackCopies(
     [...packRows.map((candidate) => candidate.entry.path), ...clientRows.map((row) => row.path)],
     cleanPlanner(rootDir, engineVersion, installed),
   );
-  const none = { rows: new Set<LedgerEntry>(), candidates: [], proof, unplanned: null, unexamined: null };
+  const none = { rows: new Set<LedgerEntry>(), candidates: [], proof, unplanned: null, unexamined: null, rerendered: [] };
   if (clientRows.length === 0) return none;
   const removed: PlanSeen = { paths: null };
   const withoutProof = await engineRenderingsFor(
@@ -630,6 +646,19 @@ async function findPackCopies(
         !withoutPack.has(row.path) && (withPack?.has(row.path) === true || isPackArtifactRow(row, artifacts)),
     ),
   );
+  const withBytes = installed.contents;
+  const withoutBytes = removed.contents;
+  const rerendered = [
+    ...new Set(
+      manifest.ledger
+        .filter((row) => (TOOLS as readonly string[]).includes(row.adapter) && !MERGED_MCP_JSON_PATHS.has(row.path))
+        .map((row) => row.path),
+    ),
+  ].filter((path) => {
+    const before = withBytes?.get(path);
+    const after = withoutBytes?.get(path);
+    return before !== undefined && after !== undefined && before !== after;
+  });
   return {
     rows,
     // "deselected": the client is still a target, and no plan without the pack produces the artifact.
@@ -637,6 +666,7 @@ async function findPackCopies(
     proof,
     unplanned: withPack === null ? (proof.renderingsUnbuilt ?? "the plan could not be built") : null,
     unexamined: null,
+    rerendered,
   };
 }
 
@@ -1222,12 +1252,26 @@ function hookDocumentsOf(
  * a script never written or drop a newer guard. The full and scoped cleans'
  * own refusal of other renderings is {@link refuseStaleRenderings}.
  */
-function hookRewriteHold(manifest: SetupManifest, documents: readonly string[], engineVersion: string): string | null {
+function hookRewriteHold(
+  manifest: SetupManifest,
+  documents: readonly string[],
+  hookDocuments: ReadonlySet<string>,
+  engineVersion: string,
+): string | null {
   if (documents.length === 0 || manifest.generatedBy === engineVersion) return null;
   return (
     `This is version ${engineVersion}, but version ${manifest.generatedBy} last wrote this setup, so ` +
-    `${documents.join(", ")} were not rewritten and still run the pack's hooks until the next sync.`
+    `${documents.join(", ")} were not rewritten and ${keptOf(documents, hookDocuments, "still run the pack's hooks")} until the next sync.`
   );
+}
+
+/**
+ * What `documents` left as they are still hold: `hooksOnly` when every one is
+ * a hooks document, else the plain sentence for a set that also holds a
+ * document naming the pack's agents or rules ({@link PackCopies.rerendered}).
+ */
+function keptOf(documents: readonly string[], hookDocuments: ReadonlySet<string>, hooksOnly: string): string {
+  return documents.every((path) => hookDocuments.has(path)) ? hooksOnly : "still carry what the pack added to them";
 }
 
 /**
@@ -1246,12 +1290,17 @@ function hookRewriteHold(manifest: SetupManifest, documents: readonly string[], 
  * than the guard in force: the settings document's ask rows are rendered from
  * it, and the loosen gate `sync` runs refuses it here too (REQ-FLOW-138), so a
  * recorded ask row never leaves without the person's `--loosen`.
+ * `documents` also holds the documents that name the pack's agents or rules
+ * ({@link PackCopies.rerendered}), so Cursor's spawn guard stops admitting the
+ * pack's agents in the same run (build/40); `hookDocuments` tells the notes
+ * which of them run hooks.
  */
 async function rewriteHookDocuments(
   rootDir: string,
   manifest: SetupManifest,
   shrunk: SetupManifest,
   documents: readonly string[],
+  hookDocuments: ReadonlySet<string>,
   packSupply: readonly PackSuppliedServer[],
   engineVersion: string,
 ): Promise<HookDocumentRewrite> {
@@ -1266,7 +1315,7 @@ async function rewriteHookDocuments(
     );
   } catch (cause) {
     const why = (cause instanceof Error ? cause.message : String(cause)).split("\n")[0] ?? "";
-    rewrite.notes.push(`The setup could not be planned without the pack (${why}), so ${documents.join(", ")} still run its hooks until the next sync.`);
+    rewrite.notes.push(`The setup could not be planned without the pack (${why}), so ${documents.join(", ")} ${keptOf(documents, hookDocuments, "still run its hooks")} until the next sync.`);
     return rewrite;
   }
   const guardCopies = outputs.filter((output) => output.path.split("/").at(-1) === PERSON_ONLY_GUARD_FILE).map((output) => output.path);
@@ -1280,7 +1329,7 @@ async function rewriteHookDocuments(
     const failure = cause as { message?: unknown; why?: unknown; next?: unknown };
     const said = [failure.message, failure.why, failure.next].filter((part): part is string => typeof part === "string" && part !== "");
     rewrite.notes.push(
-      `${documents.join(", ")} were not rewritten, so they still run the pack's hooks: ${said.join("; ")}. ` +
+      `${documents.join(", ")} were not rewritten, so they ${keptOf(documents, hookDocuments, "still run the pack's hooks")}: ${said.join("; ")}. ` +
         `Put back the stricter autonomy setting in ${STATE_DIR}/${MANIFEST_FILE}, or have the person loosen it, then sync.`,
     );
     return rewrite;
@@ -1307,7 +1356,8 @@ async function rewriteHookDocuments(
         written = { result, content: writtenContent, ...(writtenRecord === null ? {} : { record: writtenRecord }) };
       }
     } catch (cause) {
-      rewrite.notes.push(`${path} was not rewritten (${cause instanceof Error ? cause.message : String(cause)}), so it still runs the pack's hooks until the next sync.`);
+      const kept = hookDocuments.has(path) ? "still runs the pack's hooks" : "still carries what the pack added to it";
+      rewrite.notes.push(`${path} was not rewritten (${cause instanceof Error ? cause.message : String(cause)}), so it ${kept} until the next sync.`);
       continue;
     }
     if (written.result.warning !== undefined) rewrite.notes.push(written.result.warning);
@@ -1397,9 +1447,12 @@ async function runScopedClean(
   // Before the confirmation and before the client documents are touched: a
   // copy a sync with this version rewrites refuses the run (review/128).
   refuseStaleRenderings(ctx, manifest, await sweepReclaimCandidates(swept, { ...sweepOptions, consent: false }), `clean --pack ${packId}`);
-  // The hooks documents this run re-renders without the pack, and why it leaves them for `sync` instead.
+  // The documents this run re-renders without the pack — the hooks documents, then the ones naming
+  // its agents or rules — and why it leaves them for `sync` instead.
   const hookDocuments = hookDocumentsOf(manifest, packSupply, packId, candidates);
-  const hookHold = hookRewriteHold(manifest, hookDocuments, ctx.app.version);
+  const hookSet = new Set(hookDocuments);
+  const documents = [...hookDocuments, ...copies.rerendered.filter((path) => !hookSet.has(path))];
+  const hookHold = hookRewriteHold(manifest, documents, hookSet, ctx.app.version);
 
   // --dry-run neither prompts nor refuses: it writes nothing, so the
   // destructive gate has nothing to gate.
@@ -1409,9 +1462,9 @@ async function runScopedClean(
         ? ""
         : `, plus its selected MCP server(s) (${selectedFromPack.join(", ")}) in the client config files`;
     const alsoHooks =
-      hookDocuments.length === 0 || hookHold !== null
+      documents.length === 0 || hookHold !== null
         ? ""
-        : `, and rewrite ${hookDocuments.join(", ")} without its hooks (an edited one is kept as a .bak)`;
+        : `, and rewrite ${documents.join(", ")} without ${documents.every((path) => hookSet.has(path)) ? "its hooks" : "what it added"} (an edited one is kept as a .bak)`;
     await confirmDestruction(ctx, {
       refusedWhat: `pack "${packId}" (${candidates.length} installed file(s)${alsoCopies})`,
       question: `Remove pack "${packId}" — ${candidates.length} installed file(s) under ${STATE_DIR}/${alsoCopies}, plus its ledger rows${alsoMcp}${alsoHooks}?`,
@@ -1445,7 +1498,8 @@ async function runScopedClean(
           rootDir,
           manifest,
           shrunk,
-          hookDocuments,
+          documents,
+          hookSet,
           packSupply.filter((server) => server.sourcePackId !== packId),
           ctx.app.version,
         );
@@ -1522,8 +1576,9 @@ async function runScopedClean(
         `${mcpSentence(mcp)} and leaves the rest of ${STATE_DIR}/ intact.\n`,
     );
     if (hookHold !== null) ctx.io.out(`${hookHold}\n`);
-    else if (hookDocuments.length > 0) {
-      ctx.io.out(`A real run also rewrites ${hookDocuments.join(", ")} from the setup without the pack, so none still runs its hooks.\n`);
+    else if (documents.length > 0) {
+      const none = documents.every((path) => hookSet.has(path)) ? "none still runs its hooks" : "none still carries what it added";
+      ctx.io.out(`A real run also rewrites ${documents.join(", ")} from the setup without the pack, so ${none}.\n`);
     }
     nextSteps(ctx, [`apply it: ${packageCommand(`clean --pack ${packId}`)}`]);
   } else {
@@ -1547,7 +1602,7 @@ async function runScopedClean(
     }
     for (const refusal of mcp.refusals) ctx.io.out(`${refusal}\n`);
     if (hooks !== null && hooks.rewritten.length > 0) {
-      ctx.io.out(`Rewrote ${hooks.rewritten.join(", ")} without the pack's hooks.\n`);
+      ctx.io.out(`Rewrote ${hooks.rewritten.join(", ")} without the pack's ${hooks.rewritten.every((path) => hookSet.has(path)) ? "hooks" : "content"}.\n`);
     }
     for (const note of hooks?.notes ?? []) ctx.io.out(`${note}\n`);
     if (salvaged > 0) {
@@ -1592,7 +1647,9 @@ async function runScopedClean(
       mcpServersDeselected: mcp.deselected,
       mcpDocumentsRewritten: [...mcp.rewritten.keys()],
       mcpServersKept: mcp.kept,
-      hookDocumentsRewritten: hooks?.rewritten ?? [],
+      hookDocumentsRewritten: (hooks?.rewritten ?? []).filter((path) => hookSet.has(path)),
+      // Every document rewritten without the pack: the hooks documents and those naming its agents or rules.
+      documentsRewritten: hooks?.rewritten ?? [],
     },
   };
 }

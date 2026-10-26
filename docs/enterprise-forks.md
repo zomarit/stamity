@@ -799,7 +799,11 @@ consumer there may resolve dependencies fresh, as before.
 
 ### Tag a release
 
-Set `version` in `package.json` and commit it on the release branch. Rehearse next: dispatch the
+Set `version` in `package.json`. Then run `node scripts/generate-pack-manifests.mjs --write`,
+which gives every bundled pack's `pack.json` that same version. A bundled pack ships in the release
+that carries it, and the tests hold each pack to `package.json`'s version, so skipping this step
+fails the release's gates on every pack still at the old version. Commit the version and what the
+command changed on the release branch. Rehearse next: dispatch the
 workflow from that branch and leave `dry_run` at true. When the rehearsal is green, push the tag
 `v<version>`. A suffix keeps a fork's releases apart from upstream's, and the tag carries it too:
 
