@@ -1,5 +1,6 @@
 // Registration-time import: `configure()` runs while the program is being built,
 // so commander's Option class is a load-time dependency, not a run-time one.
+import { lstat } from "node:fs/promises";
 import { isAbsolute, join, relative, sep } from "node:path";
 import { Option, type Command } from "commander";
 import { CLAUDE_SETTINGS_PATH } from "../../adapters/claude.ts";
@@ -20,7 +21,7 @@ import { detectPredecessorState, type PredecessorState } from "../../migration/d
 import { lookupCatalogEntry } from "../../pack/curated.ts";
 import { gitProgramFor } from "../../shared/programPath.ts";
 import type { MergeResult } from "../../types/content.ts";
-import { isPackOwner, PACK_OWNER_PREFIX, type ImportDecision } from "../../types/manifest.ts";
+import { isPackOwner, PACK_OWNER_PREFIX, type ImportDecision, type SetupManifest } from "../../types/manifest.ts";
 import {
   DEFAULT_IMPORT_MODE,
   IMPORT_MODES,
@@ -791,24 +792,71 @@ function unwrittenImportNote(targetPath: string, choice: ImportMode, dryRun: boo
  *
  * An explicit `--import-config` that differs is not applied to that path, so
  * the line says so, names the decision kept, and gives the way to choose again
- * (review/62): a full `clean`, which puts the owner's file back, then a fresh
- * `init`. For a carried `skip` the owner's file never moved, so removing the
- * manifest before `--force` works too; after a `replace` it would drop the
- * backup record that `clean` restores from, so that way is not offered there.
+ * (review/62): a full `clean`, then a fresh `init`. For a carried `skip` the
+ * owner's file never moved, so removing the manifest before `--force` works
+ * too; after a `replace` it would drop the backup record that `clean` restores
+ * from, so that way is not offered there.
+ *
+ * A carried `replace` says whether it records a backup (review/68), because
+ * `clean` moves back only a recorded one. With a record, `clean` puts the
+ * owner's file back. With none, `clean` leaves it where it is, so the line names
+ * the rename by hand before the `init`: `byHand`, the `.bak` that may hold the
+ * owner's file ({@link unrecordedOwnerBackup}). With no such file, it asks for the
+ * owner's own copy at the path, the one step left that can work.
  */
-function carriedImportNote(targetPath: string, choice: ImportMode, flag: ImportMode | undefined): string {
+function carriedImportNote(decision: ImportDecision, flag: ImportMode | undefined, byHand: string | null): string {
+  const { path: targetPath, mode: choice } = decision;
   if (flag === undefined || flag === choice) {
     return `existing config: ${targetPath} keeps the decision the replaced setup recorded, so it was not asked again (${choice})`;
   }
+  const kept =
+    `existing config: --import-config ${flag} was not applied to ${targetPath}, which keeps the decision ` +
+    `the replaced setup recorded (${choice}).`;
+  const init = `\`stamity init --import-config ${flag}\``;
+  if (choice === "replace" && decision.backup === undefined) {
+    return byHand === null
+      ? `${kept} No backup of your own file is recorded or found, so \`stamity clean -y\` does not put it back. ` +
+          `To choose again, run \`stamity clean -y\`, then put your own file at ${targetPath} yourself, and then run ${init}`
+      : `${kept} No backup of your own file is recorded, so \`stamity clean -y\` does not put it back. ` +
+          `To choose again, run \`stamity clean -y\`, then rename ${byHand} to ${targetPath} yourself once you have ` +
+          `checked it holds your own file, and then run ${init}`;
+  }
+  const recorded =
+    decision.backup === undefined
+      ? ""
+      : ` The backup of your own file, ${decision.backup.path}, is recorded, so \`stamity clean -y\` puts it back.`;
   const manifestWay =
     choice === "skip"
       ? `, or remove ${STATE_DIR}/manifest.json and run \`stamity init --force --import-config ${flag}\``
       : "";
-  return (
-    `existing config: --import-config ${flag} was not applied to ${targetPath}, which keeps the decision ` +
-    `the replaced setup recorded (${choice}). To choose again, run \`stamity clean -y\` and then ` +
-    `\`stamity init --import-config ${flag}\`${manifestWay}`
-  );
+  return `${kept}${recorded} To choose again, run \`stamity clean -y\` and then ${init}${manifestWay}`;
+}
+
+/**
+ * The `.bak` a person renames back by hand before choosing again over a carried
+ * `replace` that records no backup (review/68), or `null` when none is there.
+ * The name is the one the replaced setup recorded before its record was dropped
+ * (the `.bak` was edited since), else the writer's first choice, `<path>.bak`,
+ * which a 1.16.0 setup took and recorded nowhere. Only a regular file counts, and
+ * never `takenNow`, the `.bak` this run's own write took: that one holds the
+ * engine's charter, not the owner's file.
+ */
+async function unrecordedOwnerBackup(
+  rootDir: string,
+  decision: ImportDecision,
+  previous: SetupManifest | null,
+  takenNow: string | undefined,
+): Promise<string | null> {
+  if (decision.mode !== "replace" || decision.backup !== undefined) return null;
+  const name =
+    previous?.importChoice?.find((entry) => entry.path === decision.path)?.backup?.path ?? `${decision.path}.bak`;
+  const absolute = join(rootDir, ...name.split("/"));
+  if (absolute === takenNow) return null;
+  try {
+    return (await lstat(absolute)).isFile() ? name : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -1312,7 +1360,15 @@ export const initCommand: CommandModule = {
     // One line PER decided path. A single line for a multi-file decision would
     // disclose the answer while hiding most of what it did — the operator sees
     // every file their one answer reached, and the disposition each one got.
-    for (const decision of carried) notes.push(carriedImportNote(decision.path, decision.mode, importFlag));
+    const byHand = await Promise.all(
+      carried.map((decision) => {
+        const written = report.wrote.find((row) => row.path === join(rootDir, ...decision.path.split("/")));
+        return unrecordedOwnerBackup(rootDir, decision, previous, written?.backupPath);
+      }),
+    );
+    for (const [index, decision] of carried.entries()) {
+      notes.push(carriedImportNote(decision, importFlag, byHand[index] ?? null));
+    }
     for (const decision of askedDecisions) {
       notes.push(
         importNote(

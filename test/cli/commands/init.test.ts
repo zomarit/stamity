@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, link, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, link, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
 import { stripVTControlCharacters } from "node:util";
@@ -2375,7 +2375,8 @@ describe("init --force never duplicates the charter (REQ-FLOW-029)", () => {
     const said = forced.stdout.replace(/\s+/g, " ");
     expect(said).toContain(
       "existing config: --import-config supplement was not applied to AGENTS.md, which keeps the decision the " +
-        "replaced setup recorded (replace). To choose again, run `stamity clean -y` and then " +
+        "replaced setup recorded (replace). The backup of your own file, AGENTS.md.bak, is recorded, so " +
+        "`stamity clean -y` puts it back. To choose again, run `stamity clean -y` and then " +
         "`stamity init --import-config supplement`",
     );
     expect(said).not.toContain("manifest.json and run");
@@ -2474,6 +2475,75 @@ describe("init --force never duplicates the charter (REQ-FLOW-029)", () => {
     await expect(readFile(join(root, "AGENTS.md.bak"), "utf8")).resolves.toBe(OWNER);
     const left = await readFile(join(root, "AGENTS.md"), "utf8").catch(() => null);
     expect(left === null ? 0 : charterTitles(left)).toBe(0);
+  }, 120_000);
+
+  /** The manifest as a 1.16.0 setup wrote it: its `replace` decisions record no backup. */
+  async function dropBackupRecords(root: string): Promise<void> {
+    const manifestPath = join(root, STATE_DIR, "manifest.json");
+    const raw = JSON.parse(await readFile(manifestPath, "utf8")) as { importChoice: { backup?: unknown }[] };
+    for (const decision of raw.importChoice) delete decision.backup;
+    await writeFile(manifestPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+  }
+
+  // review/68: with no backup record, `clean` moves nothing back, so the note says so and names the
+  // rename by hand. Each printed step is then run as written, and the owner's prose ends up in AGENTS.md.
+  it("names the rename by hand for a carried replace with no backup record, and its steps give the owner's file back", async ({ skip }) => {
+    await getTemp().seedFiles({ "repo/AGENTS.md": OWNER });
+    const root = await makeRepo();
+    try {
+      await seedGitRepo(root);
+    } catch (error) {
+      if (error instanceof Error && error.name === "GitUnavailableError") skip();
+      throw error;
+    }
+    await run(root, ["init", "-y", "--tools", "claude", "--import-config", "replace"]);
+    await dropBackupRecords(root);
+
+    const forced = await run(root, ["init", "-y", "--force", "--import-config", "supplement"]);
+
+    expect(forced.stdout.replace(/\s+/g, " ")).toContain(
+      "existing config: --import-config supplement was not applied to AGENTS.md, which keeps the decision the " +
+        "replaced setup recorded (replace). No backup of your own file is recorded, so `stamity clean -y` does " +
+        "not put it back. To choose again, run `stamity clean -y`, then rename AGENTS.md.bak to AGENTS.md " +
+        "yourself once you have checked it holds your own file, and then run `stamity init --import-config supplement`",
+    );
+
+    await run(root, ["clean", "-y"]);
+    expect(existsSync(join(root, "AGENTS.md"))).toBe(false);
+    await expect(readFile(join(root, "AGENTS.md.bak"), "utf8")).resolves.toBe(OWNER);
+    await rename(join(root, "AGENTS.md.bak"), join(root, "AGENTS.md"));
+    await run(root, ["init", "-y", "--tools", "claude", "--import-config", "supplement"]);
+    expect((await readManifest(root))?.importChoice).toEqual([{ path: "AGENTS.md", mode: "supplement" }]);
+    expect((await agentsMd(root)).endsWith(`\n\n${OWNER}`)).toBe(true);
+  }, 120_000);
+
+  // review/68: the owner's `.bak` is gone and this run's write took `AGENTS.md.bak` of the engine's
+  // edited charter. That file is not the owner's, so the note never tells anyone to rename it back.
+  it("names no .bak to rename when the only one is the charter this run backed up", async ({ skip }) => {
+    await getTemp().seedFiles({ "repo/AGENTS.md": OWNER });
+    const root = await makeRepo();
+    try {
+      await seedGitRepo(root);
+    } catch (error) {
+      if (error instanceof Error && error.name === "GitUnavailableError") skip();
+      throw error;
+    }
+    await run(root, ["init", "-y", "--tools", "claude", "--import-config", "replace"]);
+    await dropBackupRecords(root);
+    await rm(join(root, "AGENTS.md.bak"));
+    await writeFile(join(root, "AGENTS.md"), `${await agentsMd(root)}\nan edit to the charter\n`, "utf8");
+
+    const forced = await run(root, ["init", "-y", "--force", "--import-config", "supplement"]);
+
+    expect(charterTitles(await readFile(join(root, "AGENTS.md.bak"), "utf8"))).toBe(1);
+    const said = forced.stdout.replace(/\s+/g, " ");
+    expect(said).toContain(
+      "existing config: --import-config supplement was not applied to AGENTS.md, which keeps the decision the " +
+        "replaced setup recorded (replace). No backup of your own file is recorded or found, so " +
+        "`stamity clean -y` does not put it back. To choose again, run `stamity clean -y`, then put your own " +
+        "file at AGENTS.md yourself, and then run `stamity init --import-config supplement`",
+    );
+    expect(said).not.toContain("rename AGENTS.md.bak");
   }, 120_000);
 });
 
