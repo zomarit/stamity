@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { gitWrite } from "../../src/cli/engine/gitWrite.ts";
-import { hookPathsAt, type HookGitRead, type HookScratch } from "../../src/runs/hookPaths.ts";
+import { hookPathsAt, hookPathsRead, setupRootsAt, type HookGitRead, type HookScratch } from "../../src/runs/hookPaths.ts";
 import { NO_GIT_CONFIG } from "../support/repoFixtures.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -155,5 +155,84 @@ describe("hookPathsAt", () => {
 
     expect(await hookPathsAt({ git: gitIn(repo), scratch: folder }, "", sha)).toEqual([".stamity/hooks", ".stamity/manifest.json", ".stamity/packs"]);
     expect(folder.made).toBe(0);
+  });
+
+  describe("every setup root in the repository (REQ-FLOW-102)", () => {
+    /** A setup at the top whose declaration names a script, and a second setup below it. */
+    const TWO_SETUPS = {
+      ".stamity/manifest.json": "{}\n",
+      ".stamity/hooks/guard.json": declaring("tools/guard.mjs"),
+      "tools/guard.mjs": "guard\n",
+      "apps/web/.stamity/manifest.json": "{}\n",
+      "apps/web/.stamity/hooks/lint.json": declaring("tools/lint.mjs"),
+      "apps/web/tools/lint.mjs": "lint\n",
+      "apps/web/src/a.ts": "a\n",
+    };
+
+    it("lists each folder whose tree holds a manifest, the top as the empty root, from the commit alone", async () => {
+      const { repo, sha } = await commit({ ...TWO_SETUPS, "x/.STAMITY/Manifest.json": "{}\n", "y/stamity/manifest.json": "{}\n", "z/.stamity/manifest.json.bak": "{}\n" });
+      await mkdir(join(repo, "w", ".stamity"), { recursive: true });
+      await writeFile(join(repo, "w", ".stamity", "manifest.json"), "{}\n");
+
+      // A manifest spelled in another letter case is a root a case-folding checkout reads; the work tree's own is not read.
+      expect(await setupRootsAt(gitIn(repo), sha)).toEqual(["", "apps/web/", "x/"]);
+    });
+
+    it("lists no root for a tree with no manifest, and the hold then reads the run's own prefix as before", async () => {
+      const { repo, sha } = await commit({ ".stamity/hooks/guard.json": declaring("tools/guard.mjs"), "tools/guard.mjs": "guard\n" });
+
+      expect(await setupRootsAt(gitIn(repo), sha)).toEqual([]);
+      const today = await hookPathsAt({ git: gitIn(repo), scratch: scratch() }, "", sha);
+      expect(today).toEqual([".stamity/hooks", ".stamity/manifest.json", ".stamity/packs", "tools/guard.mjs"]);
+      expect(await hookPathsAt({ git: gitIn(repo), scratch: scratch() }, [""], sha)).toEqual(today);
+    });
+
+    it("names the commit's listing failure by git's exit code", async () => {
+      const { repo } = await commit({ "a.txt": "a\n" });
+
+      expect(await setupRootsAt(gitIn(repo), "0".repeat(40))).toMatch(/^hold refused: the setups in the tree of 0{40} could not be listed \(git ls-tree answered \d+\)/);
+    });
+
+    it("holds the script the top's declaration names for a run below it, and each root's own, read from that root", async () => {
+      const { repo, sha } = await commit(TWO_SETUPS);
+      const roots = await setupRootsAt(gitIn(repo), sha);
+      if (typeof roots === "string") throw new Error(roots);
+      const folder = scratch();
+
+      const read = await hookPathsRead({ git: gitIn(repo), scratch: folder }, ["apps/web/", ...roots], sha);
+
+      expect(read).toEqual([
+        ".stamity/hooks",
+        ".stamity/manifest.json",
+        ".stamity/packs",
+        "apps/web/.stamity/hooks",
+        "apps/web/.stamity/manifest.json",
+        "apps/web/.stamity/packs",
+        "apps/web/tools/lint.mjs",
+        "tools/guard.mjs",
+      ]);
+      // The run's own prefix and the listed root are one root, read once.
+      expect(folder).toMatchObject({ made: 2, removed: 2 });
+    });
+
+    it("refuses where a second root's manifest does not parse, naming that root's file", async () => {
+      const { repo, sha } = await commit({ ...TWO_SETUPS, "apps/web/.stamity/manifest.json": "{ not json\n" });
+
+      expect(await hookPathsAt({ git: gitIn(repo), scratch: scratch() }, ["", "apps/web/"], sha)).toBe(
+        "hold refused: apps/web/.stamity/manifest.json at Base: does not parse, so the hook scripts it names are unknown and the run pushes nothing; fix it on the base branch, then start the run again from it",
+      );
+    });
+
+    it("refuses where a second root's manifest is a link, as the run's own is", async () => {
+      const { repo } = await commit(TWO_SETUPS);
+      const run = (args: string[], input?: string): string => execFileSync("git", args, { cwd: repo, encoding: "utf8", ...(input === undefined ? {} : { input }), env: { ...process.env, ...ENV } }).trim();
+      run(["rm", "-q", "--cached", "apps/web/.stamity/manifest.json"]);
+      run(["update-index", "--add", "--cacheinfo", `120000,${run(["hash-object", "-w", "--stdin"], "../../.stamity/manifest.json")},apps/web/.stamity/manifest.json`]);
+      run(["commit", "-q", "-m", "link"]);
+      const sha = run(["rev-parse", "HEAD"]);
+
+      expect(await setupRootsAt(gitIn(repo), sha)).toEqual(["", "apps/web/"]);
+      expect(await hookPathsAt({ git: gitIn(repo), scratch: scratch() }, ["", "apps/web/"], sha)).toMatch(/^hold refused: apps\/web\/\.stamity\/manifest\.json at Base: passes through a link/);
+    });
   });
 });

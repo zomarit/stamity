@@ -109,14 +109,21 @@ export const PERSON_ONLY_PATHS: readonly string[] = [
  * The paths of `paths` a person-only glob matches, in input order (build/99): as written from the git top, or, for a
  * project below it, as written from the project root where the path lies under `prefix` (its folder as
  * `git rev-parse --show-prefix` prints it). So `<prefix>/.claude/settings.json` is held, and `.github/workflows/**`
- * still holds at the top. An empty `prefix`, a project at the git top, answers as the globs alone do.
+ * still holds at the top. An empty `prefix`, a project at the git top, answers as the globs alone do. A list of
+ * prefixes (REQ-FLOW-102: every setup root in the repository, the run's own among them) holds a path under any of them,
+ * each read as one prefix is; an empty list answers as the globs alone do.
  */
-export function heldPaths(paths: readonly string[], prefix = ""): string[] {
+export function heldPaths(paths: readonly string[], prefix: string | readonly string[] = ""): string[] {
   const held = (path: string): boolean => PERSON_ONLY_PATHS.some((glob) => matchGlob(path, glob, { foldCase: true }));
-  return paths.filter((path) => {
-    const fromProject = fromProjectRoot(path, prefix);
-    return held(path) || (fromProject !== null && held(fromProject));
-  });
+  const prefixes = typeof prefix === "string" ? [prefix] : prefix;
+  return paths.filter(
+    (path) =>
+      held(path) ||
+      prefixes.some((root) => {
+        const fromProject = fromProjectRoot(path, root);
+        return fromProject !== null && held(fromProject);
+      }),
+  );
 }
 
 /**

@@ -1146,6 +1146,74 @@ describe("stamity run checkpoint", () => {
     });
   });
 
+  describe("every setup root in the repository (REQ-FLOW-102, REQ-FLOW-093)", () => {
+    const NESTED = "apps/web";
+    const declaring = (script: string): string => `${JSON.stringify({ hooks: [{ event: "pre_tool_use", command: ["node", script] }] })}\n`;
+
+    it("holds a nested setup's client settings out of a run at the git top, in the patch", async () => {
+      const { repo, remote } = await seed("unattended", { files: { [`${NESTED}/.stamity/manifest.json`]: "{}\n", [`${NESTED}/.claude/settings.json`]: "{}\n" } });
+      await put(repo, `${NESTED}/.claude/settings.json`, '{ "hooks": { "steered": true } }\n');
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt", `${NESTED}/.claude/settings.json`]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [`${NESTED}/.claude/settings.json`] });
+      expect(pushedFile(remote, `${NESTED}/.claude/settings.json`)).toBe("{}");
+      expect(pushedFile(remote, PATCH)).toContain("steered");
+      expect(pushedFile(remote, "a.txt")).toBe("the unit's change");
+    });
+
+    it("holds a setup the run adds below the top, its manifest and client settings both", async () => {
+      const { repo, remote } = await seed("unattended");
+      await put(repo, `${NESTED}/.stamity/manifest.json`, "{}\n");
+      await put(repo, `${NESTED}/.claude/settings.json`, '{ "hooks": {} }\n');
+      await put(repo, `${NESTED}/src/a.ts`, "the unit's change\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", `${NESTED}/.stamity/manifest.json`, `${NESTED}/.claude/settings.json`, `${NESTED}/src/a.ts`]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [`${NESTED}/.claude/settings.json`, `${NESTED}/.stamity/manifest.json`] });
+      const tree = pushedTree(remote);
+      expect(tree).not.toContain(`${NESTED}/.claude/settings.json`);
+      expect(tree).toContain(`${NESTED}/src/a.ts`);
+    });
+
+    it("holds the script the top's declaration names out of a run in a project below it", async () => {
+      const { repo, remote, project } = await seed("unattended", {
+        project: NESTED,
+        files: { ".stamity/manifest.json": "{}\n", ".stamity/hooks/guard.json": declaring("tools/guard.mjs"), "tools/guard.mjs": "base guard\n" },
+      });
+      await writeFile(join(repo, "tools/guard.mjs"), "steered guard\n");
+      await put(repo, `${NESTED}/a.txt`, "the unit's change\n");
+
+      const { code, doc } = await run(project, [...CHECKPOINT, "--paths", "a.txt", "../../tools/guard.mjs"]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: ["tools/guard.mjs"] });
+      expect(pushedFile(remote, "tools/guard.mjs")).toBe("base guard");
+      expect(pushedFile(remote, `${NESTED}/${PATCH}`)).toContain("+steered guard");
+    });
+
+    it("refuses before staging where a nested setup's manifest at Base: does not parse, naming it", async () => {
+      const { repo, remote } = await seed("unattended", { files: { [`${NESTED}/.stamity/manifest.json`]: "{ not json\n" } });
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({
+        pushed: false,
+        committed: null,
+        notDone: [
+          `hold refused: ${NESTED}/.stamity/manifest.json at Base: does not parse, so the hook scripts it names are unknown and the run pushes nothing; fix it on the base branch, then start the run again from it`,
+        ],
+      });
+      expect(git(repo, ["diff", "--cached", "--name-only"])).toBe("");
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+  });
+
   it("pushes HEAD to the run's branch alone: no main, --force, --tags or -- in the push argv", async () => {
     const { repo } = await seed("unattended");
     git(repo, ["tag", "v1.0.0"]);

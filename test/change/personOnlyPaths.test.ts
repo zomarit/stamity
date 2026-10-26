@@ -225,6 +225,20 @@ describe("heldPaths", () => {
     });
   });
 
+  describe("every setup root in the repository (REQ-FLOW-102)", () => {
+    const paths = ["apps/web/.claude/settings.json", "apps/api/.cursor/hooks.json", "apps/cli/.claude/settings.json", "apps/web/src/a.ts", ".github/workflows/ci.yml"];
+
+    it("holds a path under any of two prefixes, and none under a folder neither names", () => {
+      expect(heldPaths(paths, ["apps/web/", "apps/api/"])).toEqual(["apps/web/.claude/settings.json", "apps/api/.cursor/hooks.json", ".github/workflows/ci.yml"]);
+    });
+
+    it("answers for a list of one prefix as for that prefix written alone, and for an empty list as for none", () => {
+      expect(heldPaths(paths, ["apps/web/"])).toEqual(heldPaths(paths, "apps/web/"));
+      expect(heldPaths(paths, "apps/web/")).toEqual(["apps/web/.claude/settings.json", ".github/workflows/ci.yml"]);
+      expect(heldPaths(paths, [])).toEqual(heldPaths(paths));
+    });
+  });
+
   it("names every glob the plan's table lists", () => {
     expect(PERSON_ONLY_PATHS).toEqual([
       ".github/workflows/**",

@@ -141,6 +141,38 @@ async function listTree(git: HookGitRead, tree: string): Promise<TreeEntry[] | s
 const NEXT_STEP = "; fix it on the base branch, then start the run again from it";
 
 /**
+ * REQ-FLOW-102: the setup root a path names where it is a setup's manifest (`<root>.stamity/manifest.json`), the root
+ * top-relative and `/`-ended, the top as `""`; else `null`. The two last segments compare as the `Base:` walk reads
+ * names, without case and in one Unicode normalization form, since a case-folding checkout opens that file there.
+ */
+export function setupRootOf(path: string): string | null {
+  const segments = path.replaceAll("\\", "/").split("/");
+  const fold = (segment: string | undefined): string => (segment ?? "").normalize("NFC").toLowerCase();
+  if (segments.length < 2 || fold(segments.at(-2)) !== ".stamity" || fold(segments.at(-1)) !== "manifest.json") return null;
+  const folders = segments.slice(0, -2);
+  return folders.length === 0 ? "" : `${folders.join("/")}/`;
+}
+
+/**
+ * REQ-FLOW-102: every setup root in `commit`'s tree, sorted and once each: each folder that holds a setup's manifest
+ * ({@link setupRootOf}), whatever it is there, so a manifest that is a link or a submodule is a root whose read then
+ * refuses, as the run's own does. One recursive listing of the tree objects, never a work tree; a failed listing is
+ * the refusal text, worded for `notDone`.
+ */
+export async function setupRootsAt(git: HookGitRead, commit: string): Promise<string[] | string> {
+  const read = await git(["ls-tree", "-r", "-z", "--name-only", "--full-tree", commit]);
+  // review/108: git's exit code alone; its stderr can name a machine's path, and this text can reach the pull request.
+  if (read.code !== 0) {
+    return `hold refused: the setups in the tree of ${commit} could not be listed (git ls-tree answered ${read.code}), so the person-only files they hold are unknown and the run pushes nothing`;
+  }
+  const roots = read.stdout.split("\0").flatMap((path) => {
+    const root = path === "" ? null : setupRootOf(path);
+    return root === null ? [] : [root];
+  });
+  return [...new Set(roots)].toSorted();
+}
+
+/**
  * review/175, review/182-/189 (signed off): what the hold holds from the hook declarations at `base`, top-relative and
  * sorted. First the files it reads there, each held whole wherever it lies: the manifest, the folder of the
  * repository's own declarations the manifest names (`.stamity/hooks` by default), and the installed packs' folder,
@@ -163,8 +195,12 @@ const NEXT_STEP = "; fix it on the base branch, then start the run again from it
  * reader reads as leaving the repository refuse too: the reason, for `notDone`. Residuals the pages name: a hook
  * written by hand into a client's settings file; anything a held script reads or loads beyond the files its
  * declaration names (review/187, review/197); a run that rewrites its own record head's `Base:`, as it can its `Mode:`.
+ *
+ * REQ-FLOW-102: `prefix` may list several project roots (every setup root, {@link setupRootsAt}, and the run's own);
+ * each is read as one root is, from its own folder, and the paths held are their union. Any root that does not resolve
+ * cleanly refuses, naming its file. One root written alone reads as before.
  */
-export async function hookPathsAt(reads: HookPathReads, prefix: string, base: string): Promise<string[] | string> {
+export async function hookPathsAt(reads: HookPathReads, prefix: string | readonly string[], base: string): Promise<string[] | string> {
   const read = await hookPathsRead(reads, prefix, base);
   if (Array.isArray(read)) return read;
   // review/205: the refusal names the person's next step, since the fix lands on the base branch, not on the run's.
@@ -182,8 +218,22 @@ export interface HookReadRefusal {
 /**
  * {@link hookPathsAt}'s read with its refusal unworded, so each caller states its own next step: the hold's names the
  * base branch and a restart, `run land`'s (review/81) the branch that holds the declaration and another land call.
+ * Several roots are read once each, in the order given (an empty list reads the top); the first that refuses decides.
  */
-export async function hookPathsRead(reads: HookPathReads, prefix: string, base: string): Promise<string[] | HookReadRefusal> {
+export async function hookPathsRead(reads: HookPathReads, prefix: string | readonly string[], base: string): Promise<string[] | HookReadRefusal> {
+  const listed = typeof prefix === "string" ? [prefix] : prefix;
+  const roots = [...new Set(listed.length === 0 ? [""] : listed)];
+  const read = await Promise.all(roots.map((root) => rootHookPaths(reads, root, base)));
+  const held: string[] = [];
+  for (const paths of read) {
+    if (!Array.isArray(paths)) return paths;
+    held.push(...paths);
+  }
+  return [...new Set(held)].toSorted();
+}
+
+/** {@link hookPathsRead} for the one project root `prefix` names. */
+async function rootHookPaths(reads: HookPathReads, prefix: string, base: string): Promise<string[] | HookReadRefusal> {
   const { git, scratch: folder } = reads;
   const at = baseReader(git, base, prefix);
   const unknown = (path: string, why: string): HookReadRefusal => ({ subject: path, why });

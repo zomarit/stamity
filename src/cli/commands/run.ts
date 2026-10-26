@@ -7,7 +7,7 @@ import { fromProjectRoot, heldPaths, PERSON_ONLY_PATHS } from "../../change/pers
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
 import { RUN_ENDED_MARKER_FILE } from "../../mcp/env.ts";
 import { checkSurfaceRecord, type RecordFileReads, type RecordUse, type SurfaceCheck } from "../../runs/gitSurface.ts";
-import { hookPathsAt, type HookScratch } from "../../runs/hookPaths.ts";
+import { hookPathsAt, setupRootOf, setupRootsAt, type HookScratch } from "../../runs/hookPaths.ts";
 import { blastRadiusSection, MORNING_FILE, prBodyFrom, screenOutbound, withBlastRadius } from "../../runs/morning.ts";
 import { inferPrerequisites, type PrereqRow } from "../../runs/prerequisites.ts";
 import { ensureDraftPr, HOST_NAME, PR_RECORD_FILE, prRecordText, resolveRepo, type PrOutcome } from "../../runs/pullRequest.ts";
@@ -1053,10 +1053,18 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   }
   // review/175, review/182-/189 (signed off): unattended, the hook files and folders Base: holds and the script each
   // declaration there names are held as person-only paths are, read before anything is staged; anything the hold
-  // cannot resolve cleanly at Base: refuses the run's push.
+  // cannot resolve cleanly at Base: refuses the run's push. REQ-FLOW-102: every setup root Base: holds is read beside
+  // the run's own project, since a later session started in any of them reads its settings and runs its hooks.
   let hookPaths: string[] = [];
+  let setups: string[] = [prefix];
   if (unattended) {
-    const read = await hookPathsAt({ git: (args) => git(top, args, verb), scratch: HOOK_SCRATCH }, prefix, base);
+    const atBase = await setupRootsAt((args) => git(top, args, verb), base);
+    if (typeof atBase === "string") {
+      result.notDone.push(atBase);
+      return finish(false);
+    }
+    setups = [...new Set([prefix, ...atBase])];
+    const read = await hookPathsAt({ git: (args) => git(top, args, verb), scratch: HOOK_SCRATCH }, setups, base);
     if (typeof read === "string") {
       result.notDone.push(read);
       return finish(false);
@@ -1117,7 +1125,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
       // build/103: a folder holding `.git` stages as a gitlink (mode 160000), which the real run holds as a link.
       const gitlink = (path: string): boolean => isDirectory(join(top, path)) && exists(join(top, path, ".git"));
       const wouldStage = stage.map((path) => ({ path, link: isLink(join(top, path)) || gitlink(path), added: false }));
-      result.held = heldOf([...(await changedSince(top, base, verb)), ...(await changedSince(top, base, verb, "index")), ...wouldStage], hookPaths, prefix);
+      result.held = heldOf([...(await changedSince(top, base, verb)), ...(await changedSince(top, base, verb, "index")), ...wouldStage], hookPaths, setups);
     }
     lines.push(`would stage: ${list(stage)}`, `would hold: ${list(result.held)}`, "Dry run: nothing was staged, written, committed or pushed.");
     return finish(true, { dryRun: true });
@@ -1136,15 +1144,17 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   if (unattended) {
     const indexSide = await changedSince(top, base, verb, "index");
     const treeSide = await changedSince(top, base, verb);
-    const inIndex = heldOf(indexSide, hookPaths, prefix);
-    const held = heldOf([...treeSide, ...indexSide], hookPaths, prefix);
+    // REQ-FLOW-102: a setup the change adds is a root of the tree the push sends, so every read below holds its files.
+    const roots = [...setups, ...setupsNamed([...treeSide, ...indexSide])];
+    const inIndex = heldOf(indexSide, hookPaths, roots);
+    const held = heldOf([...treeSide, ...indexSide], hookPaths, roots);
     // v21 (pr/39): a held path absent at Base: and absent from the work tree, staged and then deleted, gets no
     // section: its two layers would add and delete it, and a patch applied part by part would create a file the run
     // deleted. Absent at Base:, a path the work tree held would show on the work tree's side, so one missing there is gone.
     const inTree = new Set(treeSide.map((entry) => entry.path));
     const bothAbsent = new Set(indexSide.filter((entry) => entry.added && !inTree.has(entry.path)).map((entry) => entry.path));
     const sectioned = held.filter((path) => !bothAbsent.has(path));
-    const isHeld = (path: string, link: boolean): boolean => heldOf([{ path, link, added: false }], hookPaths, prefix).length > 0;
+    const isHeld = (path: string, link: boolean): boolean => heldOf([{ path, link, added: false }], hookPaths, roots).length > 0;
     // review/248: the paths --drop-held names leave the patch where the run undid them; one still changed stays held.
     const toDrop = ((opts["dropHeld"] ?? []) as string[]).map((path) => fromTop(path.replaceAll("\\", "/")));
     const withdraw = [...new Set(toDrop.filter((path) => !held.includes(path)))];
@@ -1281,7 +1291,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     return finish(false);
   }
   // review/159: the commits the push would send, read before the checkpoint's own, which puts held paths back to Base: only.
-  const inHistory = unattended ? await heldInHistory(top, remote.tips, hookPaths, prefix, verb) : [];
+  const inHistory = unattended ? await heldInHistory(top, remote.tips, hookPaths, setups, verb) : [];
 
   // pr/5: the commit takes the whole index, so a path staged before the verb ran and not in its own list refuses it.
   const isOwn = ownPath([...stage, ...gone, ...patches, ...result.held], named);
@@ -1392,7 +1402,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   // review/159, review/156: a held path in a pushed commit, or still changed in HEAD's tree (a hook that staged it
   // again), refuses the push; the verb never rewrites history.
   if (unattended) {
-    const atTip = heldOf(await changedSince(top, base, verb, "HEAD"), hookPaths, prefix).filter((path) => !inHistory.includes(path));
+    const atTip = heldOf(await changedSince(top, base, verb, "HEAD"), hookPaths, setups).filter((path) => !inHistory.includes(path));
     result.notDone.push(...inHistory.map((path) => `held path in history (${path})`), ...atTip.map((path) => `held path in the pushed tree (${path})`));
     if (inHistory.length + atTip.length > 0) {
       lines.push("push: refused (a held path would be pushed)");
@@ -1576,12 +1586,22 @@ const HELD_PREFIXES: readonly string[] = [
 
 /**
  * Whether a link at `path` is held: at a held glob's directory prefix (its own match is {@link heldPaths}'), as
- * written from the git top or, for a project below it (build/99), from the project root `projectPrefix` names.
+ * written from the git top or, for a project below it (build/99), from any project root `roots` names (REQ-FLOW-102).
  */
-function heldLink(path: string, projectPrefix: string): boolean {
-  const fromProject = fromProjectRoot(path, projectPrefix);
+function heldLink(path: string, roots: readonly string[]): boolean {
   const at = (read: string): boolean => HELD_PREFIXES.some((prefix) => matchGlob(read, prefix, { foldCase: true }));
-  return at(path) || (fromProject !== null && at(fromProject));
+  return (
+    at(path) ||
+    roots.some((root) => {
+      const fromProject = fromProjectRoot(path, root);
+      return fromProject !== null && at(fromProject);
+    })
+  );
+}
+
+/** REQ-FLOW-102: the setup roots `entries` add or change a manifest in, each once ({@link setupRootOf}). */
+function setupsNamed(entries: readonly Changed[]): string[] {
+  return [...new Set(entries.flatMap((entry) => setupRootOf(entry.path) ?? []))];
 }
 
 /**
@@ -1589,13 +1609,16 @@ function heldLink(path: string, projectPrefix: string): boolean {
  * hook files and folders the hold reads at `Base:`, and the scripts their declarations name: `hookPathsAt` in `../../runs/hookPaths.ts`,
  * review/175, review/182), or a link or a submodule at a held glob's prefix or at a folder above one of `hookPaths`
  * (review/195). A hook path matches without case, in one Unicode normalization form (review/194) and over the Windows
- * reading of a path, as the globs and the `Base:` walk read names. `prefix` is the project's folder below the git top
- * (build/99): the globs and their prefixes match from the project root too; the hook paths already carry it.
+ * reading of a path, as the globs and the `Base:` walk read names. `setups` are the project roots below the git top
+ * (build/99, REQ-FLOW-102: the run's own and every setup root at `Base:`), to which every root whose manifest `entries`
+ * change is added, so a setup the change adds is read too: the globs and their prefixes match from each of them; the
+ * hook paths already carry theirs.
  */
-function heldOf(entries: readonly Changed[], hookPaths: readonly string[], prefix: string): string[] {
+function heldOf(entries: readonly Changed[], hookPaths: readonly string[], setups: readonly string[]): string[] {
   const paths = [...new Set(entries.map((entry) => entry.path))];
   const links = new Set(entries.filter((entry) => entry.link).map((entry) => entry.path));
-  const byGlob = new Set(heldPaths(paths, prefix));
+  const prefixes = [...new Set([...setups, ...setupsNamed(entries)])];
+  const byGlob = new Set(heldPaths(paths, prefixes));
   const roots = hookPaths.map(foldPath);
   const above = new Set(
     roots.flatMap((root) => {
@@ -1605,7 +1628,7 @@ function heldOf(entries: readonly Changed[], hookPaths: readonly string[], prefi
   );
   const under = (folded: string): boolean => roots.some((root) => folded === root || folded.startsWith(`${root}/`));
   const held = (path: string): boolean =>
-    byGlob.has(path) || under(foldPath(path)) || (links.has(path) && (heldLink(path, prefix) || above.has(foldPath(path))));
+    byGlob.has(path) || under(foldPath(path)) || (links.has(path) && (heldLink(path, prefixes) || above.has(foldPath(path))));
   return paths.filter(held).toSorted();
 }
 
@@ -1654,10 +1677,10 @@ async function changedSince(top: string, base: string, verb: string, side: Side 
  * root commit included and a merge by its own resolution (`--cc`), renames
  * read as a deletion and an addition, a link or a submodule at a held glob's
  * prefix included (review/200, review/195), every glob read from the project
- * root too where the project lies below the git top (build/99).
+ * root too where the project lies below the git top (build/99), and from every setup root (REQ-FLOW-102).
  */
-async function heldInHistory(top: string, tips: readonly string[], hookPaths: readonly string[], prefix: string, verb: string): Promise<string[]> {
-  return heldOf(await pushedChanges(top, tips, verb), hookPaths, prefix);
+async function heldInHistory(top: string, tips: readonly string[], hookPaths: readonly string[], setups: readonly string[], verb: string): Promise<string[]> {
+  return heldOf(await pushedChanges(top, tips, verb), hookPaths, setups);
 }
 
 /**
