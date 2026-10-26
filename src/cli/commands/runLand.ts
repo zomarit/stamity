@@ -188,12 +188,6 @@ const HOOK_SCRATCH: HookScratch = {
   remove: (root) => rmSync(root, { recursive: true, force: true }),
 };
 
-/** Whether the run is unattended as the shell guard reads it, as `run.ts` reads it (review/162). */
-function readsUnattended(mode: "attended" | "unattended" | null, flag: string | undefined): boolean {
-  if (mode !== null) return mode === "unattended";
-  return !["", "false", "0"].includes((flag ?? "").trim().toLowerCase());
-}
-
 /**
  * review/96: the folder every `gh` call starts in: `/` on POSIX; on Windows the system drive's root (`SystemDrive` and
  * a `\`), else the root of the home folder's drive.
@@ -244,7 +238,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     });
   }
   const head = resumeCard.readRecordHead(record.text);
-  const unattended = readsUnattended(head.mode, env["STAMITY_UNATTENDED"]);
+  const unattended = resumeCard.readsUnattended(head.mode, env["STAMITY_UNATTENDED"]);
   const fastForward = opts["fastForward"] === true;
   /**
    * review/103, review/110: the person's answer to an `asks` outcome, given on the line the guard asks them about
@@ -585,6 +579,20 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       const headNow = await gitLine(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]);
       if (headNow !== approvedSha) throw headMoved(headNow ?? "no commit");
     }
+    // review/177: the shell guard's verdict on the fast-forward's push, before anything is written into the body. A
+    // default branch the setting also names as deploying reads `push-deploying` first, which passes only on the
+    // person's approval, since the decision put that reason in front of them.
+    const refspec = `${sha}:refs/heads/${defaultBranch}`;
+    if (fastForward) {
+      let verdict: ReturnType<typeof personOnlyVerdict>;
+      try {
+        verdict = personOnlyVerdict(`git push origin ${refspec}`, { defaultBranches: defaults, currentBranch: null, tags: [], deployingBranches: setting.deployingBranches });
+      } catch {
+        throw new Refused("the shell guard's table could not decide the fast-forward's push");
+      }
+      const asked = verdict.deny && verdict.ask ? verdict.rule : null;
+      if (verdict.deny && asked !== "push-default" && !(asked === "push-deploying" && approval !== null)) throw new Refused(`push refused: ${verdict.reason}`);
+    }
     const at = new Date().toISOString();
     const line = evidenceLine(at, sha, checks.green.length, threads ?? 0, 0, approval === null ? undefined : { sha: approval.sha, reasons: approval.reasons.map((reason) => sanitizeLabel(reason)) });
     const patched = await answered(
@@ -593,14 +601,6 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     );
     if (patched.status !== 200) throw new Refused(`writing the evidence into #${number}'s body answered HTTP ${patched.status}`);
     if (fastForward) {
-      const refspec = `${sha}:refs/heads/${defaultBranch}`;
-      let verdict: ReturnType<typeof personOnlyVerdict>;
-      try {
-        verdict = personOnlyVerdict(`git push origin ${refspec}`, { defaultBranches: defaults, currentBranch: null, tags: [], deployingBranches: setting.deployingBranches });
-      } catch {
-        throw new Refused("the shell guard's table could not decide the fast-forward's push");
-      }
-      if (verdict.deny && !(verdict.ask && verdict.rule === "push-default")) throw new Refused(`push refused: ${verdict.reason}`);
       const pushed = await git(["push", "--quiet", "origin", refspec]);
       if (pushed.code !== 0) throw new Refused(`the fast-forward's push answered ${pushed.code}`);
       lines.push(`act: fast-forwarded ${defaultBranch} to ${sha}`);

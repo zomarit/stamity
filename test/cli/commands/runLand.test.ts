@@ -11,6 +11,7 @@ import { LAND_CLOCK } from "../../../src/cli/commands/runLand.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
 import type * as GhRunnerModule from "../../../src/cli/engine/ghRunner.ts";
 import type * as FsModule from "node:fs";
+import type * as PersonOnlyModule from "../../../src/hooks/personOnly.ts";
 import { surfaceRecord } from "../../../src/runs/gitSurface.ts";
 import { insideAny } from "../../../src/runs/landEvidence.ts";
 import { prRecordText } from "../../../src/runs/pullRequest.ts";
@@ -163,6 +164,23 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
   };
 });
 
+/** review/177: a verdict a case hands the fast-forward's push check in place of the real table's; `null` reads the real one. */
+const table = vi.hoisted(() => ({ push: null as PersonOnlyModule.PersonOnlyVerdict | null, commands: [] as string[] }));
+
+// A spy over the real table: every command gets the real verdict unless a case sets `push`. Mock reason: the land
+// decision asks for every deploying default branch first, so no real input brings an unapproved `push-deploying`
+// verdict to the push check; the order of that check and the body write is reachable only through a stand-in.
+vi.mock("../../../src/hooks/personOnly.ts", async (importOriginal) => {
+  const real = await importOriginal<typeof PersonOnlyModule>();
+  return {
+    ...real,
+    personOnlyVerdict: (command: string, ctx: PersonOnlyModule.PersonOnlyContext): PersonOnlyModule.PersonOnlyVerdict => {
+      table.commands.push(command);
+      return table.push !== null && command.startsWith("git push ") ? table.push : real.personOnlyVerdict(command, ctx);
+    },
+  };
+});
+
 const ENV = { GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: NO_GIT_CONFIG, GIT_AUTHOR_NAME: "A", GIT_AUTHOR_EMAIL: "a@example.com", GIT_COMMITTER_NAME: "A", GIT_COMMITTER_EMAIL: "a@example.com" };
 
 function git(cwd: string, args: readonly string[]): string {
@@ -192,6 +210,8 @@ describe("stamity run land", () => {
     gh.program = "/usr/bin/gh";
     gh.probe = null;
     links.clear();
+    table.push = null;
+    table.commands.length = 0;
   });
 
   /**
@@ -905,6 +925,48 @@ describe("stamity run land", () => {
     expect((await run(repo, ["land", "--run", RUN, "--fast-forward", "--approved", head])).doc).toMatchObject({ outcome: "landed", approved: { sha: head, act: "push-default" } });
     expect(git(remote, ["rev-parse", "refs/heads/main"])).toBe(head);
     expect(await record(repo)).toMatch(new RegExp(` land: #7 ${head} fast-forwarded \\(approved by the person for ${head}\\)\\n$`));
+  });
+
+  it("fast-forwards a default branch the setting names as deploying once the person approved it (REQ-FLOW-132, review/177)", async () => {
+    const { repo, remote, base, head } = await seed({ manifest: '{"version":1,"autonomy":{"deployingBranches":["main"]}}\n' });
+    route(`GET repos/o/r/compare/${base}...${head}`, { status: "ahead" });
+
+    const result = await run(repo, ["land", "--run", RUN, "--fast-forward", "--approved", head]);
+
+    expect(result.doc).toMatchObject({ outcome: "landed", approved: { sha: head, act: "push-default", reasons: ["main is named in autonomy.deployingBranches"] } });
+    expect(table.commands).toEqual([`git push origin ${head}:refs/heads/main`]);
+    expect(git(remote, ["rev-parse", "refs/heads/main"])).toBe(head);
+    expect(bodies()).toEqual([expect.stringContaining(`; approved by the person for ${head} over: main is named in autonomy.deployingBranches`)]);
+  });
+
+  it("refuses a fast-forward whose push check refuses before it writes the evidence into the body (REQ-FLOW-132, review/177)", async () => {
+    const { repo, remote, base, head } = await seed();
+    route(`GET repos/o/r/compare/${base}...${head}`, { status: "ahead" });
+    table.push = { deny: true, rule: "push-deploying", act: "A push to a branch the repository names as deploying", reason: "a deploying branch, unapproved", ask: true };
+
+    const result = await run(repo, ["land", "--run", RUN, "--fast-forward"]);
+
+    expect(result.doc).toMatchObject({ outcome: "refused", notDone: ["push refused: a deploying branch, unapproved"] });
+    expect(table.commands).toEqual([`git push origin ${head}:refs/heads/main`]);
+    // The one write is why the merge waits, as on every refusal (build/6); no evidence line was written before it.
+    expect(bodies()).toEqual([`The list.\n\nmerge waits on: push refused: a deploying branch, unapproved\n\n${MARKER}`]);
+    expect(git(remote, ["rev-parse", "refs/heads/main"])).toBe(base);
+  });
+
+  it("lands on an approval given before the default branch's setting added a reason, the evidence naming both (review/174, pin)", async () => {
+    const { repo, head } = await seed();
+    route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: ".github/workflows/ci.yml" }, { filename: "b" }]);
+    const paths = "the diff touches paths that define the evidence: .github/workflows/ci.yml";
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reasons: [paths], head } });
+
+    const deploying = Buffer.from('{"version":1,"autonomy":{"deployingBranches":["main"]}}\n').toString("base64");
+    route("GET repos/o/r/contents/.stamity/manifest.json", { content: deploying });
+    const result = await run(repo, ["land", "--run", RUN, "--approved", head]);
+
+    // The approval names the head, not the reasons (the SECURITY.md residual): the reason added after it does not stop
+    // the land, and the evidence line shows every reason the approval was taken over.
+    expect(result.doc).toMatchObject({ outcome: "landed", approved: { sha: head, reasons: [paths, "main is named in autonomy.deployingBranches"] } });
+    expect(bodies().at(-1)).toContain(`; approved by the person for ${head} over: ${paths}; main is named in autonomy.deployingBranches`);
   });
 
   it("still refuses a refused outcome with --approved, and leaves an asks outcome unchanged without it (review/103)", async () => {

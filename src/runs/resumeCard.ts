@@ -263,6 +263,16 @@ export function readRecordHead(text: string): RecordHead {
   };
 }
 
+/**
+ * Whether the run is unattended as the shell guard reads it (REQ-FLOW-120): the record head's `mode`, else
+ * `STAMITY_UNATTENDED` set to anything but empty, `false` or `0` (any case, any spacing); `Mode: attended` wins over
+ * the variable (review/162). The one reader the run verbs share (review/84).
+ */
+export function readsUnattended(mode: RecordHead["mode"], flag: string | undefined): boolean {
+  if (mode !== null) return mode === "unattended";
+  return !["", "false", "0"].includes((flag ?? "").trim().toLowerCase());
+}
+
 /** A mode line's value as the lower-case word, or null for anything else. */
 function recordMode(value: string | undefined): RecordHead["mode"] {
   const word = value?.toLowerCase();

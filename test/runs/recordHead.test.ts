@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   RECORD_BASE_PATTERN,
@@ -6,7 +9,7 @@ import {
   RECORD_MODE_PATTERN,
   RECORD_RESUMES_PATTERN,
 } from "../../src/runs/layout.ts";
-import { readRecordHead } from "../../src/runs/resumeCard.ts";
+import { readRecordHead, readsUnattended } from "../../src/runs/resumeCard.ts";
 
 /**
  * The run record's head reads the run's mode, branch, base and resumed run
@@ -141,5 +144,29 @@ describe("the record head's mode, branch, base and resumes lines (REQ-CTX-012)",
     expect(RECORD_BRANCH_PATTERN).toEqual(/^branch:\s*(\S+)/i);
     expect(RECORD_BASE_PATTERN).toEqual(/^base:\s*([0-9a-f]{7,64})\b/i);
     expect(RECORD_RESUMES_PATTERN).toEqual(/^resumes:\s*(\S+)/i);
+  });
+});
+
+/** The command modules, which read the run's mode through the one reader below. */
+const COMMANDS_DIR = fileURLToPath(new URL("../../src/cli/commands/", import.meta.url));
+
+describe("whether a run is unattended, from the record head's mode and the variable (REQ-FLOW-120, review/84)", () => {
+  it("reads the variable unset, empty, false or 0 in any case and spacing as attended, and any other value as unattended", () => {
+    for (const flag of [undefined, "", "false", "0", "FALSE ", " 0 "]) expect(readsUnattended(null, flag), JSON.stringify(flag)).toBe(false);
+    for (const flag of ["1", "yes", "true"]) expect(readsUnattended(null, flag), flag).toBe(true);
+  });
+
+  it("lets the record's Mode: win over the variable either way", () => {
+    expect(readsUnattended("attended", "1")).toBe(false);
+    expect(readsUnattended("unattended", "0")).toBe(true);
+    expect(readsUnattended(readRecordHead(sixLineHead({ mode: "attended" })).mode, "yes")).toBe(false);
+    expect(readsUnattended(readRecordHead(sixLineHead()).mode, undefined)).toBe(true);
+  });
+
+  it("is the one reader: no command module keeps a local copy", () => {
+    const copies = readdirSync(COMMANDS_DIR)
+      .filter((name) => name.endsWith(".ts"))
+      .filter((name) => /\bfunction readsUnattended\b/.test(readFileSync(join(COMMANDS_DIR, name), "utf8")));
+    expect(copies).toEqual([]);
   });
 });

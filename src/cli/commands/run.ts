@@ -849,7 +849,7 @@ async function startsUnattended(ctx: CliContext, run: string, runBranch: string)
   const flag = ctx.app.runtime.env["STAMITY_UNATTENDED"];
   const recordRel = `${layout.runRelPath(run)}/${layout.RECORD_FILE}`;
   const record = readCapped(join(cwd, recordRel), layout.RECORD_HEAD_READ_BYTES);
-  if (record !== null) return readsUnattended(resumeCard.readRecordHead(record.text).mode, flag);
+  if (record !== null) return resumeCard.readsUnattended(resumeCard.readRecordHead(record.text).mode, flag);
   startVerbGit(true);
   const heads = await Promise.all(
     [`refs/heads/${runBranch}`, `refs/remotes/origin/${runBranch}`].map(async (ref) => {
@@ -858,7 +858,7 @@ async function startsUnattended(ctx: CliContext, run: string, runBranch: string)
     }),
   );
   const text = heads.find((head) => head !== null);
-  return readsUnattended(text === undefined || text === null ? null : resumeCard.readRecordHead(text).mode, flag);
+  return resumeCard.readsUnattended(text === undefined || text === null ? null : resumeCard.readRecordHead(text).mode, flag);
 }
 
 /**
@@ -943,7 +943,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     });
   }
   const head = resumeCard.readRecordHead(record.text);
-  const unattended = readsUnattended(head.mode, ctx.app.runtime.env["STAMITY_UNATTENDED"]);
+  const unattended = resumeCard.readsUnattended(head.mode, ctx.app.runtime.env["STAMITY_UNATTENDED"]);
   const removed = startVerbGit(unattended);
   const recordBase = head.base;
   const base = recordBase === null ? null : await commitAt(cwd, recordBase, verb);
@@ -1676,16 +1676,6 @@ async function pushedChanges(top: string, tips: readonly string[], verb: string)
     });
   }
   return rawEntries(read.stdout);
-}
-
-/**
- * Whether the run is unattended as the shell guard reads it: `Mode:
- * unattended`, or no `Mode:` line while `STAMITY_UNATTENDED` is set (not
- * empty, `false` or `0`); `Mode: attended` wins over the variable (review/162).
- */
-function readsUnattended(mode: "attended" | "unattended" | null, flag: string | undefined): boolean {
-  if (mode !== null) return mode === "unattended";
-  return !["", "false", "0"].includes((flag ?? "").trim().toLowerCase());
 }
 
 /**
