@@ -5577,6 +5577,36 @@ describe("check — legacy-files", () => {
     );
   });
 
+  // A link cannot be made without privileges on Windows; the lstat walk is the same code there.
+  it.skipIf(process.platform === "win32")(
+    "never follows a link: a linked prompts folder, skill folder or companion is not listed",
+    async () => {
+      const handle = getRepo();
+      const root = await seedRepo(handle, {
+        files: {
+          "elsewhere/prompts/st-work.prompt.md": "outside\n",
+          "elsewhere/skill/agents/openai.yaml": "outside\n",
+          "elsewhere/openai.yaml": "outside\n",
+          ".github/.keep": "",
+          ".agents/skills/st-plan/agents/.keep": "",
+          // The control: a real companion on the same walk is still listed.
+          ".agents/skills/st-work/agents/openai.yaml": "policy: {}\n",
+        },
+      });
+      await symlink(join(root, "elsewhere", "prompts"), join(root, ".github", "prompts"));
+      await symlink(join(root, "elsewhere", "skill"), join(root, ".agents", "skills", "st-ask"));
+      await symlink(join(root, "elsewhere", "openai.yaml"), join(root, ".agents", "skills", "st-plan", "agents", "openai.yaml"));
+
+      const found = await doctorRow(root, "legacy-files");
+
+      expect(found.status).toBe("warn");
+      expect(found.detail).toContain(
+        "1 file(s) an earlier release wrote that this setup no longer writes or tracks: " +
+          ".agents/skills/st-work/agents/openai.yaml. ",
+      );
+    },
+  );
+
   it("passes with no readable manifest, which leaves no ledger to compare", async () => {
     const root = await seedRepo(getRepo(), { files: { ".github/prompts/st-work.prompt.md": "left behind\n" } });
     await rm(manifestPath(root));

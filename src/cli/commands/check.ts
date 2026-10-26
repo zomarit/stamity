@@ -1374,10 +1374,36 @@ const LEGACY_PROMPTS_DIR = ".github/prompts";
 const LEGACY_PREFIX = "st-";
 const PROMPT_SUFFIX = ".prompt.md";
 
-/** The names of the entries of `dir` that `keep` admits, sorted; none when `dir` is not a readable folder. */
-async function entryNames(dir: string, keep: (entry: { name: string; isFile(): boolean; isDirectory(): boolean }) => boolean): Promise<string[]> {
+/**
+ * True when every folder from `root` down to `rel` is a real folder, none of
+ * them a link. Each prefix is read with `lstat`, which does not follow its last
+ * name, so a linked folder fails at its own prefix whatever the deeper reads see.
+ */
+async function linkFreeFolder(root: string, rel: string): Promise<boolean> {
+  const segments = rel.split("/");
+  const stats = await Promise.all(
+    segments.map((_, index) => lstat(join(root, ...segments.slice(0, index + 1))).catch(() => null)),
+  );
+  return stats.every((stat) => stat?.isDirectory() === true);
+}
+
+/**
+ * The names of the entries of the folder `rel` under `root` that `keep` admits,
+ * sorted; none when the folder is missing, unreadable, or reached through a
+ * link. A `Dirent` reports a link as neither a file nor a folder, so no entry
+ * that is a link is admitted either.
+ */
+async function entryNames(
+  root: string,
+  rel: string,
+  keep: (entry: { name: string; isFile(): boolean; isDirectory(): boolean }) => boolean,
+): Promise<string[]> {
+  if (!(await linkFreeFolder(root, rel))) return [];
   try {
-    return (await readdir(dir, { withFileTypes: true })).filter(keep).map((entry) => entry.name).toSorted();
+    return (await readdir(join(root, ...rel.split("/")), { withFileTypes: true }))
+      .filter(keep)
+      .map((entry) => entry.name)
+      .toSorted();
   } catch {
     return [];
   }
@@ -1392,10 +1418,12 @@ async function entryNames(dir: string, keep: (entry: { name: string; isFile(): b
  * names it once and drops its row in the same run, so after that sync only
  * this row names it again.
  *
- * Read from the folders and the ledger directly: names only, never a file's
- * bytes. A path a ledger row still holds — a client that plans it, or a 1.16.0
- * row the next `sync` has yet to sweep — is not a leftover. Without a manifest
- * there is no ledger to compare with, so the row passes.
+ * Found on disk by their fixed engine names, never from ledger rows: the sync
+ * that keeps such a file leaves no row for it. Names only, never a file's bytes,
+ * and no folder on the way down, nor the file itself, may be a link. The ledger
+ * only takes paths out: one a row still holds (a client that plans it, or a
+ * 1.16.0 row the next `sync` has yet to sweep) is not a leftover. Without a
+ * manifest there is no ledger to compare with, so the row passes.
  *
  * - `warn` — one or more such files, each named with the remedy: the owner
  *   deletes it, unless it is theirs.
@@ -1407,17 +1435,23 @@ async function checkLegacyFiles(rootDir: string, manifest: SetupManifest | null)
   const root = resolve(rootDir);
   const held = new Set(manifest.ledger.map((row) => row.path));
   const prompts = (
-    await entryNames(join(root, ...LEGACY_PROMPTS_DIR.split("/")), (entry) =>
+    await entryNames(root, LEGACY_PROMPTS_DIR, (entry) =>
       entry.isFile() && entry.name.startsWith(LEGACY_PREFIX) && entry.name.endsWith(PROMPT_SUFFIX),
     )
   ).map((name) => `${LEGACY_PROMPTS_DIR}/${name}`);
-  const skillsDir = join(root, ...SKILLS_PROJECTION_DIR.split("/"));
-  const skillFolders = await entryNames(skillsDir, (entry) => entry.isDirectory() && entry.name.startsWith(LEGACY_PREFIX));
+  const skillFolders = await entryNames(root, SKILLS_PROJECTION_DIR, (entry) =>
+    entry.isDirectory() && entry.name.startsWith(LEGACY_PREFIX),
+  );
+  // `agents/openai.yaml`: the folder that holds the companion, then its name.
+  const slash = TOUCHPOINT_POLICY_FILE.lastIndexOf("/");
+  const companionDir = TOUCHPOINT_POLICY_FILE.slice(0, slash);
+  const companionName = TOUCHPOINT_POLICY_FILE.slice(slash + 1);
   const companions = (
     await Promise.all(
       skillFolders.map(async (folder) => {
-        const stat = await lstat(join(skillsDir, folder, ...TOUCHPOINT_POLICY_FILE.split("/"))).catch(() => null);
-        return stat?.isFile() === true ? [`${SKILLS_PROJECTION_DIR}/${folder}/${TOUCHPOINT_POLICY_FILE}`] : [];
+        const holder = `${SKILLS_PROJECTION_DIR}/${folder}/${companionDir}`;
+        const names = await entryNames(root, holder, (entry) => entry.isFile() && entry.name === companionName);
+        return names.map((name) => `${holder}/${name}`);
       }),
     )
   ).flat();
