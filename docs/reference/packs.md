@@ -16,7 +16,7 @@ A pack is content installed on top of the corpus behind the trust ladder. Packs 
 
 Interface work that reuses the design system a repo already has and captures browser evidence for the accessibility floor.
 
-- **Version:** `1.16.0`
+- **Version:** `1.17.0`
 - **Ships:** `skills` (2), `commands` (1)
 - **Install:** `stamity add frontend`
 
@@ -33,7 +33,7 @@ Commands:
 
 Take a service to production and keep it there: a readiness review graded apart from its evidence, a release that stops before anything irreversible, and an incident procedure that proposes and never applies.
 
-- **Version:** `1.16.0`
+- **Version:** `1.17.0`
 - **Ships:** `skills` (2), `commands` (1)
 - **Install:** `stamity add production`
 
