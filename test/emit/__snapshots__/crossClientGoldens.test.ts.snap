@@ -4870,7 +4870,7 @@ Credential handling is the secrets rule's subject and is not restated here.
 - Each finding is reported with a category name from item 9 and the request
   shape that triggers it, so the fix starts from a known remediation.
 ",
-  "CLAUDE.md": "<!-- STAMITY:BEGIN v1.0.0-golden -->
+  "CLAUDE.md": "<!-- STAMITY:BEGIN -->
 @AGENTS.md
 <!-- STAMITY:END -->
 ",
@@ -5274,12 +5274,12 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "d50a9a7d979a1a625ac713e3bc8832265b5ea0f5055e8b603699fafab0320982 94105 bytes",
+  ".stamity/manifest.json": "7ca734afcf26b2128865d1feed6b23ad9d95c08cad77d206cea14963788ae3e1 94105 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
   "AGENTS.override.md": "122504f41cc40a99c65cba4995c228bf4a5137d738324bbe3a847c6aaa5192db 25872 bytes",
-  "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
+  "CLAUDE.md": "697c902a89fcffe97474d8ca71b309c303c3989f9c87dbbf2c6fb12d12e95bc4 55 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
@@ -9062,7 +9062,7 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
   client reads its own location; call a skill by name whenever its description fits the job.
 ",
-  "CLAUDE.md": "<!-- STAMITY:BEGIN v1.0.0-golden -->
+  "CLAUDE.md": "<!-- STAMITY:BEGIN -->
 @AGENTS.md
 <!-- STAMITY:END -->
 ",
@@ -9149,9 +9149,9 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "3d9c6d2fd3d4f348a639f4974e050c3abc96049899ea97aa1d8ce22e4dd83fa2 28615 bytes",
+  ".stamity/manifest.json": "5f35e17818ec97e7f4e850b2ae882819a1a8d01c72d3ef89e4db9e57e7a080f5 28615 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
-  "CLAUDE.md": "192a4f4666e5d1a96dbf44455477ad8dc7d0f6035946e8dc28143697c9752b15 69 bytes",
+  "CLAUDE.md": "697c902a89fcffe97474d8ca71b309c303c3989f9c87dbbf2c6fb12d12e95bc4 55 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
