@@ -124,9 +124,11 @@ describe("the fork probe's steps", () => {
       "walk: check after clean --pack",
     ]);
     const add = all.find((step) => step.name === `walk: add ${MADE_UP_PACK.name as string}`);
-    expect(add?.command).toContain('"/scratch/fork-probe-pack"');
+    // The script quotes the path `path.join` builds, so the expected text is built the same way: on Windows its
+    // separators are backslashes, JSON-escaped (prove/14).
+    expect(add?.command).toContain(JSON.stringify(join("/scratch", "fork-probe-pack")));
     expect(add?.command).toContain("--allow-untrusted -y");
-    expect(all.some((step) => (step.command ?? "").includes("packs/"))).toBe(false);
+    expect(all.some((step) => /packs[\\/]/.test(step.command ?? ""))).toBe(false);
   });
 
   // ADDED (build/43, the sign-off on b1's W-4): the registry-less fork, the guide's default, is the second kind. Its

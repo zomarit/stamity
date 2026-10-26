@@ -5,7 +5,7 @@ import { readFile, readdir, rm, symlink } from "node:fs/promises";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   COPILOT_AGENT_PROMPT_CAP,
   COPILOT_DIALECT_FACTS,
@@ -1880,6 +1880,37 @@ describe("copilot-setup-steps.yml", () => {
     expect(await yamlAt("ignored")).not.toContain("NPM_CONFIG_USERCONFIG");
     expect(await yamlAt("untracked")).not.toContain("NPM_CONFIG_USERCONFIG");
     expect(await yamlAt("tracked")).toContain("NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc");
+  });
+
+  it("answers the .npmrc read for the setup root when GIT_DIR and GIT_INDEX_FILE name another repository (branch-review W-1)", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({
+      "tracked/package-lock.json": "{}\n",
+      "tracked/.npmrc": "registry=https://npm.mirror.example/\n",
+      "untracked/package-lock.json": "{}\n",
+      "untracked/.npmrc": "registry=https://npm.mirror.example/\n",
+    });
+    const git = (dir: string, args: readonly string[]): void => {
+      const result = spawnSync("git", args, { cwd: temp.path(dir), encoding: "utf8" });
+      expect(result.status, result.stderr).toBe(0);
+    };
+    for (const dir of ["tracked", "untracked"]) git(dir, ["init", "--quiet"]);
+    git("tracked", ["add", "--", ".npmrc"]);
+
+    const yamlAt = async (dir: string): Promise<string> =>
+      rowAt(await planResidue({ rootDir: temp.path(dir) }), COPILOT_SETUP_STEPS_PATH).content;
+
+    // Inside a git hook these name the hook's repository: each setup root's read points at the other one.
+    try {
+      vi.stubEnv("GIT_DIR", temp.path("untracked", ".git"));
+      vi.stubEnv("GIT_INDEX_FILE", temp.path("untracked", ".git", "index"));
+      expect(await yamlAt("tracked")).toContain("NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc");
+      vi.stubEnv("GIT_DIR", temp.path("tracked", ".git"));
+      vi.stubEnv("GIT_INDEX_FILE", temp.path("tracked", ".git", "index"));
+      expect(await yamlAt("untracked")).not.toContain("NPM_CONFIG_USERCONFIG");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("keeps a fork's scope registry on the install line beside the project's .npmrc (review/68)", async () => {

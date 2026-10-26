@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readFile, readdir, writeFile } from "node:fs/promises";
+import { lstat, readFile, readdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import semver from "semver";
 import { describe, expect, it } from "vitest";
@@ -422,6 +422,26 @@ describe("upgrade — refusals write nothing", () => {
 
     expect(error.code).toBe("VALIDATION_ERROR");
     expect(error.message).toContain("in place");
+    expect(await treeDigest(root)).toEqual(before);
+  });
+
+  // The banner's reader (`readRepositoryPin`) refuses a linked package.json; upgrade refuses it too, rather than moving
+  // the pin in a regular copy that replaces the link while the linked file keeps the old pin (branch-review M-2).
+  it.skipIf(process.platform === "win32")("refuses a root package.json that is a link, naming it, and leaves the link and its target as they were", async () => {
+    const handle = tempDir();
+    const root = await seedSetup(handle, { packageJson: null });
+    await handle.seedFiles({ "shared/package.json": pkgJson(DEFAULT_PIN) });
+    const target = join(root, "shared", "package.json");
+    await symlink(target, join(root, "package.json"));
+    const before = await treeDigest(root);
+
+    const error = await refusalOf(runUpgrade(input(root), realDeps));
+
+    expect(error.code).toBe("VALIDATION_ERROR");
+    expect(error.message).toContain("package.json is a link");
+    expect(error.message).toContain("Nothing was written.");
+    expect((await lstat(join(root, "package.json"))).isSymbolicLink()).toBe(true);
+    expect(await readFile(target, "utf8")).toBe(pkgJson(DEFAULT_PIN));
     expect(await treeDigest(root)).toEqual(before);
   });
 });

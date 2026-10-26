@@ -47,6 +47,7 @@ import { printableName } from "../manifest/coOwnedJson.ts";
 import { readCopilotSetupSteps } from "../manifest/manifest.ts";
 import { bytesShowEngineOutput } from "../manifest/ownedPaths.ts";
 import type { McpEmission } from "../mcp/emit.ts";
+import { runGitCheck } from "../merge/safeWrite.ts";
 import {
   grantableFootprint,
   resolveAgentGrant,
@@ -74,7 +75,6 @@ import type { AdapterOutput, ContentClass, EmissionOwner } from "../types/conten
 import type { ModelClass, Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import type { SetupManifest } from "../types/manifest.ts";
-import { runGit } from "../worktree/git.ts";
 
 // ── Client layout ────────────────────────────────────────────────
 
@@ -1436,16 +1436,24 @@ const NPMRC_FILE = ".npmrc";
  *   holds — an export or a tarball of a commit carries exactly the committed
  *   files — so the answer is the commit's either way. The case this leaves is a
  *   git checkout on a machine where git cannot run, with an ignored `.npmrc`.
+ *
+ * Git runs on the merge layer's pinned runner (`../merge/safeWrite.ts::runGitCheck`),
+ * which leaves every `GIT_*` variable out, so inside a git hook a `GIT_DIR` or
+ * `GIT_INDEX_FILE` names no other repository or index here (branch-review W-1).
+ * It bounds the call's wall time, so a hung git cannot stall a sync, and any
+ * failure, the bound included, reads as git not answering.
  */
 async function hasCommittedNpmrc(rootDir: string): Promise<boolean> {
   if (!(await isFileAt(join(rootDir, NPMRC_FILE)))) return false;
-  const listed = await runGit({ args: ["--literal-pathspecs", "ls-files", "-z", "--", NPMRC_FILE], cwd: rootDir, timeoutMs: GIT_LS_FILES_TIMEOUT_MS });
-  if (listed.status !== 0) return true;
-  return listed.stdout.split("\0").includes(NPMRC_FILE);
+  let listed: string;
+  try {
+    listed = await runGitCheck(["ls-files", "-z", "--", NPMRC_FILE], rootDir);
+    // reason: not silent — git not answering is a documented branch above: the file's presence decides.
+  } catch {
+    return true;
+  }
+  return listed.split("\0").includes(NPMRC_FILE);
 }
-
-/** Bounds the one git read emission makes, so a hung git cannot stall a sync. */
-const GIT_LS_FILES_TIMEOUT_MS = 10_000;
 
 /** True when `path` is a regular file (a link to one counts); any read failure answers `false`. */
 async function isFileAt(path: string): Promise<boolean> {

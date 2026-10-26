@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Command } from "commander";
 import semver from "semver";
@@ -287,6 +287,7 @@ export async function runUpgrade(input: UpgradeInput, deps: UpgradeDeps): Promis
   }
   // (5) The pin, prepared in memory.
   const pkgPath = join(rootDir, PACKAGE_JSON);
+  await refuseLinkedPackageJson(pkgPath);
   const prepared = preparePin(input, await deps.readFile(pkgPath));
   // (6) The plan.
   const plan = await deps.planSync(rootDir, runningVersion, {});
@@ -326,6 +327,30 @@ export async function runUpgrade(input: UpgradeInput, deps: UpgradeDeps): Promis
   const pinMoves = prepared.pin !== null && prepared.pin.from !== prepared.pin.to;
   const noop = changed.length === 0 && reclaimed.length === 0 && !pinMoves;
   return { ...base, noop, pin: prepared.pin, pinNote: prepared.pinNote, notices };
+}
+
+/**
+ * Refuses a root `package.json` that is a link, before it is read. The banner's
+ * reader of the same pin (`../notice/updateNotice.ts::readRepositoryPin`) reads
+ * no file through a link, and the pin's write replaces a link with a regular
+ * file, so moving the pin through one would leave the linked file on the old
+ * pin while this repository's copy names the new one (branch-review M-2).
+ * Nothing at the path is not a refusal: no pin moves and no file is created.
+ */
+async function refuseLinkedPackageJson(pkgPath: string): Promise<void> {
+  let linked: boolean;
+  try {
+    linked = (await lstat(pkgPath)).isSymbolicLink();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
+  }
+  if (linked) {
+    throw refusal(
+      `${PACKAGE_JSON} is a link, so upgrade cannot move its pin: it reads and writes the pin only in a regular ${PACKAGE_JSON}, never through a link.`,
+      `replace ${PACKAGE_JSON} with the file it links to, or move the pin in the linked file yourself, then re-run`,
+    );
+  }
 }
 
 /** The file's text, or `null` when it does not exist. */

@@ -1165,8 +1165,12 @@ export function bareShapeRefusal(cwd: string): string {
  * the setup root is not the program started, on any platform. Where no `PATH`
  * entry holds git the call rejects as it does on a machine with no git
  * installed, and no program is started.
+ *
+ * Also the Copilot adapter's tracked-`.npmrc` read
+ * (`../adapters/copilot.ts::hasCommittedNpmrc`), so that read answers for the
+ * setup root inside a git hook too.
  */
-function runGitCheck(args: readonly string[], cwd: string): Promise<string> {
+export function runGitCheck(args: readonly string[], cwd: string): Promise<string> {
   if (gitDiscoveryMeetsBareShape(cwd)) return Promise.reject(new Error(bareShapeRefusal(cwd)));
   const env = gitCheckEnv();
   const pinned = ["--literal-pathspecs", "-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", ...args];
