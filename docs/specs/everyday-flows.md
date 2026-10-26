@@ -1131,6 +1131,17 @@ points at `add` (`adoptInstalledPacks`, `src/pack/install.ts`, called before the
     a link, or not hashing as recorded (`adoptPackFolder`, `src/pack/install.ts`).
   - A sweep that finds a recorded file missing prunes the folders it leaves empty, never on a preview and never through
     a link (`pruneBelowMissing`, `src/merge/reclaim.ts`; `build/5` of run `2026-10-15_cloud-runs`).
+- **Amended 2026-10-26** (the run's whole-branch fix round, ledger row `prove/12`, commit `74d822a4`; read there). Given
+  a later `init` that takes kept packs back from their receipts, Then it says so: its panel, and its dry-run preview,
+  print one plain line per pack, `took back the kept pack "<id>" from its receipt under .stamity/packs/` (`would take
+  back …` on a dry run), the id cleaned through `sanitizeLabel` first, since a receipt is repository data; the report
+  carries the ids in folder order as `adoptedPacks`, which `init --json` holds under `report`. A pack its receipt
+  cannot prove stays a warning and is not listed (`adoptedPackLines`, `src/cli/commands/init/panel.ts:710-722`;
+  `InitApplyReport.adoptedPacks`, `src/cli/commands/init/apply.ts:197-205`, set at `:636`; the preview,
+  `src/cli/commands/init.ts:980`).
+  - Proof: `test/cli/commands/initApply.test.ts` (the report field: live, dry run, a refused pack),
+    `test/cli/commands/initPanel.test.ts` (the line, with a control and a bidi character in the id),
+    `test/cli/commands/init.test.ts` (the real command's preview and panel).
 - **Proof:** `test/cli/commands/clean.test.ts`, `test/cli/commands/roundTrip.test.ts`, `test/cli/commands/initApply.test.ts`,
   `test/pack/install.test.ts`, `test/emit/stateScaffold.test.ts`, `test/merge/reclaim.test.ts`,
   `test/cli/ledgerForgery.test.ts` and `test/cli/flows.e2e.test.ts` (re-pinned to `--purge`).
