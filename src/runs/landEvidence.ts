@@ -78,10 +78,12 @@ function foldPath(path: string): string {
  * The paths of `paths` (git-top relative, a rename's old name among them) in {@link LAND_ASK_PATHS}, holding a held
  * patch, or at or under one of `hookPaths` (the hook files and the scripts the repository's own hook declarations name,
  * `./hookPaths.ts`, top-relative, build/2), sorted and once each: as written, or from the project root below the top
- * that `prefix` names. A hook path matches without case and in one Unicode normalization form, as the hold matches it.
+ * that `prefix` names, or from any of the roots it lists (REQ-FLOW-102: every setup root, the run's own among them).
+ * A hook path matches without case and in one Unicode normalization form, as the hold matches it.
  */
-export function askPathsOf(paths: readonly string[], prefix = "", hookPaths: readonly string[] = []): string[] {
+export function askPathsOf(paths: readonly string[], prefix: string | readonly string[] = "", hookPaths: readonly string[] = []): string[] {
   const roots = hookPaths.map(foldPath);
+  const prefixes = typeof prefix === "string" ? [prefix] : prefix;
   const asks = (path: string): boolean =>
     LAND_ASK_PATHS.some((glob) => matchGlob(path, glob, { foldCase: true })) || matchGlob(path, HELD_PATCH, { foldCase: true });
   const hooked = (path: string): boolean => {
@@ -89,10 +91,15 @@ export function askPathsOf(paths: readonly string[], prefix = "", hookPaths: rea
     return roots.some((root) => folded === root || folded.startsWith(`${root}/`));
   };
   return [...new Set(paths)]
-    .filter((path) => {
-      const fromProject = fromProjectRoot(path, prefix);
-      return asks(path) || (fromProject !== null && asks(fromProject)) || hooked(path);
-    })
+    .filter(
+      (path) =>
+        asks(path) ||
+        prefixes.some((root) => {
+          const fromProject = fromProjectRoot(path, root);
+          return fromProject !== null && asks(fromProject);
+        }) ||
+        hooked(path),
+    )
     .toSorted();
 }
 
@@ -414,8 +421,11 @@ export interface LandInput {
   setting: ResolvedAutonomy;
   /** The changed paths, renames' old names included, and whether the list read whole. */
   files: { paths: readonly string[]; complete: boolean };
-  /** The project's folder below the git top (`git rev-parse --show-prefix`). */
-  prefix: string;
+  /**
+   * The project's folder below the git top (`git rev-parse --show-prefix`), or every setup root the land read with it
+   * (REQ-FLOW-102), each read as {@link askPathsOf} reads one.
+   */
+  prefix: string | readonly string[];
   /**
    * The hook files and declared hook scripts read at `Base:` and at the head (`./hookPaths.ts`, build/2), or why they
    * could not be read, which asks: whether the diff reaches a hook is then not known.

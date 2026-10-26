@@ -1599,9 +1599,12 @@ function heldLink(path: string, roots: readonly string[]): boolean {
   );
 }
 
-/** REQ-FLOW-102: the setup roots `entries` add or change a manifest in, each once ({@link setupRootOf}). */
+/**
+ * REQ-FLOW-102: the setup roots `entries` add or change a manifest in, or put a link or a submodule at as the setup
+ * folder, each once ({@link setupRootOf}).
+ */
 function setupsNamed(entries: readonly Changed[]): string[] {
-  return [...new Set(entries.flatMap((entry) => setupRootOf(entry.path) ?? []))];
+  return [...new Set(entries.flatMap((entry) => setupRootOf(entry.path, entry.link) ?? []))];
 }
 
 /**

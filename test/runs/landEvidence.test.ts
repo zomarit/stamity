@@ -109,6 +109,18 @@ describe("LAND_ASK_PATHS (decision D2)", () => {
     expect(askPathsOf(["tools/guard.mjs"])).toEqual([]);
   });
 
+  it("matches a path below any of several setup roots, as the hold reads every setup (REQ-FLOW-102)", () => {
+    const paths = ["apps/web/.claude/settings.json", "apps/api/.stamity/manifest.json", "apps/cli/.claude/settings.json", "apps/web/src/a.ts", ".mcp.json"];
+
+    expect(askPathsOf(paths, ["", "apps/web/", "apps/api/"])).toEqual([".mcp.json", "apps/api/.stamity/manifest.json", "apps/web/.claude/settings.json"]);
+    expect(askPathsOf(paths, ["apps/web/"])).toEqual(askPathsOf(paths, "apps/web/"));
+    expect(askPathsOf(paths, [])).toEqual(askPathsOf(paths));
+    expect(decideLand(input({ files: { paths, complete: true }, prefix: ["", "apps/web/"] }))).toMatchObject({
+      outcome: "asks",
+      reason: "the diff touches paths that define the evidence: .mcp.json, apps/web/.claude/settings.json",
+    });
+  });
+
   it("lets the charter, a rule file and an agent definition land on the evidence", () => {
     expect(askPathsOf(["lib/AGENTS.md", "pkg/CLAUDE.md", ".claude/rules/x.md", ".cursorrules", ".claude/agents/reviewer.md", ".github/prompts/p.md"])).toEqual([]);
   });

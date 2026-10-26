@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { gitWrite } from "../../src/cli/engine/gitWrite.ts";
-import { hookPathsAt, hookPathsRead, setupRootsAt, type HookGitRead, type HookScratch } from "../../src/runs/hookPaths.ts";
+import { hookPathsAt, hookPathsRead, setupRootOf, setupRootsAt, type HookGitRead, type HookScratch } from "../../src/runs/hookPaths.ts";
 import { NO_GIT_CONFIG } from "../support/repoFixtures.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -233,6 +233,78 @@ describe("hookPathsAt", () => {
 
       expect(await setupRootsAt(gitIn(repo), sha)).toEqual(["", "apps/web/"]);
       expect(await hookPathsAt({ git: gitIn(repo), scratch: scratch() }, ["", "apps/web/"], sha)).toMatch(/^hold refused: apps\/web\/\.stamity\/manifest\.json at Base: passes through a link/);
+    });
+
+    /**
+     * `repo`'s next commit with each of `entries` written to the index alone (whatever its tree held under that path
+     * dropped first): a link (mode 120000) or a submodule (mode 160000, at `HEAD`'s own commit), so every platform
+     * commits the shape; the new commit's id.
+     */
+    function retyped(repo: string, entries: Record<string, "link" | "submodule">): string {
+      const run = (args: string[], input?: string): string => execFileSync("git", args, { cwd: repo, encoding: "utf8", ...(input === undefined ? {} : { input }), env: { ...process.env, ...ENV } }).trim();
+      const head = run(["rev-parse", "HEAD"]);
+      for (const [path, kind] of Object.entries(entries)) {
+        run(["rm", "-q", "-r", "--cached", "--ignore-unmatch", "--", path]);
+        const entry = kind === "link" ? `120000,${run(["hash-object", "-w", "--stdin"], "../elsewhere")},${path}` : `160000,${head},${path}`;
+        run(["update-index", "--add", "--cacheinfo", entry]);
+      }
+      run(["commit", "-q", "-m", "retyped"]);
+      return run(["rev-parse", "HEAD"]);
+    }
+
+    it("lists a folder whose setup folder is a link or a submodule as a root, and one holding a plain file there as none", async () => {
+      const { repo } = await commit({ "a.txt": "a\n", "docs/.stamity": "a note\n" });
+      const sha = retyped(repo, { "apps/web/.stamity": "link", "libs/ui/.STAMITY": "submodule" });
+
+      expect(setupRootOf("apps/web/.stamity", true)).toBe("apps/web/");
+      expect(setupRootOf(".stamity", true)).toBe("");
+      expect(setupRootOf("apps/web/.stamity")).toBeNull();
+      expect(await setupRootsAt(gitIn(repo), sha)).toEqual(["apps/web/", "libs/ui/"]);
+      expect(await hookPathsAt({ git: gitIn(repo), scratch: scratch() }, ["", "apps/web/"], sha)).toMatch(
+        /^hold refused: apps\/web\/\.stamity\/manifest\.json at Base: passes through a link \(apps\/web\/\.stamity\)/,
+      );
+      // Spelled in another letter case, the folder refuses by its spelling before its kind is read.
+      expect(await hookPathsAt({ git: gitIn(repo), scratch: scratch() }, ["libs/ui/"], sha)).toMatch(/^hold refused: libs\/ui\/\.stamity\/manifest\.json at Base: is spelled in another letter case/);
+    });
+
+    it("refuses where a second root's setup folder or manifest is a submodule, as the run's own does", async () => {
+      const { repo } = await commit(TWO_SETUPS);
+      const folder = retyped(repo, { "apps/web/.stamity": "submodule" });
+      const manifest = retyped(repo, { "apps/web/.stamity": "submodule", "apps/api/.stamity/manifest.json": "submodule" });
+
+      expect(await setupRootsAt(gitIn(repo), folder)).toEqual(["", "apps/web/"]);
+      expect(await hookPathsAt({ git: gitIn(repo), scratch: scratch() }, ["", "apps/web/"], folder)).toMatch(/^hold refused: apps\/web\/\.stamity\/manifest\.json at Base: passes through a submodule/);
+      expect(await setupRootsAt(gitIn(repo), manifest)).toEqual(["", "apps/api/", "apps/web/"]);
+      expect(await hookPathsAt({ git: gitIn(repo), scratch: scratch() }, ["apps/api/"], manifest)).toMatch(/^hold refused: apps\/api\/\.stamity\/manifest\.json at Base: passes through a submodule/);
+    });
+
+    it("refuses a tree listing with a line it cannot read, rather than leave a root out", async () => {
+      const listing = `100644 blob ${"a".repeat(40)}\ta.txt\0not a tree line\0`;
+      const git: HookGitRead = () => Promise.resolve({ code: 0, stdout: listing, stderr: "" });
+
+      expect(await setupRootsAt(git, "b".repeat(40))).toMatch(/^hold refused: the setups in the tree of b{40} could not be listed \(an entry did not read\)/);
+    });
+
+    it("reads at most four setup roots at once in a tree holding ten, and holds every one's files", async () => {
+      const roots = Array.from({ length: 10 }, (_, index) => `apps/p${index}/`);
+      const { repo, sha } = await commit(Object.fromEntries(roots.map((root) => [`${root}.stamity/manifest.json`, "{}\n"])));
+      const real = gitIn(repo);
+      // Each root's read opens with one listing of the commit's own tree; how many of those are in flight together.
+      const flight = { now: 0, most: 0 };
+      const counting: HookGitRead = async (args) => {
+        const opening = args.length === 3 && args[0] === "ls-tree" && args[2] === sha;
+        if (opening) flight.most = Math.max(flight.most, (flight.now += 1));
+        try {
+          return await real(args);
+        } finally {
+          if (opening) flight.now -= 1;
+        }
+      };
+
+      const read = await hookPathsRead({ git: counting, scratch: scratch() }, roots, sha);
+
+      expect(flight.most).toBe(4);
+      expect(read).toEqual(roots.flatMap((root) => [`${root}.stamity/hooks`, `${root}.stamity/manifest.json`, `${root}.stamity/packs`]).toSorted());
     });
   });
 });

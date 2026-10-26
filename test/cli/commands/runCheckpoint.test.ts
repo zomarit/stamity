@@ -1212,6 +1212,105 @@ describe("stamity run checkpoint", () => {
       expect(git(repo, ["diff", "--cached", "--name-only"])).toBe("");
       expect(remoteHeads(remote)).toEqual(SEEDED);
     });
+
+    it("refuses before staging where a nested setup folder at Base: is a link, as the run's own does", async () => {
+      const { repo, remote } = await seed("unattended", { files: { "cfg/manifest.json": "{}\n" }, links: { [`${NESTED}/.stamity`]: "../../cfg" } });
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({
+        pushed: false,
+        committed: null,
+        notDone: [
+          `hold refused: ${NESTED}/.stamity/manifest.json at Base: passes through a link (${NESTED}/.stamity), so the hook scripts it names are unknown and the run pushes nothing; fix it on the base branch, then start the run again from it`,
+        ],
+      });
+      expect(git(repo, ["diff", "--cached", "--name-only"])).toBe("");
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("holds a setup folder the run adds as a submodule, and the client settings beside it", async () => {
+      const { repo, remote } = await seed("unattended");
+      const nested = join(repo, NESTED, ".stamity");
+      await put(repo, `${NESTED}/.stamity/manifest.json`, "{}\n");
+      git(nested, ["-c", "init.defaultBranch=main", "init", "-q"]);
+      git(nested, ["add", "manifest.json"]);
+      git(nested, ["commit", "-q", "-m", "nested"]);
+      await put(repo, `${NESTED}/.claude/settings.json`, '{ "hooks": {} }\n');
+      await put(repo, `${NESTED}/src/a.ts`, "the unit's change\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", `${NESTED}/.stamity`, `${NESTED}/.claude/settings.json`, `${NESTED}/src/a.ts`]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [`${NESTED}/.claude/settings.json`, `${NESTED}/.stamity`] });
+      const tree = pushedTree(remote);
+      expect(tree).not.toContain(`${NESTED}/.claude/settings.json`);
+      expect(tree).not.toContain(`${NESTED}/.stamity`);
+      expect(tree).toContain(`${NESTED}/src/a.ts`);
+    });
+
+    it.skipIf(process.platform === "win32")("holds a setup folder the run adds as a link, and the client settings beside it", async () => {
+      const { repo, remote } = await seed("unattended");
+      await put(repo, "cfg/manifest.json", "{}\n");
+      await put(repo, `${NESTED}/.claude/settings.json`, '{ "hooks": {} }\n');
+      await symlink("../../cfg", join(repo, NESTED, ".stamity"));
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "cfg", `${NESTED}/.stamity`, `${NESTED}/.claude/settings.json`]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pushed: true, notDone: [], held: [`${NESTED}/.claude/settings.json`, `${NESTED}/.stamity`] });
+      const tree = pushedTree(remote);
+      expect(tree).not.toContain(`${NESTED}/.stamity`);
+      expect(tree).toContain("cfg/manifest.json");
+    });
+
+    it("refuses the push when a commit it would send adds a setup below the top with its client settings", async () => {
+      const { repo, remote } = await seed("unattended");
+      await put(repo, `${NESTED}/.stamity/manifest.json`, "{}\n");
+      await put(repo, `${NESTED}/.claude/settings.json`, '{ "hooks": {} }\n');
+      git(repo, ["add", "--", NESTED]);
+      git(repo, ["commit", "-q", "-m", "run's own commit"]);
+      await writeFile(join(repo, "a.txt"), "changed\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt"]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false, notDone: [`held path in history (${NESTED}/.claude/settings.json)`, `held path in history (${NESTED}/.stamity/manifest.json)`] });
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("refuses the push when HEAD's tree adds a setup below the top after the commit, a hook having staged it again", async () => {
+      const { repo, remote } = await seed("unattended");
+      await put(repo, `${NESTED}/.stamity/manifest.json`, "{}\n");
+      await put(repo, `${NESTED}/.claude/settings.json`, '{ "hooks": {} }\n');
+      await writeFile(join(repo, "a.txt"), "changed\n");
+      const hook = join(repo, ".git", "hooks", "pre-commit");
+      await writeFile(hook, `#!/bin/sh\ngit add -- ${NESTED}\n`);
+      await chmod(hook, 0o755);
+      const held = [`${NESTED}/.claude/settings.json`, `${NESTED}/.stamity/manifest.json`];
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", "a.txt", ...held]);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pushed: false, held, notDone: held.map((path) => `held path in the pushed tree (${path})`) });
+      expect(pushes()).toEqual([]);
+      expect(remoteHeads(remote)).toEqual(SEEDED);
+    });
+
+    it("lists a nested setup's client settings in a dry run's would hold", async () => {
+      const { repo } = await seed("unattended", { files: { [`${NESTED}/.stamity/manifest.json`]: "{}\n", [`${NESTED}/.claude/settings.json`]: "{}\n" } });
+      await put(repo, `${NESTED}/.claude/settings.json`, '{ "hooks": { "steered": true } }\n');
+      await writeFile(join(repo, "a.txt"), "the unit's change\n");
+
+      const { code, doc } = await run(repo, [...CHECKPOINT, "--dry-run", "--paths", "a.txt", `${NESTED}/.claude/settings.json`]);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ dryRun: true, held: [`${NESTED}/.claude/settings.json`] });
+      expect(pushes()).toEqual([]);
+    });
   });
 
   it("pushes HEAD to the run's branch alone: no main, --force, --tags or -- in the push argv", async () => {

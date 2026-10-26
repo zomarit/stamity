@@ -421,6 +421,41 @@ describe("stamity run land", () => {
     expect(kinds()).not.toContain("merge");
   });
 
+  it("asks for a diff editing a nested setup's client settings or the script its declaration names, from a run at the git top (REQ-FLOW-102)", async () => {
+    const declaring = `${JSON.stringify({ hooks: [{ event: "pre_tool_use", command: ["node", "tools/lint.mjs"] }] })}\n`;
+    const { repo } = await seed({ files: { "apps/web/.stamity/manifest.json": "{}\n", "apps/web/.stamity/hooks/lint.json": declaring, "apps/web/tools/lint.mjs": "base lint\n" } });
+    route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: "apps/web/.claude/settings.json" }, { filename: "apps/web/tools/lint.mjs" }]);
+
+    const result = await run(repo, ["land", "--run", RUN]);
+
+    expect(result.code).toBe(1);
+    expect(result.doc).toMatchObject({
+      outcome: "asks",
+      asks: { act: "pr-merge", reason: "the diff touches paths that define the evidence: apps/web/.claude/settings.json, apps/web/tools/lint.mjs" },
+      evidence: { held: ["apps/web/.claude/settings.json", "apps/web/tools/lint.mjs"] },
+    });
+    expect(kinds()).not.toContain("merge");
+  });
+
+  it("asks for a diff adding a setup below the top with its client settings, the setup only at the head (REQ-FLOW-102)", async () => {
+    const { repo, remote } = await seed();
+    await put(repo, "apps/api/.stamity/manifest.json", "{}\n");
+    await put(repo, "apps/api/.cursor/hooks.json", "{}\n");
+    git(repo, ["add", "-A"]);
+    git(repo, ["commit", "-q", "-m", "a setup"]);
+    git(repo, ["push", "-q", remote, `HEAD:refs/heads/${RUN_BRANCH}`]);
+    const head = git(repo, ["rev-parse", "HEAD"]);
+    route("GET repos/o/r/pulls/7", pull(head));
+    route(`GET repos/o/r/commits/${head}/check-runs`, { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] });
+    route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: "apps/api/.stamity/manifest.json" }, { filename: "apps/api/.cursor/hooks.json" }]);
+
+    const result = await run(repo, ["land", "--run", RUN]);
+
+    expect(result.code).toBe(1);
+    expect(result.doc).toMatchObject({ outcome: "asks", evidence: { held: ["apps/api/.cursor/hooks.json", "apps/api/.stamity/manifest.json"] } });
+    expect(kinds()).not.toContain("merge");
+  });
+
   it("reads a work-tree ledger that differs from the commit's only in CRLF line ends as the same ledger", async () => {
     const { repo } = await seed();
     const path = join(repo, RUN_DIR, "ledger.jsonl");

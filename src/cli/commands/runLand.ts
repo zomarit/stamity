@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join, parse, resolve } from "node:path";
 import { readAutonomy, strictestAutonomy, type ResolvedAutonomy } from "../../config/autonomy.ts";
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
 import { readGitSurface, SURFACE_RECORD_FILE, surfaceRefusal, type RecordFileReads } from "../../runs/gitSurface.ts";
-import { hookPathsRead, type HookScratch } from "../../runs/hookPaths.ts";
+import { hookPathsRead, setupRootsAt, type HookScratch } from "../../runs/hookPaths.ts";
 import {
   askPathsOf,
   checkEvidence,
@@ -439,8 +439,9 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     // build/2, review/74, review/80: the hook files and the scripts the repository's own declarations name, at Base:,
     // at the head and at the default branch's tip, ask in every mode: a run that edits a declared hook script reaches
     // every later session's hook, whichever of the three declares it.
-    const hookPaths = await declaredHookPaths({ base: head.base, head: sha, tip: branch.tip, defaultBranch, prefix }, git, gitLine);
-    result.evidence.held = askPathsOf(files, prefix, typeof hookPaths === "string" ? [] : hookPaths);
+    // REQ-FLOW-102: from every setup root the three trees hold, as the hold reads them.
+    const { paths: hookPaths, setups } = await declaredHookPaths({ base: head.base, head: sha, tip: branch.tip, defaultBranch, prefix }, git, gitLine);
+    result.evidence.held = askPathsOf(files, setups, typeof hookPaths === "string" ? [] : hookPaths);
 
     // (7) The review threads, every page, read again on every later read (review/72).
     const readThreads = async (): Promise<number | null> => {
@@ -476,7 +477,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       beforeReady,
       setting,
       files: { paths: files, complete: counted === now.changedFiles },
-      prefix,
+      prefix: setups,
       hookPaths,
       checks,
       threads,
@@ -648,15 +649,19 @@ async function answered(call: Promise<GhResponse>, what: string): Promise<GhResp
 /**
  * The hook paths the declarations name at the record's `Base:`, at the head and at the default branch's tip
  * (`../../runs/hookPaths.ts`, review/74, review/80), together and sorted; or why they are not known, which asks, worded
- * with the person's next step (review/81). The tip is fetched first where this clone does not hold it.
+ * with the person's next step (review/81). The tip is fetched first where this clone does not hold it. REQ-FLOW-102:
+ * every setup root any of the three trees holds is read beside the run's own project, as the hold reads them, and
+ * `setups` lists them for the ask set; a tree whose setups could not be listed asks, `setups` then the run's own alone.
  */
 async function declaredHookPaths(
   at: { base: string | null; head: string; tip: string; defaultBranch: string; prefix: string },
   git: (args: readonly string[]) => Promise<GitWriteResult>,
   gitLine: (args: readonly string[]) => Promise<string | null>,
-): Promise<string[] | string> {
-  const unknown = (where: string, why: string, next: string): string =>
-    `the hook declarations at ${where} could not be read (${why}), so whether the diff reaches a hook script is not known; ${next}, then run land again, or a person decides`;
+): Promise<{ paths: string[] | string; setups: string[] }> {
+  const unknown = (where: string, why: string, next: string): { paths: string; setups: string[] } => ({
+    paths: `the hook declarations at ${where} could not be read (${why}), so whether the diff reaches a hook script is not known; ${next}, then run land again, or a person decides`,
+    setups: [at.prefix],
+  });
   const onDefault = `fix the declaration on ${at.defaultBranch}`;
   const base = at.base === null ? null : await gitLine(["rev-parse", "--verify", "--quiet", `${at.base}^{commit}`]);
   if (base === null) return unknown("the record's Base:", "it names no commit here", "write the commit the run started from as the record's Base:");
@@ -673,15 +678,24 @@ async function declaredHookPaths(
     { where: `${at.defaultBranch}'s tip ${at.tip}`, commit: at.tip, next: onDefault },
     { where: `the head ${at.head}`, commit: at.head, next: "fix the declaration on the run's branch" },
   ];
-  const read = await Promise.all(sides.map((side) => hookPathsRead(reads, at.prefix, side.commit)));
+  const listed = await Promise.all(sides.map((side) => setupRootsAt(git, side.commit)));
+  const setups = [at.prefix];
+  for (const [index, side] of sides.entries()) {
+    const roots = listed[index];
+    if (roots === undefined) continue;
+    if (typeof roots === "string") return unknown(side.where, "the setups in its tree could not be listed", side.next);
+    setups.push(...roots);
+  }
+  const unique = [...new Set(setups)];
+  const read = await Promise.all(sides.map((side) => hookPathsRead(reads, unique, side.commit)));
   const paths: string[] = [];
   for (const [index, side] of sides.entries()) {
     const found = read[index];
     if (found === undefined) continue;
-    if (!Array.isArray(found)) return unknown(side.where, found.subject === null ? found.why : `${found.subject} ${found.why}`, side.next);
+    if (!Array.isArray(found)) return { ...unknown(side.where, found.subject === null ? found.why : `${found.subject} ${found.why}`, side.next), setups: unique };
     paths.push(...found);
   }
-  return [...new Set(paths)].toSorted();
+  return { paths: [...new Set(paths)].toSorted(), setups: unique };
 }
 
 /** The fields of one list entry the lookup matches on. */
