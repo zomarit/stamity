@@ -344,4 +344,30 @@ describe("check and clean over the copies", () => {
     expect(existsSync(abs(root, CLAUDE_HOOKS_DIR))).toBe(false);
     expect(await readFile(abs(root, OWNER_HOOK), "utf8")).toBe(OWNER_HOOK_BODY);
   });
+
+  it("keeps the policy copy a kept settings document's guard reads, so that guard still answers a governed call (REQ-FLOW-036)", async () => {
+    const root = await freshRepo();
+    await init(root);
+    const document = JSON.parse(await readFile(abs(root, CLAUDE_HOOK_POLICIES_PATH), "utf8")) as {
+      policies: { agentId: string; allow: string[] }[];
+    };
+    // A governed agent the policy lets read: without the policy copy the guard refuses it as POLICY_UNREADABLE.
+    const agent = document.policies.find((policy) => policy.allow.includes("read"))?.agentId;
+    if (agent === undefined) throw new Error("the fixture's policy document grants no agent a read");
+    // The owner's comment line: the document no longer parses, so the sweep keeps it whole and it still runs every copy.
+    const settings = abs(root, CLAUDE_SETTINGS_PATH);
+    await writeFile(settings, `// team settings\n${await readFile(settings, "utf8")}`, "utf8");
+
+    const result = await runInProcess([cleanCommand], ["clean", "-y"], { cwd: root });
+
+    expect(result.code, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(existsSync(abs(root, CLAUDE_HOOK_POLICIES_PATH)), CLAUDE_HOOK_POLICIES_PATH).toBe(true);
+    const guard = spawnSync(process.execPath, [abs(root, `${CLAUDE_HOOKS_DIR}/stamity-pre-tool-use-guard.mjs`)], {
+      cwd: root,
+      input: JSON.stringify({ agent_type: agent, tool_name: "Read", tool_input: { file_path: "README.md" } }),
+      encoding: "utf8",
+    });
+    expect(guard.status, guard.stderr).toBe(0);
+    expect(guard.stderr).not.toContain("POLICY_UNREADABLE");
+  });
 });

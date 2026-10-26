@@ -12,12 +12,14 @@
  * `permissions.allow` row; releases up to 1.12.0 rendered three, which leave
  * through the bound below. No comment syntax can carry a marker, so ownership is
  * decided per ENTRY by the shared core (`./coOwnedJson.ts`, whose rules this
- * module only parameterises): **the engine owns each allow row, deny row, ask
- * row and hook entry it wrote, recorded on the ledger row by the hash of its
- * canonical JSON (`LedgerEntry.coOwned`), and nothing else in the file.** It
- * never replaces or removes a deny or ask row, any other member of
- * `permissions`, or an entry it did not write; the file keeps its own
- * indentation, key order, line ending and final newline.
+ * module only parameterises): **the engine owns each allow row and hook entry
+ * it wrote, recorded on the ledger row by the hash of its canonical JSON
+ * (`LedgerEntry.coOwned`), and nothing else in the file. A deny or ask row it
+ * added is recorded and never owned: `clean` keeps it, and `sync` removes only a
+ * recorded row this version no longer renders (one of `RETIRED_CLAUDE_ROWS`, or
+ * an ask row the autonomy setting does not render).** It never replaces an
+ * owner's row, any other member of `permissions`, or an entry it did not write;
+ * the file keeps its own indentation, key order, line ending and final newline.
  *
  * The deny and ask rows ({@link ROW_POINTERS}, REQ-FLOW-036). A hash cannot
  * tell the engine's row from an owner's equal one, whether the owner wrote it

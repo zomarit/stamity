@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { CURSOR_GUARD_EVENTS, EVENT_RENAME, MCP_GUARD_PATH, SUBAGENT_GUARD_PATH, buildHooksJson } from "../../src/adapters/cursor.ts";
-import type { HookInterchange } from "../../src/hooks/model.ts";
+import { CLAUDE_HOOK_POLICIES_PATH } from "../../src/adapters/claude.ts";
+import { CLAUDE_HOOKS_DIR, type HookInterchange } from "../../src/hooks/model.ts";
 import { portableHookCommand } from "../../src/hooks/portableRunner.ts";
 import { planCoOwnedJson, reduceCoOwnedJson } from "../../src/manifest/coOwnedJson.ts";
 import {
@@ -816,6 +817,18 @@ describe("hookScriptReader", () => {
     } finally {
       parse.mockRestore();
     }
+  });
+
+  it("says a document running a guard under Claude Code's hook folder runs the policy copy that guard reads (REQ-FLOW-036)", () => {
+    const guard = `${CLAUDE_HOOKS_DIR}/stamity-pre-tool-use-guard.mjs`;
+    const settings = JSON.stringify({ hooks: { PreToolUse: [{ hooks: [{ type: "command", command: `node "\${CLAUDE_PROJECT_DIR}/${guard}"` }] }] } });
+    expect(reader.isHookScript(CLAUDE_HOOK_POLICIES_PATH)).toBe(true);
+    expect(reader.runs(settings, guard)).toBe(true);
+    expect(reader.runs(settings, CLAUDE_HOOK_POLICIES_PATH)).toBe(true);
+    // A document running only scripts elsewhere holds no policy copy, nor another file in the folder.
+    const elsewhere = JSON.stringify({ hooks: { x: [{ command: `node ${HOOKS_GENERATED_DIR}/codex/a.mjs` }] } });
+    expect(reader.runs(elsewhere, CLAUDE_HOOK_POLICIES_PATH)).toBe(false);
+    expect(reader.runs(settings, `${CLAUDE_HOOKS_DIR}/notes.json`)).toBe(false);
   });
 });
 

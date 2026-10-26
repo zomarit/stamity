@@ -47,6 +47,7 @@
 
 import { createHash } from "node:crypto";
 import { isPlainObject } from "../config/parse.ts";
+import { CLAUDE_HOOK_POLICIES_FILE } from "../emit/hooksInfra.ts";
 import { CLAUDE_HOOKS_DIR } from "../hooks/model.ts";
 import { HOOKS_GENERATED_DIR, STATE_DIR } from "../types/markers.ts";
 import { argvExecutedScript, executedScript, isPackScriptPath, printableName, type CoOwnedJsonSpec } from "./coOwnedJson.ts";
@@ -765,6 +766,9 @@ export function referencedHookScripts(text: string): Set<string> {
   return scripts;
 }
 
+/** The tool-policy document's copy the guards under `.claude/hooks/stamity/` read (`../adapters/claude.ts::CLAUDE_HOOK_POLICIES_PATH`). */
+const CLAUDE_POLICY_COPY = `${CLAUDE_HOOKS_DIR}/${CLAUDE_HOOK_POLICIES_FILE}`;
+
 /**
  * How the reclaim sweep reads a hooks document it keeps
  * (`../merge/reclaim.ts::HookScriptReader`): which candidate paths are engine
@@ -772,6 +776,12 @@ export function referencedHookScripts(text: string): Set<string> {
  * (`.claude/hooks/stamity/`), an installed pack's folder, or one of
  * `guardPaths` — and whether a kept document's text runs one. Each
  * document's references are read once, however the calls interleave.
+ *
+ * The policy copy beside Claude Code's guards ({@link CLAUDE_POLICY_COPY}) is
+ * run by no entry, but the tool-policy guard reads it and fails closed on every
+ * governed call when it is gone (REQ-FLOW-036). So a document that runs any
+ * script under `.claude/hooks/stamity/` "runs" it too, and the sweep keeps it
+ * while that document stays. The hold only keeps a file; it never deletes one.
  */
 export function hookScriptReader(guardPaths: readonly string[]): {
   isHookScript(path: string): boolean;
@@ -792,7 +802,8 @@ export function hookScriptReader(guardPaths: readonly string[]): {
         entry = { scripts: referencedHookScripts(text), flat: forwardSlashes(text) };
         read.set(text, entry);
       }
-      return entry.scripts.has(path) || entry.flat.includes(path);
+      if (entry.scripts.has(path) || entry.flat.includes(path)) return true;
+      return path === CLAUDE_POLICY_COPY && [...entry.scripts].some((script) => script.startsWith(`${CLAUDE_HOOKS_DIR}/`));
     },
   };
 }
