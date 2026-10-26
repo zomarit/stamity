@@ -1854,6 +1854,23 @@ describe("copilot-setup-steps.yml", () => {
     expect(stepsOf(withRc).filter((step) => step.env !== undefined)).toHaveLength(1);
   });
 
+  it("keeps a fork's scope registry on the install line beside the project's .npmrc (review/68)", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({ "repo/.npmrc": "registry=https://npm.mirror.example/\n" });
+    const registry = "https://npm.acme.example/registry";
+    const ctx: EmissionContext = {
+      ...ctxOf({ rootDir: temp.path("repo"), languages: ["python"] }),
+      packageName: "@acme/stamity",
+      npmRegistry: registry,
+    };
+
+    const yaml = rowAt(await planResidueFor(ctx), COPILOT_SETUP_STEPS_PATH).content;
+
+    // A command-line setting outranks every config file, so the scope still resolves from the fork's registry.
+    expect(runSteps(yaml)[0]).toBe(`npm install --global --@acme:registry=${registry} @acme/stamity@${ENGINE_VERSION}`);
+    expect(yaml).toContain("NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc");
+  });
+
   // ── Who owns the workflow (REQ-FLOW-149) ─────────────────────────────
 
   /** A context whose manifest carries `toolOptions.copilot.setupSteps`. */
