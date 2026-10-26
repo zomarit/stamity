@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { STATE_DIR } from "../types/markers.ts";
 
@@ -27,7 +27,7 @@ import { STATE_DIR } from "../types/markers.ts";
  * first write" warning into a red `check` and an exit 1, which is a severity
  * escalation nothing asked for. It is scaffolding, like the state directories
  * themselves and like the `.gitignore` rule: written by the verb, owned by no
- * ledger row, removed with `.stamity/` when `clean` takes the setup out.
+ * ledger row, taken back by `clean` ({@link removeStateScaffold}).
  */
 export const STATE_SUBDIRS: readonly string[] = ["learnings", "handoffs"];
 
@@ -88,4 +88,31 @@ export async function ensureStateScaffold(
     }),
   );
   return created.filter((row): row is string => row !== null);
+}
+
+/**
+ * Take the placeholders back out (REQ-FLOW-028): `clean` keeps the state
+ * directory's user content, so the scaffold that marks an empty store is the
+ * setup's to remove, and only as the bytes it wrote. Each placeholder that is a
+ * regular file holding exactly the scaffold's body is unlinked; an edited one,
+ * a link at its name and a missing one are left. The folders stay for the
+ * caller, which prunes them once empty.
+ *
+ * Returns the repo-relative placeholders it removed, in creation order.
+ */
+export async function removeStateScaffold(rootDir: string): Promise<string[]> {
+  const removed = await Promise.all(
+    stateKeepPaths().map(async (path) => {
+      const absPath = join(rootDir, ...path.split("/"));
+      try {
+        if (!(await lstat(absPath)).isFile() || (await readFile(absPath, "utf8")) !== STATE_KEEP_CONTENT) return null;
+        await unlink(absPath);
+        return path;
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException | null)?.code === "ENOENT") return null;
+        throw err;
+      }
+    }),
+  );
+  return removed.filter((path): path is string => path !== null);
 }

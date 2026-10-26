@@ -1,11 +1,12 @@
 import { existsSync } from "node:fs";
-import { chmod, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, readFile, readdir, symlink, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   STATE_KEEP_FILE,
   STATE_SUBDIRS,
   ensureStateScaffold,
+  removeStateScaffold,
   stateKeepPaths,
 } from "../../src/emit/stateScaffold.ts";
 import { STATE_DIR } from "../../src/types/markers.ts";
@@ -165,5 +166,42 @@ describe("ensureStateScaffold", () => {
       `${STATE_DIR}/learnings`,
       `${STATE_DIR}/handoffs`,
     ]);
+  });
+});
+
+describe("removeStateScaffold (REQ-FLOW-028)", () => {
+  it("unlinks each placeholder that still holds the scaffold's bytes, reports it, and leaves its folder", async () => {
+    const root = getTemp().dir;
+    await ensureStateScaffold(root);
+
+    const removed = await removeStateScaffold(root);
+
+    expect(removed).toEqual(stateKeepPaths());
+    for (const name of STATE_SUBDIRS) {
+      expect(existsSync(keepIn(root, name))).toBe(false);
+      // The folder is the caller's to prune once it is empty: a learning beside the placeholder keeps it.
+      expect(existsSync(dirIn(root, name))).toBe(true);
+    }
+  });
+
+  it("keeps an edited placeholder and a link at the placeholder's name, and passes over a missing one", async () => {
+    const root = getTemp().dir;
+    await ensureStateScaffold(root);
+    const edited = "# our team's note on why handoffs are committed\n";
+    await writeFile(keepIn(root, "handoffs"), edited, "utf-8");
+    // A link standing where the placeholder was, aimed at a file with the scaffold's very bytes: not the file the setup wrote.
+    const outside = getTemp().path("outside-keep");
+    await writeFile(outside, KEEP_BODY, "utf-8");
+    await unlink(keepIn(root, "learnings"));
+    await symlink(outside, keepIn(root, "learnings"));
+
+    expect(await removeStateScaffold(root)).toEqual([]);
+    expect(await readFile(keepIn(root, "handoffs"), "utf-8")).toBe(edited);
+    expect((await lstat(keepIn(root, "learnings"))).isSymbolicLink()).toBe(true);
+    expect(await readFile(outside, "utf-8")).toBe(KEEP_BODY);
+
+    const bare = getTemp().path("bare");
+    await mkdir(bare, { recursive: true });
+    expect(await removeStateScaffold(bare)).toEqual([]);
   });
 });
