@@ -170,12 +170,16 @@ describe("upgrade — moves a setup to the running release", () => {
   it("reports a second run as a no-op", async () => {
     const root = await seedSetup(tempDir());
     await runUpgrade(input(root), realDeps);
+    const manifestBefore = await readFile(manifestPath(root), "utf8");
 
-    const again = await runUpgrade(input(root), realDeps);
+    // TEST CHANGE, justified: REQ-FLOW-032 — a no-op upgrade leaves the manifest
+    // byte-identical. The second run's clock is a day later, so a restamp would show.
+    const again = await runUpgrade(input(root, { now: new Date("2026-01-02T00:00:00.000Z") }), realDeps);
 
     expect(again.changed).toEqual([]);
     expect(again.pin).toEqual({ field: "devDependencies", from: V, to: V });
     expect(again.noop).toBe(true);
+    expect(await readFile(manifestPath(root), "utf8")).toBe(manifestBefore);
   });
 
   it("moves a caret pin and keeps the caret", async () => {

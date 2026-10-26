@@ -2667,8 +2667,10 @@ describe("four-tool union", () => {
     expect(claudeMd).toContain("STAMITY:BEGIN");
     // TEST CHANGE: native skill discovery makes the extra bridge paragraph
     // redundant. Keep exactly the managed import; native copies are proven above.
+    // TEST CHANGE, justified: REQ-FLOW-032 — the BEGIN marker carries no version, so
+    // a release that changes nothing in the block changes no byte; it pinned the stamp.
     expect(claudeMd.trim().split("\n")).toEqual([
-      "<!-- STAMITY:BEGIN v1.0.0-golden -->",
+      "<!-- STAMITY:BEGIN -->",
       `@${AGENTS_MD_FILE}`,
       "<!-- STAMITY:END -->",
     ]);

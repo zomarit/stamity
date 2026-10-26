@@ -193,14 +193,16 @@ describe("outputWriteOptions — one lane decision for both verbs", () => {
     expect("appendIfNoBlock" in options).toBe(false);
   });
 
-  it("always declares the version, the force flag, the backup and the boundary", () => {
+  // TEST CHANGE, justified: REQ-FLOW-032 — no version reaches the writer, so a merged
+  // block's BEGIN marker is the bare one; this asserted `version: ENGINE_VERSION`.
+  it("declares the force flag, the backup and the boundary, and no version", () => {
     const options = outputWriteOptions(null, ENGINE_VERSION, true, "/repo");
     expect(options).toMatchObject({
-      version: ENGINE_VERSION,
       force: true,
       backup: true,
       boundaryDir: "/repo",
     });
+    expect("version" in options).toBe(false);
   });
 
   /**

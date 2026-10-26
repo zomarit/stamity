@@ -298,13 +298,18 @@ else { process.stderr.write('Unexpected GitHub mutation: ' + args.join(' ')); pr
   // Parameterised with REQ-UPSTREAM-016: the lane is the same either way, and the manifest is
   // the variable the recovery comparison is being judged on.
   function syncedFixture(manifest: Record<string, unknown> = MINIMAL_MANIFEST) {
-    // Call the real sync write seam: its wall-clock updatedAt is the only generated
-    // content difference between two fresh integrations of this unchanged target.
+    // Call the real sync write seam, with the file removed first: the writer then stamps a
+    // fresh wall-clock updatedAt, the only generated content difference between two fresh
+    // integrations of this unchanged target. That is what a release before REQ-FLOW-032 left
+    // on every sync, and the recovery's updatedAt exception still has to accept it.
+    // TEST CHANGE, justified: REQ-FLOW-032 — writeManifest no longer restamps unchanged
+    // content, so the script removes the manifest before writing it back; it called
+    // writeManifest over the file as it stood and relied on the restamp.
     const source = pathToFileURL(join(ROOT, "src/manifest/manifest.ts")).href;
     const f = fixture({
       files: {
         ".stamity/manifest.json": `${JSON.stringify(manifest, null, 2)}\n`,
-        "scripts/sync-manifest.mjs": `import { readManifest, writeManifest } from ${JSON.stringify(source)};\nawait writeManifest(process.cwd(), await readManifest(process.cwd()));\n`,
+        "scripts/sync-manifest.mjs": `import { rm } from "node:fs/promises";\nimport { manifestPath, readManifest, writeManifest } from ${JSON.stringify(source)};\nconst current = await readManifest(process.cwd());\nawait rm(manifestPath(process.cwd()));\nawait writeManifest(process.cwd(), current);\n`,
       },
       config: {
         regenerate: ["node scripts/gen.mjs", "node scripts/sync-manifest.mjs"],
