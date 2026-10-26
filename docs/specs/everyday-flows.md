@@ -1,6 +1,6 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.16.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
@@ -175,6 +175,26 @@ states the code, and a line headed "As built" says what moved. Citations into `s
 before, but for a rule table or a short block cited by its lines. A ledger id in that text (`review/158`, `build/9`) is
 that run's own. This merge allocates none of REQ-FLOW-135, REQ-FLOW-136 and REQ-FLOW-146 to REQ-FLOW-149. That text
 is not in a release yet; it ships with the next minor after 1.16.0.
+
+REQ-FLOW-027 to REQ-FLOW-029, REQ-FLOW-032 to REQ-FLOW-034, REQ-FLOW-048, REQ-FLOW-049 and REQ-FLOW-149, and the text
+dated 2026-10-26 under REQ-FLOW-016, REQ-FLOW-022, REQ-FLOW-026, REQ-FLOW-036, REQ-PLUGIN-016, REQ-PLUGIN-046,
+REQ-FLOW-089, REQ-FLOW-091, REQ-FLOW-092, REQ-FLOW-101, REQ-FLOW-102, REQ-FLOW-111, REQ-FLOW-118, REQ-FLOW-120,
+REQ-FLOW-123, REQ-FLOW-132, REQ-FLOW-133, REQ-FLOW-138 and REQ-FLOW-150 and in the Concerns, come from the spec delta of
+`docs/plans/022-autonomy-distribution-02.md` (plan 022 file 2, Package 20, run `2026-10-25_autonomy-distribution-02`),
+each entry read with every "Amended at …" block of the plan's unit cells that restates it and with the as-built deltas
+the units' implementer and fixer reports declared, merged once by that run's pass `spec2` at its Prove phase. Where a
+delta entry and the code differ, the text states the code, and a line headed "As built" says what moved. Every
+`path:line` in that text reads at `1fe7d915`, the integration head holding every unit of the file but
+`b1-fork-ci-job`; a citation of `b1`'s own work (`.github/workflows/ci.yml`, `scripts/ci/fork-probe.mjs`, its
+`clean --pack` re-render and its land ask set) reads on its lane `p20/b1`, at `9bdbde48` or `5509611f`, and says so.
+Citations into the modules the run rewrote by hundreds of lines (`src/cli/commands/clean.ts`,
+`src/cli/commands/run.ts`, `src/hooks/personOnly.ts`, `src/manifest/manifest.ts`, `src/cli/commands/sync/engine.ts`)
+name the file and the symbol, as before. A ledger id in that text (`review/28`, `build/28`) is that run's own unless a
+run is named beside it. Of the ids plan 016 held here, REQ-FLOW-030, REQ-FLOW-031, REQ-FLOW-035 and REQ-FLOW-039 to
+REQ-FLOW-047 stay unallocated, and REQ-FLOW-050, Copilot's touchpoints as shared skills, is held with its unit
+`b13-copilot-touchpoints-skills` for the maintainer's decision: neither it nor the delta's sentences on Copilot's prompt
+files under REQ-FLOW-026 and REQ-FLOW-118 are merged. That text is not in a release yet; it ships with the next minor
+after 1.16.0.
 
 ## Intent
 
@@ -501,7 +521,7 @@ byte-identical tree cites (`:313-315`).
   table (`review/117`).
 - **Proof:** `test/corpus/commands/work.test.ts`; QA.
 
-### REQ-FLOW-016 — Setup ignores the review gate's state files
+### REQ-FLOW-016 — Setup ignores the machine-local files it writes
 
 `init`, `sync`, the migration carry and `config mcp` make sure `.gitignore` covers four entries: `.env.mcp` and the
 review gate's runtime state — `.stamity/review-gate.json`, its `.lock` directory and its `.tmp-*` temp files
@@ -532,6 +552,43 @@ name them (`review/67`).
   cache with the neutral reason (`GITIGNORE_REASONS`, `src/cli/commands/init/panel.ts`). Proof: `test/mcp/env.test.ts`,
   `test/cli/commands/init.test.ts`, `test/cli/commands/initPanel.test.ts`, `test/cli/commands/syncEngine.test.ts`,
   `test/emit/upgradeFrom1140.e2e.test.ts`, each holding the new entries last.
+- **Amended 2026-10-26** (plan 022 file 2, unit `b4-gitignore-lines` and its fix round, with `b3-clean-keeps-state`'s
+  order and `b16-docs-pointers-batch`'s rollup; ledger rows `review/28` to `review/32`, `build/9`, `build/10`,
+  `build/12` and `build/13`; read at `1fe7d915`; the heading read "Setup ignores the review gate's state files"). Given
+  `init`, `sync` or `config mcp add`, Then `.gitignore` gets each entry the setup needs that the file's lines do not
+  already cover, where the paragraph above reads "covers four entries" and the 2026-10-18 bullet eight: `.env.mcp` only
+  when a selected MCP server needs a credential or a `.env.mcp` exists on disk, and each of the other seven — the
+  review gate's three, the pre-flight's canary, the run-ended marker, `context-once/` and the model cache — whenever
+  any client is set up, since a writer of each serves every client (decision E1; `GITIGNORE_ENTRY_WHEN`,
+  `src/mcp/env.ts:256-298`; `requiredGitignoreEntries`, the same file). An entry whose target is on disk always keeps
+  its line. The ledger records each line the engine appended on one `.gitignore` row per client (`coOwned.lines`,
+  beside `createdFile` and `terminatorAdded`; `gitignoreLedgerRows`), `OWNED_PATHS` lists `.gitignore` and moves to
+  `version` 4 (`src/manifest/ownedPaths.ts:88-90`), and the manifest reader refuses, with `CONFIG_ERROR` before any
+  write, `coOwned.lines` on any other path or a recorded line outside `REQUIRED_GITIGNORE_ENTRIES`; the take-back
+  re-checks the same bound (`ownedGitignoreLines`, `src/mcp/env.ts`). A line the record does not hold is never removed,
+  so a ledger from 1.16.0 or earlier owns none. Once written, the `.env.mcp` line is never taken back, by `sync` or
+  `clean`, whatever one checkout holds: the `.gitignore` and its record are committed and shared, so a checkout without
+  the file must not drop another checkout's ignore rule (`GITIGNORE_LINES_KEPT_ONCE_WRITTEN`, `:297`; `review/28`, a
+  declared default). A full `clean` takes back each other recorded line whose target is gone after its sweep and
+  deletes a `.gitignore` the engine created that is left empty, and takes back none while it keeps `.stamity/` for a
+  hook still wired to it (REQ-FLOW-028; `reconcileGitignore`, `:881-927`; `review/29`).
+  - As built: each `.gitignore` row's `contentHash` is the sha256 of the recorded lines under a domain prefix, never of
+    the file, so an owner's edit elsewhere leaves the manifest as it was and the hash never proves a whole-file delete
+    (`gitignoreLinesHash`, `:928-936`; `review/32`), and no sweep edits or deletes `.gitignore`: `sync` counts it as
+    emitted, and its reclaim reducer always refuses (`coOwnedReclaimReducers`, `src/cli/engine/emissionWrite.ts`).
+    `sync` names a line it takes back (`.gitignore: removed …`, `gitignoreRemoved` in `sync --json` and on a workspace
+    member row, which `docs/workspaces.md` lists), though with `.env.mcp` kept no valid manifest leaves `sync` a line to
+    take back today; a live `clean --json` carries `gitignoreRemoved`, its dry run names the lines a real run takes
+    back (`build/13`), and `init --dry-run` names only the lines a live `init` writes (`build/9`). The migration carry
+    and the model-list move append without recording (`ensureGitignoreEntry`), so `clean` leaves their lines; on a
+    setup upgraded from 1.15.0 whose manifest still saves `models.listed`, the cache line stays after `clean`
+    (`build/11`, deferred). The provenance rollup of `sync` and `check`, text and `--json`, leaves the `.gitignore`
+    rows out of a client's file count and its stamp (`provenanceFromManifest`, `src/cli/commands/sync/report.ts`;
+    `build/12`).
+  - Proof: `test/mcp/env.test.ts` (the census of each entry's writers, `GITIGNORE_ENTRY_WHEN`'s keys equal to the list,
+    the take-back cases), `test/manifest/manifest.test.ts`, `test/cli/commands/initApply.test.ts`,
+    `test/cli/commands/syncEngine.test.ts`, `test/cli/commands/clean.test.ts`, `test/cli/commands/roundTrip.test.ts`,
+    `test/cli/commands/workspace.test.ts`, `test/cli/commands/check.test.ts` ("check — provenance").
 - **Proof:** `test/mcp/env.test.ts`, `test/cli/commands/syncEngine.test.ts`, `test/merge/writeEscape.test.ts`; QA.
 
 ### REQ-FLOW-017 — QA rows record walked, auto-proven or accepted-unwalked
@@ -786,6 +843,18 @@ From `docs/plans/013-optimization-sweep-03.md` § Spec delta A, the unit `sw10-f
   - GIVEN a Python repository THEN the workflow holds `setup-node` at `lts/*` and no install step; GIVEN project pins (a
     SHA plus comment) THEN they win; GIVEN a SHA-pinned `checkout` alone THEN the advice names `setup-node`; GIVEN no
     pins THEN `checkout@v6`, `setup-node@v7` and no `@v5` (`test/adapters/copilot.test.ts`; added 2026-10-15).
+- **Amended 2026-10-26** (plan 022 file 2, unit `b9-upgrade-verb` and its fix round; read at `1fe7d915`). The update
+  notice bullet reads as REQ-FLOW-048 states it: `Update available: <pin> -> <new>. To move: npx -y <name>@<new>
+  upgrade --to <new>. To stay on <pin>, do nothing.`, compared with the repository's pin, with `sync` in place of
+  `upgrade --to <new>` for a target below 1.17.0 (`buildBanner` and `moveVerb`, `src/cli/notice/updateNotice.ts`). The
+  `sync --help` bullet reads `update = npx -y <name>@<version> upgrade --to <version> — runs that release's sync and
+  moves the package.json pin; npx -y <name>@<version> sync regenerates without moving it.`, `upgrade` first and the
+  pinned `sync` second as the regenerate-only form; the no-channel branch says to install the newer release into the
+  project, then names `npx --no <name>` in both places, and a registry fork's `--@<scope>:registry=<url>` stands ahead
+  of the package (`updatePathHelp`, `src/cli/commands/sync.ts:72-87`). The criterion with a pin at 1.9.1 stands, for a
+  target below 1.17.0.
+  - Proof: `test/cli/notice/updateNotice.test.ts`, `test/cli/commands/sync.test.ts` (the three help branches, re-pinned
+    with a `TEST CHANGE, justified: REQ-FLOW-022` line).
 - **Proof:** `test/cli/commands/initPanel.test.ts`, `test/cli/commands/init.test.ts`,
   `test/cli/commands/initApply.test.ts`, `test/cli/commands/check.test.ts`, `test/cli/notice/updateNotice.test.ts`,
   `test/cli/commands/sync.test.ts`, `test/adapters/copilot.test.ts`; the Codex pins in `test/adapters/codex.test.ts`
@@ -955,11 +1024,254 @@ integrated. Before the unit, `CODEX_COMMANDS_DIR` was `null` and Codex received 
   reclaim sweep removes those files and nothing else under `.cursor/`" and the Expand/contract sentence "the
   `.cursor/skills/st-<id>/` rows reclaimed in the same sync" describe the releases before this amendment; the 1.10.0
   case the Proof bullet names now pins the keep.
+- **Amended 2026-10-26** (plan 022 file 2, unit `b12-repo-file-waste`, with `b16-docs-pointers-batch`'s `check` row and
+  the fix lane for `build/8`; read at `1fe7d915`). The first bullet's "with a companion
+  `.agents/skills/st-<id>/agents/openai.yaml`" reads "with, when Codex is selected, a companion … that Codex alone owns"
+  (REQ-FLOW-033): `projectTouchpointSkills` takes a required `policy` option, Codex passing `true` and Cursor `false`
+  (`src/emit/skillsProjection.ts:593`, `:612`), so "co-own each file" holds of each `SKILL.md` and no longer of the
+  companion, which a Codex deselection now sweeps. The bullet on Copilot is unchanged: the delta's sentence there
+  belongs to the held unit `b13-copilot-touchpoints-skills` (REQ-FLOW-050, not merged).
+  - Proof: `test/emit/touchpointSkills.test.ts` (the owners case, re-pinned with a `TEST CHANGE, justified:
+    REQ-FLOW-033` line), `test/emit/skillsProjection.test.ts`, `test/adapters/cursor.test.ts`,
+    `test/emit/syncDriftProof.e2e.test.ts` (the two deselection cases, re-pinned; `build/8`).
 - **Proof:** `test/emit/touchpointSkills.test.ts`, `test/emit/skillsProjection.test.ts`,
   `test/adapters/codex.test.ts`, `test/adapters/cursor.test.ts`, `test/adapters/copilot.test.ts`,
   `test/cli/commands/initPanel.test.ts`, `test/cli/commands/syncEngine.test.ts` (the 1.10.0 reclaim case),
   `test/docsPages.test.ts`; the live check; QA. (Route clause dropped 1.15.0: the list also named three suites of the
   plugin route, deleted with it.)
+
+### REQ-FLOW-027 — Setup then `clean` restores the repository byte for byte
+
+Added 2026-10-26 (plan 022 file 2, units `b4-gitignore-lines` and `b5-import-config-round-trip` with their fix rounds,
+and `b1-fork-ci-job`'s fix round for `build/40`).
+
+Given a fixture repository, When `init -y` for all four clients and then `clean -y` run, Then every file that existed
+before is byte-identical, a pre-existing `.gitignore` included, with or without a final newline and CRLF kept, and no
+other file exists, except `.claude/settings.json`'s recorded deny and ask rows (REQ-FLOW-036) and a `.env.mcp` ignore
+line once written (REQ-FLOW-016); `git status --porcelain --ignored` prints what it printed before, after the engine
+wrote its machine-local files too (REQ-FLOW-028). Given `--import-config supplement`, Then `AGENTS.md` and `CLAUDE.md`
+come back byte for byte, leading whitespace, a byte-order mark and a missing final newline included: the prepend keeps
+the owner's bytes below one blank line, and the sweep's strip of a block at byte 0 takes the END line's break and one
+separator line (`prependManagedBlock`, `src/merge/safeWrite.ts`; `stripManagedBlock`, `src/merge/managedBlocks.ts`).
+Given `--import-config replace`, Then the decision records `backup: { path, sha256 }`, a full `clean` moves that backup
+back after its sweep, both files come back byte for byte and no `AGENTS.md.bak*` remains. Given a `.gitignore` row whose
+`coOwned.lines` names a line outside `REQUIRED_GITIGNORE_ENTRIES`, Then `readManifest` raises `CONFIG_ERROR` and nothing
+is written. Given `clean --pack <id> -y`, Then no hooks document still runs a script of that pack, Copilot's
+`.github/hooks/stamity.json` included.
+
+- **As built, beyond the delta:**
+  - The backup record is accepted on a `replace` decision only, named `<path>.bak` or `<path>.bak.<8 lowercase hex>`
+    in the decision's own folder, with a lowercase sha256; each defect is one indexed `CONFIG_ERROR`
+    (`importBackupPathDefect`, `src/manifest/manifest.ts`). `init` records it after its write loop, never on a dry run
+    (`withImportBackups`, `src/cli/commands/init/apply.ts`), and `init --force` carries it (REQ-FLOW-029). The restore
+    moves a backup only when nothing is at the target, the backup is a regular file with one name, no link and inside
+    the repository, and it hashes as recorded; the move never replaces a file that appears after the checks — `link`
+    then `unlink`, else a copy with `COPYFILE_EXCL` where the file system takes no hard link — and any other case
+    leaves both files and names why (`restoreImportBackups`, `restoreRefusal` and `moveWithoutClobber`,
+    `src/cli/commands/clean.ts`; `review/46`, `review/47`). `--json` carries `restored` and `restoreSkipped` when the
+    setup recorded a backup, and the dry run names each move.
+  - `clean --pack` rewrites a hooks document only when the pack has a ledger row under its `hooks/` folder, the
+    setup's `generatedBy` is the running version, and the loosen gate passes over the setup without the pack; each
+    failure rewrites nothing and says why, the version case "until the next sync" (`hookDocumentsOf`,
+    `hookRewriteHold` and `rewriteHookDocuments`, `src/cli/commands/clean.ts`; `review/43`, `review/44`). It writes
+    through `init`'s lanes, an edited document kept as a `.bak` and named; the question, the dry run and `--json`'s
+    `hookDocumentsRewritten`, writes that changed bytes only, name the documents (`review/45`, `review/49`).
+  - On `b1`'s lane, `clean --pack` also re-renders every other client document both plans render with different
+    bytes — Cursor's spawn guard, the model maps, Cursor's model-pins hook, Codex's `AGENTS.override.md` — so none still
+    names the pack's agents or rules, under the same holds; the merged MCP documents are left to the server removal, and
+    `--json` gains `documentsRewritten` (`PackCopies.rerendered`, `findPackCopies`, `src/cli/commands/clean.ts:648-660`
+    at `p20/b1`; `build/40`, which the fork probe's walk found, REQ-PLUGIN-033 in `docs/specs/fork-layer.md`).
+  - **Named residues** (`b5`'s M-2 and M-3): a supplemented owner file with no final newline gains one at the first
+    `sync` after `init`, so `init`, `sync`, `clean` gives it back with a final newline, while `init`, `clean` is
+    byte-exact; and an owner file holding only whitespace is kept below the block at supplement, but `clean` deletes
+    the file, since the sweep cannot tell that whitespace from what an editor adds after the engine's own block.
+- **Proof:** `test/cli/commands/roundTrip.test.ts`, `test/cli/commands/clean.test.ts`, `test/merge/managedBlocks.test.ts`,
+  `test/merge/reclaim.test.ts`, `test/merge/safeWrite.test.ts`, `test/manifest/manifest.test.ts`,
+  `test/cli/commands/initApply.test.ts`.
+- **Source:** `src/merge/safeWrite.ts`, `src/merge/managedBlocks.ts`, `src/merge/reclaim.ts`, `src/cli/commands/clean.ts`,
+  `src/cli/commands/init/apply.ts`, `src/manifest/manifest.ts`, `src/mcp/env.ts`.
+
+### REQ-FLOW-028 — `clean` keeps user state unless `--purge`
+
+Added 2026-10-26 (plan 022 file 2, unit `b3-clean-keeps-state` and its fix round).
+
+Given a setup holding learnings, handoffs, overrides, an installed pack, run records, the owner's hooks, the inbox and
+verify artifacts, When `clean -y` runs, Then each of those is byte-identical, and the pack's client copies,
+`.stamity/manifest.json`, `.stamity/generated/`, the review gate's state (`review-gate.json`, its `.lock` folder and its
+`.tmp-*` files), the engine's machine-local files (`client-models.json`, `preflight-canary.json`, `run-ended.json` and
+`context-once/`) and the store placeholders that still hold the setup's bytes are gone, each folder left empty pruned,
+`.stamity/` too, so no file is left whose ignore line `clean` took back; `--json` lists `kept` and `packsKept`. When
+`clean -y --purge` runs, Then `.stamity/` is gone. Given `--purge --pack x`, Then `VALIDATION_ERROR` and nothing written.
+Given a later `init -y`, Then a kept pack's rows are taken back from its receipt, or the pack is named in a warning that
+points at `add` (`adoptInstalledPacks`, `src/pack/install.ts`, called before the plan in
+`src/cli/commands/init/apply.ts`).
+
+- **As built, beyond the delta:**
+  - The order of a live default run: the sweep, the machine-local files, the review gate's state, the placeholders, the
+    prune, the `.gitignore` take-back, and the manifest last, with `.stamity/` once empty, so a step that fails leaves
+    the ledger and a re-run finishes (`removeSetupState` and `removeSetupManifest`, `src/cli/commands/clean.ts:121-141`
+    states it); one exception, a take-back that refuses (a linked `.gitignore`, an injection pattern) removes the
+    manifest before it names the lines to delete by hand (`review/58`, `review/61`).
+  - A link at any of those names, a linked store folder included, is never followed, left and named, and `--json`'s
+    `left` lists each with why, `kept` then leaving out its entry (`review/59`, `review/60`).
+  - While a hooks document the sweep keeps still runs a script under `.stamity/` or `.claude/hooks/stamity/`, the default
+    run keeps the manifest beside the held scripts and takes back no ignore line; the re-run after that wiring is gone
+    reads the ledger and finishes (`:143-153`; `review/29`).
+  - The texts: the question and the dry run say what stays and offer `clean --purge` instead of this run; after a
+    default run the closing line says to delete `.stamity/` by hand, since the setup's record is gone, and with wiring
+    held that `clean --purge` deletes it once the wiring is gone; a `clean --purge` with no manifest says the same
+    by-hand step (`keptStateLines` and `nothingToClean`; `review/57`, a declared default: no new delete without a
+    ledger). A full run's dry run calls the paths ones this setup wrote and none orphaned (inbox `cut/8`;
+    `formatReclaimReport`, `src/merge/reclaim.ts`).
+  - Adoption refuses a receipt naming another pack's folder, or listing a file outside its own folder, reached through
+    a link, or not hashing as recorded (`adoptPackFolder`, `src/pack/install.ts`).
+  - A sweep that finds a recorded file missing prunes the folders it leaves empty, never on a preview and never through
+    a link (`pruneBelowMissing`, `src/merge/reclaim.ts`; `build/5` of run `2026-10-15_cloud-runs`).
+- **Proof:** `test/cli/commands/clean.test.ts`, `test/cli/commands/roundTrip.test.ts`, `test/cli/commands/initApply.test.ts`,
+  `test/pack/install.test.ts`, `test/emit/stateScaffold.test.ts`, `test/merge/reclaim.test.ts`,
+  `test/cli/ledgerForgery.test.ts` and `test/cli/flows.e2e.test.ts` (re-pinned to `--purge`).
+- **Source:** `src/cli/commands/clean.ts`, `src/emit/stateScaffold.ts`, `src/pack/install.ts`, `src/merge/reclaim.ts`.
+
+### REQ-FLOW-029 — `init --force` never duplicates the charter
+
+Added 2026-10-26 (plan 022 file 2, unit `b6-init-force-charter` and its three fix rounds, with `b5`'s hand-off,
+`build/23`).
+
+Given `init -y`, When `init -y --force` runs, Then `AGENTS.md` holds one `# Charter` and is byte-identical to the first
+write, with no `AGENTS.md.bak*` and no import decision; given the engine's charter with its markers removed, a corrupt
+manifest or a deleted `.stamity/`, Then still one `# Charter`. Given a recorded `importChoice`, When `init --force`
+runs, Then each decision whose file still exists carries over unchanged, and only the other paths are asked or
+defaulted. Given user prose with no charter and `--force --import-config supplement`, Then the prose survives byte for
+byte.
+
+- **As built, beyond the delta:**
+  - The import candidates leave out a path a client row of the replaced setup records and any file whose text is the
+    engine's charter, the second on every `init`, not only under `--force` (`collectExistingConfigPaths`,
+    `src/cli/commands/init/plan.ts`).
+  - A carried decision is dropped when its file is gone, and a carried `supplement` when its file now reads as the
+    charter; a `replace` keeps its `backup` record whole while the `.bak` is a regular file hashing as recorded, else
+    only the record goes, and a backup record is minted only for a decision asked in this run
+    (`carriedImportDecisions`, `src/cli/commands/init/plan.ts`; `withImportBackups`, `src/cli/commands/init/apply.ts`;
+    `review/63`). So `init -y --import-config replace`, `init -y --force`, `clean -y` gives the owner's file back byte
+    for byte (`build/23`).
+  - Under `--force` the replaced setup's rows at the four instruction files join the ownership index only, so an
+    unedited charter git holds with no uncommitted change is overwritten with no `.bak`, by REQ-PLUGIN-046's recovery
+    rule; an edited one still takes it.
+  - An explicit `--import-config` applies only to paths no carried decision covers (`build/31`, signed off as built).
+    Where the flag differs from a carried decision, `init` prints a line naming the file, the decision kept and how to
+    choose again; after a carried `replace` it says whether a backup is recorded, and with none it names renaming the
+    owner's `.bak` by hand, or putting the owner's own copy back (`carriedImportNote` and `unrecordedOwnerBackup`,
+    `src/cli/commands/init.ts`; `review/62`, `review/68`). The `--import-config` help says a decided file keeps its
+    decision and points at that line (`review/73`). Under `--json` the line does not print and the document names no
+    carried decision, so a script cannot tell the flag was not applied (`review/74`, deferred; no requirement here).
+  - Over a corrupt manifest the repair is `init -y --force --loosen`: the loosen gate reads an unreadable manifest as
+    the strictest setting (REQ-FLOW-138).
+- **Proof:** `test/cli/commands/init.test.ts` (its REQ-FLOW-029 block), `test/cli/commands/initPlan.test.ts`,
+  `test/cli/commands/initApply.test.ts`.
+- **Source:** `src/cli/commands/init.ts`, `src/cli/commands/init/plan.ts`, `src/cli/commands/init/apply.ts`.
+
+### REQ-FLOW-032 — A no-op `sync` leaves every file byte-identical
+
+Added 2026-10-26 (plan 022 file 2, unit `b7-manifest-stable` and its fix round, with `b16-docs-pointers-batch`'s
+`review/55`; inbox `build/96` and `cut/20`).
+
+Given a synced repository, When `sync` runs again with no input change, Then 0 files change and
+`.stamity/manifest.json` is byte-identical, `updatedAt` included, and `sync --json` carries `manifestWritten: false`;
+given a sync that changes one emitted file or one manifest field, Then `updatedAt` moves and `manifestWritten: true`.
+Given `CLAUDE.md` or a supplemented file after `sync`, Then its BEGIN marker carries no version; the pinned
+`npx -y <pkg>@<v>` calls keep theirs (REQ-FLOW-002).
+
+- **As built, beyond the delta:**
+  - `writeManifest` returns `{ written, updatedAt }` and skips the write only when the file on disk parses as an
+    object, its `updatedAt` has the exact shape `toISOString` writes and round-trips, and the manifest serialised with
+    that stamp equals the file's bytes, `\r\n` read as `\n`; validation runs first, and every other case stamps and
+    writes (`writeManifest` and `isWriterTimestamp`, `src/manifest/manifest.ts`). `applySync` no longer stamps, and an
+    empty build's line reads `manifest already current` where nothing was written (`src/cli/commands/sync/report.ts`).
+    A no-op `upgrade --to <running>` leaves the manifest byte-identical too (REQ-FLOW-034).
+  - A block an earlier release stamped differs only by its marker, so the next `sync` rewrites it once to the bare
+    marker and names that in a notice, the old stamp printed only when it is version-shaped; a write that already
+    carries its own notice or warning gets none (`withMarkerRewriteNotice`, `src/cli/commands/sync/engine.ts`;
+    `review/53`).
+  - Neither `sync` nor `check` prints "(stamped v…)" beside an adapter's file count, since no file carries that stamp
+    now; the JSON rollup keeps `stampedVersion`, a field scripts read (`provenanceLines`,
+    `src/cli/commands/sync/report.ts`; `renderProvenance`, `src/cli/commands/check.ts`; `review/54`, `review/55`;
+    `review/56`, a declared default).
+  - A 1.16.0 `check` over a newer tree reads the bare markers as drift, a skew the CHANGELOG names. In this repository
+    a second dogfood sync left the manifest byte-identical, `updatedAt` included (the run's integration of `b7`).
+- **Proof:** `test/manifest/manifest.test.ts` ("a write that changes nothing is skipped (REQ-FLOW-032)"),
+  `test/cli/commands/sync.test.ts`, `test/cli/commands/syncEngine.test.ts`, `test/adapters/claude.test.ts`,
+  `test/emit/planner.test.ts`, `test/cli/flows.e2e.test.ts`, `test/cli/dogfoodDist.e2e.test.ts`,
+  `test/cli/commands/upgrade.test.ts`, `test/cli/commands/check.test.ts` ("check — provenance").
+- **Source:** `src/manifest/manifest.ts`, `src/cli/commands/sync/engine.ts`, `src/cli/commands/sync/report.ts`,
+  `src/adapters/claude.ts`, `src/emit/planner.ts`, `src/cli/engine/emissionWrite.ts`.
+
+### REQ-FLOW-033 — Codex's touchpoint companion is written only for Codex
+
+Added 2026-10-26 (plan 022 file 2, unit `b12-repo-file-waste`, with `b16-docs-pointers-batch`'s `check` row and the fix
+lane for `build/8`).
+
+Given tools without `codex`, When sync plans, Then no `.agents/skills/st-<id>/agents/openai.yaml` is planned; given
+`[codex, cursor]`, Then each of the nine carries it, owned by `codex` alone, and each `SKILL.md` is owned by both. Given
+a 1.16.0 ledger with those companions and tools `[cursor]`, Then the next sync deletes each one whose row matches and
+whose bytes, raw or with `\r\n` read as `\n`, hash to the frozen 1.16.0 digest, keeps and names an edited one, and
+leaves every `SKILL.md` byte-identical. The proof reaches only a closed list of the nine literal companion paths, each
+with that digest; a ledger row's own hash is never the digest, and the row only selects it where no plan output renders
+the path and it names a listed owner (`codex`, `cursor`), `artifactType: "command"`, the entry's touchpoint and that
+same digest (`RETIRED_ENGINE_PATHS`, `src/manifest/ownedPaths.ts:365-411`; `retiredEngineRenderings`,
+`src/cli/engine/emissionWrite.ts`). The bundled skills' own companions are out of scope (decision E4).
+
+- **As built, where the delta differed:**
+  - The delta's closed list also held the Copilot prompt files 1.16.0 wrote for the touchpoints and the pack commands.
+    The list holds the nine companions alone: proving a prompt file needs 1.16.0's nine command bodies shipped in the
+    package, about 225 KB past the logic bundle's headroom, and a frozen per-file digest already fails for `st-work`
+    (the declared default "keep and name", plan 022 file 2's `b12` block of 2026-10-25). So no deletion proof exists
+    for a prompt file, and a pack command's companion is outside the list too: without Codex it is kept and named.
+  - `check`'s `legacy-files` row warns, and never fails, naming each `.agents/skills/st-*/agents/openai.yaml` and each
+    `.github/prompts/st-*.prompt.md` on disk that no ledger row holds — a file an earlier release wrote that a `sync`
+    kept, named once and stopped recording — with the remedy: delete it by hand unless it is yours. It finds them by
+    their fixed names, reads names only, follows no link at any folder on the way, and passes with no readable manifest
+    (`checkLegacyFiles` and `linkFreeFolder`, `src/cli/commands/check.ts`; `docs/troubleshooting.md:114`; `review/6`).
+    It prints after `moved-skills` (REQ-PLUGIN-016, amended 2026-10-26).
+- **Proof:** `test/cli/engine/retiredRenderings.test.ts`, `test/emit/touchpointSkills.test.ts`,
+  `test/emit/skillsProjection.test.ts`, `test/adapters/cursor.test.ts`, `test/adapters/codex.test.ts` (the skills-list
+  measure unchanged), `test/emit/syncDriftProof.e2e.test.ts`, `test/cli/commands/check.test.ts` ("check — legacy-files").
+- **Source:** `src/emit/skillsProjection.ts`, `src/adapters/cursor.ts`, `src/adapters/codex.ts`,
+  `src/manifest/ownedPaths.ts`, `src/cli/engine/emissionWrite.ts`, `src/cli/commands/check.ts`.
+
+### REQ-FLOW-034 — `stamity upgrade --to <version>` moves a setup to the running release in one step
+
+Added 2026-10-26 (plan 022 file 2, unit `b9-upgrade-verb` and its fix round, with `b9b-readd-synced-pack`; decisions E3,
+E5).
+
+Given a setup written by A and the CLI running B, with `--to B`, When `upgrade` runs, Then B's own sync runs in-process,
+the root `package.json` pin moves to B (an exact, `^` or `~` spec; any other spec stays, with a `pinNote`), and the
+report lists the changed, reclaimed and refused paths. Given `--to` other than the running version, Then exit 1, and it
+prints `npx -y <name>@<to> upgrade --to <to>`, ending `--allow-major` where `<to>`'s major differs from the setup's
+`generatedBy`, or the pinned `sync` form when `<to>` is below 1.17.0, with no spawn and no npx. It refuses and writes
+nothing when B is older than `generatedBy` (unless `--allow-downgrade`) or the major differs (unless `--allow-major`).
+Given a manifest `autonomy` looser than the guard on disk, Then it exits 1 with `AUTONOMY_LOOSENED` and writes nothing,
+`package.json` included and on a dry run too, unless `--loosen` is passed: the loosen gate runs inside `applySync`
+before any write (REQ-FLOW-138). Learnings, handoffs, overrides and run records stay byte-identical. When the setup
+lists Codex, the report says to review the hooks in `/hooks` (`src/cli/commands/upgrade.ts:17-49`).
+
+- **As built, where the delta differed:**
+  - There is no client-set refusal and no `--allow-client-change`: the manifest reader already refuses a `tools` entry
+    outside `TOOLS` with `CONFIG_ERROR`, and every `TOOLS` entry has an adapter, so that refusal could never fire
+    (`src/cli/commands/upgrade.ts:37-42`; `review/8`, `review/18`). The flag is an unknown option, exit 2.
+  - The selected clients' own CLIs, which the plan starts for their model lists, `--dry-run` included, start only after
+    every refusal before the plan has passed; `STAMITY_NO_CLIENT_PROBE=1` keeps them unstarted (`freshModelLists`;
+    `review/12`).
+  - A pin key spelled with a JSON escape refuses before any write; a workspaces root moves the root pin only and says
+    so. The notices carry `check`'s pack-catalog findings, so a stale catalog pack names `add <id>`, which now runs in a
+    synced setup: a pack's own synced client copy no longer refuses its re-add, while another pack's copy, an override
+    holding a new id and a first install still do, and the left-behind check still refuses a re-add whose new version
+    drops files (`heldByOwnCopy`, `src/pack/install.ts`; `build/3`).
+  - The verb is the tenth advertised and the sixteenth registered (`src/cli.ts`), and `docs/cli-reference.md` and
+    `llms.txt` carry it; the CLI reference's `AUTONOMY_LOOSENED` row names it (REQ-FLOW-138, amended 2026-10-26).
+- **Proof:** `test/cli/commands/upgrade.test.ts`, `test/cli/commands/upgradeClientProbe.test.ts`,
+  `test/cli/commands/add.test.ts`, `test/pack/upgradeRemedy.test.ts`, `test/cli/surface.e2e.test.ts`,
+  `test/cli/engine/autonomyGate.test.ts` (the write-loop census row).
+- **Source:** `src/cli/commands/upgrade.ts`, `src/cli.ts`, `src/pack/install.ts`.
 
 ### REQ-FLOW-036 — `.claude/settings.json` is merged entry by entry, an owner's entries survive every verb, and retired rows leave
 
@@ -1060,6 +1372,17 @@ or an entry it did not write.
   - Proof: `test/manifest/claudeSettings.test.ts`, `test/merge/settingsOwnerEntries.test.ts`,
     `test/merge/settingsKeyOwnership.test.ts`, `test/adapters/claude.test.ts`, `test/docsPages.test.ts` (the settings
     row's pins).
+- **Amended 2026-10-26** (plan 022 file 2, unit `b3-clean-keeps-state`; inbox `build/89` and `build/103` of run
+  `2026-10-15_cloud-runs`; read at `1fe7d915`). Given a kept `.claude/settings.json` whose hook entry runs a guard copy
+  under `.claude/hooks/stamity/`, When `clean` runs, Then the policy copy that guard reads stays too, so the kept guard
+  does not fail closed on a missing policy: the hooks reader answers that such a document runs the policy copy
+  (`hookScriptReader.runs`, `src/manifest/hookDocuments.ts`), and the hold only ever keeps a file.
+  - As built: re-measured first, the red case was a kept settings file the reducer could not parse, whose guard refused
+    a governed call with `POLICY_UNREADABLE`; an owner key, or an edited guard entry, was reduced away with the guard.
+    The head comment of `src/manifest/claudeSettings.ts` now says the engine owns each allow row and hook entry it wrote
+    and records, never owns, a deny or ask row it added, as the 2026-10-25 bullet states.
+  - Proof: `test/merge/claudeHookCopies.test.ts` (the kept guard exits 0 for a governed agent the policy lets read),
+    `test/manifest/hookDocuments.test.ts`.
 - **Proof:** `test/merge/settingsOwnerEntries.test.ts`, `test/merge/settingsKeyOwnership.test.ts`,
   `test/manifest/coOwnedJson.test.ts`, `test/manifest/jsonMembers.test.ts`, `test/manifest/claudeSettings.test.ts`,
   `test/merge/reclaim.test.ts`; QA.
@@ -1197,6 +1520,60 @@ bytes still hash to what the ledger recorded, inside the engine's bound; an edit
   touches"; no plugin root ships since 1.15.0).
 - **Proof:** `test/emit/namePrefix.test.ts`, `test/adapters/cursor.test.ts`, `test/merge/hookFilesOwnership.test.ts`;
   `test/adapters/cursorLegacyGuards.test.ts` with its four fixtures (added 2026-10-08).
+
+### REQ-FLOW-048 — The update notice asks only when its banner can show, compares with the repository pin, and names `upgrade`
+
+Added 2026-10-26 (plan 022 file 2, unit `b9-upgrade-verb` and its fix round).
+
+Given stderr is not a terminal, or `--json` is set, Then no request and no stamp. Given `STAMITY_NO_UPDATE_CHECK` set to
+`1`, `true` or `yes` (any case, trimmed), Then no request. Given a root `package.json` pin P (else `generatedBy`, else
+the running version) and a registry answer N > P, Then the banner reads `Update available: P -> N. To move: npx -y
+<name>@N upgrade --to N. To stay on P, do nothing.`; when N is below 1.17.0, the first release with `upgrade`, the move
+reads `npx -y <name>@N sync`; it ends with `--allow-major` when the majors differ. The stamp file is keyed by package
+name, `update-check-<name with / and @ as ->.json` (`shouldProbeNotice`, `isOptedOut`, `buildBanner` and
+`cacheFileName`, `src/cli/notice/updateNotice.ts`).
+
+- **As built, beyond the delta:**
+  - The pin is read from `devDependencies`, then `dependencies`, an exact, `^` or `~` spec only, then the manifest's
+    `generatedBy`, each file only as a regular file of at most 1 MiB, so a link, a device or a larger file names nothing
+    (`readRepositoryPin` and `pinSpecOf`; `readRegularFile`, `src/cli/engine/autonomyGate.ts`; `review/7`).
+  - `--allow-major` ends only the `upgrade` form, and a prerelease of 1.17.0 or later, a fork's `1.17.0-fork.1`
+    included, gets the `upgrade` form, since the compare reads `semver.coerce` of the target (`moveVerb`; `review/11`).
+  - `src/cli.ts` hands the process's facts to one function, `startupNotice`, which holds the gate and the pin read
+    (`review/9`).
+- **Proof:** `test/cli/notice/updateNotice.test.ts`, `test/cli/surface.e2e.test.ts` (the piped-stderr case).
+- **Source:** `src/cli/notice/updateNotice.ts`, `src/cli.ts`.
+
+### REQ-FLOW-049 — The published package carries the dependency tree it was tested with, and `st` says it is going
+
+Added 2026-10-26 (plan 022 file 2, unit `b10-shrinkwrap-st` and its fix round).
+
+Given the packed release tarball, Then it holds `package/npm-shrinkwrap.json`: no row is marked `dev`, a `devOptional`
+row reads `optional`, the root row has no `devDependencies`, and every production and optional row of the gated lock is
+there (`productionShrinkwrap`, `scripts/pack-release.mjs`). Given the checkout after a pack, Then no
+`npm-shrinkwrap.json` is at the root. Given `st --version`, Then stdout equals `stamity --version` and stderr is exactly
+one line, `stamity: the st command is deprecated and is removed in 2.0.0; run stamity instead.` (`src/st.ts:16`); given
+`stamity --version`, Then stderr is empty. The `st` bin goes at 2.0.0.
+
+- **As built, beyond the delta:**
+  - `packRelease` refuses a leftover shrinkwrap at the root before any write, a `package-lock.json` whose bytes differ
+    from git's committed `HEAD:./package-lock.json`, and a root with no commit, and derives the shrinkwrap from the bytes
+    it compared; it removes the file in a `finally`, also on SIGINT, SIGTERM or SIGHUP, then lets the signal end the
+    process (`packRelease`, `committedLock` and `holdSignals`, `scripts/pack-release.mjs`; `review/40`, `review/41`). A
+    SIGKILL's leftover is refused by the next pack. Both release workflows' "Pack tarball" run
+    `node scripts/pack-release.mjs --pack-destination . --json`, byte-equal, with `id: pack` and its outputs kept for the
+    fork rehearsal. `package.json` reads `bin.st: ./dist/st.js` and `files: ["dist", "npm-shrinkwrap.json"]`, and the
+    lock's root row maps `st` the same (`package-lock.json:21`; `build/18`). The tarball smoke asserts the installed
+    shrinkwrap holds no `dev` row and that the installed `st --version` answers as `stamity` does.
+  - The plan cell's `st --json check` reads `st check --json`: `--json` is the verb's flag, and before the verb both bins
+    exit 2.
+  - Unmeasured: whether GitHub Packages marks a version `_hasShrinkwrap`; a fork's consumers there may resolve fresh, as
+    before, and `docs/enterprise-forks.md` says so (`build/19`). A typed consumer gets a nested `@types/node`, and
+    measured, its compiler loads nothing from it (`review/42`, rejected on that measurement).
+- **Proof:** `test/ci/packRelease.test.ts`, `test/cli/stAlias.e2e.test.ts`, `test/cli/binMap.test.ts`,
+  `test/ci/workflow.test.ts`, `test/ci/forkReleaseWorkflow.test.ts`; `node scripts/tarball-smoke.mjs`.
+- **Source:** `scripts/pack-release.mjs`, `src/st.ts`, `package.json`, `tsdown.config.mjs`,
+  `.github/workflows/release.yml`, `.github/workflows/fork-release.yml`.
 
 ### REQ-PLUGIN-005 — The emitted runner starts its launcher by an absolute path
 
@@ -1520,6 +1897,27 @@ justified-change note. `pack-reach`'s states are unchanged.
   row set equals the probe ids `check.ts` declares and its doctor sample equals a real run (`test/cli/commands/check.test.ts`,
   the row-order array and the sample case; `test/docsPages.test.ts`, "troubleshooting documents the doctor rows check
   prints, and only those"; added 2026-10-21).
+
+Amended 2026-10-26 (plan 022 file 2, unit `b3-clean-keeps-state` and its fix round, with `b16-docs-pointers-batch`'s
+doctor row; read at `1fe7d915`). The surviving `clean` criteria read with REQ-FLOW-028. Given `clean -y`, Then it
+removes only what the ledger's client rows name, the copies `sync` projected from a pack among them, and keeps the user
+state REQ-FLOW-028 lists, the installed packs with their own `pack:<id>` rows included (`planCleanCandidates`,
+`src/cli/commands/clean.ts`). Given `clean -y --purge`, Then `.stamity/` is absent too, except while a hooks document
+the sweep keeps still runs a hook script under `.stamity/` or `.claude/hooks/stamity/` (REQ-FLOW-037): then `--purge`
+keeps everything under `.stamity/`, the user state and the manifest included, names the held scripts, and deletes
+`.stamity/` whole once that wiring is gone and the re-run finishes. The doctor rows: `legacy-files` (REQ-FLOW-033)
+prints after `moved-skills`, then `autonomy-deploying` (REQ-FLOW-139) and `model-pins`, so the fixed row order counts
+eighteen probes where the paragraph of 2026-10-21 counts sixteen, plan 022 file 1's `autonomy-deploying` being the
+other (`docs/troubleshooting.md:84`, `:113-116`). `pack-reach`'s states are unchanged.
+
+- **As built, where the delta differed:** the delta excepted the held script alone. Keeping the whole folder is the
+  cell's "`--purge` keeps today's order", signed off as built (`build/28`, on the maintainer's end list), so learnings,
+  handoffs and the rest outlive a `--purge` that runs while that wiring is held.
+- GIVEN `check` on any setup THEN its doctor rows read `moved-skills`, `legacy-files`, `autonomy-deploying`,
+  `model-pins` in that order, and the troubleshooting page's probe count and table follow it (added 2026-10-26;
+  `test/cli/commands/check.test.ts`, "returns the eighteen doctor rows in a fixed order"; `test/docsPages.test.ts`).
+- GIVEN hook wiring still running a script under `.stamity/` WHEN `clean -y --purge` runs THEN `.stamity/` stays whole
+  and the held scripts are named (added 2026-10-26; `test/cli/commands/clean.test.ts`).
 
 ### REQ-PLUGIN-017 — Explicit gates beat detection
 
@@ -2179,6 +2577,20 @@ pre-existing).
   and before `2. **Classify.**`, and `src/cli/commands/gate.ts` still carries "git was not started here: this folder,
   or a folder above it, has the layout of a bare repository" (`test/corpus/commands/work.test.ts`,
   `test/corpus/commands/lightTrio.test.ts`; added 2026-10-15).
+
+Amended 2026-10-26 (plan 022 file 2, units `b12-repo-file-waste` and `b8-copilot-setup-switch` with its fix rounds,
+the latter's re-review row `review/71`; read at `1fe7d915`). The rendering proof gains two bounded exceptions, beyond
+the plan's own entries. (1) At the nine touchpoint companions 1.16.0 wrote, which only Codex plans now, the proof is a
+closed list of literal paths, each with the frozen digest of the bytes 1.16.0 wrote there; a ledger row only selects
+that digest, never its own hash, and the bytes must still hash to it (REQ-FLOW-033; `RETIRED_ENGINE_PATHS`,
+`src/manifest/ownedPaths.ts:365-411`). (2) At `.github/workflows/copilot-setup-steps.yml` under
+`toolOptions.copilot.setupSteps: off` alone, a recorded hash that matches the bytes, plus the workflow's engine header
+line, also proves the delete (REQ-FLOW-149; `withRecordedSetupSteps`, `src/adapters/copilot.ts:220-242`). So "a forged
+row and hash alone no longer delete" holds everywhere but there: a forged row hashing an owner's headed workflow,
+beside a planted `off`, deletes it, the exposure the overwrite lane already has at that path; both edits sit in the
+person-only manifest, which `run land` asks about, and `SECURITY.md`'s manifest row names it (`review/70`). The module
+comments say the same (`needsRenderingProof`'s doc, `src/manifest/ownedPaths.ts:337-344`; `ReclaimOptions.renderings`,
+`src/merge/reclaim.ts`).
 
 ### REQ-PLUGIN-047 `check` takes the expected release and client set from its caller
 
@@ -3801,7 +4213,9 @@ Then `Mode: attended` (`content/skills/st-unattended/SKILL.md:24-27`; `content/c
 with no `Mode:` line reads attended unless `STAMITY_UNATTENDED` is set; then the variable governs, as the shell guard,
 the ask gate and the run verbs read it, and a `Mode: attended` head wins over it (`readRecordHead`,
 `src/runs/resumeCard.ts`; `unattendedBy` and `unattendedSource`, `src/hooks/scripts.ts:3701-3732`, `:4118-4136`;
-`readsUnattended`, `src/cli/commands/run.ts:1092-1095`). `/st-board pickup` and
+`readsUnattended`, `src/runs/resumeCard.ts:266-274`, the one reader the run verbs share since plan 022 file 2's unit
+`b14c-land-batch`, ledger row `review/84` of run `2026-10-23_autonomy-distribution-01`; amended 2026-10-26, it read
+"`src/cli/commands/run.ts:1092-1095`"). `/st-board pickup` and
 `/st-rework` hand the mode to `/st-work` as `run-mode: attended | unattended` (`content/commands/st-board.md:128`,
 `:366`; `content/commands/st-rework.md:268-270`), and `/st-debug` hands it over only when attended: an unattended debug
 run stops after the root cause and hands nothing to `/st-work` (REQ-FLOW-097; `content/commands/st-debug.md:131-136`);
@@ -3903,6 +4317,12 @@ and a draft pull request titled `Refused:` where a branch can be pushed, else th
   `reads` check, `src/runs/planCheck.ts`). Proof: `test/runs/freshness.test.ts` (the disk-walk link cases skip on Windows, the tree-mode ones run there),
   `test/runs/planCheck.test.ts`, `test/docsPages.test.ts` ("states w2's stale reasons, their messages and the empty
   reads list on REQ-FLOW-091").
+- **Amended 2026-10-26** (plan 022 file 2, unit `b14-run-verbs-batch` and its fix round; inbox `build/42`, ledger row
+  `review/34`; read at `1fe7d915`). Given a plan whose Risks section holds a line at column 0 led by `Critical`, Then
+  `plan check` refuses with `critical-risk` at that line, as it refuses a bullet or a table row; a column-0 line that
+  continues a Risks bullet, with no blank line between, is read by its bullet's lead, and "No risk here is Critical."
+  stays ready (`isCriticalRisk` and `checkSections`, `src/runs/planCheck.ts:396-423`).
+  - Proof: `test/runs/planCheck.test.ts` (the plain-paragraph case and the wrapped-bullet case).
 - **Proof:** `test/cli/commands/plan.test.ts`, `test/runs/planCoverageParity.test.ts` (the engine's coverage check equals
   the skill's copy), `test/cli/surface.e2e.test.ts`, `test/corpus/cliCallForm.test.ts`,
   `test/corpus/skills/unattended.test.ts` (one case per blocker code), `test/corpus/commands/board.test.ts` ("gates
@@ -3972,6 +4392,21 @@ the default branch, read by REST; `run start` leaves it for a branch of the run'
   `:2147-2148`), and a pull request already open keeps its own title as before (`:1231-1234`).
   - Proof: `test/cli/commands/runEnd.test.ts` ("titles a refused run's pull request %j as %j, prefixing Refused:
     once", five titles).
+- **Amended 2026-10-26** (plan 022 file 2, unit `b14-run-verbs-batch` and its fix round; inbox `build/12`, `build/102`,
+  `build/105`, `review/224`, and ledger rows `review/14` and `review/40` of run `2026-10-23_autonomy-distribution-01`;
+  read at `1fe7d915`). Given an `ssh.github.com` origin (SSH on port 443) while the host `gh` uses is `github.com`, Then
+  `resolveRepo` reads it as `github.com`, so an attended `--pr` or `run end` opens its draft there; under a `GH_HOST`
+  naming another host it stays unresolved (`src/runs/pullRequest.ts:348`). Given an attended run, Then `run checkpoint`
+  and `run end` given `--drop-held` exit 1 with `not withdrawn: --drop-held reads only in an unattended run, where the
+  held patch is written`, before staging, where the flag was ignored and the verb exited 0 (`runCheckpoint`,
+  `src/cli/commands/run.ts`). A path the index tracks inside a folder a `.gitignore` rule ignores is staged, through
+  `git add -u` for the paths the index tracks exactly and `git add` for the rest (`add`, the same file). The run verbs'
+  git helpers take the running verb, so a failure inside `run end` reads `run end could not …`.
+  - As built: `review/40` closed as rejected with a pin: a branch name holding `(`, `$` or a backtick is refused by
+    name (`PUSHABLE_BRANCH`) before the push, so quoting its refspec would change no outcome.
+  - Proof: `test/runs/pullRequest.test.ts`, `test/cli/commands/runCheckpoint.test.ts` (the attended `--drop-held`, the
+    tracked file inside an ignored folder, the branch-name pin), `test/cli/commands/runEnd.test.ts` ("names run end,
+    not run checkpoint, where git fails to list …").
 - **Proof:** `test/runs/pullRequest.test.ts`, `test/cli/commands/run.test.ts`, `test/cli/commands/runCheckpoint.test.ts`,
   `test/cli/commands/runEnd.test.ts`, `test/cli/surface.e2e.test.ts`, `test/corpus/skills/unattended.test.ts`
   ("st-unattended — checkpoints and the ending").
@@ -4281,6 +4716,15 @@ egress, token-shaped variable names (names only) and missing review state; with 
   `hooks-loaded` gains Claude Code's cloud refusal of REQ-FLOW-112 (`:497`, `:501-512`). Proof:
   `test/cli/commands/gatePreflight.test.ts` ("the helper advice, run literally"; "reads the client and cloud fields and
   Cursor's egress warning through detectSession (v8)"), `test/runs/preflight.test.ts`, `test/session/detect.test.ts`.
+- **Amended 2026-10-26** (plan 022 file 2, unit `b14-run-verbs-batch`; inbox `build/43` and `review/58`; read at
+  `1fe7d915`). `token-env` names a variable with a `PWD` segment, such as `MYSQL_PWD`, and still skips `PWD` and
+  `OLDPWD` themselves, an exact path-holder name never counting as a credential (`src/runs/preflight.ts:833`, `:842`).
+  `review-state` says the in-progress record was not read when it is over 1 MiB or unreadable, never that it holds no
+  `usage: review` line: `usageReviewLines` reads the record whole or not at all and answers `null` for one that is there
+  and unread, carried as `reviewState.recordUnread` (`src/cli/commands/gate.ts:1975`, `:2113`;
+  `src/runs/preflight.ts:879`).
+  - Proof: `test/runs/preflight.test.ts`, `test/cli/commands/gatePreflight.test.ts` (a 1.26 MB record warns "was not
+    read").
 - **Proof:** `test/runs/preflight.test.ts`, `test/cli/commands/gatePreflight.test.ts`,
   `test/hooks/personOnlyGuard.test.ts` (the canary), `test/mcp/env.test.ts`, `test/cli/commands/init.test.ts` and
   `test/cli/commands/initPanel.test.ts` (the canary's ignore entry).
@@ -4472,6 +4916,45 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
     REQ-FLOW-137)" and "a dry-run publish (a4, REQ-FLOW-102 as built)", and the `CLASSES` rows),
     `test/hooks/personOnlyGuard.test.ts`, `test/cli/commands/runCheckpoint.test.ts` (the prefix pins, the CRLF link,
     `--drop-held`), `test/docsPages.test.ts` (the run verbs' row and its mapping twin).
+- **Amended 2026-10-26** (plan 022 file 2, unit `b14b-default-branch-read` and its three fix rounds, ledger row
+  `review/163` of run `2026-10-23_autonomy-distribution-01`; and unit `b14-run-verbs-batch` with its fix round; read at
+  `1fe7d915`). **A remote's HEAD ref.** Given a line the guard judges that writes or deletes a remote's HEAD ref through
+  `git symbolic-ref`, `git update-ref` (the `--stdin` text the line carries included, `--stdin` read under any
+  abbreviation git accepts) or a remote-tracking `git branch` delete, or a `git symbolic-ref` or `git update-ref` call
+  holding, after its subcommand, a word the line cannot show as literal text (an option word or a name the shell fills
+  in, globs or brace-expands), or a `git branch` call whose such words could make it that delete, Then the guard records
+  `push-default` for it, and `push-deploying` first where the target deploys. Given `git remote set-head` in any of its
+  modes (automatic, a named branch, a delete), or a `git remote` call holding, after `remote` and up to its own
+  subcommand's place, a word the line cannot show as literal text, Then the guard records `push-default`, with
+  `push-deploying` first where the named branch deploys or, for such a word, wherever the repository names a deploying
+  branch, beside `remote-write` where that rule reads, whether or not it knows the origin's repository, so the autonomy
+  setting no longer runs it unasked on the main thread. In each case the act asks on Claude Code's main thread and
+  Copilot CLI's main agent, and is refused for a sub-agent, on Cursor and Codex, and while a run is unattended
+  (`symbolicRefVerdict`, `remoteWriteVerdict` and the `update-ref` and `branch` readers, `src/hooks/personOnly.ts`). A
+  read of that ref is not an act, a remote's HEAD ref given as `update-ref`'s new or old value is a read, and the run
+  verbs' own write of it (`alignOriginHead`, through the CLI's git runner) is never judged.
+  - As built, where the delta differed: the delta named literal routes alone. The review rounds took the "fail toward
+    asking" sign-off (`review/22` to `review/27`, `review/35`, `review/36`, `review/51`, `build/14`), so a word the line
+    cannot show asks on these calls, and the stdin text and the remote-tracking reads are linear in the line (a 64 KiB
+    line decides in about 0.1 s). No verdict refused at the base moved; the friction toward asking is accepted, a
+    person's own `git remote set-head` included. `SECURITY.md`'s HEAD-ref paragraph names what is not read on the
+    judged line: a file written into `.git/`, a `--stdin` text read from a file or made by another program, a ref name
+    hidden in a way the guard does not decode, a `git remote rename` or `remove`, and a ref-store migration to
+    reftable. The person-only guard's budget row moved to 299,008 bytes with its reason (`HOOK_SCRIPT_BUDGETS`,
+    `src/hooks/scripts.ts`).
+  - **The hold.** A kept held patch on a fresh clone is read section by section, as a carried one is: a section naming
+    a path the hold does not hold, a section holding more than one file patch, a section whose header git writes with
+    no prefix or with custom prefixes (`diff.srcPrefix`/`diff.dstPrefix`, named in the refusal), and a patch not
+    starting at a `diff --git` line each refuse the push (`committedPatchPaths`, `sectionPathsOf` and
+    `customPrefixNames`, `src/cli/commands/run.ts`; `build/15`, `review/33`, and rows `review/15` and `review/16` of run
+    `2026-10-23_autonomy-distribution-01`). A hook declaration value led by a drive letter (`C:x`, `--out=C:x`) refuses
+    the hold rather than holding the value as written (`src/runs/hookPaths.ts:297-298`; `review/203`). The dry run's
+    `would hold` counts a nested repository at a held prefix as the real run stages it, a gitlink.
+  - Proof: `test/hooks/personOnly.test.ts` (the describe "a remote's HEAD ref written or deleted (b14b, REQ-FLOW-102,
+    review/163)" and its timing rows), `test/hooks/personOnlyGuard.test.ts` (the case on every client),
+    `test/hooks/scriptBudget.test.ts`, `test/cli/commands/runCheckpoint.test.ts` (the kept-patch refusals, the dry run's
+    nested repository), `test/runs/hookPaths.test.ts`, `test/docsPages.test.ts` (the HEAD-ref sentences on both security
+    pages).
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`, `test/change/personOnlyPaths.test.ts`,
   `test/cli/commands/runCheckpoint.test.ts` (the held patch; the refused push, "refuses the push when a commit it would
   send changes a held path, rewriting no history"), `test/adapters/claude.test.ts`,
@@ -4826,6 +5309,27 @@ re-checked at build.
     `src/cli/commands/check.ts`). `docs/troubleshooting.md` lists the row.
   - The global install bypasses a project `.npmrc` mirror at setup, and the vendor facts were not re-read at build;
     both are open as Minors. A project pinning Node below the CLI's engines gets a red `stamity --version` step.
+- **Amended 2026-10-26** (plan 022 file 2, unit `b8-copilot-setup-switch` and its fix rounds, with
+  `b16-docs-pointers-batch` and `b18-vendor-claims` for Cursor; inbox `build/34` and `review/68`, ledger rows
+  `review/67`, `review/71`, `build/38`, `review/78` and `review/79`; read at `1fe7d915`). The two Minors of the bullet
+  above are closed. Given a project Node pin that every version it can resolve to sits below the CLI's floor
+  (`CLI_NODE_FLOOR`, `22.22.2`, held equal to `package.json`'s `engines.node`), Then the CLI's steps are replaced by a
+  comment naming the pin, its source and the floor, and no `stamity --version` step turns the run red; an alias such as
+  `lts/*` is never read as below, and a package with no npm channel keeps its own comment, first (`cliSteps` and
+  `isBelowFloor`, `src/adapters/copilot.ts:1233-1239`, `:1271-1288`). Given a root `.npmrc` that git tracks, Then the
+  CLI's install step carries `env: NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc`, and the project's own install
+  step does not; in a git work tree an ignored or untracked `.npmrc` gives none, and where git does not answer for the
+  folder the file's presence decides (`hasCommittedNpmrc`, `:1440-1445`). That npm skips the project config in global
+  mode is inferred, not measured. The sentence "That a repository file overrides Cursor's saved environments is
+  vendor-documented" reads: Cursor uses a personal, then a team saved environment before a repository's
+  `.cursor/environment.json`, and a saved environment reads that file only when its location points at it
+  (cursor.com/docs/cloud-agent/setup, read 2026-10-26); `docs/cloud.md`, the `cloud-install` row and its comment in
+  `src/cli/commands/check.ts` say so.
+  - As built: where git cannot run in a git checkout, an ignored root `.npmrc` is read from disk, so that one machine
+    renders the `env:` lines and reports the committed workflow as drifted (`review/69`, Minor).
+  - Proof: `test/adapters/copilot.test.ts` ("reads only a committed .npmrc in a git work tree …", the below-floor pin,
+    a fork's scope registry beside `.npmrc`), `test/shared/cliCall.test.ts` (`CLI_NODE_FLOOR`), `test/docsPages.test.ts`
+    ("says Cursor uses a saved environment before a repository's environment.json, on the page and the check row").
 - **Proof:** `test/adapters/copilot.test.ts` (the "copilot-setup-steps.yml" cases), `test/cli/commands/check.test.ts`
   ("check — cloud-install (REQ-FLOW-111)"), `test/docsPages.test.ts`.
 
@@ -5000,6 +5504,14 @@ vendor-documented, not run.
   inlines the prompt. Where the file is not yet on the default branch, the run writes a declared `## Prerequisites` row
   naming it (`content/skills/st-unattended/references/cloud.md:87-88`). The entry also loads on Copilot CLI and states
   cloud-only rules, open as a Minor.
+- **Amended 2026-10-26** (plan 022 file 2, unit `b8-copilot-setup-switch`; inbox `review/50`; read at `1fe7d915`). The
+  Minor above is closed: the entry's prompt-file sentence and its 59-minute, `@copilot continue` step each open with
+  "On Copilot's cloud agent", so a CLI or editor user who picks the agent is not handed cloud-only rules
+  (`buildRunAgentFile`, `src/adapters/copilot.ts:819`, `:824`); the body is 1,146 bytes. The delta's move of the entry to
+  `.agents/skills/st-work/SKILL.md` belongs to the held unit `b13-copilot-touchpoints-skills` and is not merged, so the
+  entry still names `.github/prompts/st-work.prompt.md`.
+  - Proof: `test/adapters/copilot.test.ts` (the `stamity-run` body holds "On Copilot's cloud agent" before "59
+    minutes" and stays under 2,000 characters).
 - **Proof:** `test/adapters/copilot.test.ts` ("Copilot's entry agent (REQ-FLOW-117, REQ-FLOW-118)"),
   `test/roster/agentPolicies.test.ts` (the roster unchanged), `test/corpus/skills/unattended.test.ts`.
 
@@ -5304,6 +5816,16 @@ act lands on the morning list.
   - Proof: `test/hooks/personOnlyGuard.test.ts`, `test/hooks/personOnlyCopilotAsk.test.ts`, `test/adapters/claude.test.ts`
     (`onFailure` on the guard rows alone, the ask rows by mode), `test/cloud/containerLeg.test.ts`,
     `test/docsPages.test.ts`.
+- **Amended 2026-10-26** (plan 022 file 2, unit `b15-qa-ci-tooling-batch`; inbox `review/168`, `review/169` and
+  `review/43`; the mirror of REQ-PROVE-042 in `docs/specs/prove-behavior-and-value.md`; read at `1fe7d915`). The
+  release re-measurement's `hook-runs.mjs --ask` counts an ask only on a marked shell call whose logged `keys` hold no
+  helper field, so a run where only a helper's call was asked reads `not-run`, "only a helper's call was asked"; a row
+  with no `keys` (Claude Code, Cursor) is not filtered (`verdictForAsk`, `scripts/qa/hook-runs.mjs`). Copilot's fact 1
+  reads `changed`, "the session id no longer has the shape the guard accepts", when a `sessionStart` id fails
+  `ASK_SESSION_ID_PATTERN`, which a test holds equal to the guard's `COPILOT_SESSION_ID_PATTERN` (`copilotFacts`, the
+  same file; `src/hooks/scripts.ts`). A test holds `ASK_CLASS_CLIENTS` to the clients whose rendered guard answers an
+  ask with `permissionDecision: "ask"`.
+  - Proof: `test/qa/hookRuns.test.ts` (the `verdictForAsk`, `ASK_SESSION_ID_PATTERN` and `ASK_CLASS_CLIENTS` describes).
 - **Proof:** `test/hooks/personOnlyGuard.test.ts` ("each client's answer to a person-only act (v0a2)", the sub-agent,
   `auto`-mode and Copilot byte-for-byte cases), `test/hooks/personOnlyGuardDist.e2e.test.ts`,
   `test/cloud/containerLeg.test.ts` (each client's answer to an ask act), `test/qa/hookRunsCli.test.ts`.
@@ -5604,6 +6126,28 @@ whole number from 0 to 9, polls pending check runs every 30 s. Exit 0 for `lande
   neither the author check nor the thread check can tell them apart, and the review loop is the evidence of record; the
   ledger is a file the run writes and commits; a repository's CI may choose its checks with code the change edits
   (`review/70`, deferred as `build/5`).
+- **Amended 2026-10-26** (plan 022 file 2, unit `b14c-land-batch` and its fix round; ledger rows `review/174` and
+  `review/177` of run `2026-10-23_autonomy-distribution-01`, and this run's `review/37` to `review/39`; read at
+  `1fe7d915`; the heading stands). Given a default branch that `autonomy.deployingBranches` also names, When
+  `run land --fast-forward` runs, Then without the person's approval it asks, before any write, since `decideLand` puts
+  the deploying reason in front of the person (`src/runs/landEvidence.ts:496`); with `--approved <sha>` over the exact
+  head it lands. The verb now checks the shell guard's verdict on the fast-forward's push before it writes the evidence
+  line into the pull request's body: a `push-default` ask passes, a `push-deploying` ask passes only with the approval,
+  and any other verdict refuses, so a refused land writes no evidence line, only its `merge waits on:` line
+  (`src/cli/commands/runLand.ts:582-595`; the bullet above's "after the shell guard's own table, accepting its
+  `push-default` ask" reads with that order and that one addition).
+  - **Residual** (`SECURITY.md`, the land verb's residuals, `review/174` closed as rejected with its pin): an approval
+    names the head commit, not the reasons the land asked about. The land reads its reasons again when it acts, from the
+    setting (the strictest of the default branch's, the head's and the work tree's manifest), the branch rules and
+    protection, and the hook declarations at the default branch's tip, so a reason added after the person approved
+    does not stop it, a fast-forward onto a branch named deploying after the approval included; the evidence line marks
+    every reason it found as approved, and the land replaces the earlier `merge waits on:` line, so no record tells the
+    reasons the person saw from a later one (`decideLand` and `evidenceLine`, `src/runs/landEvidence.ts`).
+  - The residual above, "a repository's CI may choose its checks with code the change edits", no longer holds of this
+    repository's own CI, which runs its classifier from the base commit (REQ-PROVE-031 in
+    `docs/specs/prove-behavior-and-value.md`, amended 2026-10-26; `build/5`); it stands for any other repository.
+  - Proof: `test/cli/commands/runLand.test.ts` (an approved fast-forward onto a deploying default branch lands; a
+    refused verdict sends only the waits write; the `review/174` pin).
 - **Proof:** `test/runs/landEvidence.test.ts`, `test/cli/commands/runLand.test.ts`, `test/cli/engine/ghRunner.test.ts`
   (`ghApi` still refusing a PUT merge and GraphQL, each new call refusing any document but its constant).
 - **Source:** `src/cli/commands/runLand.ts`, `src/runs/landEvidence.ts`, `src/cli/engine/ghRunner.ts`,
@@ -5638,6 +6182,14 @@ refuses.
     (`src/cli/commands/runLand.ts:462-476`).
   - An `asks` outcome proceeds only under the person's `--approved <sha>` (REQ-FLOW-132), so the delta's "merges, marks
     ready and pushes nothing" holds of the call without it.
+- **Amended 2026-10-26** (plan 022 file 2, unit `b1-fork-ci-job`'s second fix round, commit `5509611f` on `p20/b1`;
+  ledger rows `review/83` and `build/5`; read at that commit). The When list's files that decide the evidence gain this
+  repository's CI classifier and the source it loads: `scripts/ci/records-only.mjs`, `src/change/classify.ts` and
+  `src/roster/triggers.ts` (`DEFINES_THE_EVIDENCE`, `src/runs/landEvidence.ts:45-62` at `p20/b1`). CI runs the base
+  commit's copy of that classifier, so an edit to it picks the checks of every later change, and a diff touching one of
+  the three now asks in every mode, unattended included; a person lands a classifier change.
+  - Proof: `test/runs/landEvidence.test.ts` ("asks about each file of the CI classifier's import closure, and lets a
+    change elsewhere land", which walks the classifier's import closure and pins it to the three files).
 - **Proof:** `test/runs/landEvidence.test.ts` (each class of the ask set matched), `test/cli/commands/runLand.test.ts`.
 - **Source:** `src/runs/landEvidence.ts`, `src/runs/hookPaths.ts`, `src/cli/commands/runLand.ts`.
 
@@ -5769,6 +6321,13 @@ or `init --force` while the baked setting is stricter than the default (`autonom
 - **Residuals** (`SECURITY.md`): a hand edit of a guard copy, the tamper notice's warning; a commit or a checkout that
   moves `HEAD`; a repository that never commits its guard copies pays one `--loosen` on a fresh clone, a switch of every
   selected client or a hooks layout move, by design (decision D18; a troubleshooting entry).
+- **Amended 2026-10-26** (plan 022 file 2, units `b9-upgrade-verb`, `b16-docs-pointers-batch` and `b1-fork-ci-job`;
+  ledger rows `review/14` and `build/39`; read at `1fe7d915`). `upgrade` raises `AUTONOMY_LOOSENED` too, passing
+  `--loosen` through to `applySync`'s gate (REQ-FLOW-034), and the pages that list the commands raising it name it: the
+  CLI reference's error row (`src/cli/docs/cliReference.ts`, `docs/cli-reference.md` regenerated),
+  `docs/troubleshooting.md`, and on `b1`'s lane `SECURITY.md` and `docs/security-mapping.md`.
+  - Proof: `test/cli/commands/upgrade.test.ts` (the loosened manifest refused byte for byte, `--loosen` passing),
+    `test/cli/docs/cliReference.test.ts`, `test/docsPages.test.ts`.
 - **Proof:** `test/cli/engine/autonomyGate.test.ts`, `test/cli/commands/sync.test.ts`, `test/cli/commands/init.test.ts`,
   `test/cli/commands/workspace.test.ts`, `test/hooks/personOnly.test.ts` ("loosening the autonomy setting (a4,
   REQ-FLOW-138)").
@@ -5980,6 +6539,51 @@ a raw push to the default branch (`test/docsPages.test.ts`, "the security pages 
 - **Source:** `SECURITY.md`, `docs/security-mapping.md`, `docs/cloud.md`, `docs/troubleshooting.md`,
   `docs/working-with-stamity.md`.
 
+### REQ-FLOW-149 — The Copilot setup workflow can be managed, handed over or turned off
+
+Added 2026-10-26 (plan 022 file 2, unit `b8-copilot-setup-switch` and its two fix rounds; ledger rows `review/66`,
+`review/67`, `review/70` to `review/72`).
+
+Given `toolOptions.copilot.setupSteps` is `managed` (the default) or absent, Then
+`.github/workflows/copilot-setup-steps.yml` is emitted as before, with the action refs copied from the project, else
+major tags. Given `user`, Then no row is emitted and the path is released: no reclaim, no ledger row, `clean` leaves it,
+`--purge` included, and `check` reports no drift (`copilotReleasedPaths`, `src/adapters/copilot.ts:146-148`; `planSync`
+drops the released row from the plan's ledger before anything reads it, `src/cli/commands/sync/engine.ts`). Given `off`,
+Then no row is emitted and reclaim runs, and `sync` and `clean` take back an unedited copy an earlier release wrote, not
+only one matching today's rendering: at that one path, beside today's rendering, the delete is also proven by the
+Copilot ledger row's recorded SHA-256 when the bytes on disk, as read or with `\r\n` read as `\n`, hash to it and carry
+the engine's header line, and only when the path is a regular file of at most 1 MiB reached through no link at any
+folder (`readSetupStepsBytes` and `withRecordedSetupSteps`, `:186-192`, `:220-242`; wired in `reclaimRenderings`,
+`src/cli/commands/sync/engine.ts`, and `cleanRenderings`, `src/cli/commands/clean.ts`). A copy matching neither, an
+edited one or one without the header line, is kept and named `skipped-user-content`, and a link or another kind of
+file at the path is named `skipped-unsafe-path`. Any other value is refused with `VALIDATION_ERROR` naming the three
+values.
+
+- **As built, beyond the delta:**
+  - The reclaim's rendering proof plans with the mode read as `managed` (`withSetupStepsRendered`, `:159-165`), so under
+    `off` today's rendering proves a current copy; the recorded-hash proof is the `review/66` fix, a declared default,
+    and the regular-file read is `review/72`'s (the cap round's note: the delta's text named no such condition).
+  - The config key `copilot.setupSteps` is the last `KEY_SPECS` entry, after `autonomy.deployingActs`; it writes the
+    nested bag as the autonomy rows write theirs, keeps the bag's other keys, and closes on the plain sync line, never
+    the loosen line (`src/cli/commands/config.ts`); `docs/configuration.md` carries the row, default `managed`. It is
+    the one validated key of Copilot's otherwise opaque `toolOptions` bag (`readCopilotSetupSteps`,
+    `src/manifest/manifest.ts`). `user` set back to `managed` with the file present is an `unmanaged-name` collision,
+    exit 1, the file byte-identical.
+- **Residuals:** a forged ledger row hashing an owner's own headed workflow, beside a planted `off`, gets it deleted at
+  the next `sync` or `clean`, the exposure the overwrite path already has there; the manifest is a person-only path
+  that `run land` asks about, and `SECURITY.md`'s manifest row names it (`review/70`; REQ-PLUGIN-046, amended
+  2026-10-26). A repository whose `.github` or `.github/workflows` folder is an in-repository link keeps an earlier
+  release's unedited copy and names it, failing safe. Under `user`, CI detection still reads the operator's workflow as
+  the engine's, so a repository whose only workflow it is gets a charter whose CI line reads `unknown`
+  (`src/detect/repoAnalyzer.ts:305`; `build/32`, deferred).
+- **Proof:** `test/adapters/copilot.test.ts` (the three modes, the read cap and the link cases),
+  `test/manifest/manifest.test.ts`, `test/cli/commands/config.test.ts`, `test/cli/commands/syncEngine.test.ts` ("off
+  after an upgrade …", its CRLF twin, "off: a row recording an owner's workflow that lacks the engine's header proves no
+  delete", the link to a device), `test/cli/commands/clean.test.ts` ("takes back under off the unedited workflow an
+  earlier version wrote …").
+- **Source:** `src/adapters/copilot.ts`, `src/manifest/manifest.ts`, `src/types/manifest.ts`, `src/cli/commands/config.ts`,
+  `src/cli/commands/sync/engine.ts`, `src/cli/commands/clean.ts`.
+
 ### REQ-FLOW-150 — Codex verdict roles state where their read-only boundary actually comes from
 
 Added 2026-10-25 (plan 022 file 1, unit `a10-codex-readonly-roles`, with its measurement on the installed Codex;
@@ -6000,6 +6604,14 @@ the role can still read.
   its shell away but not its patch writes and left it no way to read a file, so no `features.*` key is emitted
   (`src/adapters/codex.ts:369-372`; the run record of `2026-10-23_autonomy-distribution-01`). The cap asks for a
   re-measure on each newer Codex; the inbox follow-up's trigger is the installed Codex moving past 0.155.1.
+- **Amended 2026-10-26** (plan 022 file 2, unit `b18-vendor-claims`, folding ledger row `review/12` of run
+  `2026-10-23_autonomy-distribution-01`; read at `1fe7d915`). The cap and every emitted agent file also say what the
+  same measurement found of the host tools: the cap's last sentence is preceded by "It also got the parent's tools that
+  act on the host: in that measurement a desktop-control attempt was refused only by that tool's own policy.", and each
+  Codex agent file's header carries "It also got the parent's tools that act on the host." (`CODEX_FACTS` and
+  `buildAgentToml`, `src/adapters/codex.ts`), so each emitted Codex agent file is rewritten once at the next `sync`.
+  - Proof: `test/adapters/codex.test.ts` (the exact agent file, re-pinned; the reviewer's file and the cap both carry
+    "tools that act on the host").
 - **Proof:** `test/adapters/codex.test.ts`, `test/emit/capabilityMatrix.test.ts`.
 - **Source:** `src/adapters/codex.ts`, `src/tools/translator.ts`.
 
@@ -6179,6 +6791,13 @@ above.
 - GIVEN a `.gitignore` without them WHEN init or a live sync runs THEN `git check-ignore -q` exits 0 for a file under
   `.stamity/context-once/` and for `.stamity/client-models.json`, each added last, and none is appended where the state
   directory's rule already covers it (added 2026-10-18; `test/mcp/env.test.ts`, `test/cli/commands/sync.test.ts`).
+- GIVEN `init -y --tools codex` with no MCP server THEN `.gitignore` holds the seven machine-local lines and no `.env.mcp`
+  line; GIVEN a `.gitignore` row whose `coOwned.lines` names `.env`, or `lines` on any other path, THEN the manifest is
+  refused with `CONFIG_ERROR` naming the line; GIVEN a recorded `.env.mcp` line, no server needing a credential and no
+  `.env.mcp` on disk, WHEN `sync` and then `clean -y` run THEN the line is still there after each; GIVEN `.env*` or
+  `!.env.mcp` in the owner's file THEN `.env.mcp` is neither appended nor owned (added 2026-10-26;
+  `test/cli/commands/initApply.test.ts`, `test/manifest/manifest.test.ts`, `test/cli/commands/syncEngine.test.ts`,
+  `test/cli/commands/roundTrip.test.ts`).
 
 **REQ-FLOW-017**
 
@@ -6277,6 +6896,10 @@ above.
 - GIVEN `init -y --maturity enterprise` on a directory that would seed `solo` THEN the manifest's `maturityTier` is
   `enterprise` and the panel reads `(tier: enterprise, …)`. GIVEN `--maturity galactic` THEN init exits non-zero naming
   the value, and no `.stamity/` is created (added 2026-10-06; `test/cli/commands/init.test.ts:581`).
+- GIVEN a pin at 1.17.0 and a registry answering 1.18.0 THEN the notice contains `npx -y <name>@1.18.0 upgrade --to
+  1.18.0`; at 1.17.0 or later the move is the `upgrade --to` form, and below it the pinned `sync` form; GIVEN
+  `sync --help` THEN it names `upgrade --to <version>` first and the pinned `sync` second (added 2026-10-26;
+  `test/cli/notice/updateNotice.test.ts`, `test/cli/commands/sync.test.ts`).
 
 **REQ-FLOW-024**
 
@@ -6326,6 +6949,95 @@ above.
 - GIVEN the full selection with Codex WHEN its skills list is measured THEN the nine touchpoints are not counted, 17
   rows are shown, and the shown total equals `codexSkillsListChars` (added 2026-10-06;
   `test/adapters/codex.test.ts:2087`).
+- GIVEN tools `[cursor]` THEN no touchpoint `agents/openai.yaml` is planned and the nine `SKILL.md` are byte-identical to
+  those `[cursor, codex]` plans; GIVEN `[cursor, codex]` THEN each companion's owners are `["codex"]` (added 2026-10-26;
+  it supersedes the first criterion's companion clause for a setup without Codex; `test/emit/touchpointSkills.test.ts`).
+
+**REQ-FLOW-027** (added 2026-10-26)
+
+- GIVEN a fixture with no `.gitignore` WHEN `init -y` for four clients and then `clean -y` run THEN every file is
+  byte-identical but the recorded settings rows, no `.gitignore` is left, and `git status --porcelain --ignored` is
+  unchanged; GIVEN a pre-existing `node_modules/` line, with or without a final newline, or a CRLF file, THEN it comes
+  back byte-identical. *(test: `test/cli/commands/roundTrip.test.ts`)*
+- GIVEN an owner `AGENTS.md` of `\n\n  # Team\n\nno final newline` and an owner `CLAUDE.md` opening with a byte-order mark
+  WHEN `init -y --tools claude --import-config supplement` and then `clean -y` run THEN both come back byte-identical;
+  GIVEN `--import-config replace` THEN the manifest records `backup: { path: "AGENTS.md.bak", sha256 }`, and after
+  `clean -y` both files are byte-identical and no `AGENTS.md.bak*` remains. *(test: `test/cli/commands/roundTrip.test.ts`)*
+- GIVEN `backup.path` of `../secret.txt`, `docs/AGENTS.md.bak`, `AGENTS.md.bak.zz` or `AGENTS.md.orig`, or `backup` on
+  `supplement`, THEN one error each; GIVEN a forged record naming `notes/a.md` with its true hash THEN nothing moves;
+  GIVEN an edited, linked, directory or hard-linked `.bak` THEN it is not moved and the reason names why; GIVEN a file
+  that appears at the target after the checks THEN it is kept. *(test: `test/manifest/manifest.test.ts`,
+  `test/cli/commands/clean.test.ts`)*
+- GIVEN `init -y --tools claude,copilot` and a pack with one hook WHEN `clean --pack <id> -y` runs THEN neither
+  `.claude/settings.json` nor `.github/hooks/stamity.json` holds an entry running `.stamity/packs/<id>/`, and `check
+  --json` is `ok: true`; GIVEN a manifest written by another version, a pack with no hooks, or a loosened manifest THEN
+  no hooks document is rewritten and the run says why. *(test: `test/cli/commands/clean.test.ts`)*
+- GIVEN init with Claude and Cursor and a pack holding an agent, synced, WHEN `clean --pack` runs THEN Cursor's spawn
+  guard no longer names the agent, `documentsRewritten` names it, and `check --json` is ok (added on `p20/b1`, `build/40`).
+  *(test: `test/cli/commands/clean.test.ts`, "clean --pack — the documents naming the pack's agents leave them behind")*
+
+**REQ-FLOW-028** (added 2026-10-26)
+
+- GIVEN a setup holding a learning, a handoff, an override, a user hook, a run record, an inbox row, a verify artifact
+  and a made-up pack, synced, WHEN `clean -y` runs THEN each is byte-identical, `.stamity/packs/<dir>/**` too; the
+  pack's copies, the manifest, `.stamity/generated/` and every `review-gate.json*` are gone; `kept` names the eight
+  entries and `stateDirRemoved` is false; GIVEN `--purge` THEN `.stamity/` is gone; GIVEN `--purge --pack x` THEN
+  `VALIDATION_ERROR` and an unchanged tree; GIVEN a later `init -y` THEN the pack's rows return with their old hashes and
+  `check`'s `pack-integrity` passes, and an edited pack file gives no rows and one warning. *(test:
+  `test/cli/commands/clean.test.ts`, `test/cli/commands/initApply.test.ts`)*
+- GIVEN the machine-local files written WHEN `clean -y` runs THEN none of the four exists and no ignore line is left for
+  them; GIVEN `client-models.json` as a link THEN it is kept, named in `left` and keeps its line; GIVEN a step after the
+  sweep failing THEN the manifest stays and the re-run takes the lines back. *(test:
+  `test/cli/commands/roundTrip.test.ts`, `test/cli/commands/clean.test.ts`)*
+- GIVEN a planted receipt listing `src/index.ts` with its true hash, or naming another pack's folder, THEN `init` adopts
+  nothing from it. *(test: `test/pack/install.test.ts`)*
+
+**REQ-FLOW-029** (added 2026-10-26)
+
+- GIVEN `init -y --tools claude,cursor,copilot` WHEN `init -y --force` runs THEN `AGENTS.md` is byte-identical, holds one
+  `# Charter`, and no `.bak` and no `importChoice` exist; GIVEN the charter with its markers removed, a corrupt manifest
+  or a deleted `.stamity/` THEN one `# Charter`; GIVEN a first `--import-config skip` THEN it is kept after `--force`, the
+  carried line printed; GIVEN prose under `--force --import-config supplement` THEN it survives byte for byte; GIVEN
+  `--import-config replace`, then `--force`, then `clean -y` THEN the owner's file comes back byte for byte. *(test:
+  `test/cli/commands/init.test.ts`, `test/cli/commands/initPlan.test.ts`, `test/cli/commands/initApply.test.ts`)*
+- GIVEN a carried decision and a differing `--import-config` THEN the line names the file, the decision kept and a
+  route that works, and after a carried `replace` with no backup record it never names the `.bak` this run took of the
+  charter. *(test: `test/cli/commands/init.test.ts`)*
+
+**REQ-FLOW-032** (added 2026-10-26)
+
+- GIVEN the same manifest content written at T1 over T0 THEN the bytes and mtime are unchanged and the result is
+  `{ written: false, updatedAt: T0 }`; GIVEN one field changed THEN `T1` and `written: true`; GIVEN CRLF on disk THEN no
+  write; GIVEN a stamp of another shape or none THEN a fresh stamp. *(test: `test/manifest/manifest.test.ts`)*
+- GIVEN `init` and then a no-op `sync` THEN `updatedAt` is equal and `sync --json` reads `manifestWritten: false`; GIVEN
+  a `CLAUDE.md` stamped `v1.16.0` THEN it is `updated` once with a notice naming the rewrite, then `unchanged`; GIVEN
+  `check`'s or `sync`'s provenance THEN no line says "stamped". *(test: `test/cli/flows.e2e.test.ts`,
+  `test/cli/commands/sync.test.ts`, `test/cli/commands/syncEngine.test.ts`, `test/adapters/claude.test.ts`,
+  `test/cli/commands/check.test.ts`)*
+
+**REQ-FLOW-033** (added 2026-10-26)
+
+- GIVEN a 1.16.0 ledger with the nine companions and tools `[cursor]` WHEN `sync` runs THEN the nine are deleted and
+  every `SKILL.md` is byte-identical; GIVEN an edited companion THEN it is kept and named; GIVEN a row carrying the true
+  hash of an owner's file at a listed path, a listed path owned by another client, `artifactType: "skill"`, another
+  touchpoint's id, or a companion row recording another text's hash THEN the file is kept; GIVEN the list THEN exactly
+  the nine literal keys. *(test: `test/cli/engine/retiredRenderings.test.ts`)*
+- GIVEN a setup without Codex and an edited companion a `sync` kept THEN `check`'s `legacy-files` row warns naming it with
+  its remedy; GIVEN a linked prompts folder, skill folder or companion THEN it is not listed; GIVEN a path a ledger row
+  holds, `team.prompt.md` or a folder at a companion's name THEN it is not listed. *(test:
+  `test/cli/commands/check.test.ts`)*
+
+**REQ-FLOW-034** (added 2026-10-26)
+
+- GIVEN a fixture written one minor below the running version V, pinning it, WHEN `upgrade --to V` runs THEN exit 0,
+  `package.json` differs only in the pin, `generatedBy` is V, the learnings, handoffs, overrides and run records are
+  byte-identical, and a second run is a no-op leaving the manifest byte-identical; GIVEN `--to` another release THEN
+  exit 1 printing its pinned `upgrade` call, or `sync` below 1.17.0, and nothing written; GIVEN a downgrade or a major
+  move THEN exit 1 naming its flag; GIVEN `--allow-client-change` THEN exit 2; GIVEN a loosened manifest THEN exit 1
+  `AUTONOMY_LOOSENED` with every file byte-identical, and with `--loosen` exit 0; GIVEN Codex THEN a notice names
+  `/hooks`. *(test: `test/cli/commands/upgrade.test.ts`, `test/cli/commands/upgradeClientProbe.test.ts`)*
+- GIVEN a local pack added and synced WHEN it is re-added with nothing overridden THEN exit 0. *(test:
+  `test/cli/commands/add.test.ts`)*
 
 **REQ-FLOW-036**
 
@@ -6378,6 +7090,9 @@ above.
   THEN it stays and is named; GIVEN an owner's deny row equal to an engine ask row THEN it stays and is not named as a
   row the engine dropped; GIVEN mode `ask` after `autonomous` THEN the rows return at the next `sync` (added 2026-10-25;
   `test/manifest/claudeSettings.test.ts`, `test/merge/settingsOwnerEntries.test.ts`).
+- GIVEN a kept settings file that still runs the guard under `.claude/hooks/stamity/` WHEN `clean -y` runs THEN the
+  policy copy stays and the guard exits 0 for a governed agent the policy lets read (added 2026-10-26;
+  `test/merge/claudeHookCopies.test.ts`).
 
 **REQ-FLOW-037**
 
@@ -6452,6 +7167,25 @@ above.
   old guard the owner deleted THEN its entry is still rewired. GIVEN the four fixtures THEN each hashes to its pinned
   SHA-256 and the frozen builder renders it byte for byte (added 2026-10-08, unit `d1b-cursor-guard-pins`;
   `test/merge/hookFilesOwnership.test.ts`, `test/adapters/cursorLegacyGuards.test.ts`).
+
+**REQ-FLOW-048** (added 2026-10-26)
+
+- GIVEN no terminal or `--json` THEN no request and no stamp; GIVEN `true`, `YES` or ` 1 ` THEN opted out, and `0` not;
+  GIVEN a pin at 1.17.0 and a registry at 1.18.0 THEN the exact banner with `upgrade --to 1.18.0`; GIVEN a pin at 1.9.1
+  and a registry at 1.10.0 THEN the move reads `sync`; GIVEN a pin at 1.18.0 THEN no banner; GIVEN a registry at 2.0.0
+  THEN `--allow-major`; GIVEN two package names THEN two stamp files; GIVEN a linked or oversized pin source THEN it names
+  nothing. *(test: `test/cli/notice/updateNotice.test.ts`)*
+
+**REQ-FLOW-049** (added 2026-10-26)
+
+- GIVEN a lock with prod, optional, devOptional and dev rows THEN the shrinkwrap drops the dev row, reads the
+  devOptional one `optional`, and the root has no `devDependencies`; GIVEN a leftover shrinkwrap, a lock that differs
+  from the commit, or no commit THEN the pack refuses before any write; GIVEN an interrupt by SIGINT, SIGTERM or SIGHUP
+  THEN the file is gone and the process ends by that signal. *(test: `test/ci/packRelease.test.ts`)*
+- GIVEN `st --version` THEN stdout equals `stamity --version` and stderr is exactly the deprecation line; GIVEN
+  `stamity --version` THEN stderr is empty; GIVEN `package.json` and the lock's root row THEN `st` maps to
+  `./dist/st.js` and `files` holds `npm-shrinkwrap.json`. *(test: `test/cli/stAlias.e2e.test.ts`,
+  `test/cli/binMap.test.ts`)*
 
 **REQ-FLOW-061**
 
@@ -6986,6 +7720,8 @@ above.
   delta prose it is not read; GIVEN `--since` on one plan THEN it is accepted, and over two plans without `--chain` THEN
   exit 2 (added 2026-10-18; *test: `test/runs/planCoverageParity.test.ts`, `test/authoring/specPlanCoverage.test.ts`,
   `test/cli/commands/plan.test.ts`*).
+- GIVEN a plain-paragraph `Critical …` line at column 0 under Risks THEN `critical-risk` at its line; GIVEN a Risks bullet
+  wrapped onto an unindented line beginning "critical" THEN ready (added 2026-10-26; *test: `test/runs/planCheck.test.ts`*).
 
 **REQ-FLOW-092** (added 2026-10-16)
 
@@ -6999,6 +7735,11 @@ above.
 - GIVEN `run start` on the default branch and a run branch whose tip tracks its origin pin THEN the switch goes through,
   the pin is kept and the checkout is clean; GIVEN that pin naming another repository THEN exit 1, `Not done: origin
   changed`. *(test: `test/cli/commands/run.test.ts`)*
+- GIVEN an `ssh://git@ssh.github.com:443/o/r.git` origin THEN it resolves to `o/r`, and under another `GH_HOST` it does
+  not; GIVEN an attended record and one `--drop-held` path THEN exit 1 with the `not withdrawn:` line; GIVEN a tracked
+  file inside an ignored folder THEN it stages and pushes; GIVEN a git failure inside `run end` THEN the line names
+  `run end could not` (added 2026-10-26; *test: `test/runs/pullRequest.test.ts`,
+  `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/runEnd.test.ts`*).
 
 **REQ-FLOW-093** (added 2026-10-16)
 
@@ -7079,6 +7820,9 @@ above.
   entry is left and `direct-push` passes; GIVEN `CLAUDE_CODE_REMOTE=1`, `GITHUB_ACTIONS` alone or a
   `CURSOR_AGENT_SOCKET` of `0` THEN the JSON reads `cloud: false`, `cloud: true` and no `cursor-egress` warning (added
   2026-10-18; *test: `test/cli/commands/gatePreflight.test.ts`*).
+- GIVEN `MYSQL_PWD` set to a short value THEN `token-env` names it, and `PWD` and `OLDPWD` it does not; GIVEN a 1.2 MiB
+  record with a usage line in its first MiB THEN `review-state` says the record was not read (added 2026-10-26; *test:
+  `test/runs/preflight.test.ts`, `test/cli/commands/gatePreflight.test.ts`*).
 
 **REQ-FLOW-102** (added 2026-10-16)
 
@@ -7100,6 +7844,17 @@ above.
   GIVEN a CRLF copy of a link section THEN it carries as a link; GIVEN `--drop-held <path>` after the run undid that
   path THEN its section leaves and `withdrawn` names it (added 2026-10-25). *(test:
   `test/cli/commands/runCheckpoint.test.ts`)*
+- GIVEN a `symbolic-ref` write or delete of a remote's HEAD ref, an `update-ref` write or delete of it (its `--stdin`
+  text included), a remote-tracking `git branch -d -r origin/HEAD`, or `git remote set-head` in each form THEN an ask
+  naming `push-default`, with or without a known origin; GIVEN a word the line cannot show on such a call THEN the same;
+  GIVEN a read of that ref, or that ref as `update-ref`'s value, THEN no act; GIVEN the rendered guard THEN Claude Code's
+  main thread is asked, and a sub-agent, Cursor, Codex and an unattended run are refused; GIVEN a 64 KiB line of each
+  reader's worst class THEN a verdict in under a second (added 2026-10-26). *(test: `test/hooks/personOnly.test.ts`,
+  `test/hooks/personOnlyGuard.test.ts`)*
+- GIVEN a kept held patch on a fresh clone with a section naming an unheld path, a second file patch after a section's
+  hunks, a file patch before the first section, a no-prefix section or custom prefixes THEN exit 1, nothing pushed;
+  GIVEN a hook declaration value `C:x` or `--out=C:x` THEN the hold refuses naming the drive (added 2026-10-26). *(test:
+  `test/cli/commands/runCheckpoint.test.ts`, `test/runs/hookPaths.test.ts`)*
 
 **REQ-FLOW-103** (added 2026-10-16)
 
@@ -7167,6 +7922,11 @@ above.
 - GIVEN Copilot selected THEN the setup steps hold the pinned install and `stamity --version`, a fork's channel and
   registry reaching it; GIVEN Cursor selected THEN `check` lists `cloud-install`, never failing, and without Cursor no
   row. *(test: `test/adapters/copilot.test.ts`, `test/cli/commands/check.test.ts`)*
+- GIVEN `.nvmrc` `20` THEN no global install line and a comment naming `22.22.2`, and `22` keeps the install; GIVEN a
+  tracked root `.npmrc` THEN the install step carries `NPM_CONFIG_USERCONFIG`, and an ignored or untracked one, or none,
+  gives no `env:`; GIVEN `docs/cloud.md` and the `cloud-install` row THEN each says Cursor uses a saved environment before
+  a repository's `environment.json`, and neither says a repository file replaces every environment (added 2026-10-26;
+  *test: `test/adapters/copilot.test.ts`, `test/docsPages.test.ts`*).
 
 **REQ-FLOW-112** (added 2026-10-18)
 
@@ -7216,6 +7976,8 @@ above.
 - GIVEN Copilot selected with the work prompt THEN the entry is emitted, under 2,000 characters, naming the prompt and
   the plan; without Copilot, or with only `cmd-ask`, THEN none; GIVEN the roster THEN its count is unchanged. *(test:
   `test/adapters/copilot.test.ts`)*
+- GIVEN the entry's body THEN "On Copilot's cloud agent" opens its prompt-file sentence and comes before "59 minutes"
+  (added 2026-10-26; *test: `test/adapters/copilot.test.ts`*).
 
 **REQ-FLOW-119** (added 2026-10-18)
 
@@ -7234,6 +7996,10 @@ above.
 - GIVEN an unattended run THEN `gh pr ready <n>` is refused with the unattended sentence naming the summary list, a local
   lightweight tag is allowed on Claude Code, and `run land --approved <sha>` refuses before any GitHub call (added
   2026-10-25; *test: `test/hooks/personOnlyGuard.test.ts`, `test/cli/commands/runLand.test.ts`*).
+- GIVEN `STAMITY_UNATTENDED` spelled `""`, `false`, `0`, `FALSE ` or `" 0 "` THEN attended, and `1`, `yes` or `true`
+  unattended; GIVEN a `Mode:` line THEN it wins over the variable; GIVEN `src/cli/commands/` THEN no file defines a
+  `readsUnattended` of its own (added 2026-10-26, plan 022 file 2, `b14c-land-batch`; *test:
+  `test/runs/recordHead.test.ts`*).
 
 **REQ-FLOW-121** (added 2026-10-18)
 
@@ -7263,6 +8029,9 @@ above.
   `permission_mode: "auto"` THEN still a refusal; GIVEN a ready mark, a local tag or an unnamed dispatch on Codex or
   Cursor THEN a refusal in every mode naming the missing identity, while `stamity run land` alone on its line runs on all
   four (added 2026-10-25). *(test: `test/adapters/claude.test.ts`, `test/hooks/personOnlyGuard.test.ts`)*
+- GIVEN observations whose only marked ask is a helper's call THEN `--ask` reads `not-run`; GIVEN a main session id
+  `"bad id!"` THEN fact 1 reads `changed`; GIVEN each client's rendered guard THEN those answering an ask with
+  `permissionDecision: "ask"` equal `ASK_CLASS_CLIENTS` (added 2026-10-26). *(test: `test/qa/hookRuns.test.ts`)*
 
 **REQ-FLOW-124** (added 2026-10-18)
 
@@ -7342,6 +8111,9 @@ above.
 - GIVEN an `asks` outcome THEN its JSON lists every reason and the head; GIVEN `--approved` with that head THEN it lands
   over the ask; GIVEN `--approved` with another sha, or in an unattended run, THEN `refused`. *(test:
   `test/cli/commands/runLand.test.ts`)*
+- GIVEN `deployingBranches` naming the default branch and `--fast-forward --approved <head>` THEN it lands; GIVEN a refused
+  verdict THEN the only body write is the waits line and the default branch does not move (added 2026-10-26). *(test:
+  `test/cli/commands/runLand.test.ts`)*
 
 **REQ-FLOW-133** (added 2026-10-25)
 
@@ -7349,6 +8121,9 @@ above.
   or `.stamity/change-classes.json`, or `autonomy.mode: "ask"`, THEN `asks` with the evidence printed and no merge call;
   GIVEN a diff touching only `AGENTS.md` or a client's skill tree THEN no ask. *(test: `test/runs/landEvidence.test.ts`,
   `test/cli/commands/runLand.test.ts`)*
+- GIVEN a diff touching `scripts/ci/records-only.mjs`, `src/change/classify.ts` or `src/roster/triggers.ts` beside
+  `src/a.ts` THEN `asks` naming that file alone; GIVEN the probe script, a sibling module under `src/change/` or the
+  classifier's test THEN no ask (added 2026-10-26, on `p20/b1`). *(test: `test/runs/landEvidence.test.ts`)*
 
 **REQ-FLOW-134** (added 2026-10-25)
 
@@ -7375,6 +8150,9 @@ above.
   version with its marker removed THEN it reads `ask`; GIVEN a setup from before the guard THEN the upgrade's first
   `sync` needs no flag. *(test: `test/cli/engine/autonomyGate.test.ts`, `test/cli/commands/sync.test.ts`,
   `test/cli/commands/init.test.ts`, `test/cli/commands/workspace.test.ts`)*
+- GIVEN a loosened manifest WHEN `upgrade --to <running>` runs THEN exit 1 `AUTONOMY_LOOSENED` and `package.json` too is
+  byte-identical; GIVEN the CLI reference's error table THEN its `AUTONOMY_LOOSENED` row names `upgrade` (added
+  2026-10-26). *(test: `test/cli/commands/upgrade.test.ts`, `test/cli/docs/cliReference.test.ts`)*
 
 **REQ-FLOW-139** (added 2026-10-25)
 
@@ -7430,11 +8208,24 @@ above.
   the Critical or Warning rows, required human review, `autonomy.mode`, `autonomy.deployingBranches`,
   `autonomy.deployingActs`, a raw merge and "raw push to the default branch". *(test: `test/docsPages.test.ts`)*
 
+**REQ-FLOW-149** (added 2026-10-26)
+
+- GIVEN `config set copilot.setupSteps bogus` THEN `VALIDATION_ERROR` naming the three values and the manifest unchanged;
+  GIVEN `user` and an edited workflow WHEN `sync` and `check` run THEN the bytes stay, no `.bak`, no ledger row, no drift,
+  and `clean -y` leaves it; GIVEN `off` and an unedited workflow, an earlier release's or a CRLF checkout of one, THEN it
+  is deleted, and an edited one, or a row hashing an owner's workflow without the header line, is kept as
+  `skipped-user-content`; GIVEN a workflow past 1 MiB or reached through a link THEN no recorded hash joins the proof;
+  GIVEN `user` set back to `managed` with the file present THEN an `unmanaged-name` collision, exit 1. *(test:
+  `test/cli/commands/config.test.ts`, `test/cli/commands/syncEngine.test.ts`, `test/cli/commands/clean.test.ts`,
+  `test/adapters/copilot.test.ts`)*
+
 **REQ-FLOW-150** (added 2026-10-25)
 
 - GIVEN a Codex reviewer's TOML THEN it holds no "sandbox_mode binds" and does hold "runs in the parent turn's
   sandbox"; GIVEN the cap THEN it names codex-cli 0.155.1 with its date; GIVEN the four verdict roles THEN
   `sandbox_mode = "read-only"` is still emitted. *(test: `test/adapters/codex.test.ts`)*
+- GIVEN the reviewer's agent file and the `per-agent tool allowlist` cap THEN each carries "tools that act on the host"
+  (added 2026-10-26). *(test: `test/adapters/codex.test.ts`)*
 
 ## References
 
@@ -7560,6 +8351,22 @@ above.
   `test/runs/hookPaths.test.ts`, `test/cli/commands/runLand.test.ts`, `test/cli/engine/autonomyGate.test.ts`,
   `test/config/autonomy.test.ts`, and the suites each requirement names; eval cases
   `unattended-land-evidence-holds` and `unattended-land-injected-merge-refused` in `evals/cases-v6/`.
+- `docs/plans/022-autonomy-distribution-02.md`, with `.stamity/runs/2026-10-25_autonomy-distribution-02/` (its record,
+  ledger and units' reports) — the spec delta, the cells' amendments and the as-built deltas the text dated 2026-10-26
+  merges (REQ-FLOW-027 to REQ-FLOW-029, REQ-FLOW-032 to REQ-FLOW-034, REQ-FLOW-048, REQ-FLOW-049 and REQ-FLOW-149;
+  REQ-FLOW-016, REQ-FLOW-022, REQ-FLOW-026, REQ-FLOW-036, REQ-PLUGIN-016, REQ-PLUGIN-046, REQ-FLOW-089, REQ-FLOW-091,
+  REQ-FLOW-092, REQ-FLOW-101, REQ-FLOW-102, REQ-FLOW-111, REQ-FLOW-118, REQ-FLOW-120, REQ-FLOW-123, REQ-FLOW-132,
+  REQ-FLOW-133, REQ-FLOW-138 and REQ-FLOW-150 amended), added 2026-10-26; its REQ-PLUGIN, REQ-FORK, REQ-PROVE, REQ-CTX
+  and REQ-UPSTREAM ids in the specs that own them.
+- `source` (added 2026-10-26): `src/mcp/env.ts` (`GITIGNORE_ENTRY_WHEN`, `reconcileGitignore`), `src/cli/commands/clean.ts`,
+  `src/cli/commands/upgrade.ts`, `src/cli/notice/updateNotice.ts`, `src/manifest/manifest.ts` (`writeManifest`,
+  `importBackupPathDefect`), `src/merge/managedBlocks.ts` (`stripManagedBlock`), `src/cli/commands/init/plan.ts`
+  (`carriedImportDecisions`), `src/pack/install.ts` (`adoptInstalledPacks`, `heldByOwnCopy`), `src/manifest/ownedPaths.ts`
+  (`RETIRED_ENGINE_PATHS`), `src/adapters/copilot.ts` (`copilotReleasedPaths`, `withRecordedSetupSteps`,
+  `hasCommittedNpmrc`), `src/cli/commands/check.ts` (`checkLegacyFiles`), `scripts/pack-release.mjs`, `src/st.ts`.
+- `test` (added 2026-10-26): `test/cli/commands/roundTrip.test.ts`, `test/cli/commands/upgrade.test.ts`,
+  `test/cli/engine/retiredRenderings.test.ts`, `test/ci/packRelease.test.ts`, `test/cli/stAlias.e2e.test.ts`, and the
+  suites each requirement names.
 
 ## Risks
 
@@ -7621,6 +8428,12 @@ above.
   record. Unmeasured at this merge (the run record's close): a tokenless publish dry run against GitHub Packages
   (REQ-PLUGIN-050 in `docs/specs/fork-layer.md`), mise's trust of a config at the Windows drive root, replace refs on
   git 2.19 to 2.42, and Claude Code older than 2.1.295.
+- Plan 022 file 2 changes what a setup leaves and what an upgrade rewrites (added 2026-10-26). A 1.16.0 `check` over a
+  newer tree reads the bare managed-block markers as drift (REQ-FLOW-032); every Codex agent file is rewritten once for
+  the host-tools sentence (REQ-FLOW-150); an attended `run checkpoint` or `run end` given `--drop-held` now exits 1
+  (REQ-FLOW-092); a `--purge` while hook wiring is held keeps `.stamity/` whole (REQ-PLUGIN-016); and a `.env.mcp`
+  ignore line, once written, is never taken back (REQ-FLOW-016). Unmeasured: whether GitHub Packages honours a
+  published shrinkwrap (REQ-FLOW-049). The CHANGELOG names each.
 
 ## Concerns
 
@@ -7661,7 +8474,13 @@ above.
     (`scripts/ci/records-only.mjs:47-51`, `LANE_PATHS`, re-pointed 2026-10-14 to `4d003d60` from `:61-66`, where the
     retired records lane had held it); the class file places them `security-sensitive`, so the lens reads any
     change to them (`.stamity/change-classes.json:8-12`); and the suites come from the base map. A change that
-    rewrites the script to answer narrow is trusted until review reads it.
+    rewrites the script to answer narrow is trusted until review reads it. Closed 2026-10-26 (plan 022 file 2, unit
+    `b1-fork-ci-job`, ledger row `build/5` of run `2026-10-23_autonomy-distribution-01`, with its fix round's
+    `review/83`): the `changes` job runs the classifier from a detached worktree of the base commit, and no base to run
+    it from means full CI (`.github/workflows/ci.yml:202-212` at `p20/b1`; REQ-PROVE-031 in
+    `docs/specs/prove-behavior-and-value.md`), so a change no longer routes its own CI; its effect shows from the next
+    change on, and `run land` asks before a change to the classifier's three files lands (REQ-FLOW-133, amended
+    2026-10-26). The bullet above stands as the record of what held until then.
   - **A backslash in a git name** (`review/43`). Off Windows, a name such as `.stamity\overrides\x.md` is one
     top-level Markdown file and reads `docs`, which is right for the file a POSIX checkout writes; on win32 git's
     names are read both ways and the stronger class kept, because a Windows checkout with `core.protectNTFS` off

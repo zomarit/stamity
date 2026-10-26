@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023).
 status: shipped-with-1.16.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
@@ -118,6 +118,12 @@ REQ-PROVE-046, and the text dated 2026-10-25 under REQ-PROVE-045, come from the 
 `spec1` of run `2026-10-25_autonomy-distribution-02` made it afterwards, and every `path:line` in that text reads at
 `864d0111`, `main` after #125. REQ-PROVE-046 stands beside REQ-PROVE-009, as the delta places it, out of id order. It
 is not in a release yet.
+
+The text dated 2026-10-26 under REQ-PROVE-031, REQ-PROVE-041 and REQ-PROVE-042 comes from plan 022 file 2
+(`docs/plans/022-autonomy-distribution-02.md`, run `2026-10-25_autonomy-distribution-02`), units `b1-fork-ci-job` and
+`b15-qa-ci-tooling-batch`, whose reports declared these deltas where the plan's said "spec carries no ids"; merged by
+that run's pass `spec2`. `b1`'s citations read on its lane `p20/b1`, `b15`'s at the integration head `1fe7d915`. It is
+not in a release yet.
 
 ## Intent
 
@@ -1818,6 +1824,26 @@ Amended 2026-10-14 (plan 020 file 1, run `2026-10-14_cli-native`, unit `d3-ci-qa
 other two jobs are deleted with the APM and plugin routes (`.github/workflows/ci.yml:220-223`, the `check` job's
 condition).
 
+Amended 2026-10-26 (plan 022 file 2, unit `b1-fork-ci-job`, folding ledger row `build/5` of run
+`2026-10-23_autonomy-distribution-01`, with its fix round's `review/83`; read on `p20/b1` at `9bdbde48` and
+`5509611f`). The `changes` job's step "Classify the change" runs the classifier from a detached worktree of the base
+commit, at `$RUNNER_TEMP/classifier-base`, the working folder staying the head checkout, so the diff and the base's class
+file read as before and only the code that picks the checks moves to the base. No base to run it from — an empty or
+all-zero `BASE_SHA`, one that is not 7 to 64 hex characters, one git cannot find, or a base without
+`scripts/ci/records-only.mjs` — prints "records-only: no base commit to run the classifier from, so full CI" and writes
+the five lines of a full answer, running no classifier code (`.github/workflows/ci.yml:192-212` at `p20/b1`).
+Permissions, the checkout, the triggers and the outputs are unchanged. So the Residual bullet above, "the script and
+its import closure run from the pull request's head", no longer holds: a change to the classifier takes effect from
+the next change on, its own diff still takes full CI, and `run land` asks before a change to
+`scripts/ci/records-only.mjs`, `src/change/classify.ts` or `src/roster/triggers.ts` lands (REQ-FLOW-133 in
+`docs/specs/everyday-flows.md`, amended 2026-10-26). `SECURITY.md`, `GOVERNANCE.md` and CONTRIBUTING's "What CI
+proves" say the same.
+
+- GIVEN a base commit holding the real classifier and a head that rewrites `scripts/ci/records-only.mjs` to answer
+  `full=false` and adds `src/x.ts` THEN the step's output is `full=true`; GIVEN a spec-only head THEN `full=false` and
+  `lanes=["specs"]`; GIVEN an empty base, forty zeros, an unknown sha or a base without the script THEN exactly the five
+  fallback lines (added 2026-10-26; `test/ci/workflow.test.ts`, "the classifier runs from the base commit, executed").
+
 ### REQ-PROVE-032 — One file names the eval run of record
 
 `evals/run-of-record.json` names the run of record's results file (`path`), the release it measured (`release`) and the
@@ -2137,6 +2163,16 @@ Copilot's row is not run, for want of a Copilot cloud-agent account, and `Not do
     (`verdictForCloud`). `--out` writes the verdict `run.mjs --cloud` reads (REQ-PROVE-021).
   - The REST shapes are proven against canned answers only, and a dirty tree's build is printed under HEAD's sha; both
     open as Minors.
+- **Amended 2026-10-26** (plan 022 file 2, unit `b15-qa-ci-tooling-batch` and its fix round; inbox `review/31` and
+  this run's `review/5`; read at `1fe7d915`). The dirty-tree half of the bullet above is closed: `setup` refuses, after
+  the `--dir` check and before any REST call or build, a checkout whose tracked files hold uncommitted edits ("the
+  checkout has uncommitted edits; commit or stash them so the evidence names the code the run ran"), or whose
+  `content/`, `packs/` or `fork/` folder, the ones the build copies whole into `dist/` (`copyTargets`,
+  `tsdown.config.mjs`), holds an untracked or ignored file, which it names; an untracked file elsewhere passes, since
+  it reaches the bundle only through an edit to a tracked file (`candidateHead`, `scripts/qa/cloud-check.mjs`). The
+  REST shapes stay open as a Minor. A pin test holds the nightly release-prep prompt to the tool's `PLAN_PATH` and
+  `CONTRACT_PATH` (inbox `build/21`).
+  - Proof: `test/qa/cloudCheck.test.ts` (the `candidateHead` describe, red on the parent).
 - **Proof:** `test/qa/cloudCheck.test.ts`, `test/qa/run.test.ts`, `test/qa/form.test.ts`; the person rows themselves are
   `judgment: maintainer`, run once at Package 25's close.
 
@@ -2175,6 +2211,14 @@ where its secrets exist", where no release-prep job runs it). `test/docsPages.te
   client's ask re-measured"), `test/ci/workflow.test.ts` (the leg in the aggregator), `test/qa/hookRunsCli.test.ts`
   ("hook-runs --ask — the facts Copilot CLI's ask rests on"), `test/qa/hookRuns.test.ts` ("copilotFacts — the three
   facts Copilot CLI's ask rests on", "ASK_HELPER_FIELDS — the guard's helper fields, restated").
+- **Amended 2026-10-26** (plan 022 file 2, unit `b15-qa-ci-tooling-batch`; inbox `review/168`, `review/169` and
+  `review/43`; read at `1fe7d915`). The `--ask` line counts an ask only on a marked shell call whose logged `keys` hold
+  no helper field, so a run where only a helper's call was asked reads `not-run`, "only a helper's call was asked";
+  Copilot's fact 1 reads `changed`, "the session id no longer has the shape the guard accepts", when a `sessionStart`
+  id fails `ASK_SESSION_ID_PATTERN`, held equal to the guard's `COPILOT_SESSION_ID_PATTERN`; and `ASK_CLASS_CLIENTS` is
+  held to the clients whose rendered guard asks (`verdictForAsk`, `copilotFacts` and `ASK_SESSION_ID_PATTERN`,
+  `scripts/qa/hook-runs.mjs`). REQ-FLOW-123 in `docs/specs/everyday-flows.md` carries the mirror.
+  - Proof: `test/qa/hookRuns.test.ts`.
 
 ### REQ-PROVE-043 — The cloud page
 

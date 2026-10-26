@@ -1,6 +1,6 @@
 ---
 id: plugin-lifecycle
-# A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, retired to this stub in run 2026-10-14_cli-native on 2026-10-14, and excluded from the site build.
+# A design document, authored from docs/plans/008-plugin-lifecycle-01.md to -03.md on 2026-09-17, amended from docs/plans/010-enterprise-release-01.md on 2026-09-26 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, retired to this stub in run 2026-10-14_cli-native on 2026-10-14, its held id range amended in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.14.0
 obsolete_when: no committed plan names this spec any more and the records gate admits a retired spec, so the stub can be deleted
@@ -74,6 +74,13 @@ dropped in place, with a paragraph headed "Amended 2026-10-14".
 
 `REQ-PLUGIN-018` was never allocated, and `REQ-PLUGIN-031` to `REQ-PLUGIN-044` were held for plan 016's later files,
 which its own re-plan places.
+
+Amended 2026-10-26 (run `2026-10-25_autonomy-distribution-02`, passes `spec1` and `spec2`). Plan 022
+(`docs/plans/022-autonomy-distribution-01.md` and `-02.md`) replaced plan 016's files 1 and 2 and placed two ids of that
+range in `docs/specs/fork-layer.md`: `REQ-PLUGIN-031` (a fork release's explicit npm dist-tag, added 2026-10-25) and
+`REQ-PLUGIN-033` (a fork's gate proved on every pull request, added 2026-10-26). `REQ-PLUGIN-032` and `REQ-PLUGIN-034`
+to `REQ-PLUGIN-044` stay unallocated; plan 022 places no other id of the range. The two ids it allocated beyond the
+range, `REQ-PLUGIN-050` and `REQ-PLUGIN-054`, are defined in the same file.
 
 ## Requirements
 

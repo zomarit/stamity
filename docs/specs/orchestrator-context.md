@@ -1,6 +1,6 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, and excluded from the site build.
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, one locator amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, and excluded from the site build.
 # The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.16.0
@@ -113,6 +113,10 @@ the spec delta of `docs/plans/022-autonomy-distribution-01.md` (plan 022 file 1,
 `2026-10-23_autonomy-distribution-01`, unit `a10-codex-readonly-roles`). That run reached `main` as pull request #125
 without this merge; pass `spec1` of run `2026-10-25_autonomy-distribution-02` made it afterwards, reading at
 `864d0111`. No criterion is added, so the count below holds. They are not in a release yet.
+
+One locator in REQ-CTX-012's paragraph of 2026-10-16 was amended on 2026-10-26 by plan 022 file 2
+(`docs/plans/022-autonomy-distribution-02.md`, run `2026-10-25_autonomy-distribution-02`, unit `b14c-land-batch`),
+merged by that run's pass `spec2` and read at `1fe7d915`; the requirement's text and the criterion count do not move.
 
 The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 
@@ -587,7 +591,9 @@ returns `mode`, `branch` and `base` (`src/runs/resumeCard.ts:73-82`, `:225-253`)
 other value reads as attended unless `STAMITY_UNATTENDED` is set (to a value other than empty, `false` or `0`); then the
 variable governs, as the shell guard, the ask gate and the run verbs read it, a `Mode: attended` head winning over it
 (`unattendedBy` and `unattendedSource`, `src/hooks/scripts.ts:3701-3732`, `:4118-4136`; `readsUnattended`,
-`src/cli/commands/run.ts:675`, `:1092-1095`; read after the whole-branch page round, re-pointed at `02c2af6d`). The debug record keeps its three head lines when
+`src/runs/resumeCard.ts:266-274`, the run verbs' one reader since plan 022 file 2's `b14c-land-batch`, ledger row
+`review/84` of run `2026-10-23_autonomy-distribution-01` (amended 2026-10-26; it read "`src/cli/commands/run.ts:675`,
+`:1092-1095`"); read after the whole-branch page round, re-pointed at `02c2af6d`). The debug record keeps its three head lines when
 attended; an unattended `/st-debug` record adds `Mode:`, `Branch:` and `Base:` (`content/commands/st-debug.md:56-68`), and an unattended
 `/st-pr-resolve` opens a record of its own with the six lines (`content/commands/st-pr-resolve.md:54`). The resume
 card's printed lines do not change.

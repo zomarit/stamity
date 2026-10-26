@@ -1,6 +1,6 @@
 ---
 id: fork-layer
-# A design document, authored outside the spec command, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-14_cli-native on 2026-10-14, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, and excluded from the site build.
+# A design document, authored outside the spec command, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-14_cli-native on 2026-10-14, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.15.0
 obsolete_when: the enterprise-forks guide and the customization page stop carrying the fork layer's behaviour, or a decision cuts the surface
@@ -38,6 +38,15 @@ for them; REQ-PLUGIN-031 is one of the ids `docs/specs/plugin-lifecycle.md` held
 REQ-PLUGIN-050 is reduced from plan 016's text. That run reached `main` as pull request #125 without this merge; pass
 `spec1` of run `2026-10-25_autonomy-distribution-02` made it afterwards, and every `path:line` in that text reads at
 `864d0111`, `main` after #125. A ledger id in that text (`review/11`) is that run's own. It is not in a release yet.
+
+REQ-PLUGIN-033 and REQ-PLUGIN-054, and the text dated 2026-10-26 under REQ-FORK-011 and REQ-PLUGIN-028, come from the
+spec delta of `docs/plans/022-autonomy-distribution-02.md` (plan 022 file 2, run `2026-10-25_autonomy-distribution-02`,
+units `b1-fork-ci-job`, `b2-secret-shaped-fixtures` and `b11-publish-integrity`), with the as-built deltas their reports
+declared, merged by that run's pass `spec2`. Where a delta entry and the code differ, the text states the code, and a
+line headed "As built" says what moved. `b1`'s citations read on its lane `p20/b1` at `9bdbde48`, the rest at the
+integration head `1fe7d915`. REQ-PLUGIN-033 is another of the ids `docs/specs/plugin-lifecycle.md` held for plan 016's
+later files, and REQ-PLUGIN-054 sits beside REQ-PLUGIN-027's workflow, as decision E7 places it. A ledger id in that
+text (`review/19`, `build/43`) is that run's own. It is not in a release yet.
 
 ## Intent
 
@@ -315,6 +324,20 @@ What holds is the CLI half: independent fixtures specify the additions, replacem
 install verifies CLI source edits, fork precedence and the supported clients. A private fork's release route is
 REQ-PLUGIN-028's identity step and REQ-PLUGIN-027's workflow, below.
 
+Amended 2026-10-26 (plan 022 file 2, unit `b1-fork-ci-job`; read on `p20/b1` at `9bdbde48`). Given
+`test/ci/forkIdentity.test.ts`, Then no case is skipped because `STAMITY_FORK_SUITE` is unset: the opt-in "inherited
+gate" group and `IDENTITY_SUITES` are retired, since REQ-PLUGIN-033's probe runs the whole suite in a renamed copy, of
+each fork kind, on every pull request. The spelling census stays on. `git grep -n STAMITY_FORK_SUITE -- test scripts
+.github` prints nothing.
+
+- **As built:** the step-0 measurement found these files red by identity in a renamed copy, each fixed in the unit by
+  deriving the value from `test/support/identity.ts` or gating it `canonicalOnly` with its reason
+  (`test/emit/sharedCharterIdentity.test.ts`, `test/emit/syncDriftProof.e2e.test.ts`,
+  `test/merge/hookFilesOwnership.test.ts`, `test/cloud/containerLeg.test.ts`, `test/cli/commands/clean.test.ts`,
+  `test/cli/commands/syncEngine.test.ts`), and the two pack suites red on the version alone, which the probe's restamp
+  answers.
+- **Proof:** `test/ci/forkIdentity.test.ts`, `test/ci/forkProbe.test.ts`.
+
 ### REQ-PLUGIN-027 — A fork releases through its own workflow
 
 Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (plan 020 file 1, run
@@ -440,6 +463,76 @@ clauses and its changelog clauses are dropped: 1.15.0 deleted their surface (`fo
 - **Proof:** `test/ci/forkReleaseWorkflow.test.ts`, `test/ci/workflow.test.ts`.
 - **Source:** `.github/workflows/fork-release.yml`, `docs/enterprise-forks.md`.
 
+### REQ-PLUGIN-033 — A fork's gate passes as a fork, proved on every pull request
+
+Added 2026-10-26 (plan 022 file 2, units `b1-fork-ci-job` with its fix rounds and `b2-secret-shaped-fixtures` with its
+fix round; ledger rows `review/19`, `build/15`, `build/40` to `build/43`, `build/2`, `review/1` to `review/4`).
+
+Given a pull request in `zomarit/stamity`, When CI runs the full side, Then the job `fork-probe` copies the tree,
+renames it with `scripts/fork-identity.mjs` to a made-up scope, sets the version to `<X.Y.Z>-fork.1`, regenerates it
+from the fork guide's `regenerate` list, and runs every step of `npm run check`, `npm run test` read as
+`node scripts/ci/test-run.mjs`, then the dogfood `check`, the identity check and the tarball smoke. It also builds a
+scratch repository with the fork's own CLI and walks `init`, `add <made-up pack>`, `sync`, `check`, `clean --pack` and
+`check` there, and last finds no tracked file rewritten. Each step must exit 0, and `all-ci-checks` reads `success`
+there and `skipped` in any other repository, on a lanes answer and on a proven push (`scripts/ci/fork-probe.mjs`;
+`.github/workflows/ci.yml:531-580`, the aggregator `:873`, `:904-908`, at `p20/b1`). Given any file under `test/`,
+`scripts/`, `src/` or `.github/`, Then it holds no real-format credential literal, not even one the leak gate's bounded
+rule would let through, and no `scheme://user:password@` URL; `test/gate/fixtureSecrets.test.ts` fails naming
+`path:line rule`, never the text.
+
+- **As built, beyond the delta:**
+  - The job runs one matrix leg per fork kind `scripts/fork-identity.mjs` makes, side by side with `fail-fast: false`:
+    `private`, the guide's default, renamed with no `--registry`, and `registry`, renamed with `--registry`; the
+    aggregator reads both legs' one result (`FORK_KINDS` and `--kind`, `scripts/ci/fork-probe.mjs`; `build/43`, signed
+    off). After the version is set the fork steps restamp the bundled packs (`generate-pack-manifests.mjs --write`)
+    before the `regenerate` list, since a bundled `pack.json` carries the release version. The first failing fork
+    step stops the run; each gate step runs after another failed; a step prints `PASS|FAIL <step> (<s>s)`, a failure
+    its exit code and last 40 lines. Exit 0 all passed, 1 a step failed, 2 it could not run.
+  - The job holds `contents: read`, checks out with `persist-credentials: false`, reads no secret and runs on
+    `pull_request`, never `pull_request_target`, and its kind reaches the script through `env:`. Its timeout is 22
+    minutes, twice the slowest local leg (640 s), to be measured again after ten green runs; `cloud-container`'s moved
+    from 30 to 5 minutes over its last ten green runs, and nightly hook-fire's stays 45, with no armed run to measure
+    (`build/15`; deferrals `build/44` to `build/46`).
+  - The walk's `check` after `clean --pack` found a defect the unit then fixed: Cursor's spawn guard still admitted the
+    removed pack's agents (`build/40`; REQ-FLOW-027 in `docs/specs/everyday-flows.md`). The fork guide's "Tag a release"
+    names the pack restamp after a version change (`build/41`), and a flake in the run-verb suite's isolation was fixed
+    (`build/42`).
+  - The fixture rule: every credential example a suite needs is built at run time, so the leak gate exempts no path
+    from any credential shape, the scanner's own source included (`SECRET_SCANNER_SOURCES = []` and
+    `SHAPE_FIXTURES = {}`, `scripts/leak-gate.mjs:473`, `:482`); the guard reads all four roots, each credential
+    matcher skipping only what its gate rule's own `allow` list names, and a file it cannot read fails it naming the
+    path (`review/1` to `review/4`). The delta's wording stands.
+  - The `cloud-container` leg's flag check refuses a host-escaping `docker run` flag in its attached or separate form
+    (`flagsOf` and `escapes`, `test/ci/cloudLeg.test.ts`; `review/19`).
+- **Proof:** `test/ci/forkProbe.test.ts`, `test/ci/workflow.test.ts` (the fork probe job, its condition over four events
+  and two repositories, the aggregator executed), `test/ci/cloudLeg.test.ts`, `test/gate/fixtureSecrets.test.ts`,
+  `test/gate/leakGateEvasion.test.ts`, `test/ci/leakGate.test.ts`; locally `node scripts/ci/fork-probe.mjs --kind
+  private` and `--kind registry`, each exit 0 under the machine lock (598 s and 607 s, the unit's report).
+- **Source:** `scripts/ci/fork-probe.mjs`, `.github/workflows/ci.yml`, `scripts/leak-gate.mjs`.
+
+### REQ-PLUGIN-054 — Both release workflows prove the registry serves the tarball they shipped
+
+Added 2026-10-26 (plan 022 file 2, unit `b11-publish-integrity` and its fix round; decision E7).
+
+Given a re-run of `release.yml` for a version npm already serves with the packed tarball's sha512 integrity, Then
+"Publish to npm with provenance" prints that nothing is to be published and exits 0; when another tarball holds that
+version, it exits 1 and never publishes (`.github/workflows/release.yml:696-712`). Given any publish in either
+workflow, Then "Verify the registry tarball" runs next: it asks the registry for `dist.integrity` up to 12 times, 10 s
+apart, and exits 1 before "Create GitHub release" unless the answer equals the integrity of the verified `$TARBALL`
+(`release.yml:722-750`; `fork-release.yml`, the step after "Publish to the registry"). Its `run` is byte-equal in both
+workflows.
+
+- **As built, beyond the delta:** only an empty answer is retried, so at most 11 waits; a non-empty answer that differs
+  fails at once. The answer is only compared, never run, and printed only when it has an integrity string's shape,
+  otherwise a fixed phrase; npm's own output is never shown, and with no answer the error names npm's last exit code
+  (`review/50`). The two steps' `env` differ: the canonical one carries only `PACKAGE_NAME` and `VERSION` and no
+  credential, and the fork's its publish step's `NODE_AUTH_TOKEN`, `REGISTRY`, `PACKAGE_NAME` and `VERSION`, so the
+  closed list of npm credential holders names that fork step beside the publish. No new egress host. A re-run after
+  "Create GitHub release" succeeded still fails at `gh release create`, the plan's follow-up row.
+- **Proof:** `test/ci/workflow.test.ts` (the step's place, the executed canonical publish), `test/ci/forkReleaseWorkflow.test.ts`
+  (the step list, the env, the byte-equal `run`, the executed read-back).
+- **Source:** `.github/workflows/release.yml`, `.github/workflows/fork-release.yml`.
+
 ### REQ-PLUGIN-028 — One command sets a fork's identity
 
 Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (plan 020 file 1, run
@@ -515,9 +608,10 @@ its command block `:134-137`.
   and the publisher, and `fork-identity.mjs --check` exits 0; GIVEN `distribution` beside any other unknown key, or a
   `stamity` that is not an object, THEN it is refused, echoing no value (`test/ci/distributionIdentity.test.ts`; added
   2026-10-14).
-- **Proof:** `test/ci/forkIdentityScript.test.ts`, `test/ci/distributionIdentity.test.ts`; the opt-in
-  `STAMITY_FORK_SUITE` group of `test/ci/forkIdentity.test.ts` runs the script; the guide's pin is the fork-guide
-  rename case of `test/docsPages.test.ts`. The gap recorded before stays: with `--registry https://npm.pkg.github.com`,
+- **Proof:** `test/ci/forkIdentityScript.test.ts`, `test/ci/distributionIdentity.test.ts`; the fork probe's rename step
+  runs the script on every pull request (REQ-PLUGIN-033; amended 2026-10-26, plan 022 file 2, unit `b1-fork-ci-job`; it
+  read "the opt-in `STAMITY_FORK_SUITE` group of `test/ci/forkIdentity.test.ts` runs the script", a group retired with
+  REQ-FORK-011's amendment); the guide's pin is the fork-guide rename case of `test/docsPages.test.ts`. The gap recorded before stays: with `--registry https://npm.pkg.github.com`,
   a `--scope` other than the owner is accepted here and refused later by REQ-PLUGIN-027's gates.
 
 ### REQ-PLUGIN-048 — A registry fork's every pinned CLI call names its registry for its scope
