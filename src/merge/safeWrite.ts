@@ -598,15 +598,15 @@ function refuseRepublishFromLink(sourcePath: string, targetName: string, shape: 
 // ── Merge shaping ──────────────────────────────────────────────────────────
 
 /**
- * Managed block above the existing body, separated by one blank line. An empty
- * (or whitespace-only) existing file yields the block alone — no blank-line
- * artifact — and output always carries a POSIX final newline so this branch and
- * a later {@link insertManagedBlock} merge agree byte-for-byte.
+ * Managed block above the existing body, separated by one blank line, with the
+ * owner's bytes below it exactly as they were: leading whitespace, a BOM and a
+ * missing final newline included (REQ-FLOW-027), so the strip
+ * (`./managedBlocks.ts::stripManagedBlock`) gives the owner's file back byte for
+ * byte. An empty existing file yields the block alone with its final newline,
+ * byte-identical to a fresh emission; a whitespace-only one is kept below it.
  */
 function prependManagedBlock(incoming: string, existingContent: string): string {
-  const tail = existingContent.trimStart();
-  const joined = tail === "" ? incoming.trim() : [incoming.trim(), "", tail].join("\n");
-  return joined.endsWith("\n") ? joined : `${joined}\n`;
+  return existingContent === "" ? `${incoming.trim()}\n` : `${incoming.trim()}\n\n${existingContent}`;
 }
 
 /**
@@ -1555,6 +1555,7 @@ async function safeWriteFileLocked(
   return {
     path: filePath,
     action: "updated",
+    backupPath: bakPath,
     warning: fingerprintFails
       ? `Overwrote ${shownPath}: the ledger records this path, but ` +
         `its bytes do not show the engine wrote them, so they may be yours. This output is written ` +
@@ -1673,6 +1674,7 @@ async function mergeManagedContent(
     return {
       path: filePath,
       action: "updated",
+      backupPath: bakPath,
       warning:
         `Rebuilt ${filePath}: its STAMITY:BEGIN/END markers were structurally corrupted ` +
         `(${describeError(mergeErr)}), so the file was regenerated from the corpus. Your previous ` +
@@ -1735,6 +1737,7 @@ async function repairTruncatedBlock(
     return {
       path: filePath,
       action: "updated",
+      backupPath: bakPath,
       warning:
         `Rebuilt ${filePath}: it opens a STAMITY:BEGIN marker that no END marker can close ` +
         `without duplicating one the file already carries, so the file was regenerated from the ` +
@@ -1759,6 +1762,7 @@ async function repairTruncatedBlock(
   return {
     path: filePath,
     action: "updated",
+    backupPath: bakPath,
     warning:
       `Repaired the managed block in ${filePath}: its STAMITY:BEGIN marker had no closing ` +
       `STAMITY:END, so the block was rewritten and terminated. Content above the marker was kept; ` +

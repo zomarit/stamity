@@ -597,6 +597,48 @@ describe("applyInit — planned emission (planner seam)", () => {
     expect(collectManifestErrors(raw)).toEqual([]);
   });
 
+  describe("the backup a replace decision takes (REQ-FLOW-027)", () => {
+    const OWNER = "# Team\n\nour own instructions\n";
+    const charter = (): AdapterOutput => ({
+      path: "AGENTS.md",
+      content: "# Charter\n\nengine charter body\n",
+      owner: { adapter: "claude", artifactId: "charter", artifactType: "infra" },
+    });
+
+    async function ownerRepo(): Promise<string> {
+      const root = await makeRepo();
+      await writeFile(join(root, "AGENTS.md"), OWNER, "utf8");
+      return root;
+    }
+
+    it("records the .bak and the hash of its bytes on the replace decision", async () => {
+      plannerOutputs.value = [charter()];
+      const root = await ownerRepo();
+
+      const report = await applyInit(optionsFor(root, { importChoice: [{ path: "AGENTS.md", mode: "replace" }] }));
+
+      expect(report.wrote[0]?.backupPath).toBe(join(root, "AGENTS.md.bak"));
+      expect((await readManifest(root))?.importChoice).toEqual([
+        { path: "AGENTS.md", mode: "replace", backup: { path: "AGENTS.md.bak", sha256: createHash("sha256").update(OWNER).digest("hex") } },
+      ]);
+      await expect(readFile(join(root, "AGENTS.md.bak"), "utf8")).resolves.toBe(OWNER);
+    });
+
+    it("records no backup on a supplement decision, nor under a dry run", async () => {
+      plannerOutputs.value = [charter()];
+      const supplemented = await ownerRepo();
+      await applyInit(optionsFor(supplemented, { importChoice: [{ path: "AGENTS.md", mode: "supplement" }] }));
+      expect((await readManifest(supplemented))?.importChoice).toEqual([{ path: "AGENTS.md", mode: "supplement" }]);
+
+      const previewed = getTemp().path("previewed");
+      await mkdir(previewed, { recursive: true });
+      await writeFile(join(previewed, "AGENTS.md"), OWNER, "utf8");
+      const report = await applyInit(optionsFor(previewed, { dryRun: true, importChoice: [{ path: "AGENTS.md", mode: "replace" }] }));
+      expect(report.wrote[0]).not.toHaveProperty("backupPath");
+      expect(existsSync(join(previewed, "AGENTS.md.bak"))).toBe(false);
+    });
+  });
+
   it("merges a colliding unmanaged file with a warning instead of silently losing it", async () => {
     // The brief's collision edge case: a planned path already exists as a
     // marker-less user file. Under init's write options the merge engine

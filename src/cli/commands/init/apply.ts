@@ -1,5 +1,6 @@
-import { lstat, mkdir, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { lstat, mkdir, readFile, stat } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
 import { buildContentIndex, type ContentRoots } from "../../../content/catalog.ts";
 import {
   resolveBundledContentRoot,
@@ -13,6 +14,7 @@ import {
 import {
   applyPreservedManifestFields,
   createManifest,
+  importBackupPathDefect,
   manifestPath,
   readManifest,
   writeManifest,
@@ -502,6 +504,13 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
     if (result.action === "skipped") skippedPaths.add(output.path);
   }
 
+  // The `.bak` each `replace` write took of the owner's file, recorded on its
+  // decision so a full `clean` can move it back (REQ-FLOW-027). Nothing is
+  // taken under `dryRun`, so nothing is recorded.
+  if (manifest.importChoice !== undefined) {
+    manifest.importChoice = await withImportBackups(rootDir, manifest.importChoice, outputs, wrote);
+  }
+
   // Ledger: one row per path this run actually stands behind. A skipped path
   // stayed user-owned — recording it would authorise a future reclaim sweep to
   // act on a file the engine never wrote — and the skip set is filtered HERE,
@@ -710,6 +719,38 @@ async function writeOutput(
   if (!dryRun) return safeWriteFile(target, content, writeOptions);
   const existing = await readIfExists(target);
   return { path: target, action: predictMergeAction(existing, content, writeOptions, target) };
+}
+
+/**
+ * `decisions` with each `replace` decision carrying the backup its write took
+ * (REQ-FLOW-027): the `.bak` the writer reported for that decision's path
+ * (`MergeResult.backupPath`, native), stored repo-relative POSIX with the
+ * SHA-256 of its bytes as read back from disk. `outputs[i]` is `wrote[i]`'s row.
+ * A decision whose write took no backup, and every other mode, is kept as it
+ * is; a name outside the reader's bound is never recorded, so the manifest
+ * this run writes always reads back.
+ */
+async function withImportBackups(
+  rootDir: string,
+  decisions: readonly ImportDecision[],
+  outputs: readonly { path: string }[],
+  wrote: readonly MergeResult[],
+): Promise<ImportDecision[]> {
+  const backups = new Map<string, string>();
+  for (const [index, output] of outputs.entries()) {
+    const backupPath = wrote[index]?.backupPath;
+    if (backupPath !== undefined) backups.set(output.path, backupPath);
+  }
+  return Promise.all(
+    decisions.map(async (decision): Promise<ImportDecision> => {
+      const backupPath = decision.mode === "replace" ? backups.get(decision.path) : undefined;
+      if (backupPath === undefined) return decision;
+      const path = relative(rootDir, backupPath).split(sep).join("/");
+      if (importBackupPathDefect(decision.path, path) !== null) return decision;
+      const sha256 = createHash("sha256").update(await readFile(backupPath)).digest("hex");
+      return { ...decision, backup: { path, sha256 } };
+    }),
+  );
 }
 
 /**

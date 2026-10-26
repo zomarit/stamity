@@ -947,7 +947,9 @@ describe("sweepReclaimCandidates — edge cases", () => {
     });
 
     expect(onlyEntry(report).action).toBe("managed-block-stripped");
-    expect(await readFile(join(root, "CLAUDE.md"), "utf-8")).toBe(`\n${userTail}`);
+    // TEST CHANGE, justified: REQ-FLOW-027 — a block at byte 0 takes its END line's own
+    // break with it, so the owner's bytes come back as they were; it read `\n${userTail}`.
+    expect(await readFile(join(root, "CLAUDE.md"), "utf-8")).toBe(userTail);
   });
 
   it("collapses several rows naming one path into a single action naming every reason", async () => {
@@ -1673,8 +1675,26 @@ describe("sweepReclaimCandidates — an instruction file leaves only on its own 
     });
 
     expect(onlyEntry(report)).toMatchObject({ action: "managed-block-stripped", proof: "block" });
-    // Every byte outside the block is kept verbatim, the newline after the END marker included.
-    expect(await readFile(join(root, "AGENTS.md"), "utf-8")).toBe(`\n${OWNER}`);
+    // TEST CHANGE, justified: REQ-FLOW-027 — a block at byte 0 takes its END line's own
+    // break with it, so the owner's bytes come back as they were; it read `\n${OWNER}`.
+    expect(await readFile(join(root, "AGENTS.md"), "utf-8")).toBe(OWNER);
+  });
+
+  it("gives back exactly the owner's file when the block at byte 0 sits one blank line above it (REQ-FLOW-027)", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    const supplemented = `${wrapInManagedBlock("engine charter", "AGENTS.md")}\n# Team\n`;
+    await temp.seedFiles({ "repo/AGENTS.md": supplemented });
+
+    const report = await sweepReclaimCandidates([hashedCandidate("AGENTS.md", supplemented)], {
+      rootDir: root,
+      consent: true,
+      trustedExactPaths: new Set(["AGENTS.md"]),
+    });
+
+    expect(onlyEntry(report)).toMatchObject({ action: "managed-block-stripped", proof: "block" });
+    // The END line's break and the one separator line the prepend wrote both go.
+    expect(await readFile(join(root, "AGENTS.md"), "utf-8")).toBe("# Team\n");
   });
 
   it("deletes the engine's Copilot workflow and a folder's Codex appendix on their own bytes", async () => {

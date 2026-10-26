@@ -58,9 +58,11 @@ const HANDOFF_FILE = `${STATE_DIR}/handoffs/session.json`;
 
 /** User prose written after a managed block — it must outlive the block. */
 const USER_NOTES = "## My notes\n\nkeep me\n";
-/** What the strip leaves behind: the newline that terminated the END-marker line
- *  is outside the block token, so it is preserved verbatim with the user bytes. */
-const STRIPPED_REMAINDER = `\n${USER_NOTES}`;
+/** What the strip leaves behind: exactly the user bytes.
+ *  TEST CHANGE, justified: REQ-FLOW-027 — a block at byte 0 takes the newline that
+ *  terminated its END-marker line with it, so the user bytes come back as they were;
+ *  this read `\n${USER_NOTES}`. */
+const STRIPPED_REMAINDER = USER_NOTES;
 /** A co-owned infra path the user replaced wholesale: no markers, no engine bytes. */
 const USER_MCP = '{\n  "mcpServers": {}\n}\n';
 const PACK_BODY = "---\nid: reviewer\n---\nReview the change.\n";
@@ -1666,4 +1668,133 @@ describe("clean — a setup whose model list moved a Codex pick", () => {
     expect(existsSync(join(root, RESPONDER))).toBe(false);
     expect(existsSync(join(root, REVIEWER))).toBe(true);
   }, 60_000);
+});
+
+/**
+ * REQ-FLOW-027, the restore of a `replace` import: `clean` moves the recorded
+ * `.bak` back only when it is the decision's own backup name, nothing is at the
+ * target after the sweep, and its bytes still hash to the record. The record is
+ * repository data, so each check is driven with a record a person could forge.
+ */
+describe("clean — the backup a replace import recorded", () => {
+  const OWNER = "# Team\n\nour own instructions\n";
+
+  async function replacedRepo(): Promise<string> {
+    const root = tempDir().path("repo");
+    await mkdir(root, { recursive: true });
+    await seedGitRepo(root);
+    await writeFile(join(root, "AGENTS.md"), OWNER, "utf-8");
+    const init = await runInProcess(COMMANDS, ["init", "-y", "--tools", "claude", "--import-config", "replace"], { cwd: root });
+    expect(init.code, init.stderr).toBe(0);
+    expect(await readFile(join(root, "AGENTS.md.bak"), "utf-8")).toBe(OWNER);
+    return root;
+  }
+
+  async function forgeBackup(root: string, backup: { path: string; sha256: string }): Promise<void> {
+    const path = join(root, STATE_DIR, "manifest.json");
+    const manifest = JSON.parse(await readFile(path, "utf-8")) as SetupManifest;
+    const decision = (manifest.importChoice ?? []).find((row) => row.path === "AGENTS.md");
+    if (decision === undefined) throw new Error("init recorded no decision for AGENTS.md");
+    Object.assign(decision, { backup });
+    await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`, "utf-8");
+  }
+
+  it("moves nothing on a forged record naming another file of the tree, even with its true hash", async () => {
+    const root = await replacedRepo();
+    await mkdir(join(root, "notes"), { recursive: true });
+    await writeFile(join(root, "notes/a.md"), "a note\n", "utf-8");
+    await forgeBackup(root, { path: "notes/a.md", sha256: sha256("a note\n") });
+    const engineCharter = await readFile(join(root, "AGENTS.md"), "utf-8");
+
+    const result = await runClean(root, ["-y"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("importChoice[0].backup.path");
+    expect(await readFile(join(root, "notes/a.md"), "utf-8")).toBe("a note\n");
+    expect(await readFile(join(root, "AGENTS.md"), "utf-8")).toBe(engineCharter);
+    expect(await readFile(join(root, "AGENTS.md.bak"), "utf-8")).toBe(OWNER);
+  }, 60_000);
+
+  it("leaves an edited .bak in place, and the reason names the hash it found", async () => {
+    const root = await replacedRepo();
+    await writeFile(join(root, "AGENTS.md.bak"), `${OWNER}edited\n`, "utf-8");
+
+    const doc = parseSingleDoc((await runClean(root, ["-y", "--json"])).stdout);
+
+    expect(doc["restored"]).toEqual([]);
+    const skipped = doc["restoreSkipped"] as { path: string; backup: string; reason: string }[];
+    expect(skipped).toHaveLength(1);
+    expect(skipped[0]).toMatchObject({ path: "AGENTS.md", backup: "AGENTS.md.bak" });
+    expect(skipped[0]?.reason).toContain(sha256(`${OWNER}edited\n`));
+    expect(await readFile(join(root, "AGENTS.md.bak"), "utf-8")).toBe(`${OWNER}edited\n`);
+    expect(existsSync(join(root, "AGENTS.md"))).toBe(false);
+  }, 60_000);
+
+  it("never renames onto a target the sweep left, and names why", async () => {
+    const root = await replacedRepo();
+    // The owner edited the engine's charter: the sweep keeps it, so it is still at the path.
+    const edited = `${await readFile(join(root, "AGENTS.md"), "utf-8")}\nmy line\n`;
+    await writeFile(join(root, "AGENTS.md"), edited, "utf-8");
+
+    const doc = parseSingleDoc((await runClean(root, ["-y", "--json"])).stdout);
+
+    expect(doc["restored"]).toEqual([]);
+    expect((doc["restoreSkipped"] as { reason: string }[])[0]?.reason).toContain("AGENTS.md is there");
+    expect(await readFile(join(root, "AGENTS.md"), "utf-8")).toBe(edited);
+    expect(await readFile(join(root, "AGENTS.md.bak"), "utf-8")).toBe(OWNER);
+  }, 60_000);
+
+  it("moves the backup back and says so", async () => {
+    const root = await replacedRepo();
+
+    const result = await runClean(root, ["-y"]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toContain("Restored AGENTS.md from AGENTS.md.bak");
+    expect(await readFile(join(root, "AGENTS.md"), "utf-8")).toBe(OWNER);
+    expect(existsSync(join(root, "AGENTS.md.bak"))).toBe(false);
+  }, 60_000);
+});
+
+/**
+ * REQ-FLOW-027, the pack part (inbox `pass/1`): `clean --pack <id>` rewrites the
+ * hooks documents from the setup without the pack in the same run, so no client
+ * still runs the pack's hook until the next `sync`.
+ */
+describe("clean --pack — the hooks documents leave the pack's hooks behind", () => {
+  const HOOK_PACK = "acme-hook";
+  /** The script the pack's hook runs, inside the pack's own folder. */
+  const HOOK_SCRIPT = `${STATE_DIR}/packs/${HOOK_PACK}/audit.mjs`;
+
+  async function run(cwd: string, argv: readonly string[]): Promise<Awaited<ReturnType<typeof runInProcess>>> {
+    const result = await runInProcess(COMMANDS, argv, { cwd });
+    expect(result.code, `${argv.join(" ")}: ${result.stdout}\n${result.stderr}`).toBe(0);
+    return result;
+  }
+
+  it("leaves no entry in .claude/settings.json or .github/hooks/stamity.json that runs the pack's script, and check is green", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await mkdir(root, { recursive: true });
+    await seedGitRepo(root);
+    await run(root, ["init", "-y", "--tools", "claude,copilot"]);
+    const packDir = await writeMadeUpPack(temp.path("packs"), HOOK_PACK, {
+      "skills/st-acme-audit/SKILL.md": madeUpArtifact("acme-audit", "skill", "Audits the acme service."),
+      "hooks/hooks.json": `${JSON.stringify({ hooks: [{ event: "pre_tool_use", matcher: "Bash", command: ["node", HOOK_SCRIPT], timeoutMs: 3000 }] }, null, 2)}\n`,
+    });
+    // The owner's committed script, which the pack's hook names: a pack ships no script of its own.
+    await mkdir(join(root, STATE_DIR, "packs", HOOK_PACK), { recursive: true });
+    await writeFile(join(root, HOOK_SCRIPT), "process.exit(0)\n", "utf-8");
+    await run(root, ["add", packDir, "--allow-untrusted", "-y"]);
+    await run(root, ["sync"]);
+    const documents = [".claude/settings.json", ".github/hooks/stamity.json"];
+    // The setup did wire the pack's hook in both: the removal below is not a no-op.
+    for (const doc of documents) expect(await readFile(join(root, doc), "utf-8")).toContain(`packs/${HOOK_PACK}/`);
+
+    await run(root, ["clean", "--pack", HOOK_PACK, "-y"]);
+
+    for (const doc of documents) expect(await readFile(join(root, doc), "utf-8")).not.toContain(`packs/${HOOK_PACK}/`);
+    const check = await runInProcess(COMMANDS, ["check", "--json"], { cwd: root });
+    expect(JSON.parse(check.stdout.trim()) as { ok: boolean }, check.stdout).toMatchObject({ ok: true });
+  }, 120_000);
 });

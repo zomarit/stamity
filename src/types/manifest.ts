@@ -286,6 +286,22 @@ export interface ImportDecision {
   path: string;
   /** What emission does at that path (see {@link ImportMode}). */
   mode: ImportMode;
+  /**
+   * The verified `.bak` the `replace` write took of the owner's file, so a full
+   * `clean` can move it back (REQ-FLOW-027). Only on `replace`. `path` is
+   * repo-relative POSIX and names `<path>.bak` or `<path>.bak.<8 lowercase hex>`
+   * in the decision's own folder, `sha256` the backup's bytes; the manifest
+   * reader refuses any other name, and `clean` re-checks both before it renames.
+   */
+  backup?: ImportBackup;
+}
+
+/** The backup record of a `replace` import decision (see {@link ImportDecision.backup}). */
+export interface ImportBackup {
+  /** Repo-relative POSIX path of the `.bak`. */
+  path: string;
+  /** Lowercase hex SHA-256 of the backup's bytes. */
+  sha256: string;
 }
 
 /**

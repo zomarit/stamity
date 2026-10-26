@@ -325,6 +325,30 @@ export function splitAtManagedBlock(
   };
 }
 
+/** The line break `text` opens with (`\r\n` or `\n`), or `""` when it opens with anything else. */
+function leadingLineBreak(text: string): string {
+  if (text.startsWith("\r\n")) return "\r\n";
+  return text.startsWith("\n") ? "\n" : "";
+}
+
+/**
+ * `content` with its managed block taken out, or `null` when no block is
+ * detected — the inverse of the prepend a supplement import writes
+ * (`./safeWrite.ts`, REQ-FLOW-027). That prepend puts the block at byte 0 and
+ * joins the owner's bytes below it with one blank line, so when the block starts
+ * at byte 0 the END line's own line break and that one separator line are
+ * dropped too, each only when it is there: what is left is the owner's file as
+ * it was. A block anywhere else leaves every byte around it as it was, the END
+ * line's break included.
+ */
+export function stripManagedBlock(content: string, filePath?: string): string | null {
+  const split = splitAtManagedBlock(content, filePath);
+  if (split === null) return null;
+  if (split.before !== "") return split.before + split.after;
+  const afterTerminator = split.after.slice(leadingLineBreak(split.after).length);
+  return afterTerminator.slice(leadingLineBreak(afterTerminator).length);
+}
+
 /**
  * Two-way split after the block: `prefix` runs through the END marker token
  * inclusive; `rest` is the preserved user suffix the merge path never

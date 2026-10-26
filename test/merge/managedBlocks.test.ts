@@ -10,6 +10,7 @@ import {
   isManagedBlockStale,
   splitAfterManagedBlock,
   splitAtManagedBlock,
+  stripManagedBlock,
   wouldChangeMarkerVariant,
   wrapInManagedBlock,
 } from "../../src/merge/managedBlocks.ts";
@@ -351,6 +352,35 @@ describe("splitAtManagedBlock", () => {
 
   it("returns null when no block is detected", () => {
     expect(splitAtManagedBlock("prose only\n", "a.md")).toBeNull();
+  });
+});
+
+describe("stripManagedBlock (REQ-FLOW-027)", () => {
+  it("drops the END line's break and one separator line when the block opens the file", () => {
+    const block = wrapInManagedBlock("body", "a.md");
+    expect(stripManagedBlock(`${block}\n\n  # Team\n\nno final newline`, "a.md")).toBe("\n  # Team\n\nno final newline");
+    expect(stripManagedBlock(`${block}\n# Team\n`, "a.md")).toBe("# Team\n");
+    // No separator line to drop: only the END line's break goes.
+    expect(stripManagedBlock(`${block}# Team\n`, "a.md")).toBe("# Team\n");
+  });
+
+  it("drops CRLF breaks the same way", () => {
+    const content = `${HTML.start}\r\nbody\r\n${HTML.end}\r\n\r\n# Team\r\n`;
+    expect(stripManagedBlock(content, "a.md")).toBe("# Team\r\n");
+  });
+
+  it("keeps every byte around a block that does not open the file", () => {
+    const content = `intro\n${wrapInManagedBlock("body", "a.md")}\noutro\n`;
+    expect(stripManagedBlock(content, "a.md")).toBe("intro\n\n\noutro\n");
+  });
+
+  it("is the inverse of the prepend: the owner's bytes after a BOM come back whole", () => {
+    const owner = "\uFEFF# Notes\n";
+    expect(stripManagedBlock(`${wrapInManagedBlock("body", "CLAUDE.md").trim()}\n\n${owner}`, "CLAUDE.md")).toBe(owner);
+  });
+
+  it("returns null when no block is detected", () => {
+    expect(stripManagedBlock("prose only\n", "a.md")).toBeNull();
   });
 });
 

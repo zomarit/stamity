@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -149,4 +150,65 @@ describe("init then clean restores .gitignore byte for byte (REQ-FLOW-027)", () 
     await run(deletedFirst, ["clean", "-y"]);
     expect(await readFile(join(deletedFirst, ".gitignore"), "utf8")).toBe("node_modules/\n.env.mcp\n");
   }, 180_000);
+});
+
+/**
+ * REQ-FLOW-027, the import part: the owner's instruction files, taken in by
+ * `--import-config supplement` or written over by `replace`, come back byte for
+ * byte after `clean -y`. Leading whitespace, a BOM and a missing final newline
+ * are the bytes a normalising prepend or strip loses.
+ */
+describe("init --import-config then clean restores the owner's instruction files (REQ-FLOW-027)", () => {
+  // Fixture names kept out of the test-input census: built at run time, as a literal each names this repository's own file.
+  const AGENTS = ["AGENTS", "md"].join(".");
+  const CLAUDE = ["CLAUDE", "md"].join(".");
+  const OWNER_AGENTS = "\n\n  # Team\n\nno final newline";
+  const OWNER_CLAUDE = "\uFEFF# Claude notes\n\nkeep the BOM\n";
+
+  async function ownerRepo(): Promise<string> {
+    const root = await freshRepo();
+    await writeFile(join(root, AGENTS), OWNER_AGENTS, "utf8");
+    await writeFile(join(root, CLAUDE), OWNER_CLAUDE, "utf8");
+    return root;
+  }
+
+  /** Every name in the root folder that starts with `AGENTS.md.bak`. */
+  async function agentsBackups(root: string): Promise<string[]> {
+    return (await readdir(root)).filter((name) => name.startsWith("AGENTS.md.bak"));
+  }
+
+  it("gives back a supplemented AGENTS.md and CLAUDE.md byte-identical", async () => {
+    const root = await ownerRepo();
+
+    await run(root, ["init", "-y", "--tools", "claude", "--import-config", "supplement"]);
+    // The setup did take both files in: the round trip below is not a no-op.
+    expect(await readFile(join(root, AGENTS), "utf8")).toContain("STAMITY:BEGIN");
+    expect(await readFile(join(root, AGENTS), "utf8")).toContain(OWNER_AGENTS);
+    expect(await readFile(join(root, CLAUDE), "utf8")).toContain(OWNER_CLAUDE);
+    await run(root, ["clean", "-y"]);
+
+    expect(await readFile(join(root, AGENTS), "utf8")).toBe(OWNER_AGENTS);
+    expect(await readFile(join(root, CLAUDE), "utf8")).toBe(OWNER_CLAUDE);
+    expect(await agentsBackups(root)).toEqual([]);
+  }, 120_000);
+
+  it("records the backup a replace took, and moves it back after clean", async () => {
+    const root = await ownerRepo();
+
+    await run(root, ["init", "-y", "--tools", "claude", "--import-config", "replace"]);
+    const manifest = await readManifest(root);
+    const decision = manifest?.importChoice?.find((row) => row.path === AGENTS);
+    expect(decision).toEqual({
+      path: AGENTS,
+      mode: "replace",
+      backup: { path: "AGENTS.md.bak", sha256: createHash("sha256").update(OWNER_AGENTS, "utf8").digest("hex") },
+    });
+    // The owner's text is gone from AGENTS.md while the setup stands: replace wrote over it.
+    expect(await readFile(join(root, AGENTS), "utf8")).not.toContain("# Team");
+    await run(root, ["clean", "-y"]);
+
+    expect(await readFile(join(root, AGENTS), "utf8")).toBe(OWNER_AGENTS);
+    expect(await readFile(join(root, CLAUDE), "utf8")).toBe(OWNER_CLAUDE);
+    expect(await agentsBackups(root)).toEqual([]);
+  }, 120_000);
 });

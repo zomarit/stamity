@@ -551,14 +551,14 @@ describe("safeWriteFile — managed-block merge", () => {
     await expect(readFile(target, "utf-8")).resolves.toBe(generated("gen", target));
   });
 
-  it("does not bump the mtime when the prepend would be a no-op", async () => {
-    // The prepend branch carries the same idempotency guard as its siblings.
-    // Reaching it needs a splice that changes nothing: empty incoming bytes over
-    // a body already shaped like the join output — degenerate, but the guard is
-    // what keeps every branch's unchanged contract uniform.
+  it("keeps the owner's bytes below the separator even when the incoming bytes are empty", async () => {
+    // TEST CHANGE, justified: REQ-FLOW-027 — the prepend keeps the owner's bytes. This
+    // case read "does not bump the mtime when the prepend would be a no-op": empty
+    // incoming bytes over `\n\nmy own notes\n` used to trim the owner's leading
+    // blank lines and rebuild the same file. With every owner byte kept below one
+    // blank line, no prepend over a non-empty file can equal it, so the write happens.
     const target = tempDir().path("stamity-agent.md");
     await writeFile(target, "\n\nmy own notes\n", "utf-8");
-    const before = await mtimeOf(target);
 
     const result = await safeWriteFile(target, "", {
       managedContent: "gen",
@@ -566,8 +566,28 @@ describe("safeWriteFile — managed-block merge", () => {
       version: VERSION,
     });
 
-    expect(result).toEqual({ path: target, action: "unchanged" });
-    await expect(mtimeOf(target)).resolves.toBe(before);
+    expect(result.action).toBe("updated");
+    await expect(readFile(target, "utf-8")).resolves.toBe("\n\n\n\nmy own notes\n");
+  });
+
+  it.each([
+    ["leading whitespace and no final newline", "\n\n  # Team\n\nno final newline"],
+    ["a BOM", "\uFEFF# Claude notes\n"],
+    ["only whitespace", "  \n\n"],
+  ])("keeps an owner file with %s byte for byte below the block (REQ-FLOW-027)", async (_label, owner) => {
+    const target = tempDir().path("AGENTS.md");
+    await writeFile(target, owner, "utf-8");
+
+    const result = await safeWriteFile(target, generated("gen", target), {
+      managedContent: "gen",
+      appendIfNoBlock: true,
+      version: VERSION,
+    });
+
+    expect(result.action).toBe("updated");
+    const onDisk = await readFile(target, "utf-8");
+    expect(onDisk).toBe(`${generated("gen", target).trim()}\n\n${owner}`);
+    expect(extractManagedBlock(onDisk, target)).toBe("gen");
   });
 
   it("rewrites a marker variant the host file type cannot parse", async () => {
@@ -690,6 +710,49 @@ describe("safeWriteFile — truncated block repair", () => {
     expect(result.warning).toContain(bak);
     await expect(readFile(bak, "utf-8")).resolves.toBe(truncated);
     await expect(readFile(target, "utf-8")).resolves.toBe(incoming);
+  });
+});
+
+describe("safeWriteFile — the backup path it reports (REQ-FLOW-027)", () => {
+  it.each([
+    ["a force overwrite", "plain owner text\n", "generated\n", { force: true }],
+    [
+      "a structurally corrupted block",
+      "<!-- STAMITY:BEGIN -->\na\n<!-- STAMITY:BEGIN -->\nb\n<!-- STAMITY:END -->\n",
+      "<!-- STAMITY:BEGIN -->\nfresh\n<!-- STAMITY:END -->\n",
+      { managedContent: "fresh" },
+    ],
+    [
+      "a truncated block",
+      "# Kept above\n<!-- STAMITY:BEGIN -->\nstale\n",
+      "<!-- STAMITY:BEGIN -->\nfresh\n<!-- STAMITY:END -->\n",
+      { managedContent: "fresh" },
+    ],
+    [
+      "a truncated block no END can close",
+      "<!-- STAMITY:END -->\n<!-- STAMITY:BEGIN -->\nstale body\n",
+      "<!-- STAMITY:BEGIN -->\nfresh\n<!-- STAMITY:END -->\n",
+      { managedContent: "fresh" },
+    ],
+  ] as const)("names the verified .bak it took before %s", async (_label, before, incoming, options) => {
+    const target = tempDir().path("stamity-owned.md");
+    await writeFile(target, before, "utf-8");
+
+    const result = await safeWriteFile(target, incoming, { ...options, version: VERSION });
+
+    expect(result.backupPath).toBe(`${target}.bak`);
+    expect(result.warning).toContain(`${target}.bak`);
+    await expect(readFile(`${target}.bak`, "utf-8")).resolves.toBe(before);
+  });
+
+  it("reports no backup path for a write that took none", async () => {
+    const target = tempDir().path("stamity-fresh.md");
+    const created = await safeWriteFile(target, "first\n", {});
+    const merged = await safeWriteFile(target, generated("gen", target), { managedContent: "gen", appendIfNoBlock: true, version: VERSION });
+
+    expect(created).not.toHaveProperty("backupPath");
+    expect(merged.action).toBe("updated");
+    expect(merged).not.toHaveProperty("backupPath");
   });
 });
 
@@ -955,10 +1018,11 @@ describe("predictMergeAction", () => {
     expect(
       predictMergeAction("", incoming, { managedContent: "gen", appendIfNoBlock: true }),
     ).toBe("updated");
-    // Same no-op splice the writer's guard covers (see the live suite).
+    // TEST CHANGE, justified: REQ-FLOW-027 — the prepend keeps the owner's bytes, so the
+    // splice the writer's guard covered (see the live suite) now writes; it read "unchanged".
     expect(
       predictMergeAction("\n\nnotes\n", "", { managedContent: "gen", appendIfNoBlock: true }),
-    ).toBe("unchanged");
+    ).toBe("updated");
     expect(
       predictMergeAction("\n\nnotes\n", "", {
         managedContent: "gen",

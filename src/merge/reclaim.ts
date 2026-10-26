@@ -24,7 +24,7 @@ import {
   sameDirectoryIdentity,
   type DirectoryIdentity,
 } from "./atomicWrite.ts";
-import { hasOwnerTextOutsideBlock, splitAtManagedBlock } from "./managedBlocks.ts";
+import { hasOwnerTextOutsideBlock, splitAtManagedBlock, stripManagedBlock } from "./managedBlocks.ts";
 import { backupBeforeOverwrite } from "./safeWrite.ts";
 
 /**
@@ -1122,7 +1122,9 @@ async function planFor(group: CandidateGroup, ctx: SweepContext): Promise<Reclai
       "The path is a hard link, so the bytes outside its managed block carry a second name this tree cannot see and which may sit outside it. Stripping the block would rewrite them as an independent copy rather than removing the block from the file both names share, so nothing was touched. Replace it with a regular file — copy the contents to a new file and move that over this name — or remove the file by hand.",
     );
   }
-  const keep = split.before + split.after;
+  // The block at byte 0 takes its END line's break and one separator line with
+  // it, the prepend's own bytes, so a supplemented file comes back as it was (REQ-FLOW-027).
+  const keep = stripManagedBlock(content, target) ?? split.before + split.after;
   return {
     kind: "strip",
     action: "managed-block-stripped",

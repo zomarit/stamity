@@ -238,6 +238,12 @@ export interface MergeResult {
    * real degradation is reported. Renderers print notices plainly.
    */
   notice?: string;
+  /**
+   * The native absolute path of the verified `.bak` this write took before it
+   * overwrote the file, when it took one. `init` records it beside a `replace`
+   * import decision, so `clean` can move the owner's file back (REQ-FLOW-027).
+   */
+  backupPath?: string;
 }
 
 /**

@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { readFile, readdir, rm, stat } from "node:fs/promises";
+import type { Stats } from "node:fs";
+import { lstat, readFile, readdir, rename, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { readManifest, writeManifest } from "../../manifest/manifest.ts";
+import { importBackupPathDefect, readManifest, writeManifest } from "../../manifest/manifest.ts";
 import {
   filterMcpJsonOnDisk,
   filterMcpServers,
@@ -17,28 +18,39 @@ import {
   reconcileGitignore,
   type GitignoreReconcile,
 } from "../../mcp/env.ts";
+import { assertWriteTargetContained, isSharedRegularFile } from "../../merge/atomicWrite.ts";
 import { formatReclaimReport, sweepReclaimCandidates, type ReclaimReport } from "../../merge/reclaim.ts";
-import { applyCommandPrefix, slugOf } from "../../content/catalog.ts";
+import { applyCommandPrefix, buildContentIndex, slugOf } from "../../content/catalog.ts";
+import { analyzeRepo, summarizeDetection } from "../../detect/repoAnalyzer.ts";
+import { extractManagedBlock } from "../../merge/managedBlocks.ts";
+import { ledgerHashIndex, ledgerPathSet, safeWriteFile } from "../../merge/safeWrite.ts";
 import { planPackRemoval } from "../../pack/install.ts";
 import { packDirRelPath } from "../../pack/receipt.ts";
-import { discoverInstalledPacks, packMcpServers } from "../../pack/projection.ts";
-import { trustedInfraPaths, type ReclaimCandidate } from "../../manifest/ledger.ts";
+import { discoverInstalledPacks, packMcpServers, withoutPolicyWarningPrint } from "../../pack/projection.ts";
+import { toLedgerEntries, trustedInfraPaths, type ReclaimCandidate } from "../../manifest/ledger.ts";
 import { OWNED_PATHS, needsRenderingProof } from "../../manifest/ownedPaths.ts";
 import {
   PACK_OWNER_PREFIX,
   isPackOwner,
   packOwner,
+  type CoOwnership,
+  type ImportBackup,
   type LedgerEntry,
   type SetupManifest,
 } from "../../types/manifest.ts";
-import { CONTENT_CLASSES, type ContentClass } from "../../types/content.ts";
+import { CONTENT_CLASSES, type AdapterOutput, type ContentClass, type MergeResult } from "../../types/content.ts";
 import { TOOLS } from "../../types/core.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import {
+  coOwnedDocumentLanes,
+  coOwnedOwnershipOf,
   coOwnedReclaimReducers,
   coOwnedReclaimRenderings,
   engineRenderingsFor,
+  fullCorpusSelection,
   hookScriptRetention,
+  ledgerRowsForOutput,
+  outputWriteOptions,
   syncRenderingsFor,
   provenLegacyCursorGuards,
   type EmissionPlanFor,
@@ -167,6 +179,109 @@ async function takeBackGitignoreLines(rootDir: string, manifest: SetupManifest):
       next: `delete these lines from ${GITIGNORE_FILE} by hand: ${left.join(", ")}`,
     });
   }
+}
+
+/** One backup a full clean moved back over the instruction file it was taken of. */
+interface RestoredBackup {
+  path: string;
+  backup: string;
+}
+
+/** One recorded backup a full clean left where it is, and why. */
+interface SkippedRestore extends RestoredBackup {
+  reason: string;
+}
+
+/** What {@link restoreImportBackups} did with each recorded backup. */
+interface RestoreOutcome {
+  restored: RestoredBackup[];
+  restoreSkipped: SkippedRestore[];
+}
+
+/** The `replace` decisions that record a backup, the only ones a full clean restores from. */
+function recordedBackups(manifest: SetupManifest): { path: string; backup: ImportBackup }[] {
+  return (manifest.importChoice ?? []).flatMap((decision) =>
+    decision.mode === "replace" && decision.backup !== undefined ? [{ path: decision.path, backup: decision.backup }] : [],
+  );
+}
+
+/** `lstat`, or `null` when nothing is at `absPath`. */
+async function lstatOrNull(absPath: string): Promise<Stats | null> {
+  try {
+    return await lstat(absPath);
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw cause;
+  }
+}
+
+/**
+ * Why the recorded backup of `path` may not be moved back, or `null` when it may
+ * (REQ-FLOW-027). Every check the manifest reader made is made again here, since
+ * this is the step that renames: `path` is an instruction file `init` imports,
+ * the backup is that file's own `.bak` name in its folder, neither name leaves
+ * the tree through a link, nothing is at `path` (a file there after the sweep is
+ * never a rename destination), and the backup is a regular file with one name
+ * whose bytes hash to the recorded `sha256`.
+ */
+async function restoreRefusal(rootDir: string, path: string, backup: ImportBackup): Promise<string | null> {
+  if (!OWNED_PATHS.importTargets.includes(path)) return `${path} is not an instruction file init imports`;
+  const defect = importBackupPathDefect(path, backup.path);
+  if (defect !== null) return `the recorded backup ${JSON.stringify(backup.path)} ${defect}`;
+  const target = join(rootDir, ...path.split("/"));
+  const source = join(rootDir, ...backup.path.split("/"));
+  try {
+    await assertWriteTargetContained(target, rootDir);
+  } catch (cause) {
+    return cause instanceof Error ? cause.message : String(cause);
+  }
+  if ((await lstatOrNull(target)) !== null) return `${path} is there, so the backup was not moved over it`;
+  const stats = await lstatOrNull(source);
+  if (stats === null) return `${backup.path} is gone`;
+  if (stats.isSymbolicLink()) return `${backup.path} is a symbolic link, so its bytes are not the backup's`;
+  if (!stats.isFile()) return `${backup.path} is not a regular file`;
+  if (isSharedRegularFile(stats)) return `${backup.path} is a hard link, so its bytes carry a second name this tree cannot see`;
+  const hash = createHash("sha256").update(await readFile(source)).digest("hex");
+  if (hash !== backup.sha256) {
+    return `${backup.path} hashes to ${hash}, not the ${backup.sha256} init recorded, so it was edited since`;
+  }
+  return null;
+}
+
+/**
+ * Move each recorded backup of a `replace` import back over the instruction
+ * file it was taken of, after the sweep removed the engine's file there
+ * (REQ-FLOW-027). One that fails a check ({@link restoreRefusal}) stays where
+ * it is, and so does whatever is at its path; the reason is reported. A rename
+ * that fails is reported the same way, so one backup never stops the rest.
+ */
+async function restoreImportBackups(rootDir: string, manifest: SetupManifest): Promise<RestoreOutcome> {
+  const outcome: RestoreOutcome = { restored: [], restoreSkipped: [] };
+  for (const { path, backup } of recordedBackups(manifest)) {
+    // oxlint-disable-next-line no-await-in-loop -- one decision per instruction file, checked and renamed in order
+    let reason = await restoreRefusal(rootDir, path, backup);
+    if (reason === null) {
+      try {
+        // oxlint-disable-next-line no-await-in-loop
+        await rename(join(rootDir, ...backup.path.split("/")), join(rootDir, ...path.split("/")));
+      } catch (cause) {
+        reason = `the rename failed: ${cause instanceof Error ? cause.message : String(cause)}`;
+      }
+    }
+    if (reason === null) outcome.restored.push({ path, backup: backup.path });
+    else outcome.restoreSkipped.push({ path, backup: backup.path, reason });
+  }
+  return outcome;
+}
+
+/** The closing lines on the recorded backups: each one moved back, and each one left with its reason. */
+function restoreLines(outcome: RestoreOutcome): string[] {
+  return [
+    ...outcome.restored.map(({ path, backup }) => `Restored ${path} from ${backup}: your file is back as it was before setup.`),
+    ...outcome.restoreSkipped.map(
+      ({ path, backup, reason }) => `Left ${backup} in place and did not restore ${path}: ${reason}. Move it back by hand if it is yours.`,
+    ),
+  ];
 }
 
 /**
@@ -795,6 +910,84 @@ function mcpSentence(mcp: McpUninstallReport): string {
   );
 }
 
+/** What {@link rewriteHookDocuments} did: the ledger rows each written document earns, and what it could not do. */
+interface HookDocumentRewrite {
+  /** Repo-relative path → the rows the written document earns, replacing the clients' rows there. */
+  rows: Map<string, LedgerEntry[]>;
+  /** One line per document left as it was, or the plan that could not be built, and why. */
+  notes: string[];
+}
+
+/**
+ * Rewrite every hooks document the setup wrote from the setup without the pack
+ * being removed (inbox `pass/1`, REQ-FLOW-027), before the sweep, so no client
+ * still runs the pack's hooks once the run ends, and the sweep's script keep no
+ * longer holds them. `shrunk` is the rendering manifest with the pack's rows and its
+ * selected servers taken out; it is planned the way `sync` plans
+ * ({@link cleanPlanner}, full-corpus selection, fresh detection). Each document
+ * goes through the lane `init` writes it with: a co-owned one through its
+ * lane's `materialize`, under the ownership the current ledger records, so the
+ * owner's entries stay; Copilot's whole-file hooks document through the
+ * merge engine with `outputWriteOptions`, whose drift rule backs up an edited
+ * one. A plan that cannot be built rewrites nothing and says so: the documents
+ * then wait for `sync`, as before.
+ */
+async function rewriteHookDocuments(
+  rootDir: string,
+  manifest: SetupManifest,
+  shrunk: SetupManifest,
+  packSupply: readonly PackSuppliedServer[],
+  engineVersion: string,
+): Promise<HookDocumentRewrite> {
+  const rewrite: HookDocumentRewrite = { rows: new Map(), notes: [] };
+  const documents = [...hookScriptRetention(manifest, packSupply).hookDocuments].filter((path) =>
+    manifest.ledger.some((row) => row.path === path),
+  );
+  if (documents.length === 0) return rewrite;
+  let outputs: readonly AdapterOutput[];
+  try {
+    const [index, repoInfo] = await Promise.all([buildContentIndex(), analyzeRepo(rootDir)]);
+    const setup = { ...structuredClone(shrunk), selection: fullCorpusSelection(index), detected: summarizeDetection(repoInfo) };
+    outputs = await withoutPolicyWarningPrint(() =>
+      cleanPlanner(rootDir, engineVersion)(setup, { monorepoPackages: repoInfo.monorepoPackages }),
+    );
+  } catch (cause) {
+    const why = (cause instanceof Error ? cause.message : String(cause)).split("\n")[0] ?? "";
+    rewrite.notes.push(`The setup could not be planned without the pack (${why}), so ${documents.join(", ")} still run its hooks until the next sync.`);
+    return rewrite;
+  }
+  const lanes = coOwnedDocumentLanes(shrunk, packSupply, manifest.ledger, await provenLegacyCursorGuards(rootDir, manifest.ledger, legacyCursorIdentity()));
+  const ledgerHashes = ledgerHashIndex(rootDir, manifest.ledger);
+  const ledgerPaths = ledgerPathSet(rootDir, manifest.ledger.map((row) => row.path));
+  for (const path of documents) {
+    const output = outputs.find((candidate) => candidate.path === path);
+    if (output === undefined) continue;
+    const target = join(rootDir, ...path.split("/"));
+    const lane = lanes.get(path);
+    const managedBody = extractManagedBlock(output.content, target);
+    let written: { result: MergeResult; content: string | null; record?: CoOwnership };
+    try {
+      if (lane === undefined) {
+        // oxlint-disable-next-line no-await-in-loop -- one write per document, each its own file
+        const result = await safeWriteFile(target, output.content, outputWriteOptions(managedBody, engineVersion, false, rootDir, ledgerPaths, ledgerHashes));
+        written = { result, content: null };
+      } else {
+        const ownership = coOwnedOwnershipOf(manifest.ledger, path, { boundaryDir: rootDir, ledgerHashes });
+        // oxlint-disable-next-line no-await-in-loop
+        const { writtenContent, writtenRecord, ...result } = await lane.materialize(target, output.content, ownership);
+        written = { result, content: writtenContent, ...(writtenRecord === null ? {} : { record: writtenRecord }) };
+      }
+    } catch (cause) {
+      rewrite.notes.push(`${path} was not rewritten (${cause instanceof Error ? cause.message : String(cause)}), so it still runs the pack's hooks until the next sync.`);
+      continue;
+    }
+    if (written.result.warning !== undefined) rewrite.notes.push(written.result.warning);
+    if (written.result.action === "skipped") continue;
+    rewrite.rows.set(path, toLedgerEntries(ledgerRowsForOutput(output, written.content, managedBody, engineVersion, written.record)));
+  }
+  return rewrite;
+}
+
 // ── Scoped mode: --pack <id> ───────────────────────────────────
 
 /**
@@ -896,6 +1089,19 @@ async function runScopedClean(
   // repo the next `sync` re-emits into, rather than one holding an entry nobody
   // can prove and a selection nobody can resolve.
   const mcp = await removePackMcpEntries(rootDir, manifest, packId, packSupply, !ctx.dryRun);
+  // The hooks documents next, from the setup without the pack, so the sweep below
+  // finds no document still running the pack's hooks (inbox `pass/1`).
+  const owner = packOwner(packId);
+  const shrunk: SetupManifest = {
+    ...rendered,
+    ledger: rendered.ledger.filter((entry) => entry.adapter !== owner),
+    ...(rendered.mcp === undefined
+      ? {}
+      : { mcp: { ...rendered.mcp, servers: rendered.mcp.servers.filter((id) => !selectedFromPack.includes(id)) } }),
+  };
+  const hooks = ctx.dryRun
+    ? null
+    : await rewriteHookDocuments(rootDir, manifest, shrunk, packSupply.filter((server) => server.sourcePackId !== packId), ctx.app.version);
   const report = await sweepReclaimCandidates(swept, { ...sweepOptions, consent: !ctx.dryRun });
   ctx.spinner.stop();
 
@@ -906,15 +1112,23 @@ async function runScopedClean(
 
   let removedRows = 0;
   if (!ctx.dryRun) {
-    const owner = packOwner(packId);
     // A judged copy's row leaves with the pack's rows, kept file or not: no
     // rendering will prove it once the pack is gone, so the kept file is the
     // owner's.
     const dropped = new Set(droppedCopies);
-    const ledger = manifest.ledger
+    const kept = manifest.ledger
       .filter((entry) => entry.adapter !== owner && !dropped.has(entry))
       .map((entry) => rehashRewritten(entry, mcp.rewritten));
-    removedRows = manifest.ledger.length - ledger.length;
+    removedRows = manifest.ledger.length - kept.length;
+    // A rewritten hooks document's client rows give way to the rows its write earns, in place.
+    const placed = new Set<string>();
+    const ledger = kept.flatMap((entry) => {
+      const rows = hooks?.rows.get(entry.path);
+      if (rows === undefined || !(TOOLS as readonly string[]).includes(entry.adapter)) return [entry];
+      if (placed.has(entry.path)) return [];
+      placed.add(entry.path);
+      return rows;
+    });
     // The selection lets go of every id this pack supplied — including one whose
     // on-disk entry was kept because the operator had tuned it. Keeping it
     // selected would fail every later `sync` on an id nothing resolves, which is
@@ -981,6 +1195,10 @@ async function runScopedClean(
       );
     }
     for (const refusal of mcp.refusals) ctx.io.out(`${refusal}\n`);
+    if (hooks !== null && hooks.rows.size > 0) {
+      ctx.io.out(`Rewrote ${[...hooks.rows.keys()].join(", ")} without the pack's hooks.\n`);
+    }
+    for (const note of hooks?.notes ?? []) ctx.io.out(`${note}\n`);
     if (salvaged > 0) {
       ctx.io.out(
         `${salvaged} kept file(s) are user-owned now — their ledger rows are dropped, so no clean or sync will touch them again.\n`,
@@ -1023,6 +1241,7 @@ async function runScopedClean(
       mcpServersDeselected: mcp.deselected,
       mcpDocumentsRewritten: [...mcp.rewritten.keys()],
       mcpServersKept: mcp.kept,
+      hookDocumentsRewritten: [...(hooks?.rows.keys() ?? [])],
     },
   };
 }
@@ -1101,6 +1320,10 @@ export const cleanCommand: CommandModule = {
       report = await sweepReclaimCandidates(candidates, { ...sweepOptions, consent: true });
       ctx.spinner.stop();
     }
+    // After the sweep took the engine's file from each path a `replace` import
+    // wrote over: the owner's file comes back from its recorded backup (REQ-FLOW-027).
+    const backups = recordedBackups(manifest);
+    const restore = ctx.dryRun || backups.length === 0 ? null : await restoreImportBackups(rootDir, manifest);
 
     // A hooks document the sweep left in place that still runs a hook script
     // under the state directory keeps the directory whole, since deleting it
@@ -1155,6 +1378,12 @@ export const cleanCommand: CommandModule = {
             `is gone: ${recorded.join(", ")}.\n`,
         );
       }
+      if (backups.length > 0) {
+        ctx.io.out(
+          `A real run also moves back each backup init recorded of your file, once the engine's file is gone and the ` +
+            `backup still hashes to what init recorded: ${backups.map(({ path, backup }) => `${backup.path} -> ${path}`).join(", ")}.\n`,
+        );
+      }
       nextSteps(ctx, ["apply it: stamity clean"]);
     } else {
       ctx.io.out(
@@ -1163,6 +1392,7 @@ export const cleanCommand: CommandModule = {
           `${stateDirRemoved ? `, ${STATE_DIR}/ removed` : ""}.\n`,
       );
       ctx.io.out(`${gitignoreOutcomeLine(gitignore, gitignoreHeld)}\n`);
+      for (const line of restore === null ? [] : restoreLines(restore)) ctx.io.out(`${line}\n`);
       nextSteps(ctx, [REINIT_OFFER]);
     }
 
@@ -1177,6 +1407,8 @@ export const cleanCommand: CommandModule = {
         ...(stateDirKept.length > 0 ? { stateDirKept } : {}),
         // The recorded `.gitignore` lines taken back, when any were (REQ-FLOW-016).
         ...(gitignore !== null && gitignore.removed.length > 0 ? { gitignoreRemoved: gitignore.removed } : {}),
+        // The backups of `replace` imports moved back and left, when the setup recorded any (REQ-FLOW-027).
+        ...(restore === null ? {} : { restored: restore.restored, restoreSkipped: restore.restoreSkipped }),
         entries: report.entries,
       },
     };

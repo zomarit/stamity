@@ -574,6 +574,52 @@ describe("collectManifestErrors", () => {
       ]);
     });
 
+    describe("the backup a replace took (REQ-FLOW-027)", () => {
+      const SHA = "c".repeat(64);
+      const withBackup = (mode: string, path: string, sha256: string = SHA) =>
+        collectManifestErrors({ ...fullManifest(), importChoice: [{ path: "AGENTS.md", mode, backup: { path, sha256 } }] });
+
+      it("accepts the file's own .bak, and its eight-hex-digit spelling, on a replace", () => {
+        expect(withBackup("replace", "AGENTS.md.bak")).toEqual([]);
+        expect(withBackup("replace", "AGENTS.md.bak.0a1b2c3d")).toEqual([]);
+        expect(
+          collectManifestErrors({
+            ...fullManifest(),
+            importChoice: [{ path: ".github/copilot-instructions.md", mode: "replace", backup: { path: ".github/copilot-instructions.md.bak", sha256: SHA } }],
+          }),
+        ).toEqual([]);
+      });
+
+      it.each(["../secret.txt", "docs/AGENTS.md.bak", "AGENTS.md.bak.zz", "AGENTS.md.orig", "AGENTS.md.bak.0A1B2C3D", "AGENTS.md.bak.0a1b2c3d4"])(
+        "refuses the backup name %s with one error naming the field",
+        (name) => {
+          const errors = withBackup("replace", name);
+          expect(errors).toHaveLength(1);
+          expect(errors[0]).toContain("`importChoice[0].backup.path`");
+          expect(errors[0]).toContain(JSON.stringify(name));
+        },
+      );
+
+      it("refuses a backup on a supplement or a skip with one error each", () => {
+        for (const mode of ["supplement", "skip"]) {
+          const errors = withBackup(mode, "AGENTS.md.bak");
+          expect(errors).toEqual(['`importChoice[0].backup` is recorded only on a "replace" decision, whose write took the owner\'s file']);
+        }
+      });
+
+      it("refuses a hash that is not a sha256 digest, and an unknown key", () => {
+        expect(withBackup("replace", "AGENTS.md.bak", "not-a-hash")).toEqual([
+          "`importChoice[0].backup.sha256` must be a lowercase sha256 hex digest",
+        ]);
+        expect(
+          collectManifestErrors({
+            ...fullManifest(),
+            importChoice: [{ path: "AGENTS.md", mode: "replace", backup: { path: "AGENTS.md.bak", sha256: SHA, from: "x" } }],
+          }),
+        ).toEqual(["unknown field `importChoice[0].backup.from`"]);
+      });
+    });
+
     it("names a path the shape check refuses once, for its shape", () => {
       const errors = collectManifestErrors({
         ...fullManifest(),

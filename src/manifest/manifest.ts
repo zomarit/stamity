@@ -923,10 +923,60 @@ function collectImportChoiceErrors(value: unknown, errors: string[]): void {
     }
     collectEnumError(entry.mode, VALID_IMPORT_MODES, `${field}.mode`, errors);
     if (entry.mode === undefined) errors.push(`\`${field}.mode\` is required`);
-    for (const key of unknownFields(entry, ["path", "mode"])) {
+    if (entry.backup !== undefined) collectImportBackupErrors(entry, field, errors);
+    for (const key of unknownFields(entry, ["path", "mode", "backup"])) {
       errors.push(`unknown field \`${field}.${key}\``);
     }
   }
+}
+
+/** `<name>.bak` or `<name>.bak.<8 lowercase hex>`, the two names the writer's backup takes (`../merge/atomicWrite.ts`). */
+const BACKUP_SUFFIX = /^\.bak(?:\.[0-9a-f]{8})?$/;
+
+/**
+ * Why `backupPath` is not a backup the `replace` write could have taken of
+ * `decisionPath`, or `null` when it is: the same name with `.bak`, or `.bak.`
+ * and exactly eight lowercase hex digits, in the same folder (REQ-FLOW-027).
+ * The bound a forged record meets twice, at the read and again in `clean`
+ * before it renames anything, so a record can never point the rename at
+ * another file of the tree.
+ */
+export function importBackupPathDefect(decisionPath: string, backupPath: string): string | null {
+  if (!backupPath.startsWith(decisionPath) || !BACKUP_SUFFIX.test(backupPath.slice(decisionPath.length))) {
+    return (
+      `is not a backup of ${JSON.stringify(decisionPath)}: it must be ${JSON.stringify(`${decisionPath}.bak`)}, ` +
+      `or that name with "." and eight lowercase hex digits, in the same folder`
+    );
+  }
+  return null;
+}
+
+/**
+ * The backup record of one import decision: only on `replace`, the one mode
+ * whose write takes the owner's file, a `{ path, sha256 }` pair whose path is
+ * that decision's own backup ({@link importBackupPathDefect}).
+ */
+function collectImportBackupErrors(entry: Record<string, unknown>, field: string, errors: string[]): void {
+  const at = `${field}.backup`;
+  if (entry.mode !== "replace") {
+    errors.push(`\`${at}\` is recorded only on a "replace" decision, whose write took the owner's file`);
+    return;
+  }
+  const backup = entry.backup;
+  if (!isPlainObject(backup)) {
+    errors.push(`\`${at}\` must be an object { path, sha256 }`);
+    return;
+  }
+  if (typeof backup.path !== "string") {
+    errors.push(`\`${at}.path\` must be a repo-relative POSIX path string`);
+  } else if (typeof entry.path === "string") {
+    const defect = repoPathDefect(backup.path) ?? importBackupPathDefect(entry.path, backup.path);
+    if (defect !== null) errors.push(`\`${at}.path\` ${JSON.stringify(backup.path)} ${defect}`);
+  }
+  if (typeof backup.sha256 !== "string" || !SHA256_HEX.test(backup.sha256)) {
+    errors.push(`\`${at}.sha256\` must be a lowercase sha256 hex digest`);
+  }
+  for (const key of unknownFields(backup, ["path", "sha256"])) errors.push(`unknown field \`${at}.${key}\``);
 }
 
 /**
