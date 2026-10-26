@@ -83,7 +83,7 @@ covers the mechanics.
 Two required status contexts gate a merge.
 
 `all-ci-checks` (`.github/workflows/ci.yml`) runs on every event. A full run passes when the check
-matrix and the `cloud-container` job both pass. The matrix has four legs: the declared Node floor,
+matrix, the `cloud-container` job and, in this repository, the `fork-probe` job pass. The matrix has four legs: the declared Node floor,
 the LTS canonical, and Windows in two shards that split the test suite between them. Beside the six
 steps you already ran, it adds four things:
 
@@ -104,9 +104,20 @@ cloud profile (Claude Code's and Cursor's with an empty home folder, Copilot's w
 more with no network, and a failing step names its profile. The suite drives every hook command
 `init` emits from the repository root and from below it, with `node` on PATH and without it.
 
-A change whose every path falls in a lane takes the `lanes` job instead of the check matrix and the
-`cloud-container` job.
-`node scripts/ci/records-only.mjs` decides; its name is older than its three lanes. The lanes, the
+The `fork-probe` job also runs beside the matrix, on the same side, in this repository only; a fork's
+own CI skips it. `node scripts/ci/fork-probe.mjs` copies the tree, renames the copy to a made-up
+scope with `scripts/fork-identity.mjs`, gives it a `-fork.1` version and regenerates it from the fork
+guide's `regenerate` list. Then it runs every step of `npm run check` in the copy, the dogfood
+`check`, the identity check and the tarball smoke, and walks the copy's own CLI through `init`, `add`
+of a made-up pack, `sync`, `check`, `clean --pack` and `check` in a scratch repository. So a change
+that would turn a fork's gate red is red here first. Run it locally the same way;
+`--keep` keeps the copy and prints its path.
+
+A change whose every path falls in a lane takes the `lanes` job instead of the check matrix, the
+`cloud-container` job and the `fork-probe` job.
+`node scripts/ci/records-only.mjs` decides; its name is older than its three lanes. CI runs it from a
+worktree of the base commit, never from the change's own checkout, so a change cannot pick its own
+checks; with no base commit to run it from, the change gets full CI. The lanes, the
 engine's `.gitkeep` excepted at every location:
 
 - `specs`: the spec under `docs/specs/`.
@@ -143,14 +154,15 @@ site, last, when the change touches a `website` path or no diff was read.
 
 A push to `main` can skip both sides. `node scripts/ci/pr-proven.mjs` reads whether the pushed
 commit's tree is the head tree of a pull request whose latest `ci.yml` pull-request run passed
-`all-ci-checks`. When it is, the check matrix, the `cloud-container` job and the `lanes` job all
-skip: that tree was already proven; the `records` job still runs. Only `ci.yml`'s own run counts as evidence. A failed or unclear read
+`all-ci-checks`. When it is, the check matrix, the `cloud-container` job, the `fork-probe` job and
+the `lanes` job all skip: that tree was already proven; the `records` job still runs. Only `ci.yml`'s own run counts as evidence. A failed or unclear read
 answers not proven rather than failing a job, so the push runs the `lanes` job or the full side, as
 `records-only.mjs` decides for its diff. The skip reaches only `ci.yml`:
 `pack-signing-rehearsal.yml` and `docs-site.yml` still run on a push whose paths match their own
 filters. `all-ci-checks` asserts which of the three shapes ran, a proven push, the `lanes` job or
 the full side, so neither short answer reads as a full pass. It also asserts the `records` job:
-passed in this repository, skipped in a fork.
+passed in this repository, skipped in a fork. And the `fork-probe` job: passed on a full run in this
+repository, skipped everywhere else.
 
 `all-pr-checks` (`.github/workflows/pr-checks.yml`) runs on pull requests only. It carries the three
 gates only a pull request can be asked. They are the DCO trailer on every commit, the
@@ -189,6 +201,9 @@ byte-compare it against the committed copy, so staleness fails the build.
 Those gates name their own repair. The matrix, docs and pins failures print the regeneration
 command. The sync-emitted trees are held drift-clean by `node dist/cli.js check` in CI rather
 than by a test.
+
+A local run uses at most four parallel workers, and never more than the machine's cores less one; set
+`STAMITY_TEST_MAX_WORKERS` to a positive integer to ask for a different number (`workerCap` in `vitest.config.ts`).
 
 Coverage is report-only globally, with a blocking floor on the merge and emit core and on the
 owned-path bound, `src/manifest/ownedPaths.ts`. There is no mutation gating.

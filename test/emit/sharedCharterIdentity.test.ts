@@ -131,13 +131,25 @@ function plan(repo: GoldenRepo): Promise<SyncPlan> {
   });
 }
 
-function apply(repo: GoldenRepo, syncPlan: SyncPlan, force = false): ReturnType<typeof applySync> {
-  return applySync(repo.rootDir, syncPlan, {
-    engineVersion: GOLDEN_ENGINE_VERSION,
-    force,
-    dryRun: false,
-    now: GOLDEN_NOW,
-  });
+/**
+ * `applySync` at the fixture's package identity. TEST CHANGE, justified: REQ-PLUGIN-033 (b1-fork-ci-job, step 0;
+ * inbox build/4) — the sweep's rendering proof re-renders a reclaim candidate under the RUNNING checkout's identity
+ * (`renderingPlanner` in `src/cli/commands/sync/engine.ts`), while the fixture wrote it under the golden one, so on a
+ * renamed fork the override no longer matched and was kept. Pinned as {@link goldenDriftGate} pins `check`'s gate; on
+ * the canonical checkout the golden identity IS the running one, so nothing changes there.
+ */
+async function apply(repo: GoldenRepo, syncPlan: SyncPlan, force = false): ReturnType<typeof applySync> {
+  pinnedIdentity.current = { name: GOLDEN_PACKAGE_NAME, npmChannel: GOLDEN_NPM_CHANNEL };
+  try {
+    return await applySync(repo.rootDir, syncPlan, {
+      engineVersion: GOLDEN_ENGINE_VERSION,
+      force,
+      dryRun: false,
+      now: GOLDEN_NOW,
+    });
+  } finally {
+    pinnedIdentity.current = null;
+  }
 }
 
 /** The disposition sync would give one path — the drift `check` reports is this plan. */

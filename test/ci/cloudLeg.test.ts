@@ -45,6 +45,49 @@ function valuesOf(args: readonly string[], flag: string): string[] {
   return args.flatMap((arg, index) => (arg === flag ? [args[index + 1] ?? ""] : []));
 }
 
+/**
+ * Each option in a `docker run` argv with its value, attached (`--flag=value`) or separate (`--flag value`), up to
+ * the image, where Docker's own options end. A flag with no value reads `""`. Ledger review/19 (plan 022 file 2,
+ * unit b1-fork-ci-job): an exact-token check (`arg === "--privileged"`, `valuesOf(args, "--network")`) let
+ * `--privileged=true`, `--pid=host` or `--network=host` through, since none of them is that token.
+ */
+function flagsOf(args: readonly string[]): { readonly flag: string; readonly value: string }[] {
+  const end = args.indexOf(IMAGE as string);
+  const options = end === -1 ? args : args.slice(0, end);
+  const flags: { flag: string; value: string }[] = [];
+  for (let index = 0; index < options.length; index += 1) {
+    const arg = options[index] ?? "";
+    if (!arg.startsWith("-")) continue;
+    const equals = arg.indexOf("=");
+    if (equals > 0) {
+      flags.push({ flag: arg.slice(0, equals), value: arg.slice(equals + 1) });
+      continue;
+    }
+    const next = options[index + 1];
+    flags.push({ flag: arg, value: next !== undefined && !next.startsWith("-") ? next : "" });
+  }
+  return flags;
+}
+
+/** The namespace options that share the host's namespace when set to `host`. */
+const HOST_NAMESPACES = new Set(["--pid", "--ipc", "--uts", "--userns", "--cgroupns", "--network", "--net"]);
+
+/** Each option in `args` that would hand a container the host: a mount but the one read-only bind, privilege, a device, a host namespace. */
+function escapes(args: readonly string[]): string[] {
+  const readOnlyBind = `type=bind,source=${SOURCE},target=${SOURCE_MOUNT as string},readonly`;
+  return flagsOf(args)
+    .filter(({ flag, value }) =>
+      flag === "-v" ||
+      flag.startsWith("--volume") ||
+      (flag === "--mount" && value !== readOnlyBind) ||
+      flag.startsWith("--privileged") ||
+      flag.startsWith("--cap-add") ||
+      flag.startsWith("--device") ||
+      (HOST_NAMESPACES.has(flag) && value === "host"),
+    )
+    .map(({ flag, value }) => (value === "" ? flag : `${flag}=${value}`));
+}
+
 describe("the cloud leg's commands", () => {
   it("pins the full node:24-bookworm image by digest", () => {
     expect(IMAGE).toMatch(/^node:24-bookworm@sha256:[0-9a-f]{64}$/);
@@ -92,15 +135,50 @@ describe("the cloud leg's commands", () => {
     for (const entry of LEG_PROFILES) {
       const args = argsOf(entry.id);
       expect(valuesOf(args, "--mount"), entry.id).toEqual([`type=bind,source=${SOURCE},target=${SOURCE_MOUNT as string},readonly`]);
-      expect(args.some((arg) => arg === "-v" || arg.startsWith("--volume")), entry.id).toBe(false);
+      expect(flagsOf(args).filter(({ flag }) => flag === "--mount"), entry.id).toHaveLength(1);
       expect(JSON.stringify(args), entry.id).not.toContain("docker.sock");
-      expect(args.some((arg) => arg === "--privileged" || arg.startsWith("--cap-add")), entry.id).toBe(false);
+      // TEST CHANGE, justified: ledger review/19 (REQ-PROVE-037) — the two exact-token checks for a volume and for
+      // privilege missed an attached value and every host namespace; `escapes` reads each option attached or separate,
+      // so every check the two lines made is still made, and more.
+      expect(escapes(args), entry.id).toEqual([]);
       expect(valuesOf(args, "--security-opt"), entry.id).toEqual(["no-new-privileges"]);
       expect(args.slice(0, 3), entry.id).toEqual(["run", "--rm", "--init"]);
       // The image, then `-c` and the script for the `/bin/sh` entrypoint.
       expect(args.slice(-3, -1), entry.id).toEqual([IMAGE, "-c"]);
       expect(valuesOf(args, "--entrypoint"), entry.id).toEqual(["/bin/sh"]);
     }
+  });
+
+  // ADDED (ledger review/19, plan 022 file 2, unit b1-fork-ci-job): the check above refuses each option that hands a
+  // container the host, whether its value is attached or separate. The first four passed the exact-token checks the
+  // case held before.
+  it("refuses a host mount, privilege, a device or a host namespace, its value attached or separate", () => {
+    for (const argv of [
+      ["--volume=/:/h"],
+      ["--pid=host"],
+      ["--privileged=true"],
+      ["--network", "host"],
+      ["-v", "/:/h"],
+      ["--volume", "/:/h"],
+      ["--volumes-from=other"],
+      [`--mount=type=bind,source=/,target=/h`],
+      ["--mount", "type=bind,source=/,target=/h"],
+      ["--privileged"],
+      ["--cap-add", "SYS_ADMIN"],
+      ["--cap-add=ALL"],
+      ["--device=/dev/kvm"],
+      ["--pid", "host"],
+      ["--ipc=host"],
+      ["--uts", "host"],
+      ["--userns=host"],
+      ["--cgroupns", "host"],
+      ["--network=host"],
+      ["--net", "host"],
+    ]) {
+      expect(escapes(["run", "--rm", ...argv, IMAGE as string, "-c", "true"]), argv.join(" ")).not.toEqual([]);
+    }
+    // Non-degenerate: the leg's own options, and a host namespace option set to anything else, pass.
+    expect(escapes(["run", "--network", "none", "--ipc=private", IMAGE as string])).toEqual([]);
   });
 
   it("copies the mounted tree to a writable folder, links node_modules, and runs the cloud suite with no install", () => {

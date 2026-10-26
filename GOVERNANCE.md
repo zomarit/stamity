@@ -51,11 +51,15 @@ check has one stable name, so a required check does not rotate when the matrix d
 ### What `all-ci-checks` covers
 
 `all-ci-checks` is the aggregator job in `.github/workflows/ci.yml`, and it runs on every event.
-A full run passes when the check matrix and the `cloud-container` job both pass. That job runs the
+A full run passes when the check matrix, the `cloud-container` job and, in this repository, the
+`fork-probe` job pass. The `cloud-container` job runs the
 suite under `test/cloud/` in a Linux container pinned by digest, with no client account, four
 times: once per cloud profile (Claude Code's and Cursor's with an empty home folder, Copilot's with
 `/root`) and once more with no network, as a cloud agent's machine would run the hooks this setup
-emits.
+emits. The `fork-probe` job, `scripts/ci/fork-probe.mjs`, runs this tree as a fork would hold it:
+renamed to a made-up scope, given a `-fork.1` version and regenerated, it must pass every step of
+`npm run check`, the dogfood check, the identity check, the tarball smoke and a walk of its own CLI
+through a pack's `add` and `clean --pack`. A fork's own CI skips that job.
 
 The check matrix runs four legs: the pinned Node floor, the current LTS, and Windows in two
 shards, each shard running half of the test suite. Which step runs on which leg is not uniform.
@@ -74,8 +78,8 @@ shards, each shard running half of the test suite. Which step runs on which leg 
 - **The floor leg only** runs the tarball smoke: pack the tarball, install it, run the published
   shape. What it proves is a runtime claim about the oldest supported Node.
 
-A change whose every path falls in a lane takes the `lanes` job in place of the check matrix and
-the `cloud-container` job.
+A change whose every path falls in a lane takes the `lanes` job in place of the check matrix, the
+`cloud-container` job and the `fork-probe` job.
 There are three lanes: `specs` (the spec), `learnings` (the recorded learnings) and `website` (the
 docs site and every other `docs/` path). A record is a path the `records` branch holds instead of
 `main`: the run records, the deferral inbox, handoffs, evidence, plans, and the eval runs,
@@ -84,7 +88,9 @@ other record is in no lane. The job runs what those paths can break: the suites 
 generate-and-diff step, the leak gate and, on pull requests, the hygiene scan. The `learnings` lane
 adds the CLI build and its dogfood check. The `website` lane adds the docs site build and the root
 typecheck. `scripts/ci/records-only.mjs` decides, and it reads the suites from the test-input map in
-the base commit's `.stamity/change-classes.json`, never from the change's own copy. Any path in no
+the base commit's `.stamity/change-classes.json`, never from the change's own copy. CI runs the
+classifier itself from a worktree of the base commit too, so a change cannot pick its own checks;
+with no base commit to run it from, the change gets full CI. Any path in no
 lane, an empty diff, a diff it cannot read, the weekly schedule and a manual run get the full check
 matrix. So does a change whose every path is in a lane when that map cannot answer: no valid map at
 the base commit, a changed path no entry matches, or a matching entry that selects every test. On
@@ -106,7 +112,8 @@ read included, is not proven, and the push then runs the `lanes` job or the full
 Only that workflow's own run counts as evidence, not a check of the same name from another
 workflow. `all-ci-checks` asserts which of the three shapes ran, a proven push, the `lanes` job or
 the full side, so neither short answer reads as a full pass, and it asserts the `records` job
-passed here and was skipped in a fork.
+passed here and was skipped in a fork. It asserts the `fork-probe` job the same way on a full run:
+passed here, skipped in a fork; on a proven push or a `lanes` answer it must read skipped.
 
 ### What `all-pr-checks` covers
 

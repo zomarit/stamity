@@ -550,9 +550,11 @@ function importClosure(entry: string): string[] {
 
 const SCRIPT_PATH = "scripts/ci/records-only.mjs";
 
-// ADDED by run 2026-10-08_product-core, unit p2c-ci-lanes-from-map (the sign-off on review/8): the
-// classifier runs from the pull request's head, so a change to it or to a module it imports
-// decides its own routing. No lane may hold those paths, and a diff touching one is full CI.
+// ADDED by run 2026-10-08_product-core, unit p2c-ci-lanes-from-map (the sign-off on review/8): a
+// change to the classifier or to a module it imports must not decide its own routing. Since ledger
+// build/5 (2026-10-26, unit b1-fork-ci-job) the `changes` job runs the base commit's copy, so such a
+// change is classified by the code before it; it still takes full CI itself: no lane may hold those
+// paths, and a diff touching one is full CI.
 describe("the lanes' own decision code", () => {
   const closure = importClosure(SCRIPT_PATH);
   // The cell names both modules; the walk adds what they import, so a new import joins the check.

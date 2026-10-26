@@ -79,6 +79,7 @@
       "tests": [
         "test/ci/docsRoster.test.ts",
         "test/ci/docsSite.test.ts",
+        "test/ci/forkProbe.test.ts",
         "test/ci/leakGate.test.ts",
         "test/ci/packSigningRehearsal.test.ts",
         "test/ci/recordsOnly.test.ts",

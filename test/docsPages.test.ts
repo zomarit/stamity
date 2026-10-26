@@ -5434,7 +5434,10 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
       // the URL-rewrite and include writes, and re-pointing the origin's HEAD ref is no person-only act.
       "On Codex and Cursor, whose payloads name no agent, that write is open to every call, not only a sub-agent's",
       "and a remote, URL-rewrite or include write are refused on them in every mode too",
-      "Re-pointing that ref with a ref write, or turning it into a plain ref, is not read as a person-only act on any client",
+      // TEST CHANGE, justified: REQ-FLOW-102 (b14b) — a remote's HEAD ref write is read as the push it steers; the
+      // sentence that said no ref write was read is replaced by b14b's (b14b-fixer-r3.md), written by b1-fork-ci-job.
+      "A write or a delete of a remote's HEAD ref that the line the guard judges shows — `git symbolic-ref`, `git update-ref` with the `--stdin` text the line carries, `git remote set-head`, or a remote-tracking `git branch` delete — is read as the push it steers",
+      "Any other git route to that ref is not read on the judged line",
       "a later attended push to the real default branch read as a push of another branch, and that push runs without asking",
       "on a gh version other than 2.102.0",
       "the guard does not read gh's own configured default host",
@@ -5489,6 +5492,8 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
       "The charter, rule and agent-definition files land on the evidence",
       "other than the charter, rule and agent-definition files",
       "`src/cli/commands/run.ts::hookPathsAt`",
+      // TEST CHANGE, justified: REQ-FLOW-102 (b14b) — a remote's HEAD ref write is read as the push it steers.
+      "Re-pointing that ref with a ref write, or turning it into a plain ref, is not read as a person-only act on any client",
     ]) {
       expect(flat, `SECURITY.md says again: ${stale}`).not.toContain(stale);
     }
@@ -5521,7 +5526,11 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
     // so the mapping names all three where it lists what Cursor and Codex refuse.
     expect(mapping).toContain("on Claude Code and Copilot CLI and never for a sub-agent, while Cursor and Codex, whose payloads name no agent, refuse them and a remote, URL-rewrite or include write in every mode");
     expect(mapping).toContain("any call's on Codex and Cursor");
-    expect(mapping).toContain("Re-pointing `origin/HEAD` with a ref write, or turning it into a plain ref, is no person-only act on any client");
+    // TEST CHANGE, justified: REQ-FLOW-102 (b14b) — a remote's HEAD ref write is read as the push it steers; the mapping
+    // carries b14b's sentence (b14b-fixer-r3.md) in place of the one that said no ref write was read.
+    expect(mapping).toContain("A write or a delete of `origin/HEAD` that the judged line shows (`git symbolic-ref`, `git update-ref` with the `--stdin` text the line carries, `git remote set-head`, a remote-tracking `git branch` delete)");
+    expect(mapping).toContain("Any other git route to that ref is not read on the judged line");
+    expect(mapping).not.toContain("Re-pointing `origin/HEAD` with a ref write, or turning it into a plain ref, is no person-only act on any client");
     // TEST CHANGE, justified (fix round 2, the lens's second wording point; REQ-FLOW-145): unattended, a tag and a
     // dispatch run on Claude Code and Copilot CLI only, so the pin carries the clients.
     expect(mapping).toContain("and of the acts the setting runs only the raw ready mark: a local tag and an unnamed workflow dispatch run there too on Claude Code and Copilot CLI, Cursor and Codex refusing them in every mode");
@@ -5607,5 +5616,85 @@ describe("the verbs that start a client's own CLI", () => {
 
     expect(list, `${page}: the list of verbs that start a client's own CLI was not found`).not.toBeNull();
     expect(list?.[0]).toContain("`upgrade`");
+  });
+
+  // ADDED (plan 022 file 2, unit b1-fork-ci-job; ledger review/19, b9-fixer-r1.md's two sentences): the security pages'
+  // lists name `upgrade` too, since SECURITY.md is file 2's one writer's.
+  it("SECURITY.md and the mapping name upgrade among them", () => {
+    expect(flowed(read(SECURITY))).toContain(
+      "`init`, `sync` (`--dry-run` included), `upgrade` (`--dry-run` included, and only once its refusals before the plan have passed) and `workspace sync` read the model list of each selected client but Claude Code,",
+    );
+    expect(flowed(read(SECURITY_MAPPING))).toContain(
+      "`init`, `sync`, `upgrade`, `workspace sync` and `check`'s `model-pins` row start each selected client's own CLI",
+    );
+  });
+});
+
+/**
+ * ADDED (plan 022 file 2, unit b1-fork-ci-job, file 2's one writer of SECURITY.md and docs/security-mapping.md): each
+ * sentence another unit handed b1 in its report, written as given, and b1's own. Each pin fails on the integration head
+ * 1fe7d915, whose pages say none of it.
+ */
+describe("file 2's SECURITY.md sentences", () => {
+  const security = () => flowed(read(SECURITY));
+  const mapping = () => flowed(read(SECURITY_MAPPING));
+
+  it("names upgrade among the verbs that refuse with AUTONOMY_LOOSENED (ledger build/39)", () => {
+    expect(security()).toContain("`sync`, `init`, `upgrade` and `workspace sync` refuse with `AUTONOMY_LOOSENED`, exit 1 and nothing written");
+    expect(mapping()).toContain("`sync`, `init`, `upgrade` and `workspace sync` refuse with `AUTONOMY_LOOSENED`");
+  });
+
+  it("says this repository's CI runs its classifier from the base commit, beside the generic residual (build/5)", () => {
+    const page = security();
+    expect(page).toContain("A repository's CI may choose which checks run with code the change edits");
+    expect(page).toContain(
+      "This repository's own CI runs its classifier from the base commit (the `changes` job in `.github/workflows/ci.yml`), so a change here cannot choose its own checks that way, and a change to that job is a CI definition, which `run land` asks about.",
+    );
+    expect(mapping()).toContain("this repository's own CI runs its classifier from the base commit");
+  });
+
+  it("names the land residual an approval of the head leaves (b14c, review/174)", () => {
+    expect(security()).toContain(
+      "An approval given to `stamity run land` names the head commit, not the reasons the land asked about. The land reads its reasons again when it acts,",
+    );
+    expect(security()).toContain("so no record tells the two apart. Code: `src/runs/landEvidence.ts::decideLand`, `src/runs/landEvidence.ts::evidenceLine`, `src/cli/commands/runLand.ts`.");
+    expect(mapping()).toContain("an approval names the head commit, not the reasons the land asked about");
+  });
+
+  it("names the closed list that proves a retired companion's delete (b12), on both pages", () => {
+    const sentence =
+      "A file an earlier release wrote that this release no longer renders for the setup (the nine touchpoint companions `agents/openai.yaml` on a setup without Codex) is proved by a closed list of literal paths instead:";
+    for (const page of [security(), mapping()]) {
+      expect(page).toContain(sentence);
+      expect(page).toContain("a row's own hash proves none of them, and a file that does not match is kept and named.");
+      expect(page).toContain("`src/manifest/ownedPaths.ts::RETIRED_ENGINE_PATHS`, `src/cli/engine/emissionWrite.ts::retiredEngineRenderings`");
+    }
+  });
+
+  it("names what a hand-edited ledger row reaches under copilot.setupSteps off (b8, review/70), on both pages", () => {
+    const sentence =
+      "With `copilot.setupSteps` set to `off`, an edit to `.stamity/manifest.json` that records the hash of an owner's own `.github/workflows/copilot-setup-steps.yml` which carries the engine's header line gets that file deleted at the next `sync` or `clean`, the same exposure the overwrite path already has there, and the manifest is a person-only path that `run land` asks about.";
+    expect(security()).toContain(sentence);
+    expect(mapping()).toContain(sentence);
+  });
+});
+
+/**
+ * ADDED (plan 022 file 2, unit b1-fork-ci-job; REQ-PLUGIN-033, ledger build/5 and build/6): the CI hand pages name the
+ * fork probe and say the classifier runs from the base commit, and CONTRIBUTING names the local worker cap's variable.
+ */
+describe("the CI hand pages name the fork probe and the base-commit classifier", () => {
+  it.each([CONTRIBUTING, GOVERNANCE])("%s names the fork probe and where the classifier runs from", (page) => {
+    const text = flowed(read(page));
+    expect(text).toContain("`fork-probe`");
+    expect(text).toContain("scripts/ci/fork-probe.mjs");
+    expect(text).toMatch(/runs? (?:it|the classifier itself) from a worktree of the base commit/);
+    expect(text).toContain("so a change cannot pick its own checks");
+  });
+
+  it("CONTRIBUTING names STAMITY_TEST_MAX_WORKERS and the cap it overrides", () => {
+    expect(flowed(read(CONTRIBUTING))).toContain(
+      "A local run uses at most four parallel workers, and never more than the machine's cores less one; set `STAMITY_TEST_MAX_WORKERS` to a positive integer to ask for a different number (`workerCap` in `vitest.config.ts`).",
+    );
   });
 });

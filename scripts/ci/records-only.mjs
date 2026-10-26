@@ -29,7 +29,9 @@
 // `src/change/classify.ts`, and what it imports, load by Node's type stripping: the `changes` job
 // runs Node 24 with no install, so that closure must stay erasable TypeScript over Node built-ins
 // (`test/ci/recordsOnly.test.ts` runs a copy of it with plain `node`, and gives a change to any
-// module in it full CI).
+// module in it full CI). That job runs this file from a worktree of the BASE commit, with the head
+// checkout as its working folder, so a change to this closure takes effect from the next change on;
+// no base to run it from is full CI (`.github/workflows/ci.yml`, "Classify the change").
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { resolve } from 'node:path'

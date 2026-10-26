@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -315,7 +316,10 @@ describe("ci.yml — the merge-blocking gate", () => {
   // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit e11-ci-container-leg): the
   // count moves from eight to nine because `cloud-container` joins after `check`, whose side of the
   // split it runs on; every other lane is still pinned, in its place.
-  it("keeps the nine lanes: the classifier, the proven-push reader, the check matrix, the cloud container leg, the lanes job, the records job, two advisory probes, and one stable aggregator", () => {
+  // TEST CHANGE, justified (2026-10-26, run 2026-10-25_autonomy-distribution-02, unit b1-fork-ci-job; REQ-PLUGIN-033):
+  // the count moves from nine to ten because `fork-probe` joins after `cloud-container`, on the same full side; every
+  // other lane is still pinned, in its place.
+  it("keeps the ten lanes: the classifier, the proven-push reader, the check matrix, the cloud container leg, the fork probe, the lanes job, the records job, two advisory probes, and one stable aggregator", () => {
     // CHANGED by plan 008 file 3, unit V1w: `plugin-route` joins the merge-blocking set, so this
     // list and the aggregator's `needs` below both move. It sits beside `apm-install` because the
     // two answer the same KIND of question — what a real consumer's tooling does with a published
@@ -334,6 +338,7 @@ describe("ci.yml — the merge-blocking gate", () => {
       "prove-pr",
       "check",
       "cloud-container",
+      "fork-probe",
       "lanes",
       "records",
       "supply-chain",
@@ -643,11 +648,15 @@ describe("ci.yml — the merge-blocking gate", () => {
     // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit e11-ci-container-leg):
     // `cloud-container` joins `needs` after `check`, because the aggregator requires it on a full
     // run and asserts it skipped on the other two shapes, and it can only read a job it needs.
+    // TEST CHANGE, justified (2026-10-26, unit b1-fork-ci-job; REQ-PLUGIN-033): `fork-probe` joins `needs` after
+    // `cloud-container`, because the aggregator requires it on a full run in the canonical repository and asserts it
+    // skipped everywhere else, and it can only read a job it needs.
     expect(aggregator.needs).toEqual([
       "changes",
       "prove-pr",
       "check",
       "cloud-container",
+      "fork-probe",
       "lanes",
       "records",
       "supply-chain",
@@ -664,6 +673,10 @@ describe("ci.yml — the merge-blocking gate", () => {
     // otherwise. The executed suite below proves which shape each line sits in.
     expect(report).toContain('test "${{ needs.cloud-container.result }}" = "success"');
     expect(report).toContain('test "${{ needs.cloud-container.result }}" = "skipped"');
+    // ADDED (2026-10-26, unit b1-fork-ci-job): the fork probe is asserted both ways and reported in the echo.
+    expect(report).toContain('test "${{ needs.fork-probe.result }}" = "success"');
+    expect(report).toContain('test "${{ needs.fork-probe.result }}" = "skipped"');
+    expect(report).toContain("fork-probe=${{ needs.fork-probe.result }}");
     for (const retired of ["apm-install", "plugin-route"]) {
       expect(report, `the report still reads the deleted ${retired} job`).not.toContain(`needs.${retired}`);
     }
@@ -762,6 +775,75 @@ describe("ci.yml — the merge-blocking gate", () => {
     });
   });
 
+  // ADDED (2026-10-26, run 2026-10-25_autonomy-distribution-02, unit b1-fork-ci-job; REQ-PLUGIN-033). Every pull
+  // request runs this tree as a renamed, suffixed fork (`scripts/ci/fork-probe.mjs`, whose steps
+  // test/ci/forkProbe.test.ts pins). Pull-request code runs inside it, a contributor's fork's included, so what is
+  // pinned is what it trusts: no secret, a read-only token the checkout does not keep, and no `pull_request_target`.
+  describe("the fork probe job", () => {
+    const job = () => jobOf(ci, "fork-probe");
+    const steps = () => stepsOf(ci, "fork-probe");
+    const GUARD = `github.repository == '${CANONICAL_REPOSITORY}' && `;
+
+    it("runs beside `check` under its needs and condition, in the canonical repository alone", () => {
+      expect(job().name).toBe("fork probe (this tree as a renamed fork)");
+      expect(job().needs).toEqual(jobOf(ci, "check").needs);
+      expect(job().if).toBe(`${GUARD}${jobOf(ci, "check").if ?? ""}`);
+      expect(job()["runs-on"]).toBe("ubuntu-latest");
+    });
+
+    it("runs only on the canonical repository's full side, over every event and both repositories", () => {
+      for (const event_name of ["pull_request", "push", "schedule", "workflow_dispatch"]) {
+        const prove = event_name === "push" ? { result: "success", outputs: { proven: "false" } } : { result: "skipped", outputs: {} };
+        for (const repository of [CANONICAL_REPOSITORY, "acme/stamity-private"]) {
+          for (const full of ["true", "false", ""]) {
+            const context = {
+              github: { event_name, repository },
+              needs: { changes: { result: "success", outputs: { full } }, "prove-pr": prove },
+            };
+            const runs = evaluateWorkflowExpression(job().if ?? "true", context) === true;
+            expect(runs, `${event_name} ${repository} full=${full}`).toBe(repository === CANONICAL_REPOSITORY && full !== "false");
+          }
+          // A proven push skips it, as it skips `check`.
+          const proven = {
+            github: { event_name, repository },
+            needs: { changes: { result: "success", outputs: { full: "true" } }, "prove-pr": { result: "success", outputs: { proven: "true" } } },
+          };
+          expect(evaluateWorkflowExpression(job().if ?? "true", proven), `${event_name} ${repository} proven`).toBe(false);
+        }
+      }
+    });
+
+    it("holds a read-only token its checkout does not keep, reads no secret, and no workflow trigger hands it one", () => {
+      expect(job().permissions).toEqual({ contents: "read" });
+      const checkout = stepOf(steps(), "Checkout");
+      expect(checkout.uses).toBe(stepOf(stepsOf(ci, "check"), "Checkout").uses);
+      expect(checkout.with).toEqual({ "persist-credentials": false });
+      const text = JSON.stringify(job());
+      expect(text, "the job reads a secret").not.toContain("secrets.");
+      expect(text, "the job names a token").not.toMatch(/GITHUB_TOKEN|GH_TOKEN|NODE_AUTH_TOKEN|NPM_TOKEN/);
+      expect(job().env).toBeUndefined();
+      // `pull_request`, never `pull_request_target`, which would run the change's code with the base's secrets.
+      expect(triggersOf(ci.workflow)).toEqual(["push", "pull_request", "workflow_dispatch", "schedule"]);
+    });
+
+    it("installs, then runs the probe as its last step, with a measured timeout", () => {
+      expect(steps().map((step) => step.name)).toEqual(["Checkout", "Set up Node", "Install", "Fork probe"]);
+      expect(stepOf(steps(), "Set up Node").uses).toBe(stepOf(stepsOf(ci, "check"), "Set up Node ${{ matrix.node }}").uses);
+      expect(stepOf(steps(), "Set up Node").with).toEqual({ "node-version": "24", cache: "npm" });
+      expect(runOf(steps(), "Install")).toBe("npm ci");
+      expect(runOf(steps(), "Fork probe")).toBe("node scripts/ci/fork-probe.mjs");
+      expect(job()["timeout-minutes"]).toBeTypeOf("number");
+      // The first ceiling came from a local run; the comment says so and when to measure again (build/15).
+      const block = ci.source.slice(ci.source.indexOf("\n  fork-probe:\n"), ci.source.indexOf("\n  lanes:\n"));
+      expect(block).toMatch(/measured locally 2026-\d\d-\d\d/);
+      expect(block).toContain("re-measure after 10 green runs");
+    });
+
+    it("is required by the aggregator", () => {
+      expect(jobOf(ci, "all-ci-checks").needs).toContain("fork-probe");
+    });
+  });
+
   // REMOVED (2026-10-14, run 2026-10-14_cli-native, unit d3-ci-qa): the `plugin-route` lane's
   // describe block, five cases pinning that job's wiring. The job left with the plugin route, which
   // 1.15.0 deletes; "names no plugin or APM route" below asserts it does not come back.
@@ -806,7 +888,17 @@ describe("ci.yml — the merge-blocking gate", () => {
       expect(stepOf(steps, "Checkout").with).toEqual({ "persist-credentials": false, "fetch-depth": 0 });
       const classify = stepOf(steps, "Classify the change");
       expect(classify.id).toBe("classify");
-      expect(classify.run).toBe('node scripts/ci/records-only.mjs --base "$BASE_SHA"');
+      // TEST CHANGE, justified: the classifier runs from the base commit (ledger build/5) — the step ran the head's
+      // own `scripts/ci/records-only.mjs`, so a change could edit the code that picks its own checks. It now runs
+      // the copy in a detached worktree of the base commit, never the checkout's; "executes the classifier from the
+      // base commit" below runs the body.
+      const run = classify.run ?? "";
+      expect(run).toContain('git worktree add --detach "$BASE_TREE" "$BASE_SHA"');
+      expect(run).toContain('node "$BASE_TREE/scripts/ci/records-only.mjs" --base "$BASE_SHA"');
+      expect(run).not.toContain("node scripts/ci/records-only.mjs");
+      expect(run).toContain('BASE_TREE="$RUNNER_TEMP/classifier-base"');
+      // No trigger that runs the change's code with the base's rights or secrets.
+      expect(triggersOf(ci.workflow)).toEqual(["push", "pull_request", "workflow_dispatch", "schedule"]);
       // The base arrives as data, never interpolated into the script body.
       const base = classify.env?.["BASE_SHA"] ?? "";
       expect(base).toBe("${{ github.event.pull_request.base.sha || github.event.before }}");
@@ -1061,8 +1153,14 @@ describe("ci.yml — the merge-blocking gate", () => {
     // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit e11-ci-container-leg):
     // `cloud-container` joins the gated lanes; it carries `check`'s condition, so it runs on the
     // full side, and the rule below evaluates it there over every combination.
-    const GATED = ["check", "cloud-container", "lanes"] as const;
+    // TEST CHANGE, justified (2026-10-26, unit b1-fork-ci-job; REQ-PLUGIN-033): `fork-probe` joins the gated lanes; it
+    // carries `check`'s condition behind the canonical repository's guard, so each context below names the canonical
+    // repository, where the guard holds and the rule is the one `check` follows; "the fork probe job" above evaluates
+    // the guard over both repositories.
+    const GATED = ["check", "cloud-container", "fork-probe", "lanes"] as const;
     const EVENTS = ["pull_request", "push", "schedule", "workflow_dispatch"] as const;
+    /** The guard `fork-probe` carries in front of `check`'s condition. */
+    const CANONICAL_GUARD = `github.repository == '${CANONICAL_REPOSITORY}' && `;
 
     it("reads the pull request's run only on a push to main, with read grants and the sha as data", () => {
       const job = jobOf(ci, "prove-pr");
@@ -1100,7 +1198,9 @@ describe("ci.yml — the merge-blocking gate", () => {
 
     // TEST CHANGE, justified (unit d3-ci-qa, as `GATED` above): "four lanes" becomes "two lanes".
     // TEST CHANGE, justified (unit e11-ci-container-leg, as `GATED` above): "two" becomes "three".
-    it("skips the three gated lanes exactly when a push is proven, and only with the classifier green", () => {
+    // TEST CHANGE, justified (unit b1-fork-ci-job, as `GATED` above): "three" becomes "four", and the context names the
+    // canonical repository.
+    it("skips the four gated lanes exactly when a push is proven, and only with the classifier green", () => {
       // Every combination, including the ones no real run produces, against a rule written here
       // independently of the file: a lane runs only when `changes` succeeded, `prove-pr` succeeded
       // or was skipped, `proven` is not `true`, and the records answer picks this lane's side.
@@ -1110,7 +1210,7 @@ describe("ci.yml — the merge-blocking gate", () => {
             for (const proven of ["true", "false", ""]) {
               for (const full of ["true", "false"]) {
                 const context = {
-                  github: { event_name },
+                  github: { event_name, repository: CANONICAL_REPOSITORY },
                   needs: {
                     changes: { result: changes, outputs: { full } },
                     "prove-pr": { result: prove, outputs: { proven } },
@@ -1135,7 +1235,11 @@ describe("ci.yml — the merge-blocking gate", () => {
       // `prove-pr` is skipped on every event but a push to `main`. `!cancelled()` is that call, and
       // `needs.changes.result == 'success'` puts back the guard the implicit `success()` gave.
       for (const lane of GATED) {
-        const condition = jobOf(ci, lane).if ?? "";
+        // TEST CHANGE, justified (unit b1-fork-ci-job, as `GATED` above): `fork-probe`'s condition opens with the
+        // canonical repository's guard, and the status function follows it; GitHub honours one anywhere in the `if`.
+        const full = jobOf(ci, lane).if ?? "";
+        if (lane === "fork-probe") expect(full.startsWith(CANONICAL_GUARD), lane).toBe(true);
+        const condition = lane === "fork-probe" ? full.slice(CANONICAL_GUARD.length) : full;
         expect(condition, lane).toMatch(/^!cancelled\(\) && needs\.changes\.result == 'success' && /);
         expect(condition, lane).toContain(
           "(needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true'",
@@ -1192,6 +1296,9 @@ describe("ci.yml — the merge-blocking gate", () => {
       // ADDED (2026-10-14, run 2026-10-14_cli-native, unit e11-ci-container-leg): the cloud
       // container leg, merge-blocking on the full side.
       "`cloud-container`",
+      // ADDED (2026-10-26, unit b1-fork-ci-job): the fork probe, merge-blocking on the canonical full side, and its script.
+      "`fork-probe`",
+      "scripts/ci/fork-probe.mjs",
       // TEST CHANGE, justified (2026-10-14, run 2026-10-13_records-branch, unit r5-ci-records-job): `records` names
       // the canonical records job now, not a lane; the restore it runs is named beside it.
       "`records`",
@@ -1264,8 +1371,13 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
   // `Results` gains `cloud-container`, which runs beside `check` on the full side: `success` in
   // the full shape, `skipped` in the lanes and proven shapes and in the failed classifier's. Every
   // shape and every assertion written before it is kept one for one; its own cases follow at the end.
+  // TEST CHANGE, justified (2026-10-26, unit b1-fork-ci-job; REQ-PLUGIN-033): `Results` gains `fork-probe`, which runs
+  // beside `check` on the full side in the canonical repository: `success` in the full shape, which models that
+  // repository, and `skipped` in the lanes, proven and failed-classifier shapes. Every shape and every assertion
+  // written before it is kept one for one, but the one that runs the shapes outside the canonical repository, which
+  // now also reads the probe skipped there; its own cases follow at the end.
   type Results = Readonly<
-    Record<"changes" | "prove-pr" | "check" | "cloud-container" | "lanes" | "records" | "supply-chain", string>
+    Record<"changes" | "prove-pr" | "check" | "cloud-container" | "fork-probe" | "lanes" | "records" | "supply-chain", string>
   >;
 
   function render(results: Results, full: string, proven: string): string {
@@ -1295,6 +1407,7 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
     "prove-pr": "skipped",
     check: "success",
     "cloud-container": "success",
+    "fork-probe": "success",
     lanes: "skipped",
     records: "success",
     "supply-chain": "failure",
@@ -1304,6 +1417,7 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
     "prove-pr": "skipped",
     check: "skipped",
     "cloud-container": "skipped",
+    "fork-probe": "skipped",
     lanes: "success",
     records: "success",
     "supply-chain": "failure",
@@ -1314,13 +1428,15 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
     "prove-pr": "success",
     check: "skipped",
     "cloud-container": "skipped",
+    "fork-probe": "skipped",
     lanes: "skipped",
     records: "success",
     "supply-chain": "failure",
   };
   // TEST CHANGE, justified (unit e11-ci-container-leg, as `Results` above): the cloud container
   // leg is gated as `check` is, so a proven push must find it skipped too.
-  const GATED = ["check", "cloud-container", "lanes"] as const;
+  // TEST CHANGE, justified (unit b1-fork-ci-job, as `Results` above): so is the fork probe.
+  const GATED = ["check", "cloud-container", "fork-probe", "lanes"] as const;
 
   it("passes a proven push with every gated lane skipped, with the advisory lane red", () => {
     expect(execute(PROVEN, "true", "true")).toBe(0);
@@ -1403,6 +1519,7 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
       "prove-pr": "skipped",
       check: "skipped",
       "cloud-container": "skipped",
+      "fork-probe": "skipped",
       lanes: "skipped",
       records: "success",
       "supply-chain": "success",
@@ -1432,9 +1549,13 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
   it("passes every shape elsewhere only with the records job skipped", () => {
     for (const repo of ["example/stamity-fork", ""]) {
       for (const [label, shape, full, proven] of SHAPES) {
-        expect(execute({ ...shape, records: "skipped" }, full, proven, repo), `${label} ${repo}`).toBe(0);
+        // TEST CHANGE, justified (unit b1-fork-ci-job, as `Results` above): outside the canonical repository the
+        // fork probe's guard skips it on every shape, the full one included, so each shape here reads it skipped;
+        // the records assertions are unchanged.
+        const elsewhere = { ...shape, "fork-probe": "skipped" };
+        expect(execute({ ...elsewhere, records: "skipped" }, full, proven, repo), `${label} ${repo}`).toBe(0);
         for (const records of ["success", "failure", "cancelled"]) {
-          expect(execute({ ...shape, records }, full, proven, repo), `${label} ${repo} records=${records}`).not.toBe(0);
+          expect(execute({ ...elsewhere, records }, full, proven, repo), `${label} ${repo} records=${records}`).not.toBe(0);
         }
       }
     }
@@ -1461,6 +1582,162 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the aggregator's lane split,
       expect(execute({ ...PROVEN, "cloud-container": result }, "true", "true"), `proven ${result}`).not.toBe(0);
       expect(execute({ ...PROVEN, "cloud-container": result }, "false", "true"), `proven lanes ${result}`).not.toBe(0);
     }
+  });
+
+  // ADDED (2026-10-26, unit b1-fork-ci-job; REQ-PLUGIN-033): the fork probe is required on a full run in the canonical
+  // repository, must read `skipped` on a full run anywhere else, and `skipped` on the other two shapes everywhere.
+  const ELSEWHERE = "acme/stamity-private";
+
+  it("fails a full run in the canonical repository unless the fork probe passed", () => {
+    for (const result of ["failure", "cancelled", "skipped"]) {
+      expect(execute({ ...FULL, "fork-probe": result }, "true"), result).not.toBe(0);
+      expect(execute({ ...FULL, "fork-probe": result }, ""), `absent answer ${result}`).not.toBe(0);
+      expect(execute({ ...FULL, "prove-pr": "success", "fork-probe": result }, "true", "false"), `push ${result}`).not.toBe(0);
+    }
+  });
+
+  it("passes a full run elsewhere only with the fork probe skipped", () => {
+    const elsewhere = { ...FULL, records: "skipped" };
+    expect(execute({ ...elsewhere, "fork-probe": "skipped" }, "true", "", ELSEWHERE)).toBe(0);
+    for (const result of ["success", "failure", "cancelled"]) {
+      expect(execute({ ...elsewhere, "fork-probe": result }, "true", "", ELSEWHERE), result).not.toBe(0);
+    }
+  });
+
+  it("fails a lanes answer or a proven push unless the fork probe skipped, in either repository", () => {
+    for (const [repo, records] of [[CANONICAL_REPOSITORY, "success"], [ELSEWHERE, "skipped"]] as const) {
+      expect(execute({ ...SHORT, records }, "false", "", repo), `lanes ${repo}`).toBe(0);
+      expect(execute({ ...PROVEN, records }, "true", "true", repo), `proven ${repo}`).toBe(0);
+      for (const result of ["success", "failure", "cancelled"]) {
+        expect(execute({ ...SHORT, records, "fork-probe": result }, "false", "", repo), `lanes ${repo} ${result}`).not.toBe(0);
+        expect(execute({ ...PROVEN, records, "fork-probe": result }, "true", "true", repo), `proven ${repo} ${result}`).not.toBe(0);
+      }
+    }
+  });
+});
+
+/**
+ * ADDED (2026-10-26, run 2026-10-25_autonomy-distribution-02, unit b1-fork-ci-job; ledger build/5). The `changes`
+ * job's "Classify the change" body, run as the runner runs it (`bash -e`), in a scratch repository whose base commit
+ * holds the real classifier and whose head rewrites it to answer narrow for every path. The answer must come from the
+ * base's copy; with no base to run it from, the five lines of a full answer, and no classifier code runs.
+ */
+describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the classifier runs from the base commit, executed", () => {
+  const BODY = runOf(stepsOf(ci, "changes"), "Classify the change");
+  /** The classifier's import closure, as test/ci/recordsOnly.test.ts walks it, and the base's class file. */
+  const CLOSURE = ["scripts/ci/records-only.mjs", "src/change/classify.ts", "src/roster/triggers.ts", ".stamity/change-classes.json"];
+  const FALLBACK = ["full=true", "lanes=[]", "suites=", "site_build=true", "cli_check=false"];
+  const scratch: string[] = [];
+  afterAll(() => {
+    for (const dir of scratch.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** A real path: Node compares the script's argv path with its own URL, and macOS's temp folder is a link. */
+  function tempRoot(): string {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "stamity-classify-base-")));
+    scratch.push(dir);
+    return dir;
+  }
+
+  function gitOut(cwd: string, ...args: string[]): string {
+    return execFileSync("git", ["-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", ...args], {
+      cwd,
+      encoding: "utf8",
+      env: { ...carriedProcessEnv(), GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: NO_GIT_CONFIG },
+    }).trim();
+  }
+
+  /** A repository whose first commit holds the classifier's closure; returns it and that commit. */
+  function baseRepository(withScript = true): { repo: string; base: string } {
+    const repo = join(tempRoot(), "repo");
+    mkdirSync(repo);
+    gitOut(repo, "init", "-q", "-b", "main");
+    for (const file of CLOSURE.filter((path) => withScript || path !== "scripts/ci/records-only.mjs")) {
+      mkdirSync(dirname(join(repo, file)), { recursive: true });
+      writeFileSync(join(repo, file), readFileSync(join(REPO_ROOT, file)));
+    }
+    writeFileSync(join(repo, "README.md"), "# fixture\n");
+    gitOut(repo, "add", "-A");
+    gitOut(repo, "commit", "-q", "-m", "base");
+    return { repo, base: gitOut(repo, "rev-parse", "HEAD") };
+  }
+
+  function commit(repo: string, files: Readonly<Record<string, string>>): void {
+    for (const [file, body] of Object.entries(files)) {
+      mkdirSync(dirname(join(repo, file)), { recursive: true });
+      writeFileSync(join(repo, file), body);
+    }
+    gitOut(repo, "add", "-A");
+    gitOut(repo, "commit", "-q", "-m", "head");
+  }
+
+  /** The step body under `bash -e`, from the head checkout; the lines it appended to `$GITHUB_OUTPUT`. */
+  function classify(repo: string, baseSha: string): { status: number | null; lines: string[]; stderr: string } {
+    const runnerTemp = join(dirname(repo), "runner-temp");
+    mkdirSync(runnerTemp, { recursive: true });
+    const output = join(runnerTemp, "github-output");
+    writeFileSync(output, "");
+    const result = spawnSync("bash", ["-e", "-c", BODY], {
+      cwd: repo,
+      encoding: "utf8",
+      env: {
+        ...carriedProcessEnv(),
+        GIT_CONFIG_NOSYSTEM: "1",
+        GIT_CONFIG_GLOBAL: NO_GIT_CONFIG,
+        BASE_SHA: baseSha,
+        GITHUB_EVENT_NAME: "pull_request",
+        RUNNER_TEMP: runnerTemp,
+        GITHUB_OUTPUT: output,
+      },
+    });
+    return { status: result.status, lines: readFileSync(output, "utf8").split("\n").filter((line) => line !== ""), stderr: result.stderr };
+  }
+
+  /** A classifier that answers narrow for any diff: what a change that edits its own picker would ship. */
+  const NARROW = [
+    "import { appendFileSync } from 'node:fs'",
+    "const lines = 'full=false\\nlanes=[\"specs\"]\\nsuites=\\nsite_build=false\\ncli_check=false\\n'",
+    "process.stdout.write(lines)",
+    "if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, lines)",
+    "",
+  ].join("\n");
+
+  it("answers a code change from the base's classifier, whatever the head's copy says", () => {
+    const { repo, base } = baseRepository();
+    commit(repo, { "scripts/ci/records-only.mjs": NARROW, "src/x.ts": "export const x = 1;\n" });
+    const { status, lines, stderr } = classify(repo, base);
+    expect(status, stderr).toBe(0);
+    // The head's rewrite would print `full=false`; the base's copy reads the diff and answers full.
+    expect(lines[0], stderr).toBe("full=true");
+    expect(lines).toHaveLength(5);
+  });
+
+  it("gives a spec-only change its lane, from the base's classifier", () => {
+    const { repo, base } = baseRepository();
+    commit(repo, { "docs/specs/x.md": "# a spec\n" });
+    const { status, lines, stderr } = classify(repo, base);
+    expect(status, stderr).toBe(0);
+    expect(lines.slice(0, 2), stderr).toEqual(["full=false", 'lanes=["specs"]']);
+  });
+
+  it("writes exactly the five lines of a full answer when there is no base to run the classifier from", () => {
+    const { repo } = baseRepository();
+    commit(repo, { "src/x.ts": "export const x = 1;\n" });
+    for (const [label, sha] of [
+      ["empty", ""],
+      ["all zeros", "0".repeat(40)],
+      ["unknown", "d".repeat(40)],
+    ] as const) {
+      const { status, lines, stderr } = classify(repo, sha);
+      expect(status, `${label}: ${stderr}`).toBe(0);
+      expect(lines, label).toEqual(FALLBACK);
+      expect(stderr, label).toContain("records-only: no base commit to run the classifier from, so full CI");
+    }
+    const without = baseRepository(false);
+    commit(without.repo, { "src/x.ts": "export const x = 1;\n" });
+    const { status, lines, stderr } = classify(without.repo, without.base);
+    expect(status, stderr).toBe(0);
+    expect(lines, "a base without the script").toEqual(FALLBACK);
   });
 });
 
@@ -2087,11 +2364,14 @@ describe("pr-checks.yml — the gates only a pull request can be asked", () => {
     // TEST CHANGE, justified (2026-10-14, run 2026-10-14_cli-native, unit e11-ci-container-leg):
     // `cloud-container` joins; it is a ci.yml job that reports on every event (skipped off the full
     // side), not a pr-checks one, so this test's property is unchanged.
+    // TEST CHANGE, justified (2026-10-26, unit b1-fork-ci-job; REQ-PLUGIN-033): `fork-probe` joins; it is a ci.yml job
+    // that reports on every event (skipped off the canonical full side), not a pr-checks one.
     expect(jobOf(ci, "all-ci-checks").needs).toEqual([
       "changes",
       "prove-pr",
       "check",
       "cloud-container",
+      "fork-probe",
       "lanes",
       "records",
       "supply-chain",
@@ -4697,7 +4977,10 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
         // TEST CHANGE, justified (plan 013 file 3, unit sw06-records-only-ci-lane): the class
         // admits `/`, so a script under a subfolder (`scripts/ci/records-only.mjs`) is matched and
         // its existence checked rather than slipping past the pattern unseen.
-        (step.run ?? "").matchAll(/(?:node|"\$STAMITY_NODE_BIN") (scripts\/[\w/-]+\.mjs)/g),
+        // TEST CHANGE, justified (2026-10-26, unit b1-fork-ci-job, ledger build/5): the `changes` job runs the base
+        // commit's copy, `node "$BASE_TREE/scripts/ci/records-only.mjs"`, so that spelling is admitted too and the
+        // repository path after the worktree prefix is checked like any other.
+        (step.run ?? "").matchAll(/(?:node|"\$STAMITY_NODE_BIN") (?:"\$BASE_TREE\/)?(scripts\/[\w/-]+\.mjs)/g),
         (match) => match[1] ?? "",
       ),
     );
@@ -4718,6 +5001,8 @@ describe("every workflow — pins, privileges and referenced scripts", () => {
       "scripts/ci/pr-proven.mjs",
       // ADDED by run 2026-10-13_records-branch, unit r5-ci-records-job (2026-10-14): the records restore and guard.
       "scripts/records.mjs",
+      // ADDED (2026-10-26, unit b1-fork-ci-job): the fork probe.
+      "scripts/ci/fork-probe.mjs",
     ]) {
       expect(referenced).toContain(script);
     }

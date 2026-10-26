@@ -28,7 +28,9 @@
 #     all read `full=true`, which is full CI. It also prints the lanes, their suites, `site_build`
 #     and `cli_check`. `site_build` is true whenever the diff touches a `website` path, on a full
 #     answer too, and whenever the diff could not be read, so no side of the split passes a site
-#     change it did not build.
+#     change it did not build. The classifier runs from a worktree of the base commit, never from
+#     the change's own checkout, so a change cannot pick its own checks; no base commit to run it
+#     from means full CI.
 #   - `prove-pr`, one leg, on a push to `main` only (skipped on every other trigger), beside
 #     `changes`. `scripts/ci/pr-proven.mjs` prints `proven=true` only when the pushed commit's
 #     tree equals the head tree of a pull request holding that commit, and that head's newest
@@ -83,6 +85,14 @@
 #     from the root and from below it, with `node` on PATH and without it, asserts the profile's
 #     cloud line, and ends a run against a bare remote with a cloud's push rules and a `gh` stub.
 #     The `check` legs run the same suite on the runner, the Windows shards through `cmd`.
+#   - `fork-probe`, one leg, in `zomarit/stamity` alone and on the full side only, beside `check`.
+#     `scripts/ci/fork-probe.mjs` copies the tree, renames the copy to a made-up scope with
+#     `scripts/fork-identity.mjs`, gives it a `-fork.1` version, regenerates it from the fork
+#     guide's `regenerate` list, and runs every step of `npm run check` there, the dogfood `check`,
+#     the identity check and the tarball smoke; then it walks `init`, `add` of a made-up pack,
+#     `sync`, `check`, `clean --pack` and `check` with the fork's own CLI in a scratch repository.
+#     So a change that turns a fork's gate red is red here first. A GitHub fork's own CI skips it,
+#     and the aggregator asserts `skipped` there.
 #   - The aggregator itself. It is the ONE required status context THIS file exposes: the legs
 #     name themselves per leg, so a rule written against them binds names that rotate with the
 #     matrix.
@@ -178,11 +188,27 @@ jobs:
         with:
           node-version: '24'
 
+      # The classifier runs from a detached worktree of the base commit, outside the workspace, so
+      # the code that picks a change's checks is never the change's own; the working folder stays
+      # the head checkout, so the diff and the base's class file read as before. No base to run it
+      # from (an empty or all-zero base, one git cannot find, or one without the script) prints the
+      # five lines of a full answer and runs no classifier code: no base means full CI. The logic
+      # stays inline on purpose: a CI definition asks at `run land`, a new script would not.
       - name: Classify the change
         id: classify
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: node scripts/ci/records-only.mjs --base "$BASE_SHA"
+        run: |
+          BASE_TREE="$RUNNER_TEMP/classifier-base"
+          if printf '%s' "$BASE_SHA" | grep -Eq '^[0-9a-fA-F]{7,64}$' \
+            && ! printf '%s' "$BASE_SHA" | grep -Eq '^0+$' \
+            && git worktree add --detach "$BASE_TREE" "$BASE_SHA" \
+            && [ -f "$BASE_TREE/scripts/ci/records-only.mjs" ]; then
+            node "$BASE_TREE/scripts/ci/records-only.mjs" --base "$BASE_SHA"
+          else
+            echo "records-only: no base commit to run the classifier from, so full CI" >&2
+            printf '%s\n' 'full=true' 'lanes=[]' 'suites=' 'site_build=true' 'cli_check=false' >> "$GITHUB_OUTPUT"
+          fi
 
   # Proven or not: on a push to `main`, whether a pull request already passed the pushed tree. It
   # runs beside `changes` with no dependency, on a push to `main` only; on every other trigger it is
@@ -477,9 +503,13 @@ jobs:
     needs: [changes, prove-pr]
     if: "!cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.full != 'false'"
     runs-on: ubuntu-latest
-    # 30: an install, a build, the image's pull and four runs of the cloud suite, where the 20 it
-    # carried held one run; not yet measured on the runner.
-    timeout-minutes: 30
+    # 5: twice the slowest of its last 10 green runs, 145 s, rounded up to whole minutes. Measured
+    # 2026-10-26 with `gh run list --workflow ci.yml --status success --json databaseId` and
+    # `gh run view <id> --json jobs` over runs 40314090529, 40308634865, 40298789425, 40295183260,
+    # 40249089641, 40246005380, 40199116768, 40159605254, 40155961992 and 40150640647 (103-145 s),
+    # every one on the image ubuntu-24.04 20261021.618 that `ubuntu-latest` named then. Re-measure
+    # when `ubuntu-latest` moves to another image, or when the leg gains a profile.
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:
@@ -496,6 +526,45 @@ jobs:
 
       - name: Cloud leg
         run: node scripts/ci/cloud-leg.mjs
+
+  # This tree as a renamed, suffixed fork (REQ-PLUGIN-033, REQ-FORK-011): `scripts/ci/fork-probe.mjs`
+  # copies the checkout, renames the copy to a made-up scope, sets a `-fork.1` version, regenerates
+  # it from the fork guide's `regenerate` list, runs every step of `npm run check` there, and walks
+  # the fork's own CLI through a pack's add and `clean --pack` in a scratch repository. It carries
+  # `check`'s needs and condition, so it runs on the full side only, and runs in the canonical
+  # repository alone: a GitHub fork's own CI skips it, and the aggregator asserts which. A pull
+  # request from a contributor's fork runs here, in the base repository, with no secret, so the job
+  # holds a read-only token that the checkout does not keep, reads no secret, and runs on
+  # `pull_request`, never `pull_request_target`.
+  fork-probe:
+    name: fork probe (this tree as a renamed fork)
+    needs: [changes, prove-pr]
+    if: "github.repository == 'zomarit/stamity' && !cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.full != 'false'"
+    runs-on: ubuntu-latest
+    # 20: twice the probe's wall time, rounded up to whole minutes, measured locally 2026-10-26 over two
+    # runs of `node scripts/ci/fork-probe.mjs` (about 600 s and 588 s on an 8-core darwin machine, the
+    # nested suite on 4 workers); no green run of this job exists yet, so re-measure after 10 green runs,
+    # as `cloud-container`'s comment does, from the job's own times.
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Fork probe
+        run: node scripts/ci/fork-probe.mjs
 
   # The short side, for a push or pull request whose every changed path falls in a lane. It
   # replaces `check` rather than running beside it, so its
@@ -772,6 +841,11 @@ jobs:
   # `cloud-container` sits on the full side beside `check`: `success` on a full run, `skipped` on a
   # lanes answer and on a proven push, both asserted.
   #
+  # `fork-probe` sits on the full side too, in the canonical repository alone: on a full run it must
+  # read `success` where `$REPO` is `zomarit/stamity` and `skipped` anywhere else, where its guard
+  # skips it, in the `records` pattern below; on a lanes answer and on a proven push it must read
+  # `skipped` everywhere.
+  #
   # The `records` job is asserted outside the three shapes, since it runs beside every one of them:
   # `success` in `zomarit/stamity`, where it is merge-blocking, and `skipped` anywhere else, where
   # its guard skips it. The repository arrives through the step's `env:`, never interpolated into
@@ -782,13 +856,13 @@ jobs:
     timeout-minutes: 5
     permissions: {}
     if: always()
-    needs: [changes, prove-pr, check, cloud-container, lanes, records, supply-chain]
+    needs: [changes, prove-pr, check, cloud-container, fork-probe, lanes, records, supply-chain]
     steps:
       - name: Report
         env:
           REPO: ${{ github.repository }}
         run: |
-          echo "changes=${{ needs.changes.result }} full=${{ needs.changes.outputs.full }} prove-pr=${{ needs.prove-pr.result }} proven=${{ needs.prove-pr.outputs.proven }} check=${{ needs.check.result }} cloud-container=${{ needs.cloud-container.result }} lanes=${{ needs.lanes.result }} records=${{ needs.records.result }} supply-chain=${{ needs.supply-chain.result }}"
+          echo "changes=${{ needs.changes.result }} full=${{ needs.changes.outputs.full }} prove-pr=${{ needs.prove-pr.result }} proven=${{ needs.prove-pr.outputs.proven }} check=${{ needs.check.result }} cloud-container=${{ needs.cloud-container.result }} fork-probe=${{ needs.fork-probe.result }} lanes=${{ needs.lanes.result }} records=${{ needs.records.result }} supply-chain=${{ needs.supply-chain.result }}"
           # The advisory lane is non-blocking by design: it is reported, never required.
           test "${{ needs.changes.result }}" = "success"
           if [ "$REPO" = "zomarit/stamity" ]; then
@@ -799,6 +873,7 @@ jobs:
           if [ "${{ needs.prove-pr.result }}" = "success" ] && [ "${{ needs.prove-pr.outputs.proven }}" = "true" ]; then
             test "${{ needs.check.result }}" = "skipped"
             test "${{ needs.cloud-container.result }}" = "skipped"
+            test "${{ needs.fork-probe.result }}" = "skipped"
             test "${{ needs.lanes.result }}" = "skipped"
           else
             test "${{ needs.prove-pr.result }}" = "skipped" || test "${{ needs.prove-pr.result }}" = "success"
@@ -807,9 +882,15 @@ jobs:
               test "${{ needs.lanes.result }}" = "success"
               test "${{ needs.check.result }}" = "skipped"
               test "${{ needs.cloud-container.result }}" = "skipped"
+              test "${{ needs.fork-probe.result }}" = "skipped"
             else
               test "${{ needs.check.result }}" = "success"
               test "${{ needs.cloud-container.result }}" = "success"
               test "${{ needs.lanes.result }}" = "skipped"
+              if [ "$REPO" = "zomarit/stamity" ]; then
+                test "${{ needs.fork-probe.result }}" = "success"
+              else
+                test "${{ needs.fork-probe.result }}" = "skipped"
+              fi
             fi
           fi

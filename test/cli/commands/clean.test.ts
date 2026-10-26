@@ -16,7 +16,7 @@ import { ORG_POLICY_REL_PATH } from "../../../src/pack/orgPolicy.ts";
 import { createApp } from "../../../src/index.ts";
 import { MANIFEST_VERSION, type LedgerEntry, type SetupManifest } from "../../../src/types/manifest.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
-import { npxCommand } from "../../support/identity.ts";
+import { canonical, canonicalOnly, npxCommand } from "../../support/identity.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { madeUpArtifact, writeMadeUpPack } from "../../support/packFixtures.ts";
 import { seedGitRepo } from "../../support/repoFixtures.ts";
@@ -290,7 +290,10 @@ describe("clean — Copilot's setup workflow", () => {
     expect(existsSync(join(root, COPILOT_SETUP_STEPS_PATH))).toBe(false);
   });
 
-  it("takes back under off the unedited workflow an earlier version wrote, which the ledger records (review/66)", async () => {
+  // TEST CHANGE, justified: REQ-PLUGIN-033 (b1-fork-ci-job, step 0) — the earlier copy is made by moving the version on
+  // the install line, which only a checkout with an npm channel renders; on a registry-less fork the workflow carries no
+  // install line, the copy equals the current one, and the case went red for the fork's identity, not for the delete.
+  it.skipIf(!canonical().canonical)(canonicalOnly("takes back under off the unedited workflow an earlier version wrote, which the ledger records (review/66)"), async () => {
     const root = await initialisedCopilot("off");
     // An earlier release's copy: another version on the install line, hashed by its row as that sync left it.
     const current = await readFile(join(root, COPILOT_SETUP_STEPS_PATH), "utf8");

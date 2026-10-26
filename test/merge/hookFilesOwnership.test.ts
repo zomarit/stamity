@@ -25,6 +25,7 @@ import { applyPackInstall, planPackInstall } from "../../src/pack/install.ts";
 import type { MergeResult } from "../../src/types/content.ts";
 import type { Tool } from "../../src/types/core.ts";
 import { HOOKS_GENERATED_DIR, STATE_DIR } from "../../src/types/markers.ts";
+import { canonical as checkoutIdentity } from "../support/identity.ts";
 import { runInProcess } from "../support/inProcess.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -1087,12 +1088,36 @@ const RENAMED_GUARDS = [
 const OLD_SUBAGENT_GUARD = RENAMED_GUARDS[0][0];
 const OLD_MCP_GUARD = RENAMED_GUARDS[1][0];
 
+/** The roster each spawn-guard capture was rendered for, as `../adapters/cursorLegacyGuards.test.ts` holds them. */
+const CAPTURED_ROSTERS: Readonly<Record<string, readonly string[]>> = {
+  "subagent-guard.mjs.txt": CURSOR_1_11_0_RUNTIME_AGENT_IDS,
+  "subagent-guard-ops.mjs.txt": [...CURSOR_1_11_0_RUNTIME_AGENT_IDS, "stamity-devops", "stamity-incident-responder"],
+  "subagent-guard-override.mjs.txt": [...CURSOR_1_11_0_RUNTIME_AGENT_IDS, "stamity-site-reliability"],
+};
+
 /**
  * The guards the published 1.11.0 package wrote for a core Cursor setup of the
  * canonical package (`../adapters/fixtures/cursor-guards-1.11.0/`, captured as
  * `../adapters/cursorLegacyGuards.test.ts` records), by old name.
  */
 function releaseOneElevenGuards(spawnFixture = "subagent-guard.mjs.txt"): Map<string, string> {
+  // TEST CHANGE, justified: REQ-PLUGIN-033 (b1-fork-ci-job, step 0) — the captures are the canonical package's bytes,
+  // which a renamed fork's 1.11.0 never wrote: its guards embed its own pinned call, and the first sync proves them
+  // under its own identity (`legacyCursorIdentity`, `src/cli/commands/sync/engine.ts`). So on a fork the fixture is
+  // what the frozen 1.11.0 builder renders for this checkout's identity and the capture's roster; on the canonical
+  // checkout it is still the capture, which test/adapters/cursorLegacyGuards.test.ts holds equal to that builder.
+  const identity = checkoutIdentity();
+  if (!identity.canonical) {
+    const rendered = render1110CursorGuards({
+      agentIds: CAPTURED_ROSTERS[spawnFixture] ?? [],
+      packageName: identity.name,
+      npmChannel: identity.npmChannel,
+    });
+    return new Map([
+      [OLD_SUBAGENT_GUARD, rendered.get(OLD_SUBAGENT_GUARD) ?? ""],
+      [OLD_MCP_GUARD, rendered.get(OLD_MCP_GUARD) ?? ""],
+    ]);
+  }
   const fixture = (name: string): string => readFileSync(join(import.meta.dirname, "..", "adapters", "fixtures", "cursor-guards-1.11.0", name), "utf8");
   return new Map([
     [OLD_SUBAGENT_GUARD, fixture(spawnFixture)],

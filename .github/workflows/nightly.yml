@@ -217,7 +217,12 @@ jobs:
     name: hook fire (client CLIs, off without secrets)
     if: github.repository == 'zomarit/stamity'
     runs-on: ubuntu-latest
-    # A model turn per client, which nothing here has measured yet; nothing in this file blocks a merge.
+    # max(45, twice the slowest green run): a model turn per client, and nothing in this file blocks a
+    # merge. Read 2026-10-26 with `gh run list --workflow nightly.yml --json databaseId` and `gh run
+    # view <id> --json jobs`: no run of this job exists to measure, since the workflow is turned off
+    # and its last run (35708325054, 2026-09-22) predates the job, so the floor of 45 stands. Any run
+    # measured from here is the unarmed, no-secret shape until a secret exists; re-measure after the
+    # first armed run, which drives a client and is the slow shape.
     timeout-minutes: 45
     permissions:
       contents: read

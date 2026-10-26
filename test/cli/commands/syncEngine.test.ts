@@ -53,7 +53,7 @@ import {
   type LedgerEntry,
   type SetupManifest,
 } from "../../../src/types/manifest.ts";
-import { npxCommand } from "../../support/identity.ts";
+import { canonical, canonicalOnly, npxCommand } from "../../support/identity.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { useTempDir, type TempDirHandle } from "../../support/tempDir.ts";
 /**
@@ -2036,7 +2036,10 @@ describe("Copilot's setup workflow: managed, user, off", () => {
     return root;
   }
 
-  it("off after an upgrade: an unedited workflow an earlier version wrote goes, and an edited one is kept (review/66)", async () => {
+  // TEST CHANGE, justified: REQ-PLUGIN-033 (b1-fork-ci-job, step 0) — the earlier version shows only on the install
+  // line, which only a checkout with an npm channel renders; on a registry-less fork the workflow carries no install
+  // line, so the non-degenerate check below went red for the fork's identity, not for the delete.
+  it.skipIf(!canonical().canonical)(canonicalOnly("off after an upgrade: an unedited workflow an earlier version wrote goes, and an edited one is kept (review/66)"), async () => {
     const handle = tempDir();
     const OLD_VERSION = "0.9.0";
     const unedited = await syncedByThenOff(handle, OLD_VERSION, "old-unedited");

@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { personOnlyVerdict } from "../../src/hooks/personOnly.ts";
 import { buildChildEnv, makeCliFixture, type CliFixture, type CliRunResult } from "../support/cliHarness.ts";
 import { ensureDistBuilt } from "../support/distBuild.ts";
+import { canonical, registryArgument } from "../support/identity.ts";
 
 /**
  * REQ-PROVE-037: a cloud machine, imitated. A cloud agent's machine is a Linux box with no user
@@ -657,7 +658,11 @@ describe("a cloud machine, imitated: every emitted hook command (REQ-PROVE-037)"
   // stub; it does nothing under any other marker. The fixture holds no package.json, so npm ci is not started.
   it.skipIf(WINDOWS)("runs Claude Code's cloud readiness under the claude-cloud marker against the npm stubs alone", () => {
     const readiness = rowsRunning("claude", READINESS);
-    const resolved = /stamity cloud readiness: the pinned CLI resolved \((npx -y \S+@\d\S*)\)\./;
+    // TEST CHANGE, justified: REQ-PLUGIN-033 (b1-fork-ci-job, step 0) — a `--registry` fork's pinned call carries
+    // `--@<scope>:registry=<url>` between `-y` and the spec (REQ-PLUGIN-048), which the pattern did not admit, so the
+    // case went red for the fork's identity; the word is derived from this checkout's own identity.
+    const registry = registryArgument(canonical()).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const resolved = new RegExp(`stamity cloud readiness: the pinned CLI resolved \\((npx -y ${registry === "" ? "" : `${registry} `}\\S+@\\d\\S*)\\)\\.`);
     const named = resolved.exec(resultOf("present", "claude-cloud", "", readiness[0]?.index ?? -1).stdout)?.[1];
     expect(named, "the readiness hook named no resolved pinned CLI").toBeDefined();
     for (const { index } of readiness) {

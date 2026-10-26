@@ -30,6 +30,7 @@ import {
   readEmittedTree,
   type GoldenRepo,
 } from "./goldenFixture.ts";
+import type * as PackageNameApi from "../../src/cli/kit/packageName.ts";
 
 /**
  * The sync-loop proof, end to end on the golden fixture: init writes, sync
@@ -88,6 +89,33 @@ import {
  */
 const SUITE_TIMEOUT_MS = 60_000;
 vi.setConfig({ testTimeout: SUITE_TIMEOUT_MS, hookTimeout: SUITE_TIMEOUT_MS });
+
+/**
+ * The package identity the sweep's rendering proof falls back to: the fixture's, which init wrote with.
+ *
+ * TEST CHANGE, justified: REQ-PLUGIN-033 (b1-fork-ci-job, step 0) — `applySync` takes no identity, and the rendering
+ * that proves a reclaim candidate's delete is built under the RUNNING checkout's (`renderingPlanner` in
+ * `src/cli/commands/sync/engine.ts`), while every plan here passes the golden one. On a renamed fork the two differ,
+ * so the proof failed and a deselected client's unedited files were kept as user content. Mocked rather than real
+ * because the identity is read from this checkout's own `package.json`, which a test cannot set per case; on the
+ * canonical checkout the golden identity IS the running one, so nothing changes there.
+ */
+const goldenIdentity = vi.hoisted(() => ({ current: null as { name: string; npmChannel: boolean } | null }));
+vi.mock("../../src/cli/kit/packageName.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof PackageNameApi>();
+  return {
+    ...actual,
+    packageName: (): string => goldenIdentity.current?.name ?? actual.packageName(),
+    hasNpmChannel: (): boolean => goldenIdentity.current?.npmChannel ?? actual.hasNpmChannel(),
+    registryOption: (opts: Parameters<typeof actual.registryOption>[0]): ReturnType<typeof actual.registryOption> =>
+      goldenIdentity.current === null
+        ? actual.registryOption(opts)
+        : opts.npmRegistry === undefined
+          ? {}
+          : { npmRegistry: opts.npmRegistry },
+  };
+});
+goldenIdentity.current = { name: GOLDEN_PACKAGE_NAME, npmChannel: GOLDEN_NPM_CHANNEL };
 
 /** Tools the proof runs with; codex is the one deselected mid-flight. */
 const ALL_TOOLS: readonly Tool[] = TOOLS;
