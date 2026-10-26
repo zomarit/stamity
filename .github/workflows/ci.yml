@@ -85,7 +85,8 @@
 #     from the root and from below it, with `node` on PATH and without it, asserts the profile's
 #     cloud line, and ends a run against a bare remote with a cloud's push rules and a `gh` stub.
 #     The `check` legs run the same suite on the runner, the Windows shards through `cmd`.
-#   - `fork-probe`, one leg, in `zomarit/stamity` alone and on the full side only, beside `check`.
+#   - `fork-probe`, two legs, one per fork kind (`private`, the guide's default, and `registry`), in
+#     `zomarit/stamity` alone and on the full side only, beside `check`.
 #     `scripts/ci/fork-probe.mjs` copies the tree, renames the copy to a made-up scope with
 #     `scripts/fork-identity.mjs`, gives it a `-fork.1` version, regenerates it from the fork
 #     guide's `regenerate` list, and runs every step of `npm run check` there, the dogfood `check`,
@@ -530,24 +531,33 @@ jobs:
   # This tree as a renamed, suffixed fork (REQ-PLUGIN-033, REQ-FORK-011): `scripts/ci/fork-probe.mjs`
   # copies the checkout, renames the copy to a made-up scope, sets a `-fork.1` version, regenerates
   # it from the fork guide's `regenerate` list, runs every step of `npm run check` there, and walks
-  # the fork's own CLI through a pack's add and `clean --pack` in a scratch repository. It carries
+  # the fork's own CLI through a pack's add and `clean --pack` in a scratch repository. One matrix leg
+  # per fork kind `scripts/fork-identity.mjs` makes, side by side so the wall time does not double:
+  # `private`, the guide's default (no `--registry`, a private package whose pinned calls read
+  # `npx --no`), and `registry` (a fork that publishes its CLI, its calls naming that registry);
+  # `needs.fork-probe.result` is both legs' result. It carries
   # `check`'s needs and condition, so it runs on the full side only, and runs in the canonical
   # repository alone: a GitHub fork's own CI skips it, and the aggregator asserts which. A pull
   # request from a contributor's fork runs here, in the base repository, with no secret, so the job
   # holds a read-only token that the checkout does not keep, reads no secret, and runs on
   # `pull_request`, never `pull_request_target`.
   fork-probe:
-    name: fork probe (this tree as a renamed fork)
+    name: fork probe (this tree as a renamed ${{ matrix.kind }} fork)
     needs: [changes, prove-pr]
     if: "github.repository == 'zomarit/stamity' && !cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.full != 'false'"
     runs-on: ubuntu-latest
-    # 20: twice the probe's wall time, rounded up to whole minutes, measured locally 2026-10-26 over three
-    # runs of `node scripts/ci/fork-probe.mjs` (about 600 s, 588 s and 594 s on an 8-core darwin machine,
-    # the nested suite on 4 workers); no green run of this job exists yet, so re-measure after 10 green runs,
-    # as `cloud-container`'s comment does, from the job's own times.
-    timeout-minutes: 20
+    # 22: twice the slowest leg's wall time, rounded up to whole minutes, measured locally 2026-10-26 with
+    # `node scripts/ci/fork-probe.mjs` on an 8-core darwin machine, the nested suite on 4 workers: the
+    # `private` leg 640 s and 598 s, the `registry` leg 607 s, 594 s, 588 s and about 600 s. One ceiling
+    # serves both legs, which run side by side. No green run of this job exists yet, so
+    # re-measure after 10 green runs, as `cloud-container`'s comment does, from each leg's own times.
+    timeout-minutes: 22
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        kind: [private, registry]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -563,8 +573,11 @@ jobs:
       - name: Install
         run: npm ci
 
+      # The kind arrives as data through `env:`, never interpolated into the script body.
       - name: Fork probe
-        run: node scripts/ci/fork-probe.mjs
+        env:
+          FORK_KIND: ${{ matrix.kind }}
+        run: node scripts/ci/fork-probe.mjs --kind "$FORK_KIND"
 
   # The short side, for a push or pull request whose every changed path falls in a lane. It
   # replaces `check` rather than running beside it, so its
@@ -844,7 +857,8 @@ jobs:
   # `fork-probe` sits on the full side too, in the canonical repository alone: on a full run it must
   # read `success` where `$REPO` is `zomarit/stamity` and `skipped` anywhere else, where its guard
   # skips it, in the `records` pattern below; on a lanes answer and on a proven push it must read
-  # `skipped` everywhere.
+  # `skipped` everywhere. Its result is both legs' (`private` and `registry`), as `check`'s is its
+  # matrix's, so either leg red or cancelled reads as not `success`.
   #
   # The `records` job is asserted outside the three shapes, since it runs beside every one of them:
   # `success` in `zomarit/stamity`, where it is merge-blocking, and `skipped` anywhere else, where

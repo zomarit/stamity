@@ -5692,6 +5692,13 @@ describe("the CI hand pages name the fork probe and the base-commit classifier",
     expect(text).toContain("so a change cannot pick its own checks");
   });
 
+  // ADDED (build/43): both fork kinds the job runs, and how to run each locally.
+  it("CONTRIBUTING names both fork kinds the probe runs", () => {
+    const text = flowed(read(CONTRIBUTING));
+    expect(text).toContain("one per fork kind `scripts/fork-identity.mjs` makes: `private`, the guide's default, with no `--registry`, and `registry`");
+    expect(text).toContain("`--kind private` or `--kind registry` (the default)");
+  });
+
   it("CONTRIBUTING names STAMITY_TEST_MAX_WORKERS and the cap it overrides", () => {
     expect(flowed(read(CONTRIBUTING))).toContain(
       "A local run uses at most four parallel workers, and never more than the machine's cores less one; set `STAMITY_TEST_MAX_WORKERS` to a positive integer to ask for a different number (`workerCap` in `vitest.config.ts`).",

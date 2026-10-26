@@ -5,9 +5,12 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import {
+  FORK_KINDS,
   FORK_PROBE_IDENTITY,
   forkVersion,
   gateCommands,
+  identityArgs,
+  parseArgs,
   MADE_UP_PACK,
   PACK_RESTAMP,
   probeSteps,
@@ -126,6 +129,28 @@ describe("the fork probe's steps", () => {
     expect(all.some((step) => (step.command ?? "").includes("packs/"))).toBe(false);
   });
 
+  // ADDED (build/43, the sign-off on b1's W-4): the registry-less fork, the guide's default, is the second kind. Its
+  // rename and identity check carry no `--registry`, so `fork-identity.mjs` makes it private, and every other step is
+  // the registry fork's, so the two legs prove one gate.
+  it("renames a private fork with no --registry and a registry fork with it, every other step the same", () => {
+    expect(FORK_KINDS).toEqual(["registry", "private"]);
+    const of = (forkKind: string): Step[] => probeSteps({ copy: "/copy", scratch: "/scratch", checkScript: CHECK_SCRIPT, forkKind }) as Step[];
+    const base = `--repository ${FORK_PROBE_IDENTITY.repository as string}`;
+    const scope = `--scope ${FORK_PROBE_IDENTITY.scope as string}`;
+    const registry = `--registry ${FORK_PROBE_IDENTITY.registry as string}`;
+    expect(identityArgs("private")).toBe(`${base} ${scope}`);
+    expect(identityArgs("registry")).toBe(`${base} ${registry} ${scope}`);
+    expect(identityArgs()).toBe(identityArgs("registry"));
+    const renames = (forkKind: string): (string | undefined)[] =>
+      of(forkKind).filter((step) => (step.command ?? "").startsWith("node scripts/fork-identity.mjs")).map((step) => step.command);
+    expect(renames("private")).toEqual([`node scripts/fork-identity.mjs ${base} ${scope}`, `node scripts/fork-identity.mjs ${base} ${scope} --check`]);
+    expect(renames("registry")).toEqual([`node scripts/fork-identity.mjs ${base} ${registry} ${scope}`, `node scripts/fork-identity.mjs ${base} ${registry} ${scope} --check`]);
+    const rest = (forkKind: string): unknown[] =>
+      of(forkKind).map((step) => [step.name, step.kind, (step.command ?? "").includes("fork-identity.mjs") ? "rename" : step.command]);
+    expect(rest("private")).toEqual(rest("registry"));
+    expect(of("private").map((step) => step.name)).toEqual(steps().map((step) => step.name));
+  });
+
   it("names a made-up fork and suffixes the version", () => {
     expect(FORK_PROBE_IDENTITY).toEqual({
       repository: "https://github.com/fork-probe/stamity-fork",
@@ -197,7 +222,20 @@ describe("the fork probe's run", () => {
   it("refuses an argument it does not know with exit 2, before it copies anything", () => {
     const result = spawnSync(process.execPath, [SCRIPT, "--bogus"], { encoding: "utf8" });
     expect(result.status, result.stderr).toBe(2);
-    expect(result.stderr).toContain("usage: node scripts/ci/fork-probe.mjs [--keep]");
+    expect(result.stderr).toContain("usage: node scripts/ci/fork-probe.mjs [--kind registry|private] [--keep]");
     expect(result.stdout).toBe("");
+  });
+
+  it("reads --kind in either spelling, runs the registry fork without it, and refuses another kind with exit 2", () => {
+    expect(parseArgs([])).toEqual({ keep: false, forkKind: "registry" });
+    expect(parseArgs(["--kind", "private", "--keep"])).toEqual({ keep: true, forkKind: "private" });
+    expect(parseArgs(["--kind=registry"])).toEqual({ keep: false, forkKind: "registry" });
+    for (const argv of [["--kind", "public"], ["--kind"], ["--kind="]]) {
+      expect(parseArgs(argv), argv.join(" ")).toHaveProperty("error");
+      const result = spawnSync(process.execPath, [SCRIPT, ...argv], { encoding: "utf8" });
+      expect(result.status, argv.join(" ")).toBe(2);
+      expect(result.stderr, argv.join(" ")).toContain("--kind takes registry or private");
+      expect(result.stdout, argv.join(" ")).toBe("");
+    }
   });
 });

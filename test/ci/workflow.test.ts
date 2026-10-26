@@ -23,6 +23,8 @@ import { osvQueryBatch } from "../../scripts/advisory-check.mjs";
 import { decide as classifyChange } from "../../scripts/ci/records-only.mjs";
 // @ts-expect-error — import-safe native ESM CI helper with no type declarations, outside the product package.
 import { IMAGE as CLOUD_LEG_IMAGE } from "../../scripts/ci/cloud-leg.mjs";
+// @ts-expect-error — import-safe native ESM CI helper with no type declarations, outside the product package.
+import { FORK_KINDS } from "../../scripts/ci/fork-probe.mjs";
 import { CURATED_MCP_SERVERS, pinnedPackageSpec } from "../../src/mcp/catalog.ts";
 import { evaluateWorkflowExpression, type ExpressionContext } from "./workflowExpression.ts";
 import { ensureDistBuilt } from "../support/distBuild.ts";
@@ -785,7 +787,7 @@ describe("ci.yml — the merge-blocking gate", () => {
     const GUARD = `github.repository == '${CANONICAL_REPOSITORY}' && `;
 
     it("runs beside `check` under its needs and condition, in the canonical repository alone", () => {
-      expect(job().name).toBe("fork probe (this tree as a renamed fork)");
+      expect(job().name).toBe("fork probe (this tree as a renamed ${{ matrix.kind }} fork)");
       expect(job().needs).toEqual(jobOf(ci, "check").needs);
       expect(job().if).toBe(`${GUARD}${jobOf(ci, "check").if ?? ""}`);
       expect(job()["runs-on"]).toBe("ubuntu-latest");
@@ -826,12 +828,25 @@ describe("ci.yml — the merge-blocking gate", () => {
       expect(triggersOf(ci.workflow)).toEqual(["push", "pull_request", "workflow_dispatch", "schedule"]);
     });
 
+    // ADDED (build/43, the sign-off on b1's W-4): both fork kinds `scripts/fork-identity.mjs` makes are witnessed,
+    // one matrix leg each so the wall time does not double, and neither leg stops the other.
+    it("runs one leg per fork kind, the guide's registry-less default and the registry fork, side by side", () => {
+      const strategy = job().strategy as { readonly "fail-fast"?: boolean; readonly matrix?: Readonly<Record<string, unknown>> } | undefined;
+      expect(strategy?.["fail-fast"]).toBe(false);
+      expect(strategy?.matrix).toEqual({ kind: ["private", "registry"] });
+      expect([...((strategy?.matrix?.["kind"] ?? []) as string[])].toSorted()).toEqual([...(FORK_KINDS as string[])].toSorted());
+      // The aggregator reads the job's one result, which is both legs', as `check`'s is its matrix's.
+      expect(stepsOf(ci, "all-ci-checks").map((step) => step.run ?? "").join("\n")).toContain("needs.fork-probe.result");
+    });
+
     it("installs, then runs the probe as its last step, with a measured timeout", () => {
       expect(steps().map((step) => step.name)).toEqual(["Checkout", "Set up Node", "Install", "Fork probe"]);
       expect(stepOf(steps(), "Set up Node").uses).toBe(stepOf(stepsOf(ci, "check"), "Set up Node ${{ matrix.node }}").uses);
       expect(stepOf(steps(), "Set up Node").with).toEqual({ "node-version": "24", cache: "npm" });
       expect(runOf(steps(), "Install")).toBe("npm ci");
-      expect(runOf(steps(), "Fork probe")).toBe("node scripts/ci/fork-probe.mjs");
+      // The kind arrives as data through the step's `env:`, never interpolated into the script body.
+      expect(runOf(steps(), "Fork probe")).toBe('node scripts/ci/fork-probe.mjs --kind "$FORK_KIND"');
+      expect(stepOf(steps(), "Fork probe").env).toEqual({ FORK_KIND: "${{ matrix.kind }}" });
       expect(job()["timeout-minutes"]).toBeTypeOf("number");
       // The first ceiling came from a local run; the comment says so and when to measure again (build/15).
       const block = ci.source.slice(ci.source.indexOf("\n  fork-probe:\n"), ci.source.indexOf("\n  lanes:\n"));

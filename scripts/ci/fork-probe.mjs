@@ -2,10 +2,14 @@
 // The fork probe for `ci.yml`'s `fork-probe` job (REQ-PLUGIN-033, REQ-FORK-011). Importing it
 // performs no I/O.
 //
-//   node scripts/ci/fork-probe.mjs [--keep]
+//   node scripts/ci/fork-probe.mjs [--kind registry|private] [--keep]
 //
 // It proves that this tree passes its own gate as a renamed, suffixed fork, the state
-// `docs/enterprise-forks.md` puts a downstream in. It copies the checkout (`git ls-files -z
+// `docs/enterprise-forks.md` puts a downstream in, of either kind `scripts/fork-identity.mjs`
+// makes (`FORK_KINDS`): `private`, the guide's default, renamed with no `--registry`, so the
+// package is private and its pinned calls read `npx --no`; or `registry` (the default here), a
+// fork that publishes its CLI, renamed with `--registry`, so its pinned calls name that registry.
+// The `fork-probe` job runs one matrix leg per kind. It copies the checkout (`git ls-files -z
 // --cached --others --exclude-standard`, so an uncommitted change is proved too) into a temporary
 // folder, links `node_modules` rather than installing, and commits the copy as a new repository.
 // Then, in the copy:
@@ -46,7 +50,13 @@ import { isMain } from '../native-typescript.mjs'
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '..', '..', '..')
 
-const USAGE = 'usage: node scripts/ci/fork-probe.mjs [--keep]'
+const USAGE = 'usage: node scripts/ci/fork-probe.mjs [--kind registry|private] [--keep]'
+
+/**
+ * The two fork kinds `scripts/fork-identity.mjs` makes: `registry` passes `--registry`, `private`
+ * (the guide's default) does not. `registry` is the kind run with no `--kind`.
+ */
+export const FORK_KINDS = Object.freeze(['registry', 'private'])
 
 /** The made-up fork. Its scope is `fork-identity.mjs`'s default for the owner, spelled out. */
 export const FORK_PROBE_IDENTITY = Object.freeze({
@@ -138,8 +148,10 @@ export function gateCommands(checkScript) {
     .map(part => (part === TEST_PART ? TEST_STEP : part))
 }
 
-function identityArgs() {
-  return `--repository ${FORK_PROBE_IDENTITY.repository} --registry ${FORK_PROBE_IDENTITY.registry} --scope ${FORK_PROBE_IDENTITY.scope}`
+/** The rename call's arguments for one fork kind: `--registry` only for a `registry` fork. */
+export function identityArgs(forkKind = 'registry') {
+  const registry = forkKind === 'registry' ? ` --registry ${FORK_PROBE_IDENTITY.registry}` : ''
+  return `--repository ${FORK_PROBE_IDENTITY.repository}${registry} --scope ${FORK_PROBE_IDENTITY.scope}`
 }
 
 const COMMIT = 'git -c user.name=fork-probe -c user.email=fork-probe@example.invalid -c commit.gpgsign=false'
@@ -148,12 +160,12 @@ const COMMIT = 'git -c user.name=fork-probe -c user.email=fork-probe@example.inv
  * Every step of the probe, in order. A step is `{ name, kind, cwd, command }` with a shell command,
  * or `{ name, kind, cwd, run }` with an in-process function returning `{ code, output }`.
  */
-export function probeSteps({ copy, scratch, checkScript }) {
+export function probeSteps({ copy, scratch, checkScript, forkKind = 'registry' }) {
   const commit = message => `${COMMIT} add -A && ${COMMIT} commit --quiet --no-verify --allow-empty -m "${message}"`
   const cli = `node ${JSON.stringify(join(copy, 'dist', 'cli.js'))}`
   const repo = join(scratch, 'repo')
   return [
-    { name: 'rename (fork-identity.mjs)', kind: 'fork', cwd: copy, command: `node scripts/fork-identity.mjs ${identityArgs()}` },
+    { name: 'rename (fork-identity.mjs)', kind: 'fork', cwd: copy, command: `node scripts/fork-identity.mjs ${identityArgs(forkKind)}` },
     { name: 'commit the rename', kind: 'fork', cwd: copy, command: commit('fork-probe: the renamed fork') },
     { name: 'set the fork version', kind: 'fork', cwd: copy, run: () => setForkVersion(copy) },
     // A bundled pack's `pack.json` carries the release version, and only the write mode restamps it
@@ -163,7 +175,7 @@ export function probeSteps({ copy, scratch, checkScript }) {
     { name: 'commit the regenerated tree', kind: 'fork', cwd: copy, command: commit('fork-probe: regenerated') },
     ...gateCommands(checkScript).map(command => ({ name: `gate: ${command}`, kind: 'gate', cwd: copy, command })),
     { name: 'gate: node dist/cli.js check', kind: 'gate', cwd: copy, command: 'node dist/cli.js check' },
-    { name: 'gate: fork-identity.mjs --check', kind: 'gate', cwd: copy, command: `node scripts/fork-identity.mjs ${identityArgs()} --check` },
+    { name: 'gate: fork-identity.mjs --check', kind: 'gate', cwd: copy, command: `node scripts/fork-identity.mjs ${identityArgs(forkKind)} --check` },
     { name: 'gate: node scripts/tarball-smoke.mjs', kind: 'gate', cwd: copy, command: 'node scripts/tarball-smoke.mjs' },
     { name: 'walk: a scratch repository', kind: 'gate', cwd: scratch, run: () => scratchRepo(repo) },
     { name: 'walk: init', kind: 'gate', cwd: repo, command: `${cli} init -y --tools claude,cursor` },
@@ -256,10 +268,15 @@ function lastLines(text, count) {
 }
 
 export function parseArgs(argv) {
-  const args = { keep: false }
-  for (const arg of argv) {
+  const args = { keep: false, forkKind: 'registry' }
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index]
     if (arg === '--keep') args.keep = true
-    else return { error: `unknown argument: ${arg}` }
+    else if (arg === '--kind' || arg.startsWith('--kind=')) {
+      const value = arg === '--kind' ? argv[(index += 1)] : arg.slice('--kind='.length)
+      if (!FORK_KINDS.includes(value)) return { error: `--kind takes ${FORK_KINDS.join(' or ')}, not ${JSON.stringify(value ?? '')}` }
+      args.forkKind = value
+    } else return { error: `unknown argument: ${arg}` }
   }
   return args
 }
@@ -308,9 +325,9 @@ function isLink(path) {
   }
 }
 
-function summaryTable(results) {
+function summaryTable(results, forkKind) {
   const rows = results.map(result => `| ${result.code === 0 ? 'PASS' : 'FAIL'} | ${result.name.replaceAll('|', '\\|')} | ${result.seconds} |`)
-  return ['### Fork probe', '', '| Result | Step | Seconds |', '|---|---|---|', ...rows, ''].join('\n') + '\n'
+  return [`### Fork probe (${forkKind} fork)`, '', '| Result | Step | Seconds |', '|---|---|---|', ...rows, ''].join('\n') + '\n'
 }
 
 export function main(argv, io = { out: text => process.stdout.write(text), err: text => process.stderr.write(text) }, root = ROOT) {
@@ -353,15 +370,15 @@ export function main(argv, io = { out: text => process.stdout.write(text), err: 
   }
   let outcome
   try {
-    outcome = runSteps(probeSteps({ copy: made.copy, scratch, checkScript }), execStep, { onResult: report })
+    outcome = runSteps(probeSteps({ copy: made.copy, scratch, checkScript, forkKind: args.forkKind }), execStep, { onResult: report })
   } finally {
     if (!args.keep) rmSync(scratch, { recursive: true, force: true })
     else io.out(`fork-probe: kept the walk at ${scratch}\n`)
     cleanup()
   }
-  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summaryTable(outcome.results))
+  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summaryTable(outcome.results, args.forkKind))
   // The whole run's wall time, the copy included: the job's timeout is measured from it.
-  io.out(`fork-probe: ${outcome.results.length} step(s) in ${Math.round((Date.now() - started) / 1000)}s\n`)
+  io.out(`fork-probe: ${args.forkKind} fork, ${outcome.results.length} step(s) in ${Math.round((Date.now() - started) / 1000)}s\n`)
   io.out(outcome.exitCode === 0 ? 'fork-probe: every step passed\n' : `fork-probe: failed: ${outcome.results.filter(result => result.code !== 0).map(result => result.name).join(', ')}\n`)
   return outcome.exitCode
 }

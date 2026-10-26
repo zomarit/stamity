@@ -660,9 +660,12 @@ describe("a cloud machine, imitated: every emitted hook command (REQ-PROVE-037)"
     const readiness = rowsRunning("claude", READINESS);
     // TEST CHANGE, justified: REQ-PLUGIN-033 (b1-fork-ci-job, step 0) — a `--registry` fork's pinned call carries
     // `--@<scope>:registry=<url>` between `-y` and the spec (REQ-PLUGIN-048), which the pattern did not admit, so the
-    // case went red for the fork's identity; the word is derived from this checkout's own identity.
-    const registry = registryArgument(canonical()).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const resolved = new RegExp(`stamity cloud readiness: the pinned CLI resolved \\((npx -y ${registry === "" ? "" : `${registry} `}\\S+@\\d\\S*)\\)\\.`);
+    // case went red for the fork's identity; the word is derived from this checkout's own identity. A registry-less
+    // fork (build/43) has no npm channel, so its call reads `npx --no` where the others read `npx -y`.
+    const identity = canonical();
+    const registry = registryArgument(identity).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const flag = identity.npmChannel ? "-y" : "--no";
+    const resolved = new RegExp(`stamity cloud readiness: the pinned CLI resolved \\((npx ${flag} ${registry === "" ? "" : `${registry} `}\\S+@\\d\\S*)\\)\\.`);
     const named = resolved.exec(resultOf("present", "claude-cloud", "", readiness[0]?.index ?? -1).stdout)?.[1];
     expect(named, "the readiness hook named no resolved pinned CLI").toBeDefined();
     for (const { index } of readiness) {

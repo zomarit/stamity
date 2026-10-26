@@ -59,7 +59,8 @@ times: once per cloud profile (Claude Code's and Cursor's with an empty home fol
 emits. The `fork-probe` job, `scripts/ci/fork-probe.mjs`, runs this tree as a fork would hold it:
 renamed to a made-up scope, given a `-fork.1` version and regenerated, it must pass every step of
 `npm run check`, the dogfood check, the identity check, the tarball smoke and a walk of its own CLI
-through a pack's `add` and `clean --pack`. A fork's own CI skips that job.
+through a pack's `add` and `clean --pack`. It runs once for each fork kind, a private fork (the
+guide's default) and a fork that publishes to a registry. A fork's own CI skips that job.
 
 The check matrix runs four legs: the pinned Node floor, the current LTS, and Windows in two
 shards, each shard running half of the test suite. Which step runs on which leg is not uniform.

@@ -110,8 +110,10 @@ scope with `scripts/fork-identity.mjs`, gives it a `-fork.1` version and regener
 guide's `regenerate` list. Then it runs every step of `npm run check` in the copy, the dogfood
 `check`, the identity check and the tarball smoke, and walks the copy's own CLI through `init`, `add`
 of a made-up pack, `sync`, `check`, `clean --pack` and `check` in a scratch repository. So a change
-that would turn a fork's gate red is red here first. Run it locally the same way;
-`--keep` keeps the copy and prints its path.
+that would turn a fork's gate red is red here first. The job runs two legs side by side, one per
+fork kind `scripts/fork-identity.mjs` makes: `private`, the guide's default, with no `--registry`,
+and `registry`, a fork that publishes its CLI. Run it locally the same way, `--kind private` or
+`--kind registry` (the default); `--keep` keeps the copy and prints its path.
 
 A change whose every path falls in a lane takes the `lanes` job instead of the check matrix, the
 `cloud-container` job and the `fork-probe` job.
