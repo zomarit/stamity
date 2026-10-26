@@ -110,7 +110,8 @@ function gitignoreRow(adapter: Tool): Record<string, unknown> {
     adapter,
     artifactId: "gitignore",
     artifactType: "infra",
-    contentHash: createHash("sha256").update(`${CLIENT_ENTRIES.join("\n")}\n`).digest("hex"),
+    // TEST CHANGE, justified: review/32 — the row hashes the recorded lines alone, never the file.
+    contentHash: createHash("sha256").update(`stamity .gitignore lines\0${CLIENT_ENTRIES.join("\n")}`, "utf8").digest("hex"),
     coOwned: { lines: CLIENT_ENTRIES, createdFile: true },
   };
 }

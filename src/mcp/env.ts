@@ -9,7 +9,6 @@ import {
   type DenyHit,
 } from "../denyscan/denyScan.ts";
 import { atomicWriteFile, isSharedRegularFile } from "../merge/atomicWrite.ts";
-import type { CoOwnedReduction } from "../types/content.ts";
 import { TOOLS, type Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import type { CoOwnership, LedgerEntry } from "../types/manifest.ts";
@@ -240,8 +239,8 @@ export const CLIENT_MODELS_CACHE_FILE = `${STATE_DIR}/client-models.json`;
  * {@link reconcileGitignore}, recording each line they append on the
  * `.gitignore` ledger row (`coOwned.lines`, REQ-FLOW-016) so `clean` can take
  * back exactly those. This list is also the bound on that record: the manifest
- * validator refuses a recorded line outside it, and the reducer re-checks it
- * ({@link reduceGitignoreToForeignContent}).
+ * validator refuses a recorded line outside it, and the take-back re-checks it
+ * ({@link reconcileGitignore}).
  */
 export const REQUIRED_GITIGNORE_ENTRIES: readonly string[] = [
   ENV_MCP_FILE,
@@ -286,6 +285,16 @@ export const GITIGNORE_ENTRY_WHEN: Readonly<Record<string, (setup: GitignoreSetu
   [CONTEXT_ONCE_GITIGNORE_ENTRY]: anyClient,
   [CLIENT_MODELS_CACHE_FILE]: anyClient,
 });
+
+/**
+ * The recorded lines no verb takes back once written (review/28): `.env.mcp`'s.
+ * The `.gitignore` and its record are committed and shared, but whether
+ * `.env.mcp` exists is one checkout's fact, so a take-back in a checkout without
+ * the file would leave another checkout's filled token file un-ignored. A stale
+ * ignore line is harmless; a missing one can leak a token. The line is still
+ * added only when {@link GITIGNORE_ENTRY_WHEN} or the file on disk asks for it.
+ */
+export const GITIGNORE_LINES_KEPT_ONCE_WRITTEN: readonly string[] = [ENV_MCP_FILE];
 
 /**
  * Rules that ignore every file in the state directory at once: the directory
@@ -724,7 +733,8 @@ export async function hardenEnvMcpMode(path: string): Promise<boolean> {
  * order: each one {@link GITIGNORE_ENTRY_WHEN} answers for, and each one whose
  * target is on disk (`present`, {@link presentGitignoreTargets}), so an existing
  * file always keeps its line — a server deselected while `.env.mcp` still holds
- * its token leaves that file ignored until the file goes. An entry the table
+ * its token leaves that file ignored, and once written that line is never taken
+ * back ({@link GITIGNORE_LINES_KEPT_ONCE_WRITTEN}). An entry the table
  * does not name is required: a missing answer keeps a line rather than drops one.
  */
 export function requiredGitignoreEntries(setup: GitignoreSetup & { present: ReadonlySet<string> }): string[] {
@@ -826,32 +836,6 @@ function removeGitignoreLines(raw: string, entries: readonly string[], terminato
   return { content: unterminated, removed, terminatorDropped: unterminated !== joined };
 }
 
-/**
- * Reduce `.gitignore` to what is not the engine's: remove the last line equal to
- * each line `record` owns ({@link ownedGitignoreLines}, which re-checks the
- * bound), and the line break the engine added when those lines were last.
- * Pure. `engine-only` when nothing is left of a file the engine created (an
- * owner emptying it included), so the caller deletes it; `untouched` when no
- * owned line is in it; else `reduced`, proven line by line: each removed line
- * is byte-equal to an entry this engine writes.
- *
- * `record` is the caller's to narrow: `clean` hands it only the lines whose
- * target is gone, so a filled `.env.mcp`, which `clean` never deletes, keeps its
- * line ({@link reconcileGitignore}).
- */
-export function reduceGitignoreToForeignContent(raw: string, record: CoOwnership | null): CoOwnedReduction {
-  const { content, removed } = removeGitignoreLines(raw, ownedGitignoreLines(record), record?.terminatorAdded === true);
-  if (content === "" && record?.createdFile === true) {
-    return {
-      kind: "engine-only",
-      detail: "The setup created .gitignore, and nothing in it is yours once its own lines are taken back.",
-      proven: true,
-    };
-  }
-  if (content === raw) return { kind: "untouched", refused: false, detail: "No line this setup added to .gitignore is in it." };
-  return { kind: "reduced", content, detail: `Took back the .gitignore line(s) this setup added: ${removed.join(", ")}.`, proven: true };
-}
-
 /** What {@link reconcileGitignore} did. */
 export interface GitignoreReconcile {
   /** The entries it appended, in {@link REQUIRED_GITIGNORE_ENTRIES} order. */
@@ -862,7 +846,10 @@ export interface GitignoreReconcile {
   deleted: boolean;
   /** What the engine owns in the file now: the record its ledger rows carry ({@link gitignoreLedgerRows}). */
   record: CoOwnership;
-  /** The sha256 of the file as this call leaves it, for those rows; `null` when no file is left. */
+  /**
+   * The rows' hash ({@link gitignoreLinesHash}): of the recorded lines alone, so an
+   * owner's edit elsewhere in the file leaves it as it was; `null` when no line is owned.
+   */
   contentHash: string | null;
 }
 
@@ -870,9 +857,10 @@ export interface GitignoreReconcile {
  * Put exactly `required` in place in the repository's `.gitignore` and take back
  * every line `previous` owns that is no longer required.
  *
- * Removal first: each owned line not in `required` goes
- * ({@link reduceGitignoreToForeignContent}'s rule, so only lines the bound
- * names). Then each required entry the file's lines do not already cover is
+ * Removal first: the last line equal to each owned line not in `required` goes,
+ * break and all, and only lines the bound names ({@link ownedGitignoreLines});
+ * a line of {@link GITIGNORE_LINES_KEPT_ONCE_WRITTEN} is never removed, and stays
+ * owned while it is in the file. Then each required entry the file's lines do not already cover is
  * appended, on the file's own line ending: an entry a rule already dominates
  * (`.env*` covers `.env.mcp`) is left to that rule and never owned, and an
  * explicit negation (`!.env.mcp`) is the operator's decision and is not
@@ -899,11 +887,15 @@ export async function reconcileGitignore(
   const raw = existing ?? "";
   const required = new Set(opts.required);
   const owned = ownedGitignoreLines(opts.previous);
-  const removal = removeGitignoreLines(raw, owned.filter((entry) => !required.has(entry)), opts.previous?.terminatorAdded === true);
+  const stays = (entry: string): boolean => required.has(entry) || GITIGNORE_LINES_KEPT_ONCE_WRITTEN.includes(entry);
+  // An owned line that stays still follows the owner's last line, so the break the engine added there stays too.
+  const rawBodies = new Set(splitLines(raw).map(lineBody));
+  const ownedStaying = owned.some((entry) => stays(entry) && rawBodies.has(entry));
+  const removal = removeGitignoreLines(raw, owned.filter((entry) => !stays(entry)), opts.previous?.terminatorAdded === true && !ownedStaying);
 
   let next = removal.content;
   const bodies = splitLines(next).map(lineBody);
-  const kept = owned.filter((entry) => required.has(entry) && bodies.includes(entry));
+  const kept = owned.filter((entry) => stays(entry) && bodies.includes(entry));
   const trimmed = bodies.map((line) => line.trim());
   const added = REQUIRED_GITIGNORE_ENTRIES.filter((entry) => required.has(entry) && !isCovered(entry, trimmed));
   let terminatorAdded = opts.previous?.terminatorAdded === true && !removal.terminatorDropped && kept.length > 0;
@@ -929,8 +921,18 @@ export async function reconcileGitignore(
     await refuseRepublish(path, raw, { refuseInjectionPatterns: true });
     await atomicWriteFile(path, next, { boundaryDir: rootDir });
   }
-  const contentHash = deleted || (existing === null && next === "") ? null : createHash("sha256").update(next, "utf8").digest("hex");
+  const contentHash = lines.length === 0 ? null : gitignoreLinesHash(lines);
   return { added, removed: removal.removed, deleted, record, contentHash };
+}
+
+/**
+ * The `.gitignore` rows' `contentHash` (review/32): the sha256 of the recorded
+ * lines under a domain prefix, never of the file. An owner's edit elsewhere in
+ * the file leaves it unchanged, so the manifest does not move with it, and it
+ * never equals a file's own hash, the proof a whole-file delete reads.
+ */
+function gitignoreLinesHash(lines: readonly string[]): string {
+  return createHash("sha256").update(`stamity .gitignore lines\0${lines.join("\n")}`, "utf8").digest("hex");
 }
 
 /**
@@ -970,10 +972,9 @@ const GITIGNORE_ARTIFACT_ID = "gitignore";
 /**
  * The ledger rows that record `record`: one `infra` row per client in `tools`
  * at `.gitignore`, each carrying the record as `coOwned` (REQ-FLOW-016) and
- * `contentHash`, the hash of the file as the write left it, as every row
- * records one; none when the engine owns no line there. The hash says only
- * that the file is unchanged since: the lines are proven one by one, and no
- * sweep reads the row (`sync` and `clean` take the lines back through
+ * `contentHash`, the hash of the recorded lines alone ({@link gitignoreLinesHash});
+ * none when the engine owns no line there. The lines are proven one by one, and
+ * no sweep reads the row (`sync` and `clean` take the lines back through
  * {@link reconcileGitignore}).
  */
 export function gitignoreLedgerRows(

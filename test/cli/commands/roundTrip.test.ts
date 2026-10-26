@@ -3,6 +3,7 @@ import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { COMMANDS } from "../../../src/cli.ts";
+import { readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { seedGitRepo } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -118,7 +119,7 @@ describe("init then clean restores .gitignore byte for byte (REQ-FLOW-027)", () 
     expect(status(root)).toBe(statusBefore);
   }, 120_000);
 
-  it("keeps a filled .env.mcp ignored after clean, and takes its line back once the owner deleted the file", async () => {
+  it("keeps a filled .env.mcp ignored after clean, and keeps its line once no server needs it and no file is there", async () => {
     const root = await freshRepo("node_modules/\n");
     await run(root, ["init", "-y", "--tools", "claude"]);
     await run(root, ["config", "mcp", "add", "github", "-y"]);
@@ -127,7 +128,8 @@ describe("init then clean restores .gitignore byte for byte (REQ-FLOW-027)", () 
     const filled = (await readFile(join(root, ".env.mcp"), "utf8")).replace(/^(GITHUB_[A-Z_]+)=$/m, "$1=filled-by-the-owner");
     await writeFile(join(root, ".env.mcp"), filled, "utf8");
 
-    // A copy of the same setup, whose owner deletes the credential file before cleaning.
+    // A copy of the same setup standing for another checkout: no server needs a credential and no
+    // .env.mcp is on disk there, yet the committed line may be what keeps a filled one ignored elsewhere.
     const deletedFirst = tempDir().path("deleted-first");
     await cp(root, deletedFirst, { recursive: true });
 
@@ -136,8 +138,15 @@ describe("init then clean restores .gitignore byte for byte (REQ-FLOW-027)", () 
     expect(git(root, ["check-ignore", "-q", ".env.mcp"]).status).toBe(0);
     expect(await readFile(join(root, ".gitignore"), "utf8")).toBe("node_modules/\n.env.mcp\n");
 
+    // TEST CHANGE, justified: review/28 — neither sync nor clean takes back the .env.mcp line once
+    // written; it read "the next clean removes the line" (plan round 2), which the sign-off reversed.
     await rm(join(deletedFirst, ".env.mcp"));
+    const manifest = await readManifest(deletedFirst);
+    if (manifest === null) throw new Error("the copy lost its manifest");
+    await writeManifest(deletedFirst, { ...manifest, mcp: { servers: [] } });
+    await run(deletedFirst, ["sync"]);
+    expect((await readFile(join(deletedFirst, ".gitignore"), "utf8")).split("\n")).toContain(".env.mcp");
     await run(deletedFirst, ["clean", "-y"]);
-    expect(await readFile(join(deletedFirst, ".gitignore"), "utf8")).toBe("node_modules/\n");
+    expect(await readFile(join(deletedFirst, ".gitignore"), "utf8")).toBe("node_modules/\n.env.mcp\n");
   }, 180_000);
 });

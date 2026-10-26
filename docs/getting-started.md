@@ -381,9 +381,11 @@ A line your `.gitignore` already covers, with `.stamity/` or `.env*` for example
 twice. A file you committed before the line existed stays tracked: setup never touches the git index.
 
 The manifest records each line setup added, and `clean` takes back exactly those once the file each
-one ignores is gone. A filled `.env.mcp`, which `clean` never deletes, keeps its line, and a line
-you wrote yourself always stays. When setup created `.gitignore` and nothing else is left in it,
-`clean` deletes it. A setup made before 1.17.0 recorded no line, so `clean` leaves its lines alone.
+one ignores is gone. The `.env.mcp` line is the exception: once written, neither `sync` nor `clean`
+takes it back, because another checkout may hold a filled one. A line you wrote yourself always
+stays, and while `clean` keeps `.stamity/` for a hook still wired to it, every line stays. When setup
+created `.gitignore` and nothing else is left in it, `clean` deletes it. A setup made before 1.17.0
+recorded no line, so `clean` leaves its lines alone.
 
 Because everything else is committed, a second checkout of this repository arrives with the whole
 setup in place and only those files missing. Placing `.env.mcp` is exactly what

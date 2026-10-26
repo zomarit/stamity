@@ -1213,8 +1213,9 @@ describe("workspace sync — the bridge", () => {
     expect(again.repos[0]).not.toHaveProperty("gitignoreAdded");
   });
 
-  it("names the recorded lines a member's sync took back from that member's .gitignore (REQ-FLOW-016)", async () => {
-    // 2026-10-25_autonomy-distribution-02/build/10: the row named appends only, so a take-back went unnamed.
+  it("keeps a member's recorded .env.mcp line once no server needs a credential, and its row names no take-back (review/28)", async () => {
+    // TEST CHANGE, justified: review/28 — the `.env.mcp` line is never taken back once written, and
+    // every other line is required while a client is set up, so a member's sync takes back none.
     const temp = getTemp();
     await seedCorpus(temp);
     const root = await seedWorkspace(temp, manifestOf([{ path: "apps/api" }], { defaults: { tools: ["claude"] } }));
@@ -1227,8 +1228,8 @@ describe("workspace sync — the bridge", () => {
     await writeManifest(api, { ...manifest, mcp: { servers: [] } });
     const result = await runSync(root, ["--json"]);
 
-    expect(singleSyncDocument(result.stdout).repos[0]).toMatchObject({ gitignoreRemoved: [".env.mcp"] });
-    expect((await readFile(join(api, ".gitignore"), "utf8")).split("\n")).not.toContain(".env.mcp");
+    expect(singleSyncDocument(result.stdout).repos[0]).not.toHaveProperty("gitignoreRemoved");
+    expect((await readFile(join(api, ".gitignore"), "utf8")).split("\n")).toContain(".env.mcp");
   });
 
   it("leaves a member the workspace declares no maturityTier for on its own tier", async () => {

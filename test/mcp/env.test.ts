@@ -24,7 +24,6 @@ import {
   gitignoreRecordOf,
   presentGitignoreTargets,
   reconcileGitignore,
-  reduceGitignoreToForeignContent,
   REQUIRED_GITIGNORE_ENTRIES,
   requiredGitignoreEntries,
   getSourceEnvMcpCommand,
@@ -628,6 +627,10 @@ describe("ensureGitignoreEntry", () => {
 /** The seven entries every client setup ignores (decision E1): all but `.env.mcp`. */
 const CLIENT_TAIL = REQUIRED_TAIL.filter((entry) => entry !== ".env.mcp");
 
+/** The `.gitignore` rows' hash of `lines` (review/32), restated: the recorded lines under a domain prefix. */
+const gitignoreLinesHash = (lines: readonly string[]): string =>
+  createHash("sha256").update(`stamity .gitignore lines\0${lines.join("\n")}`, "utf8").digest("hex");
+
 /**
  * Step 0 of b4 (decision E1): the census of what names each entry's constant
  * under `src/`, so a new writer of a machine-local file meets
@@ -715,34 +718,51 @@ describe("presentGitignoreTargets", () => {
   });
 });
 
-describe("reduceGitignoreToForeignContent", () => {
-  it("keeps an owner's .env line a forged record names, and removes only the engine's own lines", () => {
-    const raw = "node_modules/\n.env\n.env.mcp\n.stamity/run-ended.json\n";
-    const reduction = reduceGitignoreToForeignContent(raw, { lines: [".env", ".env.mcp", "node_modules/", MARKER_ENTRY] });
-    expect(reduction).toMatchObject({ kind: "reduced", content: "node_modules/\n.env\n", proven: true });
-    expect(reduceGitignoreToForeignContent(".env\n", { lines: [".env"], createdFile: true })).toMatchObject({ kind: "untouched", refused: false });
+/** What `reconcileGitignore` leaves of `raw` when it takes back every line `previous` owns: what `clean` runs. */
+async function takenBack(raw: string, previous: CoOwnership): Promise<{ content: string | null; removed: string[]; deleted: boolean }> {
+  const dir = repo();
+  await dir.seedFiles({ ".gitignore": raw });
+  const { removed, deleted } = await reconcileGitignore(dir.dir, { required: [], previous });
+  return { content: existsSync(dir.path(".gitignore")) ? await readFile(dir.path(".gitignore"), "utf8") : null, removed, deleted };
+}
+
+// TEST CHANGE, justified: review/31 — these cases ran a reducer no verb called; they now run
+// reconcileGitignore, the take-back `clean` and `sync` use, and remove the run-ended marker's line
+// where they removed `.env.mcp`'s, which no verb takes back any more (review/28).
+describe("reconcileGitignore's take-back", () => {
+  it("keeps an owner's .env line a forged record names, and removes only the engine's own lines", async () => {
+    const raw = "node_modules/\n.env\n.stamity/run-ended.json\n";
+    expect(await takenBack(raw, { lines: [".env", "node_modules/", MARKER_ENTRY] })).toEqual({
+      content: "node_modules/\n.env\n",
+      removed: [MARKER_ENTRY],
+      deleted: false,
+    });
+    expect(await takenBack(".env\n", { lines: [".env"], createdFile: true })).toEqual({ content: ".env\n", removed: [], deleted: false });
   });
 
-  it("removes the last equal line on CRLF, and drops the break it added when its lines were last", () => {
-    expect(reduceGitignoreToForeignContent(".env.mcp\r\nnode_modules/\r\n.env.mcp\r\n", { lines: [".env.mcp"] })).toMatchObject({
-      kind: "reduced",
-      content: ".env.mcp\r\nnode_modules/\r\n",
-    });
-    expect(reduceGitignoreToForeignContent("dist/\n.env.mcp\n", { lines: [".env.mcp"], terminatorAdded: true })).toMatchObject({
-      kind: "reduced",
-      content: "dist/",
-    });
+  it("removes the last equal line on CRLF, and drops the break it added when its lines were last", async () => {
+    expect((await takenBack(`${MARKER_ENTRY}\r\nnode_modules/\r\n${MARKER_ENTRY}\r\n`, { lines: [MARKER_ENTRY] })).content).toBe(
+      `${MARKER_ENTRY}\r\nnode_modules/\r\n`,
+    );
+    expect((await takenBack(`dist/\n${MARKER_ENTRY}\n`, { lines: [MARKER_ENTRY], terminatorAdded: true })).content).toBe("dist/");
     // An owner's line after the engine's: the break it added is no longer the file's last, so it stays.
-    expect(reduceGitignoreToForeignContent("dist/\n.env.mcp\nmine/\n", { lines: [".env.mcp"], terminatorAdded: true })).toMatchObject({
-      kind: "reduced",
-      content: "dist/\nmine/\n",
-    });
+    expect((await takenBack(`dist/\n${MARKER_ENTRY}\nmine/\n`, { lines: [MARKER_ENTRY], terminatorAdded: true })).content).toBe("dist/\nmine/\n");
   });
 
-  it("reads a created file left with nothing of the owner's as engine-only, an emptied one included", () => {
-    expect(reduceGitignoreToForeignContent(`${CLIENT_TAIL.join("\n")}\n`, { lines: CLIENT_TAIL, createdFile: true }).kind).toBe("engine-only");
-    expect(reduceGitignoreToForeignContent("", { lines: CLIENT_TAIL, createdFile: true }).kind).toBe("engine-only");
-    expect(reduceGitignoreToForeignContent(`${CLIENT_TAIL.join("\n")}\n`, { lines: CLIENT_TAIL })).toMatchObject({ kind: "reduced", content: "" });
+  it("deletes a created file left with nothing of the owner's, an emptied one included, and keeps one it did not create", async () => {
+    expect(await takenBack(`${CLIENT_TAIL.join("\n")}\n`, { lines: CLIENT_TAIL, createdFile: true })).toMatchObject({ content: null, deleted: true });
+    expect(await takenBack("", { lines: CLIENT_TAIL, createdFile: true })).toMatchObject({ content: null, deleted: true });
+    expect(await takenBack(`${CLIENT_TAIL.join("\n")}\n`, { lines: CLIENT_TAIL })).toMatchObject({ content: "", deleted: false });
+  });
+
+  it("never takes back a recorded .env.mcp line, whatever is required, and keeps owning it (review/28)", async () => {
+    const dir = repo();
+    await dir.seedFiles({ ".gitignore": `dist/\n.env.mcp\n${MARKER_ENTRY}\n` });
+
+    const result = await reconcileGitignore(dir.dir, { required: [], previous: { lines: [".env.mcp", MARKER_ENTRY], createdFile: true } });
+
+    expect(result).toMatchObject({ removed: [MARKER_ENTRY], deleted: false, record: { lines: [".env.mcp"], createdFile: true } });
+    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe("dist/\n.env.mcp\n");
   });
 });
 
@@ -757,25 +777,41 @@ describe("reconcileGitignore", () => {
       removed: [],
       deleted: false,
       record: { lines: CLIENT_TAIL, createdFile: true },
-      contentHash: createHash("sha256").update(`${CLIENT_TAIL.join("\n")}\n`).digest("hex"),
+      // TEST CHANGE, justified: review/32 — the rows hash the recorded lines alone, never the file.
+      contentHash: gitignoreLinesHash(CLIENT_TAIL),
     });
     expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(`${CLIENT_TAIL.join("\n")}\n`);
   });
 
+  it("hashes only the recorded lines, so an owner's edit elsewhere leaves the rows' hash as it was (review/32)", async () => {
+    const dir = repo();
+    const first = await reconcileGitignore(dir.dir, { required: CLIENT_TAIL, previous: null });
+    await writeFile(dir.path(".gitignore"), `mine.log\n${await readFile(dir.path(".gitignore"), "utf8")}`, "utf8");
+
+    const second = await reconcileGitignore(dir.dir, { required: CLIENT_TAIL, previous: first.record });
+
+    expect(second.contentHash).toBe(first.contentHash);
+    // Never a file's own hash: the proof a whole-file delete reads.
+    expect(first.contentHash).not.toBe(createHash("sha256").update(`${CLIENT_TAIL.join("\n")}\n`).digest("hex"));
+  });
+
   it("takes back an owned line no longer required, keeps the owner's bytes, and appends what is new", async () => {
+    // TEST CHANGE, justified: review/28 — the `.env.mcp` line is never taken back, so the line
+    // dropped here is the run-ended marker's, and `.env.mcp`'s stays to the end.
     const dir = repo();
     await dir.seedFiles({ ".gitignore": "dist/" });
     const first = await reconcileGitignore(dir.dir, { required: REQUIRED_TAIL, previous: null });
     expect(first.record).toEqual({ lines: REQUIRED_TAIL, terminatorAdded: true });
 
-    const second = await reconcileGitignore(dir.dir, { required: CLIENT_TAIL, previous: first.record });
+    const narrowed = REQUIRED_TAIL.filter((entry) => entry !== MARKER_ENTRY);
+    const second = await reconcileGitignore(dir.dir, { required: narrowed, previous: first.record });
 
-    expect(second).toMatchObject({ added: [], removed: [".env.mcp"], deleted: false, record: { lines: CLIENT_TAIL, terminatorAdded: true } });
-    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(`dist/\n${CLIENT_TAIL.join("\n")}\n`);
+    expect(second).toMatchObject({ added: [], removed: [MARKER_ENTRY], deleted: false, record: { lines: narrowed, terminatorAdded: true } });
+    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe(`dist/\n${narrowed.join("\n")}\n`);
 
     const last = await reconcileGitignore(dir.dir, { required: [], previous: second.record });
-    expect(last.removed).toEqual(CLIENT_TAIL);
-    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe("dist/");
+    expect(last.removed).toEqual(narrowed.filter((entry) => entry !== ".env.mcp"));
+    expect(await readFile(dir.path(".gitignore"), "utf8")).toBe("dist/\n.env.mcp\n");
   });
 
   it("deletes a file it created once nothing is left, and an owner's line keeps it", async () => {

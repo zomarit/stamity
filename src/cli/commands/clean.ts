@@ -11,6 +11,7 @@ import type { PackSuppliedServer } from "../../mcp/catalog.ts";
 import { MERGED_MCP_JSON_PATHS, engineOwnedServerIds } from "../../mcp/emit.ts";
 import {
   GITIGNORE_FILE,
+  GITIGNORE_LINES_KEPT_ONCE_WRITTEN,
   gitignoreRecordOf,
   presentGitignoreTargets,
   reconcileGitignore,
@@ -103,8 +104,8 @@ import { confirm, promptGate } from "../kit/prompts.ts";
  * ledger records the setup appending (`coOwned.lines`, REQ-FLOW-016) whose
  * ignored file is gone, and deletes the file when the setup created it and
  * nothing else is left. A line it never recorded — every line of a setup from
- * 1.16.0 or earlier — stays, and so does `.env.mcp`'s while that file, which
- * clean never deletes, is still there.
+ * 1.16.0 or earlier — stays, and so does `.env.mcp`'s, which no verb takes back
+ * (review/28). While the state directory is kept (below), every line stays.
  *
  * One exception keeps the state directory (S17): a hooks document the sweep
  * leaves in place — an owner's entries kept in it, or a file it cannot read —
@@ -140,8 +141,8 @@ export function planCleanCandidates(manifest: SetupManifest): ReclaimCandidate[]
 /**
  * Take back the `.gitignore` lines the setup recorded appending (REQ-FLOW-016):
  * each one whose ignored file is gone now, after the sweep and the state
- * directory, so a line goes only once nothing is left for it to ignore — a
- * filled `.env.mcp`, which clean never deletes, stays ignored. The file goes
+ * directory, so a line goes only once nothing is left for it to ignore — and
+ * `.env.mcp`'s never goes ({@link GITIGNORE_LINES_KEPT_ONCE_WRITTEN}). The file goes
  * when the setup created it and nothing of the owner's is in it. `null` when
  * the ledger records no line (a setup from 1.16.0 or earlier), which leaves
  * the file as it is.
@@ -158,7 +159,7 @@ async function takeBackGitignoreLines(rootDir: string, manifest: SetupManifest):
   try {
     return await reconcileGitignore(rootDir, { required: keep, previous });
   } catch (cause) {
-    const left = (previous.lines ?? []).filter((line) => !present.has(line));
+    const left = (previous.lines ?? []).filter((line) => !present.has(line) && !GITIGNORE_LINES_KEPT_ONCE_WRITTEN.includes(line));
     throw new CliFailure({
       code: "FS_ERROR",
       message: `generated files were removed, but the ${GITIGNORE_FILE} lines this setup added were not taken back`,
@@ -168,16 +169,30 @@ async function takeBackGitignoreLines(rootDir: string, manifest: SetupManifest):
   }
 }
 
-/** The closing sentence on what a live full clean did to `.gitignore`. */
-function gitignoreOutcomeLine(outcome: GitignoreReconcile | null): string {
+/**
+ * The closing sentence on what a live full clean did to `.gitignore`; `held` when
+ * the state directory was kept, so the take-back did not run (review/29).
+ */
+function gitignoreOutcomeLine(outcome: GitignoreReconcile | null, held: boolean): string {
+  if (held) {
+    return (
+      `Left your ${GITIGNORE_FILE} untouched: ${STATE_DIR}/ is kept, and a hook still wired to it can write the files ` +
+      `its lines ignore. The re-run that removes ${STATE_DIR}/ takes back the lines this setup added.`
+    );
+  }
   if (outcome === null) return `Left your ${GITIGNORE_FILE} untouched: this setup recorded no line of its own in it.`;
-  const kept = outcome.record.lines ?? [];
+  const recorded = outcome.record.lines ?? [];
+  const kept = recorded.filter((line) => !GITIGNORE_LINES_KEPT_ONCE_WRITTEN.includes(line));
+  const keptForGood = recorded.filter((line) => GITIGNORE_LINES_KEPT_ONCE_WRITTEN.includes(line));
   const parts = [
     ...(outcome.deleted ? [`Removed ${GITIGNORE_FILE}: the setup created it, and nothing of yours was in it.`] : []),
     ...(!outcome.deleted && outcome.removed.length > 0
       ? [`Took back the ${GITIGNORE_FILE} line(s) this setup added: ${outcome.removed.join(", ")}.`]
       : []),
     ...(kept.length > 0 ? [`Kept the ${GITIGNORE_FILE} line for ${kept.join(", ")}: that file is still there, so git keeps ignoring it.`] : []),
+    ...(keptForGood.length > 0
+      ? [`Kept the ${GITIGNORE_FILE} line for ${keptForGood.join(", ")}: clean never takes it back, so a token file in any checkout stays ignored.`]
+      : []),
   ];
   return parts.length > 0 ? parts.join(" ") : `Left your ${GITIGNORE_FILE} untouched: no line this setup added is left in it.`;
 }
@@ -1121,12 +1136,15 @@ export const cleanCommand: CommandModule = {
 
     // The ignore lines last, so the lane reads which ignored files are gone; after the
     // sweep's report, so a refusal here still leaves what was removed on the screen.
-    const gitignore = ctx.dryRun ? null : await takeBackGitignoreLines(rootDir, manifest);
+    // Not while the state directory is kept: a hook still wired to it can write the
+    // files those lines ignore (review/29), and the re-run takes them back.
+    const gitignoreHeld = stateDirKept.length > 0;
+    const gitignore = ctx.dryRun || gitignoreHeld ? null : await takeBackGitignoreLines(rootDir, manifest);
 
     if (ctx.dryRun) {
       // The take-back reads which ignored files are gone after the run, so the
       // preview names the recorded lines and the rule, not a verdict per line.
-      const recorded = gitignoreRecordOf(manifest.ledger)?.lines ?? [];
+      const recorded = (gitignoreRecordOf(manifest.ledger)?.lines ?? []).filter((line) => !GITIGNORE_LINES_KEPT_ONCE_WRITTEN.includes(line));
       ctx.io.out(
         `Dry run: nothing was written and ${STATE_DIR}/ is untouched. ` +
           `A real run also deletes ${STATE_DIR}/ and everything in it.\n`,
@@ -1144,7 +1162,7 @@ export const cleanCommand: CommandModule = {
           `${report.strippedCount} rewritten to keep user content, ${report.skippedCount} skipped` +
           `${stateDirRemoved ? `, ${STATE_DIR}/ removed` : ""}.\n`,
       );
-      ctx.io.out(`${gitignoreOutcomeLine(gitignore)}\n`);
+      ctx.io.out(`${gitignoreOutcomeLine(gitignore, gitignoreHeld)}\n`);
       nextSteps(ctx, [REINIT_OFFER]);
     }
 

@@ -1128,26 +1128,33 @@ describe("the review gate's state is ignored on sync", () => {
     expect((await gitignoreRows(root)).map((row) => [row.adapter, row.coOwned?.lines])).toEqual([["cursor", MACHINE_LOCAL]]);
   });
 
-  it("takes back the .env.mcp line once no server needs a credential and the file is gone, and names it", async () => {
+  it("keeps the recorded .env.mcp line once no server needs a credential and no file is on disk (review/28)", async () => {
+    // TEST CHANGE, justified: review/28 — the `.env.mcp` line is never taken back once written: the
+    // record is committed and shared, while a missing file is one checkout's fact.
     const handle = tempDir();
     const root = await seedRepo(handle);
     await editManifest(root, (manifest) => ({ ...manifest, mcp: { servers: ["github"] } }));
     const first = await liveSync(root, T1);
     expect(first.report.gitignoreAdded).toEqual([".env.mcp", ...MACHINE_LOCAL]);
     expect((await gitignoreRows(root))[0]?.coOwned?.lines).toEqual([".env.mcp", ...MACHINE_LOCAL]);
+    const before = await readFile(join(root, ".gitignore"), "utf8");
 
     await editManifest(root, (manifest) => ({ ...manifest, mcp: { servers: [] } }));
     const { plan, report } = await liveSync(root, T2);
 
-    expect(report.gitignoreRemoved).toEqual([".env.mcp"]);
+    expect(existsSync(join(root, ".env.mcp"))).toBe(false);
+    expect(report.gitignoreRemoved).toBeUndefined();
     expect(report.gitignoreAdded).toEqual([]);
-    expect(await readFile(join(root, ".gitignore"), "utf8")).toBe(`${MACHINE_LOCAL.join("\n")}\n`);
-    expect(syncJsonPayload(plan, report).gitignoreRemoved).toEqual([".env.mcp"]);
-    expect(renderSyncReport(plan, report, plainPalette)).toContain(".gitignore: removed .env.mcp");
-    expect((await gitignoreRows(root))[0]?.coOwned?.lines).toEqual(MACHINE_LOCAL);
+    expect(await readFile(join(root, ".gitignore"), "utf8")).toBe(before);
+    expect((await gitignoreRows(root))[0]?.coOwned?.lines).toEqual([".env.mcp", ...MACHINE_LOCAL]);
+    // The report still names a take-back, should one happen.
+    const named = { ...report, gitignoreRemoved: [MACHINE_LOCAL[0] ?? ""] };
+    expect(syncJsonPayload(plan, named).gitignoreRemoved).toEqual([MACHINE_LOCAL[0]]);
+    expect(renderSyncReport(plan, named, plainPalette)).toContain(`.gitignore: removed ${MACHINE_LOCAL[0]}`);
   });
 
-  it("keeps the .env.mcp line while the file is on disk after its server goes, and takes it back once the file goes", async () => {
+  it("keeps the .env.mcp line while the file is on disk after its server goes, and after the file goes", async () => {
+    // TEST CHANGE, justified: review/28 — the line stays once the file goes too.
     const handle = tempDir();
     const root = await seedRepo(handle);
     gitInit(root);
@@ -1162,7 +1169,8 @@ describe("the review gate's state is ignored on sync", () => {
 
     await rm(join(root, ".env.mcp"));
     const gone = await liveSync(root, new Date("2026-01-04T00:00:00.000Z"));
-    expect(gone.report.gitignoreRemoved).toEqual([".env.mcp"]);
+    expect(gone.report.gitignoreRemoved).toBeUndefined();
+    expect(isIgnored(root, ".env.mcp")).toBe(true);
   });
 
   it.each([".env*\n", ".env.*\n!.env.mcp\n"])("neither appends nor owns .env.mcp when the owner's %j answers for it", async (owner) => {

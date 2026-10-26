@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { COMMANDS } from "../../../src/cli.ts";
 import { cleanCommand, planCleanCandidates } from "../../../src/cli/commands/clean.ts";
 import { applySync, planSync } from "../../../src/cli/commands/sync/engine.ts";
+import { REQUIRED_GITIGNORE_ENTRIES } from "../../../src/mcp/env.ts";
 import { wrapInManagedBlock } from "../../../src/merge/managedBlocks.ts";
 import { ORG_POLICY_REL_PATH } from "../../../src/pack/orgPolicy.ts";
 import { createApp } from "../../../src/index.ts";
@@ -325,6 +326,19 @@ describe("clean — full removal", () => {
     expect(result.stdout).toContain(".gitignore");
     expect(await readIfPresent(join(root, ".gitignore"))).toBe(`${STATE_DIR}/\nnode_modules/\n`);
   });
+
+  it("takes back none of the engine's own lines a 1.16.0 setup wrote, since its ledger records none (review/30)", async () => {
+    const temp = tempDir();
+    const root = await seedInitialisedRepo(temp);
+    const engineLines = `node_modules/\n${REQUIRED_GITIGNORE_ENTRIES.join("\n")}\n`;
+    await temp.seedFiles({ "repo/.gitignore": engineLines });
+
+    const result = await runClean(root, ["--json", "-y"]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(await readIfPresent(join(root, ".gitignore"))).toBe(engineLines);
+    expect(parseSingleDoc(result.stdout)).not.toHaveProperty("gitignoreRemoved");
+  });
 });
 
 // ── The .gitignore lines setup recorded (REQ-FLOW-016, REQ-FLOW-027) ─────
@@ -374,6 +388,24 @@ describe("clean — the .gitignore lines setup recorded", () => {
       `A real run also takes back the .gitignore line(s) this setup added, each once the file it ignores is gone: ${MACHINE_LOCAL.join(", ")}.`,
     );
     expect(await readFile(join(root, ".gitignore"), "utf8")).toBe(before);
+  });
+
+  it("keeps every recorded line while .stamity/ is kept for a hook still wired to it (review/29)", async () => {
+    const root = tempDir().path("repo");
+    await mkdir(root, { recursive: true });
+    const init = await runInProcess(COMMANDS, ["init", "-y", "--tools", "cursor"], { cwd: root });
+    expect(init.code, init.stderr).toBe(0);
+    const before = await readFile(join(root, ".gitignore"), "utf8");
+    expect(before).toBe(`${MACHINE_LOCAL.join("\n")}\n`);
+    // The engine's own bytes with a stray tail: still every script named, no longer JSON (S17).
+    await writeFile(join(root, ".cursor/hooks.json"), `${await readFile(join(root, ".cursor/hooks.json"), "utf8")},`, "utf8");
+
+    const result = await runClean(root, ["-y"]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(existsSync(join(root, STATE_DIR))).toBe(true);
+    expect(await readFile(join(root, ".gitignore"), "utf8")).toBe(before);
+    expect(result.stdout).toContain(`Left your .gitignore untouched: ${STATE_DIR}/ is kept`);
   });
 
   it("says which lines it took back, and deletes the .gitignore it created", async () => {
