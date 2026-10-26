@@ -1,6 +1,6 @@
 {
   "name": "production",
-  "version": "1.16.0",
+  "version": "1.17.0",
   "description": "Take a service to production and keep it there: a readiness review graded apart from its evidence, a release that stops before anything irreversible, and an incident procedure that proposes and never applies.",
   "declaredTools": [
     "claude",
