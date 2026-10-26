@@ -334,7 +334,14 @@ export function renderingProofClass(path: string): RenderingProofClass | null {
  * Codex appendix heading or the workflow's header line. The fingerprint stays
  * the overwrite lane's proof (`../merge/safeWrite.ts`) and no longer proves a
  * delete. So the delete needs the running engine's own rendering at the path:
- * a forged row and hash alone no longer delete.
+ * a forged row and hash alone no longer delete. One exception, at
+ * `.github/workflows/copilot-setup-steps.yml` under
+ * `toolOptions.copilot.setupSteps: off` alone: there a recorded hash that
+ * matches the bytes, plus the workflow's header line, also proves the delete
+ * (`../adapters/copilot.ts::withRecordedSetupSteps` adds that hash to the
+ * renderings), so a forged row hashing an owner's headed workflow, beside a
+ * planted `off`, deletes it; both edits sit in the person-only manifest, and
+ * the same forged row already lets the overwrite lane replace it with no `.bak`.
  *
  * What the proof does not close: the rendering is built from the setup's packs
  * and overrides, which a repository writer can also plant, so a planted pack or

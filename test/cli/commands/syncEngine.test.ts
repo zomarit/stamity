@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 // `link` is the hard-link primitive, aliased for the same reason the write-escape
 // suite aliases it: `link` reads as a symlink at a glance, and the shared-name
 // class is precisely the shape that is NOT one.
-import { link as hardLink, lstat, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { link as hardLink, lstat, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -2053,6 +2053,34 @@ describe("Copilot's setup workflow: managed, user, off", () => {
 
     expect(kept.report.reclaimed?.entries.find((entry) => entry.path === WORKFLOW)?.action).toBe("skipped-user-content");
     expect(await readFile(join(editedRoot, WORKFLOW), "utf8")).toBe(edited);
+  });
+
+  it("off after an upgrade: a CRLF checkout of the unedited workflow an earlier version wrote goes too (review/66)", async () => {
+    const handle = tempDir();
+    const root = await syncedByThenOff(handle, "0.9.0", "old-crlf");
+    const written = await readFile(join(root, WORKFLOW), "utf8");
+    expect(written).not.toContain("\r");
+    // What a `core.autocrlf` checkout of the committed copy leaves on disk; the row hashes the LF bytes.
+    await writeFile(join(root, WORKFLOW), written.replaceAll("\n", "\r\n"), "utf8");
+
+    const { report } = await syncOnce(root, T2);
+
+    expect(report.reclaimed?.entries.find((entry) => entry.path === WORKFLOW)?.action).toBe("deleted");
+    expect(existsSync(join(root, WORKFLOW))).toBe(false);
+  });
+
+  it.skipIf(process.platform === "win32")("off: a workflow path that links to a device is never read, and is named as a link (review/72)", async () => {
+    const handle = tempDir();
+    const root = await syncedThenSwitched(handle, "off");
+    await rm(join(root, WORKFLOW));
+    await symlink("/dev/zero", join(root, WORKFLOW));
+
+    const { report } = await syncOnce(root, T2);
+
+    const entry = report.reclaimed?.entries.find((candidate) => candidate.path === WORKFLOW);
+    expect(entry?.action).toBe("skipped-unsafe-path");
+    expect(entry?.detail).toContain("symbolic link");
+    expect((await lstat(join(root, WORKFLOW))).isSymbolicLink()).toBe(true);
   });
 
   it("off: a row recording an owner's workflow that lacks the engine's header proves no delete (review/66)", async () => {

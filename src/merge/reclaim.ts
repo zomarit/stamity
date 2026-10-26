@@ -310,7 +310,13 @@ export interface ReclaimOptions {
    * delete needs the bytes to hash into this set (or a managed block spanning
    * the file): a recorded hash a hand edit of the manifest can forge no longer
    * proves it there. A path with no entry has no rendering, so the file is kept;
-   * none at all when absent.
+   * none at all when absent. One exception: under
+   * `toolOptions.copilot.setupSteps: off`, the entry at
+   * `.github/workflows/copilot-setup-steps.yml` also holds the hash the Copilot
+   * row records there when the bytes match it and carry the workflow's header
+   * line (`../adapters/copilot.ts::withRecordedSetupSteps`), so at that one path
+   * a recorded hash plus the header proves the delete, and the set is not only
+   * engine renderings.
    */
   renderings?: ReadonlyMap<string, ReadonlySet<string>>;
   /**

@@ -8,7 +8,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { lstat, readFile, readdir, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import {
   buildPortableHookRunner,
@@ -166,6 +166,25 @@ function sha256Hex(bytes: Buffer | string): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+/** Past this many bytes the file at the workflow's path is not one the engine wrote (its rendering is a few KiB). */
+const SETUP_STEPS_READ_MAX_BYTES = 1024 * 1024;
+
+/**
+ * The bytes at the setup workflow's path, or `null` unless they are a regular
+ * file of at most {@link SETUP_STEPS_READ_MAX_BYTES} reached through no link
+ * (review/72). Every segment is read with `lstat` before anything is opened, so
+ * a link to a device or to an endless file is never read. This is the shape of
+ * the engine's other bounded reads (`../cli/engine/autonomyGate.ts::readRegularFile`,
+ * review/7), which this engine module cannot import from the CLI layer.
+ */
+async function readSetupStepsBytes(rootDir: string): Promise<Buffer | null> {
+  const segments = COPILOT_SETUP_STEPS_PATH.split("/");
+  const stats = await Promise.all(segments.map((_, depth) => lstat(join(rootDir, ...segments.slice(0, depth + 1)))));
+  const leaf = stats.at(-1);
+  if (stats.some((entry) => entry.isSymbolicLink()) || leaf?.isFile() !== true || leaf.size > SETUP_STEPS_READ_MAX_BYTES) return null;
+  return readFile(join(rootDir, ...segments));
+}
+
 /**
  * `proof` with, under `off`, the bytes the ledger records for the setup
  * workflow accepted beside the running engine's rendering there (review/66).
@@ -178,6 +197,10 @@ function sha256Hex(bytes: Buffer | string): string {
  * - `proof` already holds a rendering at the path, so the plan was built and
  *   the path is a reclaim candidate;
  * - a Copilot row at the path records a SHA-256;
+ * - the path is a regular file within a read cap, reached through no link
+ *   (`readSetupStepsBytes`). Anything else is never opened here and adds
+ *   nothing, so the sweep keeps it, and its own `lstat` names a link or another
+ *   kind of file at the path `skipped-unsafe-path`;
  * - the bytes on disk, raw or with `\r\n` read as `\n`, hash to it, and carry
  *   the engine's header line (`../manifest/ownedPaths.ts::bytesShowEngineOutput`).
  *
@@ -197,13 +220,14 @@ export async function withRecordedSetupSteps<T extends { renderings: Map<string,
   if (hashes === undefined || readCopilotSetupSteps(manifest) !== "off") return proof;
   const recorded = manifest.ledger.find((row) => row.path === COPILOT_SETUP_STEPS_PATH && row.adapter === TOOL)?.contentHash;
   if (recorded === undefined || !SHA256_HEX.test(recorded)) return proof;
-  let bytes: Buffer;
+  let bytes: Buffer | null;
   try {
-    bytes = await readFile(join(rootDir, COPILOT_SETUP_STEPS_PATH));
+    bytes = await readSetupStepsBytes(rootDir);
     // reason: not silent — an unreadable file adds no digest, so the sweep keeps it and names it.
   } catch {
     return proof;
   }
+  if (bytes === null) return proof;
   const text = bytes.toString("utf8");
   const folded = text.replaceAll("\r\n", "\n");
   const unedited = sha256Hex(bytes) === recorded || (folded !== text && sha256Hex(folded) === recorded);

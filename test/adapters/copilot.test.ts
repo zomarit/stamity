@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readFile, readdir, rm } from "node:fs/promises";
+import { readFile, readdir, rm, symlink } from "node:fs/promises";
 import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
@@ -29,6 +29,7 @@ import {
   runAgentRows,
   copilotMatcherWarnings,
   translateCopilotMatcher,
+  withRecordedSetupSteps,
 } from "../../src/adapters/copilot.ts";
 import { __resetContentRootCacheForTests } from "../../src/content/contentRoot.ts";
 import type { CatalogItem } from "../../src/content/catalog.ts";
@@ -1925,6 +1926,58 @@ describe("copilot-setup-steps.yml", () => {
     expect(copilotReleasedPaths(ctxWithSetupSteps("off").manifest).size).toBe(0);
     expect(copilotReleasedPaths(ctxWithSetupSteps("managed").manifest).size).toBe(0);
     expect(copilotReleasedPaths(ctxOf().manifest).size).toBe(0);
+  });
+
+  /** The reclaim's proof as `engineRenderingsFor` hands it over: one stand-in rendering at the workflow. */
+  const proofAtWorkflow = (): { renderings: Map<string, Set<string>> } => ({
+    renderings: new Map([[COPILOT_SETUP_STEPS_PATH, new Set(["0".repeat(64)])]]),
+  });
+  const sha256Of = (text: string): string => createHash("sha256").update(text).digest("hex");
+
+  /** An `off` manifest whose Copilot row at the workflow records the SHA-256 of `text`. */
+  function offRecording(text: string): EmissionContext["manifest"] {
+    const { manifest } = ctxWithSetupSteps("off");
+    const row = { path: COPILOT_SETUP_STEPS_PATH, adapter: "copilot", artifactId: "copilot-setup-steps", artifactType: "infra", contentHash: sha256Of(text) } as const;
+    return { ...manifest, ledger: [...manifest.ledger, row] };
+  }
+
+  it("under off, takes the recorded hash only from a regular file within the read cap (review/72)", async () => {
+    const temp = getTemp();
+    const workflow = rowAt(await planResidue(), COPILOT_SETUP_STEPS_PATH).content;
+    // Comment lines keep the header and the YAML; only the size is past the 1 MiB cap.
+    const oversized = `${workflow}${"# padding\n".repeat(110_000)}`;
+    await temp.seedFiles({ [`within/${COPILOT_SETUP_STEPS_PATH}`]: workflow, [`past/${COPILOT_SETUP_STEPS_PATH}`]: oversized });
+
+    const within = await withRecordedSetupSteps(temp.path("within"), offRecording(workflow), proofAtWorkflow());
+    const past = await withRecordedSetupSteps(temp.path("past"), offRecording(oversized), proofAtWorkflow());
+
+    expect(within.renderings.get(COPILOT_SETUP_STEPS_PATH)?.has(sha256Of(workflow))).toBe(true);
+    expect([...(past.renderings.get(COPILOT_SETUP_STEPS_PATH) ?? [])]).toEqual(["0".repeat(64)]);
+  });
+
+  it.skipIf(process.platform === "win32")("under off, never takes the recorded hash through a link at the workflow or its folder (review/72)", async () => {
+    const temp = getTemp();
+    const workflow = rowAt(await planResidue(), COPILOT_SETUP_STEPS_PATH).content;
+    const segments = COPILOT_SETUP_STEPS_PATH.split("/");
+    await temp.seedFiles({ [`elsewhere/${COPILOT_SETUP_STEPS_PATH}`]: workflow, "leaf/.github/workflows/.keep": "", "folder/.github/.keep": "" });
+    // The file a link to the recorded bytes, then its folder a link to a folder holding them.
+    await symlink(temp.path("elsewhere", ...segments), temp.path("leaf", ...segments));
+    await symlink(temp.path("elsewhere", ".github", "workflows"), temp.path("folder", ".github", "workflows"), "dir");
+
+    const proofs = await Promise.all(["leaf", "folder"].map((dir) => withRecordedSetupSteps(temp.path(dir), offRecording(workflow), proofAtWorkflow())));
+
+    for (const proof of proofs) expect([...(proof.renderings.get(COPILOT_SETUP_STEPS_PATH) ?? [])]).toEqual(["0".repeat(64)]);
+  });
+
+  it.skipIf(process.platform === "win32")("under off, never opens a workflow path that links to a device (review/72)", async () => {
+    const temp = getTemp();
+    const workflow = rowAt(await planResidue(), COPILOT_SETUP_STEPS_PATH).content;
+    await temp.seedFiles({ "device/.github/workflows/.keep": "" });
+    await symlink("/dev/zero", temp.path("device", ...COPILOT_SETUP_STEPS_PATH.split("/")));
+
+    const proof = await withRecordedSetupSteps(temp.path("device"), offRecording(workflow), proofAtWorkflow());
+
+    expect([...(proof.renderings.get(COPILOT_SETUP_STEPS_PATH) ?? [])]).toEqual(["0".repeat(64)]);
   });
 
   it("keeps naming the pinned version in the hook entries (inbox row 257, decided in v10)", async () => {
