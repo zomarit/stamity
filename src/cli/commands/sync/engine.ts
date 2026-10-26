@@ -1,7 +1,7 @@
 import { lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import pLimit from "p-limit";
-import { copilotReleasedPaths, withSetupStepsRendered } from "../../../adapters/copilot.ts";
+import { copilotReleasedPaths, withRecordedSetupSteps, withSetupStepsRendered } from "../../../adapters/copilot.ts";
 import { buildContentIndex } from "../../../content/catalog.ts";
 import { analyzeRepo, summarizeDetection } from "../../../detect/repoAnalyzer.ts";
 import {
@@ -842,7 +842,7 @@ async function reclaimRenderings(
   engineVersion: string | undefined,
 ): Promise<RenderingProof> {
   if (engineVersion === undefined) return { renderings: new Map() };
-  return engineRenderingsFor(
+  const proof = await engineRenderingsFor(
     rootDir,
     // Under `off` the plan renders no setup workflow, which an unedited copy's delete needs (REQ-FLOW-149).
     withSetupStepsRendered(plan.manifest),
@@ -850,6 +850,8 @@ async function reclaimRenderings(
     renderingPlanner(rootDir, engineVersion),
     legacyCursorIdentity(),
   );
+  // An earlier release's unedited copy, as its row records it (review/66).
+  return withRecordedSetupSteps(rootDir, plan.manifest, proof);
 }
 
 /**

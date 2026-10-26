@@ -2024,6 +2024,53 @@ describe("Copilot's setup workflow: managed, user, off", () => {
     expect(await readFile(join(editedRoot, WORKFLOW), "utf8")).toBe(edited);
   });
 
+  /** A Copilot setup synced once in the default mode by engine `version`, then moved to `off`. */
+  async function syncedByThenOff(handle: TempDirHandle, version: string, dir: string): Promise<string> {
+    const root = await seedRepo(handle, { tools: ["copilot"], dir });
+    const plan = await planSync(root, version, { runner: () => "" });
+    await applySync(root, plan, { engineVersion: version, force: false, dryRun: false, now: T1 });
+    const synced = await readManifest(root);
+    await writeManifest(root, { ...synced!, toolOptions: { copilot: { setupSteps: "off" } } }, { now: T1 });
+    return root;
+  }
+
+  it("off after an upgrade: an unedited workflow an earlier version wrote goes, and an edited one is kept (review/66)", async () => {
+    const handle = tempDir();
+    const OLD_VERSION = "0.9.0";
+    const unedited = await syncedByThenOff(handle, OLD_VERSION, "old-unedited");
+    const editedRoot = await syncedByThenOff(handle, OLD_VERSION, "old-edited");
+    // The earlier copy installs its own version, so it does not hash to the running engine's rendering.
+    expect(await readFile(join(unedited, WORKFLOW), "utf8")).toContain(`@${OLD_VERSION}`);
+    const edited = `${await readFile(join(editedRoot, WORKFLOW), "utf8")}${OWNER_LINE}`;
+    await writeFile(join(editedRoot, WORKFLOW), edited, "utf8");
+
+    const gone = await syncOnce(unedited, T2);
+    const kept = await syncOnce(editedRoot, T2);
+
+    expect(gone.report.reclaimed?.entries.find((entry) => entry.path === WORKFLOW)?.action).toBe("deleted");
+    expect(existsSync(join(unedited, WORKFLOW))).toBe(false);
+    expect((await readManifest(unedited))?.ledger.some((row) => row.path === WORKFLOW)).toBe(false);
+
+    expect(kept.report.reclaimed?.entries.find((entry) => entry.path === WORKFLOW)?.action).toBe("skipped-user-content");
+    expect(await readFile(join(editedRoot, WORKFLOW), "utf8")).toBe(edited);
+  });
+
+  it("off: a row recording an owner's workflow that lacks the engine's header proves no delete (review/66)", async () => {
+    const handle = tempDir();
+    const root = await syncedThenSwitched(handle, "off");
+    const owners = "name: Our own setup\non: workflow_dispatch\njobs:\n  copilot-setup-steps:\n    runs-on: ubuntu-latest\n    steps: []\n";
+    await writeFile(join(root, WORKFLOW), owners, "utf8");
+    const manifest = await readManifest(root);
+    const row = manifest!.ledger.find((entry) => entry.path === WORKFLOW);
+    row!.contentHash = createHash("sha256").update(owners).digest("hex");
+    await writeManifest(root, manifest!, { now: T1 });
+
+    const { report } = await syncOnce(root, T2);
+
+    expect(report.reclaimed?.entries.find((entry) => entry.path === WORKFLOW)?.action).toBe("skipped-user-content");
+    expect(await readFile(join(root, WORKFLOW), "utf8")).toBe(owners);
+  });
+
   it("user, then managed with the file still there: an unmanaged-name collision, and sync exits 1", async () => {
     const handle = tempDir();
     const root = await syncedThenSwitched(handle, "user");

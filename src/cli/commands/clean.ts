@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { constants as fsConstants, type Stats } from "node:fs";
 import { copyFile, link, lstat, readFile, readdir, rm, rmdir, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
-import { copilotReleasedPaths, withSetupStepsRendered } from "../../adapters/copilot.ts";
+import { copilotReleasedPaths, withRecordedSetupSteps, withSetupStepsRendered } from "../../adapters/copilot.ts";
 import { resolveAutonomy } from "../../config/autonomy.ts";
 import { PERSON_ONLY_GUARD_FILE } from "../../hooks/scripts.ts";
 import { importBackupPathDefect, readManifest, writeManifest } from "../../manifest/manifest.ts";
@@ -421,7 +421,8 @@ async function cleanRenderings(
     engineRenderingsFor(rootDir, withSetupStepsRendered(manifest), paths, cleanPlanner(rootDir, engineVersion), legacyCursorIdentity()),
     syncRenderingsFor(rootDir, manifest, paths, cleanPlanner(rootDir, engineVersion)),
   ]);
-  return { ...proof, syncRenderings };
+  // An earlier release's unedited copy, as its row records it (review/66).
+  return { ...(await withRecordedSetupSteps(rootDir, manifest, proof)), syncRenderings };
 }
 
 /**

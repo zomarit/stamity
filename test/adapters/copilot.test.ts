@@ -1854,6 +1854,33 @@ describe("copilot-setup-steps.yml", () => {
     expect(stepsOf(withRc).filter((step) => step.env !== undefined)).toHaveLength(1);
   });
 
+  it("reads only a committed .npmrc in a git work tree: an ignored or untracked one writes no env (review/67)", async () => {
+    const temp = getTemp();
+    await temp.seedFiles({
+      "ignored/package-lock.json": "{}\n",
+      "ignored/.gitignore": ".npmrc\n",
+      "ignored/.npmrc": "//npm.example/:_authToken=personal\n",
+      "untracked/package-lock.json": "{}\n",
+      "untracked/.npmrc": "registry=https://npm.mirror.example/\n",
+      "tracked/package-lock.json": "{}\n",
+      "tracked/.npmrc": "registry=https://npm.mirror.example/\n",
+    });
+    const git = (dir: string, args: readonly string[]): void => {
+      const result = spawnSync("git", args, { cwd: temp.path(dir), encoding: "utf8" });
+      expect(result.status, result.stderr).toBe(0);
+    };
+    for (const dir of ["ignored", "untracked", "tracked"]) git(dir, ["init", "--quiet"]);
+    git("tracked", ["add", "--", ".npmrc"]);
+
+    const yamlAt = async (dir: string): Promise<string> =>
+      rowAt(await planResidue({ rootDir: temp.path(dir) }), COPILOT_SETUP_STEPS_PATH).content;
+
+    // CI checks out the commit, so a file only this machine holds must not reach the workflow.
+    expect(await yamlAt("ignored")).not.toContain("NPM_CONFIG_USERCONFIG");
+    expect(await yamlAt("untracked")).not.toContain("NPM_CONFIG_USERCONFIG");
+    expect(await yamlAt("tracked")).toContain("NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc");
+  });
+
   it("keeps a fork's scope registry on the install line beside the project's .npmrc (review/68)", async () => {
     const temp = getTemp();
     await temp.seedFiles({ "repo/.npmrc": "registry=https://npm.mirror.example/\n" });

@@ -289,6 +289,24 @@ describe("clean — Copilot's setup workflow", () => {
     expect(result.code, result.stderr).toBe(0);
     expect(existsSync(join(root, COPILOT_SETUP_STEPS_PATH))).toBe(false);
   });
+
+  it("takes back under off the unedited workflow an earlier version wrote, which the ledger records (review/66)", async () => {
+    const root = await initialisedCopilot("off");
+    // An earlier release's copy: another version on the install line, hashed by its row as that sync left it.
+    const current = await readFile(join(root, COPILOT_SETUP_STEPS_PATH), "utf8");
+    const earlier = current.replace(/(npm install --global \S+@)\S+/u, "$10.9.0");
+    expect(earlier).not.toBe(current);
+    await writeFile(join(root, COPILOT_SETUP_STEPS_PATH), earlier, "utf8");
+    const manifest = await readManifest(root);
+    const row = manifest!.ledger.find((entry) => entry.path === COPILOT_SETUP_STEPS_PATH);
+    row!.contentHash = createHash("sha256").update(earlier).digest("hex");
+    await writeManifest(root, manifest!);
+
+    const result = await runClean(root, ["-y"]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(existsSync(join(root, COPILOT_SETUP_STEPS_PATH))).toBe(false);
+  });
 });
 
 describe("clean — nothing to clean", () => {

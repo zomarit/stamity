@@ -7,6 +7,7 @@
  * (2026-10-14).
  */
 
+import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import {
@@ -44,6 +45,7 @@ import {
 import { CLIENT_HOOK_GUARANTEES } from "../hooks/model.ts";
 import { printableName } from "../manifest/coOwnedJson.ts";
 import { readCopilotSetupSteps } from "../manifest/manifest.ts";
+import { bytesShowEngineOutput } from "../manifest/ownedPaths.ts";
 import type { McpEmission } from "../mcp/emit.ts";
 import {
   grantableFootprint,
@@ -72,6 +74,7 @@ import type { AdapterOutput, ContentClass, EmissionOwner } from "../types/conten
 import type { ModelClass, Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
 import type { SetupManifest } from "../types/manifest.ts";
+import { runGit } from "../worktree/git.ts";
 
 // ── Client layout ────────────────────────────────────────────────
 
@@ -153,6 +156,59 @@ export function withSetupStepsRendered(manifest: SetupManifest): SetupManifest {
     ...manifest,
     toolOptions: { ...manifest.toolOptions, copilot: { ...manifest.toolOptions?.copilot, setupSteps: "managed" } },
   };
+}
+
+/** Exactly 64 lowercase hex characters: the shape of a SHA-256 the ledger records. */
+const SHA256_HEX = /^[0-9a-f]{64}$/u;
+
+/** The ledger's spelling of a content hash. */
+function sha256Hex(bytes: Buffer | string): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+/**
+ * `proof` with, under `off`, the bytes the ledger records for the setup
+ * workflow accepted beside the running engine's rendering there (review/66).
+ * Every workflow on disk when the mode first exists was written by an earlier
+ * release, whose install line names its own version, so today's rendering
+ * alone would keep the unedited copy, drop its row and leave it installing the
+ * old CLI. The digest is added only when all of these hold:
+ *
+ * - the mode is `off`;
+ * - `proof` already holds a rendering at the path, so the plan was built and
+ *   the path is a reclaim candidate;
+ * - a Copilot row at the path records a SHA-256;
+ * - the bytes on disk, raw or with `\r\n` read as `\n`, hash to it, and carry
+ *   the engine's header line (`../manifest/ownedPaths.ts::bytesShowEngineOutput`).
+ *
+ * That pair, a recorded hash and the header line, is the proof the overwrite
+ * lane already reads at this path (`../merge/safeWrite.ts`). So a row hashing
+ * an owner's own workflow, which lacks the header, proves no delete, and an
+ * edited copy matches nothing and is kept. The sweep still hashes the bytes it
+ * deletes (`../merge/reclaim.ts`), so the digest proves only the bytes read
+ * here. Bounded to this one path.
+ */
+export async function withRecordedSetupSteps<T extends { renderings: Map<string, Set<string>> }>(
+  rootDir: string,
+  manifest: SetupManifest,
+  proof: T,
+): Promise<T> {
+  const hashes = proof.renderings.get(COPILOT_SETUP_STEPS_PATH);
+  if (hashes === undefined || readCopilotSetupSteps(manifest) !== "off") return proof;
+  const recorded = manifest.ledger.find((row) => row.path === COPILOT_SETUP_STEPS_PATH && row.adapter === TOOL)?.contentHash;
+  if (recorded === undefined || !SHA256_HEX.test(recorded)) return proof;
+  let bytes: Buffer;
+  try {
+    bytes = await readFile(join(rootDir, COPILOT_SETUP_STEPS_PATH));
+    // reason: not silent — an unreadable file adds no digest, so the sweep keeps it and names it.
+  } catch {
+    return proof;
+  }
+  const text = bytes.toString("utf8");
+  const folded = text.replaceAll("\r\n", "\n");
+  const unedited = sha256Hex(bytes) === recorded || (folded !== text && sha256Hex(folded) === recorded);
+  if (unedited && bytesShowEngineOutput(COPILOT_SETUP_STEPS_PATH, text)) hashes.add(recorded);
+  return proof;
 }
 
 /** Job name the coding agent runs. Not a convention — the platform matches on it. */
@@ -1121,7 +1177,7 @@ export function buildSetupSteps(
  * ({@link CLI_NODE_FLOOR}, build/34), where the install or the version check
  * would turn every run of this workflow red.
  *
- * With a root `.npmrc` the install reads it as its user config (review/68):
+ * With a committed root `.npmrc` the install reads it as its user config (review/68, review/67):
  * npm skips the project config in global mode (inferred, not measured), so a
  * registry mirror the project routes through would otherwise be bypassed.
  */
@@ -1274,7 +1330,7 @@ export interface SetupStepsPins {
   readonly checkout: ActionPin | null;
   /** The `actions/setup-node` ref; `null` renders the major tag. */
   readonly setupNode: ActionPin | null;
-  /** True when a root `.npmrc` file exists: the CLI's global install then reads it (review/68). */
+  /** True when the root `.npmrc` is one the commit holds ({@link hasCommittedNpmrc}): the CLI's global install then reads it (review/68). */
   readonly npmrc: boolean;
 }
 
@@ -1315,10 +1371,40 @@ export async function readSetupStepsPins(rootDir: string): Promise<SetupStepsPin
   const [node, actions, npmrc] = await Promise.all([
     readNodePin(rootDir),
     readActionPins(rootDir),
-    isFileAt(join(rootDir, ".npmrc")),
+    hasCommittedNpmrc(rootDir),
   ]);
   return { node, ...actions, npmrc };
 }
+
+/** The project's npm config, at the setup root. */
+const NPMRC_FILE = ".npmrc";
+
+/**
+ * True when the setup root holds a `.npmrc` the cloud agent's checkout will
+ * hold too (review/67). The workflow runs on a checkout of the commit, and
+ * `check` re-plans it on every machine, so a file only this machine holds — a
+ * git-ignored one with a personal token, or one not yet added — must not
+ * decide the `env:` lines: one checkout would render them and another would
+ * report the committed workflow as drifted.
+ *
+ * - No file on disk: `false`, and no git is started.
+ * - Git answers for the folder: `true` only when the index holds the file
+ *   (`git ls-files`), so an ignored or untracked copy is not read.
+ * - Git does not answer (no repository, no git installed, a folder git is kept
+ *   from): the file's presence. A folder holding no repository holds what it
+ *   holds — an export or a tarball of a commit carries exactly the committed
+ *   files — so the answer is the commit's either way. The case this leaves is a
+ *   git checkout on a machine where git cannot run, with an ignored `.npmrc`.
+ */
+async function hasCommittedNpmrc(rootDir: string): Promise<boolean> {
+  if (!(await isFileAt(join(rootDir, NPMRC_FILE)))) return false;
+  const listed = await runGit({ args: ["--literal-pathspecs", "ls-files", "-z", "--", NPMRC_FILE], cwd: rootDir, timeoutMs: GIT_LS_FILES_TIMEOUT_MS });
+  if (listed.status !== 0) return true;
+  return listed.stdout.split("\0").includes(NPMRC_FILE);
+}
+
+/** Bounds the one git read emission makes, so a hung git cannot stall a sync. */
+const GIT_LS_FILES_TIMEOUT_MS = 10_000;
 
 /** True when `path` is a regular file (a link to one counts); any read failure answers `false`. */
 async function isFileAt(path: string): Promise<boolean> {
