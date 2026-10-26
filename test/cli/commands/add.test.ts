@@ -1407,8 +1407,11 @@ describe("add — collisions", () => {
     // TEST CHANGE, justified (review/57): 2026-10-06. The prove/5 wording led
     // with `clean --pack <id>`, which exits 1 for a pack with no rows — this
     // one's state. Not installed, the remedy is sync (for claims a client copy
-    // left), then add, then sync, and the stray is the operator's to move;
-    // the installed branch is pinned in upgradeRemedy.test.ts, which runs it.
+    // left), then add, then sync, and the stray is the operator's to move.
+    // The installed branch's own text (collisionPart, `is installed: to
+    // replace it`) is unpinned since build/3: upgradeRemedy.test.ts's installed
+    // case now reaches the left-behind refusal, which pins and runs the
+    // replaceSteps commands the two share (review/21).
     // TEST CHANGE, justified (2026-10-08, build/47, review/61, the lane D fixer): once the
     // pack is gone no rendering proves a client copy, so `sync` keeps it and drops its row
     // rather than removing it, and a `clean --pack` that could not plan the pack leaves the
