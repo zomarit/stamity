@@ -541,9 +541,9 @@ jobs:
     needs: [changes, prove-pr]
     if: "github.repository == 'zomarit/stamity' && !cancelled() && needs.changes.result == 'success' && (needs.prove-pr.result == 'success' || needs.prove-pr.result == 'skipped') && needs.prove-pr.outputs.proven != 'true' && needs.changes.outputs.full != 'false'"
     runs-on: ubuntu-latest
-    # 20: twice the probe's wall time, rounded up to whole minutes, measured locally 2026-10-26 over two
-    # runs of `node scripts/ci/fork-probe.mjs` (about 600 s and 588 s on an 8-core darwin machine, the
-    # nested suite on 4 workers); no green run of this job exists yet, so re-measure after 10 green runs,
+    # 20: twice the probe's wall time, rounded up to whole minutes, measured locally 2026-10-26 over three
+    # runs of `node scripts/ci/fork-probe.mjs` (about 600 s, 588 s and 594 s on an 8-core darwin machine,
+    # the nested suite on 4 workers); no green run of this job exists yet, so re-measure after 10 green runs,
     # as `cloud-container`'s comment does, from the job's own times.
     timeout-minutes: 20
     permissions:

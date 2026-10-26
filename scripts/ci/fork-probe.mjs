@@ -33,7 +33,8 @@
 // Exit 0 when every step passed; 1 when a fork or gate step failed; 2 when it could not run: an
 // argument it does not know, a folder that is not a checkout root, no `node_modules`, or a copy or
 // `git init` that failed. The job reads no secret and holds `contents: read`, and the probe needs
-// none: the copy's CLI runs with no client probe and no update check.
+// none: the walk's CLI calls run with no client probe and no update check, and every other step
+// with the job's own environment, as the `check` job's steps run.
 import { spawnSync } from 'node:child_process'
 import { appendFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -227,9 +228,15 @@ export function runSteps(steps, exec, { now = () => Date.now(), onResult = () =>
   return { exitCode, results }
 }
 
-/** The child environment: no client probe and no update check, so the walk asks no network. */
-function childEnv() {
-  return { ...process.env, STAMITY_NO_CLIENT_PROBE: '1', STAMITY_NO_UPDATE_CHECK: '1' }
+/**
+ * A step's environment. The walk's CLI calls run with no client probe and no update check, so they
+ * start no client and ask no registry; every other step gets the job's own environment, as the
+ * `check` job's steps do, so the nested gate is the one a fork runs.
+ */
+function stepEnv(step) {
+  return step.name.startsWith('walk: ')
+    ? { ...process.env, STAMITY_NO_CLIENT_PROBE: '1', STAMITY_NO_UPDATE_CHECK: '1' }
+    : process.env
 }
 
 function execStep(step) {
@@ -238,7 +245,7 @@ function execStep(step) {
     cwd: step.cwd,
     shell: true,
     encoding: 'utf8',
-    env: childEnv(),
+    env: stepEnv(step),
     maxBuffer: 512 * 1024 * 1024,
   })
   return { code: result.status ?? 1, output: `${result.stdout ?? ''}${result.stderr ?? ''}${result.error ? `${result.error.message}\n` : ''}` }
