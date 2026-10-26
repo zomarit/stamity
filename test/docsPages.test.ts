@@ -5772,3 +5772,61 @@ describe("the CI hand pages name the fork probe and the base-commit classifier",
     );
   });
 });
+
+/**
+ * ADDED (run 2026-10-25_autonomy-distribution-02, ledger prove/44 and prove/64): since the adoption fix, `init` takes a
+ * kept pack back only after every gate `add` runs passes again on its kept bytes (`src/pack/install.ts::keptPackGateRefusal`),
+ * so only a bundled catalog pack can come back, and any other kept pack is named and re-installed with `add <source>`.
+ * The pages that state the install routes, the planted-pack residual and `clean`'s kept packs say so, clause for clause.
+ */
+describe("the pages say init takes a kept pack back only through add's gates (prove/44)", () => {
+  const takeBack = "`init` takes a kept pack back only after every gate `add` runs passes again on the same bytes";
+  const refused =
+    "A kept pack a gate refuses, or one whose gates cannot run from its kept folder (a local or `node_modules` pack, signed or not), is refused: `init` names it in a warning and records none of its files,";
+  const residual =
+    "A planted pack folder with a `receipt.json` and no `pack:` rows does not become an installed pack at the next `init`: `init` takes a kept pack back only after every gate `add` runs passes again on the same bytes, so only a first-party pack whose files are the bundled catalog's own comes back, and any other is named in a warning with none of its files recorded.";
+
+  it("SECURITY.md states the take-back beside the three sources, the gate chain and residual (2)", () => {
+    const page = flowed(read(SECURITY));
+    expect(page).toContain(
+      "A kept pack is not a fourth source. A default `clean` keeps each pack folder under `.stamity/packs/`, and the next `init` takes one back only after every gate `add` runs passes again on the same bytes (`src/pack/install.ts::keptPackGateRefusal`).",
+    );
+    expect(page).toContain(
+      "An install keeps neither `pack.json` nor a signature beside the pack, so those gates can run only for a first-party pack from the bundled catalog: `init` plans it from the copy inside this package under the catalog's pin, as `stamity add <id>` does, and takes it back only when its receipt lists every file in the folder, those files hash to the catalog pack's own bytes, and the receipt records the source kind, trust tier and tool footprint the install would.",
+    );
+    expect(page).toContain(`${refused} and \`stamity add <source>\` re-installs it through the gates.`);
+    expect(page).toContain("Every route runs the same gate chain, and `init` runs it again before it takes a kept pack back.");
+    expect(page).toContain(residual);
+  });
+
+  it("the mapping page carries the take-back row and residual (2) as SECURITY.md does", () => {
+    const page = flowed(read(SECURITY_MAPPING));
+    expect(page).toContain(
+      "| Any repository writer, a pull request included | Commits a pack folder with a `receipt.json` under `.stamity/packs/`, so the next `init` records it as installed with no gate run on it | A kept pack is not a fourth source: " +
+        takeBack,
+    );
+    expect(page).toContain(
+      `${refused} and \`stamity add <source>\` re-installs it through the gates. Code: \`src/pack/install.ts::adoptInstalledPacks\`, \`src/pack/install.ts::keptPackGateRefusal\` | A local or \`node_modules\` pack does not come back at \`init\` after a default \`clean\`; only \`add <source>\` installs it again |`,
+    );
+    expect(page).toContain(residual);
+  });
+
+  it("docs/packs-and-trust.md says what the next init does with the packs a plain clean keeps", () => {
+    const page = flowed(read(PACKS_AND_TRUST));
+    expect(page).toContain(
+      "Plain `stamity clean` removes the generated setup and keeps the rest of `.stamity/`, installed packs included, under `.stamity/packs/`. The next `stamity init` takes a kept pack back only after every gate `add` runs passes again on the same bytes.",
+    );
+    expect(page).toContain(
+      "so those gates can run only for a first-party pack from the bundled catalog, and only one whose kept files are that pack's own bytes comes back.",
+    );
+    expect(page).toContain(`${refused} and \`stamity add <source>\` installs it again through the gates.`);
+  });
+
+  it("CHANGELOG.md's clean entry says which kept packs init takes back, and no longer that it takes every one", () => {
+    const page = flowed(read("CHANGELOG.md"));
+    expect(page).toContain(
+      "A later `init` takes a kept first-party pack back once `add`'s gates pass again on it; any other kept pack is named, and `add <source>` re-installs it.",
+    );
+    expect(page).not.toContain("A later `init` takes a kept pack back from its own receipt");
+  });
+});

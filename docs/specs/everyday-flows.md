@@ -5457,6 +5457,12 @@ charter's 95-line pin, the always-on figure is published with and without it, an
   rewrites the file, which takes a `.bak` where git cannot confirm it committed (REQ-PLUGIN-046).
 - **Proof:** `test/emit/agentsMd.test.ts`, `test/corpus/invariants.test.ts`, `test/emit/capabilityMatrix.test.ts`,
   `test/cli/commands/check.test.ts`, `test/merge/hookFilesOwnership.test.ts`, `test/cli/checkExpectations.test.ts`.
+- **Amended 2026-10-26** (the 1.17.0 page re-attestation's fix round, ledger row `prove/48`, commit `dbd3a19b`; read
+  there). Given Cursor selected, Then the block's draft bullet reads "Keep the pull request a draft: only `stamity run
+  land --ready` readies it." (`src/emit/agentsMd.ts`, `CURSOR_CLOUD_BLOCK_LINES`): the pull request stays a draft until
+  `stamity run land --ready` readies it on its evidence, as on every client since 1.17.0. The requirement above read
+  "keep the PR a draft, never ready", which no longer holds. The bullet is 76 bytes, as the old one was, so the
+  14-line count and the root file's byte figures do not move. *Proof:* `test/emit/agentsMd.test.ts`.
 
 ### REQ-FLOW-115 — Cursor's context once per conversation, and its managed runs
 

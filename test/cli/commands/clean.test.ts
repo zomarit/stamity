@@ -2385,7 +2385,10 @@ describe("clean keeps the user's state under .stamity/ (REQ-FLOW-028)", () => {
   );
 
   it(
-    "says what it kept and that the next init takes the pack back",
+    // TEST CHANGE, justified (2026-10-25_autonomy-distribution-02/prove/64): since prove/44 the next init takes a kept
+    // pack back only when it is a bundled catalog pack and add's gates pass again on its bytes, and names any other one
+    // with `add <source>` as its route; the closing line said every kept pack came back, so the pin and title follow it.
+    "says what it kept and which kept packs the next init takes back",
     async () => {
       const root = await copyOf(withState);
 
@@ -2399,8 +2402,11 @@ describe("clean keeps the user's state under .stamity/ (REQ-FLOW-028)", () => {
       );
       expect(result.stdout).not.toContain(`${npxCommand("clean --purge")} deletes these too`);
       expect(result.stdout).toContain(
-        `The installed pack(s) ${SHIP_ID} stay under ${STATE_DIR}/packs/: the next ${npxCommand("init")} records them again from their receipts.`,
+        `The installed pack(s) ${SHIP_ID} stay under ${STATE_DIR}/packs/. The next ${npxCommand("init")} takes one back only ` +
+          `if it is a first-party pack from the bundled catalog and every gate add runs passes again on its kept files; ` +
+          `it names any other kept pack and records none of its files, so re-install that one with ${npxCommand("add <source>")}.`,
       );
+      expect(result.stdout).not.toContain("records them again from their receipts");
       expect(result.stdout).not.toContain(`${STATE_DIR}/ removed`);
     },
     60_000,

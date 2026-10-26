@@ -2134,6 +2134,35 @@ describe("adoptInstalledPacks", () => {
       [".stamity/packs/elsewhere", expect.stringContaining(`installs to ${PACK_ROOT}, not .stamity/packs/elsewhere`) as unknown],
     ]);
   });
+
+  // ADDED (2026-10-25_autonomy-distribution-02/prove/66): `init` prints each refusal's folder, id and reason as they
+  // stand (`src/cli/commands/init/apply.ts::adoptionRefusalWarning`), and a planted folder or file name is repository
+  // data, so an ESC, a right-to-left override or a line break in it would rewrite the line the operator reads.
+  it.skipIf(process.platform === "win32")(
+    "cleans a planted folder name and an unlisted file name before either enters a refusal (prove/66)",
+    async () => {
+      // Built at run time so the source holds no control character: ESC, U+202E (right-to-left override), a newline.
+      const hostile = `x${String.fromCodePoint(0x1b)}[2K${String.fromCodePoint(0x202e)}y\nz`;
+      const cleaned = "x[2Ky z";
+      const unprintable = /[\p{Cc}‪-‮⁦-⁩]/u;
+      await keptCatalogPack();
+      await getProject().seedFiles({
+        [`.stamity/packs/${hostile}/${RECEIPT_FILE}`]: "not json",
+        [`${CATALOG_ROOT}/agents/${hostile}.md`]: "planted\n",
+      });
+
+      const adoption = await adoptInstalledPacks(getProject().dir, new Set());
+
+      expect(adoption.adopted).toEqual([]);
+      expect(adoption.refused.map((refusal) => [refusal.dir, refusal.packId, refusal.reason])).toEqual([
+        [CATALOG_ROOT, CATALOG_ID, `${CATALOG_ROOT}/agents/${cleaned}.md lies in its folder but its receipt does not list it, so no gate read it`],
+        [`.stamity/packs/${cleaned}`, cleaned, `.stamity/packs/${cleaned}/${RECEIPT_FILE} is not valid JSON`],
+      ]);
+      for (const refusal of adoption.refused) {
+        for (const field of [refusal.dir, refusal.packId, refusal.reason]) expect(field).not.toMatch(unprintable);
+      }
+    },
+  );
 });
 
 // ── Post-install re-verification ───────────────────────────────

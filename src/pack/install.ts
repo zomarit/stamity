@@ -23,6 +23,7 @@ import { assertPassthroughKeys } from "../emit/skillsProjection.ts";
 import { CONTENT_CLASSES, type ContentClass } from "../types/content.ts";
 import { estimateTokens } from "../guard/tokenEstimate.ts";
 import { readHookDefinitions } from "../hooks/userHooks.ts";
+import { printableName } from "../manifest/coOwnedJson.ts";
 import type { ReclaimCandidate } from "../manifest/ledger.ts";
 import { readManifest } from "../manifest/manifest.ts";
 import { isSharedRegularFile } from "../merge/atomicWrite.ts";
@@ -1754,8 +1755,8 @@ export interface PackAdoption {
 /**
  * The ledger rows of each pack still installed under `.stamity/packs/` that
  * the setup no longer records (REQ-FLOW-028): `clean` keeps installed packs and
- * removes the manifest, so the next `init` takes them back from their own
- * receipts, as {@link applyPackInstall} recorded them.
+ * removes the manifest, so the next `init` takes back the ones `add`'s gates
+ * pass again, as {@link applyPackInstall} recorded them.
  *
  * The receipt and the folder are repository data, so nothing is trusted that
  * the bytes on disk do not prove. A folder is adopted only when it is a real
@@ -1815,7 +1816,13 @@ async function adoptPackFolder(
     // reason: not silent — a folder with no receipt was never installed by `add`, so it is neither adopted nor named.
     return null;
   }
-  const refuse = (packId: string, reason: string): PackAdoptionRefusal => ({ dir, packId, reason });
+  // The folder name and any file name a reason quotes are repository data, and `init` prints all three fields as they
+  // stand, so each is cleaned the way every label an operator reads is (prove/66).
+  const refuse = (packId: string, reason: string): PackAdoptionRefusal => ({
+    dir: printableName(dir),
+    packId: printableName(packId),
+    reason: printableName(reason),
+  });
   if (!receiptStats.isFile() || isSharedRegularFile(receiptStats)) {
     return refuse(name, `${dir}/${RECEIPT_FILE} is not a regular file with one name`);
   }

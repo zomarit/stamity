@@ -557,7 +557,13 @@ edited, and an unlink that was refused.
 Delete by hand each client copy it keeps and names, unless it is yours, then follow it with
 `stamity sync`, which regenerates the clients' files without the pack. Plain `stamity clean`
 removes the generated setup and keeps the rest of `.stamity/`, installed packs included, under
-`.stamity/packs/`. `stamity clean --purge` deletes `.stamity/` whole, packs included.
+`.stamity/packs/`. The next `stamity init` takes a kept pack back only after every gate `add` runs
+passes again on the same bytes. An install keeps neither `pack.json` nor a signature beside the pack,
+so those gates can run only for a first-party pack from the bundled catalog, and only one whose kept
+files are that pack's own bytes comes back. A kept pack a gate refuses, or one whose gates cannot
+run from its kept folder (a local or `node_modules` pack, signed or not), is refused: `init` names it
+in a warning and records none of its files, and `stamity add <source>` installs it again through the
+gates. `stamity clean --purge` deletes `.stamity/` whole, packs included.
 
 ## Author your own pack
 
