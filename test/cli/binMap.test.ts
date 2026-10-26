@@ -100,4 +100,15 @@ describe("package.json bin map", () => {
   it("ships the release pack's npm-shrinkwrap.json beside dist", () => {
     expect(pkg.files).toEqual(["dist", "npm-shrinkwrap.json"]);
   });
+
+  // ADDED by plan 022 file 2, b10-shrinkwrap-st (REQ-FLOW-049): the release shrinkwrap is the lock's
+  // production rows, root row included, so a stale bin there ships in every tarball, and the next
+  // `npm install` here rewrites it in an unrelated diff. npm writes the lock's paths without `./`.
+  it("matches package-lock.json's root row bin to package.json's", () => {
+    const lock = JSON.parse(readFileSync(join(REPO_ROOT, "package-lock.json"), "utf-8")) as {
+      readonly packages: Record<string, { readonly bin?: Record<string, string> }>;
+    };
+    const expected = Object.fromEntries(Object.entries(pkg.bin).map(([name, entry]) => [name, entry.replace(/^\.\//, "")]));
+    expect(lock.packages[""]?.bin).toEqual(expected);
+  });
 });
