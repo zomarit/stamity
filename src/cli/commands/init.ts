@@ -62,6 +62,7 @@ import {
   type InitOverrides,
 } from "./init/plan.ts";
 import {
+  adoptedPackLines,
   defaultClientsLine,
   emissionSummary,
   gitignoreLine,
@@ -976,6 +977,7 @@ function renderDryRun(
       mcpConfigured: mcpServers.length > 0,
     })}\n`,
   );
+  for (const line of adoptedPackLines(report)) io.out(`  ${line}\n`);
   for (const warning of [
     ...report.wrote.flatMap((row) => (row.warning === undefined ? [] : [row.warning])),
     ...report.warnings,

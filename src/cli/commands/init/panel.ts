@@ -28,6 +28,7 @@ import {
 } from "../../../types/markers.ts";
 import type { WorkingTreeStatus } from "../../engine/gitStatus.ts";
 import { packageCommand } from "../../kit/packageName.ts";
+import { sanitizeLabel } from "../../kit/prompts.ts";
 import type { Palette } from "../../kit/terminal.ts";
 import type { InitApplyReport } from "./apply.ts";
 import type { InitDecisions } from "./plan.ts";
@@ -707,6 +708,20 @@ function noticeLines(report: InitApplyReport): string[] {
 }
 
 /**
+ * One plain line per kept pack this init took back from its receipt
+ * ({@link InitApplyReport.adoptedPacks}), so its agents, rules and hooks are not
+ * first met at the next sync (2026-10-25_autonomy-distribution-02/prove/12).
+ * Not a warning: taking a proven pack back is the happy path, and one its
+ * receipt cannot prove is already a warning of its own. The id comes from a
+ * receipt in the repository, so it is printed through `sanitizeLabel`. The
+ * panel and init's dry-run preview both print these.
+ */
+export function adoptedPackLines(report: InitApplyReport): string[] {
+  const verb = report.dryRun ? "would take back" : "took back";
+  return report.adoptedPacks.map((id) => `${verb} the kept pack "${sanitizeLabel(id)}" from its receipt under ${STATE_DIR}/packs/`);
+}
+
+/**
  * The end-of-init security disclosure, in two independent halves.
  *
  * They were one string gated on MCP servers existing, which made the whole
@@ -962,6 +977,7 @@ export function renderInitPanel(input: InitPanelInput): string {
   }
   if (mcpServers.length > 0) lines.push(`  ${credentialLine(mcpServers)}`);
   for (const notice of noticeLines(report)) lines.push(`  ${notice}`);
+  for (const line of adoptedPackLines(report)) lines.push(`  ${line}`);
   for (const warning of warningLines(report)) {
     lines.push(`  ${palette.yellow(`warning: ${warning}`)}`);
   }

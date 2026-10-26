@@ -20,6 +20,7 @@ import {
 } from "../../../src/content/contentRoot.ts";
 import { createManifest, readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
 import type * as CuratedModule from "../../../src/pack/curated.ts";
+import { applyPackInstall, planPackInstall } from "../../../src/pack/install.ts";
 import type { Tool } from "../../../src/types/core.ts";
 import { EngineError } from "../../../src/types/errors.ts";
 import { STATE_DIR } from "../../../src/types/markers.ts";
@@ -27,6 +28,7 @@ import { readWorkspaceManifest } from "../../../src/workspace/manifest.ts";
 import { WORKSPACE_MANIFEST_FILE } from "../../../src/workspace/model.ts";
 import { npxCommand } from "../../support/identity.ts";
 import { runInProcess, type InProcessResult } from "../../support/inProcess.ts";
+import { madeUpArtifact, writeMadeUpPack } from "../../support/packFixtures.ts";
 import { MENU_KEYS, MenuTtyInput, waitForOutput } from "../../support/menuTty.ts";
 import { carriedProcessEnv, NO_GIT_CONFIG, seedGitRepo } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -578,6 +580,33 @@ describe("init — fresh repo", () => {
     await writeFile(join(root, ".env.mcp"), "GITHUB_PAT=\n", "utf8");
     const withFile = await runInit(root, ["--dry-run", "-y"]);
     expect(withFile.stdout).toContain("these lines — .env.mcp (MCP server credentials), ");
+  });
+
+  // 2026-10-25_autonomy-distribution-02/prove/12: after a default clean, init takes a kept pack back from its receipt;
+  // the preview and the panel each name it on one plain line, never as a warning.
+  it("names a kept pack it takes back from its receipt, in the dry-run preview and the panel", async () => {
+    const root = await makeRepo();
+    const source = await writeMadeUpPack(getTemp().path("pack-sources"), "acme-kept", {
+      "rules/stamity-acme-style.md": madeUpArtifact("acme-style", "rule", "The acme style."),
+    });
+    const plan = await planPackInstall(root, source, { allowUntrusted: true });
+    const setup = createManifest({
+      tools: ["claude"],
+      selection: { items: { agent: [], skill: [], rule: [], command: [] } },
+      generatorVersion: "0.0.0-test",
+      now: new Date("2026-08-13T09:00:00.000Z"),
+    });
+    const { result: installed } = await applyPackInstall(root, plan, setup, { engineVersion: "0.0.0-test", now: new Date("2026-08-13T09:00:00.000Z") });
+    expect(installed.installed, installed.errors.join("; ")).toBe(true);
+
+    const preview = await runInit(root, ["--dry-run", "-y"]);
+    expect(preview.code).toBe(0);
+    expect(preview.stdout).toContain('\n  would take back the kept pack "acme-kept" from its receipt under .stamity/packs/\n');
+
+    const live = await runInit(root, ["-y"]);
+    expect(live.code).toBe(0);
+    expect(live.stdout).toContain('\n  took back the kept pack "acme-kept" from its receipt under .stamity/packs/\n');
+    expect(live.stdout).not.toContain("warning: took back");
   });
 
   it("prints the stack-suggestion block for a detected stack, above the next steps", async () => {

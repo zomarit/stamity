@@ -194,6 +194,15 @@ export interface InitApplyReport {
    * which writes nothing. The panel names exactly these.
    */
   gitignoreAdded: string[];
+  /**
+   * The ids of the kept packs under `.stamity/packs/` this run took back from
+   * their receipts (`../../../pack/install.ts::adoptInstalledPacks`), in folder
+   * order — or, under `dryRun`, would take back. One its receipt cannot prove
+   * is a warning instead and is not listed. The panel names each on a plain
+   * line (2026-10-25_autonomy-distribution-02/prove/12). Repository data: a
+   * printer cleans an id before it prints it.
+   */
+  adoptedPacks: string[];
   dryRun: boolean;
 }
 
@@ -624,6 +633,7 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
     ledgerCount: ledger.length,
     gitignoreEnsured: !dryRun,
     gitignoreAdded,
+    adoptedPacks: adoption.adopted,
     dryRun,
   };
 }

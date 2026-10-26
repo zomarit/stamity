@@ -105,6 +105,7 @@ function reportFixture(wrote: MergeResult[] = [], warnings: string[] = []): Init
     ledgerCount: wrote.length,
     gitignoreEnsured: true,
     gitignoreAdded: [...REQUIRED_GITIGNORE_ENTRIES],
+    adoptedPacks: [],
     dryRun: false,
   };
 }
@@ -806,6 +807,26 @@ describe("renderInitPanel — security disclosure", () => {
     );
 
     expect(output).not.toContain("security:");
+  });
+
+  // 2026-10-25_autonomy-distribution-02/prove/12: a kept pack init takes back from its receipt is named on a plain
+  // line, never a warning. The id comes from a receipt, repository data, so it is printed cleaned.
+  it("names each kept pack it took back on a plain line, its id cleaned of control and invisible characters", () => {
+    const output = renderInitPanel(
+      panelInput({ report: { ...reportFixture(), adoptedPacks: ["acme-kept", "odd\u001b[31m‮id\nnext"] } }),
+    );
+    const rows = output.split("\n").filter((row) => row.includes("kept pack"));
+
+    expect(rows).toEqual([
+      '  took back the kept pack "acme-kept" from its receipt under .stamity/packs/',
+      '  took back the kept pack "odd[31mid next" from its receipt under .stamity/packs/',
+    ]);
+    expect(output).not.toContain("\u001b[31m");
+    expect(output).not.toContain("‮");
+  });
+
+  it("prints no kept-pack line when init took none back", () => {
+    expect(renderInitPanel(panelInput())).not.toContain("kept pack");
   });
 
   it("keeps the credential wording for a run with an MCP server", () => {

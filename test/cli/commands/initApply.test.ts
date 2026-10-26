@@ -240,6 +240,9 @@ describe("applyInit — fresh repo", () => {
       ledgerCount: 1,
       gitignoreEnsured: true,
       gitignoreAdded: CLIENT_ENTRIES,
+      // TEST CHANGE, justified (2026-10-25_autonomy-distribution-02/prove/12): the report names the kept packs init
+      // took back from their receipts; a fresh repo has none.
+      adoptedPacks: [],
       dryRun: false,
     });
     for (const dir of STATE_DIRS) {
@@ -451,6 +454,18 @@ describe("applyInit — the packs a clean kept (REQ-FLOW-028)", () => {
     expect(byPath(manifest.ledger.filter((row) => row.adapter === OWNER))).toEqual(byPath(recorded));
     expect(await verifyInstalledPacks(root, manifest)).toEqual({ checked: 3, findings: [] });
     expect(report.warnings.filter((warning) => warning.includes(".stamity/packs/"))).toEqual([]);
+    // prove/12: the pack taken back is named, so the panel can say so.
+    expect(report.adoptedPacks).toEqual([PACK_ID]);
+  });
+
+  it("names a kept pack it would take back under --dry-run too, and records nothing", async () => {
+    const root = await makeRepo();
+    await keptPack(root);
+
+    const report = await applyInit(optionsFor(root, { dryRun: true }));
+
+    expect(report.adoptedPacks).toEqual([PACK_ID]);
+    expect(await readManifest(root)).toBeNull();
   });
 
   it("records no row of a kept pack whose file was edited, and names it in one warning that points at add", async () => {
@@ -466,6 +481,8 @@ describe("applyInit — the packs a clean kept (REQ-FLOW-028)", () => {
     expect(named).toHaveLength(1);
     expect(named[0]).toContain("rules/stamity-acme-style.md hashes to");
     expect(named[0]).toContain("add <source>");
+    // A refused pack is a warning only, never named as taken back.
+    expect(report.adoptedPacks).toEqual([]);
   });
 });
 
