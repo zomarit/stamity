@@ -457,7 +457,8 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     fact:
       "A cloud agent opens pull requests and tries to fix CI failures on the ones it creates. Whether " +
       "such a pull request is a draft the page does not say, so a run opens its own draft through the " +
-      "run verbs and never marks it ready. The platform's own push and pull request, its CI fixes " +
+      "run verbs and marks it ready only through `stamity run land --ready`, once the evidence holds. " +
+      "The platform's own push and pull request, its CI fixes " +
       "included, meet no shell guard, held-path hold or scan, so branch protection on the default " +
       "branch is needed to keep them off it.",
     status: "not documented",

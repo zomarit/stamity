@@ -4491,7 +4491,7 @@ For a Cursor cloud agent in this repository; the charter above binds it as it bi
 - Learnings first: where no session-start banner has printed, run
   \`node .stamity/generated/hooks/cursor/stamity-session-start.mjs\` with an empty stdin and open only the files
   it lists as loaded.
-- Keep the pull request a draft and never mark it ready; a person does that.
+- Keep the pull request a draft: only \`stamity run land --ready\` readies it.
 - An unattended run follows the \`st-unattended\` skill, \`.agents/skills/st-unattended/SKILL.md\`.
 ",
   "AGENTS.override.md": "
@@ -5274,10 +5274,10 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "f341773bf60ecf122f96ec1eb3525bbc60ad13e521d8b44d44e1fb59a68c3878 94105 bytes",
+  ".stamity/manifest.json": "5e5873f5cd1410cd5f589bd46b950e4ab1cf1bd8b135a952942a5cad454416f0 94105 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
+  "AGENTS.md": "8a27073afaf09be0ca5fc782dd2632108aab084a85b0dccaaad3ceba751a7173 6548 bytes",
   "AGENTS.override.md": "122504f41cc40a99c65cba4995c228bf4a5137d738324bbe3a847c6aaa5192db 25872 bytes",
   "CLAUDE.md": "697c902a89fcffe97474d8ca71b309c303c3989f9c87dbbf2c6fb12d12e95bc4 55 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -10925,7 +10925,7 @@ For a Cursor cloud agent in this repository; the charter above binds it as it bi
 - Learnings first: where no session-start banner has printed, run
   \`node .stamity/generated/hooks/cursor/stamity-session-start.mjs\` with an empty stdin and open only the files
   it lists as loaded.
-- Keep the pull request a draft and never mark it ready; a person does that.
+- Keep the pull request a draft: only \`stamity run land --ready\` readies it.
 - An unattended run follows the \`st-unattended\` skill, \`.agents/skills/st-unattended/SKILL.md\`.
 ",
 }
@@ -11013,8 +11013,8 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "1c6d98b6fe6ba331141f636d82491b8f1e7f4e4cd9d090e0330369f45f024d9e 22426 bytes",
-  "AGENTS.md": "6b5b5bebfd779fe5b513cd8c2c41fa3b4dd70826435e9df9c70076ba48c29b98 6548 bytes",
+  ".stamity/manifest.json": "26c55c9dd237957d5178fb1b216085559c5c32d475bf322b6306f207b2435224 22426 bytes",
+  "AGENTS.md": "8a27073afaf09be0ca5fc782dd2632108aab084a85b0dccaaad3ceba751a7173 6548 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",

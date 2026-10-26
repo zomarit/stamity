@@ -222,7 +222,7 @@ const CURSOR_CLOUD_BLOCK_LINES = [
   "- Learnings first: where no session-start banner has printed, run",
   "  `node .stamity/generated/hooks/cursor/stamity-session-start.mjs` with an empty stdin and open only the files",
   "  it lists as loaded.",
-  "- Keep the pull request a draft and never mark it ready; a person does that.",
+  "- Keep the pull request a draft: only `stamity run land --ready` readies it.",
   "- An unattended run follows the `st-unattended` skill, `.agents/skills/st-unattended/SKILL.md`.",
 ] as const;
 

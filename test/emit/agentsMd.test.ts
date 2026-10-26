@@ -615,7 +615,11 @@ describe("Cursor's cloud block (REQ-FLOW-114)", () => {
     "- Learnings first: where no session-start banner has printed, run",
     "  `node .stamity/generated/hooks/cursor/stamity-session-start.mjs` with an empty stdin and open only the files",
     "  it lists as loaded.",
-    "- Keep the pull request a draft and never mark it ready; a person does that.",
+    // TEST CHANGE, justified (2026-10-26, run 2026-10-25_autonomy-distribution-02, ledger prove/48): the
+    // bullet said a person marks the draft ready, while `stamity run land --ready` now marks the run's own
+    // draft ready on its evidence on every client. The sentence moved; its byte length did not, so the
+    // line count and the two shared-bytes figures below hold unchanged.
+    "- Keep the pull request a draft: only `stamity run land --ready` readies it.",
     "- An unattended run follows the `st-unattended` skill, `.agents/skills/st-unattended/SKILL.md`.",
     "",
   ].join("\n");
