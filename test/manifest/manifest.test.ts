@@ -1157,6 +1157,8 @@ describe("readManifest / writeManifest", () => {
       ["a value Date.parse accepts but the writer never produces", "2026-08-13"],
       ["a non-date string", "not a time"],
       ["an impossible calendar date in the writer's shape", "2026-02-31T09:15:00.000Z"],
+      ["a month 13 in the writer's shape, which no Date holds", "2026-13-01T09:15:00.000Z"],
+      ["an hour 25 in the writer's shape, which no Date holds", "2026-08-13T25:00:00.000Z"],
     ])("stamps afresh over an on-disk updatedAt that is %s", async (_label, planted) => {
       const root = getRoot().dir;
       await writeManifest(root, fullManifest(), { now: FIXED_NOW });

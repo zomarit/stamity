@@ -1404,10 +1404,14 @@ const WRITER_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 /**
  * True for a value this writer could have stamped: its shape, and a date that
  * round-trips through `toISOString` unchanged, so a lenient parse of an
- * impossible date (`02-31`) does not pass.
+ * impossible date (`02-31`) does not pass. A shape no `Date` holds (a month
+ * 13) parses to an invalid date, which is checked before `toISOString` would
+ * throw on it: that stamp is stale, so the write replaces it.
  */
 function isWriterTimestamp(value: unknown): value is string {
-  return typeof value === "string" && WRITER_TIMESTAMP.test(value) && new Date(value).toISOString() === value;
+  if (typeof value !== "string" || !WRITER_TIMESTAMP.test(value)) return false;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) && date.toISOString() === value;
 }
 
 /**
