@@ -272,6 +272,21 @@ describe("checkPlans", () => {
     expect(calm.ready).toBe(true);
   });
 
+  // review/34: a Risks bullet wrapped onto an unindented next line is one Markdown paragraph (a lazy continuation), but a
+  // next line led by "critical" read as a plain-paragraph Critical risk, so a plan whose risks are all Warnings refused.
+  it("reads a Risks bullet's unindented wrapped line by its bullet, and still refuses a plain-paragraph Critical after a blank line", async (ctx) => {
+    const { cwd, stamp } = await seeded(() => ctx.skip());
+    const wrapped = cleanPlan(stamp).replace("- **Warning** — a retry storm.", "- **Warning** — a retry storm, which could turn\nmore load, then\ncritical under load.");
+    const parted = cleanPlan(stamp).replace("- **Warning** — a retry storm.", "- **Warning** — a retry storm.\n\nCritical: retries can double-charge.");
+
+    const calm = await check(cwd, wrapped);
+    const refused = await check(cwd, parted);
+
+    expect(calm.ready).toBe(true);
+    expect(refused.ready).toBe(false);
+    expect(blockersOf(refused, "critical-risk")).toEqual([{ code: "critical-risk", line: lineOf(parted, "double-charge") }]);
+  });
+
   it("refuses lint-L2 on a dangling dependency and on a cycle, L2 failing", async (ctx) => {
     const { cwd, stamp } = await seeded(() => ctx.skip());
     const dangling = cleanPlan(stamp).replace("| `depends_on` | u1-guard |", "| `depends_on` | u9-gone |");

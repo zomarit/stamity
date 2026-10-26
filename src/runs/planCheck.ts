@@ -393,9 +393,15 @@ function checkSections(lines: readonly string[], blockers: PlanBlocker[]): void 
       });
     }
   }
+  // review/34: whether the row before is a bullet line or that bullet's continuation, on the line right above (no blank
+  // line, heading, table row or fence between), so a column-0 line here is the bullet's lazy continuation in Markdown.
+  let item = { open: false, line: 0 };
   for (const row of rows) {
+    const continues = item.open && item.line === row.line - 1;
+    const trimmed = row.text.trim();
+    item = { open: !row.heading && trimmed !== "" && !trimmed.startsWith("|") && (continues || BULLET.test(row.text)), line: row.line };
     if (row.heading) continue;
-    if (row.section.startsWith("risks") && isCriticalRisk(row.text)) {
+    if (row.section.startsWith("risks") && isCriticalRisk(row.text, continues)) {
       blockers.push({ code: "critical-risk", line: row.line, message: "A Critical risk blocks handoff; mitigate it to Warning or resolve it before an unattended start." });
     }
     if (row.section.startsWith("prerequisites")) checkPrerequisiteRow(row.text, row.line, blockers);
@@ -404,16 +410,17 @@ function checkSections(lines: readonly string[], blockers: PlanBlocker[]): void 
 
 /**
  * A Risks bullet led by `Critical`, a Risks table row with a cell led by it, or (build/42) a plain paragraph line led
- * by it at column 0; an indented line is a bullet's continuation, which its bullet's own lead decides.
+ * by it at column 0; an indented line, or (review/34) a column-0 line that `continues` a bullet, is that bullet's
+ * continuation, which its bullet's own lead decides.
  */
-function isCriticalRisk(text: string): boolean {
+function isCriticalRisk(text: string, continues: boolean): boolean {
   const trimmed = text.trim();
   if (trimmed.startsWith("|")) {
     return trimmed.replace(/^\|/, "").replace(/\|$/, "").split("|").some((cell) => CRITICAL_LEAD.test(cell));
   }
   const item = BULLET.exec(trimmed)?.[1];
   if (item !== undefined) return CRITICAL_LEAD.test(item);
-  return !/^\s/.test(text) && CRITICAL_LEAD.test(trimmed);
+  return !continues && !/^\s/.test(text) && CRITICAL_LEAD.test(trimmed);
 }
 
 /**
