@@ -43,9 +43,9 @@ everything it would write:
   agentCapabilities  pass
 
   files              5
-  footprint          23.1 KiB of 256.0 KiB allowed
+  footprint          23.2 KiB of 256.0 KiB allowed
   target             .stamity/packs/frontend
-  trust              curator-verified — catalog pin verified: aggregate content SHA 630c15ffa71f… matches and the catalog grants "curator-verified"
+  trust              curator-verified — catalog pin verified: aggregate content SHA 1bcb11a7f5b6… matches and the catalog grants "curator-verified"
 
   will install
     skills
@@ -54,9 +54,9 @@ everything it would write:
       skills/st-design-system-detect/SKILL.md              8.1 KiB  ~2052 tok
       skills/st-design-system-detect/agents/openai.yaml      189 B  ~48 tok
     commands
-      commands/st-ui-review.md                             7.4 KiB  ~1881 tok
+      commands/st-ui-review.md                             7.4 KiB  ~1900 tok
 
-  context cost  ~5906 tokens across 5 file(s)
+  context cost  ~5925 tokens across 5 file(s)
 
   scope
     declared tools  claude, cursor, copilot, codex

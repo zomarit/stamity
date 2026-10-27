@@ -42,7 +42,7 @@ Scenario input — the request as it arrives in chat. No command is running, and
 is in flight in the repository:
 
 > I'm the only one touching this repo this week and no other branch is open. Rename the
-> private helper `fmtDate` in `src/util/date.ts` and update its two call sites.
+> private helper `fmtDate` in `src/util/date.ts` to `formatShortDate` and update its two call sites.
 
 Answer with the id of the one skill that applies, or `none` if the request stays with the
 main flow, plus one sentence of reason.
