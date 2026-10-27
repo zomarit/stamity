@@ -206,11 +206,13 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     subject: "Project hooks",
     fact:
       "Claude Code on the web runs the hooks in the clone's `.claude/settings.json` in a session " +
-      "with one repository. A session with several repositories loads no repository's hooks, and " +
-      "user-level `~/.claude/settings.json` hooks stay on the operator's machine.",
+      "with one repository, outside a project's cloud threads. In an Anthropic-hosted environment, " +
+      "a session with several repositories loads no repository's hooks, and a project's cloud thread " +
+      "loads none whatever the number of repositories; a self-hosted environment goes by its runner's " +
+      "settings. User-level `~/.claude/settings.json` hooks stay on the operator's machine.",
     status: "documented",
-    citation: { url: "https://code.claude.com/docs/en/cloud-environments", accessDate: "2026-10-15" },
-    glance: "repository hooks run in a one-repository session; none with several repositories",
+    citation: { url: "https://code.claude.com/docs/en/cloud-environments", accessDate: "2026-10-27" },
+    glance: "repository hooks run in a one-repository session; none with several repositories or in a project thread",
   },
   {
     tool: "claude",

@@ -103,8 +103,9 @@ set to any value but empty, `false` or `0`. A cloud's own marker means "cloud", 
 
 ### Set it up
 
-Start one repository per session: a session holding several repositories loads none of their
-hooks, and the pre-flight's `hooks-loaded` check refuses it. Set `STAMITY_UNATTENDED=1` in the
+Start one repository per session, outside a project: a session holding several repositories loads
+none of their hooks, a project's cloud thread loads none whatever the number of repositories, and
+the pre-flight's `hooks-loaded` check refuses either. Set `STAMITY_UNATTENDED=1` in the
 cloud environment. The setup ships a readiness hook for this cloud. Where `CLAUDE_CODE_REMOTE` is
 `true` it marks the session's hooks loaded and runs `npm ci` when `node_modules` is missing and a
 lockfile is there. Locally it does nothing. The GitHub proxy refuses GraphQL, so `gh pr` and

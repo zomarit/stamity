@@ -47,8 +47,9 @@ never rewrite history.
 
 ## Hooks
 
-A cloud session that holds several repositories loads none of their hooks. An unattended start there is refused first
-by the pre-flight's `hooks-loaded` check, and its fix is one repository per session.
+A cloud session that holds several repositories loads none of their hooks, and neither does a project's cloud thread,
+whatever the number of repositories. An unattended start in either is refused first by the pre-flight's `hooks-loaded`
+check, and its fix is one repository per session, outside a project.
 
 ## Continuing a run from its branch
 

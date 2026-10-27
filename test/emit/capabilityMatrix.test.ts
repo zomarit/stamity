@@ -701,9 +701,18 @@ describe("the cloud column and the Cloud sessions section", () => {
     expect(cloudFact("codex", "Project hooks").status).toBe("not documented");
     expect(cloudFact("codex", "Project hooks").fact).toContain("assume none run");
     expect(cloudFact("codex", "Project hooks").fact).toContain("sandbox is the enforcement");
-    expect(cloudFact("claude", "Project hooks").fact).toContain(
-      "A session with several repositories loads no repository's hooks",
+    // Re-pinned 2026-10-27 (the 1.17.0 cut's vendor-fact line): the cloud-environments page now
+    // scopes the several-repositories rule to an Anthropic-hosted environment and adds that a
+    // project's cloud thread loads no repository's hooks at all, so the fact and its pins moved.
+    const claudeHooks = cloudFact("claude", "Project hooks");
+    expect(claudeHooks.fact).toContain("in a session with one repository, outside a project's cloud threads");
+    expect(claudeHooks.fact).toContain(
+      "In an Anthropic-hosted environment, a session with several repositories loads no repository's hooks",
     );
+    expect(claudeHooks.fact).toContain("a project's cloud thread loads none whatever the number of repositories");
+    expect(claudeHooks.fact).toContain("a self-hosted environment goes by its runner's settings");
+    expect(claudeHooks.citation.accessDate).toBe("2026-10-27");
+    expect(claudeHooks.glance).toContain("project thread");
     expect(cloudFact("copilot", "Default branch").fact).toContain("present on the repository's default branch");
     expect(cloudFact("copilot", "Project hooks").fact).toContain("in the cloned repository");
     expect(cloudFact("cursor", "Project hooks").fact).toContain(

@@ -550,9 +550,11 @@ A vendor's cloud runs only the hooks it documents. Each fact below is dated, wit
 
 - Codex: Codex cloud documents no project hooks, so assume none run there. Its sandbox is the
   enforcement.
-- Claude Code: a cloud session with several repositories loads no repository hooks, so neither the
-  guard nor the session start runs there. With one repository it runs the clone's
-  `.claude/settings.json`.
+- Claude Code: in an Anthropic-hosted environment a cloud session with several repositories loads
+  no repository hooks, and a project's cloud thread loads none whatever the number of repositories,
+  so neither the guard nor the session start runs there. A session with one repository, outside a
+  project's cloud threads, runs the clone's `.claude/settings.json`. A self-hosted environment goes
+  by its runner's settings.
 - Copilot: the cloud agent uses hooks only when the hooks file is present on the default branch, and
   loads them from `.github/hooks/*.json` in its clone, so a branch that adds the file runs no hooks
   until the file reaches the default branch.

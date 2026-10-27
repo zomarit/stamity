@@ -28,7 +28,7 @@ page, under Currency and revisit triggers.
 
 | Client | Entry file | Reads `.agents/skills/` | Hook config | Hook enforcement | MCP dialect | In the vendor's cloud |
 |---|---|---|---|---|---|---|
-| `claude` | `CLAUDE.md` | no | `.claude/settings.json` | `fail-closed` — blocks on exit `2` | `claude-json` | repository hooks run in a one-repository session; none with several repositories — read 2026-10-15 |
+| `claude` | `CLAUDE.md` | no | `.claude/settings.json` | `fail-closed` — blocks on exit `2` | `claude-json` | repository hooks run in a one-repository session; none with several repositories or in a project thread — read 2026-10-27 |
 | `cursor` | none — `AGENTS.md` is native | yes | `.cursor/hooks.json` | `opt-in-fail-closed` — blocks on exit `2` | `cursor-json` | repository hooks run, without `sessionStart`, `sessionEnd` or the MCP hooks — read 2026-10-15 |
 | `copilot` | none — `AGENTS.md` is native | yes | `.github/hooks/stamity.json` | `fail-closed` — blocks on exit `2` | `vscode-json` | repository hooks run, loaded from the clone, only when on the default branch — read 2026-10-15 |
 | `codex` | none — `AGENTS.md` is native | yes | `.codex/hooks.json` | `fail-closed` — blocks on exit `2` | `codex-toml` | no project hooks documented; assume none run — read 2026-10-15 |
@@ -277,7 +277,7 @@ happen in that cloud, and reads `not run` where none has.
 
 | Client | Subject | Fact | Session start prints | Status | Source | Person check |
 |---|---|---|---|---|---|---|
-| `claude` | Project hooks | Claude Code on the web runs the hooks in the clone's `.claude/settings.json` in a session with one repository. A session with several repositories loads no repository's hooks, and user-level `~/.claude/settings.json` hooks stay on the operator's machine. | — | documented | <https://code.claude.com/docs/en/cloud-environments> — accessed 2026-10-15 | not run |
+| `claude` | Project hooks | Claude Code on the web runs the hooks in the clone's `.claude/settings.json` in a session with one repository, outside a project's cloud threads. In an Anthropic-hosted environment, a session with several repositories loads no repository's hooks, and a project's cloud thread loads none whatever the number of repositories; a self-hosted environment goes by its runner's settings. User-level `~/.claude/settings.json` hooks stay on the operator's machine. | — | documented | <https://code.claude.com/docs/en/cloud-environments> — accessed 2026-10-27 | not run |
 | `claude` | Session marker | `CLAUDE_CODE_REMOTE` is `true` in the session VM and never `true` locally. | — | documented | <https://code.claude.com/docs/en/cloud-environments> — accessed 2026-10-15 | not run |
 | `claude` | GitHub access | The GitHub proxy refuses GraphQL with a 403, so `gh pr`, `gh issue` and Projects v2 fail; `gh api` over REST works. | GraphQL, gh pr, gh issue and Projects are unavailable here; use gh api. | documented | <https://code.claude.com/docs/en/cloud-environments> — accessed 2026-10-15 | not run |
 | `claude` | Session state | A reclaimed VM is rebuilt fresh when the session reopens, so state the hooks wrote there, the review gate's round counter included, does not carry over. | A missing review-gate counter is rebuilt from the run record on this branch. | documented | <https://code.claude.com/docs/en/cloud-environments> — accessed 2026-10-15 | not run |

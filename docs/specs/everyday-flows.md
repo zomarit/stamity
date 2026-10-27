@@ -4136,6 +4136,13 @@ hooks, and that Codex cloud documents no project hooks, so none are assumed to r
   and `view` name their path argument `filePath` or `path` (`build/76`).
 - **Expand/contract:** the 1.14 PascalCase file is replaced on the first 1.15 `sync`, its bytes kept recoverable by the
   rendering proof; rollback is a re-sync at the prior version.
+- **Amended 2026-10-27** (the 1.17.0 cut's vendor-fact line; Claude Code's cloud-environments page, read 2026-10-27).
+  The guides' Claude Code sentence moved with the vendor's page: a session with one repository runs the clone's
+  `.claude/settings.json` outside a project's cloud threads; in an Anthropic-hosted environment a session with several
+  repositories loads no repository hooks, and a project's cloud thread loads none whatever the number of repositories;
+  a self-hosted environment goes by its runner's settings (`CLIENT_CLOUD_FACTS`, `src/hooks/model.ts`, its "Project
+  hooks" row; `docs/customization.md`, `docs/troubleshooting.md`). The paragraph above, read at `fee88300`, stands as
+  that commit's record.
 - **Proof:** `test/adapters/copilot.test.ts`, `test/hooks/portableRunner.test.ts`, `test/emit/hooksInfra.test.ts`.
 
 ### REQ-FLOW-087 — PR-resolve and the board work in a REST-only session
@@ -5380,6 +5387,15 @@ hooks is vendor-documented, re-checked at build; a repository added after the st
   stand in for the variable; its evidence opens `hooks did not load` and names `$CLAUDE_ENV_FILE`, and its fix names one
   repository per session (`hooksLoaded`, `src/runs/preflight.ts:497`, `:501-512`). The cloud reference names the
   refusal by the check's id, `hooks-loaded` (`content/skills/st-unattended/references/cloud.md:48-51`).
+- **Amended 2026-10-27** (the 1.17.0 cut's vendor-fact line; Claude Code's cloud-environments page, read 2026-10-27).
+  The vendor fact this requirement rests on moved: the several-repositories rule now holds in an Anthropic-hosted
+  environment, and a project's cloud thread loads no repository's hooks whatever the number of repositories; a
+  self-hosted environment goes by its runner's settings. Given a project's cloud thread with one repository whose shell
+  sees `CLAUDE_CODE_REMOTE=true`, Then the refusal is the same `hooks-loaded` refusal, since no repository hook writes
+  `STAMITY_HOOKS_ACTIVE`; the cloud
+  reference and `docs/cloud.md` name both cases and the remedy, one repository per session, outside a project
+  (`content/skills/st-unattended/references/cloud.md:48-52`). The pre-flight's fix text still names only the
+  several-repositories case (`src/runs/preflight.ts:511-513`), a recorded gap.
 - **Proof:** `test/runs/preflight.test.ts` ("hooks-loaded in Claude Code's cloud"),
   `test/cli/commands/gatePreflight.test.ts`, `test/corpus/skills/unattended.test.ts`.
 

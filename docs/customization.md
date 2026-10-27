@@ -446,8 +446,10 @@ reaches the session.
 
 A vendor's cloud runs only the hooks it documents. Copilot's cloud agent uses hooks only when the
 file is on the default branch, and loads them from the clone. A Claude Code cloud session with
-several repositories loads no repository hooks; with one repository it runs the clone's
-`.claude/settings.json`. Cursor's hosted cloud agents run the repository's hooks except
+one repository runs the clone's `.claude/settings.json`, outside a project's cloud threads. In an
+Anthropic-hosted environment a session with several repositories loads no repository hooks, and a
+project's cloud thread loads none whatever the number of repositories; a self-hosted environment
+goes by its runner's settings. Cursor's hosted cloud agents run the repository's hooks except
 `sessionStart`, `sessionEnd` and the MCP hooks, and none during their early read-only turns; a
 self-hosted worker runs `sessionStart` when a session claims it. Codex cloud documents
 no project hooks, so assume none run: its sandbox is the enforcement. The session-start hook names a
