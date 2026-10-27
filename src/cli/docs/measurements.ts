@@ -108,7 +108,7 @@ export const RUN_OF_RECORD_FILE = "evals/run-of-record.json";
  * the same `main` commit as the regenerated page, after the records it names have landed on
  * `records`.
  */
-export const MEASUREMENT_SNAPSHOT_PATH = "evals/measurements/merge-ready-2026-10-20.json";
+export const MEASUREMENT_SNAPSHOT_PATH = "evals/measurements/merge-ready-2026-10-27.json";
 
 /**
  * Where the page links a record: the `records` branch of this repository, which holds the run
