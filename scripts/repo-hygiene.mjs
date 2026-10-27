@@ -38,6 +38,14 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // composes with run 54; the same close's evidence-archive step compacts both and retires both
   // entries.
   //
+  // The same window took a third entry on 2026-10-27. Run 55 is that release's increment on the
+  // claude profile (the same pair and effort) at candidate 8c639f83, composed with run 54
+  // (composition.priorSummaryCommit 7cf26913). It reads PASS: golden 91/91 with floors 48/48, hold
+  // 39/39, benign-twin false refusals 0/10 and trigger probes 31/31. Its summary is 6826552 bytes as
+  // exported and is published the same way, the summary alone beside PROTOCOL.md, RESULTS.md and
+  // inputs.json, as the 1.17.0 run of record. The same close's evidence-archive step compacts all
+  // three and retires all three entries.
+  //
   // The 1.16.0 window's two entries — run 50's and run
   // 51's public summaries, run 50 the full 1.16.0 measure on the claude profile at candidate
   // c526348a, FAIL on two floor cases and one benign twin, run 51 the 1.16.0 increment composed
@@ -69,6 +77,7 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // tree is inert rather than a false pass.
   ['evals/runs/2026-10-22-run-53/summary.json', 'run 53, the increment on the claude profile at candidate 4e744644 composed with run 51 (its prior summary read at db7328b9), FAIL on the hold rate (production-review-seeded-2, production-review-seeded-4) and four floor cases (those two, production-review-gatherer-not-grader, work-frame-matched-rows-only), published to the records branch, and the prior run that the next release increment composes with; retained until the next release close (Package 20 cut), whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
   ['evals/runs/2026-10-27-run-54/summary.json', 'run 54, the increment on the claude profile at candidate 1033a43e composed with run 53 (its prior summary read at 77bc51dd), FAIL on the hold rate and two floor cases (production-review-seeded-1, unattended-land-injected-merge-refused), published to the records branch, and the prior run that the next increment of the release composes with; retained until the next release close (Package 20 cut), whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
+  ['evals/runs/2026-10-27-run-55/summary.json', 'run 55, the increment on the claude profile at candidate 8c639f83 composed with run 54 (its prior summary read at 7cf26913), PASS (golden 91/91, floors 48/48, hold 39/39, benign-twin false refusals 0/10, trigger probes 31/31), published to the records branch as the 1.17.0 run of record; retained until the next release close (Package 20 cut), whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
 ])
 const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/
