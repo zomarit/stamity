@@ -3966,11 +3966,10 @@ puts in the reply but the Brief does not quote, returns once the Brief quotes `:
 renumbered A1; `plain-never-drops-open-gap` A3 (sha256:aedaed311879), the rewritten text and
 nothing else (`content/skills/st-plain/SKILL.md:101`), met here by a request the skill must
 decline while the product gives no line for the no the charter puts first, returns once the
-product states that decline rule. `unattended-close-opens-draft-pr`'s new note stands above its
-2026-10-25 note, because the runner reads the first note for a label
-(`scripts/eval/run.mjs:207-208`) and the label A1 now names another row than the one that note
-disposed; the older note therefore no longer admits run 53's A1 repeat, and the runner checks
-only the latest comparable run, run 56. No row deleted is a `must NOT` row and none of the seven
+product states that decline rule. `unattended-close-opens-draft-pr` now carries two A1 notes,
+because the label A1 names another row than the one its 2026-10-25 note disposed; the runner
+reads every note for a label (`scripts/eval/run.mjs:202-214`), so each note disposes the row its
+own hash names, and run 53's A1 repeat still reads disposed. No row deleted is a `must NOT` row and none of the seven
 cases is carried from cases-v5, so the appendix and `EXPECTED_MOVES` do not move. The counts
 move: 153 → 145 advisory criteria; the 967 binding criteria, the 171 cases, the floor tags, the
 thresholds and the 189 non-negotiable rows hold. The seven case files named here move, so under

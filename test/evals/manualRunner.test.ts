@@ -1572,6 +1572,32 @@ describe("full run admission and strict aggregation", () => {
     expect(undisposedRepeats({ candidate: disposedCandidate, advisory: { repeats: ["case-recycled:A1"] } }, dispositioned, root)).toEqual(["case-recycled:A1"]);
   });
 
+  // Added 2026-10-27 (run 2026-10-25_autonomy-distribution-02, prove/76; REQ-PROVE-009): a label
+  // renumbered onto a new row and disposed again carries two notes, one per row. Each note disposes
+  // its own row's repeat whichever stands first, and a row whose hash neither note carries stays open.
+  it("reads every disposition note for a label, so a reused label disposes each row by its own hash", () => {
+    const root = temp();
+    const fixture = gitFixture(root);
+    const path = `${CASES_DIR}/golden/case-twice.md`;
+    const rows = ["The first row, deleted first.", "The second row, renumbered A1 and deleted next.", "The third row, never deleted."];
+    const hashOf = (advisory: string) => sha256(parseCase(caseMarkdown("case-twice", advisory), path).advisory[0]).slice(0, 12);
+    fixture.write(path, caseMarkdown("case-twice", rows.map((row, index) => `${index + 1}. ${row}`).join("\n")));
+    const firstCandidate = fixture.commit("three rows");
+    const olderNote = `Disposition 2026-09-15: A1 deleted (sha256:${hashOf(`1. ${rows[0]}`)}) — reason.`;
+    fixture.write(path, caseMarkdown("case-twice", `${olderNote}\n\n1. ${rows[1]}\n2. ${rows[2]}`));
+    const secondCandidate = fixture.commit("first deletion");
+    const newerNote = `Disposition 2026-09-16: A1 deleted (sha256:${hashOf(`1. ${rows[1]}`)}) — reason.`;
+    const current = caseMarkdown("case-twice", `${newerNote}\n\n${olderNote}\n\n1. ${rows[2]}`);
+    fixture.write(path, current);
+    const thirdCandidate = fixture.commit("second deletion");
+    const twice = [parseCase(current, path)];
+    // The older note stands second and still disposes the row its hash names.
+    expect(undisposedRepeats({ candidate: firstCandidate, advisory: { repeats: ["case-twice:A1"] } }, twice, root)).toEqual([]);
+    expect(undisposedRepeats({ candidate: secondCandidate, advisory: { repeats: ["case-twice:A1"] } }, twice, root)).toEqual([]);
+    // The third row now holds A1 and neither note carries its hash.
+    expect(undisposedRepeats({ candidate: thirdCandidate, advisory: { repeats: ["case-twice:A1"] } }, twice, root)).toEqual(["case-twice:A1"]);
+  });
+
   // TEST CHANGE, justified (2026-10-14, r1b-records-suite-eval-cases): "reads every one of run 27's eight repeats as
   // disposed by the live corpus" moved unchanged, with its collection-time read of run 27's summary and its history
   // probe, to test/records/run27Repeats.test.ts under this describe's name: run 27 is a record that leaves `main`, and

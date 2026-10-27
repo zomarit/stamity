@@ -74,14 +74,7 @@ describe("full run admission and strict aggregation", () => {
       "unattended-close-opens-draft-pr:A1",
       "unattended-item-says-merge-refused:A2",
     ]);
-    // TEST CHANGE, justified (2026-10-27, run 2026-10-25_autonomy-distribution-02, run 56's dispositions):
-    // `unattended-close-opens-draft-pr`'s label A1 names a different row since the 2026-10-25
-    // renumbering, and run 56 repeated that row. Its 2026-10-27 note has to stand above the
-    // 2026-10-25 one because `disposed()` reads only the first note per label
-    // (`scripts/eval/run.mjs:207-208`), so run 53's A1 no longer reads disposed. The runner checks
-    // only the latest comparable run, run 56 (the case below), so no run is refused by this. The
-    // other two of run 53's repeats still read disposed, and the shadowed one is named, not dropped.
-    expect(undisposedRepeats(run53, roster, REPO_ROOT)).toEqual(["unattended-close-opens-draft-pr:A1"]);
+    expect(undisposedRepeats(run53, roster, REPO_ROOT)).toEqual([]);
   });
 
   // Added 2026-10-27 (run 2026-10-25_autonomy-distribution-02, the dispositions of eval run 56;

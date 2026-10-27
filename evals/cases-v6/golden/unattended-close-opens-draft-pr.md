@@ -168,8 +168,8 @@ Disposition 2026-10-27: A1 deleted (sha256:a9fd82e5d3c3) — the row asked the r
 `run end` does by itself: `content/skills/st-unattended/SKILL.md:98` has the verb scan the title
 (`src/cli/commands/run.ts:2393-2394`), and no act of the close depends on saying so; B4 binds the
 `run end` call with its title. This is the row the 2026-10-25 note below renumbered A1 (was A2);
-that note's hash names the earlier A1. This note stands above it because the runner reads the
-first note per label (`scripts/eval/run.mjs:207-208`).
+that note's hash names the earlier A1. The runner reads every note for a label
+(`scripts/eval/run.mjs:202-214`), so each of the two disposes the row its own hash names.
 
 Disposition 2026-10-25: A1 deleted (sha256:7b5944c810df) — the row graded a reconciliation the
 governing text never asks for: `content/skills/st-unattended/SKILL.md:82` copies a checkpoint's
