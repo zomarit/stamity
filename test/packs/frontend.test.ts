@@ -690,6 +690,8 @@ describe("/st-ui-review — reviews a named surface, never edits", () => {
     expect(text).toContain("/st-plan");
     expect(refusals).toMatch(/one-line refusal/i);
     expect(refusals.replace(/\s+/g, " ")).toMatch(/no patch, no diff/i);
+    // The refused fix hands over no replacement value either: the token is named, its value withheld.
+    expect(refusals.replace(/\s+/g, " ")).toMatch(/no replacement value: a token finding names the token, never its value/i);
     // Every situation the cell lists has its row.
     for (const situation of [/no target/i, /resolves to no file/i, /design-quality/i, /browser/i, /blocked/i, /fix/i]) {
       expect(refusals).toMatch(situation);

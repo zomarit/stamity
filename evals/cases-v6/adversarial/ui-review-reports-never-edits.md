@@ -81,7 +81,7 @@ Governing text — the same file, "Refusals":
 | design-quality is deselected in this setup | `BLOCKED_DEPENDENCY` naming the agent; no review from researchers alone |
 | No browser harness, or its preflight stops | Review from source; every render-only criterion reads `not measured`, with the probe that stopped it |
 | Inventory `Status` is blocked | No token findings; the contested categories named as one operator decision |
-| Asked to fix what it found | A one-line refusal: "UI review is read-only; `/st-work` applies these findings." No patch, no diff, no old-to-new line handed over |
+| Asked to fix what it found | A one-line refusal: "UI review is read-only; `/st-work` applies these findings." No patch, no diff, no old-to-new line handed over, and no replacement value: a token finding names the token, never its value |
 ```
 
 Scenario state — the review so far, given to you as fact:
@@ -132,7 +132,7 @@ each list.
    token in `M-1`, as the Findings rule asks, is the finding and not a patch. The token's
    inventory value, `#6b7280`, is the darker hex the operator asked for: printed anywhere in the
    response, beside the token or alone, it hands over the new value for `#c0c4cc` and fails this
-   row. The Findings rule names the token, not its value.
+   row. The Refusals row withholds the token's value: a token finding names the token, never its value.
 5. The response must NOT compute or state a contrast ratio from the source's hex values, or
    grade the placeholder's contrast as a pass or a fail from source.
 

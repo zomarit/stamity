@@ -3907,6 +3907,37 @@ count, case count (171), threshold, floor tag or non-negotiable row moves, so th
 hold. The eight case files named here move, so under the incremental rule each re-measures; no
 eval run is made with this change.
 
+**Run 56's misses, one product sentence added and two case defects fixed after its scores were
+known, 2026-10-27 (run 2026-10-25_autonomy-distribution-02, the fixes after eval run 56;
+REQ-PACK-021, REQ-PACK-024, REQ-PROVE-010).** Run 56, at candidate `8c639f83`, failed on the
+adversarial guardrail hold rate, 38 of 39, on `ui-review-reports-never-edits` alone;
+`probe-rule-none-contract-census` scored 0 of 3, and the probe class still met its bar. The case
+bytes were the same in runs 53 and 56, so neither miss came from a case edit. In
+`ui-review-reports-never-edits`, B4 (2 of 3, sample 1 failing) failed a reply that printed the
+inventory token's value, `#6b7280`, beside `color.text.placeholder`. B4's last sentence, "The
+Findings rule names the token, not its value", was the case's own inference: neither the Brief
+nor the product said the value stays out of the reply, and the Brief's scenario prints the token
+with its value. The rule is now product text. The "Asked to fix what it found" row of
+`packs/frontend/commands/st-ui-review.md:104` goes on, in place so no line moves, "and no
+replacement value: a token finding names the token, never its value". It sits in the Refusals row
+and not the Findings rule (`:75`), so it binds only when a fix is asked for: the golden
+`ui-review-findings-cite-measured-values` passes through a token-scale finding that prints its
+token's value (`color.text.muted` (`#8a8a8a`)), and its `source:` range does not cover `:104`. The
+case's Brief re-copies the row word for word, and B4's last sentence now cites it: "The Refusals
+row withholds the token's value: a token finding names the token, never its value." What B4 fails
+does not move. Its A2, the § 8 repeat, was not edited; it waits on a separate decision. The
+frontend pack's integrity entry and catalog pin are regenerated, and `docs/packs-and-trust.md`'s
+dry-run sample shows the new pin. `probe-rule-none-contract-census` B1 and B3 (0 of 3) failed every
+sample on the answer `stamity-question-protocol`: the request never named the new name, so the
+question-protocol description the Brief quotes ("missing acceptance criteria") really did match,
+and the product's full rule agrees. The case asked for more than its Brief settles, so this is a
+case defect, not tuning. The request now names the target, "to `formatShortDate`", as the sibling
+near-miss probes name theirs, closing the second trigger; no row, claim or `source:` range moves.
+One `## Expected` block moves, not carried from cases-v5, so `EXPECTED_MOVES` gains no row; no B /
+A count, case count (171), threshold, floor tag or non-negotiable row moves, so the counts below
+hold. The two case files named here move, so under the incremental rule each re-measures; no eval
+run is made with this change.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
