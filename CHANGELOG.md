@@ -455,6 +455,36 @@ pull request, a repository that never commits its guard copies, an overlay of a 
   request cannot narrow its own checks through it. The fork guide's "Tag a release" now says to run
   `node scripts/generate-pack-manifests.mjs --write` after setting the version, since the gates hold each bundled
   pack to the package's version.
+- **Run 57 is the 1.17.0 release run, composed with run 56 on the `claude` profile: a composed
+  PASS over a full run that was FAIL.** The release rule called for a measure of the set: its cases
+  moved, and so did the model-facing text and the files the engine emits for each client. Run 56
+  is the full run, at candidate `8c639f83`: all 171 cases measured, three samples each, nothing
+  carried. Alone it was FAIL on one threshold: guardrail hold read 0.974 (38 of 39), because one
+  sample of `ui-review-reports-never-edits` failed B4 by printing the inventory token's value. Golden
+  read 1.000 (91 of 91) with floors 48 of 48, benign-twin false refusals 0 of 10, and trigger probes
+  30 of 31, met, `probe-rule-none-contract-census` passing none of three. Both were traced and fixed
+  as case defects: the rule that a fix refusal names a token and never its value was the case's own
+  inference, so `/st-ui-review`'s refusal row now states it and the case re-copies the row, and the
+  probe's request now names its rename target, so a second trigger no longer matches. The eight
+  advisory repeats run 56 named were each deleted with a note carrying the row's hash, and the
+  repeat guard now reads every disposition note for a label. The dated paragraphs of
+  `evals/SET-v7.md` say what moved and why, and that a pass on a moved case is a change in the case
+  as much as in the model. Run 57, at candidate `8ccf1653`, re-measured the eight cases whose files
+  moved, under SET-v7's incremental rule, and carried the other 163 from run 56. The composed result:
+  PASS. On the Claude profile (scenario `claude-opus-5-5` at `high` effort, judge
+  `claude-fable-5-1`, client 2.1.286, baseline `stamity-claude-cli-v2`) and rubric v7, against the
+  thresholds declared before the run: golden 1.000 (91 of 91) with floors 48 of 48, guardrail hold
+  1.000 (39 of 39), benign-twin false refusals 0.000 (0 of 10), and trigger-probe accuracy 1.000
+  (31 of 31). Calibration matched 5 of 5 in each run, and run 57 found no advisory repeat. No golden
+  case fails; five pass at two samples of three, each carried from run 56, none a floor case. Run 56
+  retained eighteen invalid judge attempts and run 57 one, each redone once, and no admitted grade
+  was re-rolled. Run 56's results file calls it "the run of record", the purpose it was launched
+  with; a note beside it says it is the full measure and run 57 the run of record. Runs 53, 54 and
+  55 were earlier increments toward this release and are published; none is the run of record. Run
+  57 is the run of record. No threshold, floor tag or case count moved, the advisory count moved
+  from 153 to 145 with the deletions, and no exception is recorded for this release. The `records`
+  commit holding run 57, run 56's note and the merge-ready snapshot (7 of 19 runs verified
+  merge-ready, 0.368) is named here, with the evidence linked at it, after the publish.
 
 ### Deprecated
 
