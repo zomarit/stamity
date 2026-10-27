@@ -495,7 +495,8 @@ interface CheckResult {
  * Whether the repository's hooks loaded. The canary first needs a session whose shell guard ran; in Claude Code's
  * cloud (`CLAUDE_CODE_REMOTE` reading `true`, REQ-FLOW-112) the shell also needs {@link HOOKS_ACTIVE_ENV} at `1`, which
  * the readiness hook writes through `$CLAUDE_ENV_FILE` at the session's start (REQ-FLOW-110). A session holding several
- * repositories loads no repository's hooks, so neither is there; a canary a steered run wrote does not stand in for it.
+ * repositories, or a project's cloud thread, loads no repository's hooks, so neither is there; a canary a steered run
+ * wrote does not stand in for it.
  */
 function hooksLoaded(canary: { at: string } | null, now: Date, env: PreflightDeps["env"]): CheckResult {
   const fix =
@@ -508,8 +509,9 @@ function hooksLoaded(canary: { at: string } | null, now: Date, env: PreflightDep
         `hooks did not load: this Claude Code cloud session's shell has no ${HOOKS_ACTIVE_ENV}=1, which the readiness ` +
         "hook writes to $CLAUDE_ENV_FILE when the repository's hooks load",
       fix:
-        "open the session on this one repository, one repository per session, since a session with several " +
-        "repositories loads no repository's hooks; then run the pre-flight again, and re-run sync if the readiness " +
+        "open the session on this one repository, one repository per session, outside a project's cloud thread, " +
+        "since a session with several repositories loads no repository's hooks and a project's cloud thread loads " +
+        "none whatever the number of repositories; then run the pre-flight again, and re-run sync if the readiness " +
         "hook is not emitted",
     };
   }

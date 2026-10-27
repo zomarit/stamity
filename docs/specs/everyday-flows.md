@@ -5394,8 +5394,8 @@ hooks is vendor-documented, re-checked at build; a repository added after the st
   sees `CLAUDE_CODE_REMOTE=true`, Then the refusal is the same `hooks-loaded` refusal, since no repository hook writes
   `STAMITY_HOOKS_ACTIVE`; the cloud
   reference and `docs/cloud.md` name both cases and the remedy, one repository per session, outside a project
-  (`content/skills/st-unattended/references/cloud.md:48-52`). The pre-flight's fix text still names only the
-  several-repositories case (`src/runs/preflight.ts:511-513`), a recorded gap.
+  (`content/skills/st-unattended/references/cloud.md:48-52`), and so does the refusal's fix: one repository per
+  session, outside a project's cloud thread (`hooksLoaded`, `src/runs/preflight.ts:512-515`).
 - **Proof:** `test/runs/preflight.test.ts` ("hooks-loaded in Claude Code's cloud"),
   `test/cli/commands/gatePreflight.test.ts`, `test/corpus/skills/unattended.test.ts`.
 

@@ -775,6 +775,10 @@ describe("runPreflight — hooks-loaded in Claude Code's cloud (REQ-FLOW-112, v5
     expect(refused?.reason).toContain("CLAUDE_ENV_FILE");
     expect(refused?.fix).toContain("one repository per session");
     expect(refused?.fix).toContain("several repositories");
+    // Added 2026-10-27: the vendor's page now says a project's cloud thread loads no repository's
+    // hooks whatever the number of repositories, so the fix names that case and its remedy too.
+    expect(refused?.fix).toContain("outside a project's cloud thread");
+    expect(refused?.fix).toContain("a project's cloud thread loads none whatever the number of repositories");
     // One fact away: the variable the readiness hook writes passes the same deps.
     const ready = await runPreflight(greenDeps({ env: { ...CLOUD, [HOOKS_ACTIVE_ENV]: "1" } }));
     expect(check(ready, "hooks-loaded").state).toBe("pass");
