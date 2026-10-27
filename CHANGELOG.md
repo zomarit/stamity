@@ -482,9 +482,15 @@ pull request, a repository that never commits its guard copies, an overlay of a 
   with; a note beside it says it is the full measure and run 57 the run of record. Runs 53, 54 and
   55 were earlier increments toward this release and are published; none is the run of record. Run
   57 is the run of record. No threshold, floor tag or case count moved, the advisory count moved
-  from 153 to 145 with the deletions, and no exception is recorded for this release. The `records`
-  commit holding run 57, run 56's note and the merge-ready snapshot (7 of 19 runs verified
-  merge-ready, 0.368) is named here, with the evidence linked at it, after the publish.
+  from 153 to 145 with the deletions, and no exception is recorded for this release. At the cut,
+  after the publish, the `records` branch stood at `fe785c17339f3dd064fbb2562953df1f3bdcd680`, and
+  the evidence is linked at that commit: the run's results at
+  [`evals/runs/2026-10-27-run-57/RESULTS.md`](https://github.com/zomarit/stamity/blob/fe785c17339f3dd064fbb2562953df1f3bdcd680/evals/runs/2026-10-27-run-57/RESULTS.md),
+  run 56's at
+  [`evals/runs/2026-10-27-run-56/RESULTS.md`](https://github.com/zomarit/stamity/blob/fe785c17339f3dd064fbb2562953df1f3bdcd680/evals/runs/2026-10-27-run-56/RESULTS.md),
+  and the merge-ready snapshot the measurements page reads, 7 of 19 runs verified merge-ready
+  (0.368), at
+  [`evals/measurements/merge-ready-2026-10-27.json`](https://github.com/zomarit/stamity/blob/fe785c17339f3dd064fbb2562953df1f3bdcd680/evals/measurements/merge-ready-2026-10-27.json).
 
 ### Deprecated
 
