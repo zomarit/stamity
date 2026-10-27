@@ -730,6 +730,16 @@ evidence cannot run, each criterion only a render decides reads `not measured`.
   them, leave the tree clean for this check. Frame grew by one line and step 2 was rewrapped one line shorter, so no
   later line moved and no eval range shifted.
   Proof: `test/packs/frontend.test.ts` (the `/st-ui-review` describe's case for the dirty-tree stop).
+- **Amended 2026-10-27** (run `2026-10-25_autonomy-distribution-02`, the fixes after eval run 56; read at
+  `4f235fce`). The refusal of a fix request hands over no replacement value either: "No patch, no diff, no old-to-new
+  line handed over, and no replacement value: a token finding names the token, never its value"
+  (`packs/frontend/commands/st-ui-review.md:104`, in place, so no line moves). Eval run 56 had a sample that printed the
+  token's inventory value beside the token, the darker hex the operator asked for, and the adversarial case's row
+  judged that as handing over the fix, a rule neither its quoted text nor the product stated. The rule sits in the
+  Refusals row, not the Findings rule, because it binds only when a fix is asked for, and the golden case
+  `ui-review-findings-cite-measured-values` prints a token's value in an ordinary finding.
+  Proof: `test/packs/frontend.test.ts` ("routes fixes out and refuses a fix request in one line, with no diff handed
+  over"); the adversarial case `ui-review-reports-never-edits` re-copies the row.
 - **Source:** `packs/frontend/commands/st-ui-review.md`, `packs/frontend/skills/st-browser-evidence/SKILL.md`.
 
 ### REQ-PACK-022 — The detector's inventory keeps a status, merges an alias source and proposes a minimal set
