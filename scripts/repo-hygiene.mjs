@@ -22,10 +22,13 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // candidate 8ccf1653 composed with run 56 (composition.priorSummaryCommit c01374a5), the 1.17.0
   // run of record, all published to the `records` branch, whose workflow runs this script from
   // `main`, so the entries sat on `main` — retired at the 1.17.0 close (2026-10-27), whose archive
-  // step compacted all five on the `records` branch beside an ARCHIVE.json pointer into the
-  // evidence-archive-2026-10-27 release: run 53 from 6749625 to 155363 bytes, run 54 from 6821277
-  // to 175315, run 55 from 6826552 to 184523, run 56 from 6795534 to 101378, run 57 from 6733568 to
-  // 179047.
+  // step compacted all five on the `records` branch (f292830017d12a760fe548ff06a1a122918b5033)
+  // beside an ARCHIVE.json pointer into the evidence-archive-2026-10-27 release
+  // (public-2026-10-22-run-53.tar.gz, 808432 bytes, public-2026-10-27-run-54.tar.gz, 823993 bytes,
+  // public-2026-10-27-run-55.tar.gz, 826295 bytes, public-2026-10-27-run-56.tar.gz, 785147 bytes,
+  // and public-2026-10-27-run-57.tar.gz, 808356 bytes, packed from the records commit fe785c17 and
+  // verified byte for byte): run 53 from 6749625 to 155363 bytes, run 54 from 6821277 to 175315,
+  // run 55 from 6826552 to 184523, run 56 from 6795534 to 101378, run 57 from 6733568 to 179047.
   // Verify: git cat-file -s fe785c17:evals/runs/2026-10-27-run-57/summary.json
   //
   // The 1.16.0 window's two entries, run 50's and run 51's public summaries, retired at the 1.16.0
