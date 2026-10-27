@@ -89,7 +89,7 @@ Governing text — the same file, "Routing" and "The Ready line":
 
 ## The Ready line
 
-The report's last line before the ticket block, and the run's last line:
+The report's last line before the ticket block, and the run's last line: the run's final message ends on it, and nothing follows it there, not a next step, an offer or a path to ready; anything said to the operator comes before it. It reads:
 `Ready: YES | NO (open: <check id>, …) | not signed — approval of record: <location | not named>`.
 
 - `NO` while a blocking check fails with no valid waiver or could not be graded. It names each

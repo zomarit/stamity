@@ -725,6 +725,16 @@ describe("/st-production-review — the verdict line and the words it never uses
     expect(text).toContain("approval of record");
   });
 
+  it("puts nothing after the Ready line in the run's final message, anything for the operator coming before it", async () => {
+    // Eval runs 53 and 54: samples ended the report on the Ready line, then added a path to ready
+    // after it. The section now says the final message ends on the line and where operator text goes.
+    const text = flowSection(await review(), "The Ready line");
+
+    expect(text).toMatch(/the run's final message ends on it, and nothing follows it there/i);
+    expect(text).toMatch(/not a next step, an offer or a path to ready/i);
+    expect(text).toMatch(/anything said to the operator comes before it/i);
+  });
+
   it("states each value's rule in REQ-PACK-018's words, a sign-off being the one the flow defines", async () => {
     const text = flowSection(await review(), "The Ready line");
 

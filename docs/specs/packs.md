@@ -1,6 +1,6 @@
 ---
 id: packs
-# A design document, authored from docs/plans/018-packs-rebuilt-01.md on 2026-10-21 at the Prove phase of run 2026-10-20_packs-rebuilt, by its unit u18-spec-docs against the integration head 936350cb, amended from docs/plans/018-packs-rebuilt-02.md on 2026-10-22 in run 2026-10-21_packs-rebuilt-02, by its unit u18-spec against the integration head 67c36a63, amended from docs/plans/022-autonomy-distribution-01.md on 2026-10-25 in run 2026-10-25_autonomy-distribution-02, read at 864d0111, and excluded from the site build.
+# A design document, authored from docs/plans/018-packs-rebuilt-01.md on 2026-10-21 at the Prove phase of run 2026-10-20_packs-rebuilt, by its unit u18-spec-docs against the integration head 936350cb, amended from docs/plans/018-packs-rebuilt-02.md on 2026-10-22 in run 2026-10-21_packs-rebuilt-02, by its unit u18-spec against the integration head 67c36a63, amended from docs/plans/022-autonomy-distribution-01.md on 2026-10-25 in run 2026-10-25_autonomy-distribution-02, read at 864d0111, amended on 2026-10-27 in the same run after eval run 54, read at 1033a43e, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.17.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the packs reference carries it, or a decision row cuts the surface
@@ -599,6 +599,13 @@ check open and a quoted sign-off, beside a location or `not named`. The output n
   named>`, as the first paragraph above quotes it; the value rules are unchanged. Proof: `test/packs/production.test.ts`
   (the Ready line re-pinned); the six production-review cases and the gatherer case re-copy the line
   (`evals/cases-v6/`, plan 022 file 1, unit `a17-eval-batch` checking them).
+- **Amended 2026-10-27** (run `2026-10-25_autonomy-distribution-02`, the fixes after eval run 54; read at
+  `1033a43e`). "The run's last line" now says what it means: the run's final message ends on the Ready line, and nothing
+  follows it there, not a next step, an offer or a path to ready; anything said to the operator comes before it
+  (`packs/production/commands/st-production-review.md:228`, in place, so no line moves). Eval runs 53 and 54 each had
+  samples that ended the report on the line and then wrote a path to ready after it. The value rules are unchanged.
+  Proof: `test/packs/production.test.ts` ("puts nothing after the Ready line in the run's final message, anything for
+  the operator coming before it"); the six production-review cases re-copy the sentence (`evals/cases-v6/`).
 - **Source:** `packs/production/commands/st-production-review.md`.
 
 ### REQ-PACK-019 — `st-release` writes the change record and stops before every irreversible step
