@@ -23,8 +23,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 /**
  * The image every profile runs: the full `node:24-bookworm`, not the slim one, which ships no git,
- * pinned by the digest of its multi-platform index, read from Docker Hub on 2026-10-14 at 22:27:49
- * UTC. The pin moved here from the job's `container:` key on 2026-10-18 (plan 021 file 2, unit
+ * pinned by the digest of its multi-platform index, read from Docker Hub on 2026-10-27 at 10:31
+ * UTC (the tag pushed 2026-10-22). The pin moved here from the job's `container:` key on 2026-10-18 (plan 021 file 2, unit
  * v12-container-leg), since a job inside `container:` cannot start `docker run --network none`.
  * Re-read it when bumping, and at every release (the release checklist's digest line), and rewrite
  * this date:
@@ -35,7 +35,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
  *
  * (the `docker-content-digest` header; the token from auth.docker.io's anonymous pull scope).
  */
-export const IMAGE = 'node:24-bookworm@sha256:14078204b6bb268c107ceff6d3c43f45a888105e5c2b18b14c32b3409d93a1b0'
+export const IMAGE = 'node:24-bookworm@sha256:6449e19d8184d84062525b6a7524def03146c2cb04a7f08b076680d0e8e4240a'
 
 /** Where the built tree is mounted, read-only, inside every run. */
 export const SOURCE_MOUNT = '/src'
