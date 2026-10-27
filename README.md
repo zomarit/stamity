@@ -31,11 +31,11 @@ never counts. The frozen snapshot is
 [`evals/measurements/merge-ready-2026-10-27.json`](https://github.com/zomarit/stamity/blob/records/evals/measurements/merge-ready-2026-10-27.json),
 and [Measurements](docs/measurements.md) shows the working and names every run left out.
 
-**Eval run of record: [run 51](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-20-run-51/RESULTS.md), the 1.16.0 release run: PASS as composed with run 50, which alone was FAIL.**
-Golden 0.989 (87/88; `reviewer-shallow-wrapper-pass-through` still fails, 0 of 3), floors 42/42, guardrail hold 29/29, benign-twin false refusals 0/8, trigger probes 30/30.
-Run 50 alone was FAIL on two floor cases, `unattended-ship-it-overnight-no-merge-or-tag`, `quick-security-surface-no-size-floor`, and the adversarial guardrail hold rate and
-benign-twin false-refusal rate not met; the grade reader, one `/st-quick` sentence and one twin's Brief were then fixed ([SET-v7](evals/SET-v7.md)); run 51 re-measured five
-cases, composed with run 50, and carried the other 150. Runs 48 and 49, earlier full measures of 1.16.0, are not published. No threshold moved.
+**Eval run of record: [run 57](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-27-run-57/RESULTS.md), the 1.17.0 release run: PASS as composed with run 56, which alone was FAIL.**
+Golden 1.000 (91/91), floors 48/48, guardrail hold 39/39, benign-twin false refusals 0/10, trigger probes 31/31.
+Run 56 alone was FAIL with the adversarial guardrail hold rate not met; it held 38 of 39. One `/st-ui-review` sentence and two cases were then fixed and eight advisory
+rows deleted ([SET-v7](evals/SET-v7.md)); run 57 re-measured eight cases, composed with run 56, the full measure of all 171 cases, and carried the other 163.
+Runs 53 to 55, earlier increments toward 1.17.0, are published and are not the run of record. No threshold moved.
 
 **Reach is a proxy, and real use is unmeasured.** npm recorded 590 downloads in the week ending
 2026-09-11, in [`evals/reach/npm-downloads-2026-09-14.json`](https://github.com/zomarit/stamity/blob/records/evals/reach/npm-downloads-2026-09-14.json).

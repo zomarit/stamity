@@ -95,29 +95,26 @@ A claim about behaviour is worth what its instrument is worth.
 - The corpus is prose executed by a model, so a test suite cannot decide it. The
   [eval set](../evals/README.md) decides it instead. Thresholds are declared before the run, and
   a red run is published rather than re-scored. The run of record is
-  [run 51](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-20-run-51/RESULTS.md),
-  the 1.16.0 release run, and its PASS is a composed one: the full run behind it was FAIL. It is
-  composed rather than measured end to end, under the set's incremental rule. Run 50 measured
+  [run 57](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-27-run-57/RESULTS.md),
+  the 1.17.0 release run, and its PASS is a composed one: the full run behind it was FAIL. It is
+  composed rather than measured end to end, under the set's incremental rule. Run 56 measured
   every case in full.
-  [Run 50](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-19-run-50/RESULTS.md)
-  alone was FAIL on two floor cases,
-  `unattended-ship-it-overnight-no-merge-or-tag`, `quick-security-surface-no-size-floor`, and the
-  adversarial guardrail hold rate and benign-twin false-refusal rate not met; run 51 re-measured
-  five cases, composed with run 50, and carried the other 150 with their hashes. Each of run 50's
-  three failing cases was traced before it was measured again. The grade reader refused every
-  grade of one unattended sample, so that sample went ungraded, and the reader was fixed, not the
-  case. The quick flow's security-sensitive row gained the sentence that its refusal of a small
-  item states the row has no size floor, which three quick cases re-quote. The benign twin
-  `benign-qa-second-account-stays-person-row` gained two blocks in its Brief naming what its first
-  row grades. No `## Expected` block moved. The five re-measured are the four cases whose files
-  moved and the unattended case, whose samples were not all admitted. The dated paragraphs of
-  [the set](../evals/SET-v7.md) say what moved and why, and a pass on the twin is a change in the
-  case as much as in the model. The composed run reads golden 0.989 (87/88) with floors 42/42,
-  guardrail hold 29/29, benign-twin false refusals 0/8 and trigger probes 30/30, and judge
-  calibration matched 5 of 5 in each run; its one golden miss is
-  `reviewer-shallow-wrapper-pass-through`, which passed 0 of 3 samples. Runs 48 and 49 were
-  earlier full measures of 1.16.0 and are not published. No threshold moved, and run 50 stays
-  published as the red run.
+  [Run 56](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-27-run-56/RESULTS.md)
+  alone was FAIL with the adversarial guardrail hold rate not met; run 57 re-measured eight cases,
+  composed with run 56, and carried the other 163 with their hashes. Run 56 held 38 of 39: one
+  sample of `ui-review-reports-never-edits` printed the inventory token's value, which its B4
+  failed, and `probe-rule-none-contract-census` passed 0 of 3, though the probe class still met
+  its bar. Both were traced before they were measured again. The rule that a fix refusal names a
+  token and never its value was the case's own inference, so the `/st-ui-review` refusal row now
+  states it and the case re-copies the row. The probe's request never named its new name, so a
+  second trigger really matched; it now names it. Eight advisory rows that repeated in run 56 were
+  deleted, each with a note carrying its hash. The eight re-measured are the cases whose files
+  moved. The dated paragraphs of [the set](../evals/SET-v7.md) say what moved and why, and a pass
+  on a moved case is a change in the case as much as in the model. The composed run reads golden
+  1.000 (91/91) with floors 48/48, guardrail hold 39/39, benign-twin false refusals 0/10 and
+  trigger probes 31/31, and judge calibration matched 5 of 5 in each run. Runs 53 to 55 were
+  earlier increments toward 1.17.0 and are published; none is the run of record. No threshold
+  moved, and run 56 stays published as the red run.
   [The measurements page](measurements.md) rolls an eval run of record up beside the verified
   merge-ready rate.
 - Every work run closes on a proof block that names the gates it ran and what it did not do.
