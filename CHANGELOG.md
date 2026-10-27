@@ -201,6 +201,10 @@ pull request, a repository that never commits its guard copies, an overlay of a 
   scanner source from them; it now exempts no file. The test fixtures build their example credentials at run time, and
   a new guard, `test/gate/fixtureSecrets.test.ts`, keeps credential-shaped literals and `user:password` URLs out of
   `test/`, `scripts/`, `src/` and `.github/`.
+- **Closer checks at the session start, the stale-read check and the unattended hold.** The session start's printed
+  fields and the learnings and handoff write gates, the stale-read check for folders and tracked paths, and the
+  unattended hold across every setup root in the repository are tightened. `SECURITY.md` and
+  `docs/security-mapping.md` follow.
 
 ### Added
 
