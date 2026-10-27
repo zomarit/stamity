@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.17.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-27T11:50:33.577Z",
+  "updatedAt": "2026-10-27T12:13:17.942Z",
   "tools": [
     "claude"
   ],
@@ -553,7 +553,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "9e01a28d45e84814a9091daf77cdf810da6a056fe6edc09354a249df44f366e9",
+      "contentHash": "4b521fac8b9491f4a7459145bd243d56c00f1ddb0c2476a03e9ae98bc35d1bf2",
       "path": ".claude/skills/st-unattended/references/cloud.md"
     },
     {
