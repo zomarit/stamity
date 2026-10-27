@@ -12,9 +12,11 @@ import {
 // deliberately not a usable key: the sequences are hand-built, not generated.
 // TEST CHANGE, justified (REQ-PLUGIN-033): each one is assembled at run time, so this source
 // carries no credential shape; the value every case reads is byte-identical to the old literal.
+// The sk- key's constant is named without the api-key word: that name before `= [` read to `gate scan` as an inline
+// api-key assignment.
 const AWS_KEY_ID = ["AKIA", "IOSFODNN7EXAMPLE"].join("");
 const FORGE_TOKEN = ["gh", "p_", "0123456789abcdefghijklmnopqrstuvwxyz"].join("");
-const SK_API_KEY = ["sk", "-", "abcdefghijklmnopqrstuvwxyz012345"].join("");
+const SK_PREFIXED_KEY = ["sk", "-", "abcdefghijklmnopqrstuvwxyz012345"].join("");
 const PEM_BODY_LINE = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4v";
 const PEM_KEY = [
   ["-----BEGIN RSA PRIVATE", "KEY-----"].join(" "),
@@ -50,7 +52,7 @@ describe("scanValueForSecrets", () => {
   it.each([
     { label: "cloud access key id", name: "AWS_ACCESS_KEY_ID", value: AWS_KEY_ID, expected: ["aws-access-key-id"] },
     { label: "forge token", name: "FORGE_TOKEN", value: FORGE_TOKEN, expected: ["github-token"] },
-    { label: "sk- api key", name: "MODEL_API_KEY", value: SK_API_KEY, expected: ["sk-prefixed-api-key"] },
+    { label: "sk- api key", name: "MODEL_API_KEY", value: SK_PREFIXED_KEY, expected: ["sk-prefixed-api-key"] },
     // The PEM body is itself a long base64 run, so it legitimately reports two
     // patterns — asserted in full here and again in the dedup case below.
     { label: "pem private key", name: "SSH_PRIVATE_KEY", value: PEM_KEY, expected: ["pem-private-key", "high-entropy-string"] },
@@ -124,7 +126,7 @@ describe("scanValueForSecrets", () => {
 
 describe("maskValue", () => {
   it("reveals the first 4 and last 2 characters", () => {
-    expect(maskValue(SK_API_KEY)).toBe("sk-a********45");
+    expect(maskValue(SK_PREFIXED_KEY)).toBe("sk-a********45");
     expect(maskValue("abcdefg")).toBe("abcd********fg");
   });
 

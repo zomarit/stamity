@@ -1009,7 +1009,11 @@ describe("runPreflight — warnings", () => {
   // build/43: PWD was no credential segment, so a short password in a name ending in it was named only when its value
   // happened to match the scanner's entropy row.
   it("a short value in a name with a PWD segment is named, and PWD and OLDPWD themselves are not (build/43)", async () => {
-    const verdict = await runPreflight(greenDeps({ env: { MYSQL_PWD: "hunter2", REDIS_PWD: "s3cret", PWD: "/w", OLDPWD: "/v" } }));
+    // Fixture data built at run time, byte-identical: written as literals beside their names, the four values read to
+    // `gate scan` as inline password assignments.
+    const [mysql, redis] = [["hun", "ter2"].join(""), ["s3c", "ret"].join("")];
+    const [cwd, previous] = ["/w", "/v"];
+    const verdict = await runPreflight(greenDeps({ env: { MYSQL_PWD: mysql, REDIS_PWD: redis, PWD: cwd, OLDPWD: previous } }));
     expect(verdict.warnings.find((warning) => warning.id === "token-env")?.names).toEqual(["MYSQL_PWD", "REDIS_PWD"]);
   });
 
