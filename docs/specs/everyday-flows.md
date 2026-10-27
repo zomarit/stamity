@@ -197,7 +197,7 @@ files under REQ-FLOW-026 and REQ-FLOW-118 are merged. That text reached `main` t
 with 1.17.0, which set `status: shipped-with-1.17.0`.
 
 The text dated 2026-10-27, under REQ-FLOW-021, REQ-FLOW-088, REQ-FLOW-091, REQ-FLOW-093 and REQ-FLOW-102, comes from
-the spec delta of Package 20's units R2 to R4, which landed at the 1.17.0 release cut, each entry read with the as-built
+the spec delta of Package 20's units R2 to R5, which landed at the 1.17.0 release cut, each entry read with the as-built
 deltas its implementer and fixer reports declared and against the landed code. It cites the code by file and symbol,
 and each test by its title. It shipped with 1.17.0.
 
@@ -5098,6 +5098,19 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
     declaration names, from a run at the git top (REQ-FLOW-102)", "asks for a diff adding a setup below the top with its
     client settings, the setup only at the head (REQ-FLOW-102)"), `test/runs/landEvidence.test.ts` ("matches a path
     below any of several setup roots, as the hold reads every setup (REQ-FLOW-102)").
+- **Amended 2026-10-27** (the 1.17.0 release cut, Package 20's unit R5 and its fix round; page accuracy). The
+  2026-10-19 bullet's "The hold fails closed on anything it cannot resolve cleanly at `Base:`" keeps its list for
+  paths written as paths, with one case held rather than refused: a word with no separator and no leading drive letter,
+  written as an argument past the launcher or as an option's `=` value, that the resolver refuses for any of its
+  causes (another letter case or Unicode normalization form, a name held twice by letter case, a link or a submodule)
+  is held as written, as a held path matches without case and in one Unicode normalization form, except the script
+  the declaration runs, which refuses (`hookPathsRead`'s values and its held-as-written branch,
+  `src/runs/hookPaths.ts`; `heldOf`, `src/cli/commands/run.ts`). A value led by a drive letter is no such word and
+  refuses (the 2026-10-26 bullet).
+  - Proof: `test/docsPages.test.ts` ("states the hold's setup roots, its bare names and its kept sections' source on
+    SECURITY.md and the mapping page"), `test/cli/commands/runCheckpoint.test.ts` ("holds a bare option value and a bare
+    argument word naming a file Base: lacks, the run adding both (review/196, review/199)"). No test runs a bare word
+    the resolver refuses.
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`, `test/change/personOnlyPaths.test.ts`,
   `test/cli/commands/runCheckpoint.test.ts` (the held patch; the refused push, "refuses the push when a commit it would
   send changes a held path, rewriting no history"), `test/adapters/claude.test.ts`,
