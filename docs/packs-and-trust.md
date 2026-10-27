@@ -564,8 +564,8 @@ and `sync` refuse when they project the setup. An install keeps neither `pack.js
 so those gates can run only for a first-party pack from the bundled catalog, and only one whose kept
 files are that pack's own bytes comes back. A kept pack a gate refuses, or one whose gates cannot
 run from its kept folder (a local or `node_modules` pack, signed or not), is refused: `init` names it
-in a warning and records none of its files, and `stamity add <source>` installs it again through the
-gates. `stamity clean --purge` deletes `.stamity/` whole, packs included.
+in a warning and records none of its files, so delete the folder, then run `stamity add <source>` to
+install it again through the gates. `stamity clean --purge` deletes `.stamity/` whole, packs included.
 
 ## Author your own pack
 

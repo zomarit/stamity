@@ -2390,6 +2390,8 @@ describe("clean keeps the user's state under .stamity/ (REQ-FLOW-028)", () => {
     // with `add <source>` as its route; the closing line said every kept pack came back, so the pin and title follow it.
     // TEST CHANGE, justified (prove/68): the take-back runs add's trust and install gates, not its Codex skills-list fit
     // check, so the line names the gates it runs and the one it leaves to the projection's ceiling.
+    // TEST CHANGE, justified (prove/82): `add` refuses a refused pack's files as strays while its folder stands, so the
+    // line says to delete the folder before `add <source>`.
     "says what it kept and which kept packs the next init takes back",
     async () => {
       const root = await copyOf(withState);
@@ -2407,7 +2409,7 @@ describe("clean keeps the user's state under .stamity/ (REQ-FLOW-028)", () => {
         `The installed pack(s) ${SHIP_ID} stay under ${STATE_DIR}/packs/. The next ${npxCommand("init")} takes one back only ` +
           `if it is a first-party pack from the bundled catalog and add's trust and install gates pass again on its kept files ` +
           `(not add's Codex skills-list fit check: with Codex selected, init and sync refuse a skills list over its ceiling); ` +
-          `it names any other kept pack and records none of its files, so re-install that one with ${npxCommand("add <source>")}.`,
+          `it names any other kept pack and records none of its files, so delete that one's folder, then re-install it with ${npxCommand("add <source>")}.`,
       );
       expect(result.stdout).not.toContain("records them again from their receipts");
       expect(result.stdout).not.toContain(`${STATE_DIR}/ removed`);

@@ -359,7 +359,7 @@ function keptStateLines(kept: readonly string[], packsKept: readonly string[], s
           `The installed pack(s) ${packsKept.join(", ")} stay under ${STATE_DIR}/packs/. The next ${packageCommand("init")} takes one back only ` +
             `if it is a first-party pack from the bundled catalog and add's trust and install gates pass again on its kept files ` +
             `(not add's Codex skills-list fit check: with Codex selected, init and sync refuse a skills list over its ceiling); ` +
-            `it names any other kept pack and records none of its files, so re-install that one with ${packageCommand("add <source>")}.`,
+            `it names any other kept pack and records none of its files, so delete that one's folder, then re-install it with ${packageCommand("add <source>")}.`,
         ]),
     ...(state?.left ?? []).map(({ path, why }) => `Left ${path}: ${why}. Delete it by hand unless it is yours.`),
   ];

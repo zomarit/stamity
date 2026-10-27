@@ -327,8 +327,11 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
   // A pack no ledger records any more — `clean` keeps installed packs and removes
   // the manifest (REQ-FLOW-028) — comes back from its own receipt, seeded here for
   // the same reason; one its receipt cannot prove is named below, never recorded.
+  // Under --force its gates judge ownership against the ledger read above, empty
+  // for a manifest that cannot be read, never by re-reading the file this run
+  // replaces (prove/81); without --force they read the manifest as `add` does.
   const carriedIds = new Set(manifest.ledger.filter((row) => isPackOwner(row.adapter)).map((row) => row.adapter.slice(PACK_OWNER_PREFIX.length)));
-  const adoption = await adoptInstalledPacks(rootDir, carriedIds);
+  const adoption = await adoptInstalledPacks(rootDir, carriedIds, force ? (previous?.ledger ?? []) : undefined);
   manifest.ledger = [...manifest.ledger, ...adoption.rows];
 
   // State directories: probe first so the report lists only what this run adds.
@@ -848,7 +851,7 @@ function previousInstructionRows(previous: SetupManifest | null): LedgerEntry[] 
 function adoptionRefusalWarning(refusal: PackAdoptionRefusal): string {
   return (
     `${refusal.dir}/ was not taken back as pack ${JSON.stringify(refusal.packId)}: ${refusal.reason}. ` +
-    `Nothing records its files now; re-install it from its source with ${packageCommand("add <source>")}, or delete the folder.`
+    `Nothing records its files now; delete the folder, then re-install it from its source with ${packageCommand("add <source>")}.`
   );
 }
 

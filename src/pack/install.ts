@@ -965,12 +965,12 @@ function heldByOwnCopy(layers: ExistingLayers, packId: string, key: string): boo
 async function readExistingLayers(
   rootDir: string,
   packId: string,
-  projectManifest: SetupManifest | null,
+  ledger: readonly LedgerEntry[],
 ): Promise<ExistingLayers> {
   const owner = packOwner(packId);
   const otherIds = [
     ...new Set(
-      (projectManifest?.ledger ?? [])
+      ledger
         .filter((entry) => isPackOwner(entry.adapter) && !isOwnedByPack(entry, owner))
         .map((entry) => entry.adapter.slice(PACK_OWNER_PREFIX.length)),
     ),
@@ -990,7 +990,7 @@ async function readExistingLayers(
   // for its full artifacts alone (a pinned root walks no overlay).
   // This pack's own copy, on a re-add: the same walk over its directory alone.
   const ownRoot = underRoot(rootDir, packLedgerRelPath(packId));
-  const recorded = (projectManifest?.ledger ?? []).some((entry) => isOwnedByPack(entry, owner));
+  const recorded = ledger.some((entry) => isOwnedByPack(entry, owner));
   const ownRoots = recorded && (await pathExists(ownRoot)) ? [{ pack: packId, root: ownRoot }] : [];
   const [shipped, overrides, ownCopy] = await Promise.all([
     buildContentIndex({ packRoots: others }),
@@ -1354,12 +1354,15 @@ export async function planPackInstall(
  * {@link planPackInstall}'s chain, with `kept`: repo-relative paths adoption
  * proved hold this pack's own earlier install, so the stray-file collision does
  * not refuse the very bytes it is re-checking. Every gate runs as it does for `add`.
+ * `held`: the ledger to judge ownership against in place of the project
+ * manifest's, which is read when it is absent (prove/81).
  */
 async function planInstall(
   projectRoot: string,
   spec: string,
   opts: PlanPackInstallOptions,
   kept: ReadonlySet<string>,
+  held?: readonly LedgerEntry[],
 ): Promise<PackInstallPlan> {
   const rootDir = resolve(projectRoot);
   const source = await resolvePackSource(rootDir, spec);
@@ -1418,13 +1421,13 @@ async function planInstall(
     totalTokens += tokens;
   }
 
-  const projectManifest = await readManifest(rootDir);
-  const layers = await readExistingLayers(rootDir, packManifest.name, projectManifest);
+  const ledger = held ?? (await readManifest(rootDir))?.ledger ?? [];
+  const layers = await readExistingLayers(rootDir, packManifest.name, ledger);
   const collisions = await collectCollisions(
     rootDir,
     packManifest.name,
     writeSet,
-    projectManifest?.ledger ?? [],
+    ledger,
     artifacts,
     layers,
     kept,
@@ -1434,7 +1437,7 @@ async function planInstall(
     rootDir,
     packManifest.name,
     writeSet,
-    projectManifest?.ledger ?? [],
+    ledger,
   );
 
   return {
@@ -1772,8 +1775,17 @@ export interface PackAdoption {
  * install keeps neither `pack.json` nor a signature. A folder with no receipt is
  * neither adopted nor named, and so is an id in `skip` (rows the caller already
  * holds, `init --force`'s carry). A packs folder that is a link adopts nothing.
+ *
+ * `ledger`, when given, is the one the gates judge ownership against in place of
+ * the project manifest on disk: `init --force` passes the ledger of the manifest
+ * it replaces, or none when that file cannot be read, so the repair `--force`
+ * exists for does not refuse a kept pack with the very corruption it replaces (prove/81).
  */
-export async function adoptInstalledPacks(rootDir: string, skip: ReadonlySet<string>): Promise<PackAdoption> {
+export async function adoptInstalledPacks(
+  rootDir: string,
+  skip: ReadonlySet<string>,
+  ledger?: readonly LedgerEntry[],
+): Promise<PackAdoption> {
   const adoption: PackAdoption = { rows: [], adopted: [], refused: [] };
   let root: string;
   let names: string[];
@@ -1787,7 +1799,7 @@ export async function adoptInstalledPacks(rootDir: string, skip: ReadonlySet<str
     return adoption;
   }
   for (const name of names) {
-    const outcome = await adoptPackFolder(root, `${PACKS_REL_PATH}/${name}`, name, skip);
+    const outcome = await adoptPackFolder(root, `${PACKS_REL_PATH}/${name}`, name, skip, ledger);
     if (outcome === null) continue;
     if ("reason" in outcome) {
       adoption.refused.push(outcome);
@@ -1805,6 +1817,7 @@ async function adoptPackFolder(
   dir: string,
   name: string,
   skip: ReadonlySet<string>,
+  ledger: readonly LedgerEntry[] | undefined,
 ): Promise<{ packId: string; rows: LedgerEntry[] } | PackAdoptionRefusal | null> {
   const dirAbs = underRoot(root, dir);
   const receiptAbs = join(dirAbs, RECEIPT_FILE);
@@ -1878,7 +1891,7 @@ async function adoptPackFolder(
     }
     rows.push({ path, adapter: owner, artifactId: packArtifactId(packId, path.slice(dir.length + 1)), artifactType: "infra", contentHash: digest });
   }
-  const gated = await keptPackGateRefusal(root, dir, packId, receipt, seen);
+  const gated = await keptPackGateRefusal(root, dir, packId, receipt, seen, ledger);
   if (gated !== null) return refuse(packId, gated);
   rows.push({
     path: receiptPath,
@@ -1939,6 +1952,7 @@ async function keptPackGateRefusal(
   packId: string,
   receipt: Record<string, unknown>,
   listed: ReadonlySet<string>,
+  ledger: readonly LedgerEntry[] | undefined,
 ): Promise<string | null> {
   const unlisted = await unlistedEntry(root, dir, listed);
   if (unlisted !== null) return `${unlisted} lies in its folder but its receipt does not list it, so no gate read it`;
@@ -1952,7 +1966,7 @@ async function keptPackGateRefusal(
         "so add's trust ladder, signature, lifecycle-name and footprint checks cannot run on these bytes"
       );
     }
-    plan = await planInstall(root, resolveBundledPackRoot(entry.id), { catalogPin: entry.pin }, listed);
+    plan = await planInstall(root, resolveBundledPackRoot(entry.id), { catalogPin: entry.pin }, listed, ledger);
   } catch (cause) {
     if (!(cause instanceof EngineError)) throw cause;
     return `add's gates refuse it: ${oneLine(cause.message)}`;

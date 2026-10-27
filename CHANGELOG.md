@@ -421,7 +421,7 @@ pull request, a repository that never commits its guard copies, an overlay of a 
   and `clean --purge` deletes the rest once that wiring is gone. A step that fails after the sweep leaves the manifest,
   so a re-run finishes. A later `init` takes a kept first-party pack back once `add`'s trust and install gates pass
   again on it, without `add`'s Codex skills-list fit check (with Codex selected, a kept pack that takes that list past
-  its ceiling makes `init` and `sync` refuse); any other kept pack is named, and `add <source>` re-installs it. A guard that a kept settings file still runs keeps the
+  its ceiling makes `init` and `sync` refuse); any other kept pack is named: delete its folder, then `add <source>` re-installs it. A guard that a kept settings file still runs keeps the
   policy copy it reads. `--purge` with `--pack` is refused.
 - **`clean` gives back the instruction files `init --import-config` took in.** After `supplement` it takes the
   engine's block out and keeps your text. After `replace` it moves your own file back from the `.bak` the setup

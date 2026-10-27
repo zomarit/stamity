@@ -70,7 +70,7 @@ package under the catalog's pin, as `stamity add <id>` does, and takes it back o
 in the folder, those files hash to the catalog pack's own bytes, and the receipt records the source kind, trust tier
 and tool footprint the install would. A kept pack a gate refuses, or one whose gates cannot run from its kept folder (a
 local or `node_modules` pack, signed or not), is refused: `init` names it in a warning and records none of its files,
-and `stamity add <source>` re-installs it through the gates.
+so delete the folder, then run `stamity add <source>` to re-install it through the gates.
 
 Every route runs the same gate chain, and `init` runs its trust and install gates again before it takes a kept pack
 back.

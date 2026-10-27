@@ -5784,6 +5784,8 @@ describe("the CI hand pages name the fork probe and the base-commit classifier",
  * `clean`'s kept packs say so, clause for clause. TEST CHANGE, justified (prove/68): the pages said "every gate `add`
  * runs", but the take-back stops at `planInstall` and never runs `add`'s Codex skills-list fit check, so each page now
  * names the gates it runs and says the fit check is not re-run (the projection's ceiling refuses an over-budget list).
+ * TEST CHANGE, justified (prove/82): with a refused pack's folder on disk, `add <source>` refuses each of its files as
+ * a stray, so each page now says to delete the folder first, then run `add <source>`.
  */
 describe("the pages say init takes a kept pack back only through add's gates (prove/44)", () => {
   const takeBack = "`init` takes a kept pack back only after `add`'s trust and install gates pass again on the same bytes";
@@ -5804,7 +5806,7 @@ describe("the pages say init takes a kept pack back only through add's gates (pr
     expect(page).toContain(
       "An install keeps neither `pack.json` nor a signature beside the pack, so those gates can run only for a first-party pack from the bundled catalog: `init` plans it from the copy inside this package under the catalog's pin, as `stamity add <id>` does, and takes it back only when its receipt lists every file in the folder, those files hash to the catalog pack's own bytes, and the receipt records the source kind, trust tier and tool footprint the install would.",
     );
-    expect(page).toContain(`${refused} and \`stamity add <source>\` re-installs it through the gates.`);
+    expect(page).toContain(`${refused} so delete the folder, then run \`stamity add <source>\` to re-install it through the gates.`);
     expect(page).toContain(
       "Every route runs the same gate chain, and `init` runs its trust and install gates again before it takes a kept pack back.",
     );
@@ -5819,7 +5821,7 @@ describe("the pages say init takes a kept pack back only through add's gates (pr
     );
     expect(page).not.toContain(overClaim);
     expect(page).toContain(
-      `${refused} and \`stamity add <source>\` re-installs it through the gates. Code: \`src/pack/install.ts::adoptInstalledPacks\`, \`src/pack/install.ts::keptPackGateRefusal\` | A local or \`node_modules\` pack does not come back at \`init\` after a default \`clean\`; only \`add <source>\` installs it again |`,
+      `${refused} so delete the folder, then run \`stamity add <source>\` to re-install it through the gates. Code: \`src/pack/install.ts::adoptInstalledPacks\`, \`src/pack/install.ts::keptPackGateRefusal\` | A local or \`node_modules\` pack does not come back at \`init\` after a default \`clean\`; only \`add <source>\` installs it again |`,
     );
     expect(page).toContain(residual);
   });
@@ -5833,13 +5835,13 @@ describe("the pages say init takes a kept pack back only through add's gates (pr
     expect(page).toContain(
       "so those gates can run only for a first-party pack from the bundled catalog, and only one whose kept files are that pack's own bytes comes back.",
     );
-    expect(page).toContain(`${refused} and \`stamity add <source>\` installs it again through the gates.`);
+    expect(page).toContain(`${refused} so delete the folder, then run \`stamity add <source>\` to install it again through the gates.`);
   });
 
   it("CHANGELOG.md's clean entry says which kept packs init takes back, and no longer that it takes every one", () => {
     const page = flowed(read("CHANGELOG.md"));
     expect(page).toContain(
-      "A later `init` takes a kept first-party pack back once `add`'s trust and install gates pass again on it, without `add`'s Codex skills-list fit check (with Codex selected, a kept pack that takes that list past its ceiling makes `init` and `sync` refuse); any other kept pack is named, and `add <source>` re-installs it.",
+      "A later `init` takes a kept first-party pack back once `add`'s trust and install gates pass again on it, without `add`'s Codex skills-list fit check (with Codex selected, a kept pack that takes that list past its ceiling makes `init` and `sync` refuse); any other kept pack is named: delete its folder, then `add <source>` re-installs it.",
     );
     expect(page).not.toContain("A later `init` takes a kept pack back from its own receipt");
   });

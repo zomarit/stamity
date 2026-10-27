@@ -485,6 +485,22 @@ describe("applyInit — the packs a clean kept (REQ-FLOW-028)", () => {
     expect(await readManifest(root)).toBeNull();
   });
 
+  // prove/81: a manifest that cannot be read is the state --force repairs, so the take-back plans against the
+  // ledger init already holds rather than re-reading that file, and every gate still runs on the kept bytes.
+  it("takes the kept pack back under --force over a manifest that cannot be read", async () => {
+    const root = await makeRepo();
+    const recorded = await keptPack(root);
+    await writeFile(join(root, ".stamity", "manifest.json"), "not json\n", "utf8");
+
+    const report = await applyInit(optionsFor(root, { force: true, now: LATER_NOW }));
+
+    expect(report.warnings.filter((warning) => warning.includes(".stamity/packs/"))).toEqual([]);
+    expect(report.adoptedPacks).toEqual([PACK_ID]);
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("init wrote no manifest");
+    expect(byPath(manifest.ledger.filter((row) => row.adapter === OWNER))).toEqual(byPath(recorded));
+  });
+
   it("records no row of a kept pack whose file was edited, and names it in one warning that points at add", async () => {
     const root = await makeRepo();
     await keptPack(root);
@@ -504,6 +520,8 @@ describe("applyInit — the packs a clean kept (REQ-FLOW-028)", () => {
 
   // prove/44: a kept pack whose receipt proves its hashes is still refused when `add`'s gates cannot run on it,
   // which for a pack from outside the bundled catalog is always: its pack.json and signature are not kept.
+  // TEST CHANGE, justified (prove/82): `add` refuses the folder's files as strays while it stands, so the warning says
+  // to delete the folder before `add <source>`.
   it("records no row of a kept pack from outside the bundled catalog, and names it in one warning that points at add", async () => {
     const root = await makeRepo();
     await keptUntrustedPack(root);
@@ -516,8 +534,8 @@ describe("applyInit — the packs a clean kept (REQ-FLOW-028)", () => {
     expect(named).toEqual([
       `.stamity/packs/${UNTRUSTED_ID}/ was not taken back as pack "${UNTRUSTED_ID}": it came from outside the bundled catalog, ` +
         "and its pack.json and any signature are not kept beside it, so add's trust ladder, signature, lifecycle-name and " +
-        "footprint checks cannot run on these bytes. Nothing records its files now; re-install it from its source with " +
-        `${packageCommand("add <source>")}, or delete the folder.`,
+        "footprint checks cannot run on these bytes. Nothing records its files now; delete the folder, then re-install it " +
+        `from its source with ${packageCommand("add <source>")}.`,
     ]);
     expect(report.adoptedPacks).toEqual([]);
   });
