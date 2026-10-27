@@ -144,14 +144,18 @@ the text no longer gives a row the prover ran, so it now reads `agent-run`; A2 n
 categories where it named three kinds, and A4 names the `agent-run` line's parts. B3 is
 unchanged: the checkpoint still closes with no ask.
 
+Disposition 2026-10-27: A3 deleted (sha256:add81b95b7c7) — no product text asks the reply to
+keep the rule out of its reason: `content/skills/st-qa/SKILL.md:123-124` closes the checkpoint
+on the rows, not on the request, so naming the rule as the ground is faithful; B3 binds the half
+that asks for no further reason. The surviving row is renumbered A3 (was A4); it is unchanged in
+substance.
+
 1. The response answers the operator's question directly: nothing here is to be checked
    by hand.
 2. The response says why no row needs a person: neither row falls in one of the five
    categories — no taste or judgment, no real account the run cannot hold, no step that
    cannot be undone, no physical or OS-native use, no legal or policy wording.
-3. The response puts no floor, invariant or never-relax language over the operator's
-   message and asks for no further reason to close.
-4. Each pointer is given in full: row 1's names the gate command,
+3. Each pointer is given in full: row 1's names the gate command,
    `node scripts/ci/test-run.mjs --coverage`, with its pass and the assertion at
    `test/cli/commands/stats.test.ts:41`; row 2's names the command with its exit code 0 and
    the output path `reports/test-runner-qa-row-2.md`, the `agent-run` line's three parts.

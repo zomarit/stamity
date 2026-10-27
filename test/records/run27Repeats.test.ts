@@ -74,6 +74,38 @@ describe("full run admission and strict aggregation", () => {
       "unattended-close-opens-draft-pr:A1",
       "unattended-item-says-merge-refused:A2",
     ]);
-    expect(undisposedRepeats(run53, roster, REPO_ROOT)).toEqual([]);
+    // TEST CHANGE, justified (2026-10-27, run 2026-10-25_autonomy-distribution-02, run 56's dispositions):
+    // `unattended-close-opens-draft-pr`'s label A1 names a different row since the 2026-10-25
+    // renumbering, and run 56 repeated that row. Its 2026-10-27 note has to stand above the
+    // 2026-10-25 one because `disposed()` reads only the first note per label
+    // (`scripts/eval/run.mjs:207-208`), so run 53's A1 no longer reads disposed. The runner checks
+    // only the latest comparable run, run 56 (the case below), so no run is refused by this. The
+    // other two of run 53's repeats still read disposed, and the shadowed one is named, not dropped.
+    expect(undisposedRepeats(run53, roster, REPO_ROOT)).toEqual(["unattended-close-opens-draft-pr:A1"]);
+  });
+
+  // Added 2026-10-27 (run 2026-10-25_autonomy-distribution-02, the dispositions of eval run 56;
+  // REQ-PROVE-009): run 56's eight repeats, all deleted, read the same way. Run 56 is the run the
+  // next run of this configuration compares with, so this is the check the runner makes before it
+  // calls a provider. The summary is read inside the case, as run 53's is above.
+  const RUN56_SUMMARY = "evals/runs/2026-10-27-run-56/summary.json";
+  const RUN56_CANDIDATE = "8c639f83c342dfdd1d8191659e8f8135cc40958f";
+  const run56Readable = existsSync(join(REPO_ROOT, RUN56_SUMMARY)) && inHistory(RUN56_CANDIDATE);
+  it.skipIf(!run56Readable)("reads every one of run 56's eight repeats as disposed by the live corpus (needs its summary and its candidate in history)", () => {
+    const run56 = JSON.parse(read(RUN56_SUMMARY));
+    const roster = readdirSync(join(REPO_ROOT, CASES_DIR), { recursive: true, encoding: "utf8" })
+      .filter(path => path.endsWith(".md")).map(path => parseCase(read(`${CASES_DIR}/${path}`), `${CASES_DIR}/${path}`));
+    expect(run56.candidate).toBe(RUN56_CANDIDATE);
+    expect(run56.advisory.repeats.map((repeat: { caseId: string; criterion: string }) => `${repeat.caseId}:${repeat.criterion}`)).toEqual([
+      "benign-qa-cli-change-no-person-row:A3",
+      "incident-proposes-mitigation-never-applies:A1",
+      "plain-never-drops-open-gap:A2",
+      "plain-never-drops-open-gap:A3",
+      "ui-review-findings-cite-measured-values:A1",
+      "ui-review-reports-never-edits:A2",
+      "unattended-close-opens-draft-pr:A1",
+      "unattended-kickoff-claims-approval:A1",
+    ]);
+    expect(undisposedRepeats(run56, roster, REPO_ROOT)).toEqual([]);
   });
 });

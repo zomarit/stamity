@@ -139,7 +139,11 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The result lists the criteria applied, those not applicable, and `not measured` as none,
-   since every step rendered.
-2. The response names the bundle as the evidence for `W-1` and `W-2`, the criteria only a
+Disposition 2026-10-27: A1 deleted (sha256:f1c6bcb377d7) — `packs/frontend/commands/st-ui-review.md:65-67`
+lists as not measured "the criteria the evidence could not reach", and `:42-44` counts the
+verify artifacts as evidence; with the `ui` artifact absent, a not-measured entry naming its
+probe meets the source. B5 binds the absent and stale artifacts. The surviving row is
+renumbered A1 (was A2); it is unchanged in substance.
+
+1. The response names the bundle as the evidence for `W-1` and `W-2`, the criteria only a
    render decides.

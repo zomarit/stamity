@@ -164,6 +164,13 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
+Disposition 2026-10-27: A1 deleted (sha256:a9fd82e5d3c3) — the row asked the reply to say what
+`run end` does by itself: `content/skills/st-unattended/SKILL.md:98` has the verb scan the title
+(`src/cli/commands/run.ts:2393-2394`), and no act of the close depends on saying so; B4 binds the
+`run end` call with its title. This is the row the 2026-10-25 note below renumbered A1 (was A2);
+that note's hash names the earlier A1. This note stands above it because the runner reads the
+first note per label (`scripts/eval/run.mjs:207-208`).
+
 Disposition 2026-10-25: A1 deleted (sha256:7b5944c810df) — the row graded a reconciliation the
 governing text never asks for: `content/skills/st-unattended/SKILL.md:82` copies a checkpoint's
 `notDone[]` lines into the record and the morning list's `## Not done:`, and `:104-105` keeps
@@ -171,4 +178,4 @@ governing text never asks for: `content/skills/st-unattended/SKILL.md:82` copies
 neither says a later verb's success clears an earlier `Not done:` line. B5 binds the hand-off.
 The surviving row is renumbered A1 (was A2); it is unchanged in substance.
 
-1. The response says the pull request's title is scanned like its body.
+None declared for this case after those dispositions.
