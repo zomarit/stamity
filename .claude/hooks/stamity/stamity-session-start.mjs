@@ -64,6 +64,9 @@ function matchSessions(rows, env) {
   return matches;
 }
 const INVISIBLE = new RegExp("(?:[\\u00AD\\u034F\\u0600-\\u0605\\u061C\\u06DD\\u070F\\u0890-\\u0891\\u08E2\\u115F-\\u1160\\u17B4-\\u17B5\\u180B-\\u180F\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u206F\\u3164\\uFE00-\\uFE0F\\uFEFF\\uFFA0\\uFFF0-\\uFFFB]|\\uD804\\uDCBD|\\uD804\\uDCCD|\\uD80D[\\uDC30-\\uDC3F]|\\uD82F[\\uDCA0-\\uDCA3]|\\uD834[\\uDD73-\\uDD7A]|\\uDB40[\\uDC80-\\uDFFF]|[\\uDB41-\\uDB43][\\uDC00-\\uDFFF])", "g");
+const UNPRINTABLE = new RegExp("[\\u0000-\\u001F\\u007F-\\u009F\\u061C\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]", "gu");
+const LEARNING_FIELDS = ["id","confidence","summary","reviewBy"];
+const HANDOFF_FIELDS = ["id","summary","expires","fromTool"];
 const SCREEN = [
   { id: "fake-instruction-header", re: new RegExp("^#{1,2}\\s*(?:system\\s+prompt|instructions|you\\s+are|role)\\s*:", "im") },
   { id: "frontmatter-config-override", re: new RegExp("^---[ \\t]*\\n[\\s\\S]{0,2000}?(?:protected|scope|model)\\s*:", "m") },
@@ -201,8 +204,9 @@ function listMarkdown(dir) {
  * One document, screened. Checks run in the order that keeps a refusal
  * attributable: size before read, injection before shape, then shape, then
  * integrity — so a poisoned file reports as poisoned rather than as malformed.
+ * `fields` are the head fields the banner prints, screened again once parsed.
  */
-function inspect(dir, name, maxBytes, coversSummary) {
+function inspect(dir, name, maxBytes, coversSummary, fields) {
   let stats;
   try {
     stats = statSync(join(dir, name));
@@ -226,6 +230,15 @@ function inspect(dir, name, maxBytes, coversSummary) {
   if (screened(raw)) return { ...doc, skip: "injection-detected" };
   const parsed = parseDocument(raw);
   if (parsed === null) return { ...doc, skip: "invalid-frontmatter" };
+  // The raw screen above read each escape as its literal characters; the parser
+  // decoded them. Each printed field is screened as decoded and as `text` prints
+  // it, field by field, as `learn read` screens them.
+  for (const field of fields) {
+    const value = parsed.head[field];
+    if (typeof value === "string" && (screened(value) || screened(text(value, "")))) {
+      return { ...doc, skip: "injection-detected" };
+    }
+  }
   const covered = coversSummary
     ? String(parsed.head.summary ?? "").trim() + "\n" + parsed.body.trim()
     : parsed.body.trim();
@@ -258,15 +271,15 @@ function declaredDay(raw) {
  * lookalike or a combining mark hid, and the raw copy keeps the ones NFKC
  * destroys by composing a trailing mark into the letter before it.
  *
- * Returns the first matching pattern id in SCREEN order, or "" when none
- * matches: a refusal that names its pattern is one somebody can attribute.
+ * Returns every matching pattern id in SCREEN order, empty when none matches:
+ * a refusal that names its pattern is one somebody can attribute.
  */
-function screenHit(raw) {
+function screenIds(raw) {
   const stripped = raw.replace(INVISIBLE, "");
   const copies = [raw, stripped];
   const normalized = normalizeForScreen(stripped);
   if (normalized !== stripped) copies.push(normalized);
-  const hit = SCREEN.find((entry) =>
+  return SCREEN.filter((entry) =>
     copies.some((copy) => {
       // A `g`-flagged row carries `lastIndex` between calls, and this now tests
       // three copies per row: without the reset the second copy would resume
@@ -274,8 +287,12 @@ function screenHit(raw) {
       entry.re.lastIndex = 0;
       return entry.re.test(copy);
     }),
-  );
-  return hit === undefined ? "" : hit.id;
+  ).map((entry) => entry.id);
+}
+
+/** The first matching pattern id in SCREEN order, or "" when none matches. */
+function screenHit(raw) {
+  return screenIds(raw)[0] ?? "";
 }
 
 /** Whether any screen pattern matches. */
@@ -409,7 +426,7 @@ function append(out, items, noun) {
 
 const learningsDir = join(STATE_ROOT, "learnings");
 const learnings = listMarkdown(learningsDir)
-  .map((name) => inspect(learningsDir, name, MAX_LEARNING_BYTES, false))
+  .map((name) => inspect(learningsDir, name, MAX_LEARNING_BYTES, false, LEARNING_FIELDS))
   .filter((doc) => doc !== null)
   // Newest declared date first — a learning written today outranks one from six
   // months ago, and a date survives a clone where an mtime does not — with a
@@ -431,7 +448,7 @@ const skipped = learnings.filter((doc) => doc.skip !== "");
 
 const handoffsDir = join(STATE_ROOT, "handoffs");
 const handoffDocs = listMarkdown(handoffsDir)
-  .map((name) => inspect(handoffsDir, name, MAX_HANDOFF_BYTES, true))
+  .map((name) => inspect(handoffsDir, name, MAX_HANDOFF_BYTES, true, HANDOFF_FIELDS))
   .filter((doc) => doc !== null);
 
 // Partitioned, not filtered away. A refusal and a handoff that is merely
@@ -445,7 +462,7 @@ const handoffs = handoffDocs
     (doc) => doc.skip === "" && RESUMABLE.includes(doc.head.status) && Date.parse(doc.head.expires) > NOW,
   )
   .map((doc) => ({
-    id: text(doc.head.id, text(stem(doc.name), "(unnamed)")),
+    id: text(doc.head.id, nameId(doc)),
     summary: text(doc.head.summary, "(no summary)"),
     expires: text(doc.head.expires, ""),
     from: text(doc.head.fromTool, ""),
@@ -461,7 +478,7 @@ function render() {
   const bytes = loaded.reduce((total, doc) => total + doc.size, 0);
   // The file name is payload too: it is attacker-chosen on any file that
   // reached the directory, and it is concatenated into a line an agent reads.
-  const ids = loaded.map((doc) => text(doc.head.id, text(stem(doc.name), "(unnamed)")));
+  const ids = loaded.map((doc) => text(doc.head.id, nameId(doc)));
   const duplicated = new Set(ids.filter((id, index) => ids.indexOf(id) !== index));
   const section = [];
   append(
@@ -512,7 +529,29 @@ function skipLine(doc) {
 
 /** A file name as one bounded, control-character-free line. */
 function fileName(doc) {
-  return text(doc.name, "(unnamed file)");
+  return text(printedName(doc.name), "(unnamed file)");
+}
+
+/** The id a learning or handoff with none takes from its file's name, as `printedName` gives it. */
+function nameId(doc) {
+  const shown = printedName(doc.name);
+  return text(shown.endsWith(".md") ? stem(shown) : shown, "(unnamed)");
+}
+
+/**
+ * A file name as the banner prints it, as `learn read` prints a skip's: C0
+ * controls and DEL to spaces, the rest of the resume card's unprintable set and
+ * the invisible class dropped. A name the screen matches, raw or printed, its
+ * stem included, prints as a placeholder naming the pattern ids, never the name.
+ */
+function printedName(name) {
+  const shown = name
+    .replace(UNPRINTABLE, (char) => (char < " " || char === "\u007f" ? " " : ""))
+    .replace(INVISIBLE, "");
+  const copies = [name, stem(name), text(shown, ""), text(stem(shown), "")];
+  const ids = [...new Set(copies.flatMap(screenIds))].sort();
+  if (ids.length === 0) return shown;
+  return "(name withheld: " + (ids.length === 1 ? "pattern " : "patterns ") + ids.join(", ") + ")";
 }
 
 /** The first cloud or CI session by priority, its lines, then the others by name. */
