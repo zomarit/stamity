@@ -336,13 +336,22 @@ describe("repository hygiene over the Git index", () => {
   // and published to the `records` branch. Only the expected list, its message and the title moved:
   // each exempt path still passes over budget while its same-directory neighbour is refused, and
   // every retired summary is still refused.
-  it("exempts exactly the run 53, run 54, run 55 and run 56 summaries and refuses their neighbours and the retired run summaries", () => {
+  //
+  // TEST CHANGE, justified (2026-10-27, run 57): the same window takes a fifth entry — run 57, the
+  // increment at candidate 8ccf1653 composed with run 56 (its prior summary read at c01374a5), PASS
+  // with golden 91/91, floors 48/48, hold 39/39, benign twins 0/10 and probes 31/31, whose exported
+  // summary is 6733568 bytes, over the budget, published to the `records` branch as the 1.17.0 run
+  // of record. Only the expected list, its message and the title moved: each exempt path still
+  // passes over budget while its same-directory neighbour is refused, and every retired summary is
+  // still refused.
+  it("exempts exactly the run 53, run 54, run 55, run 56 and run 57 summaries and refuses their neighbours and the retired run summaries", () => {
     const exempt = exemptedPaths();
-    expect(exempt, "the size-exception map's paths are not the run 53, run 54, run 55 and run 56 summaries alone").toEqual([
+    expect(exempt, "the size-exception map's paths are not the run 53, run 54, run 55, run 56 and run 57 summaries alone").toEqual([
       "evals/runs/2026-10-22-run-53/summary.json",
       "evals/runs/2026-10-27-run-54/summary.json",
       "evals/runs/2026-10-27-run-55/summary.json",
       "evals/runs/2026-10-27-run-56/summary.json",
+      "evals/runs/2026-10-27-run-57/summary.json",
     ]);
 
     const root = fixture();

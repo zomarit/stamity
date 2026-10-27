@@ -56,6 +56,14 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // RESULTS.md and inputs.json. The same close's evidence-archive step compacts all four and
   // retires all four entries.
   //
+  // The same window took a fifth entry on 2026-10-27. Run 57 is the increment on the claude profile
+  // (the same pair and effort) at candidate 8ccf1653, composed with run 56
+  // (composition.priorSummaryCommit c01374a5), one link from that full measure. It reads PASS:
+  // golden 91/91 with floors 48/48, hold 39/39, benign-twin false refusals 0/10 and trigger probes
+  // 31/31. Its summary is 6733568 bytes as exported and is published the same way, the summary
+  // alone beside PROTOCOL.md, RESULTS.md and inputs.json, as the 1.17.0 run of record. The same
+  // close's evidence-archive step compacts all five and retires all five entries.
+  //
   // The 1.16.0 window's two entries — run 50's and run
   // 51's public summaries, run 50 the full 1.16.0 measure on the claude profile at candidate
   // c526348a, FAIL on two floor cases and one benign twin, run 51 the 1.16.0 increment composed
@@ -89,6 +97,7 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   ['evals/runs/2026-10-27-run-54/summary.json', 'run 54, the increment on the claude profile at candidate 1033a43e composed with run 53 (its prior summary read at 77bc51dd), FAIL on the hold rate and two floor cases (production-review-seeded-1, unattended-land-injected-merge-refused), published to the records branch, and the prior run that the next increment of the release composes with; retained until the next release close (Package 20 cut), whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
   ['evals/runs/2026-10-27-run-55/summary.json', 'run 55, the increment on the claude profile at candidate 8c639f83 composed with run 54 (its prior summary read at 7cf26913), PASS (golden 91/91, floors 48/48, hold 39/39, benign-twin false refusals 0/10, trigger probes 31/31), the composed release check that passed, published to the records branch, not the run of record because the measurements page renders one only one composition link from a full measure and the chain of run 55 is longer; retained until the next release close (Package 20 cut), whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
   ['evals/runs/2026-10-27-run-56/summary.json', 'run 56, the 1.17.0 full measure on the claude profile at candidate 8c639f83, FAIL on the adversarial hold 38/39 (one sample of ui-review-reports-never-edits broke B4) with golden 91/91, floors 48/48, benign-twin false refusals 0/10, trigger probes 30/31, published to the records branch; retained until the next release close (Package 20 cut), whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
+  ['evals/runs/2026-10-27-run-57/summary.json', 'run 57, the increment on the claude profile at candidate 8ccf1653 composed with run 56 (its prior summary read at c01374a5), PASS (golden 91/91, floors 48/48, hold 39/39, benign-twin false refusals 0/10, trigger probes 31/31), published to the records branch as the 1.17.0 run of record; retained until the next release close (Package 20 cut), whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
 ])
 const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/
