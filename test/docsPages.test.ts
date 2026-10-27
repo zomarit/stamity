@@ -5730,7 +5730,10 @@ describe("file 2's SECURITY.md sentences", () => {
     expect(security()).toContain(
       "the overwrite takes the `.bak`, the `.npmrc` read takes the file's presence as its answer, and a `worktree` verb refuses",
     );
-    expect(mapping()).toContain(`\`handoff\` and \`gate\`, ${clause} and the tracked-and-clean check before an overwrite)`);
+    // prove/18: the mapping row names `plan check`'s reads in SECURITY.md's words.
+    expect(mapping()).toContain(
+      `(the reads of \`sync\`, \`check\`, \`init\`, \`config detect\`, \`handoff\` and \`gate\`, the reads of \`plan check\`, ${clause} and the tracked-and-clean check before an overwrite)`,
+    );
   });
 
   it("names what a hand-edited ledger row reaches under copilot.setupSteps off (b8, review/70), on both pages", () => {
