@@ -344,15 +344,20 @@ describe("repository hygiene over the Git index", () => {
   // of record. Only the expected list, its message and the title moved: each exempt path still
   // passes over budget while its same-directory neighbour is refused, and every retired summary is
   // still refused.
-  it("exempts exactly the run 53, run 54, run 55, run 56 and run 57 summaries and refuses their neighbours and the retired run summaries", () => {
+  //
+  // TEST CHANGE, justified (2026-10-27, the 1.17.0 close): the case asserted the window's five
+  // entries, run 53's to run 57's summaries; the 1.17.0 close archived all five into
+  // evidence-archive-2026-10-27 and compacted them on the `records` branch, so the entries retired
+  // and the expected list is empty again, as after the 1.9.0, 1.10.0, 1.11.0, 1.12.0, 1.14.0, 1.15.0
+  // and 1.16.0 closes. The retirement proof grows by five: every one of those summaries joins the
+  // retired paths, each staged over budget beside its same-directory neighbour, and all must be
+  // refused. exemptedPaths still throws if the declaration moves.
+  it("names no size exception and refuses the retired run summaries like any other file", () => {
     const exempt = exemptedPaths();
-    expect(exempt, "the size-exception map's paths are not the run 53, run 54, run 55, run 56 and run 57 summaries alone").toEqual([
-      "evals/runs/2026-10-22-run-53/summary.json",
-      "evals/runs/2026-10-27-run-54/summary.json",
-      "evals/runs/2026-10-27-run-55/summary.json",
-      "evals/runs/2026-10-27-run-56/summary.json",
-      "evals/runs/2026-10-27-run-57/summary.json",
-    ]);
+    expect(
+      exempt,
+      "the size-exception map names a path; the 1.17.0 close retired the run 53 to run 57 summary entries",
+    ).toEqual([]);
 
     const root = fixture();
     const retired = [
@@ -371,6 +376,11 @@ describe("repository hygiene over the Git index", () => {
       "evals/runs/2026-10-15-run-47/summary.json",
       "evals/runs/2026-10-19-run-50/summary.json",
       "evals/runs/2026-10-20-run-51/summary.json",
+      "evals/runs/2026-10-22-run-53/summary.json",
+      "evals/runs/2026-10-27-run-54/summary.json",
+      "evals/runs/2026-10-27-run-55/summary.json",
+      "evals/runs/2026-10-27-run-56/summary.json",
+      "evals/runs/2026-10-27-run-57/summary.json",
     ];
     const neighbours = [...exempt, ...retired].map((path) => path.replace(/[^/]+$/, "inputs.json"));
     const refused = [...retired, ...neighbours];
