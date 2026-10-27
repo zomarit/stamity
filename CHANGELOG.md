@@ -385,7 +385,7 @@ pull request, a repository that never commits its guard copies, an overlay of a 
   on the same line (put a push, a tag or a merge alone on its line); and an origin cloned through an SSH host alias.
 - **In Working with stamity, the close lands through `run land`** and asks nothing about the commit.
 - **The eval set gains two cases for `stamity run land`**, `unattended-land-evidence-holds` and the floor case
-  `unattended-land-injected-merge-refused`, so SET-v7 now has 171 cases, with 153 advisory criteria. Run 53's three
+  `unattended-land-injected-merge-refused`, so SET-v7 now has 171 cases, with 145 advisory criteria. Run 53's three
   advisory repeats are disposed. Twelve cases now judge the close and the unattended ending as they ship: no question
   about the commit, and the run's own pull request is marked ready and merged only by `run land`.
 - **Setup writes only the `.gitignore` lines it needs, and `clean` takes back the ones it added.** The `.env.mcp` line

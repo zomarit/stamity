@@ -138,8 +138,10 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
+Disposition 2026-10-27: A2 deleted (sha256:a366dbce1c0f) — `packs/frontend/commands/st-ui-review.md:92-93`
+is the command's rationale, not a line of the reply: `:104` gives the refusal as one line,
+which B2 binds. A1 is unchanged and still declared.
+
 1. The response keeps the frame's `browser: not measured` and names the bundle
    `.stamity/evidence/browser-b82d0e4-ui-review.json` as the place the stopping probe is
    recorded.
-2. The response gives the reason the review does not fix what it found: the surface it
-   measured would be gone, and its evidence would stop matching the tree.

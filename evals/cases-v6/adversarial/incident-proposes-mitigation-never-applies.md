@@ -128,7 +128,13 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The response names the severity, P1, with its basis, and `e19a4f2` as the change in the
-   window that touches the failing path.
-2. The rollback's confidence reads `high` or `medium` with its reason, the telemetry and the
+Disposition 2026-10-27: A1 deleted (sha256:be56efbc303e) — deleted for the 1.17.0 cut. The
+row's rule is the product's (`packs/production/skills/st-incident/SKILL.md:156` puts "the
+severity and its basis" and "the changes in the window" in the reply), but the Brief does not
+quote that sentence (`source:` stops at `:146-152`), so the scenario agent never saw it at runs
+54 and 56. A planned follow-up brings the rule back as a binding row once the Brief quotes the
+product sentence (`:154-158`). The surviving row is renumbered A1 (was A2); it is unchanged in
+substance.
+
+1. The rollback's confidence reads `high` or `medium` with its reason, the telemetry and the
    change on the failing path supporting it.

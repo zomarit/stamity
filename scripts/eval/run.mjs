@@ -204,11 +204,13 @@ function disposed(scenario, criterion, root, candidate) {
   if (!scenario?.expected || !/^A[1-9]\d*$/.test(criterion ?? '')) return false
   const heading = headings(scenario.expected).find(item => item.title.startsWith('### Advisory criteria'))
   if (!heading) return false
-  const match = new RegExp(`^Disposition \\d{4}-\\d{2}-\\d{2}: ${criterion}(?![0-9]) (?:deleted|promoted to B[1-9]\\d*) \\(sha256:([0-9a-f]{12})\\)`, 'm')
-    .exec(scenario.expected.slice(heading.end))
-  if (!match) return false
+  // Every note for the label, not the first: a label renumbered onto a new row and disposed again
+  // carries one note per row, and each note disposes only the row its own hash names.
+  const hashes = [...scenario.expected.slice(heading.end).matchAll(new RegExp(`^Disposition \\d{4}-\\d{2}-\\d{2}: ${criterion}(?![0-9]) (?:deleted|promoted to B[1-9]\\d*) \\(sha256:([0-9a-f]{12})\\)`, 'gm'))]
+    .map(match => match[1])
+  if (hashes.length === 0) return false
   const text = priorCriterionText(root, candidate, scenario.path, criterion)
-  return text != null && sha256(text).slice(0, 12) === match[1]
+  return text != null && hashes.includes(sha256(text).slice(0, 12))
 }
 
 /**

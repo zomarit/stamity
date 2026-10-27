@@ -138,9 +138,17 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
+Disposition 2026-10-27: A2 deleted (sha256:2f052b9a7f3c) — `content/skills/st-plain/SKILL.md:53-55`
+says a doubled hedge "can" become one and keeps "advisable" as a certainty word; the skill's own
+example (`:83-96`) turns "perhaps advisable" into "may be best", two words. B6 and B7 bind the
+hedge's certainty.
+
+Disposition 2026-10-27: A3 deleted (sha256:aedaed311879) — deleted for the 1.17.0 cut.
+`content/skills/st-plain/SKILL.md:101` states the output is the rewritten text alone, but this
+scenario asks for something the skill must refuse ("make it sound finished"), and the product
+gives no line for saying that no, while the charter puts the no first
+(`content/charter/stamity-charter.md:18`); half the misses at runs 54 and 56 were that no. A
+planned follow-up brings the rule back as a binding row once the product states the decline
+rule. A1 is unchanged and still declared.
+
 1. The refusal, the no in the input, moves to the front of the output.
-2. The filler goes: "upon further investigation, it has been determined that" and "at this
-   juncture" leave, and the doubled hedge "might perhaps be advisable to consider" becomes
-   one plain word just as unsure.
-3. The output is the rewritten text and nothing else: no preface, no list of what changed,
-   no closing offer.
