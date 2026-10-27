@@ -3151,7 +3151,13 @@ describe("docs/specs/everyday-flows.md, amended for w2 and v0b's fix", () => {
       "before any history count, and no chain base exempts them",
       "is not a plain repository path; write it as git lists it and re-stamp the plan.",
       "is a symbolic link, lies under one, or is a folder holding one at HEAD; list the files the plan read instead, and re-stamp the plan.",
-      "is not tracked by git at HEAD, so its history cannot be measured; commit it or drop it from reads, and re-stamp the plan.",
+      // TEST CHANGE, justified (REQ-FLOW-091, Package 20's unit R3): the untracked message changed and uncommitted was
+      // added, so the pin follows the message plan check prints now; the old one stays quoted in the spec as history.
+      "is not tracked by git at HEAD, or is a folder holding files HEAD does not (untracked, ignored or only staged), so its history cannot be measured; list the tracked files or subfolders the plan read instead, or commit or remove those files (never commit ignored output), and re-stamp the plan.",
+      "stale `uncommitted`",
+      "has changes in the work tree or the index that HEAD does not hold, so its history does not measure them; commit or undo them, and if the plan's research read them, re-read it and re-stamp the plan.",
+      "a tracked file path deleted on disk stays `missing`",
+      "`freshness.stale[].reason` gains `uncommitted`",
       "A head `reads: []` is `head-key-missing` at the `reads:` line: \"The head's `reads` must list at least one path.\"",
       "`freshness([])`, the engine's call, is unchanged",
     ]) {

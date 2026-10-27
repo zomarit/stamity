@@ -1,6 +1,6 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended at the 1.17.0 release cut on 2026-10-27, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.17.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
@@ -195,6 +195,11 @@ REQ-FLOW-047 stay unallocated, and REQ-FLOW-050, Copilot's touchpoints as shared
 `b13-copilot-touchpoints-skills` for the maintainer's decision: neither it nor the delta's sentences on Copilot's prompt
 files under REQ-FLOW-026 and REQ-FLOW-118 are merged. That text reached `main` through pull request #128 and shipped
 with 1.17.0, which set `status: shipped-with-1.17.0`.
+
+The text dated 2026-10-27, under REQ-FLOW-021, REQ-FLOW-088, REQ-FLOW-091, REQ-FLOW-093 and REQ-FLOW-102, comes from
+the spec delta of Package 20's units R2 to R4, which landed at the 1.17.0 release cut, each entry read with the as-built
+deltas its implementer and fixer reports declared and against the landed code. It cites the code by file and symbol,
+and each test by its title. It shipped with 1.17.0.
 
 ## Intent
 
@@ -749,6 +754,22 @@ context budget allows the orchestrator's own bounded read on the named-target sh
   cap, which is refused unread, is keyed by its modified time (`src/learnings/store.ts:328-363`).
 - Each header's byte figure counts its own printed lines, so past the 20-line cut the banner's figure equals the bytes
   it printed (`src/hooks/scripts.ts:653-657`).
+- **Amended 2026-10-27** (the 1.17.0 release cut, Package 20's unit R2 and its fix round). Given a learning or a
+  handoff the session-start banner reads, Then after the raw screen it screens each head field it prints (a learning's
+  `id`, `confidence`, `summary` and `reviewBy`; a handoff's `id`, `summary`, `expires` and `fromTool`) as decoded and
+  again as it prints it, one field at a time, each copy through the screen's union (raw, invisible-stripped,
+  normalized), and a hit skips the file `injection-detected`, as the raw screen does. A file name prints with C0
+  controls and DEL turned to spaces and the rest of the resume card's unprintable class (`UNPRINTABLE_CHARS`,
+  `src/runs/layout.ts`) and the invisible class dropped; a name the screen matches, raw or as printed, its stem
+  included, prints as `(name withheld: pattern <id>)` (`patterns <ids>` for more than one), the read verb's
+  placeholder, never the name, and an id taken from the file's stem prints the same way. On a clean head the banner and
+  `formatLearningsIndex` print the same lines (`inspect`, `screenIds`, `fileName`, `nameId` and `printedName`,
+  `src/hooks/scripts.ts`).
+  - Proof: `test/hooks/scripts.test.ts` ("skips a file whose printed head field hits the screen only once decoded
+    (REQ-FLOW-021)", "skips a file whose printed head field hits the screen only once its control prints as a space
+    (REQ-FLOW-021)", "prints a file name with the unprintable class removed, and withholds a name the screen matches
+    (REQ-FLOW-021)", "withholds a file name the screen matches only as printed (REQ-FLOW-021)", "still loads a clean head
+    written with escapes, as the engine's formatter prints it").
 
 - **Proof:** the learnings suites under `test/learnings/` (the warning window in `test/learnings/validation.test.ts`),
   `test/hooks/scripts.test.ts` and `test/runs/resumeCardParity.test.ts`; `docs/troubleshooting.md`; QA.
@@ -4236,6 +4257,23 @@ that folder for a client that has one".)
     and wires every entry to a copy", "removes every unedited old copy by its recorded hash, and keeps the copies and the
     settings", "keeps an edited old copy and names it, and removes the unedited six"), `test/emit/hooksInfra.test.ts`,
     `test/docsPages.test.ts` ("troubleshooting shows the guard command Claude Code runs, at the copy").
+- **Amended 2026-10-27** (the 1.17.0 release cut, Package 20's unit R2 and its fix round). Given a learning, Then the
+  write gate screens, beside the raw text, each string head field as decoded, as the read verb prints it and as the
+  session-start banner prints it, and the body as the read verb prints it, naming each pattern id once per file and
+  never echoing the text (`validateLearningContent` and `screenedCopies`, `src/learnings/validation.ts`), so the store's
+  write path, `learn write`, the directory validator and the migration carry refuse what the readers refuse. The read
+  verb's loader screens the same copies in both of its modes, after the raw screen and before the digest, and skips a
+  hit `injection-detected` under its pattern ids, never as `invalid-frontmatter` (`loadValidatedLearnings`,
+  `src/learnings/store.ts`). Given a handoff, Then its write gate screens each string head field as decoded and as the
+  session-start banner prints it, each pattern id named once (`parseHandoff` and `screenDocument`,
+  `src/handoffs/validation.ts`), and every handoff verb goes through it.
+  - Proof: `test/learnings/validation.test.ts` ("screens each head field as decoded, naming each pattern id once
+    (REQ-FLOW-088)", "screens each head field as printed, where a control between words completes a row
+    (REQ-FLOW-088)", "screens the body as printed, where a control between words completes a row (REQ-FLOW-088)",
+    "refuses a decoded or printed hit as injection at both ends, in both read modes (REQ-FLOW-088)", "passes a clean
+    head field written with escapes"), `test/handoffs/validation.test.ts` ("screens each head field as decoded and as
+    printed, naming each pattern id once (REQ-FLOW-088)", "passes a clean head field written with escapes"),
+    `test/cli/commands/learn.test.ts` (its shared-loader case, changed under a `TEST CHANGE, justified` line).
 - **Proof:** `test/content/charter.test.ts` (the invariant 5 pins, "holds invariant 5's screened read, every clause on its
   four lines", with no `/dev/null`, no `hooks/*/` and no single generated path), `test/content/invariantsVersion.test.ts`
   (the 1.3.1 hash row; amended 2026-10-22, it read the 1.3.0 row).
@@ -4348,8 +4386,11 @@ and a draft pull request titled `Refused:` where a branch can be pushed, else th
   counts 0 for it forever. Each is a `stale` blocker at the `reads:` line, its message the path in backticks and then
   its own fix: "is not a plain repository path; write it as git lists it and re-stamp the plan.", "is a symbolic link,
   lies under one, or is a folder holding one at HEAD; list the files the plan read instead, and re-stamp the plan." and
-  "is not tracked by git at HEAD, so its history cannot be measured; commit it or drop it from reads, and re-stamp the
-  plan.". A head `reads: []` is `head-key-missing` at the `reads:` line: "The head's `reads` must list at least one
+  "is not tracked by git at HEAD, or is a folder holding files HEAD does not (untracked, ignored or only staged), so
+  its history cannot be measured; list the tracked files or subfolders the plan read instead, or commit or remove
+  those files (never commit ignored output), and re-stamp the plan." (amended 2026-10-27, the bullet of that date
+  below; it read "is not tracked by git at HEAD, so its history cannot be measured; commit it or drop it from reads,
+  and re-stamp the plan."). A head `reads: []` is `head-key-missing` at the `reads:` line: "The head's `reads` must list at least one
   path."; any other value that is not a list of paths keeps "must be a list of paths". `freshness([])`, the engine's
   call, is unchanged, and the report's `freshness.stale[].reason` gains `link`, `spelling` and `untracked`; `moved` and
   `missing` read as before (`StaleReason` and `freshness`, `src/runs/freshness.ts`; `OWN_STALE_MESSAGE` and the head's
@@ -4362,6 +4403,36 @@ and a draft pull request titled `Refused:` where a branch can be pushed, else th
   continues a Risks bullet, with no blank line between, is read by its bullet's lead, and "No risk here is Critical."
   stays ready (`isCriticalRisk` and `checkSections`, `src/runs/planCheck.ts:396-423`).
   - Proof: `test/runs/planCheck.test.ts` (the plain-paragraph case and the wrapped-bullet case).
+- **Amended 2026-10-27** (the 1.17.0 release cut, Package 20's unit R3 and its two fix rounds). Given a plan's head
+  `reads:` list, When `stamity plan check` measures its freshness, Then two more refusals come before any history
+  count, and no chain base exempts them. A path that is a folder in `HEAD`'s tree is stale `untracked` where its disk
+  copy holds an entry the index does not (an untracked or ignored file, a non-empty untracked folder, a nested
+  repository; an empty folder does not count), or where its index holds an entry `HEAD`'s tree does not (staged, or
+  added with intent-to-add), read by `git ls-files --others --directory --no-empty-directory` with no exclude option
+  and by `git diff-index --cached --diff-filter=A HEAD`. A path that `HEAD`'s tree holds and that is on disk is stale
+  `uncommitted` where its work tree or index differs from `HEAD` at or below it (an edit, a staged change, a deletion
+  below a folder, a file the disk holds as a folder or, below a folder, as a link), read by
+  `git status --porcelain=v1 --untracked-files=no`, which reads a file touched but not changed as unchanged and, under
+  the CLI's runner (`GIT_OPTIONAL_LOCKS=0`), writes no index; a tracked file path deleted on disk stays `missing`.
+  Each read is literal (`--literal-pathspecs`) and runs through the same runner as every other read; a failure is
+  `freshness-error`, and a read past the runner's output bound says so rather than "timed out". The `untracked`
+  message is the one the 2026-10-19 bullet now quotes, and the `uncommitted` one is "has changes in the work tree or
+  the index that HEAD does not hold, so its history does not measure them; commit or undo them, and if the plan's
+  research read them, re-read it and re-stamp the plan."; neither names an entry below the path. The report's
+  `freshness.stale[].reason` gains `uncommitted`. Not measured: a change the assume-unchanged or skip-worktree index
+  bits, or a configuration that ignores submodules, hide from `git status` (`freshness`, `treeState`, `untrackedBelow`
+  and `uncommitted`, `src/runs/freshness.ts`; `OWN_STALE_MESSAGE`, `src/runs/planCheck.ts`).
+  - Proof: `test/runs/freshness.test.ts` ("reads a tracked folder as untracked once it holds a file outside HEAD's
+    tree, ignored or not", "counts a nested repository inside a tracked folder, and not an empty untracked folder",
+    "reports a failed listing below a tracked folder as an error, the verdict stale", "reads a tracked folder as
+    untracked once its index holds an entry HEAD's tree does not, staged or intent-to-add", "names a listing past the
+    runner's output bound as that, not as a timeout", "reads a tracked path whose work tree or index differs from HEAD
+    as uncommitted, as a file and below a folder", "reads a folder whose tracked file the disk holds as a link,
+    uncommitted, as uncommitted", which skips on Windows, "keeps a touched but unchanged file and a clean tree fresh,
+    writing no index, one status read per tracked path"),
+    `test/runs/planCheck.test.ts` ("refuses a reads path with changes HEAD does not hold at the reads line, naming it",
+    and the `untracked` message pin), `test/docsPages.test.ts` ("states w2's stale reasons, their messages and the empty
+    reads list on REQ-FLOW-091").
 - **Proof:** `test/cli/commands/plan.test.ts`, `test/runs/planCoverageParity.test.ts` (the engine's coverage check equals
   the skill's copy), `test/cli/surface.e2e.test.ts`, `test/corpus/cliCallForm.test.ts`,
   `test/corpus/skills/unattended.test.ts` (one case per blocker code), `test/corpus/commands/board.test.ts` ("gates
@@ -4563,6 +4634,13 @@ stray check `:872`, the index read `indexTracked`, `:1129-1139`, which `--paths`
   …` (`carriedSections` and `sectionStarts`, called from the hold, `src/cli/commands/run.ts`).
   - Proof: `test/cli/commands/runCheckpoint.test.ts` (the describe "a fresh clone that holds a new change keeps the
     branch's earlier sections (n14 P3, REQ-FLOW-105)").
+- **Amended 2026-10-27** (the 1.17.0 release cut, Package 20's unit R4 and its fix round). Given an unattended
+  checkpoint or `run end`, Then the held set, the dry run's `would hold`, the history check and the pushed-tree check
+  read from every setup root REQ-FLOW-102's bullet of that date names, not from the run's own project alone, so a
+  commit the push would send, or `HEAD`'s tree, that adds a setup below the top with its client settings refuses the
+  push as a held path in history or in the pushed tree (`heldOf` and `setupsNamed`, `src/cli/commands/run.ts`).
+  - Proof: `test/cli/commands/runCheckpoint.test.ts` (the describe "every setup root in the repository (REQ-FLOW-102,
+    REQ-FLOW-093)").
 - **Proof:** `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/run.test.ts`,
   `test/corpus/skills/unattended.test.ts`.
 
@@ -4994,6 +5072,32 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
     `test/hooks/scriptBudget.test.ts`, `test/cli/commands/runCheckpoint.test.ts` (the kept-patch refusals, the dry run's
     nested repository), `test/runs/hookPaths.test.ts`, `test/docsPages.test.ts` (the HEAD-ref sentences on both security
     pages).
+- **Amended 2026-10-27** (the 1.17.0 release cut, Package 20's unit R4 and its fix round). **Every setup root.** Given
+  an unattended `run checkpoint` or `run end`, Then the hold reads every setup root in the repository, not only the
+  run's own project: each folder whose `.stamity/manifest.json` (its last two segments matched without case) is in the
+  tree at `Base:`, listed by one `git ls-tree -r -z --full-tree` over that commit's tree objects and never a work tree;
+  each folder whose manifest the change the push sends adds, in a commit it would send, in `HEAD`'s tree or in the
+  index and work tree; and the run's own project. A folder whose setup folder or manifest is a link or a submodule is a
+  root too. For each root the hold keeps its person-only files, a path held where a person-only glob matches it as
+  written from the git top or from any root (`heldPaths` takes one prefix or a list), and the scripts and files its hook declarations at `Base:` name, read from that root through the
+  same `Base:` reader, four roots at a time until every root is read; the held set is their union, and the first root
+  that refuses, in the order given, decides. A root that does not resolve cleanly at `Base:` (its manifest does not
+  parse, or is a link or a submodule) refuses the call before anything is staged, naming that root's file, and a tree
+  whose setups cannot be listed refuses as `hold refused: the setups in the tree of <commit> could not be listed
+  (<why>), …`. A repository with one setup at the top reads as before. `run land`'s ask reads the setup roots of the
+  tree at `Base:`, at the default branch's tip and at the head, and asks for a diff touching any root's person-only
+  files or declared scripts; a tree whose setups cannot be listed, or a nested manifest that does not resolve, asks
+  rather than refuses (`setupRootsAt`, `setupRootOf` and `hookPathsRead`, `src/runs/hookPaths.ts`; `heldPaths`,
+  `src/change/personOnlyPaths.ts`; `setupsNamed` and `heldOf`, `src/cli/commands/run.ts`; `declaredHookPaths`,
+  `src/cli/commands/runLand.ts`; `askPathsOf`, `src/runs/landEvidence.ts`). A run continued on a fresh clone whose kept held patch holds a setup the run added refuses each
+  later checkpoint, since the roots are read from `Base:`, the index and the work tree and never from the kept patch:
+  it fails closed until a person applies or drops the patch.
+  - Proof: `test/runs/hookPaths.test.ts`, `test/change/personOnlyPaths.test.ts` and
+    `test/cli/commands/runCheckpoint.test.ts` (each its describe "every setup root in the repository"),
+    `test/cli/commands/runLand.test.ts` ("asks for a diff editing a nested setup's client settings or the script its
+    declaration names, from a run at the git top (REQ-FLOW-102)", "asks for a diff adding a setup below the top with its
+    client settings, the setup only at the head (REQ-FLOW-102)"), `test/runs/landEvidence.test.ts` ("matches a path
+    below any of several setup roots, as the hold reads every setup (REQ-FLOW-102)").
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`, `test/change/personOnlyPaths.test.ts`,
   `test/cli/commands/runCheckpoint.test.ts` (the held patch; the refused push, "refuses the push when a commit it would
   send changes a held path, rewriting no history"), `test/adapters/claude.test.ts`,
@@ -8421,6 +8525,18 @@ above.
 - `test` (added 2026-10-26): `test/cli/commands/roundTrip.test.ts`, `test/cli/commands/upgrade.test.ts`,
   `test/cli/engine/retiredRenderings.test.ts`, `test/ci/packRelease.test.ts`, `test/cli/stAlias.e2e.test.ts`, and the
   suites each requirement names.
+- `source` (added 2026-10-27): `src/hooks/scripts.ts` (`inspect`, `screenIds`, `printedName`, `nameId`),
+  `src/learnings/validation.ts` (`validateLearningContent`, `screenedCopies`), `src/learnings/store.ts`
+  (`loadValidatedLearnings`), `src/handoffs/validation.ts` (`parseHandoff`), `src/runs/freshness.ts` (`untrackedBelow`,
+  `uncommitted`), `src/runs/planCheck.ts` (`OWN_STALE_MESSAGE`), `src/runs/hookPaths.ts` (`setupRootsAt`,
+  `setupRootOf`, `hookPathsRead`), `src/change/personOnlyPaths.ts` (`heldPaths`), `src/cli/commands/run.ts`
+  (`setupsNamed`, `heldOf`), `src/cli/commands/runLand.ts` (`declaredHookPaths`), `src/runs/landEvidence.ts`
+  (`askPathsOf`).
+- `test` (added 2026-10-27): `test/hooks/scripts.test.ts`, `test/learnings/validation.test.ts`,
+  `test/handoffs/validation.test.ts`, `test/runs/freshness.test.ts`, `test/runs/planCheck.test.ts`,
+  `test/runs/hookPaths.test.ts`, `test/change/personOnlyPaths.test.ts`, `test/cli/commands/runCheckpoint.test.ts`,
+  `test/cli/commands/runLand.test.ts`, `test/runs/landEvidence.test.ts`, as each requirement's bullet of that date
+  names them.
 
 ## Risks
 
