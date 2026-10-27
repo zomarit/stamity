@@ -311,10 +311,19 @@ describe("repository hygiene over the Git index", () => {
   // neighbour is refused. Only the expected list, its message and the title moved; the body already
   // reads the exempt paths. The retirement proof is unchanged: every retired summary and its
   // neighbour is still staged over budget and must be refused like any other file.
-  it("exempts exactly the run 53 summary and refuses its neighbour and the retired run summaries", () => {
+  //
+  // TEST CHANGE, justified (2026-10-27, run 54): the same window takes a second entry — run 54, the
+  // release's increment at candidate 1033a43e composed with run 53 (its prior summary read at
+  // 77bc51dd), FAIL on the hold rate and two floor cases, whose exported summary is 6821277 bytes,
+  // over the budget, published to the `records` branch, and the run the release's next increment
+  // composes with. Only the expected list, its message and the title moved: each exempt path still
+  // passes over budget while its same-directory neighbour is refused, and every retired summary is
+  // still refused.
+  it("exempts exactly the run 53 and run 54 summaries and refuses their neighbours and the retired run summaries", () => {
     const exempt = exemptedPaths();
-    expect(exempt, "the size-exception map's paths are not the run 53 summary alone").toEqual([
+    expect(exempt, "the size-exception map's paths are not the run 53 and run 54 summaries alone").toEqual([
       "evals/runs/2026-10-22-run-53/summary.json",
+      "evals/runs/2026-10-27-run-54/summary.json",
     ]);
 
     const root = fixture();
