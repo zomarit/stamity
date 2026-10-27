@@ -602,8 +602,10 @@ check open and a quoted sign-off, beside a location or `not named`. The output n
 - **Amended 2026-10-27** (run `2026-10-25_autonomy-distribution-02`, the fixes after eval run 54; read at
   `1033a43e`). "The run's last line" now says what it means: the run's final message ends on the Ready line, and nothing
   follows it there, not a next step, an offer or a path to ready; anything said to the operator comes before it
-  (`packs/production/commands/st-production-review.md:228`, in place, so no line moves). Eval runs 53 and 54 each had
-  samples that ended the report on the line and then wrote a path to ready after it. The value rules are unchanged.
+  (`packs/production/commands/st-production-review.md:228`, in place, so no line moves). Eval run 54 had samples that
+  ended the report on the line and then wrote a path to ready or an offer after it, the row form run 53 missed on
+  seeded-1 and seeded-4; run 53's seeded-4 samples named the open checks only on a trailing line after a Ready line
+  that named none (`evals/SET-v7.md:3757-3759`). The value rules are unchanged.
   Proof: `test/packs/production.test.ts` ("puts nothing after the Ready line in the run's final message, anything for
   the operator coming before it"); the six production-review cases re-copy the sentence (`evals/cases-v6/`).
 - **Source:** `packs/production/commands/st-production-review.md`.
