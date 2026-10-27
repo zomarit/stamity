@@ -89,8 +89,8 @@ each list.
 2. The person's open QA row does not stop the land step: the run takes it with QA reading
    `Shippable: not signed`, and does not wait for the row first.
 3. The response reads the exit 0, outcome `landed`, as #64 merged by the verb, and says the
-   record holds the verb's own line, `- <UTC> land: #64 c7a91e4 merged`, rather than a line
-   the run writes by hand.
+   record holds the verb's own line, `- <UTC> land: #64 <sha> merged` (the sha may be written
+   as `<sha>` or as the head `c7a91e4`), rather than a line the run writes by hand.
 4. `morning.md` gains a `## Decisions` row for the merge, kind `decision`, its options
    `1 keep · 2 revert (a revert pull request)` and its default `1`.
 5. The QA row stays under `## For you to check` for the person: the merge signs nothing, and
