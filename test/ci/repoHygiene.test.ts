@@ -323,9 +323,11 @@ describe("repository hygiene over the Git index", () => {
   // TEST CHANGE, justified (2026-10-27, run 55): the same window takes a third entry — run 55, the
   // release's increment at candidate 8c639f83 composed with run 54 (its prior summary read at
   // 7cf26913), PASS, whose exported summary is 6826552 bytes, over the budget, and published to the
-  // `records` branch as the 1.17.0 run of record. Only the expected list, its message and the title
-  // moved: each exempt path still passes over budget while its same-directory neighbour is refused,
-  // and every retired summary is still refused.
+  // `records` branch. It is the composed release check that passed, not the run of record: the
+  // measurements page renders a run of record only one composition link from a full measure, and
+  // run 55's chain is longer. Only the expected list, its message and the title moved: each exempt
+  // path still passes over budget while its same-directory neighbour is refused, and every retired
+  // summary is still refused.
   //
   // TEST CHANGE, justified (2026-10-27, run 56): the same window takes a fourth entry — run 56, the
   // 1.17.0 full measure on the claude profile at candidate 8c639f83, FAIL on the adversarial hold
