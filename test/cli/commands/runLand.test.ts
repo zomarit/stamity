@@ -1394,7 +1394,9 @@ describe("stamity run land", () => {
       github(repo, base, head, base, { changed_files: 4 });
       route("GET repos/o/r/pulls/7/files", [...seededFiles, { filename: "c.txt" }]);
       route(`GET repos/o/r/commits/${head}/check-runs`, green);
-      await put(repo, ".git/info/grafts", `${base} ${work}\n`);
+      // TEST CHANGE, justified (integration round 7): `work` loses its parent too. `work` descends from `base`, so giving `base`
+      // the parent `work` alone made a loop, and on a loop git found a merge base only when the two commits shared a second.
+      await put(repo, ".git/info/grafts", `${base} ${work}\n${work}\n`);
       // The override is live: local git now calls a commit of the run's the merge base, and the one-file range would fit.
       expect(git(repo, ["merge-base", base, head])).toBe(work);
 
