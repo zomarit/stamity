@@ -592,6 +592,21 @@ describe.skipIf(!gitAvailable)("classifyRange", () => {
       expect(facts).toMatchObject({ files: 0, lines: null, complete: false });
     });
 
+    // A stand-in for git, because the system attributes file sits in git's install prefix, which a test must not write:
+    // it fails a range diff that reaches it with the switch off, and hands every call to the real program otherwise.
+    it.skipIf(process.platform === "win32")("turns the system attributes file off for every range diff", async () => {
+      const { repo, base } = await seed({ "docs/x.md": "a\n" });
+      const head = await commit(repo, { "docs/x.md": "b\n" });
+      const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
+      const shim = getRoot().path("checking-git");
+      await put(shim, { git: `#!/bin/sh\ncase "$*" in *--attr-source*) [ "$GIT_ATTR_NOSYSTEM" = 1 ] || exit 97;; esac\nexec "${real}" "$@"\n` });
+      await chmod(join(shim, "git"), 0o755);
+
+      const facts = await isolated(() => classifyRange(repo, base, head), { PATH: `${shim}:${process.env["PATH"] ?? ""}` });
+
+      expect(facts).toMatchObject({ files: 1, lines: 2, complete: true });
+    });
+
     it("raises a name the report cannot show to at least product", async () => {
       const name = `docs/a${String.fromCodePoint(0x202e)}b.md`;
       const { repo, base } = await seed({ "docs/x.md": "a\n" });

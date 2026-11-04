@@ -35,9 +35,8 @@ import { gitCheckRunner, keptFromGit, type GitInputRunner } from "./gitStatus.ts
  * its own rules, and so are the tree-level attributes: git reads `.gitattributes` for a diff from the work tree even
  * between two commits, and a `diff=` driver there moves where `-W` stops, which can take a call out of a hunk's context
  * and a class down with it. `--attr-source` needs git 2.41; an older git fails that read, and the range fails closed.
- * `--attr-source` moves the tree-level file alone. An empty `core.attributesFile` turns the user's file off. Git's
- * `info/attributes` has no such switch, so a non-empty one reads `complete` false. The system file is still read: its
- * switch, `GIT_ATTR_NOSYSTEM`, is a variable, and `gitCheckRunner` strips every `GIT_*` one from what it starts.
+ * `--attr-source` moves the tree-level file alone. `GIT_ATTR_NOSYSTEM` turns the system file off and an empty
+ * `core.attributesFile` the user's. Git's `info/attributes` has no such switch, so a non-empty one reads `complete` false.
  *
  * **The rest moved here from `../commands/gate.ts`, unchanged,** because `gate.ts` and `../commands/runLand.ts` share
  * a wave and neither may import the other: the class-file read, the name, count and patch parsers, the project-root
@@ -767,7 +766,7 @@ function commitOf(runner: GitRunner, cwd: string, side: "base" | "head", ref: st
  * sanitises them where they meet a terminal or a comment, as `gate classify` does.
  */
 export async function classifyRange(cwd: string, base: string, head: string): Promise<RangeFacts> {
-  const runner = gitCheckRunner({ timeoutMs: GATE_GIT_TIMEOUT_MS, maxBuffer: GATE_GIT_MAX_BUFFER });
+  const runner = gitCheckRunner({ timeoutMs: GATE_GIT_TIMEOUT_MS, maxBuffer: GATE_GIT_MAX_BUFFER, env: { GIT_ATTR_NOSYSTEM: "1" } });
   try {
     const cwdPrefix = readCwdPrefix(runner, cwd);
     const from = commitOf(runner, cwd, "base", base);

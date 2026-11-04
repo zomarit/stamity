@@ -157,6 +157,8 @@ export interface GitCheckRunnerOptions {
   timeoutMs?: number;
   /** Bytes of stdout per call before the call fails; omitted keeps Node's default. */
   maxBuffer?: number;
+  /** Variables set over {@link gitCheckEnv} for every call, for a switch git offers only as a variable. */
+  env?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -196,7 +198,7 @@ export function gitCheckRunner(options: GitCheckRunnerOptions = {}): GitInputRun
     if (gitDiscoveryMeetsBareShape(cwd)) {
       throw Object.assign(new Error(bareShapeRefusal(cwd)), { status: 128, keptFromGit: true });
     }
-    const env = gitCheckEnv();
+    const env = { ...gitCheckEnv(), ...options.env };
     // review/116: replace refs off by the command-line key too, which on git 2.19 to 2.42 beats a repository's
     // `core.useReplaceRefs=true` where the variable alone does not.
     const pinned = ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", "-c", "core.useReplaceRefs=false", ...args];
