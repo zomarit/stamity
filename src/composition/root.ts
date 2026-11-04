@@ -102,6 +102,8 @@ import * as runsDisposition from "../runs/disposition.ts";
 import * as runsPlanCoverage from "../runs/planCoverage.ts";
 import * as runsFreshness from "../runs/freshness.ts";
 import * as runsRunContract from "../runs/runContract.ts";
+import * as runsItemContract from "../runs/itemContract.ts";
+import * as runsReviewTool from "../runs/reviewTool.ts";
 import * as runsPullRequest from "../runs/pullRequest.ts";
 import * as runsPrerequisites from "../runs/prerequisites.ts";
 import * as runsMorning from "../runs/morning.ts";
@@ -155,6 +157,7 @@ import * as changeClassify from "../change/classify.ts";
 import * as changeTestInputs from "../change/testInputs.ts";
 import * as changeScan from "../change/scan.ts";
 import * as changePersonOnlyPaths from "../change/personOnlyPaths.ts";
+import * as changeAutoShip from "../change/autoShip.ts";
 
 /**
  * Every engine module, grouped by feature. Fields are concrete module namespace
@@ -284,6 +287,9 @@ export interface EngineRegistry {
     readonly planCoverage: typeof runsPlanCoverage;
     readonly freshness: typeof runsFreshness;
     readonly runContract: typeof runsRunContract;
+    readonly itemContract: typeof runsItemContract;
+    /** What a named review tool said about a pull request's head (REQ-FLOW-154). */
+    readonly reviewTool: typeof runsReviewTool;
     readonly pullRequest: typeof runsPullRequest;
     readonly prerequisites: typeof runsPrerequisites;
     readonly morning: typeof runsMorning;
@@ -398,6 +404,8 @@ export interface EngineRegistry {
     readonly scan: typeof changeScan;
     /** The person-only paths an unattended push holds off its tree (REQ-FLOW-102). */
     readonly personOnlyPaths: typeof changePersonOnlyPaths;
+    /** Whether a change fits `autonomy.autoShip`, so `run land` may merge it with nobody asked (REQ-FLOW-152). */
+    readonly autoShip: typeof changeAutoShip;
   };
 }
 
@@ -515,6 +523,8 @@ export function createEngine(): EngineRegistry {
       planCoverage: runsPlanCoverage,
       freshness: runsFreshness,
       runContract: runsRunContract,
+      itemContract: runsItemContract,
+      reviewTool: runsReviewTool,
       pullRequest: runsPullRequest,
       prerequisites: runsPrerequisites,
       morning: runsMorning,
@@ -556,7 +566,7 @@ export function createEngine(): EngineRegistry {
     resilience: { retry, failureClass, failureLog, adapterTimeout },
     roster: { triggers: rosterTriggers, reviewCaps, agentPolicies, agentGrants, modelLadder, modelDefaults },
     config: { parse: configParse, autonomy: configAutonomy },
-    change: { classify: changeClassify, testInputs: changeTestInputs, scan: changeScan, personOnlyPaths: changePersonOnlyPaths },
+    change: { classify: changeClassify, testInputs: changeTestInputs, scan: changeScan, personOnlyPaths: changePersonOnlyPaths, autoShip: changeAutoShip },
   });
 }
 

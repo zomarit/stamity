@@ -185,8 +185,8 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
 /** A refusal a case hands the range read in place of the real one; `null` runs the real read. */
 const range = vi.hoisted(() => ({ refusal: null as Error | null }));
 
-// A spy over the real read, which runs in every case but one. Mock reason: `run land` finds the base with `git merge-base`,
-// which only names a commit the store holds, so no real repository reaches the read's refusal of an absent commit.
+// A spy over the real read, which runs in every case but three. Mock reason: a case must see that the verb reads no range
+// at all, and that a failure of the read that is no coded refusal stands, and no real repository reaches either.
 vi.mock("../../../src/cli/engine/changeRange.ts", async (importOriginal) => {
   const real = await importOriginal<typeof ChangeRangeModule>();
   return {
@@ -1049,11 +1049,11 @@ describe("stamity run land", () => {
     // The approval names the head, not the reasons (the SECURITY.md residual): the reason added after it does not stop
     // the land. The evidence line marks every reason found when the land acted as approved, the later one too, and the
     // land replaces the `merge waits on:` line the person was shown, so no record tells the reasons they saw apart.
-    // TEST CHANGE, justified (land-wiring, review/15): the head's manifest names no deploying branch and the default branch's
-    // now does, so the land also names that key. The pin stands: a reason added after the approval does not stop the land.
-    const loosened = "the head's manifest loosens autonomy.deployingBranches against main's";
-    expect(result.doc).toMatchObject({ outcome: "landed", approved: { sha: head, reasons: [paths, loosened, "main is named in autonomy.deployingBranches"] } });
-    expect(bodies().at(-1)).toContain(`; approved by the person for ${head} over: ${paths}; ${loosened}; main is named in autonomy.deployingBranches`);
+    // TEST CHANGE, justified (review/45, signed off): the pull request leaves the manifest alone, so no key is named as
+    // loosened, and these words go back to what they were before land-wiring. The pin stands: a reason added after the
+    // approval does not stop the land.
+    expect(result.doc).toMatchObject({ outcome: "landed", approved: { sha: head, reasons: [paths, "main is named in autonomy.deployingBranches"] } });
+    expect(bodies().at(-1)).toContain(`; approved by the person for ${head} over: ${paths}; main is named in autonomy.deployingBranches`);
   });
 
   it("still refuses a refused outcome with --approved, and leaves an asks outcome unchanged without it (review/103)", async () => {
@@ -1231,17 +1231,79 @@ describe("stamity run land", () => {
       const patched = gh.calls.find((call) => call.method === "PATCH")?.body as { body: string };
       expect(patched.body).toContain("0 open Critical/Warning rows; main's tip reads not red with test missing or pending");
     });
+
+    /** The default branch's answers: each read takes the next tip, the last repeating. */
+    const tips = (...shas: string[]): void => {
+      gh.routes.set("GET repos/o/r/branches/main", shas.map((sha) => ({ status: 200, json: { commit: { sha }, protection: { enabled: false } } })));
+    };
+    const NEWER = "9".repeat(40);
+
+    it("reads the branch again just before the act, so a newer commit that went red asks (review/44, review/54)", async () => {
+      const { repo, base } = await seed();
+      tips(base, base, NEWER);
+      route(`GET repos/o/r/commits/${NEWER}/check-runs`, failing);
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "asks", asks: { reasons: ["main is red: test failing on its tip"] }, evidence: { defaultBranch: { failing: ["test"] } } });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("reads the branch again on every --wait poll (review/44, review/54)", async () => {
+      fakeClock();
+      const { repo, base, head } = await seed();
+      route(`GET repos/o/r/commits/${head}/check-runs`, { total_count: 1, check_runs: [{ id: 1, name: "test", status: "in_progress", conclusion: null, app: { id: 15368 } }] });
+      tips(base, base, NEWER);
+      route(`GET repos/o/r/commits/${NEWER}/check-runs`, failing);
+
+      const result = await run(repo, ["land", "--run", RUN, "--wait", "1"]);
+
+      expect(result.doc).toMatchObject({ outcome: "refused", evidence: { defaultBranch: { failing: ["test"] } } });
+    });
+
+    it("asks when the branch stops reading on the re-read, naming the read", async () => {
+      const { repo, base } = await seed();
+      gh.routes.set("GET repos/o/r/branches/main", [
+        { status: 200, json: { commit: { sha: base }, protection: { enabled: false } } },
+        { status: 200, json: { commit: { sha: base }, protection: { enabled: false } } },
+        { status: 502, json: { message: "Bad Gateway" } },
+      ]);
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({
+        outcome: "asks",
+        asks: { reasons: ["main's tip could not be read (the default branch read answered HTTP 502), so whether it is red is not known"] },
+      });
+      expect(kinds()).not.toContain("merge");
+    });
   });
 
   describe("auto-ship (REQ-FLOW-152)", () => {
     const manifestOn = (autoShip: Record<string, unknown>): string =>
       `${JSON.stringify({ version: 1, autonomy: { deployingBranches: ["main"], autoShip: { maxFiles: 10, maxLines: 100, classes: ["product", "records"], ...autoShip } } })}\n`;
+    /** GitHub's word on what merges: the merge base its compare names, and the pull request's line counts, as git counts that range. */
+    const github = (repo: string, tip: string, head: string, mergeBase = tip, over: Record<string, unknown> = {}): number => {
+      route(`GET repos/o/r/compare/${tip}...${head}`, { status: "ahead", merge_base_commit: { sha: mergeBase } });
+      const rows = git(repo, ["diff", "--numstat", mergeBase, head]).split("\n").map((line) => line.split("\t"));
+      const additions = rows.reduce((sum, [added]) => sum + Number(added), 0);
+      const deletions = rows.reduce((sum, [, removed]) => sum + Number(removed), 0);
+      route("GET repos/o/r/pulls/7", pull(head, { additions, deletions, ...over }));
+      return additions + deletions;
+    };
+    // TEST CHANGE, justified (review/52, signed off): the verb takes the merge base from GitHub and holds the range against the
+    // pull request's file list and line counts, so a seeded land that fits has GitHub agree with the range it reads.
     const seedOn = async (autoShip: Record<string, unknown> = {}): Promise<Seeded> => {
       const manifest = manifestOn(autoShip);
       const seeded = await seed({ manifest });
       route("GET repos/o/r/contents/.stamity/manifest.json", { content: Buffer.from(manifest).toString("base64"), encoding: "base64" });
+      github(seeded.repo, seeded.base, seeded.head);
       return seeded;
     };
+    const green = { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] };
+    const seededFiles = [{ filename: "a.txt" }, { filename: `${RUN_DIR}/record.md` }, { filename: `${RUN_DIR}/ledger.jsonl` }];
+    const incomplete = (why: string): object => ({
+      outcome: "asks",
+      asks: { reasons: ["main is named in autonomy.deployingBranches", `auto-ship: the classification is incomplete: ${why}`] },
+    });
 
     it("merges onto a deploying branch with no ask when the change fits, the evidence line naming the rules", async () => {
       const { repo } = await seedOn();
@@ -1254,13 +1316,15 @@ describe("stamity run land", () => {
     });
 
     it("counts a rename's two sides through the real range read, and a change that fits still lands", async () => {
-      const { repo, remote } = await seedOn();
+      const { repo, remote, base } = await seedOn();
       git(repo, ["mv", "a.txt", "b.txt"]);
       git(repo, ["commit", "-q", "-m", "a rename"]);
       git(repo, ["push", "-q", remote, `HEAD:refs/heads/${RUN_BRANCH}`]);
       const head = git(repo, ["rev-parse", "HEAD"]);
-      route("GET repos/o/r/pulls/7", pull(head));
-      route(`GET repos/o/r/commits/${head}/check-runs`, { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] });
+      // TEST CHANGE, justified (review/52, signed off): the range is held against GitHub's list, so the list names what moved.
+      github(repo, base, head);
+      route("GET repos/o/r/pulls/7/files", [{ filename: "b.txt", previous_filename: "a.txt" }, { filename: `${RUN_DIR}/record.md` }, { filename: `${RUN_DIR}/ledger.jsonl` }]);
+      route(`GET repos/o/r/commits/${head}/check-runs`, green);
 
       const result = await run(repo, ["land", "--run", RUN]);
 
@@ -1286,13 +1350,102 @@ describe("stamity run land", () => {
       expect(kinds()).not.toContain("merge");
     });
 
-    it("asks on a shallow clone, where the base cannot be found, rather than failing", async () => {
-      const { repo, head } = await seedOn();
-      await writeFile(join(repo, ".git", "shallow"), `${head}\n`);
+    // TEST CHANGE, justified (review/52, signed off): the base is GitHub's now, so a shallow clone reaches this as a base GitHub
+    // names and the clone does not hold, with no spy in the way; a local shallow file no longer decides anything.
+    it("asks on a shallow clone, whose store lacks the base GitHub names, rather than failing", async () => {
+      const { repo, base, head } = await seedOn();
+      const absent = "d".repeat(40);
+      route(`GET repos/o/r/compare/${base}...${head}`, { status: "ahead", merge_base_commit: { sha: absent } });
 
       const result = await run(repo, ["land", "--run", RUN]);
 
-      expect(result.doc).toMatchObject({ outcome: "asks", asks: { reasons: ["main is named in autonomy.deployingBranches", expect.stringContaining("auto-ship: the classification is incomplete")] } });
+      expect(result.doc).toMatchObject(incomplete(`the base ${absent} is not a commit the object store holds, so the range cannot be classified`));
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("takes the merge base from GitHub, so a planted local parent override cannot shrink what is read (review/52)", async () => {
+      const { repo, remote, base, head: work } = await seedOn({ maxFiles: 3 });
+      await put(repo, "c.txt", "c\n");
+      git(repo, ["add", "-A"]);
+      git(repo, ["commit", "-q", "-m", "a small last step"]);
+      git(repo, ["push", "-q", remote, `HEAD:refs/heads/${RUN_BRANCH}`]);
+      const head = git(repo, ["rev-parse", "HEAD"]);
+      github(repo, base, head, base, { changed_files: 4 });
+      route("GET repos/o/r/pulls/7/files", [...seededFiles, { filename: "c.txt" }]);
+      route(`GET repos/o/r/commits/${head}/check-runs`, green);
+      await put(repo, ".git/info/grafts", `${base} ${work}\n`);
+      // The override is live: local git now calls a commit of the run's the merge base, and the one-file range would fit.
+      expect(git(repo, ["merge-base", base, head])).toBe(work);
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "asks", asks: { reasons: ["main is named in autonomy.deployingBranches", "auto-ship: 4 files are over autonomy.autoShip.maxFiles (3)"] } });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it.each([
+      ["answers 502", { status: 502, json: { message: "Bad Gateway" } }, "HTTP 502"],
+      ["names no merge base", { status: 200, json: { status: "ahead" } }, "HTTP 200"],
+      ["names something that is no commit id", { status: 200, json: { merge_base_commit: { sha: "--all" } } }, "HTTP 200"],
+    ])("asks when GitHub's compare %s, naming it (review/52)", async (_name, answer, words) => {
+      const { repo, base, head } = await seedOn();
+      gh.routes.set(`GET repos/o/r/compare/${base}...${head}`, answer);
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject(incomplete(`GitHub's compare of ${base} and ${head} named no merge base (${words})`));
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("asks where the range and the pull request's file list differ, naming the path (review/52)", async () => {
+      const { repo, base, head } = await seedOn();
+      github(repo, base, head, base, { changed_files: 4 });
+      route("GET repos/o/r/pulls/7/files", [...seededFiles, { filename: "other.txt" }]);
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject(incomplete("the range read and GitHub's file list differ on other.txt"));
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("asks where the range's line total is not the pull request's, naming both (review/52)", async () => {
+      const { repo, base, head } = await seedOn();
+      const counted = github(repo, base, head);
+      route("GET repos/o/r/pulls/7", pull(head, { additions: counted + 1, deletions: 0 }));
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject(incomplete(`the range read counts ${counted} lines and GitHub ${counted + 1}`));
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("asks where GitHub names no line counts for the pull request (review/52)", async () => {
+      const { repo, base, head } = await seedOn();
+      const counted = github(repo, base, head);
+      route("GET repos/o/r/pulls/7", pull(head));
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject(incomplete(`the range read counts ${counted} lines and GitHub none`));
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("judges the change by the tip's class file, not the one its fork point holds (review/53)", async () => {
+      const { repo, base, head } = await seedOn();
+      git(repo, ["switch", "-q", "main"]);
+      await put(repo, ".stamity/change-classes.json", `${JSON.stringify({ classes: { "security-sensitive": ["a.txt"] } })}\n`);
+      git(repo, ["add", "-A"]);
+      git(repo, ["commit", "-q", "-m", "a rule tightened after the run forked"]);
+      const tip = git(repo, ["rev-parse", "HEAD"]);
+      git(repo, ["switch", "-q", RUN_BRANCH]);
+      route("GET repos/o/r/branches/main", { commit: { sha: tip }, protection: { enabled: false } });
+      route(`GET repos/o/r/commits/${tip}/check-runs`, green);
+      github(repo, tip, head, base);
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "asks", evidence: { autoShip: { eligible: false, reasons: expect.arrayContaining([expect.stringContaining("security-sensitive")]) } } });
+      expect(kinds()).not.toContain("merge");
     });
 
     it("reads the range's refusal of an absent commit as incomplete, so the land asks instead of failing", async () => {
@@ -1317,9 +1470,8 @@ describe("stamity run land", () => {
     });
 
     it("still asks for --fast-forward, the rules met", async () => {
-      const { repo, base, head } = await seedOn();
+      const { repo } = await seedOn();
       route("GET repos/o/r/rules/branches/main", []);
-      route(`GET repos/o/r/compare/${base}...${head}`, { status: "ahead" });
 
       expect((await run(repo, ["land", "--run", RUN, "--fast-forward"])).doc).toMatchObject({ outcome: "asks", asks: { reasons: ["main is named in autonomy.deployingBranches"], act: "push-default" } });
     });
@@ -1537,7 +1689,8 @@ describe("stamity run land", () => {
 
       const result = await run(repo, ["land", "--run", RUN]);
 
-      expect(result.doc).toMatchObject({ outcome: "refused", notDone: [expect.stringContaining("last edited by unknown")] });
+      // TEST CHANGE, justified (review/50): "last edited by unknown" told a person to look for an edit that never happened.
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: [expect.stringContaining("the last editor of its comment did not read")] });
       expect(kinds()).not.toContain("merge");
     });
 
@@ -1577,6 +1730,21 @@ describe("stamity run land", () => {
       const { repo, head } = await seedTool();
       const strangers = [comment(1, "stranger", "User", requestMarker("e".repeat(40))), comment(2, "stranger", "User", requestMarker("f".repeat(40))), comment(3, "stranger", "User", requestMarker(head))];
       answers(strangers);
+      gh.editors = [editorsPage([never(1), never(2), never(3)])];
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ evidence: { review: { state: "waiting" } } });
+      expect(posted()).toEqual([`@codex review\n\n${requestMarker(head)}`]);
+    });
+
+    it("counts no marker a stranger's text would rejoin into after one strip (review/55)", async () => {
+      const { repo, head } = await seedTool();
+      const rejoining = (sha: string): string => {
+        const whole = requestMarker(sha);
+        return `${whole.slice(0, 9)}${whole}${whole.slice(9)}`;
+      };
+      answers([comment(1, "stranger", "User", rejoining("e".repeat(40))), comment(2, "stranger", "User", rejoining("f".repeat(40))), comment(3, "stranger", "User", rejoining(head))]);
       gh.editors = [editorsPage([never(1), never(2), never(3)])];
 
       const result = await run(repo, ["land", "--run", RUN]);
@@ -1639,7 +1807,7 @@ describe("stamity run land", () => {
 
       expect(result.doc).toMatchObject({
         outcome: "asks",
-        asks: { reasons: [expect.stringMatching(/^the legs disagree on autonomy\.reviewTool, and no leg wins: the default branch's manifest, the manifest committed at `HEAD`, the manifest on disk$/)] },
+        asks: { reasons: [expect.stringMatching(/^the legs disagree on autonomy\.reviewTool, and no leg wins: the default branch's manifest, the manifest committed at `HEAD`, the manifest on disk; the review tool's word was not read$/)] },
         evidence: { review: null },
       });
       expect(kinds().filter((kind) => kind.includes("issues/7") || kind === "editors")).toEqual([]);
@@ -1672,6 +1840,14 @@ describe("stamity run land", () => {
         outcome: "asks",
         asks: { reasons: ["the diff touches paths that define the evidence: .stamity/manifest.json", "the head's manifest loosens autonomy.adminRuleProof against main's"] },
       });
+    });
+
+    it("names nothing where the pull request leaves the manifest alone, whatever the default branch tightened since (review/45)", async () => {
+      const { repo } = await seed();
+      const tightened = `${JSON.stringify({ version: 1, autonomy: { deployingBranches: ["release/*"] } })}\n`;
+      route("GET repos/o/r/contents/.stamity/manifest.json", { content: Buffer.from(tightened).toString("base64"), encoding: "base64" });
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed" });
     });
 
     it("refuses a default-branch read that answers neither 200 nor 404, through the same catch", async () => {

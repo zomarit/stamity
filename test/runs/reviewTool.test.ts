@@ -3,6 +3,7 @@ import {
   parseStateBlock,
   requestMarker,
   reviewToolVerdict,
+  UNREAD_EDITOR,
   withoutRequestMarkers,
   type ReviewToolFacts,
   type ReviewToolState,
@@ -428,6 +429,16 @@ describe("withoutRequestMarkers", () => {
     expect(withoutRequestMarkers(`a ${requestMarker(CLEAN_HEAD)} b ${requestMarker(OTHER_HEAD)} c`)).toBe("a  b  c");
     expect(withoutRequestMarkers("no marker here")).toBe("no marker here");
   });
+
+  it("strips until nothing left rejoins into a marker, however deep the nesting", () => {
+    const nest = (inner: string): string => {
+      const whole = requestMarker(CLEAN_HEAD);
+      return `${whole.slice(0, 9)}${inner}${whole.slice(9)}`;
+    };
+    const once = nest(requestMarker(CLEAN_HEAD));
+    expect(withoutRequestMarkers(once)).toBe("");
+    expect(withoutRequestMarkers(`a ${nest(once)} b`)).toBe("a  b");
+  });
 });
 
 describe("reviewToolVerdict, the state comment's last editor", () => {
@@ -477,10 +488,27 @@ describe("reviewToolVerdict, the state comment's last editor", () => {
     expect(verdict.reason).toContain("last edited by a-person");
   });
 
-  it("says nothing about an edit to a comment holding no block", () => {
-    const comment: Comment = { ...fromTool("a plain comment"), editor: "a-person" };
-    const verdict = reviewToolVerdict(facts(CLEAN_HEAD, [request(CLEAN_HEAD), comment], { now: WAIT_ENDED }), TOOL);
-    expect(verdict.reason).toContain("gave no result");
+  /*
+   * TEST CHANGE, justified (build/25, review/57, signed off): this row pinned that an edit to a comment holding no block said
+   * nothing, which let an edit that also takes the marker out drop the state comment from the count, and a lone reply stand in
+   * for it. Any comment of the tool's that someone else last edited holds now, marker or not.
+   */
+  it.each([
+    ["alone", () => [{ ...fromTool("a plain comment"), editor: "a-person" }]],
+    ["with a lone reply on the head beside it", () => [{ ...fromTool("a plain comment"), editor: "a-person" }, fromTool(`Echoed:\n${CLEAN_BODY}`)]],
+  ])("holds on a tool comment holding no marker and edited by someone else, %s", (_name, comments) => {
+    const all = [request(CLEAN_HEAD), ...comments()];
+    expect(state(facts(CLEAN_HEAD, all))).toBe("waiting");
+    const verdict = reviewToolVerdict(facts(CLEAN_HEAD, all, { now: WAIT_ENDED }), TOOL);
+    expect(verdict.state).toBe("silent");
+    expect(verdict.reason).toContain("last edited by a-person");
+  });
+
+  it("says the last editor did not read where that is the case, and names no person's edit", () => {
+    const verdict = reviewToolVerdict(facts(CLEAN_HEAD, [request(CLEAN_HEAD), edited(UNREAD_EDITOR)], { now: WAIT_ENDED }), TOOL);
+    expect(verdict.state).toBe("silent");
+    expect(verdict.reason).toContain("the last editor of its comment did not read");
+    expect(verdict.reason).not.toContain("last edited by");
   });
 });
 

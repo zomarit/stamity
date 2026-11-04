@@ -20,7 +20,7 @@ import { matchGlob } from "../change/classify.ts";
 import { fromProjectRoot, PERSON_ONLY_PATHS } from "../change/personOnlyPaths.ts";
 import { matchesDeployingBranch, type ResolvedAutonomy } from "../config/autonomy.ts";
 import { parseLedgerText } from "./ledgerStore.ts";
-import type { ReviewToolFacts, ReviewToolVerdict } from "./reviewTool.ts";
+import { UNREAD_EDITOR, type ReviewToolFacts, type ReviewToolVerdict } from "./reviewTool.ts";
 
 /** The person-only globs that land on the evidence: the charter, the rule files and the agent definitions (D2). */
 export const LANDS_ON_EVIDENCE: readonly string[] = [
@@ -355,9 +355,6 @@ export function parseReactions(json: unknown): ReviewToolFacts["reactions"] | nu
   });
 }
 
-/** What stands for an editor that was not read: no login's form, so the reader never trusts it. */
-export const UNREAD_EDITOR = "unknown";
-
 /** A comment's last editor in REST's form, a bot's with its `[bot]` ending; `null` only for a comment read as never edited. */
 function editorOf(node: unknown): string | null {
   const editor = field(node, "editor");
@@ -385,6 +382,12 @@ export function parseEditorsPage(json: unknown): { editors: Map<number, string |
   return { editors, next: more ? (cursor as string) : null };
 }
 
+/** The merge base GitHub's compare of two commits names, or `null` for an answer that names no commit id. */
+export function parseMergeBase(json: unknown): string | null {
+  const sha = field(json, "merge_base_commit", "sha");
+  return typeof sha === "string" && /^[0-9a-f]{40,64}$/.test(sha) ? sha : null;
+}
+
 /** The fields of a pull request the land verb reads. */
 export interface LandPr {
   number: number;
@@ -401,6 +404,9 @@ export interface LandPr {
   body: string;
   mergeableState: string | null;
   changedFiles: number;
+  /** Lines added and removed, as GitHub counts them; `null` where it names none, which only auto-ship weighs. */
+  additions: number | null;
+  deletions: number | null;
   /**
    * The login that opened it as the review-thread query names it (review/94), the spelling `viewer` has; `null` where
    * GitHub names none. {@link parsePr} leaves it `null`: REST spells an app `app[bot]`, so the caller fills it.
@@ -423,6 +429,8 @@ export function parsePr(json: unknown): LandPr | null {
   const repo = field(json, "head", "repo", "full_name");
   const body = field(json, "body");
   const mergeable = field(json, "mergeable_state");
+  const additions = field(json, "additions");
+  const deletions = field(json, "deletions");
   return {
     number,
     url,
@@ -437,6 +445,8 @@ export function parsePr(json: unknown): LandPr | null {
     body: typeof body === "string" ? body : "",
     mergeableState: typeof mergeable === "string" ? mergeable : null,
     changedFiles: changed,
+    additions: typeof additions === "number" ? additions : null,
+    deletions: typeof deletions === "number" ? deletions : null,
     author: null,
   };
 }
@@ -604,7 +614,7 @@ export function decideLand(input: LandInput): LandDecision {
   if (others.length > 0) asks.push({ reason: `the diff touches paths that define the evidence: ${others.join(", ")}`, act });
   const { defaultBranch } = input.own;
   if (input.looserKeys.length > 0) asks.push({ reason: `the head's manifest loosens ${input.looserKeys.join(", ")} against ${defaultBranch}'s`, act });
-  if (input.reviewToolConflict.length > 0) asks.push({ reason: `the legs disagree on autonomy.reviewTool, and no leg wins: ${input.reviewToolConflict.join(", ")}`, act });
+  if (input.reviewToolConflict.length > 0) asks.push({ reason: `the legs disagree on autonomy.reviewTool, and no leg wins: ${input.reviewToolConflict.join(", ")}; the review tool's word was not read`, act });
   const red = input.defaultBranchRed;
   if (red !== undefined && red.failing.length > 0) asks.push({ reason: `${defaultBranch} is red: ${red.failing.join(", ")} failing on its tip`, act });
   if (red !== undefined && red.unread !== null) asks.push({ reason: `${defaultBranch}'s tip could not be read (${red.unread}), so whether it is red is not known`, act });

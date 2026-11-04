@@ -626,7 +626,69 @@ describe.skipIf(!gitAvailable)("classifyRange", () => {
 
       expect(facts.result.class).toBe("product");
       expect(facts.result.reason).toContain("the change could not be read");
-      expect(facts).toMatchObject({ files: 0, lines: null, complete: false });
+      expect(facts).toMatchObject({ files: 0, paths: [], lines: null, complete: false });
+    });
+  });
+
+  describe("the file set, for a caller to hold beside another list", () => {
+    it("names each changed path from the top level, a rename's two sides among them", async () => {
+      const { repo, base } = await seed({ "app/.stamity/manifest.json": "{}\n", "app/docs/old.md": "one\ntwo\nthree\nfour\n", "app/docs/x.md": "a\n" });
+      git(join(repo, "app"), ["mv", "docs/old.md", "docs/new.md"]);
+      const head = await commit(repo, { "app/docs/x.md": "b\n" });
+
+      const facts = await range(join(repo, "app"), base, head);
+
+      expect(facts.paths.toSorted()).toEqual(["app/docs/new.md", "app/docs/old.md", "app/docs/x.md"]);
+      expect(facts.files).toBe(3);
+    });
+  });
+
+  describe("a local parent override (review/52)", () => {
+    it("is read by no call: a planted one cannot shrink a range named by a parent", async () => {
+      const { repo, base } = await seed({ "docs/x.md": "a\n", "docs/y.md": "a\n" });
+      const planted = await commit(repo, { "docs/x.md": "b\n", "docs/y.md": "b\n" });
+      git(repo, ["reset", "-q", "--hard", base]);
+      const head = await commit(repo, { "docs/x.md": "b\n", "docs/y.md": "b\n", "docs/z.md": "c\n" });
+      await put(repo, { ".git/info/grafts": `${head} ${planted}\n` });
+      // The override is live for git as anything else runs it, so the case below proves the read does not take it.
+      expect(git(repo, ["rev-parse", `${head}~1`]).trim()).toBe(planted);
+
+      const facts = await range(repo, `${head}~1`, head);
+
+      expect(facts.paths.toSorted()).toEqual(["docs/x.md", "docs/y.md", "docs/z.md"]);
+      expect(facts).toMatchObject({ files: 3, lines: 5, complete: true });
+    });
+  });
+
+  describe("the commit the class file is read at (review/53)", () => {
+    /** A change to a docs path, and beside it on another line of history a commit whose class file raises that path. */
+    async function forked(): Promise<{ repo: string; base: string; head: string; tip: string }> {
+      const { repo, base } = await seed({ "docs/x.md": "a\n" });
+      const head = await commit(repo, { "docs/x.md": "b\n" });
+      git(repo, ["switch", "-q", "--detach", base]);
+      const tip = await commit(repo, { [CLASS_FILE]: fileOf({ "security-sensitive": ["docs/x.md"] }) });
+      return { repo, base, head, tip };
+    }
+
+    it("is the base with none named, as `gate` and every other caller read it", async () => {
+      const { repo, base, head } = await forked();
+
+      expect((await range(repo, base, head)).result.class).toBe("docs");
+    });
+
+    it("is the commit named where one is, and the range stays base to head", async () => {
+      const { repo, base, head, tip } = await forked();
+
+      const facts = await isolated(() => classifyRange(repo, base, head, tip));
+
+      expect(facts.result.class).toBe("security-sensitive");
+      expect(facts.paths).toEqual(["docs/x.md"]);
+    });
+
+    it("refuses a commit the store does not hold, as it does a base", async () => {
+      const { repo, base, head } = await forked();
+
+      await expect(isolated(() => classifyRange(repo, base, head, "0".repeat(40)))).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
     });
   });
 });

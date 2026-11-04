@@ -8,15 +8,19 @@
  *
  * **The state comment** is the proven signal. Only a comment whose author is a `Bot` of the configured login, and whose
  * last editor is that login or nobody, counts: a person pasting the same text proves nothing, and neither does a write
- * token rewriting the tool's own comment, which keeps the bot as author. One rewritten that way holds the read rather than
- * dropping out of it, or a reply could stand in for it. The tool edits one comment in place, so that
- * comment's `createdAt` can sit long before the run it reports: the wait is timed from the request marker, never from the
- * comment. A flag stays true after every thread is resolved, so only a new run clears findings. `review-state` needs
- * `APPROVED` on the head. `reaction` needs `+1` and is the weakest: a reaction cannot be tied to a commit, so one left on an
- * earlier head still reads.
+ * token rewriting the tool's own comment, which keeps the bot as author. Any comment of the tool's rewritten that way,
+ * marker or not, holds the read rather than dropping out of it, or a reply could stand in for it. The tool edits one comment
+ * in place, so that comment's `createdAt` can sit long before the run it reports: the wait is timed from the request marker,
+ * never from the comment. A flag stays true after every thread is resolved, so only a new run clears findings. `review-state`
+ * needs `APPROVED` on the head. `reaction` needs `+1` and is the weakest: a reaction cannot be tied to a commit, so one left on
+ * an earlier head still reads.
  *
- * **Rounds** are the distinct heads carrying a request marker. Anyone who can comment can write a marker, and it can only
- * use a round up or start a wait early, which holds the merge: nothing about a marker reads clean.
+ * **The stated limit.** A deleted comment leaves no last editor to read, so deleting the state comment is not seen: a lone
+ * reply of the tool's carrying a clean block on the head, beside an earlier `+1`, then reads clean. That needs a token that
+ * can delete the tool's comment, and the tool echoing a block as raw text, which nothing has shown it does.
+ *
+ * **Rounds** are the distinct heads carrying a request marker. This reader counts every marker it is given, and nothing about
+ * a marker reads clean; `run land` hands it only the run's own, {@link withoutRequestMarkers} clearing every other comment.
  *
  * Imports one type only, so `./landEvidence.ts` can take the verdict. Erasable syntax only, since
  * `scripts/generate-docs.mjs` loads the CLI by Node's type stripping.
@@ -70,6 +74,9 @@ const FULL_SHA = /^[0-9a-f]{40}$/;
 
 const REQUEST_MARKER = /<!-- stamity:review-request ([0-9a-f]{40}) -->/g;
 
+/** What stands for an editor that was not read: no login's form, so the reader never trusts it. */
+export const UNREAD_EDITOR = "unknown";
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -88,9 +95,13 @@ export function requestMarker(head: string): string {
   return `<!-- stamity:review-request ${head} -->`;
 }
 
-/** `body` with no request marker: what `run land` passes for a comment the run did not write, so it spends no round. */
+/**
+ * `body` with no request marker: what `run land` passes for a comment the run did not write, so it spends no round. Stripped
+ * until nothing changes, since text around a marker can join into another once that one is gone.
+ */
 export function withoutRequestMarkers(body: string): string {
-  return body.replaceAll(REQUEST_MARKER, "");
+  const left = body.replaceAll(REQUEST_MARKER, "");
+  return left === body ? body : withoutRequestMarkers(left);
 }
 
 /** Text from a comment, for a line a person reads: it can hold anything, so only plain text is shown. */
@@ -165,8 +176,9 @@ function reacted(facts: ReviewToolFacts, tool: ReviewToolConfig): boolean {
 /**
  * The tool keeps one state comment per pull request, so two comments carrying the marker cannot both be it, and neither is
  * read, whichever commit each names. A reply echoing a block would otherwise stand in for a run that never happened. Text
- * naming the marker counts too: at worst that holds a merge for a person. One someone else last edited holds the read
- * first, whatever the rest say: it may be the state comment, so the comment beside it cannot be trusted to be.
+ * naming the marker counts too: at worst that holds a merge for a person. Any comment of the tool's someone else last edited
+ * holds the read first, marker or not, whatever the rest say: it may be the state comment with the marker taken out, so the
+ * comment beside it cannot be trusted to be.
  *
  * `clean` also needs the tool's `+1` on the pull request. Text can be echoed or edited, and nobody else can react under the
  * tool's login; the tool leaves it seconds after a clean run. The limit: a reaction names no commit, so this proves the tool
@@ -177,9 +189,10 @@ function stateCommentReading(facts: ReviewToolFacts, tool: ReviewToolConfig): Re
   if (marker === undefined || section === undefined) return "none";
   const fromTool = facts.comments.filter((comment) => comment.userType === "Bot" && comment.userLogin === tool.login);
   const trusted = (comment: ReviewToolFacts["comments"][number]): boolean => comment.editor === null || comment.editor === tool.login;
-  const carrying = fromTool.filter((comment) => comment.body.includes(marker));
-  const rewritten = carrying.find((comment) => !trusted(comment));
+  const rewritten = fromTool.find((comment) => !trusted(comment));
+  if (rewritten?.editor === UNREAD_EDITOR) return { why: "the last editor of its comment did not read" };
   if (rewritten !== undefined) return { why: `its comment was last edited by ${shown(String(rewritten.editor))}, not by the tool` };
+  const carrying = fromTool.filter((comment) => comment.body.includes(marker));
   if (carrying.length > 1) return { why: `${carrying.length} of its comments carry the marker, and it keeps one state comment` };
   const reads = fromTool.flatMap((comment): (StateBlock | Unusable)[] => {
     const read = readBlock(comment.body, marker, section);

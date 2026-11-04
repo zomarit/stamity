@@ -31,8 +31,9 @@ import { gitCheckRunner, keptFromGit, type GitInputRunner } from "./gitStatus.ts
  * **{@link classifyRange} is a read of its own.** `gate classify` compares a base with the work tree, the index and
  * the untracked files; a land acts on what merges, so this reads two commits from the object store alone: names and
  * counts by `git diff-tree`, hunks, heads and lockfile copies from blobs. A change committed and then reverted in the
- * work tree still counts, and nothing left uncommitted does. The class file is the base commit's, so no change sets
- * its own rules, and so are the tree-level attributes: git reads `.gitattributes` for a diff from the work tree even
+ * work tree still counts, and nothing left uncommitted does. The class file is the base commit's unless the caller names
+ * another commit the change cannot write, so no change sets its own rules. The tree-level attributes are always the
+ * base's: git reads `.gitattributes` for a diff from the work tree even
  * between two commits, and a `diff=` driver there moves where `-W` stops, which can take a call out of a hunk's context
  * and a class down with it. `--attr-source` needs git 2.41; an older git fails that read, and the range fails closed.
  * `--attr-source` moves the tree-level file alone. `GIT_ATTR_NOSYSTEM` turns the system file off and an empty
@@ -570,6 +571,8 @@ export interface RangeFacts {
   result: ClassifyResult;
   /** The changed paths, each side of a rename counted. */
   files: number;
+  /** Those paths by name, top-level-relative as GitHub's file list names them. */
+  paths: string[];
   /** The numstat sum of added and deleted lines; `null` when a file has no count. */
   lines: number | null;
   /** Whether every changed file's lines were read. */
@@ -744,8 +747,15 @@ function readRangeLockfiles(runner: GitRunner, root: ProjectRoot, base: string, 
     });
 }
 
+/**
+ * What every git call of a range read runs under: the system attributes file off, and an empty file (git reads this name as
+ * the null device on every platform) in place of the clone's graft file, which a run can write under `.git/` to give a
+ * commit other parents (review/52). Replace refs are the runner's own pin.
+ */
+const RANGE_GIT_ENV: Readonly<Record<string, string>> = { GIT_ATTR_NOSYSTEM: "1", GIT_GRAFT_FILE: "/dev/null" };
+
 /** `ref` as a commit id the object store holds; anything else refuses, as a shallow clone's missing base does. */
-function commitOf(runner: GitRunner, cwd: string, side: "base" | "head", ref: string): string {
+function commitOf(runner: GitRunner, cwd: string, side: "base" | "head" | "class file's commit", ref: string): string {
   // No parser stands in front of this read as one does for `--base`, so the refusal of a `-`-led ref is here.
   const commit = ref.startsWith("-") ? null : resolveBase(runner, cwd, ref);
   if (commit !== null) return commit;
@@ -764,15 +774,19 @@ function commitOf(runner: GitRunner, cwd: string, side: "base" | "head", ref: st
  * one past the runner's bound, one outside the project, or a submodule, whose pointer stands for code nobody read; and
  * for a git directory whose own attributes file holds anything. Paths and reasons are the repository's bytes: a caller
  * sanitises them where they meet a terminal or a comment, as `gate classify` does.
+ *
+ * `classFileAt` is the commit whose class file judges the range, and whose tree places the project root: the base unless
+ * named. `run land` names the default branch's tip, since a run picks its merge base by where it forks.
  */
-export async function classifyRange(cwd: string, base: string, head: string): Promise<RangeFacts> {
-  const runner = gitCheckRunner({ timeoutMs: GATE_GIT_TIMEOUT_MS, maxBuffer: GATE_GIT_MAX_BUFFER, env: { GIT_ATTR_NOSYSTEM: "1" } });
+export async function classifyRange(cwd: string, base: string, head: string, classFileAt: string = base): Promise<RangeFacts> {
+  const runner = gitCheckRunner({ timeoutMs: GATE_GIT_TIMEOUT_MS, maxBuffer: GATE_GIT_MAX_BUFFER, env: RANGE_GIT_ENV });
   try {
     const cwdPrefix = readCwdPrefix(runner, cwd);
     const from = commitOf(runner, cwd, "base", base);
     const to = commitOf(runner, cwd, "head", head);
-    const root = findProjectRoot(runner, cwd, cwdPrefix, from);
-    const classFile = readBaseClassFile(runner, root, from);
+    const rulesCommit = classFileAt === base ? from : commitOf(runner, cwd, "class file's commit", classFileAt);
+    const root = findProjectRoot(runner, cwd, cwdPrefix, rulesCommit);
+    const classFile = readBaseClassFile(runner, root, rulesCommit);
     const { rules, reason } = rulesFrom(classFile);
     // On win32 git's names are read both ways (review/43); elsewhere literally (review/20).
     const windows = process.platform === "win32";
@@ -800,14 +814,16 @@ export async function classifyRange(cwd: string, base: string, head: string): Pr
       ...(localAttributes ? ["info/attributes in the git directory is not empty and git reads it above the base's attributes, so the hunks may not be the base's and the read is not complete"] : []),
       ...(gitlinks.length === 0 ? [] : [`no line of the code behind a submodule pointer was read, so the read is not complete: ${namePaths(gitlinks)}`]),
     ];
+    const paths = [...new Set([...named.paths, ...named.renames.flatMap((rename) => [rename.from, rename.to])])];
     return {
       result: applyNameFloor(withReasons(raised, unread)),
-      files: new Set([...named.paths, ...named.renames.flatMap((rename) => [rename.from, rename.to])]).size,
+      files: paths.length,
+      paths,
       lines: total,
       complete: total !== null && placed.outside.length === 0 && !localAttributes,
     };
   } catch (err) {
     if (!(err instanceof GitReadError)) throw err;
-    return { result: failClosed(`the change could not be read (${describeGitFailure(err)}), so the class is product`), files: 0, lines: null, complete: false };
+    return { result: failClosed(`the change could not be read (${describeGitFailure(err)}), so the class is product`), files: 0, paths: [], lines: null, complete: false };
   }
 }

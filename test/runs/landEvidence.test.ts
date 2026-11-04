@@ -59,6 +59,8 @@ const PR: LandPr = {
   body: `The morning list.\n\n${MARKER}`,
   mergeableState: "clean",
   changedFiles: 2,
+  additions: 3,
+  deletions: 1,
   author: "runner",
 };
 
@@ -271,6 +273,12 @@ describe("the answers' parsers", () => {
     expect(parseFiles([{ filename: "src/new.ts", previous_filename: ".github/workflows/ci.yml" }, { filename: "b" }])).toEqual({ paths: ["src/new.ts", ".github/workflows/ci.yml", "b"], count: 2 });
     expect(parsePr({ number: 7 })).toBeNull();
   });
+
+  it("reads the pull request's line counts, and a count GitHub leaves out as null, which only auto-ship weighs", () => {
+    const answer = { number: 7, html_url: "u", node_id: "n", state: "open", head: { ref: "r", sha: SHA }, base: { ref: "main" }, changed_files: 1 };
+    expect(parsePr({ ...answer, additions: 4, deletions: 2 })).toMatchObject({ additions: 4, deletions: 2 });
+    expect(parsePr(answer)).toMatchObject({ additions: null, deletions: null });
+  });
 });
 
 describe("decideLand", () => {
@@ -458,7 +466,8 @@ describe("decideLand, the factory's evidence (REQ-FLOW-152 to REQ-FLOW-154)", ()
 
   it("names every leg where the legs disagree on the review tool, a clean verdict or none beside it", () => {
     const legs = ["the default branch's manifest", "the manifest on disk"];
-    const reason = "the legs disagree on autonomy.reviewTool, and no leg wins: the default branch's manifest, the manifest on disk";
+    // TEST CHANGE, justified (review/51): the ask also says the tool's word was not read, since a person approving it hears of it nowhere else.
+    const reason = "the legs disagree on autonomy.reviewTool, and no leg wins: the default branch's manifest, the manifest on disk; the review tool's word was not read";
     expect(reasonsOf({ reviewToolConflict: legs })).toEqual([reason]);
     expect(reasonsOf({ reviewToolConflict: legs, reviewTool: verdict("clean") })).toEqual([reason]);
   });
@@ -486,7 +495,7 @@ describe("decideLand, the factory's evidence (REQ-FLOW-152 to REQ-FLOW-154)", ()
     ["a held path", { files: { paths: [".github/workflows/ci.yml"], complete: true } }, "the diff touches paths that define the evidence: .github/workflows/ci.yml"],
     ["a loosened key", { looserKeys: ["autonomy.autoShip"] }, "the head's manifest loosens autonomy.autoShip against main's"],
     ["a red tip", { defaultBranchRed: { failing: ["test"], unread: null } }, "main is red: test failing on its tip"],
-    ["legs that disagree", { reviewToolConflict: ["one", "two"] }, "the legs disagree on autonomy.reviewTool, and no leg wins: one, two"],
+    ["legs that disagree", { reviewToolConflict: ["one", "two"] }, "the legs disagree on autonomy.reviewTool, and no leg wins: one, two; the review tool's word was not read"],
   ])("does not let an eligible auto-ship pass over %s", (_name, over, reason) => {
     expect(reasonsOf({ setting: deploying, autoShip: eligible, ...over })).toEqual([reason]);
   });

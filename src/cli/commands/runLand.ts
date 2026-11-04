@@ -19,6 +19,7 @@ import {
   parseEditorsPage,
   parseFiles,
   parseIssueComments,
+  parseMergeBase,
   parsePr,
   parseReactions,
   parseReviews,
@@ -26,7 +27,6 @@ import {
   parseThreadsPage,
   ownPr,
   pollWhilePending,
-  UNREAD_EDITOR,
   withinAny,
   unresolvedThreads,
   waitsLine,
@@ -44,11 +44,11 @@ import {
 } from "../../runs/landEvidence.ts";
 import { screenOutbound } from "../../runs/morning.ts";
 import { PR_RECORD_FILE, prRecordRefusal, resolveRepo, runMarker } from "../../runs/pullRequest.ts";
-import { parseStateBlock, requestMarker, reviewToolVerdict, withoutRequestMarkers, type ReviewToolFacts, type ReviewToolVerdict } from "../../runs/reviewTool.ts";
+import { parseStateBlock, requestMarker, reviewToolVerdict, UNREAD_EDITOR, withoutRequestMarkers, type ReviewToolFacts, type ReviewToolVerdict } from "../../runs/reviewTool.ts";
 import { gitProgramFor } from "../../shared/programPath.ts";
 import { EngineError } from "../../types/errors.ts";
 import type { ReviewToolConfig } from "../../types/manifest.ts";
-import { classifyRange } from "../engine/changeRange.ts";
+import { classifyRange, namePaths, type RangeFacts } from "../engine/changeRange.ts";
 import {
   ghApi,
   ghCommentEditors,
@@ -85,10 +85,11 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * surface must still be the pre-flight's (REQ-FLOW-131), at the start and again just before the act.
  *
  * **The factory's evidence.** A required check failing on the default branch's tip asks, and a tip that does not read asks
- * (REQ-FLOW-153). A deploying default branch asks unless the change fits `autonomy.autoShip`, read from the commits that
- * merge (REQ-FLOW-152). A named review tool is read on the head, asked once where it has no run there, and waited for: only
- * its clean word passes (REQ-FLOW-154). Each is read again before the act. A wait that outlasts the verb ends as `asks` with
- * `asks.pending`, which no `--approved` passes: the next call reads the tool's word.
+ * (REQ-FLOW-153); the branch is read again at each re-read, so a newer commit is the one judged. A deploying default branch
+ * asks unless the change fits `autonomy.autoShip`, read from the commits that merge, with GitHub naming the merge base and
+ * agreeing with the range (REQ-FLOW-152). A named review tool is read on the head, asked once where it has no run there, and
+ * waited for: only its clean word passes (REQ-FLOW-154). The tip and the tool are read again before the act. A wait that
+ * outlasts the verb ends as `asks` with `asks.pending`, which no `--approved` passes: the next call reads the tool's word.
  *
  * **The act.** `--ready` marks a draft ready only once the rest holds, then merges. Before the merge the body gains
  * one "evidence checked at" line, never "landed"; only after the merge call succeeds does `record.md` gain
@@ -126,6 +127,8 @@ const MAX_PAGES = 10;
 const MAX_FILE_PAGES = 30;
 /** A branch name as it goes into a path unencoded, as the push check reads it. */
 const PATH_BRANCH = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/-]+$/;
+/** The manifest below the project root: a pull request whose file list leaves it out cannot loosen a key. */
+const MANIFEST_PATH = ".stamity/manifest.json";
 /** The default branch's tip as read (REQ-FLOW-153): only `failing` is red. */
 interface TipRead {
   failing: string[];
@@ -410,7 +413,6 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
 
     // (4) The setting: the strictest of the default branch's, HEAD's and the work tree's manifest and the baked guard.
     const setting = await readSetting(cwd, prefix, repoPath, defaultBranch, gitLine, call, readGuardLegs);
-    const looserKeys = await readLooserKeys(prefix, repoPath, defaultBranch, gitLine, call);
     // Legs that disagree on the review tool go to a person: `setting.reviewTool` is then only the first leg's, and it judges nothing.
     const tool = setting.reviewToolConflict.length === 0 ? setting.reviewTool : undefined;
 
@@ -425,6 +427,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       counted += read.count;
       if (read.count < 100) break;
     }
+    // Only a pull request that changes the manifest can loosen a key: a default branch tightened since the fork loosens nothing here.
+    const looserKeys = files.includes(`${prefix}${MANIFEST_PATH}`) ? await readLooserKeys(prefix, repoPath, defaultBranch, gitLine, call) : [];
 
     // (6) The required checks: the rulesets' and the branch protection's; a 403 or 404 on the rules falls back to all.
     const rules = await call(`${repoPath}/rules/branches/${defaultBranch}`);
@@ -434,10 +438,15 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     if (branch === null) throw new Refused("the default branch did not read");
     const required: RequiredCheck[] = [...(ruleRead?.required ?? []), ...branch.required];
     const readChecks = async (): Promise<CheckEvidence> => checkEvidence(required, await checkRuns(json, repoPath, sha));
-    /** REQ-FLOW-153: the tip's required checks; a context missing or pending there is not red, and a read that fails asks. */
+    /**
+     * REQ-FLOW-153: the required checks of the tip as it stands now, read from the branch each time, so a commit landed since
+     * the last read is the one judged. A context missing or pending there is not red, and a read that fails asks.
+     */
     const readTip = async (): Promise<TipRead> => {
       try {
-        const now = checkEvidence(required, await checkRuns(json, repoPath, branch.tip));
+        const latest = parseBranch(await json(`${repoPath}/branches/${defaultBranch}`, "the default branch read"));
+        if (latest === null) throw new Refused("the default branch did not read");
+        const now = checkEvidence(required, await checkRuns(json, repoPath, latest.tip));
         return { failing: now.failing, unread: null, notRed: [...now.pending, ...now.missing] };
       } catch (error) {
         if (!(error instanceof Refused)) throw error;
@@ -452,7 +461,10 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     const { paths: hookPaths, setups } = await declaredHookPaths({ base: head.base, head: sha, tip: branch.tip, defaultBranch, prefix }, git, gitLine);
     result.evidence.held = askPathsOf(files, setups, typeof hookPaths === "string" ? [] : hookPaths);
     // REQ-FLOW-152: read only where it can spare an ask, the tip being in this clone by now.
-    const autoShip = setting.autoShip !== undefined && matchesDeployingBranch(defaultBranch, setting.deployingBranches) ? await autoShipRead(cwd, branch.tip, sha, setting.autoShip, gitLine) : undefined;
+    const autoShip =
+      setting.autoShip !== undefined && matchesDeployingBranch(defaultBranch, setting.deployingBranches)
+        ? await autoShipRead(cwd, { tip: branch.tip, head: sha, files, pr }, setting.autoShip, (path) => call(`${repoPath}/${path}`))
+        : undefined;
 
     // (7) The review threads, every page, read again on every later read (review/72).
     const readThreads = async (): Promise<number | null> => {
@@ -858,17 +870,41 @@ function ranOnHead(facts: ReviewToolFacts, tool: ReviewToolConfig): boolean {
   return facts.reviews.some((review) => review.userLogin === tool.login && review.commitId === facts.head) || facts.comments.some((comment) => comment.userLogin === tool.login && blockOn(comment.body));
 }
 
+/** Where the range read and GitHub's own view of the pull request part, in words; `null` where they agree. */
+function rangeDisagreement(range: RangeFacts, files: readonly string[], pr: LandPr): string | null {
+  const read = new Set(range.paths);
+  const listed = new Set(files);
+  const differ = [...[...read].filter((path) => !listed.has(path)), ...[...listed].filter((path) => !read.has(path))];
+  if (differ.length > 0) return `the range read and GitHub's file list differ on ${namePaths(differ.toSorted())}`;
+  const total = pr.additions === null || pr.deletions === null ? null : pr.additions + pr.deletions;
+  return range.lines === null || range.lines === total ? null : `the range read counts ${range.lines} lines and GitHub ${total ?? "none"}`;
+}
+
 /**
- * Whether what merges fits `rules` (REQ-FLOW-152): the range from the merge base with the default branch's tip, a commit
- * the default branch holds, so a run cannot pick it, as the record's `Base:` could. No merge base (a shallow clone) and a
- * commit the range read cannot find both read as not eligible, so the land asks instead of failing.
+ * Whether what merges fits `rules` (REQ-FLOW-152). Nothing here rests on the clone's history, which the run can write: GitHub
+ * names the merge base, and the range must then match the pull request's file list and line counts. The tip's class file
+ * judges the change, since a run picks its merge base by where it forks; both commits are out of its hands, and the tip is
+ * the rules as they stand today. A compare that names no base, a range that disagrees with GitHub and a commit this clone
+ * does not hold (a shallow clone) all read as not eligible, so the land asks instead of failing.
  */
-async function autoShipRead(cwd: string, tip: string, head: string, rules: AutoShipRules, gitLine: (args: readonly string[]) => Promise<string | null>): Promise<AutoShipVerdict> {
+async function autoShipRead(
+  cwd: string,
+  at: { tip: string; head: string; files: readonly string[]; pr: LandPr },
+  rules: AutoShipRules,
+  call: (path: string) => Promise<GhResponse>,
+): Promise<AutoShipVerdict> {
+  const { tip, head, files, pr } = at;
   const incomplete = (why: string): AutoShipVerdict => ({ eligible: false, reasons: [`the classification is incomplete: ${why}`] });
-  const base = await gitLine(["merge-base", tip, head]);
-  if (base === null) return incomplete(`this clone holds no merge base of ${tip} and ${head}`);
+  const compare = await call(`compare/${tip}...${head}`).catch((error: unknown) => {
+    if (error instanceof Refused) return null;
+    throw error;
+  });
+  const base = compare?.status === 200 ? parseMergeBase(compare.json) : null;
+  if (base === null) return incomplete(`GitHub's compare of ${tip} and ${head} named no merge base (${compare === null ? "gh failed" : `HTTP ${compare.status}`})`);
   try {
-    return autoShipVerdict(await classifyRange(cwd, base, head), rules);
+    const range = await classifyRange(cwd, base, head, tip);
+    const differs = rangeDisagreement(range, files, pr);
+    return differs === null ? autoShipVerdict(range, rules) : incomplete(differs);
   } catch (error) {
     if (!(error instanceof EngineError) || error.code !== "VALIDATION_ERROR") throw error;
     return incomplete(error.message);
