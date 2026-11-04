@@ -20,9 +20,11 @@
  * unless an organization ruleset blocks that no repository-level act can take
  * the default branch out of, the account not an organization owner, since a
  * repository admin can lift a repository rule or classic protection, repoint
- * the default branch, or rename the repository. `hooks-loaded` is a
- * canary, not a wall: the shell guard writes it, and a steered run could
- * write it too.
+ * the default branch, or rename the repository. `adminRuleProof` is the one
+ * opt-in past that (REQ-FLOW-151): the person accepts the lift, so a ruleset
+ * that binds the account now counts, with the warning `admin-can-lift`, and
+ * classic protection still does not. `hooks-loaded` is a canary, not a wall:
+ * the shell guard writes it, and a steered run could write it too.
  *
  * No value is ever echoed: `token-env` names variables only, and no evidence
  * string carries an environment value or the canary's raw text. Erasable
@@ -42,13 +44,13 @@ export type RestRead = (path: string) => Promise<{ status: number; json: unknown
 
 type CheckId = "hooks-loaded" | "node-engine" | "cli-pin" | "gate-scan" | "direct-push" | "input-author" | "floors";
 type CheckState = "pass" | "refuse" | "unknown";
-type WarningId = "cursor-egress" | "token-env" | "review-state";
+type WarningId = "cursor-egress" | "token-env" | "review-state" | "admin-can-lift";
 
 export interface PreflightVerdict {
   ok: boolean;
   checks: { id: CheckId; state: CheckState; evidence: string }[];
   refusals: { id: CheckId; reason: string; fix: string }[];
-  /** `names` lists `token-env`'s variables; `reason` says why `review-state` fired. */
+  /** `names` lists `token-env`'s variables; `reason` says why `review-state` or `admin-can-lift` fired. */
   warnings: { id: WarningId; names?: string[]; reason?: string }[];
 }
 
@@ -115,6 +117,8 @@ export interface PreflightDeps {
   now: Date;
   /** The board item the run takes as input, by reference. */
   item?: { owner: string; repo: string; number: number } | undefined;
+  /** `autonomy.adminRuleProof` as the strictest read of its legs gives it (REQ-FLOW-151); absent reads false. */
+  adminRuleProof?: boolean | undefined;
   /** The emitted copies of the floor rules, one entry per client copy. */
   floors: readonly { id: string; path: string; exists: boolean }[];
   /**
@@ -166,6 +170,7 @@ const CONFIG_FIX = "make git's configuration readable in the run's environment (
 const PUSH_URL_FIX ="point every push URL of origin at the repository its fetch URL names";
 const ORIGIN_FIX = "point origin at the GitHub repository the run pushes to";
 const ADMIN_FIX = "run as an account or token without admin on this repository";
+const ADMIN_LIFT_REASON = "the account administers the repository and could still lift the rule this pass rests on; only the guard stops that";
 const ENGINES_FIX = "reinstall the CLI so its package.json and its engines.node range can be read";
 const PUSH_RIGHT_FIX =
   "run as an account or a token with contents write on the repository (a fine-grained token's Contents: Read and write), " +
@@ -209,6 +214,8 @@ interface DirectPushDetail {
   mergeBypass: boolean;
   /** The fix when it differs from the verdict's usual one. */
   fix?: string;
+  /** `blocked` rests only on rules this administrator could lift, which `adminRuleProof` accepted. */
+  adminCanLift?: true;
   /**
    * The account has no push right at all (`permissions.push` false): the
    * default branch is blocked, so the verdict reads `blocked`, but the run's own
@@ -332,17 +339,20 @@ function pinsDefaultBranch(conditions: unknown, branch: string, repoId: unknown)
   return true;
 }
 
-/** The account's role in `org`: `member` takes an organization ruleset's exception; an owner or an unread role does not. */
-async function organizationMember(rest: RestRead, org: string): Promise<{ member: boolean; evidence: string }> {
+/**
+ * The account's role in `org`: `member` takes an organization ruleset's exception; an owner or an unread role does not.
+ * `owner` is the one other role `adminRuleProof` accepts, so any other word, or none, fails closed under it too.
+ */
+async function organizationMember(rest: RestRead, org: string): Promise<{ member: boolean; owner: boolean; evidence: string }> {
   const reply = await read(rest, `/user/memberships/orgs/${org}`);
   const role = reply !== null && reply.status === 200 && isRecord(reply.json) ? reply.json["role"] : undefined;
-  if (role === "member") return { member: true, evidence: "" };
-  if (role === "admin") return { member: false, evidence: "the account is an owner of the organization and can edit its rulesets" };
-  if (typeof role === "string") return { member: false, evidence: "the account's organization role is not plain membership" };
-  return { member: false, evidence: `the account's organization role is unreadable (${statusText(reply)})` };
+  if (role === "member") return { member: true, owner: false, evidence: "" };
+  if (role === "admin") return { member: false, owner: true, evidence: "the account is an owner of the organization and can edit its rulesets" };
+  if (typeof role === "string") return { member: false, owner: false, evidence: "the account's organization role is not plain membership" };
+  return { member: false, owner: false, evidence: `the account's organization role is unreadable (${statusText(reply)})` };
 }
 
-async function inspectDirectPush(rest: RestRead, repo: RepoRef): Promise<DirectPushDetail> {
+async function inspectDirectPush(rest: RestRead, repo: RepoRef, opts: { adminRuleProof: boolean } = { adminRuleProof: false }): Promise<DirectPushDetail> {
   if (!safeRepo(repo.owner, repo.repo)) {
     return { verdict: "unknown", evidence: "the origin repository's name is not a GitHub name", mergeBypass: false };
   }
@@ -372,7 +382,9 @@ async function inspectDirectPush(rest: RestRead, repo: RepoRef): Promise<DirectP
   // stricter reading. An administrator can lift a repository ruleset or classic
   // protection with one REST call, so only an organization ruleset binds it, and
   // only one whose conditions no repository-level act can move off the branch
-  // (`pinsDefaultBranch`), for an account that is no organization owner.
+  // (`pinsDefaultBranch`), for an account that is no organization owner. With
+  // `opts.adminRuleProof` a ruleset it could lift counts too, as binding now;
+  // classic protection never does, so it is read for no administrator.
   const isAdmin = !isRecord(permissions) || permissions["admin"] !== false;
   const repoId = repoReply.json["id"];
   const branchPath = encodeURIComponent(branch);
@@ -401,6 +413,10 @@ async function inspectDirectPush(rest: RestRead, repo: RepoRef): Promise<DirectP
     const blocking: { id: number; bypass: string }[] = [];
     /** Organization rulesets that pin the branch, binding an administrator once its role reads plain membership. */
     const adminBlocking: { id: number; bypass: string }[] = [];
+    /** Under `adminRuleProof`: organization rulesets that do not pin the branch, which count once the role reads. */
+    const adminUnpinned: { id: number; bypass: string }[] = [];
+    /** Under `adminRuleProof`: rulesets that bind the administrator now and that it could lift. */
+    const adminRepoBlocking: { id: number; bypass: string }[] = [];
     for (const [index, [id, organization]] of rulesets.entries()) {
       const reply = replies[index] ?? null;
       if (reply === null || reply.status !== 200 || !isRecord(reply.json)) {
@@ -414,12 +430,15 @@ async function inspectDirectPush(rest: RestRead, repo: RepoRef): Promise<DirectP
       const bypass = reply.json["current_user_can_bypass"];
       if (bypass === "never" || bypass === "pull_requests_only") {
         if (isAdmin && !organization) {
-          notes.push(`the account administers the repository and can lift repository ruleset ${id}`);
+          if (opts.adminRuleProof) adminRepoBlocking.push({ id, bypass });
+          else notes.push(`the account administers the repository and can lift repository ruleset ${id}`);
           continue;
         }
         if (isAdmin) {
           if (pinsDefaultBranch(reply.json["conditions"], branch, repoId)) {
             adminBlocking.push({ id, bypass });
+          } else if (opts.adminRuleProof) {
+            adminUnpinned.push({ id, bypass });
           } else {
             notes.push(
               `organization ruleset ${id}'s conditions do not keep the default branch in scope against a repository ` +
@@ -431,21 +450,32 @@ async function inspectDirectPush(rest: RestRead, repo: RepoRef): Promise<DirectP
         blocking.push({ id, bypass });
         continue;
       }
-      const how = bypass === "always" ? "always" : "no bypass value read, counted as a bypass";
+      const how = bypass === "always" ? "always" : `${typeof bypass === "string" ? "a value that is not never or pull_requests_only" : "no bypass value read"}, counted as a bypass`;
       notes.push(`the account bypasses ruleset ${id} (${how})`);
     }
-    if (adminBlocking.length > 0) {
+    if (adminBlocking.length + adminUnpinned.length > 0) {
       const role = await organizationMember(rest, repo.owner);
-      if (role.member) blocking.push(...adminBlocking);
-      else notes.push(`${role.evidence}, so no organization ruleset binds it`);
+      if (role.member) {
+        blocking.push(...adminBlocking);
+        adminRepoBlocking.push(...adminUnpinned);
+      } else if (opts.adminRuleProof && role.owner) {
+        adminRepoBlocking.push(...adminBlocking, ...adminUnpinned);
+      } else {
+        notes.push(`${role.evidence}, so no organization ruleset binds it`);
+      }
     }
-    if (blocking.length > 0) {
-      const named = blocking.map(({ id, bypass }) => `${id} (bypass ${bypass})`).join(", ");
-      const level = isAdmin ? "organization ruleset" : "ruleset";
+    const binding = [...blocking, ...adminRepoBlocking];
+    if (binding.length > 0) {
+      const named = binding.map(({ id, bypass }) => `${id} (bypass ${bypass})`).join(", ");
+      const level = isAdmin && adminRepoBlocking.length === 0 ? "organization ruleset" : "ruleset";
+      const liftable = blocking.length === 0;
       return {
         verdict: "blocked",
-        evidence: `active ${level} ${named} requires a pull request and the account cannot bypass it for a direct push`,
-        mergeBypass: blocking.every(({ bypass }) => bypass === "pull_requests_only"),
+        evidence:
+          `active ${level} ${named} requires a pull request and the account cannot bypass it for a direct push` +
+          (liftable ? "; the rule binds now, and the account could still lift it" : ""),
+        mergeBypass: binding.every(({ bypass }) => bypass === "pull_requests_only"),
+        ...(liftable ? { adminCanLift: true as const } : {}),
       };
     }
     if (unreadableIds.length > 0) {
@@ -481,8 +511,8 @@ async function inspectDirectPush(rest: RestRead, repo: RepoRef): Promise<DirectP
  * `blocked` (proven), `open` (it can), or `unknown` (not readable — refused
  * like `open`).
  */
-export async function directPushVerdict(rest: RestRead, repo: RepoRef): Promise<"blocked" | "open" | "unknown"> {
-  return (await inspectDirectPush(rest, repo)).verdict;
+export async function directPushVerdict(rest: RestRead, repo: RepoRef, opts?: { adminRuleProof: boolean }): Promise<"blocked" | "open" | "unknown"> {
+  return (await inspectDirectPush(rest, repo, opts)).verdict;
 }
 
 interface CheckResult {
@@ -724,12 +754,15 @@ interface DirectPushCheck {
   result: CheckResult;
   /** The account can merge past a blocking ruleset's required review. */
   mergeBypass: boolean;
+  /** The pass rests on a rule this administrator could lift. */
+  adminCanLift: boolean;
 }
 
 async function directPush(deps: PreflightDeps): Promise<DirectPushCheck> {
   const settle = (state: CheckState, evidence: string, fix: string) => ({
     result: { state, evidence, fix },
     mergeBypass: false,
+    adminCanLift: false,
   });
   // `gh` talks to GH_HOST when it is set, else github.com; u4's `resolveRepo`
   // takes a non-proxy origin only on that host, and the proxy origin is github.com.
@@ -768,13 +801,14 @@ async function directPush(deps: PreflightDeps): Promise<DirectPushCheck> {
   if (!identity.bound) {
     return settle("unknown", `${name}: ${identity.evidence}, so the REST reads prove nothing about it`, identity.fix);
   }
-  const detail = await inspectDirectPush(deps.rest, deps.repo);
+  const detail = await inspectDirectPush(deps.rest, deps.repo, { adminRuleProof: deps.adminRuleProof === true });
   // review/198: a run that cannot push its own branch ends with no branch, no pull request and no morning list.
   if (detail.noPushRight === true) return settle("refuse", `${name}: ${detail.evidence}`, PUSH_RIGHT_FIX);
   if (detail.verdict === "blocked") {
     return {
       result: { state: "pass", evidence: `${name}: ${detail.evidence}; ${identity.evidence}`, fix: "" },
       mergeBypass: detail.mergeBypass,
+      adminCanLift: detail.adminCanLift === true,
     };
   }
   return settle(
@@ -914,6 +948,7 @@ export async function runPreflight(deps: PreflightDeps): Promise<PreflightVerdic
   if (names.length > 0) warnings.push({ id: "token-env", names });
   const reviewReason = reviewStateReason(deps.reviewState, push.mergeBypass);
   if (reviewReason !== null) warnings.push({ id: "review-state", reason: reviewReason });
+  if (push.adminCanLift) warnings.push({ id: "admin-can-lift", reason: ADMIN_LIFT_REASON });
 
   return { ok: refusals.length === 0, checks, refusals, warnings };
 }

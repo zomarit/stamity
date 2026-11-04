@@ -34,6 +34,9 @@ import {
   type TestSource,
 } from "../../change/testInputs.ts";
 import { linesPastCap, SCAN_LINE_MAX_CHARS, scanAddedLines, type ScanFile, type ScanHit } from "../../change/scan.ts";
+import { strictestAutonomy } from "../../config/autonomy.ts";
+import { CLAUDE_HOOKS_DIR } from "../../hooks/model.ts";
+import { PERSON_ONLY_GUARD_FILE } from "../../hooks/scripts.ts";
 import { PREFLIGHT_CANARY_FILE } from "../../mcp/env.ts";
 import { readGitSurface, SURFACE_RECORD_FILE, SURFACE_RECORD_LABEL, surfaceRecord, type GitSurface } from "../../runs/gitSurface.ts";
 import { screenOutbound } from "../../runs/morning.ts";
@@ -45,11 +48,14 @@ import { detectSession, type SessionKind } from "../../session/detect.ts";
 import { findPackageRoot } from "../../shared/paths.ts";
 import { bareShapeRefusal, gitDiscoveryMeetsBareShape } from "../../merge/safeWrite.ts";
 import { fileSystemProbe, gitProgramFor, isNodeModulesBin, programNotFound, resolveProgramOnPath, searchPathOf } from "../../shared/programPath.ts";
+import { TOOLS } from "../../types/core.ts";
 import type { SetupManifest } from "../../types/manifest.ts";
-import { REVIEW_GATE_STATE_FILE } from "../../types/markers.ts";
+import { HOOKS_GENERATED_DIR, REVIEW_GATE_STATE_FILE } from "../../types/markers.ts";
+import { guardCopySetting, readRegularFile } from "../engine/autonomyGate.ts";
 import { ghApi } from "../engine/ghRunner.ts";
 import { gitCheckRunner, keptFromGit, revisionLines, type GitInputRunner } from "../engine/gitStatus.ts";
 import { gitWrite, gitWriteEnv } from "../engine/gitWrite.ts";
+import { readSetting } from "../engine/landSetting.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
 import type { GitRunner } from "../../workspace/git.ts";
@@ -2065,6 +2071,59 @@ async function recordGitSurface(ctx: CliContext, root: string, passed: boolean, 
   }
 }
 
+/** Every client's guard copy, as the loosen gate lists them (`../engine/autonomyGate.ts`). */
+const GUARD_COPIES: readonly string[] = [`${CLAUDE_HOOKS_DIR}/${PERSON_ONLY_GUARD_FILE}`, ...TOOLS.map((tool) => `${HOOKS_GENERATED_DIR}/${tool}/${PERSON_ONLY_GUARD_FILE}`)];
+/** Past this a guard copy is not one the engine wrote; it reads off. */
+const GUARD_COPY_READ_MAX_BYTES = 1024 * 1024;
+
+/**
+ * Whether `autonomy.adminRuleProof` is on in every leg (REQ-FLOW-151): the default branch's manifest, `HEAD`'s, the work
+ * tree's and each guard copy on disk. `readSetting` skips a leg that is not there, since `run land` only tightens on what
+ * it finds; this pass stands on the legs, so a missing or unread one reads off, or a run could turn the key on with a
+ * commit of its own on a default branch that holds no manifest. `run land`'s read is reused, so the two cannot drift.
+ */
+async function adminRuleProofInForce(root: string, repoPath: string, rest: RestRead): Promise<boolean> {
+  const runner = gitCheckRunner({ timeoutMs: GATE_GIT_TIMEOUT_MS, maxBuffer: GATE_GIT_MAX_BUFFER });
+  const gitLine = (args: readonly string[]): string | null => {
+    try {
+      return runner(args, root).replace(/\r?\n$/, "");
+    } catch {
+      return null;
+    }
+  };
+  try {
+    const about = await rest(repoPath);
+    const branch = typeof about.json === "object" && about.json !== null ? (about.json as { default_branch?: unknown }).default_branch : undefined;
+    if (about.status !== 200 || typeof branch !== "string" || branch === "") return false;
+    const texts = await Promise.all(GUARD_COPIES.map((path) => readRegularFile(join(root, ...path.split("/")), GUARD_COPY_READ_MAX_BYTES)));
+    const copies = texts.filter((text) => typeof text === "string");
+    if (copies.length === 0 || texts.includes(undefined)) return false;
+    let onDefaultBranch = false;
+    let atHead = false;
+    const setting = await readSetting(
+      root,
+      gitLine(["rev-parse", "--show-prefix"]) ?? "",
+      repoPath,
+      branch,
+      (args) => {
+        const text = gitLine(args);
+        atHead = text !== null;
+        return Promise.resolve(text);
+      },
+      async (path) => {
+        const reply = await rest(path);
+        onDefaultBranch = reply.status === 200;
+        return reply;
+      },
+    );
+    const strictest = strictestAutonomy(setting, ...copies.map((text) => guardCopySetting(text)));
+    return onDefaultBranch && atHead && strictest.adminRuleProof === true;
+  } catch {
+    // A refused or failed read proves nothing: the administrator's refusal stands.
+    return false;
+  }
+}
+
 async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {
   const root = ctx.app.runtime.cwd;
   const env = ctx.app.runtime.env;
@@ -2093,6 +2152,9 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
   const item = opts["item"] as PreflightDeps["item"];
   const floors = floorCopies(root, manifest);
   const usage = usageReviewLines(root, now);
+  // The work tree's key is one leg of several, so off there settles it and on there alone proves nothing.
+  const adminRuleProof =
+    manifest?.autonomy?.adminRuleProof === true && rest !== null && origin !== null && (await adminRuleProofInForce(root, `repos/${origin.owner}/${origin.repo}`, rest));
   const verdict = await runPreflight({
     env,
     nodeVersion: process.versions.node,
@@ -2108,6 +2170,7 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
     canary: canary === undefined ? null : { at: typeof at === "string" ? at : "" },
     now,
     ...(item === undefined ? {} : { item }),
+    adminRuleProof,
     floors,
     pushIdentity,
     reviewState: { counter: existsSync(join(root, REVIEW_GATE_STATE_FILE)), usageReviewLines: usage ?? 0, recordUnread: usage === null },

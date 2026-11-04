@@ -503,6 +503,171 @@ describe("directPushVerdict — classic protection", () => {
   });
 });
 
+describe("directPushVerdict — an administrator under adminRuleProof (REQ-FLOW-151)", () => {
+  const ON = { adminRuleProof: true };
+  const OWNER: Reply = { status: 200, json: { state: "active", role: "admin", organization: { login: "o" } } };
+  const warned = (verdict: PreflightVerdict): string[] => verdict.warnings.map((entry) => entry.id);
+
+  /** An administrator under one repository ruleset of `enforcement`, reading `bypass`. */
+  const underRepository = (bypass: string | undefined, enforcement = "active") =>
+    restTable({
+      "/repos/o/r": repoReply(ADMIN),
+      "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(9)] },
+      "/repos/o/r/rulesets/9": ruleset(9, enforcement, bypass),
+    });
+  /** An administrator under one organization ruleset with `conditions`, the role read answering `membership`. */
+  const underOrganization = (conditions: unknown, membership: Reply, bypass: string | null = "never") =>
+    restTable({
+      "/repos/o/r": repoReply(ADMIN),
+      "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(9, 1, "Organization")] },
+      "/repos/o/r/rulesets/9": ruleset(9, "active", bypass ?? undefined, conditions),
+      "/user/memberships/orgs/o": membership,
+    });
+  const UNPINNED = orgConditions(["~DEFAULT_BRANCH"]);
+  const PINNED = orgConditions(["~ALL"]);
+
+  it.each(["never", "pull_requests_only"])("a repository ruleset reading %s blocks with the option on, carrying admin-can-lift", async (bypass) => {
+    const { rest, calls } = underRepository(bypass);
+
+    expect(await directPushVerdict(rest, REPO, ON)).toBe("blocked");
+    const verdict = await runPreflight(greenDeps({ rest, adminRuleProof: true }));
+
+    expect(check(verdict, "direct-push").state).toBe("pass");
+    expect(check(verdict, "direct-push").evidence).toContain(`active ruleset 9 (bypass ${bypass})`);
+    expect(check(verdict, "direct-push").evidence).toContain("binds now, and the account could still lift it");
+    expect(verdict.ok).toBe(true);
+    expect(warned(verdict)).toContain("admin-can-lift");
+    expect(verdict.warnings.find((entry) => entry.id === "admin-can-lift")?.reason).toContain("only the guard stops");
+    // Classic protection proves nothing for an administrator, so it is never read.
+    expect(calls).not.toContain("/repos/o/r/branches/main/protection");
+  });
+
+  it("the same ruleset with the option off stays open, with no warning, and an absent option reads off", async () => {
+    const off = await runPreflight(greenDeps({ rest: underRepository("never").rest, adminRuleProof: false }));
+    const absent = await runPreflight(greenDeps({ rest: underRepository("never").rest }));
+
+    expect(await directPushVerdict(underRepository("never").rest, REPO, { adminRuleProof: false })).toBe("open");
+    expect(await directPushVerdict(underRepository("never").rest, REPO)).toBe("open");
+    for (const verdict of [off, absent]) {
+      expect(check(verdict, "direct-push").state).toBe("refuse");
+      expect(refusal(verdict, "direct-push")?.fix).toBe("run as an account or token without admin on this repository");
+      expect(warned(verdict)).not.toContain("admin-can-lift");
+    }
+  });
+
+  it("a pull_requests_only pass still warns that the account can merge past the review", async () => {
+    const verdict = await runPreflight(greenDeps({ rest: underRepository("pull_requests_only").rest, adminRuleProof: true }));
+    const never = await runPreflight(greenDeps({ rest: underRepository("never").rest, adminRuleProof: true }));
+
+    expect(verdict.warnings.find((entry) => entry.id === "review-state")?.reason).toContain("pull_requests_only");
+    expect(never.warnings.find((entry) => entry.id === "review-state")?.reason ?? "").not.toContain("pull_requests_only");
+  });
+
+  // `always`, `exempt` and `never` are GitHub's published words beside `pull_requests_only`; `exempt` skips the rule
+  // outright, and the rest stand for any word it adds later, or a field it leaves out.
+  it.each([["always"], ["exempt"], ["sometimes"], ["NEVER"], [""], [undefined]])("a bypass word of %j never reads blocked, whatever the option", async (bypass) => {
+    const verdict = await runPreflight(greenDeps({ rest: underRepository(bypass).rest, adminRuleProof: true }));
+
+    expect(await directPushVerdict(underRepository(bypass).rest, REPO, ON)).toBe("open");
+    expect(await directPushVerdict(underOrganization(UNPINNED, MEMBER, bypass ?? null).rest, REPO, ON)).toBe("open");
+    expect(check(verdict, "direct-push").state).toBe("refuse");
+    expect(verdict.ok).toBe(false);
+    expect(warned(verdict)).not.toContain("admin-can-lift");
+  });
+
+  it("names a bypass word it read as a word, not as no value", async () => {
+    const verdict = await runPreflight(greenDeps({ rest: underRepository("exempt").rest, adminRuleProof: true }));
+    const silent = await runPreflight(greenDeps({ rest: underRepository(undefined).rest, adminRuleProof: true }));
+
+    expect(check(verdict, "direct-push").evidence).toContain("a value that is not never or pull_requests_only");
+    expect(check(silent, "direct-push").evidence).toContain("no bypass value read");
+  });
+
+  it.each(["evaluate", "disabled"])("a ruleset in %s mode counts for nothing, where the same ruleset active blocks", async (enforcement) => {
+    expect(await directPushVerdict(underRepository("never", enforcement).rest, REPO, ON)).toBe("open");
+    expect(await directPushVerdict(underRepository("never", "active").rest, REPO, ON)).toBe("blocked");
+  });
+
+  it("classic protection alone never blocks for an administrator, even one enforce_admins binds", async () => {
+    const protection = { required_pull_request_reviews: { required_approving_review_count: 1 }, enforce_admins: { enabled: true } };
+    const { rest, calls } = restTable({
+      "/repos/o/r": repoReply(ADMIN),
+      "/repos/o/r/rules/branches/main": { status: 200, json: [] },
+      "/repos/o/r/branches/main/protection": { status: 200, json: protection },
+    });
+
+    expect(await directPushVerdict(rest, REPO, ON)).toBe("open");
+    expect(calls).not.toContain("/repos/o/r/branches/main/protection");
+  });
+
+  it("a pinned organization ruleset over a plain member blocks with no warning, since it cannot lift that rule", async () => {
+    const verdict = await runPreflight(greenDeps({ rest: underOrganization(PINNED, MEMBER).rest, adminRuleProof: true }));
+
+    expect(check(verdict, "direct-push").state).toBe("pass");
+    expect(check(verdict, "direct-push").evidence).toContain("active organization ruleset 9");
+    expect(warned(verdict)).not.toContain("admin-can-lift");
+  });
+
+  it.each([
+    ["an unpinned organization ruleset over a plain member", UNPINNED, MEMBER],
+    ["a pinned organization ruleset over an owner", PINNED, OWNER],
+    ["an unpinned organization ruleset over an owner", UNPINNED, OWNER],
+  ])("%s blocks with the option on, carrying admin-can-lift, and stays open with it off", async (_label, conditions, membership) => {
+    const verdict = await runPreflight(greenDeps({ rest: underOrganization(conditions, membership).rest, adminRuleProof: true }));
+
+    expect(check(verdict, "direct-push").state).toBe("pass");
+    expect(warned(verdict)).toContain("admin-can-lift");
+    expect(await directPushVerdict(underOrganization(conditions, membership).rest, REPO)).toBe("open");
+  });
+
+  it.each([
+    ["a 404, an outside collaborator", { status: 404, json: { message: "Not Found" } }],
+    ["a 403", { status: 403, json: { message: "Forbidden" } }],
+    ["a role this check does not know", { status: 200, json: { state: "active", role: "billing_manager" } }],
+  ] as const)("a role read answering %s fails closed on an organization ruleset, pinned or not", async (_label, membership) => {
+    for (const conditions of [PINNED, UNPINNED]) {
+      // oxlint-disable-next-line no-await-in-loop -- two conditions, one verdict each
+      const verdict = await runPreflight(greenDeps({ rest: underOrganization(conditions, membership).rest, adminRuleProof: true }));
+      expect(check(verdict, "direct-push").state).toBe("refuse");
+      expect(warned(verdict)).not.toContain("admin-can-lift");
+    }
+  });
+
+  it("with the option off an unpinned organization ruleset reads no role, as it always has", async () => {
+    const { rest, calls } = underOrganization(UNPINNED, MEMBER);
+
+    expect(await directPushVerdict(rest, REPO)).toBe("open");
+    expect(calls).not.toContain("/user/memberships/orgs/o");
+  });
+
+  it("one binding repository ruleset beside a bypassed one and an unread one blocks, naming only the one that binds", async () => {
+    const { rest } = restTable({
+      "/repos/o/r": repoReply(ADMIN),
+      "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(1), pullRequestRule(2), pullRequestRule(3)] },
+      "/repos/o/r/rulesets/1": ruleset(1, "active", "always"),
+      "/repos/o/r/rulesets/2": ruleset(2, "active", "never"),
+      "/repos/o/r/rulesets/3": { status: 404, json: { message: "Not Found" } },
+    });
+
+    const verdict = await runPreflight(greenDeps({ rest, adminRuleProof: true }));
+
+    expect(check(verdict, "direct-push").state).toBe("pass");
+    expect(check(verdict, "direct-push").evidence).toContain("active ruleset 2 (bypass never)");
+    expect(check(verdict, "direct-push").evidence).not.toContain("ruleset 1");
+  });
+
+  it("a reply with no rights block, read as an administrator, passes only with the option on", async () => {
+    const routes = {
+      "/repos/o/r": repoReply(undefined),
+      "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(9)] },
+      "/repos/o/r/rulesets/9": ruleset(9, "active", "never"),
+    };
+
+    expect(await directPushVerdict(restTable(routes).rest, REPO, ON)).toBe("blocked");
+    expect(await directPushVerdict(restTable(routes).rest, REPO)).toBe("open");
+  });
+});
+
 describe("runPreflight — direct-push inputs", () => {
   it("repo null (no origin, a non-GitHub host) is unknown and reads nothing", async () => {
     const { rest, calls } = restTable({});

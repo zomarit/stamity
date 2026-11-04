@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { enginesOf, gateCommand, readPushIdentity } from "../../../src/cli/commands/gate.ts";
 import { VERSION } from "../../../src/composition/root.ts";
+import { autonomyMarkerLine, resolveAutonomy } from "../../../src/config/autonomy.ts";
+import { PERSON_ONLY_GUARD_FILE } from "../../../src/hooks/scripts.ts";
 import { createManifest, writeManifest } from "../../../src/manifest/manifest.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
@@ -243,6 +245,99 @@ describe("stamity gate preflight and scan --text", () => {
 
       expect(rest.calls.map((call) => call.path)).toContain("user/memberships/orgs/o");
       expect(code).toBe(0);
+    });
+
+    describe("autonomy.adminRuleProof, read from every leg (REQ-FLOW-151)", () => {
+      const MANIFEST = ".stamity/manifest.json";
+      const GUARD = `.claude/hooks/stamity/${PERSON_ONLY_GUARD_FILE}`;
+      const SECOND_GUARD = `.stamity/generated/hooks/cursor/${PERSON_ONLY_GUARD_FILE}`;
+      const ON_MARKER = `${autonomyMarkerLine(resolveAutonomy({ autonomy: { adminRuleProof: true } }))}\n`;
+      const OFF_MARKER = `${autonomyMarkerLine(resolveAutonomy({}))}\n`;
+      const DEFAULT_BRANCH_READ = `repos/o/r/contents/${MANIFEST}?ref=main`;
+
+      /** What each leg holds: the key on or off, or a leg that is not there or cannot be read. */
+      interface Legs {
+        defaultBranch: "on" | "off" | "absent" | "failed";
+        head: "on" | "off" | "absent";
+        workTree: "on" | "off";
+        guard: "on" | "off" | "absent" | "foreign";
+      }
+      const ALL_ON: Legs = { defaultBranch: "on", head: "on", workTree: "on", guard: "on" };
+
+      /** An administrator's repository under a ruleset with no bypass, and the key set as `legs` says. */
+      async function optedRepo(legs: Legs): Promise<string> {
+        const repo = await seedRepo();
+        const off = await readFile(join(repo, MANIFEST), "utf8");
+        const on = JSON.stringify({ ...(JSON.parse(off) as object), autonomy: { adminRuleProof: true } });
+        rest.routes.set("repos/o/r", { status: 200, json: { default_branch: "main", id: 1, permissions: { admin: true, push: true } } });
+        rest.routes.set("repos/o/r/rules/branches/main", { status: 200, json: [{ type: "pull_request", ruleset_id: 7, ruleset_source_type: "Repository" }] });
+        rest.routes.set("repos/o/r/rulesets/7", { status: 200, json: { enforcement: "active", current_user_can_bypass: "never" } });
+        const content = (text: string): { status: number; json: unknown } => ({ status: 200, json: { content: Buffer.from(text).toString("base64") } });
+        if (legs.defaultBranch === "on") rest.routes.set(DEFAULT_BRANCH_READ, content(on));
+        if (legs.defaultBranch === "off") rest.routes.set(DEFAULT_BRANCH_READ, content(off));
+        if (legs.defaultBranch === "failed") rest.routes.set(DEFAULT_BRANCH_READ, { status: 500, json: { message: "Server Error" } });
+        if (legs.guard !== "absent") {
+          await mkdir(join(repo, GUARD, ".."), { recursive: true });
+          const bodies = { on: ON_MARKER, off: OFF_MARKER, foreign: "not a guard\n" };
+          await writeFile(join(repo, GUARD), bodies[legs.guard]);
+        }
+        if (legs.head !== "absent") {
+          await writeFile(join(repo, MANIFEST), legs.head === "on" ? on : off);
+          git(repo, ["add", MANIFEST]);
+          git(repo, ["commit", "-q", "-m", "the setup"]);
+        }
+        await writeFile(join(repo, MANIFEST), legs.workTree === "on" ? on : off);
+        return repo;
+      }
+
+      it("passes an administrator with every leg on, warning admin-can-lift, reading the default branch's manifest", async () => {
+        const repo = await optedRepo(ALL_ON);
+
+        const { code, doc } = await gate(repo, PREFLIGHT);
+
+        expect(doc["refusals"]).toEqual([]);
+        expect(code).toBe(0);
+        expect(stateOf(doc, "direct-push")).toBe("pass");
+        expect(doc["warnings"]).toContainEqual({ id: "admin-can-lift", reason: expect.stringContaining("only the guard stops") as string });
+        expect(rest.calls.map((call) => call.path)).toContain(DEFAULT_BRANCH_READ);
+        expect(new Set(rest.calls.map((call) => `${call.method} ${call.hostname}`))).toEqual(new Set(["GET github.com"]));
+      });
+
+      it("passes with a second guard copy on, and refuses where that copy is off", async () => {
+        const repo = await optedRepo(ALL_ON);
+        await mkdir(join(repo, SECOND_GUARD, ".."), { recursive: true });
+        await writeFile(join(repo, SECOND_GUARD), ON_MARKER);
+        const both = await gate(repo, PREFLIGHT);
+        await writeFile(join(repo, SECOND_GUARD), OFF_MARKER);
+        const split = await gate(repo, PREFLIGHT);
+
+        expect(both.code).toBe(0);
+        expect(split.code).toBe(1);
+        expect(stateOf(split.doc, "direct-push")).toBe("refuse");
+      });
+
+      it.each<[string, Partial<Legs>]>([
+        ["an agent's work-tree-only edit", { defaultBranch: "off", head: "off", guard: "off" }],
+        ["an agent's edit of the work tree and the guard copy", { defaultBranch: "off", head: "off" }],
+        ["an agent's commit on its own branch, the guard copy baked to match", { defaultBranch: "off" }],
+        ["a default branch that holds no manifest", { defaultBranch: "absent" }],
+        ["a default branch manifest read that failed", { defaultBranch: "failed" }],
+        ["a key off at HEAD", { head: "off" }],
+        ["no manifest at HEAD", { head: "absent" }],
+        ["a key off in the work tree", { workTree: "off" }],
+        ["a guard copy baked off", { guard: "off" }],
+        ["no guard copy at all", { guard: "absent" }],
+        ["a guard copy that is no guard", { guard: "foreign" }],
+      ])("refuses as today on %s", async (_label, change) => {
+        const repo = await optedRepo({ ...ALL_ON, ...change });
+
+        const { code, doc } = await gate(repo, PREFLIGHT);
+
+        expect(code).toBe(1);
+        expect(stateOf(doc, "direct-push")).toBe("refuse");
+        expect(doc["refusals"]).toContainEqual(expect.objectContaining({ id: "direct-push", fix: "run as an account or token without admin on this repository" }));
+        expect((doc["warnings"] as { id: string }[]).map((warning) => warning.id)).not.toContain("admin-can-lift");
+      });
     });
 
     it("refuses hooks-loaded with no canary", async () => {
