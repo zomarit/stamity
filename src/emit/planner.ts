@@ -69,6 +69,7 @@ import {
   type AgentsMdPlan,
 } from "./agentsMd.ts";
 import { planHooksInfra, type CoreHooksPlan } from "./hooksInfra.ts";
+import { LAND_WORKFLOW_ARTIFACT_ID, LAND_WORKFLOW_PATH, planLandWorkflow } from "../adapters/landWorkflow.ts";
 import {
   projectSkills,
   SKILLS_PROJECTION_DIR,
@@ -1095,6 +1096,7 @@ export function composeEmissionPlanner(
     refuseInvocableNameClashes(contentIndex, cli);
     const core = await buildCoreEmissionPlan(ctx, packs);
     const tools = TOOLS.filter((tool) => ctx.manifest.tools.includes(tool));
+    const landJob = await planLandWorkflow(ctx.rootDir, ctx.manifest, cli);
 
     const rows = new Map<string, PendingRow>();
     const sharedPaths = new Set<string>();
@@ -1169,6 +1171,8 @@ export function composeEmissionPlanner(
           })),
         );
       }
+      // Only while `autonomy.landJob` is on (REQ-FLOW-157), so default output does not move.
+      if (landJob.content !== null) addRow(rows, LAND_WORKFLOW_PATH, landJob.content, sharedOwners(LAND_WORKFLOW_ARTIFACT_ID, "infra"));
       for (const path of rows.keys()) sharedPaths.add(path);
     }
 
@@ -1258,6 +1262,7 @@ export function composeEmissionPlanner(
         ...effortDisclosures(ctx.manifest),
         ...residueWarnings,
         ...blockWarnings,
+        ...landJob.warnings,
       ],
       // Judged against the same selection and the same ownership boundary the
       // rows above were built under, so `check` reads the reach of THIS plan.

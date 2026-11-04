@@ -289,11 +289,13 @@ const LINT_SCRIPT_FALLBACK = "lint-script";
 const TEST_SCRIPT_FALLBACK = "test-script";
 
 /**
- * Workflow filenames this engine emits into `.github/workflows/` itself —
- * currently the Copilot coding agent's environment-preparation workflow
- * (`src/adapters/copilot.ts`, `COPILOT_SETUP_STEPS_PATH`). Named here rather
+ * Workflow filenames this engine emits into `.github/workflows/` itself: the
+ * Copilot coding agent's environment-preparation workflow
+ * (`src/adapters/copilot.ts`, `COPILOT_SETUP_STEPS_PATH`) and the land job's
+ * (`src/adapters/landWorkflow.ts`, `LAND_WORKFLOW_PATH`). Named here rather
  * than imported so the detector keeps no edge into the adapter layer;
- * `test/detect/repoAnalyzer.test.ts` asserts the two spellings agree.
+ * `test/detect/repoAnalyzer.test.ts` and `test/adapters/landWorkflow.test.ts`
+ * assert the spellings agree.
  *
  * These names are excluded from the github-actions probe because detection
  * runs fresh on every sync and check: keying CI on the mere existence of
@@ -302,7 +304,7 @@ const TEST_SCRIPT_FALLBACK = "test-script";
  * `github-actions` with zero user changes — emission that is not a fixpoint,
  * and a detected fact that is false (no pipeline exists).
  */
-const ENGINE_EMITTED_WORKFLOWS: ReadonlySet<string> = new Set(["copilot-setup-steps.yml"]);
+const ENGINE_EMITTED_WORKFLOWS: ReadonlySet<string> = new Set(["copilot-setup-steps.yml", "stamity-land.yml"]);
 
 /** Extensions GitHub Actions reads inside `.github/workflows/`. */
 const WORKFLOW_EXTENSIONS: readonly string[] = [".yml", ".yaml"];

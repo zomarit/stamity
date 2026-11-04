@@ -13,6 +13,7 @@
       "src/cli/engine/landSetting.ts",
       "src/change/autoShip.ts",
       "src/runs/reviewTool.ts",
+      "src/adapters/landWorkflow.ts",
       "src/roster/triggers.ts",
       "src/hooks/**",
       "scripts/ci/**"

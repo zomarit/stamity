@@ -81,11 +81,12 @@ export const IMPORT_TARGET = Object.freeze({
  * ({@link OwnedPathBound.hookRoots}, REQ-FLOW-113). Version 4 adds `.gitignore`,
  * whose row records the ignore lines the engine appended (`coOwned.lines`,
  * REQ-FLOW-016); the manifest validator bounds those lines to the engine's own
- * entries, and the row never licenses a whole-file write or delete. A unit that
- * adds an emitted path extends this value and raises `version`.
+ * entries, and the row never licenses a whole-file write or delete. Version 5
+ * adds the land job's workflow (REQ-FLOW-157). A unit that adds an emitted path
+ * extends this value and raises `version`.
  */
 export const OWNED_PATHS: OwnedPathBound = Object.freeze({
-  version: 4,
+  version: 5,
   exact: Object.freeze([
     ".gitignore",
     "AGENTS.md",
@@ -103,6 +104,7 @@ export const OWNED_PATHS: OwnedPathBound = Object.freeze({
     ".cursor/hooks/stamity-subagent-guard.mjs",
     ".github/hooks/stamity.json",
     ".github/workflows/copilot-setup-steps.yml",
+    ".github/workflows/stamity-land.yml",
     ".vscode/mcp.json",
   ]),
   charterFileName: "AGENTS.md",
@@ -305,10 +307,16 @@ const COPILOT_HOOKS_FILE = ".github/hooks/stamity.json";
 /**
  * Which kind of path `path` is for the rendering proof, or `null` when the
  * proof does not govern it. An instruction-file name decides first, so a
- * charter name inside a content folder is held as a charter.
+ * charter name inside a content folder is held as a charter. The land job's
+ * workflow is outside the proof (REQ-FLOW-157): the plan renders it only while
+ * `autonomy.landJob` is on, so turning the setting off, the one time the file
+ * has to go, leaves no rendering to compare, and a kept copy would go on
+ * merging. A recorded hash and the header line prove that delete, as they do
+ * for the Copilot workflow under `off`.
  */
 export function renderingProofClass(path: string): RenderingProofClass | null {
   if (LEGACY_CURSOR_GUARD_NAMES.has(path)) return "cursor-1.11.0-guard";
+  if (path === LAND_WORKFLOW_FILE) return null;
   if (needsByteProof(path)) return "instruction";
   if (path === COPILOT_HOOKS_FILE) return "copilot-hooks";
   return OWNED_PATHS.contentRoots.some((root) => isStrictlyUnder(path, root)) && hasEngineMintedName(path)
@@ -420,19 +428,23 @@ export function provenByRendering(sha256OfBytes: string, renderings: ReadonlySet
 
 // ── The byte proof at instruction files (REQ-PLUGIN-046) ───────────────────
 
+/** The land job's workflow (`../adapters/landWorkflow.ts`'s `LAND_WORKFLOW_PATH`, which this earlier-wave module cannot import; a test holds the two equal). */
+const LAND_WORKFLOW_FILE = ".github/workflows/stamity-land.yml";
+
 /** The instruction-file paths, besides a charter in any folder, whose bytes must show the engine wrote them. */
 const BYTE_PROOF_PATHS: ReadonlySet<string> = new Set([
   "AGENTS.override.md",
   "CLAUDE.md",
   ".github/workflows/copilot-setup-steps.yml",
+  LAND_WORKFLOW_FILE,
 ]);
 
 /**
  * True when a recorded hash at `path` proves a backup-free overwrite only
  * together with bytes that show the engine wrote them
  * ({@link bytesShowEngineOutput}): an `AGENTS.md` in any folder,
- * `AGENTS.override.md`, `CLAUDE.md` and the Copilot setup workflow. A
- * whole-file delete there needs more: the running engine's rendering
+ * `AGENTS.override.md`, `CLAUDE.md`, the Copilot setup workflow and the land
+ * job's workflow. A whole-file delete there needs more: the running engine's rendering
  * ({@link needsRenderingProof}), since an owner's copy can pass the fingerprint.
  *
  * These are the paths where an owner's own file sits at the name the engine
@@ -468,6 +480,9 @@ const CODEX_ROOT_APPENDIX_HEADING = "## Conditional rules (Codex down-conversion
 /** The header line every release's Copilot setup workflow carries (`../adapters/copilot.ts`). */
 const COPILOT_SETUP_HEADER_LINE =
   "# Prepares the environment the GitHub Copilot coding agent works in. The agent runs";
+
+/** The header line every land job's workflow carries (`../adapters/landWorkflow.ts`). */
+const LAND_WORKFLOW_HEADER_LINE = "# Finishes a run's land where its session cannot: it merges a run's own pull request on the";
 
 /** The text as lines, with an optional leading BOM dropped and `\r\n` read as `\n`. */
 function linesOf(text: string): string[] {
@@ -518,7 +533,8 @@ export function isEngineCharterDocument(text: string): boolean {
  *   charter, so the appendix heading below it is what the engine's file carries.
  * - `CLAUDE.md`: never. The engine writes it as one managed block, so only a
  *   block spanning the file proves it, which the callers test on their own.
- * - The Copilot setup workflow: a line equal to the engine's header line.
+ * - The Copilot setup workflow and the land job's workflow: a line equal to the
+ *   engine's header line.
  */
 export function bytesShowEngineOutput(path: string, text: string): boolean {
   if (!needsByteProof(path)) return true;
@@ -527,6 +543,7 @@ export function bytesShowEngineOutput(path: string, text: string): boolean {
   if (path === ".github/workflows/copilot-setup-steps.yml") {
     return lines.includes(COPILOT_SETUP_HEADER_LINE);
   }
+  if (path === LAND_WORKFLOW_FILE) return lines.includes(LAND_WORKFLOW_HEADER_LINE);
   if (isEngineCharterDocument(text)) return true;
   if (path === "AGENTS.override.md") return lines.includes(CODEX_ROOT_APPENDIX_HEADING);
   return path.includes("/") && (firstNonBlankLine(lines)?.startsWith(CODEX_APPENDIX_TITLE) ?? false);

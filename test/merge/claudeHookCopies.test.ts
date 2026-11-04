@@ -327,7 +327,8 @@ describe("check and clean over the copies", () => {
     const check = await runInProcess([checkCommand], ["check", "--json"], { cwd: root });
     const report = JSON.parse(check.stdout) as { ownedPaths: { version: number; hookRoots: string[] } };
     // TEST CHANGE, justified: REQ-FLOW-016 — the bound gains `.gitignore`, whose row records the ignore lines setup appended (version 3 -> 4).
-    expect(report.ownedPaths.version).toBe(4);
+    // TEST CHANGE, justified: REQ-FLOW-157 — the land job's workflow joined the bound, which raises its version; the rule held here is unchanged.
+    expect(report.ownedPaths.version).toBe(5);
     expect(report.ownedPaths.hookRoots).toEqual([`${CLAUDE_HOOKS_DIR}/`]);
   });
 

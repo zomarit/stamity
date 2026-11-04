@@ -402,6 +402,8 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // over the wave-2 git seam's types and remote parser.
   "src/change/personOnlyPaths.ts": { unit: "u6-person-only-tables", wave: 3 },
   "src/change/autoShip.ts": { unit: "auto-ship-rules", wave: 3 },
+  // Below the plan composer, which places its row, so it imports no adapter of wave 10.
+  "src/adapters/landWorkflow.ts": { unit: "land-job", wave: 3 },
   "src/runs/freshness.ts": { unit: "u3-freshness-contract", wave: 3 },
   "src/runs/pullRequest.ts": { unit: "u4-pr-runners", wave: 3 },
   // A ready item's body to a run contract: over the wave-2 contract version and learnings screen, one wave above them.
