@@ -1,6 +1,7 @@
 import { lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, parse, resolve } from "node:path";
+import { LAND_JOB_NAME } from "../../adapters/landWorkflow.ts";
 import { autoShipVerdict, type AutoShipRules, type AutoShipVerdict } from "../../change/autoShip.ts";
 import { CLASS_FILE } from "../../change/classify.ts";
 import { matchesDeployingBranch } from "../../config/autonomy.ts";
@@ -115,17 +116,23 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * since `gh` is the job's token there and a person's thread the run closed must stay unresolved whichever account reads it. The
  * record at the head must read `Status: closed` with no `(blocked:`, and neither it nor the morning list may hold a `## Refused`
  * row, the rule step 4 of the unattended ending states. The git surface is not read, since no pre-flight ran here. The job writes
- * no `land:` line, the body's evidence line standing, and while evidence is pending or a land is refused it writes nothing, with
- * two exceptions the cloud leaves it. A cloud run cannot ask the review tool, so the job does, through the same request, and a
- * silent tool sends no event, so the job waits it out in this one call; a `silent` or `spent` tool then writes the status line,
- * the hold a person can see. Its markers count as the run's, in every land of a setup with the job on, and no one else's do.
+ * no `land:` line, the body's evidence line standing. A cloud run cannot ask the review tool, so the job does, through the same
+ * request, and a silent tool sends no event, so the job waits it out in this one call. Its markers count as the run's, in every
+ * land of a setup with the job on, and no one else's do.
  *
- * Exit 0 `landed` or `already-landed`, and in job mode `pending` and `not-a-run`; 1 `asks` or `refused` (the JSON's `outcome` is
- * how a flow branches); 2 usage.
+ * **A job's exit.** 0 on every normal end, pending or held; 1 for a true failure alone, a read or a write GitHub did not answer
+ * as it should. A hold shows as the pull request's status line, never as a red job, since GitHub may put a failing job's run on
+ * the default branch's tip. Only a run still in progress and a head a newer job speaks for leave no line. The method comes from
+ * the ruleset's `allowed_merge_methods`, else the repository's flags, merge before squash before rebase; none is a hold.
+ *
+ * Exit 0 `landed` or `already-landed`; 1 `asks` or `refused` (the JSON's `outcome` is how a flow branches); 2 usage. A job's
+ * exit is above.
  */
 
 /** `--wait` polls every this many milliseconds. */
 const POLL_MS = 30_000;
+/** A job polls the review tool less often: one poll is about 9 calls, and every job on a repository shares `GITHUB_TOKEN`'s hourly allowance. */
+const JOB_POLL_MS = 120_000;
 /** review/79: after the ready mark, the merge state is read again every this many milliseconds, for at most the next. */
 const READY_POLL_MS = 5_000;
 const READY_MERGEABLE_MS = 60_000;
@@ -157,6 +164,8 @@ const bareLogin = (login: string): string => login.replace(/\[bot\]$/, "").toLow
 const PATH_BRANCH = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/-]+$/;
 /** The manifest below the project root: a pull request whose file list leaves it out cannot loosen a key. */
 const MANIFEST_PATH = ".stamity/manifest.json";
+/** The merge methods a job may take, in the order it prefers them. */
+const MERGE_METHODS: readonly MergeMethod[] = ["merge", "squash", "rebase"];
 /** The default branch's tip as read (REQ-FLOW-153): only `failing` is red. */
 interface TipRead {
   failing: string[];
@@ -189,6 +198,19 @@ interface LandResult {
   /** review/103, review/110: the asks outcome the person approved with --approved <sha>, where the verb landed over one. */
   approved?: { sha: string; reason: string; reasons: string[]; act: string };
   notDone: string[];
+}
+
+/**
+ * A refusal that is a normal end for a job (REQ-FLOW-157): it exits 0, and `shown` puts its reasons in the status line. To a
+ * session it is any refusal.
+ */
+class Held extends Refused {
+  readonly shown: boolean;
+
+  constructor(shown: boolean, ...reasons: string[]) {
+    super(...reasons);
+    this.shown = shown;
+  }
 }
 
 /** The pre-flight record's reads (review/34): the kind by `lstat`, never through a link, and the capped read, which keeps the module's 64 KiB cap. */
@@ -304,7 +326,7 @@ const BODY_MARKER = /<!-- stamity:run (\S+) -->$/;
 async function jobTarget(ctx: CliContext, number: number): Promise<{ run: string; number: number } | { stop: CommandResult }> {
   const { cwd, env: given } = ctx.app.runtime;
   const env: NodeJS.ProcessEnv = { ...given };
-  const stop = (outcome: "refused" | "not-a-run", notDone: string[]): { stop: CommandResult } => {
+  const stop = (outcome: "refused" | "not-a-run" | "already-landed", notDone: string[]): { stop: CommandResult } => {
     const reasons = notDone.map((entry) => sanitizeLabel(entry));
     ctx.io.out(`${[`pr: #${number}`, `outcome: ${outcome}`, ...reasons.map((entry) => `  - ${entry}`)].join("\n")}\n`);
     return { stop: { exitCode: outcome === "refused" ? 1 : 0, json: { subcommand: "land", run: null, outcome, pr: { number }, notDone: reasons } } };
@@ -320,6 +342,9 @@ async function jobTarget(ctx: CliContext, number: number): Promise<{ run: string
     if (pr === null) throw new Refused(`the read of #${number} answered HTTP ${reply.status}`);
     const run = BODY_MARKER.exec(pr.body.trimEnd())?.[1] ?? "";
     if (!ctx.engine.runs.layout.isRunId(run)) return stop("not-a-run", [`#${number}'s body names no run, so the job leaves it as it is`]);
+    // Read first, since a repository may delete the head branch on the merge, and a later event still starts a job.
+    if (pr.merged) return stop("already-landed", []);
+    if (pr.state !== "open") return stop("not-a-run", [`#${number} is closed, so the job leaves it as it is`]);
     return { run, number };
   } catch (error) {
     if (!(error instanceof Refused)) throw error;
@@ -363,7 +388,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
   const approvedSha = typeof opts["approved"] === "string" ? opts["approved"].toLowerCase() : null;
   const approved = approvedSha !== null;
   const ready = opts["ready"] === true;
-  const method = (typeof opts["method"] === "string" ? opts["method"] : "merge") as MergeMethod;
+  let method = (typeof opts["method"] === "string" ? opts["method"] : "merge") as MergeMethod;
   const waitMinutes = typeof opts["wait"] === "number" ? opts["wait"] : 0;
   let budgetEnd = LAND_CLOCK.now() + LAND_BUDGET_MS - ACT_RESERVE_MS;
 
@@ -374,6 +399,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     notDone: [],
   };
   const lines: string[] = [`run: ${run} (${job !== null ? "job" : unattended ? "unattended" : "attended"})`];
+  /** A true failure in a job, the one end that exits 1 there. */
+  let jobFailed = false;
   const finish = (): CommandResult => {
     result.notDone = result.notDone.map((entry) => sanitizeLabel(entry));
     if (result.pr !== null) lines.push(`pr: #${result.pr.number} ${result.pr.url} at ${result.pr.head}`);
@@ -390,7 +417,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     lines.push(`outcome: ${result.outcome}`);
     const notDone = result.notDone;
     ctx.io.out(`${[...lines, ...(notDone.length === 0 ? [] : ["Not done:", ...notDone.map((entry) => `  - ${entry}`)])].join("\n")}\n`);
-    const landed = ["landed", "already-landed", "would-land", "pending", "not-a-run"].includes(result.outcome);
+    const landed = ["landed", "already-landed", "would-land"].includes(result.outcome) || (job !== null && !jobFailed);
     return { exitCode: landed ? 0 : 1, json: { subcommand: "land", run, ...result, ...(ctx.dryRun ? { dryRun: true } : {}) } };
   };
   // An attended close opens its pull request with `checkpoint --pr`, so no `end` stamped it: a person lands it, and it is no failure.
@@ -417,7 +444,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
   let noteWaits = async (reasons: readonly string[]): Promise<void> => {
     void reasons;
   };
-  /** A job leaves the pull request as it was, but for a review tool's hold, which only this line shows a person. */
+  /** A job writes why only for a normal end, set where one is reached: a true failure's red run says it. */
   let bodyTakesWaits = job === null;
   try {
     // review/103: --approved is the person's answer; an unattended run has no person to give it, so it refuses first.
@@ -453,6 +480,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     // REQ-FLOW-157: a job has no pre-flight, no session and no credential in its clone, so it reads the run's end from the
     // head, and origin's tip from REST: `git ls-remote` would need the token the checkout was told not to keep.
     const ended = job === null ? null : await endedAtHead({ sha, recordRel, morningRel: `${runDir}/${MORNING_FILE}`, number: job.number }, git, (text) => resumeCard.readRecordHead(text).status);
+    const runLogin = ended?.login ?? undefined;
     const readOriginTip = async (): Promise<string | null> => {
       if (job !== null) return parseBranch(await json(`${repoPath}/branches/${runBranch}`, "the run's branch read"))?.tip ?? null;
       const remote = await git(["ls-remote", "origin", `refs/heads/${runBranch}`]);
@@ -483,10 +511,11 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     // review/73 and the login source: the login gh is authenticated as comes from the thread query's viewer, one source
     // for the author check and the thread rule; an app installation token answers it where it refuses `GET user`. In a job
     // that login is the job's token, so `viewer`, the run's own login, is the head's `Login:` and `actor` alone is gh's.
-    const firstThreads = await reviewThreads(repo.host, repo.owner, repo.repo, number, ghOpts, ended?.login);
+    const firstThreads = await reviewThreads(repo.host, repo.owner, repo.repo, number, ghOpts, runLogin);
     if (firstThreads === null) throw new Refused("the review threads could not be read, nor with them the login gh is authenticated as");
     const actor = firstThreads.viewer;
-    const viewer = ended?.login ?? actor;
+    // A head with no `Login:` is held below, on the status line, for which the pull request must still read as the run's.
+    const viewer = ended === null ? actor : (runLogin ?? firstThreads.author ?? actor);
     // review/94: the pull request's author from the same query, in the spelling viewer has, never REST's user.login.
     const prAuthor = firstThreads.author;
     const readPr = async (): Promise<LandPr> => {
@@ -515,10 +544,12 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       }
     };
 
+    if (ended !== null && ended.holds.length > 0) throw new Held(!ended.inProgress, ...ended.holds);
+
     // (4) The setting: the strictest of the default branch's, HEAD's and the work tree's manifest and the baked guard.
     const setting = await readSetting(cwd, prefix, repoPath, defaultBranch, gitLine, call, readGuardLegs);
     // REQ-FLOW-157: the strictest read keeps `landJob` only where every leg holds it equal, so no head turns the job on for itself.
-    if (job !== null && setting.landJob === undefined) throw new Refused("autonomy.landJob is not on in every leg of the setting, so the job does not land here");
+    if (job !== null && setting.landJob === undefined) throw new Held(true, "autonomy.landJob is not on in every leg of the setting, so the job does not land here");
     // Legs that disagree on the review tool go to a person: `setting.reviewTool` is then only the first leg's, and it judges nothing.
     const tool = setting.reviewToolConflict.length === 0 ? setting.reviewTool : undefined;
     // A job has no client's shell limit and no next call to leave a wait to: its budget takes in the tool's whole wait.
@@ -542,6 +573,11 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     const rules = await call(`${repoPath}/rules/branches/${defaultBranch}`);
     const ruleRead = rules.status === 200 ? parseBranchRules(rules.json) : null;
     if (rules.status === 200 && ruleRead === null) throw new Refused("the branch rules did not read");
+    if (job !== null) {
+      const allowed = allowedMethod(rules.status === 200 ? rules.json : null, about);
+      if (allowed === null) throw new Held(true, `no merge method is allowed on ${defaultBranch}, so the job has none to take`);
+      method = allowed;
+    }
     const branch = parseBranch(await json(`${repoPath}/branches/${defaultBranch}`, "the default branch read"));
     if (branch === null) throw new Refused("the default branch did not read");
     const required: RequiredCheck[] = [...(ruleRead?.required ?? []), ...branch.required];
@@ -554,7 +590,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       try {
         const latest = parseBranch(await json(`${repoPath}/branches/${defaultBranch}`, "the default branch read"));
         if (latest === null) throw new Refused("the default branch did not read");
-        const now = checkEvidence(required, await checkRuns(json, repoPath, latest.tip));
+        // The land job's own run may sit on the tip, and a job's hold or failure says nothing of the branch.
+        const now = checkEvidence(required, (await checkRuns(json, repoPath, latest.tip)).filter((entry) => entry.name !== LAND_JOB_NAME));
         return { failing: now.failing, unread: null, notRed: [...now.pending, ...now.missing] };
       } catch (error) {
         if (!(error instanceof Refused)) throw error;
@@ -578,13 +615,24 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     const toolOwn = (read: readonly ThreadRead[]): string[] => (tool === undefined ? [] : toolThreadIds(read, tool.login, viewer));
     /** build/29: the open threads only the tool holds, as last read; `run land` alone closes these. */
     let toolOpen = toolOwn(firstThreads.threads);
+    /** Every thread as last read. */
+    let lastThreads = firstThreads.threads;
+    /** The accounts a job writes as, beside the run's own: a thread one of them closed was closed by the land, not by a person. */
+    const jobLogins = [...(setting.landJob === undefined ? [] : [JOB_BOT]), ...(job === null ? [] : [actor])].map(bareLogin);
+    /**
+     * Threads a job closed over someone's comment, which `unresolvedThreads` does not count, since it reads the run's login alone.
+     * Counted so a later job, or a session, does not land past a person the race let the job close over.
+     */
+    const closedOver = (read: readonly ThreadRead[]): number =>
+      read.filter((entry) => entry.isResolved && entry.resolvedBy !== null && bareLogin(entry.resolvedBy) !== bareLogin(viewer) && jobLogins.includes(bareLogin(entry.resolvedBy)) && joinedBySomeone(entry, tool?.login, viewer)).length;
     const readThreads = async (): Promise<number | null> => {
-      const read = await reviewThreads(repo.host, repo.owner, repo.repo, number, ghOpts, ended?.login);
+      const read = await reviewThreads(repo.host, repo.owner, repo.repo, number, ghOpts, runLogin);
       const usable = read !== null && read.viewer.toLowerCase() === actor.toLowerCase();
       toolOpen = usable ? toolOwn(read.threads) : [];
-      return usable ? read.count : null;
+      lastThreads = usable ? read.threads : [];
+      return usable ? read.count + closedOver(read.threads) : null;
     };
-    let threads: number | null = firstThreads.count;
+    let threads: number | null = firstThreads.count + closedOver(firstThreads.threads);
 
     // (8) The ledger as the head commit holds it, and the work tree's copy, which must equal it.
     const ledger = await ledgerAt(cwd, sha, `${runDir}/${layout.LEDGER_FILE}`, git);
@@ -609,7 +657,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     // (9b) The review tool's three reads, the editors last, so an edit landing between the reads shows as a foreign editor.
     // Only the run's own request markers go in: a stranger's cannot spend a round or stand for a request. With the land job on
     // the job's token asks too, so its markers count in every land, and in a job whatever login that token proves to be.
-    const requesters = new Set([viewer, ...(setting.landJob === undefined ? [] : [JOB_BOT]), ...(job === null ? [] : [actor])].map(bareLogin));
+    const requesters = new Set([bareLogin(viewer), ...jobLogins]);
     const fromRun = (login: string): boolean => requesters.has(bareLogin(login));
     const readFacts = async (): Promise<ReviewToolFacts> => {
       const comments = await everyPage(json, `${repoPath}/issues/${number}/comments`, "the pull request's comments read", parseIssueComments);
@@ -694,6 +742,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       return decideLand(inputFor(pr, checks, beforeReady));
     };
     const pending = (decision: LandDecision): boolean => decision.outcome === "refused" && decision.pending;
+    /** Whether the review request failed to post, leaving no marker for the tool's wait to run from. */
+    let requestFailed = false;
     /**
      * REQ-FLOW-154: asks the tool on a head whose only stops are waits, so no round goes on a head that cannot land, and
      * only where the run has not asked on it yet. A run the tool started itself gets the marker alone (build/11): the clock
@@ -707,17 +757,22 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       const written = await ghApi({ method: "POST", path: `${repoPath}/issues/${number}/comments`, body: { body }, hostname: repo.host }, ghOpts).catch(() => null);
       if (written?.status === 201) return reread(beforeReady);
       result.notDone.push(`the review request was not posted to #${number} (${written === null ? "gh failed before GitHub answered" : `HTTP ${written.status}`})`);
+      requestFailed = true;
       return now;
     };
-    /** A job waits on the tool alone: the tool's silence sends no event, while every other pending thing ends in one. */
-    const worthWaiting = (now: LandDecision): boolean => pending(now) && (job === null || review?.state === "waiting");
+    /**
+     * A job waits on the tool alone, whose silence sends no event, and not on a request that never posted, which no wait ends.
+     * Anything else pending goes on the status line, since a check outside the watched workflows sends no event either.
+     */
+    const worthWaiting = (now: LandDecision): boolean => pending(now) && (job === null || (review?.state === "waiting" && !requestFailed));
     /** `--wait`: while only pending checks or an uncomputed merge state stop it, sleep a poll's interval, then read again. */
     const waitOut = async (decision: LandDecision, beforeReady: boolean): Promise<LandDecision> => {
       let now = decision;
       if (waitMinutes === 0 && job === null) return now;
-      while (worthWaiting(now) && LAND_CLOCK.now() + POLL_MS <= deadline) {
+      const poll = job === null ? POLL_MS : JOB_POLL_MS;
+      while (worthWaiting(now) && LAND_CLOCK.now() + poll <= deadline) {
         // oxlint-disable-next-line no-await-in-loop -- a poll: each read waits out the interval after the last one
-        await LAND_CLOCK.sleep(POLL_MS);
+        await LAND_CLOCK.sleep(poll);
         // oxlint-disable-next-line no-await-in-loop -- the next read decides whether the wait goes on
         now = await reread(beforeReady);
       }
@@ -763,10 +818,12 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     if (decision.outcome === "refused" && decision.pending && job !== null) {
       result.outcome = "pending";
       result.notDone.push(...decision.reasons);
+      bodyTakesWaits = true;
+      await noteWaits(result.notDone);
       return finish();
     }
     if (decision.outcome === "refused") {
-      bodyTakesWaits ||= review?.state === "silent" || review?.state === "spent";
+      bodyTakesWaits = true;
       // A tool wait runs up to `waitMinutes`, past the verb's budget, so what is left of it goes to the next call.
       if (decision.pending && review?.state === "waiting") {
         const [reason = ""] = decision.reasons;
@@ -785,6 +842,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       result.outcome = "asks";
       // review/110: every reason, and the head an approval must name (`--approved <head>`).
       result.asks = { reason: decision.reason, reasons: decision.reasons, act: decision.act, head: sha };
+      bodyTakesWaits = true;
       await noteWaits([`${decision.reasons.join("; ")} (a person decides: ${decision.act})`]);
       return finish();
     }
@@ -832,7 +890,13 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       show(checks, pr);
       const after = decideLand(inputFor(pr, checks, false));
       const stops = [...failed, ...(after.outcome === "refused" ? after.reasons : [])];
-      if (stops.length > 0) throw new Refused(...stops);
+      // Whoever closed it: a comment by anyone but the tool or the run's login is theirs to weigh, and only this read shows it.
+      const joined = ownThreads.filter((id) => {
+        const entry = lastThreads.find((read) => read.id === id);
+        return entry === undefined || joinedBySomeone(entry, tool?.login, viewer);
+      });
+      if (stops.length === 0) stops.push(...joined.map((id) => `someone else wrote in the tool's review thread ${id} before it closed, so a person decides`));
+      if (stops.length > 0) throw new Held(true, ...stops);
       lines.push(`threads: resolved ${ownThreads.length} of the tool's own`);
     }
     const at = new Date().toISOString();
@@ -866,11 +930,9 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
         `the merge call (#${number}'s own state decides whether it merged; run it again)`,
       );
       if (merged.status !== 200) {
-        throw new Refused(
-          merged.status === 409
-            ? `GitHub refused the merge (HTTP 409): the head moved since ${sha}; run it again`
-            : `GitHub refused the merge (HTTP ${merged.status}); #${number} stays open`,
-        );
+        const why = merged.status === 409 ? `GitHub refused the merge (HTTP 409): the head moved since ${sha}; run it again` : `GitHub refused the merge (HTTP ${merged.status}); #${number} stays open`;
+        // A refusal is a hold; a moved head's own job speaks for it; a GitHub that failed is a true failure.
+        throw merged.status >= 500 ? new Refused(why) : new Held(merged.status !== 409, why);
       }
       lines.push(`act: merged #${number} at ${sha} (${method})`);
     }
@@ -883,9 +945,32 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     if (!(error instanceof Refused)) throw error;
     result.outcome = "refused";
     result.notDone.push(...error.reasons);
+    if (error instanceof Held) bodyTakesWaits ||= error.shown;
+    else jobFailed = job !== null;
     await noteWaits(error.reasons);
     return finish();
   }
+}
+
+/**
+ * The method a job merges by (REQ-FLOW-157): the first of {@link MERGE_METHODS} every ruleset's `allowed_merge_methods` allows,
+ * else, where no ruleset lists any, the first the repository's flags leave on; `null` where none is. A flag GitHub does not show
+ * this token reads as on: the merge call's own answer then decides.
+ */
+function allowedMethod(rules: unknown, about: unknown): MergeMethod | null {
+  const lists = (Array.isArray(rules) ? rules : []).flatMap((rule: { type?: unknown; parameters?: { allowed_merge_methods?: unknown } } | null) => {
+    const list = rule?.type === "pull_request" ? rule.parameters?.allowed_merge_methods : undefined;
+    return Array.isArray(list) ? [list as unknown[]] : [];
+  });
+  const flags = (typeof about === "object" && about !== null ? about : {}) as Record<string, unknown>;
+  const flagged: Readonly<Record<MergeMethod, unknown>> = { merge: flags["allow_merge_commit"], squash: flags["allow_squash_merge"], rebase: flags["allow_rebase_merge"] };
+  return MERGE_METHODS.find((method) => (lists.length > 0 ? lists.every((list) => list.includes(method)) : flagged[method] !== false)) ?? null;
+}
+
+/** Whether `thread` holds a comment by anyone but the review tool and the run's login, or did not read whole. */
+function joinedBySomeone(thread: ThreadRead, toolLogin: string | undefined, runLogin: string): boolean {
+  if (!thread.complete) return true;
+  return thread.authors.some(({ login, person }) => login === null || (bareLogin(login) !== bareLogin(runLogin) && (person || `${login}[bot]` !== toolLogin)));
 }
 
 /**
@@ -1146,29 +1231,28 @@ function lastLine(text: string, line: RegExp): string | null {
 /**
  * Job mode's proof that the run ended unblocked, all of it at the head, and the run's login (REQ-FLOW-157): `Status: closed`
  * with no `(blocked:`, no `## Refused` row in the record or the morning list, and `PR:` naming this pull request. The run wrote
- * these, so they hold it to its own word and no further: the login still has to be the author GitHub names. Every reason
- * refuses at once, and none echoes the head's text.
+ * these, so they hold it to its own word and no further: the login still has to be the author GitHub names. `holds` lists every
+ * reason, none echoing the head's text, and `inProgress` says the run is still at work, which is no one's hold yet.
  */
 async function endedAtHead(
   at: { sha: string; recordRel: string; morningRel: string; number: number },
   git: (args: readonly string[]) => Promise<GitWriteResult>,
   statusOf: (text: string) => string | null,
-): Promise<{ login: string }> {
+): Promise<{ login: string | null; holds: string[]; inProgress: boolean }> {
   const record = await regularFileAt(at.sha, at.recordRel, git);
-  if ("refused" in record) throw new Refused(record.refused);
-  const morning = await regularFileAt(at.sha, at.morningRel, git);
+  if ("refused" in record) return { login: null, holds: [record.refused], inProgress: false };
   const status = statusOf(record.text) ?? "";
-  const reasons: string[] = [];
-  if (!/^closed\b/i.test(status.trim())) reasons.push(`the record at ${at.sha} does not read Status: closed, so the run has not ended`);
-  if (/\(blocked:/i.test(status)) reasons.push(`the record at ${at.sha} reads (blocked:, so a person decides`);
-  if (holdsRefusedRow(record.text)) reasons.push(`the record at ${at.sha} holds a ## Refused row, so a person decides`);
-  if ("text" in morning && holdsRefusedRow(morning.text)) reasons.push(`the morning list at ${at.sha} holds a ## Refused row, so a person decides`);
-  if ("refused" in morning && !morning.missing) reasons.push(morning.refused);
-  if (lastLine(record.text, /^PR: ([0-9]+)$/) !== String(at.number)) reasons.push(`the record at ${at.sha} does not name #${at.number} on a PR: line`);
   const login = lastLine(record.text, /^Login: (\S+)$/);
-  if (login === null) reasons.push(`the record at ${at.sha} names no Login:`);
-  if (reasons.length > 0 || login === null) throw new Refused(...reasons);
-  return { login };
+  if (!/^closed\b/i.test(status.trim())) return { login, holds: [`the record at ${at.sha} does not read Status: closed, so the run has not ended`], inProgress: true };
+  const morning = await regularFileAt(at.sha, at.morningRel, git);
+  const holds: string[] = [];
+  if (/\(blocked:/i.test(status)) holds.push(`the record at ${at.sha} reads (blocked:, so a person decides`);
+  if (holdsRefusedRow(record.text)) holds.push(`the record at ${at.sha} holds a ## Refused row, so a person decides`);
+  if ("text" in morning && holdsRefusedRow(morning.text)) holds.push(`the morning list at ${at.sha} holds a ## Refused row, so a person decides`);
+  if ("refused" in morning && !morning.missing) holds.push(morning.refused);
+  if (lastLine(record.text, /^PR: ([0-9]+)$/) !== String(at.number)) holds.push(`the record at ${at.sha} does not name #${at.number} on a PR: line`);
+  if (login === null) holds.push(`the record at ${at.sha} names no Login:`);
+  return { login, holds, inProgress: false };
 }
 
 /** The ledger's evidence at `sha`, refusing a missing one, one that is no regular file, or a work-tree copy that differs. */

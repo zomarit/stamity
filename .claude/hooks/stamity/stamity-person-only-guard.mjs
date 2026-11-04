@@ -3990,7 +3990,8 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		} else if (words[0] !== "stamity" && !PACKAGE_WORDS.includes(words[0] ?? "")) return "a first word other than `stamity`, `st` or `npx`: a prefix, a wrapper or another program";
 		if (words[at] !== "run") return "words between the program and `run <verb>`";
 		if (!RUN_VERBS.has(words[at + 1] ?? "")) return "words between `run` and its verb";
-		if (words.slice(at + 2).some((option) => /^--job(?:=|$)/.test(option))) return "`--job`, which only the land workflow runs";
+		const jobFlag = (option) => /^--job(?:=|$)/.test(option) || /[*?[]/.test(option) && "--job".startsWith(option.split(/[*?[]/)[0] ?? "");
+		if (words.slice(at + 2).some(jobFlag)) return "`--job`, which only the land workflow runs";
 		if (powershell && ats.some((index) => index > at)) return "an unquoted `@` in a word after `run`, which PowerShell reads as a splat";
 		return null;
 	}

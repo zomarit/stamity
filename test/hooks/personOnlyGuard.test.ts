@@ -2060,6 +2060,11 @@ describe("the guard's reading of the land verb's job mode (REQ-FLOW-157)", () =>
     "npx -y @zomarit/stamity@1.17.0 run land --pr 7 --job",
     'stamity run land "--job" --pr 7',
     "stamity run land --run 2026-10-23_x --ready --job=1",
+    // The shell may expand these to the flag against a file of that name, so they read as the flag.
+    "stamity run land --j?b --pr 7",
+    "stamity run land --[j]ob --pr 7",
+    "stamity run land --jo* --pr 7",
+    "stamity run land * --pr 7",
   ];
 
   // Not an ask: job mode skips what only a session holds, so no agent's line carries it, and no click passes one.
@@ -2072,6 +2077,8 @@ describe("the guard's reading of the land verb's job mode (REQ-FLOW-157)", () =>
       expect(clientDecision(tool, run(guard, helper), `${tool} helper: ${command}`).deny, `${tool} helper: ${command}`).toBe(true);
     }
     expect(decide(tool, guard, "stamity run land --run 2026-10-23_x --ready --json")).toEqual({ deny: false });
+    // A glob that cannot reach the flag is no job line.
+    expect(decide(tool, guard, "stamity run land --run 2026-10-23_*").deny).toBe(personOnlyVerdict("stamity run land --run 2026-10-23_*", BAKED_DEFAULT).deny);
     // A word the shell fills in may spell it: the stand-alone rule's shape refuses that line first.
     expect(decide(tool, guard, 'stamity run land "$MODE" --pr 7').deny).toBe(true);
     await getRepo().seedFiles({ ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") });

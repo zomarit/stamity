@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { pinnedCliInstall } from "../../src/adapters/copilot.ts";
-import { buildLandWorkflow, LAND_WORKFLOW_ARTIFACT_ID, LAND_WORKFLOW_PATH, planLandWorkflow } from "../../src/adapters/landWorkflow.ts";
+import { buildLandWorkflow, LAND_JOB_NAME, LAND_WORKFLOW_ARTIFACT_ID, LAND_WORKFLOW_PATH, planLandWorkflow } from "../../src/adapters/landWorkflow.ts";
 import { COMMANDS } from "../../src/cli.ts";
 import { parseYamlStrict } from "../../src/config/parse.ts";
 import { detectCIProviders } from "../../src/detect/repoAnalyzer.ts";
@@ -32,7 +32,7 @@ interface Workflow {
   on: Record<string, { workflows?: string[]; types?: string[]; inputs?: unknown } | null>;
   permissions: Record<string, string>;
   concurrency?: unknown;
-  jobs: { land: { if: string; "timeout-minutes": number; concurrency: Record<string, unknown>; env: Record<string, string>; steps: Step[] } };
+  jobs: { land: { name: string; if: string; "timeout-minutes": number; concurrency: Record<string, unknown>; env: Record<string, string>; steps: Step[] } };
 }
 
 function workflowOf(names: readonly string[] = ["CI"], review?: { login: string; waitMinutes: number }): { text: string; yaml: Workflow } {
@@ -67,6 +67,9 @@ describe("the land job's workflow (REQ-FLOW-157)", () => {
     expect(yaml.permissions).toEqual({ contents: "write", "pull-requests": "write", checks: "read" });
     expect(yaml.jobs.land.if).not.toContain("issue_comment");
     expect(yaml.jobs.land["timeout-minutes"]).toBe(15);
+    // The check run's name, which the brake leaves out: a name no project's own job is likely to hold.
+    expect(yaml.jobs.land.name).toBe(LAND_JOB_NAME);
+    expect(LAND_JOB_NAME).toBe("stamity-land");
   });
 
   it("queues per pull request, never cancelling a job in progress, and takes no slot for an event the job skips", () => {

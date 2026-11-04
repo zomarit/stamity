@@ -21,6 +21,9 @@ import type { SetupManifest } from "../types/manifest.ts";
 /** Where the workflow lands. A test holds it equal to `../manifest/ownedPaths.ts` and `../detect/repoAnalyzer.ts`, which cannot import it. */
 export const LAND_WORKFLOW_PATH = ".github/workflows/stamity-land.yml";
 
+/** The job's name, so its check run's: the brake reads the default branch's tip, where GitHub may put this run, and leaves it out. */
+export const LAND_JOB_NAME = "stamity-land";
+
 /** The artifact id the ledger's rows carry. */
 export const LAND_WORKFLOW_ARTIFACT_ID = "land-workflow";
 
@@ -85,6 +88,7 @@ export function buildLandWorkflow(workflows: readonly string[], review: { login:
     "",
     "jobs:",
     "  land:",
+    `    name: ${LAND_JOB_NAME}`,
     "    if: >-",
     "      github.event_name == 'workflow_dispatch'",
     "      || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.pull_requests[0].number)",

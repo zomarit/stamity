@@ -331,8 +331,8 @@ export const runCommand: CommandModule = {
         if (subcommand === CONTRACT && given["item"] === undefined) command.error("error: run contract needs --item <owner/repo#n>", { exitCode: 2 });
         if (subcommand === LAND && given["pr"] !== undefined && !job) command.error("error: --pr applies to land only with --job", { exitCode: 2 });
         if (job && !PR_NUMBER.test(String(given["pr"]))) command.error("error: --job needs --pr <number>", { exitCode: 2 });
-        // Job mode reads no person's answer and pushes nothing: the run, the approval, a wait and a fast-forward are all a session's.
-        const notInJob = ["run", "approved", "fastForward", "wait"].find((key) => given[key] !== undefined);
+        // Job mode reads no person's answer and pushes nothing: the run, the approval, a wait, a fast-forward and a chosen method are all a session's.
+        const notInJob = ["run", "approved", "fastForward", "wait", "method"].find((key) => given[key] !== undefined);
         if (job && notInJob !== undefined) command.error(`error: --job refuses ${OPTION_FLAGS[notInJob] ?? "--run"}`, { exitCode: 2 });
         if (subcommand === CHECKPOINT && typeof given["pr"] === "string") command.error("error: checkpoint's --pr takes no value", { exitCode: 2 });
         if (subcommand === CHECKPOINT && (given["pr"] === true) !== (given["title"] !== undefined)) {
@@ -1001,7 +1001,9 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     });
   }
 
-  const result: Checkpoint = { branch: null, base, committed: null, pushed: false, held: [], withdrawn: [], scan: { hits: [], unscanned: [] }, pr: null, notDone: [] };
+  // The stamp's second pass carries the first pass's lines: what that pass's push left out, it alone can name (REQ-FLOW-157).
+  const firstPass = (opts["carriedNotDone"] ?? []) as string[];
+  const result: Checkpoint = { branch: null, base, committed: null, pushed: false, held: [], withdrawn: [], scan: { hits: [], unscanned: [] }, pr: null, notDone: [...firstPass] };
   const lines: string[] = [`run: ${run} (${unattended ? "unattended" : "attended"})`, `base: ${base}`, ...removedLine(removed)];
   const finish = async (passed: boolean, extra: Record<string, unknown> = {}): Promise<CommandResult> => {
     let ok = passed;
@@ -1019,7 +1021,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
         }
       }
     }
-    const notDone = result.notDone.map((entry) => sanitizeLabel(entry));
+    const notDone = [...new Set(result.notDone.map((entry) => sanitizeLabel(entry)))];
     result.notDone = notDone;
     ctx.io.out(`${[...lines, ...(notDone.length === 0 ? [] : ["Not done:", ...notDone.map((entry) => `  - ${entry}`)])].join("\n")}\n`);
     return { exitCode: ok ? 0 : 1, json: { subcommand: verb, run, ...removedKey(removed), ...result, ...(verb === END ? { inferred: [] } : {}), ...extra } };
@@ -1548,7 +1550,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     ? await stampLandJobLines(ctx, { cwd, recordRel, repo: step.repo, top, number: step.pr.number }, result.notDone)
     : false;
   if (stamped) {
-    const again = await runCheckpoint(ctx, { ...opts, paths: [], dropHeld: [] }, END);
+    const again = await runCheckpoint(ctx, { ...opts, paths: [], dropHeld: [], carriedNotDone: result.notDone }, END);
     return noticed === null ? again : { ...again, json: { ...(again.json as Record<string, unknown>), notice: noticed } };
   }
   return finish(step.pr !== null, { inferred: step.inferred, ...(noticed === null ? {} : { notice: noticed }) });
