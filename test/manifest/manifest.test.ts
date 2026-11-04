@@ -943,6 +943,17 @@ describe("collectManifestErrors", () => {
   });
 });
 
+/** The factory keys through the whole-manifest check (plan 023 file 1, unit settings; REQ-FLOW-137). The field rules are test/config/autonomy.test.ts's. */
+describe("collectManifestErrors — the autonomy factory keys", () => {
+  const reviewTool = { login: "chatgpt-codex-connector[bot]", request: "@codex review", clean: "state-comment", waitMinutes: 40, rounds: 2 };
+  const withTool = (rounds: number): unknown => ({ ...createManifest(createOptions()), autonomy: { reviewTool: { ...reviewTool, rounds } } });
+
+  it("admits a review tool at the most rounds, and refuses one past them by name", () => {
+    expect(collectManifestErrors(withTool(3))).toEqual([]);
+    expect(collectManifestErrors(withTool(4))).toEqual(["`autonomy.reviewTool.rounds` must be a whole number from 1 to 3"]);
+  });
+});
+
 describe("migrateManifest", () => {
   // TEST CHANGE, justified (e1-pins-contract, REQ-LADDER-005): generation 2 shipped the first
   // step (per-client pins), so "no steps at generation 1" became the one step and its chain.

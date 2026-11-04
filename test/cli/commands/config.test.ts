@@ -2396,11 +2396,117 @@ describe("config — the autonomy keys", () => {
   });
 });
 
+/**
+ * The four factory keys (plan 023 file 1, unit settings; REQ-FLOW-137, REQ-FLOW-138). Each takes a closed word, writes
+ * its preset or clears the member, and an on word closes on the `sync --loosen` line.
+ */
+describe("config — the factory keys", () => {
+  const LOOSEN_LINE = "the person runs stamity sync --loosen";
+  const REVIEW_TOOL = {
+    login: "chatgpt-codex-connector[bot]",
+    request: "@codex review",
+    clean: "state-comment",
+    stateMarker: "codex-review-state:v1",
+    stateSection: "code_review",
+    waitMinutes: 40,
+    rounds: 2,
+  } as const;
+
+  it("sits after the three autonomy keys, in the plan's order, before copilot.setupSteps", () => {
+    const at = CONFIG_KEYS.indexOf("autonomy.deployingActs");
+    expect(CONFIG_KEYS.slice(at + 1, at + 6)).toEqual([
+      "autonomy.adminRuleProof",
+      "autonomy.autoShip",
+      "autonomy.reviewTool",
+      "autonomy.landJob",
+      "copilot.setupSteps",
+    ]);
+  });
+
+  it("reads each key off by default", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+
+    expect((await run(handle, ["get", "autonomy.adminRuleProof"])).stdout).toContain("(default: off)");
+    expect((await run(handle, ["get", "autonomy.autoShip"])).stdout).toContain("(default: off)");
+    expect((await run(handle, ["get", "autonomy.reviewTool"])).stdout).toContain("(default: none)");
+    expect((await run(handle, ["get", "autonomy.landJob"])).stdout).toContain("(default: off)");
+  });
+
+  it("writes the codex preset exactly, and dropping it closes on the loosen line", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+
+    const on = await run(handle, ["set", "autonomy.reviewTool", "codex"]);
+
+    expect(on.code).toBe(0);
+    expect((await readManifest(handle.dir))?.autonomy).toEqual({ reviewTool: REVIEW_TOOL });
+    // Naming a tool holds more lands, so it loosens nothing.
+    expect(on.stdout).toContain("next: run stamity sync to apply");
+    expect(rowFor((await run(handle, ["list"])).stdout, "autonomy.reviewTool")).toMatch(/codex\s+\(set\)/);
+
+    const off = await run(handle, ["set", "autonomy.reviewTool", "none", "--json"]);
+
+    expect(singleDoc(off.stdout)).toMatchObject({ changed: true, loosens: true });
+    expect((await readManifest(handle.dir))?.autonomy).toBeUndefined();
+  });
+
+  it("writes the low-risk preset exactly, the ci job's workflow and the proof, each closing on the loosen line", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+
+    const ship = await run(handle, ["set", "autonomy.autoShip", "low-risk"]);
+    const job = await run(handle, ["set", "autonomy.landJob", "ci"]);
+    const proof = await run(handle, ["set", "autonomy.adminRuleProof", "on"]);
+
+    for (const result of [ship, job, proof]) expect(result.stdout).toContain(LOOSEN_LINE);
+    expect((await readManifest(handle.dir))?.autonomy).toEqual({
+      autoShip: { maxFiles: 10, maxLines: 200, classes: ["records", "docs", "tests"] },
+      landJob: { workflows: ["CI"] },
+      adminRuleProof: true,
+    });
+  });
+
+  it("clears each on its off word, leaving no empty block", () => {
+    let manifest = baseManifest();
+    for (const [key, on] of [["autonomy.adminRuleProof", "on"], ["autonomy.autoShip", "low-risk"], ["autonomy.landJob", "ci"]] as const) {
+      manifest = setConfigValue(manifest, key, on);
+    }
+    expect(manifest.autonomy).toBeDefined();
+    for (const key of ["autonomy.adminRuleProof", "autonomy.autoShip", "autonomy.landJob"]) manifest = setConfigValue(manifest, key, "off");
+
+    expect(manifest.autonomy).toBeUndefined();
+  });
+
+  it("reads a hand-written value as custom, never as a preset it is not", () => {
+    const custom = baseManifest({
+      autonomy: { autoShip: { maxFiles: 3, maxLines: 40, classes: ["docs"] }, reviewTool: { ...REVIEW_TOOL, rounds: 3 }, landJob: { workflows: ["Build"] } },
+    });
+
+    for (const key of ["autonomy.autoShip", "autonomy.reviewTool", "autonomy.landJob"]) {
+      expect(getConfigValue(custom, key)).toMatchObject({ value: "custom", isDefault: false, resolved: "custom" });
+    }
+  });
+
+  it("refuses a word outside the closed set, naming the set, and writes nothing", async () => {
+    const handle = tempDir();
+    await seedManifest(handle);
+    const before = await manifestBytes(handle);
+
+    const refused = await run(handle, ["set", "autonomy.reviewTool", "bogus"]);
+
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toContain("none | codex");
+    expect(await manifestBytes(handle)).toBe(before);
+  });
+});
+
 /** Copilot's setup workflow, managed, handed over or turned off (REQ-FLOW-149). */
 describe("config — copilot.setupSteps", () => {
   it("is the last key, after the autonomy rows, so their menu numbers hold", () => {
     expect(CONFIG_KEYS.at(-1)).toBe("copilot.setupSteps");
-    expect(CONFIG_KEYS.at(-2)).toBe("autonomy.deployingActs");
+    // TEST CHANGE, justified: REQ-FLOW-137 — the four factory keys sit after `autonomy.deployingActs` and before this key (plan 023 file 1, unit settings), so `autonomy.landJob` is now the autonomy row beside it; the rule held here, the last key after the autonomy rows, is unchanged.
+    expect(CONFIG_KEYS.at(-2)).toBe("autonomy.landJob");
   });
 
   it("reads managed by default", async () => {

@@ -194,16 +194,53 @@ export const DEPLOYING_ACTS: readonly DeployingAct[] = [
   "push-default",
 ];
 
+/** What `run land` may merge onto a deploying branch with nobody asked (REQ-FLOW-152): every limit holds, or it asks. */
+export interface AutoShipConfig {
+  maxFiles: number;
+  maxLines: number;
+  /** The change classes that may ship alone, from `../change/classify.ts::CLASS_ORDER`. */
+  classes: string[];
+  /** Globs every changed path must match; absent, no path limit. */
+  paths?: string[];
+}
+
+/** The ways a review tool can say a head is clean, strongest first. `reaction` cannot be tied to a commit. */
+export const REVIEW_TOOL_CLEANS = ["state-comment", "review-state", "reaction"] as const;
+
+/** The review tool `run land` asks and waits for (REQ-FLOW-154). */
+export interface ReviewToolConfig {
+  /** The tool's GitHub login. */
+  login: string;
+  /** The comment that asks it for a review. */
+  request: string;
+  clean: (typeof REVIEW_TOOL_CLEANS)[number];
+  /** The name opening the tool's state comment, and the section of it that reads, for `clean: state-comment`. */
+  stateMarker?: string;
+  stateSection?: string;
+  waitMinutes: number;
+  rounds: number;
+}
+
+/** The final merge job (REQ-FLOW-157): the workflows whose finish starts it. */
+export interface LandJobConfig {
+  workflows: string[];
+}
+
 /**
  * The repository's autonomy setting. Every member is optional: an absent block
- * resolves to mode `autonomous` with nothing named as deploying
- * (`../config/autonomy.ts::resolveAutonomy`).
+ * resolves to mode `autonomous` with nothing named as deploying and every key
+ * below `deployingActs` off (`../config/autonomy.ts::resolveAutonomy`).
  */
 export interface AutonomyConfig {
   mode?: AutonomyMode;
   /** Branch names, or patterns whose `*` stays inside one path segment (`release/*`) and whose `**` crosses segments. */
   deployingBranches?: string[];
   deployingActs?: DeployingAct[];
+  /** An administrator passes the pre-flight on a ruleset that binds now (REQ-FLOW-151). */
+  adminRuleProof?: boolean;
+  autoShip?: AutoShipConfig;
+  reviewTool?: ReviewToolConfig;
+  landJob?: LandJobConfig;
 }
 
 /**

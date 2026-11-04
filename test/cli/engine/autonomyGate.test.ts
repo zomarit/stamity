@@ -553,6 +553,73 @@ describe("assertNotLoosened — a --loosen write names what it loosened (review/
   });
 });
 
+/** The four factory keys through the gate (plan 023 file 1, unit settings; REQ-FLOW-137, REQ-FLOW-138). */
+describe("the factory keys in a guard copy", () => {
+  const AUTO_SHIP = { maxFiles: 10, maxLines: 200, classes: ["records", "docs", "tests"] };
+  const REVIEW_TOOL = { login: "chatgpt-codex-connector[bot]", request: "@codex review", clean: "state-comment", stateMarker: "codex-review-state:v1", stateSection: "code_review", waitMinutes: 40, rounds: 2 } as const;
+  const ALL_ON: AutonomyConfig = { adminRuleProof: true, autoShip: { ...AUTO_SHIP, paths: ["site-notes/**"] }, reviewTool: REVIEW_TOOL, landJob: { workflows: ["CI"] } };
+  const bakedLine = (text: string): string => text.split("\n").find((line) => line.startsWith("const AUTONOMY = ")) ?? "";
+
+  it("bakes the same JSON into the marker and the constant, in one key order, and reads it back", () => {
+    const text = guardText(ALL_ON);
+    const marker = text.split("\n").find((line) => line.startsWith(MARKER)) ?? "";
+
+    expect(marker.slice(MARKER.length)).toBe(bakedLine(text).slice("const AUTONOMY = ".length, -1));
+    expect(guardCopySetting(text)).toEqual(setting(ALL_ON));
+  });
+
+  it("renders a default copy with none of the keys, byte for byte what an unnamed setting renders", () => {
+    const text = guardText();
+
+    expect(text).toBe(buildPersonOnlyGuardScript({ tool: "claude", layout: "claude" }));
+    for (const key of ["adminRuleProof", "autoShip", "reviewTool", "landJob"]) expect(text).not.toContain(key);
+  });
+
+  it("counts a review tool as stricter than the default, so a full clean asks, and only then changes the line", () => {
+    const line = (text: string): string => text.split("\n").find((entry) => entry.startsWith("const STRICTER = ")) ?? "";
+    const plain = 'const STRICTER = AUTONOMY.mode === "ask" || AUTONOMY.deploying.length > 0 || AUTONOMY.deployingBranches.length > 0;';
+
+    expect(line(guardText())).toBe(plain);
+    expect(line(guardText({ adminRuleProof: true, autoShip: AUTO_SHIP, landJob: { workflows: ["CI"] } }))).toBe(plain);
+    expect(line(guardText({ reviewTool: REVIEW_TOOL }))).toBe(`${plain.slice(0, -1)} || AUTONOMY.reviewTool !== undefined;`);
+  });
+
+  it("refuses to bake a key's value that a line or paragraph separator would end the marker with", () => {
+    const separator = String.fromCharCode(0x2028);
+    const render = (autonomy: ResolvedAutonomy): string => buildPersonOnlyGuardScript({ tool: "claude", layout: "claude", autonomy });
+    const bad: readonly ResolvedAutonomy[] = [
+      { ...setting(), reviewTool: { ...REVIEW_TOOL, request: `x${separator}process.exit(0)` } },
+      { ...setting(), autoShip: { ...AUTO_SHIP, paths: [`x${separator}process.exit(0)`] } },
+      { ...setting(), landJob: { workflows: [`x${separator}process.exit(0)`] } },
+    ];
+    for (const autonomy of bad) expect(() => render(autonomy)).toThrowError(/cannot bake/);
+  });
+
+  const turnedOn: readonly [AutonomyConfig, string, string][] = [
+    [{ adminRuleProof: true }, "`adminRuleProof` would turn on", "`adminRuleProof` is now on"],
+    [{ autoShip: AUTO_SHIP }, "`autoShip` would turn on or widen", "`autoShip` is now on or wider"],
+    [{ landJob: { workflows: ["CI"] } }, "`landJob` would turn on or move", "`landJob` is now on or moved"],
+  ];
+  it.each(turnedOn)("refuses a write that turns %j on, naming it, and lets --loosen name it in the notice", async (block, refusal, notice) => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText());
+    await expect(assertNotLoosened(root, setting(block), { loosen: false, copies: CLAUDE_ONLY })).rejects.toThrowError(refusal);
+    const lines: string[] = [];
+    await assertNotLoosened(root, setting(block), { loosen: true, copies: CLAUDE_ONLY, notice: (line) => lines.push(line) });
+    expect(lines.join("\n")).toContain(notice);
+  });
+
+  it("refuses a write that drops or shortens the review tool, naming which", async () => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText({ reviewTool: REVIEW_TOOL }));
+
+    await expect(assertNotLoosened(root, setting(), { loosen: false, copies: CLAUDE_ONLY })).rejects.toThrowError("`reviewTool` would no longer be named");
+    await expect(
+      assertNotLoosened(root, setting({ reviewTool: { ...REVIEW_TOOL, waitMinutes: 5 } }), { loosen: false, copies: CLAUDE_ONLY }),
+    ).rejects.toThrowError("`reviewTool` would shorten or change");
+  });
+});
+
 describe("guardCopySetting — a copy with no marker (decision D6)", () => {
   it("reads a copy of this release whose marker line was removed as `ask`", () => {
     const stripped = withoutMarker(guardText());

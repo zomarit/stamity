@@ -292,3 +292,206 @@ describe("the manifest schema's autonomy block", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * The four factory keys (plan 023 file 1, unit settings; REQ-FLOW-137, REQ-FLOW-138): each resolves, parses back from a
+ * marker, compares and combines, and is absent when off, so a default setting's bytes do not move.
+ */
+describe("the factory keys", () => {
+  const AUTO_SHIP = { maxFiles: 10, maxLines: 200, classes: ["records", "docs", "tests"] };
+  const REVIEW_TOOL = {
+    login: "chatgpt-codex-connector[bot]",
+    request: "@codex review",
+    clean: "state-comment",
+    stateMarker: "codex-review-state:v1",
+    stateSection: "code_review",
+    waitMinutes: 40,
+    rounds: 2,
+  } as const;
+  const LAND_JOB = { workflows: ["CI"] };
+  const ALL_ON: AutonomyConfig = { adminRuleProof: true, autoShip: AUTO_SHIP, reviewTool: REVIEW_TOOL, landJob: LAND_JOB };
+
+  describe("resolveAutonomy", () => {
+    it("carries each key on, in the fixed order, and leaves each absent when off", () => {
+      expect(Object.keys(resolved(ALL_ON))).toEqual([
+        "mode",
+        "runs",
+        "deployingBranches",
+        "deploying",
+        "adminRuleProof",
+        "autoShip",
+        "reviewTool",
+        "landJob",
+      ]);
+      expect(resolved(ALL_ON)).toMatchObject(ALL_ON);
+      expect(Object.keys(resolved({ adminRuleProof: false }))).toEqual(["mode", "runs", "deployingBranches", "deploying"]);
+    });
+
+    const unreadable: readonly [string, unknown][] = [
+      ["a rounds of 4", { reviewTool: { ...REVIEW_TOOL, rounds: 4 } }],
+      ["a wait of 0", { reviewTool: { ...REVIEW_TOOL, waitMinutes: 0 } }],
+      ["a clean word outside the set", { reviewTool: { ...REVIEW_TOOL, clean: "silence" } }],
+      ["a request on two lines", { reviewTool: { ...REVIEW_TOOL, request: "@codex\nreview" } }],
+      ["a login of another shape", { reviewTool: { ...REVIEW_TOOL, login: "not a login" } }],
+      ["a maxFiles of 0", { autoShip: { ...AUTO_SHIP, maxFiles: 0 } }],
+      ["a maxLines of 1.5", { autoShip: { ...AUTO_SHIP, maxLines: 1.5 } }],
+      ["an unknown member inside a key", { landJob: { workflows: ["CI"], extra: true } }],
+      ["workflows that are not a list", { landJob: { workflows: "CI" } }],
+      ["adminRuleProof as a word", { adminRuleProof: "on" }],
+    ];
+    for (const [label, block] of unreadable) {
+      it(`fails closed on ${label}: mode ask, every act named, nothing loosening kept`, () => {
+        expect(resolveAutonomy({ autonomy: block })).toEqual(resolved({ mode: "ask", deployingActs: [...DEPLOYING_ACTS] }));
+      });
+    }
+
+    it("keeps a review tool it can read out of a block it cannot, since dropping it would loosen", () => {
+      const setting = resolveAutonomy({ autonomy: { mode: "Ask", reviewTool: REVIEW_TOOL, autoShip: AUTO_SHIP } });
+      expect(setting).toEqual(resolved({ mode: "ask", deployingActs: [...DEPLOYING_ACTS], reviewTool: REVIEW_TOOL }));
+    });
+  });
+
+  describe("the marker line", () => {
+    const each: readonly [string, AutonomyConfig][] = [
+      ["adminRuleProof", { adminRuleProof: true }],
+      ["autoShip", { autoShip: AUTO_SHIP }],
+      ["autoShip with paths", { autoShip: { ...AUTO_SHIP, paths: ["site-notes/**"] } }],
+      ["reviewTool", { reviewTool: REVIEW_TOOL }],
+      ["landJob", { landJob: LAND_JOB }],
+      ["all four", ALL_ON],
+    ];
+    for (const [label, block] of each) {
+      it(`parses ${label} back byte for byte`, () => {
+        const line = autonomyMarkerLine(resolved(block));
+        const back = parseAutonomyMarker(`${line}\n`);
+        expect(back).toEqual(resolved(block));
+        expect(autonomyMarkerLine(back as ResolvedAutonomy)).toBe(line);
+      });
+    }
+
+    it("writes nothing new for a setting with every key off", () => {
+      expect(autonomyMarkerLine(resolved())).toBe(
+        '// stamity-autonomy {"mode":"autonomous","runs":["pr-ready","tag"],"deployingBranches":[],"deploying":[]}',
+      );
+    });
+
+    it("reads a marker from before the keys as every key off", () => {
+      const older = '// stamity-autonomy {"mode":"autonomous","runs":["pr-ready","tag"],"deployingBranches":[],"deploying":[]}\n';
+      expect(parseAutonomyMarker(older)).toEqual(resolved());
+    });
+
+    const strictest = resolved({ mode: "ask", deployingActs: [...DEPLOYING_ACTS] });
+    const head = '"mode":"autonomous","runs":["pr-ready","tag"],"deployingBranches":[],"deploying":[]';
+
+    it("reads keys out of order as unreadable", () => {
+      const swapped = `{${head},"landJob":{"workflows":["CI"]},"adminRuleProof":true}`;
+      const inner = `{${head},"autoShip":{"maxLines":200,"maxFiles":10,"classes":["docs"]}}`;
+      expect(parseAutonomyMarker(`// stamity-autonomy ${swapped}\n`)).toEqual(strictest);
+      expect(parseAutonomyMarker(`// stamity-autonomy ${inner}\n`)).toEqual(strictest);
+    });
+
+    it("reads a key spelled off, or a value the schema refuses, as unreadable", () => {
+      expect(parseAutonomyMarker(`// stamity-autonomy {${head},"adminRuleProof":false}\n`)).toEqual(strictest);
+      expect(parseAutonomyMarker(`// stamity-autonomy {${head},"landJob":null}\n`)).toEqual(strictest);
+      expect(parseAutonomyMarker(`// stamity-autonomy {${head},"autoShip":{"maxFiles":0,"maxLines":1,"classes":[]}}\n`)).toEqual(strictest);
+    });
+  });
+
+  describe("loosens", () => {
+    const wider = (change: object): AutonomyConfig => ({ autoShip: { ...AUTO_SHIP, ...change } });
+    const tool = (change: object): AutonomyConfig => ({ reviewTool: { ...REVIEW_TOOL, ...change } });
+    const pairs: readonly [string, AutonomyConfig, AutonomyConfig][] = [
+      ["turning adminRuleProof on", { adminRuleProof: true }, {}],
+      ["turning autoShip on", { autoShip: AUTO_SHIP }, {}],
+      ["turning landJob on", { landJob: LAND_JOB }, {}],
+      ["raising autoShip's maxFiles", wider({ maxFiles: 11 }), { autoShip: AUTO_SHIP }],
+      ["raising autoShip's maxLines", wider({ maxLines: 201 }), { autoShip: AUTO_SHIP }],
+      ["adding an autoShip class", wider({ classes: [...AUTO_SHIP.classes, "product"] }), { autoShip: AUTO_SHIP }],
+      ["dropping autoShip's paths", wider({}), wider({ paths: ["site-notes/**"] })],
+      ["adding an autoShip path", wider({ paths: ["site-notes/**", "site-code/**"] }), wider({ paths: ["site-notes/**"] })],
+      ["dropping the review tool", {}, { reviewTool: REVIEW_TOOL }],
+      ["shortening the review wait", tool({ waitMinutes: 10 }), { reviewTool: REVIEW_TOOL }],
+      ["lowering the review rounds", tool({ rounds: 1 }), { reviewTool: REVIEW_TOOL }],
+    ];
+    for (const [label, looser, stricter] of pairs) {
+      it(`reads ${label} as looser, and the reverse as not`, () => {
+        expect(loosens(resolved(looser), resolved(stricter))).toBe(true);
+        expect(loosens(resolved(stricter), resolved(looser))).toBe(false);
+      });
+    }
+
+    it("reads another tool, or a weaker proof of clean, as looser", () => {
+      expect(loosens(resolved(tool({ login: "another-reviewer[bot]" })), resolved({ reviewTool: REVIEW_TOOL }))).toBe(true);
+      expect(loosens(resolved(tool({ clean: "reaction" })), resolved({ reviewTool: REVIEW_TOOL }))).toBe(true);
+    });
+
+    it("reads moving the job onto other workflows as looser, and the same keys as not", () => {
+      expect(loosens(resolved({ landJob: { workflows: ["Deploy"] } }), resolved({ landJob: LAND_JOB }))).toBe(true);
+      expect(loosens(resolved(ALL_ON), resolved(ALL_ON))).toBe(false);
+    });
+  });
+
+  describe("strictestAutonomy", () => {
+    it("keeps adminRuleProof, autoShip and landJob only when every leg holds them equal", () => {
+      const on = resolved({ adminRuleProof: true, autoShip: AUTO_SHIP, landJob: LAND_JOB });
+      expect(strictestAutonomy(on, on)).toEqual(on);
+      expect(strictestAutonomy(on, resolved())).toEqual(resolved());
+      expect(strictestAutonomy(resolved(), on)).toEqual(resolved());
+      expect(strictestAutonomy(on, resolved({ adminRuleProof: true, autoShip: { ...AUTO_SHIP, maxFiles: 9 }, landJob: LAND_JOB }))).toEqual(
+        resolved({ adminRuleProof: true, landJob: LAND_JOB }),
+      );
+    });
+
+    it("keeps the review tool if any leg names it, with the highest rounds and the longest wait", () => {
+      const one = resolved({ reviewTool: { ...REVIEW_TOOL, rounds: 1, waitMinutes: 60 } });
+      const three = resolved({ reviewTool: { ...REVIEW_TOOL, rounds: 3, waitMinutes: 20 } });
+      expect(strictestAutonomy(resolved(), one).reviewTool).toEqual({ ...REVIEW_TOOL, rounds: 1, waitMinutes: 60 });
+      expect(strictestAutonomy(one, resolved(), three).reviewTool).toEqual({ ...REVIEW_TOOL, rounds: 3, waitMinutes: 60 });
+    });
+
+    it("is looser than a candidate when one of its legs is, the review tool included", () => {
+      const legs = [resolved({ reviewTool: REVIEW_TOOL }), resolved({ reviewTool: { ...REVIEW_TOOL, rounds: 3 } })];
+      const baseline = strictestAutonomy(legs[0]!, legs[1]!);
+      const candidates = [resolved(), resolved({ reviewTool: REVIEW_TOOL }), resolved({ reviewTool: { ...REVIEW_TOOL, rounds: 3 } })];
+      for (const candidate of candidates) {
+        expect(loosens(candidate, baseline)).toBe(legs.some((leg) => loosens(candidate, leg)));
+      }
+      expect(candidates.map((candidate) => loosens(candidate, baseline))).toEqual([true, true, false]);
+    });
+  });
+
+  describe("the manifest schema", () => {
+    it("admits the four keys, at each range's ends", () => {
+      expect(collectManifestErrors(manifestWith(ALL_ON))).toEqual([]);
+      expect(collectManifestErrors(manifestWith({ autoShip: { ...AUTO_SHIP, paths: ["site-notes/**"] } }))).toEqual([]);
+      expect(collectManifestErrors(manifestWith({ reviewTool: { ...REVIEW_TOOL, rounds: 1, waitMinutes: 120 } }))).toEqual([]);
+      expect(collectManifestErrors(manifestWith({ reviewTool: { ...REVIEW_TOOL, rounds: 3, waitMinutes: 1 } }))).toEqual([]);
+    });
+
+    const refused: readonly [string, unknown, string][] = [
+      ["adminRuleProof that is not a boolean", { adminRuleProof: "on" }, "`autonomy.adminRuleProof` must be a boolean"],
+      ["a rounds of 4", { reviewTool: { ...REVIEW_TOOL, rounds: 4 } }, "`autonomy.reviewTool.rounds` must be a whole number from 1 to 3"],
+      ["a rounds of 0", { reviewTool: { ...REVIEW_TOOL, rounds: 0 } }, "`autonomy.reviewTool.rounds`"],
+      ["a wait past 120", { reviewTool: { ...REVIEW_TOOL, waitMinutes: 121 } }, "`autonomy.reviewTool.waitMinutes` must be a whole number from 1 to 120"],
+      ["a clean word outside the set", { reviewTool: { ...REVIEW_TOOL, clean: "silence" } }, "`autonomy.reviewTool.clean` must be one of state-comment | review-state | reaction"],
+      ["a request past 200 characters", { reviewTool: { ...REVIEW_TOOL, request: "r".repeat(201) } }, "`autonomy.reviewTool.request` must be one line of at most 200 characters"],
+      ["a request on two lines", { reviewTool: { ...REVIEW_TOOL, request: "a\nb" } }, "`autonomy.reviewTool.request`"],
+      ["a request holding a line separator", { reviewTool: { ...REVIEW_TOOL, request: `a${String.fromCharCode(0x2028)}b` } }, "`autonomy.reviewTool.request`"],
+      ["a login of another shape", { reviewTool: { ...REVIEW_TOOL, login: "-bad" } }, "`autonomy.reviewTool.login` must be a GitHub login"],
+      ["a state marker on two lines", { reviewTool: { ...REVIEW_TOOL, stateMarker: "a\nb" } }, "`autonomy.reviewTool.stateMarker`"],
+      ["an unknown tool member", { reviewTool: { ...REVIEW_TOOL, extra: 1 } }, "unknown field `autonomy.reviewTool.extra`"],
+      ["a maxFiles of 0", { autoShip: { ...AUTO_SHIP, maxFiles: 0 } }, "`autonomy.autoShip.maxFiles` must be a positive whole number"],
+      ["a maxLines of 1.5", { autoShip: { ...AUTO_SHIP, maxLines: 1.5 } }, "`autonomy.autoShip.maxLines` must be a positive whole number"],
+      ["a class outside the set", { autoShip: { ...AUTO_SHIP, classes: ["trivial"] } }, "`autonomy.autoShip.classes` names unknown class \"trivial\""],
+      ["paths that hold a line break", { autoShip: { ...AUTO_SHIP, paths: ["a\nb"] } }, "`autonomy.autoShip.paths`"],
+      ["workflows that are not a list", { landJob: { workflows: "CI" } }, "`autonomy.landJob.workflows`"],
+      ["a key that is not an object", { landJob: ["CI"] }, "`autonomy.landJob` must be an object"],
+    ];
+    for (const [label, block, fragment] of refused) {
+      it(`refuses ${label}`, () => {
+        const errors = collectManifestErrors(manifestWith(block));
+        expect(errors.some((error) => error.includes(fragment)), errors.join("\n")).toBe(true);
+      });
+    }
+  });
+});

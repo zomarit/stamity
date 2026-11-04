@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import semver from "semver";
+import { CLASS_ORDER } from "../change/classify.ts";
+import { factoryKeyDefects } from "../config/autonomy.ts";
 import { isPlainObject, parseJsonStrict, unknownFields } from "../config/parse.ts";
 import { atomicWriteFile } from "../merge/atomicWrite.ts";
 import { mapFsErrno } from "../merge/fsErrors.ts";
@@ -800,7 +802,7 @@ function collectGatesErrors(value: unknown, errors: string[]): void {
 }
 
 /** Known fields of the autonomy block, doubling as its strict key set. */
-const AUTONOMY_FIELDS = ["mode", "deployingBranches", "deployingActs"] as const;
+const AUTONOMY_FIELDS = ["mode", "deployingBranches", "deployingActs", "adminRuleProof", "autoShip", "reviewTool", "landJob"] as const;
 
 /** Most branches `autonomy.deployingBranches` may name. */
 export const MAX_DEPLOYING_BRANCHES = 32;
@@ -843,8 +845,10 @@ export function deployingBranchDefect(value: unknown): string | null {
 
 /**
  * The autonomy block (REQ-FLOW-137): a mode from {@link AUTONOMY_MODES}, at
- * most {@link MAX_DEPLOYING_BRANCHES} branch names or patterns, and acts from
- * {@link DEPLOYING_ACTS}, the refusal naming the whole set.
+ * most {@link MAX_DEPLOYING_BRANCHES} branch names or patterns, acts from
+ * {@link DEPLOYING_ACTS}, the refusal naming the whole set, and the factory
+ * keys by `../config/autonomy.ts::factoryKeyDefects`, the one rule the land verb
+ * also fails closed on, with `autoShip.classes` from {@link CLASS_ORDER}.
  */
 function collectAutonomyErrors(value: unknown, errors: string[]): void {
   if (!isPlainObject(value)) {
@@ -880,6 +884,12 @@ function collectAutonomyErrors(value: unknown, errors: string[]): void {
         );
       }
     }
+  }
+  errors.push(...factoryKeyDefects(value));
+  const classes = isPlainObject(value.autoShip) ? value.autoShip["classes"] : undefined;
+  for (const name of Array.isArray(classes) ? (classes as unknown[]) : []) {
+    if ((CLASS_ORDER as readonly unknown[]).includes(name)) continue;
+    errors.push(`\`autonomy.autoShip.classes\` names unknown class ${JSON.stringify(name)} (known: ${CLASS_ORDER.join(", ")})`);
   }
   for (const key of unknownFields(value, AUTONOMY_FIELDS)) {
     errors.push(`unknown field \`autonomy.${key}\` (known: ${AUTONOMY_FIELDS.join(", ")})`);

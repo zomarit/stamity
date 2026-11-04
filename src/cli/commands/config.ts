@@ -722,6 +722,61 @@ function applyAutonomy(
   else draft.autonomy = next;
 }
 
+/** The factory keys a closed word sets: `adminRuleProof` by `on`, the other three to a preset. */
+type PresetField = "adminRuleProof" | "autoShip" | "reviewTool" | "landJob";
+
+/** Each word's value; the word that clears the key maps to `undefined`. */
+type Presets<Field extends PresetField> = Readonly<Record<string, AutonomyConfig[Field] | undefined>>;
+
+/** `autonomy.autoShip`'s words. */
+const AUTO_SHIP_PRESETS: Presets<"autoShip"> = {
+  off: undefined,
+  "low-risk": { maxFiles: 10, maxLines: 200, classes: ["records", "docs", "tests"] },
+};
+
+/** `autonomy.reviewTool`'s words: the 40 minutes are the worst start plus the worst run seen across 28 pull requests. */
+const REVIEW_TOOL_PRESETS: Presets<"reviewTool"> = {
+  none: undefined,
+  codex: {
+    login: "chatgpt-codex-connector[bot]",
+    request: "@codex review",
+    clean: "state-comment",
+    stateMarker: "codex-review-state:v1",
+    stateSection: "code_review",
+    waitMinutes: 40,
+    rounds: 2,
+  },
+};
+
+/** `autonomy.landJob`'s words. */
+const LAND_JOB_PRESETS: Presets<"landJob"> = { off: undefined, ci: { workflows: ["CI"] } };
+
+/** `autonomy.adminRuleProof`'s words. */
+const ADMIN_RULE_PROOF_WORDS: Presets<"adminRuleProof"> = { off: undefined, on: true };
+
+/** The word a value reads as: its preset's, or `custom` for one written by hand; the off word when nothing is on. */
+function presetWord(value: unknown, presets: Readonly<Record<string, unknown>>): string {
+  const words = Object.keys(presets);
+  const found = words.find((word) => JSON.stringify(presets[word]) === JSON.stringify(value));
+  return found ?? "custom";
+}
+
+/** The row of one closed-word factory key. A word outside the set reaches the schema as itself, which refuses it, as {@link applyAutonomy} leaves it. */
+function presetSpec(field: PresetField, presets: Readonly<Record<string, unknown>>, hint: string): ConfigKeySpec {
+  const choices = Object.keys(presets);
+  return {
+    key: `autonomy.${field}`,
+    hint: `one of ${choices.join(" | ")} — ${hint}`,
+    choices,
+    read: (manifest) => {
+      const value = manifest.autonomy?.[field];
+      return value === undefined || value === false ? null : presetWord(value, presets);
+    },
+    resolve: (manifest) => presetWord(resolveAutonomy(manifest)[field], presets),
+    apply: (draft, raw) => applyAutonomy(draft, { [field]: Object.hasOwn(presets, raw) ? structuredClone(presets[raw]) : raw }),
+  };
+}
+
 // ── Copilot's setup workflow ─────────────────────────────────────────
 
 /** The persisted `toolOptions.copilot.setupSteps`, or null when the bag carries none. */
@@ -1024,6 +1079,30 @@ export const KEY_SPECS: readonly ConfigKeySpec[] = [
         deployingActs: raw === NONE ? undefined : (parseCsv(raw) as DeployingAct[]),
       }),
   },
+  presetSpec(
+    "adminRuleProof",
+    ADMIN_RULE_PROOF_WORDS,
+    "on lets an administrator pass the unattended pre-flight where a ruleset that binds now stops a direct push; the account " +
+      "could still lift the rule, and only the person-only guard stops that. Turning it on loosens the setting",
+  ),
+  presetSpec(
+    "autoShip",
+    AUTO_SHIP_PRESETS,
+    "low-risk lets `run land` merge onto a deploying branch unasked when a change holds at most 10 files and 200 lines, all " +
+      "records, docs or tests. A fast-forward still asks. Turning it on or widening it loosens the setting",
+  ),
+  presetSpec(
+    "reviewTool",
+    REVIEW_TOOL_PRESETS,
+    "codex makes `run land` ask Codex for a review of the head and wait up to 40 minutes, for at most 2 rounds; silence holds " +
+      "the land. Dropping or shortening it loosens the setting. A hand-written `clean: reaction` is the weakest proof, since a " +
+      "reaction cannot be tied to a commit",
+  ),
+  presetSpec(
+    "landJob",
+    LAND_JOB_PRESETS,
+    "ci lets the final merge job finish a land after the workflow `CI`, where a cloud cannot. Turning it on loosens the setting",
+  ),
   {
     key: "copilot.setupSteps",
     hint:

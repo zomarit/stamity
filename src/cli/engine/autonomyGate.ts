@@ -4,10 +4,12 @@ import { existsSync } from "node:fs";
 import { lstat, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
+  looserKeys,
   loosens,
   parseAutonomyMarker,
   resolveAutonomy,
   strictestAutonomy,
+  type LooserKey,
   type ResolvedAutonomy,
 } from "../../config/autonomy.ts";
 import { CLAUDE_HOOKS_DIR } from "../../hooks/model.ts";
@@ -392,6 +394,14 @@ function looserParts(next: ResolvedAutonomy, baseline: ResolvedAutonomy, done = 
   for (const name of baseline.deployingBranches) {
     if (!kept.has(key(name))) parts.push(`the deploying branch ${JSON.stringify(name)} ${dropped}`);
   }
+  const keys: Readonly<Record<LooserKey, string>> = {
+    adminRuleProof: done ? "`adminRuleProof` is now on" : "`adminRuleProof` would turn on",
+    autoShip: done ? "`autoShip` is now on or wider" : "`autoShip` would turn on or widen",
+    "reviewTool-dropped": `\`reviewTool\` ${dropped}`,
+    "reviewTool-shorter": done ? "`reviewTool` is now shorter or changed" : "`reviewTool` would shorten or change",
+    landJob: done ? "`landJob` is now on or moved" : "`landJob` would turn on or move",
+  };
+  for (const name of looserKeys(next, baseline)) parts.push(keys[name]);
   return parts;
 }
 

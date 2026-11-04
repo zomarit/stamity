@@ -1,7 +1,6 @@
-import { closeSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, parse, resolve } from "node:path";
-import { readAutonomy, strictestAutonomy, type ResolvedAutonomy } from "../../config/autonomy.ts";
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
 import { readGitSurface, SURFACE_RECORD_FILE, surfaceRefusal, type RecordFileReads } from "../../runs/gitSurface.ts";
 import { hookPathsRead, setupRootsAt, type HookScratch } from "../../runs/hookPaths.ts";
@@ -51,6 +50,7 @@ import {
   type MergeMethod,
 } from "../engine/ghRunner.ts";
 import { gitWrite, gitWriteEnv, type GitWriteResult } from "../engine/gitWrite.ts";
+import { encodeQuery, READ_MAX_BYTES, readCapped, readSetting, Refused } from "../engine/landSetting.ts";
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
@@ -107,13 +107,6 @@ const MAX_PAGES = 10;
 const MAX_FILE_PAGES = 30;
 /** A branch name as it goes into a path unencoded, as the push check reads it. */
 const PATH_BRANCH = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/-]+$/;
-/** UTF-8's byte-order mark, which a manifest's reader drops before it parses; built from its code, never typed. */
-const BOM = String.fromCharCode(0xfeff);
-/** The run's manifest, from the project root. */
-const MANIFEST = ".stamity/manifest.json";
-/** The most of a manifest, a ledger or a record read. */
-const READ_MAX_BYTES = 4_194_304;
-
 /** What the verb's JSON carries. */
 interface LandResult {
   outcome: "landed" | "already-landed" | "asks" | "refused" | "would-land";
@@ -130,39 +123,6 @@ interface LandResult {
   /** review/103, review/110: the asks outcome the person approved with --approved <sha>, where the verb landed over one. */
   approved?: { sha: string; reason: string; reasons: string[]; act: string };
   notDone: string[];
-}
-
-/** A refusal before the decision: the reasons go to `notDone`. */
-class Refused extends Error {
-  readonly reasons: string[];
-
-  constructor(...reasons: string[]) {
-    super(reasons.join("; "));
-    this.reasons = reasons;
-  }
-}
-
-/** At most `maxBytes` of a regular file (never through a link), and whether it held more; `null` when absent or unreadable. */
-function readCapped(path: string, maxBytes: number): { text: string; truncated: boolean } | null {
-  try {
-    if (!lstatSync(path).isFile()) return null;
-    const fd = openSync(path, "r");
-    try {
-      if (!fstatSync(fd).isFile()) return null;
-      const buffer = Buffer.alloc(maxBytes + 1);
-      let filled = 0;
-      while (filled < buffer.length) {
-        const read = readSync(fd, buffer, filled, buffer.length - filled, filled);
-        if (read === 0) break;
-        filled += read;
-      }
-      return { text: buffer.toString("utf8", 0, Math.min(filled, maxBytes)), truncated: filled > maxBytes };
-    } finally {
-      closeSync(fd);
-    }
-  } catch {
-    return null;
-  }
 }
 
 /** The pre-flight record's reads (review/34): the kind by `lstat`, never through a link, and the capped read, which keeps the module's 64 KiB cap. */
@@ -206,11 +166,6 @@ function tempRoots(env: NodeJS.ProcessEnv): string[] {
   if (process.platform !== "win32") return [tmpdir(), "/tmp"];
   const named = [env, process.env].flatMap((from) => [from["TEMP"], from["TMP"], from["LOCALAPPDATA"] === undefined ? undefined : join(from["LOCALAPPDATA"], "Temp")]);
   return [tmpdir(), join(homedir(), "AppData", "Local", "Temp"), ...named.filter((root): root is string => typeof root === "string" && root !== "")];
-}
-
-/** A branch name or value encoded for a query string in the REST runner's path alphabet. */
-function encodeQuery(value: string): string {
-  return encodeURIComponent(value).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 export async function runLand(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {
@@ -762,47 +717,6 @@ async function ledgerAt(
     return { refused: `the work tree's ${ledgerRel} differs from the commit's: checkpoint first` };
   }
   return ledgerEvidence(shown.stdout);
-}
-
-/** The setting a manifest's text resolves to; text that does not parse resolves to the strictest. */
-function settingOf(text: string): ResolvedAutonomy {
-  try {
-    const parsed: unknown = JSON.parse(text.startsWith(BOM) ? text.slice(1) : text);
-    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) return readAutonomy(parsed as { autonomy?: unknown });
-  } catch {
-    // Falls through to the strictest setting.
-  }
-  return readAutonomy({ autonomy: "unreadable" });
-}
-
-/**
- * The setting as the strictest of the default branch's manifest (so the run cannot loosen it on its own branch),
- * `HEAD`'s and the work tree's; none of the three there refuses as `no setup found`.
- */
-async function readSetting(
-  cwd: string,
-  prefix: string,
-  repoPath: string,
-  defaultBranch: string,
-  gitLine: (args: readonly string[]) => Promise<string | null>,
-  call: (path: string) => Promise<GhResponse>,
-): Promise<ResolvedAutonomy> {
-  const found: ResolvedAutonomy[] = [];
-  const path = `${prefix}${MANIFEST}`.split("/").map((segment) => encodeQuery(segment)).join("/");
-  const remote = await call(`${repoPath}/contents/${path}?ref=${encodeQuery(defaultBranch)}`);
-  if (remote.status === 200) {
-    const content = typeof remote.json === "object" && remote.json !== null ? (remote.json as Record<string, unknown>)["content"] : undefined;
-    found.push(typeof content === "string" ? settingOf(Buffer.from(content, "base64").toString("utf8")) : settingOf(""));
-  } else if (remote.status !== 404) {
-    throw new Refused(`the default branch's manifest read answered HTTP ${remote.status}`);
-  }
-  const committed = await gitLine(["show", `HEAD:./${MANIFEST}`]);
-  if (committed !== null) found.push(settingOf(committed));
-  const local = readCapped(join(cwd, MANIFEST), READ_MAX_BYTES);
-  if (local !== null) found.push(local.truncated ? settingOf("") : settingOf(local.text));
-  const [first, ...rest] = found;
-  if (first === undefined) throw new Refused(`no setup found: no ${MANIFEST} on ${defaultBranch}, at HEAD or in the work tree`);
-  return strictestAutonomy(first, ...rest);
 }
 
 /**

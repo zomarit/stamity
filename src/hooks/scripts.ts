@@ -28,7 +28,7 @@ import {
   toCopilotToolsFrontmatter,
 } from "../tools/translator.ts";
 import type { Tool } from "../types/core.ts";
-import type { AutonomousAct, AutonomyMode, DeployingAct } from "../types/manifest.ts";
+import type { AutonomousAct, AutonomyMode, AutoShipConfig, DeployingAct, LandJobConfig, ReviewToolConfig } from "../types/manifest.ts";
 import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE, HOOKS_ACTIVE_ENV, STATE_DIR } from "../types/markers.ts";
 import { CONTEXT_ONCE_DIR, PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE, RUN_ENDED_MAX_AGE_MS } from "../mcp/env.ts";
@@ -4236,11 +4236,16 @@ export interface GuardAutonomy {
   readonly runs: readonly AutonomousAct[];
   readonly deployingBranches: readonly string[];
   readonly deploying: readonly DeployingAct[];
+  readonly adminRuleProof?: boolean;
+  readonly autoShip?: AutoShipConfig;
+  readonly reviewTool?: ReviewToolConfig;
+  readonly landJob?: LandJobConfig;
 }
 
 /**
  * The setting a guard is rendered with when its caller names none: the default an absent manifest key resolves to
- * (`resolveAutonomy({})`, held equal by test/hooks/personOnlyGuard.test.ts). Emission always names one.
+ * (`resolveAutonomy({})`, held equal by test/hooks/personOnlyGuard.test.ts), every factory key off, so absent.
+ * Emission always names one.
  */
 const DEFAULT_GUARD_AUTONOMY: GuardAutonomy = { mode: "autonomous", runs: ["pr-ready", "tag"], deployingBranches: [], deploying: [] };
 
@@ -4498,7 +4503,10 @@ if (told !== null) {
  * and the same value as `AUTONOMY`. An act whose rule it runs unasked is
  * allowed, except a ready mark while a run is unattended, which the run's one
  * draft keeps refused (REQ-FLOW-120). The land verb's line is read in every
- * mode over the parsed program words (REQ-FLOW-121), with no mode read.
+ * mode over the parsed program words (REQ-FLOW-121), with no mode read. The four
+ * factory keys are baked only when on, so a default copy's bytes do not move, and
+ * the guard decides nothing on them, but for one: a named review tool makes the
+ * setting stricter than the default, written into `STRICTER` only then.
  *
  * A command naming `gate preflight` that the guard allows writes
  * `{ "at": <ISO> }` to {@link PREFLIGHT_CANARY_FILE}, the pre-flight's proof
@@ -4531,11 +4539,25 @@ export function buildPersonOnlyGuardScript(opts: {
       code: "VALIDATION_ERROR",
     });
   }
+  const { adminRuleProof, autoShip, reviewTool, landJob } = autonomy;
+  const keyTexts = [
+    ...(autoShip === undefined ? [] : [...autoShip.classes, ...(autoShip.paths ?? [])]),
+    ...(reviewTool === undefined ? [] : [reviewTool.login, reviewTool.request, reviewTool.clean, reviewTool.stateMarker ?? "", reviewTool.stateSection ?? ""]),
+    ...(landJob?.workflows ?? []),
+  ];
+  if (keyTexts.some(breaksLine)) {
+    throw new EngineError("An autonomy key holds a value with a control character or a line break, which the guard cannot bake.", { code: "VALIDATION_ERROR" });
+  }
+  // The key order of `../config/autonomy.ts::autonomyMarkerLine`, which the loosen gate reads this constant back through.
   const baked = {
     mode: autonomy.mode,
     runs: [...autonomy.runs],
     deployingBranches: [...autonomy.deployingBranches],
     deploying: [...autonomy.deploying],
+    ...(adminRuleProof === true ? { adminRuleProof } : {}),
+    ...(autoShip === undefined ? {} : { autoShip }),
+    ...(reviewTool === undefined ? {} : { reviewTool }),
+    ...(landJob === undefined ? {} : { landJob }),
   };
   const regex = (pattern: RegExp): string => `new RegExp(${json(pattern.source)}, ${json(pattern.flags)})`;
   return `${header(
@@ -4600,7 +4622,7 @@ const AUTONOMY = ${json(baked)};
 // review/129): it moves the origin the outside-party rule holds writes to. A \`git remote set-head\` is also read as a
 // push of the default branch (review/163), which asks, so it never runs unasked.
 const RUNS = [...AUTONOMY.runs, ...(AUTONOMY.deploying.includes("workflow-dispatch") ? [] : ["workflow-dispatch"]), "remote-write"];
-const STRICTER = AUTONOMY.mode === "ask" || AUTONOMY.deploying.length > 0 || AUTONOMY.deployingBranches.length > 0;
+const STRICTER = AUTONOMY.mode === "ask" || AUTONOMY.deploying.length > 0 || AUTONOMY.deployingBranches.length > 0${reviewTool === undefined ? "" : " || AUTONOMY.reviewTool !== undefined"};
 // This package as emission found it (review/44, review/53): the program words that run it (its bins and unscoped name,
 // read from the engine's own package.json, so a renamed fork's bin is read as this package's), its name, whose
 // node_modules path names its CLI file, and whether this repository is the engine's own.
