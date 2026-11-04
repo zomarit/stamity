@@ -404,6 +404,8 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/change/autoShip.ts": { unit: "auto-ship-rules", wave: 3 },
   "src/runs/freshness.ts": { unit: "u3-freshness-contract", wave: 3 },
   "src/runs/pullRequest.ts": { unit: "u4-pr-runners", wave: 3 },
+  // A ready item's body to a run contract: over the wave-2 contract version and learnings screen, one wave above them.
+  "src/runs/itemContract.ts": { unit: "item-contract", wave: 3 },
   "src/detect/stackSupport.ts": { unit: "p1-19", wave: 3 },
   "src/detect/verificationGates.ts": { unit: "p1-19", wave: 3 },
   "src/merge/atomicWrite.ts": { unit: "p1-23", wave: 3 },
@@ -712,6 +714,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // and kit and the evidence module, one wave under the run verb that registers it, so it imports nothing from
   // `run.ts` or the wave-14 gate verb.
   "src/cli/commands/runLand.ts": { unit: "a6-land-verb", wave: 14 },
+  // `run contract`'s body, over the wave-13 runners and kit and the wave-3 item module, one wave under the run verb
+  // that registers it.
+  "src/cli/commands/runContract.ts": { unit: "item-contract", wave: 14 },
   // TEST CHANGE, justified (2026-10-14, plan 020 file 1, units d6-verb and
   // d7-engine): the `stamity plugin` verb, its setup engine, its status report
   // and the capability reader at wave 2 (pl-c6) left with the plugin route in
