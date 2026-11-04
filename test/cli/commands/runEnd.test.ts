@@ -1271,7 +1271,11 @@ describe("stamity run end", () => {
   describe("the notice", () => {
     const CONTRACT = `${RUN_DIR}/contract.yml`;
     const REVIEWERS = "repos/o/r/pulls/7/requested_reviewers";
-    const FINAL = [...END("feat: the change"), "--final-round"];
+    // TEST CHANGE, justified (review/71, signed off): the notice no longer waits for --final-round, which most runs never
+    // pass, so these cases run a plain end, as the skill does. `says in the text` keeps the flag, proving it changes nothing.
+    const ENDED = END("feat: the change");
+    const RECORD = `${RUN_DIR}/record.md`;
+    const SENT_LINE = /^- \S+ notice: #7 review requested of a-person$/m;
 
     /** A contract `parseRunContract` accepts, naming `answerer` as the YAML text given. */
     const contract = (answerer: string): string =>
@@ -1288,13 +1292,81 @@ describe("stamity run end", () => {
       const { repo, remote } = await seed("attended");
       await put(repo, CONTRACT, contract('"@a-person"'));
 
-      const { code, doc } = await run(repo, FINAL);
+      const { code, doc } = await run(repo, ENDED);
 
       expect(code).toBe(0);
-      expect(doc).toMatchObject({ subcommand: "end", pr: { number: 7 }, notDone: [] });
+      expect(doc).toMatchObject({ subcommand: "end", pr: { number: 7 }, notice: "a-person", notDone: [] });
       expect(requests()).toEqual([{ method: "POST", path: REVIEWERS, body: { reviewers: ["a-person"], team_reviewers: [] } }]);
       expect(writesToGitHub().map((call) => call.path)).toEqual(["repos/o/r/pulls", REVIEWERS]);
       expect(git(remote, ["ls-tree", "-r", "--name-only", `refs/heads/${RUN_BRANCH}`]).split("\n")).toContain(CONTRACT);
+      expect(await readFile(join(repo, RECORD), "utf8")).toMatch(SENT_LINE);
+    });
+
+    it("sends once: a later end finds the record line, sends nothing and says nothing, and commits the line", async () => {
+      const { repo, remote } = await seed("attended");
+      await put(repo, CONTRACT, contract('"@a-person"'));
+
+      await run(repo, ENDED);
+      const later = await run(repo, [...ENDED, "--final-round"]);
+
+      expect(later.code).toBe(0);
+      expect(later.doc).toMatchObject({ notDone: [] });
+      expect(later.doc).not.toHaveProperty("notice");
+      expect(requests()).toHaveLength(1);
+      expect(git(remote, ["show", `refs/heads/${RUN_BRANCH}:${RECORD}`])).toMatch(SENT_LINE);
+    });
+
+    it("tries again on a later end after a failed request, which left no record line", async () => {
+      const { repo } = await seed("attended");
+      await put(repo, CONTRACT, contract('"@a-person"'));
+      rest.queued.set(`POST ${REVIEWERS}`, [{ status: 422, json: null }]);
+
+      const first = await run(repo, ENDED);
+      const recordAfterFirst = await readFile(join(repo, RECORD), "utf8");
+      const later = await run(repo, ENDED);
+
+      expect(first.doc).toMatchObject({ notDone: ["notice not sent: the review request answered HTTP 422, so it reached nobody"] });
+      expect(first.doc).not.toHaveProperty("notice");
+      expect(recordAfterFirst).not.toContain("notice:");
+      expect(later.doc).toMatchObject({ notice: "a-person", notDone: [] });
+      expect(requests()).toHaveLength(2);
+    });
+
+    it("reads only its own line as sent: a record that merely says notice still sends", async () => {
+      const { repo } = await seed("attended");
+      await put(repo, CONTRACT, contract('"@a-person"'));
+      await writeFile(join(repo, RECORD), `${await readFile(join(repo, RECORD), "utf8")}\n- 2026-11-04T00:00:00Z notice: the plan changed\n`);
+
+      const { doc } = await run(repo, ENDED);
+
+      expect(doc).toMatchObject({ notice: "a-person" });
+      expect(requests()).toHaveLength(1);
+    });
+
+    it("sends nothing where the record cannot be read whole, since a line it may hold could not be seen", async () => {
+      const { repo } = await seed("attended");
+      await put(repo, CONTRACT, contract('"@a-person"'));
+      await writeFile(join(repo, RECORD), `${await readFile(join(repo, RECORD), "utf8")}\n${"filler line\n".repeat(400_000)}`);
+
+      const { code, doc } = await run(repo, ENDED);
+
+      expect(code).toBe(0);
+      expect((doc as { notDone: string[] }).notDone).toContain(`notice not sent: ${RECORD} could not be read whole`);
+      expect(requests()).toEqual([]);
+    });
+
+    it.skipIf(process.platform === "win32" || process.getuid?.() === 0)("still ends 0 and names the record where the sent line could not be written", async () => {
+      const { repo } = await seed("attended");
+      await put(repo, CONTRACT, contract('"@a-person"'));
+      await chmod(join(repo, RUN_DIR), 0o555);
+
+      const { code, doc } = await run(repo, ENDED);
+      await chmod(join(repo, RUN_DIR), 0o755);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ notice: "a-person" });
+      expect((doc as { notDone: string[] }).notDone.join("\n")).toMatch(/^record line not written: /);
+      expect(requests()).toHaveLength(1);
     });
 
     it("says in the text whom it asked, with no @ on the name", async () => {
@@ -1312,7 +1384,7 @@ describe("stamity run end", () => {
       const { repo } = await seed("attended");
       await put(repo, CONTRACT, contract('"@O/core-team"'));
 
-      const { code, doc } = await run(repo, FINAL);
+      const { code, doc } = await run(repo, ENDED);
 
       expect(code).toBe(0);
       expect(doc).toMatchObject({ notDone: [] });
@@ -1324,7 +1396,7 @@ describe("stamity run end", () => {
       const { repo } = await seed("attended");
       await put(repo, CONTRACT, contract('"@elsewhere/core"'));
 
-      const { code, doc } = await run(repo, FINAL);
+      const { code, doc } = await run(repo, ENDED);
 
       expect(code).toBe(0);
       expect(doc).toMatchObject({ notDone: ["notice not sent: the contract's answerer is a team outside this repository's owner, so it reached nobody"] });
@@ -1335,7 +1407,7 @@ describe("stamity run end", () => {
       const { repo } = await seed("attended");
       await put(repo, CONTRACT, contract('"@The-Run"'));
 
-      const { code, doc } = await run(repo, FINAL);
+      const { code, doc } = await run(repo, ENDED);
 
       expect(code).toBe(0);
       expect(doc).toMatchObject({ pr: { number: 7 }, notDone: ["notice not sent: the answerer opened pull request #7, so a review request cannot reach them"] });
@@ -1347,7 +1419,7 @@ describe("stamity run end", () => {
       await put(repo, CONTRACT, contract('"@a-person"'));
       rest.routes.set("GET repos/o/r/pulls/7", { status: 503, json: null });
 
-      const { code, doc } = await run(repo, FINAL);
+      const { code, doc } = await run(repo, ENDED);
 
       expect(code).toBe(0);
       expect(doc).toMatchObject({ notDone: ["notice not sent: the author of pull request #7 could not be read (GitHub answered HTTP 503)"] });
@@ -1359,7 +1431,7 @@ describe("stamity run end", () => {
       await put(repo, CONTRACT, contract('"@a-person"'));
       rest.routes.set(`POST ${REVIEWERS}`, { status: 422, json: { message: "Reviews may only be requested from collaborators" } });
 
-      const { code, doc } = await run(repo, FINAL);
+      const { code, doc } = await run(repo, [...ENDED, "--final-round"]);
 
       expect(code).toBe(0);
       expect(doc).toMatchObject({ pr: { number: 7 }, notDone: ["notice not sent: the review request answered HTTP 422, so it reached nobody"] });
@@ -1372,7 +1444,7 @@ describe("stamity run end", () => {
       await put(repo, CONTRACT, contract('"@a-person"'));
       rest.rejected.set(`POST ${REVIEWERS}`, "GH_NOT_LOGGED_IN");
 
-      const { code, doc } = await run(repo, FINAL);
+      const { code, doc } = await run(repo, ENDED);
 
       expect(code).toBe(0);
       expect(doc).toMatchObject({ notDone: ["notice not sent: the call failed before GitHub answered (GH_NOT_LOGGED_IN)"] });
@@ -1383,7 +1455,7 @@ describe("stamity run end", () => {
       await put(repo, CONTRACT, contract('"@a-person"'));
       rest.rejected.set("GET repos/o/r/pulls/7", "ENOENT");
 
-      const { code, doc } = await run(repo, FINAL);
+      const { code, doc } = await run(repo, ENDED);
 
       expect(code).toBe(0);
       expect(doc).toMatchObject({ notDone: ["notice not sent: the call failed before GitHub answered (ENOENT)"] });
@@ -1401,7 +1473,7 @@ describe("stamity run end", () => {
       const { repo } = await seed("attended");
       await put(repo, CONTRACT, contract(answerer));
 
-      const { code, doc } = await run(repo, FINAL);
+      const { code, doc } = await run(repo, ENDED);
 
       expect(code).toBe(0);
       expect(doc).toMatchObject({ pr: { number: 7 }, notDone: ["notice not sent: the contract's answerer is neither a GitHub login nor a team, so it reached nobody"] });
@@ -1411,10 +1483,11 @@ describe("stamity run end", () => {
     it("sends nothing and writes no line with no contract, and reads no author", async () => {
       const { repo } = await seed("attended");
 
-      const { code, doc } = await run(repo, FINAL);
+      const { code, doc } = await run(repo, ENDED);
 
       expect(code).toBe(0);
       expect(doc).toMatchObject({ pr: { number: 7 }, notDone: [] });
+      expect(doc).not.toHaveProperty("notice");
       expect(requests()).toEqual([]);
       expect(rest.calls.filter((call) => call.path === "repos/o/r/pulls/7")).toEqual([]);
     });
@@ -1423,7 +1496,7 @@ describe("stamity run end", () => {
       const { repo } = await seed("attended");
       await put(repo, CONTRACT, 'run-contract: 2\nanswerer: "@a-person"\nsome-key: x\n');
 
-      const { code, doc } = await run(repo, FINAL);
+      const { code, doc } = await run(repo, ENDED);
 
       expect(code).toBe(0);
       expect(doc).toMatchObject({ notDone: [`notice not sent: ${CONTRACT} did not parse`] });
@@ -1434,25 +1507,25 @@ describe("stamity run end", () => {
       const { repo } = await seed("attended");
       await mkdir(join(repo, CONTRACT), { recursive: true });
 
-      const { code, doc } = await run(repo, FINAL);
+      const { code, doc } = await run(repo, ENDED);
 
       expect(code).toBe(0);
       expect(doc).toMatchObject({ notDone: [`notice not sent: ${CONTRACT} could not be read`] });
       expect(requests()).toEqual([]);
     });
 
-    it("sends nothing on a plain end or a dry run: only the run's last end speaks", async () => {
-      const plain = await seed("attended");
-      const dry = await seed("attended");
-      await Promise.all([plain, dry].map(({ repo }) => put(repo, CONTRACT, contract('"@a-person"'))));
+    // TEST CHANGE, justified (review/71, signed off): a plain end now sends, so this case keeps only what stays silent.
+    it("sends nothing on a dry run or a checkpoint, and writes no record line", async () => {
+      const { repo } = await seed("attended");
+      await put(repo, CONTRACT, contract('"@a-person"'));
 
-      const middle = await run(plain.repo, END("feat: x"));
-      const planned = await run(dry.repo, [...FINAL, "--dry-run"]);
+      const planned = await run(repo, [...ENDED, "--dry-run"]);
+      const middle = await run(repo, ["checkpoint", "--run", RUN, "--pr", "--title", "feat: x", "--json"]);
 
-      expect(middle.code).toBe(0);
-      expect(middle.doc).toMatchObject({ pr: { number: 7 }, notDone: [] });
       expect(planned.code).toBe(0);
+      expect(middle.code).toBe(0);
       expect(requests()).toEqual([]);
+      expect(await readFile(join(repo, RECORD), "utf8")).not.toContain("notice:");
     });
 
     it("sends nothing where no pull request opened, and the line says only that", async () => {
@@ -1460,21 +1533,27 @@ describe("stamity run end", () => {
       await put(repo, CONTRACT, contract('"@a-person"'));
       rest.routes.set("POST repos/o/r/pulls", { status: 500, json: null });
 
-      const { code, doc } = await run(repo, FINAL);
+      const { code, doc } = await run(repo, ENDED);
 
       expect(code).toBe(1);
       expect(doc).toMatchObject({ pr: null, notDone: [`draft PR not opened (${RUN_BRANCH}): opening it answered HTTP 500`] });
       expect(requests()).toEqual([]);
     });
 
-    it("asks on a refused run's last end too, since its pull request is what the person reads", async () => {
-      const { repo } = await seed("attended");
-      await put(repo, CONTRACT, contract('"@a-person"'));
+    // TEST CHANGE, justified (review/71, signed off): a refused end sends nothing, where round 1 asked on it.
+    it("sends nothing on a --refused end, with or without --final-round, and writes no record line", async () => {
+      const plain = await seed("attended");
+      const last = await seed("attended");
+      await Promise.all([plain, last].map(({ repo }) => put(repo, CONTRACT, contract('"@a-person"'))));
 
-      const { code } = await run(repo, [...FINAL, "--refused"]);
+      const first = await run(plain.repo, [...ENDED, "--refused"]);
+      const second = await run(last.repo, [...ENDED, "--refused", "--final-round"]);
 
-      expect(code).toBe(0);
-      expect(requests()).toHaveLength(1);
+      expect(first.code).toBe(0);
+      expect(second.code).toBe(0);
+      expect(first.doc).toMatchObject({ pr: { number: 7 }, notDone: [] });
+      expect(requests()).toEqual([]);
+      expect(await readFile(join(plain.repo, RECORD), "utf8")).not.toContain("notice:");
     });
   });
 });

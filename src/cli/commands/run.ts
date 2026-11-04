@@ -156,9 +156,11 @@ import { runLand } from "./runLand.ts";
  * question passes between two chain files; one it cannot remove makes the exit 1,
  * its `notDone` line naming it.
  *
- * **The notice** (REQ-FLOW-156): `end --final-round`, once it has a pull request, reads the run folder's `contract.yml`
- * and asks its `answerer` for a review through `ghRequestReview`, with no text and no mention. A failure never moves
- * the exit code: it is a `notDone` line. No contract sends nothing and says nothing.
+ * **The notice** (REQ-FLOW-156, review/71): the first `end` with a pull request and the run folder's `contract.yml` asks
+ * its `answerer` for a review through `ghRequestReview`, with no text and no mention, and appends a `notice:` line to
+ * the record; a later `end` that finds the line sends nothing, and the JSON's `notice` names whom this call asked. It
+ * does not read `--final-round`, which most runs never pass, and a `--refused` end sends nothing. A failure never moves
+ * the exit code: it is a `notDone` line, leaves no record line, and the next `end` tries again. No contract says nothing.
  *
  * **`land`** (REQ-FLOW-132, REQ-FLOW-133) merges the run's own pull request, or fast-forwards the default branch to
  * its head, when the evidence holds, else asks or refuses; its body is `./runLand.ts`, registered here only.
@@ -1519,11 +1521,15 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     result.notDone.push(`title not changed: pull request #${step.pr.number} was already open, so it keeps its own title, not the Refused: one`);
   }
   lines.push(`pr: ${step.pr === null ? "not opened" : `#${step.pr.number} ${step.pr.url} (${step.pr.how})`}`);
-  if (verb === END && opts["finalRound"] === true && step.pr !== null && step.repo !== undefined) {
-    await runEndNotice({ cwd, top, runDir, env: { ...ctx.app.runtime.env }, repo: step.repo, number: step.pr.number }, lines, result.notDone);
-  }
-  return finish(step.pr !== null, { inferred: step.inferred });
+  const noticed =
+    verb === END && opts["refused"] !== true && step.pr !== null && step.repo !== undefined
+      ? await runEndNotice(ctx, { cwd, top, runDir, recordRel, repo: step.repo, number: step.pr.number }, lines, result.notDone)
+      : null;
+  return finish(step.pr !== null, { inferred: step.inferred, ...(noticed === null ? {} : { notice: noticed }) });
 }
+
+/** The record line a sent notice leaves, as {@link runEndNotice} writes it: prose that merely says "notice" is not one. */
+const NOTICE_SENT = /^- \S+ notice: #[0-9]+ review requested of /m;
 
 /** Whom an `answerer` asks: `@login` or `@org/team`, anything else `null`, so no free text reaches a request. */
 function reviewerOf(answerer: string): { login: string } | { org: string; team: string } | null {
@@ -1539,13 +1545,19 @@ function reviewerOf(answerer: string): { login: string } | { org: string; team: 
  * text names a login that passed, and a `notDone` line names the file, a status or a class, never GitHub's or `gh`'s
  * words. A team is asked by its slug, which GitHub reads in the repository's own organization, so another's team
  * sends nothing rather than reach a team of that name here. The author's read is what drops them: unread, nothing goes.
+ * Returns whom it asked, else `null`. The record line goes in after the push, as `land:` does, so the next `end`
+ * commits it; a session that ends here leaves it in the work tree, and a fresh clone's `end` would ask once more.
  */
-async function runEndNotice(at: { cwd: string; top: string; runDir: string; env: NodeJS.ProcessEnv; repo: OriginRepo; number: number }, lines: string[], notDone: string[]): Promise<void> {
+async function runEndNotice(ctx: CliContext, at: { cwd: string; top: string; runDir: string; recordRel: string; repo: OriginRepo; number: number }, lines: string[], notDone: string[]): Promise<string | null> {
   const rel = `${at.runDir}/${CONTRACT_FILE}`;
-  if (!exists(join(at.cwd, rel))) return;
-  const unsent = (why: string): void => {
+  if (!exists(join(at.cwd, rel))) return null;
+  const unsent = (why: string): null => {
     notDone.push(`notice not sent: ${why}`);
+    return null;
   };
+  const record = readCapped(join(at.cwd, at.recordRel), RECORD_READ_MAX_BYTES);
+  if (record === null || record.truncated) return unsent(`${at.recordRel} could not be read whole`);
+  if (NOTICE_SENT.test(record.text)) return null;
   const read = readCapped(join(at.cwd, rel), CONTRACT_READ_MAX_BYTES);
   if (read === null || read.truncated) return unsent(`${rel} could not be read`);
   const parsed = parseRunContract(read.text, rel);
@@ -1554,7 +1566,7 @@ async function runEndNotice(at: { cwd: string; top: string; runDir: string; env:
   if (reviewer === null) return unsent("the contract's answerer is neither a GitHub login nor a team, so it reached nobody");
   const { host: hostname, owner, repo } = at.repo;
   if ("org" in reviewer && reviewer.org.toLowerCase() !== owner.toLowerCase()) return unsent("the contract's answerer is a team outside this repository's owner, so it reached nobody");
-  const opts = { cwd: at.top, env: at.env };
+  const opts = { cwd: at.top, env: { ...ctx.app.runtime.env } };
   try {
     if ("login" in reviewer) {
       const pull = await ghApi({ method: "GET", path: `repos/${owner}/${repo}/pulls/${at.number}`, hostname }, opts);
@@ -1565,11 +1577,19 @@ async function runEndNotice(at: { cwd: string; top: string; runDir: string; env:
     const asked = "login" in reviewer ? { reviewers: [reviewer.login], teamReviewers: [] } : { reviewers: [], teamReviewers: [reviewer.team] };
     const answer = await ghRequestReview({ hostname, owner, repo, number: at.number, ...asked }, opts);
     if (answer.status < 200 || answer.status >= 300) return unsent(`the review request answered HTTP ${answer.status}, so it reached nobody`);
-    lines.push(`notice: review requested of ${"login" in reviewer ? reviewer.login : reviewer.team}`);
   } catch (cause) {
     const code = (cause as { code?: unknown } | null)?.code;
-    unsent(`the call failed before GitHub answered (${typeof code === "string" ? code : "no code"})`);
+    return unsent(`the call failed before GitHub answered (${typeof code === "string" ? code : "no code"})`);
   }
+  const asked = "login" in reviewer ? reviewer.login : reviewer.team;
+  lines.push(`notice: review requested of ${asked}`);
+  const text = `${record.text}${record.text === "" || record.text.endsWith("\n") ? "" : "\n"}- ${new Date().toISOString()} notice: #${at.number} review requested of ${asked}\n`;
+  try {
+    await ctx.engine.merge.atomicWrite.atomicWriteFile(join(at.cwd, at.recordRel), text, { boundaryDir: at.cwd });
+  } catch (cause) {
+    notDone.push(`record line not written: ${at.recordRel} (${cause instanceof Error ? cause.message : "the write failed"})`);
+  }
+  return asked;
 }
 
 /** The pins every diff here takes against config: no external diff, colour, textconv or rename pairing, top-level names. */
