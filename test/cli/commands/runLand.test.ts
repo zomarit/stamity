@@ -1470,6 +1470,8 @@ describe("stamity run land", () => {
     });
 
     it("still asks for --fast-forward, the rules met", async () => {
+      // TEST CHANGE, justified (review/52, signed off): this case's own compare route named no merge base, which now reads as
+      // incomplete; `seedOn` routes the compare with one, so the rules are met as the title says.
       const { repo } = await seedOn();
       route("GET repos/o/r/rules/branches/main", []);
 
@@ -1805,6 +1807,7 @@ describe("stamity run land", () => {
 
       const result = await run(repo, ["land", "--run", RUN]);
 
+      // TEST CHANGE, justified (review/51): the ask also says the tool's word was not read, since no review is read here.
       expect(result.doc).toMatchObject({
         outcome: "asks",
         asks: { reasons: [expect.stringMatching(/^the legs disagree on autonomy\.reviewTool, and no leg wins: the default branch's manifest, the manifest committed at `HEAD`, the manifest on disk; the review tool's word was not read$/)] },
