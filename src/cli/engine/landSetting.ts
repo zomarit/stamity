@@ -1,15 +1,26 @@
 import { closeSync, fstatSync, lstatSync, openSync, readSync } from "node:fs";
 import { join } from "node:path";
-import { looserAutonomyKeys, readAutonomy, strictestAutonomy, type ResolvedAutonomy } from "../../config/autonomy.ts";
+import { looserAutonomyKeys, readAutonomy, reviewToolConflict, strictestAutonomy, type AutonomyLeg, type ResolvedAutonomy } from "../../config/autonomy.ts";
 
 /**
  * The setting a run's act reads (REQ-FLOW-132, REQ-FLOW-137, REQ-FLOW-138): the strictest of the default branch's
  * manifest, `HEAD`'s, the work tree's and the baked guard's, so a run cannot loosen it on its own branch and a key
- * merged to the default branch binds only once a person has baked it. Moved here from `../commands/runLand.ts`, which
- * imports it with the capped read and the refusal it throws, so a verb one wave up can read the same setting the same
- * way. It names GitHub's answer by shape rather than importing `./ghRunner.ts`, a module of this wave, and takes the
- * guard's reader from its caller for the same reason: `readGuardSetting` lives in `./autonomyGate.ts`, also this wave.
+ * merged to the default branch binds only once a person has baked it; a review tool the legs differ on is named as a
+ * conflict for a person to settle. Moved here from `../commands/runLand.ts`, which imports it with the capped read and
+ * the refusal it throws, so a verb one wave up can read the same setting the same way. It names GitHub's answer by
+ * shape rather than importing `./ghRunner.ts`, a module of this wave, and takes the guard's reader from its caller for
+ * the same reason: `readGuardLegs` lives in `./autonomyGate.ts`, also this wave.
  */
+
+/** The strictest setting, and the legs a person has to settle before its `reviewTool` means anything. */
+export interface LandSetting extends ResolvedAutonomy {
+  /**
+   * Each leg, named, where they disagree on the review tool ({@link reviewToolConflict}); empty where they agree. Not
+   * empty, no leg's tool stands: `reviewTool` is then only the first leg's, kept so a read still shows a tool is in
+   * play, and a land asks a person instead of acting on it.
+   */
+  readonly reviewToolConflict: readonly string[];
+}
 
 /** UTF-8's byte-order mark, which a manifest's reader drops before it parses; built from its code, never typed. */
 const BOM = String.fromCharCode(0xfeff);
@@ -81,9 +92,10 @@ async function defaultBranchSetting(prefix: string, repoPath: string, defaultBra
 }
 
 /**
- * The setting as the strictest of the default branch's manifest (so the run cannot loosen it on its own branch and it
- * stays the first leg, whose review tool stands), `HEAD`'s, the work tree's and the baked guard's, which `guard` reads
- * from `cwd` (`null` where the setup has none); none of the three manifests there refuses as `no setup found`.
+ * The setting as the strictest of the default branch's manifest (so the run cannot loosen it on its own branch),
+ * `HEAD`'s, the work tree's and the baked guard's, whose legs `guard` reads from `cwd` (none where the setup has no
+ * guard), and those legs named where they disagree on the review tool; none of the three manifests there refuses as
+ * `no setup found`. A leg with no manifest at all is no leg, so it names no tool and disagrees with nothing.
  */
 export async function readSetting(
   cwd: string,
@@ -92,19 +104,19 @@ export async function readSetting(
   defaultBranch: string,
   gitLine: GitLine,
   call: GitHubCall,
-  guard: (rootDir: string) => Promise<ResolvedAutonomy | null>,
-): Promise<ResolvedAutonomy> {
-  const found: ResolvedAutonomy[] = [];
+  guard: (rootDir: string) => Promise<readonly AutonomyLeg[]>,
+): Promise<LandSetting> {
+  const manifests: AutonomyLeg[] = [];
   const remote = await defaultBranchSetting(prefix, repoPath, defaultBranch, call);
-  if (remote !== null) found.push(remote);
+  if (remote !== null) manifests.push({ source: "the default branch's manifest", setting: remote });
   const committed = await gitLine(["show", `HEAD:./${MANIFEST}`]);
-  if (committed !== null) found.push(settingOf(committed));
+  if (committed !== null) manifests.push({ source: "the manifest committed at `HEAD`", setting: settingOf(committed) });
   const local = readCapped(join(cwd, MANIFEST), READ_MAX_BYTES);
-  if (local !== null) found.push(local.truncated ? settingOf("") : settingOf(local.text));
-  const [first, ...rest] = found;
+  if (local !== null) manifests.push({ source: "the manifest on disk", setting: local.truncated ? settingOf("") : settingOf(local.text) });
+  const [first] = manifests;
   if (first === undefined) throw new Refused(`no setup found: no ${MANIFEST} on ${defaultBranch}, at HEAD or in the work tree`);
-  const baked = await guard(cwd);
-  return strictestAutonomy(first, ...rest, ...(baked === null ? [] : [baked]));
+  const legs = [...manifests, ...(await guard(cwd))];
+  return { ...strictestAutonomy(first.setting, ...legs.slice(1).map((leg) => leg.setting)), reviewToolConflict: reviewToolConflict(legs) };
 }
 
 /**

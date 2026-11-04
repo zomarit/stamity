@@ -49,7 +49,7 @@ import {
   type GhResponse,
   type MergeMethod,
 } from "../engine/ghRunner.ts";
-import { readGuardSetting } from "../engine/autonomyGate.ts";
+import { readGuardLegs } from "../engine/autonomyGate.ts";
 import { gitWrite, gitWriteEnv, type GitWriteResult } from "../engine/gitWrite.ts";
 import { encodeQuery, READ_MAX_BYTES, readCapped, readSetting, Refused } from "../engine/landSetting.ts";
 import { CliFailure } from "../kit/output.ts";
@@ -369,7 +369,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     };
 
     // (4) The setting: the strictest of the default branch's, HEAD's and the work tree's manifest and the baked guard.
-    const setting = await readSetting(cwd, prefix, repoPath, defaultBranch, gitLine, call, readGuardSetting);
+    const setting = await readSetting(cwd, prefix, repoPath, defaultBranch, gitLine, call, readGuardLegs);
 
     // (5) The changed files, every page, a rename's old name included.
     const files: string[] = [];

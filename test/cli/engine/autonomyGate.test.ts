@@ -8,6 +8,7 @@ import {
   gateGuardCopies,
   guardCopySetting,
   readBaseline,
+  readGuardLegs,
   readGuardSetting,
   strictGuardGate,
   type GuardCopies,
@@ -43,6 +44,7 @@ const CLAUDE_COPY = GUARD_COPY_PATHS[0] ?? "";
 const CLAUDE_ONLY: GuardCopies = { planned: [CLAUDE_COPY], baking: [CLAUDE_COPY] };
 const MARKER = "// stamity-autonomy ";
 const AUTO_SHIP_ON = { maxFiles: 10, maxLines: 200, classes: ["records", "docs", "tests"] };
+const REVIEW_TOOL_ON = { login: "chatgpt-codex-connector[bot]", request: "@codex review", clean: "state-comment", waitMinutes: 40, rounds: 2 } as const;
 
 function setting(autonomy?: AutonomyConfig): ResolvedAutonomy {
   return resolveAutonomy(autonomy === undefined ? {} : { autonomy });
@@ -724,6 +726,73 @@ describe("readGuardSetting", () => {
     await breakGitConfig(root);
 
     expect((await readGuardSetting(root))?.deploying).toEqual([...DEPLOYING_ACTS]);
+  });
+
+  it("keeps the tool HEAD's copy names over an edit of the copy on disk (review/37)", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText({ reviewTool: REVIEW_TOOL_ON }));
+    await put(root, ".stamity/manifest.json", manifestText());
+    await commitAll(root, skip);
+    await put(root, CLAUDE_COPY, guardText({ reviewTool: { ...REVIEW_TOOL_ON, login: "another-reviewer[bot]" } }));
+
+    expect((await readGuardSetting(root))?.reviewTool).toEqual(REVIEW_TOOL_ON);
+  });
+});
+
+/** Each copy `readGuardSetting` folds together, named, so a read can see two copies disagree (review/37). */
+describe("readGuardLegs", () => {
+  const OTHER_COPY = GUARD_COPY_PATHS[1] ?? "";
+  const sources = async (root: string): Promise<string[]> => (await readGuardLegs(root)).map((leg) => leg.source);
+
+  it("gives no leg where no copy is there and the setup owns none", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, ".stamity/manifest.json", manifestText(undefined, []));
+    await commitAll(root, skip);
+
+    expect(await readGuardLegs(root)).toEqual([]);
+  });
+
+  it("names a leg per copy, HEAD's before the disk's, each with the setting it holds", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    const swapped = { reviewTool: { ...REVIEW_TOOL_ON, login: "another-reviewer[bot]" } };
+    await put(root, CLAUDE_COPY, guardText({ reviewTool: REVIEW_TOOL_ON }));
+    await put(root, ".stamity/manifest.json", manifestText());
+    await commitAll(root, skip);
+    await put(root, CLAUDE_COPY, guardText(swapped));
+
+    expect(await readGuardLegs(root)).toEqual([
+      { source: `the guard copy \`${CLAUDE_COPY}\` committed at \`HEAD\``, setting: setting({ reviewTool: REVIEW_TOOL_ON }) },
+      { source: `the guard copy \`${CLAUDE_COPY}\` on disk`, setting: setting(swapped) },
+    ]);
+  });
+
+  it("names a copy on disk that no commit holds, outside a checkout too", async () => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText());
+    await put(root, OTHER_COPY, guardText({ mode: "ask" }));
+
+    expect(await sources(root)).toEqual([`the guard copy \`${CLAUDE_COPY}\` on disk`, `the guard copy \`${OTHER_COPY}\` on disk`]);
+  });
+
+  it("reads `ask` where the setup at HEAD records a copy nobody can find, naming that", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, ".stamity/manifest.json", manifestText());
+    await commitAll(root, skip);
+
+    const [leg, ...others] = await readGuardLegs(root);
+    expect(others).toEqual([]);
+    expect(leg?.setting.mode).toBe("ask");
+    expect(leg?.source).toContain("records one");
+  });
+
+  it("names `HEAD` as a leg of its own when git refuses the repository", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText());
+    await put(root, ".stamity/manifest.json", manifestText());
+    await commitAll(root, skip);
+    await breakGitConfig(root);
+
+    expect(await sources(root)).toEqual([`the guard copy \`${CLAUDE_COPY}\` on disk`, "`HEAD`, which git did not answer for"]);
   });
 });
 

@@ -8,6 +8,7 @@ import {
   parseAutonomyMarker,
   readAutonomy,
   resolveAutonomy,
+  reviewToolConflict,
   strictestAutonomy,
   type ResolvedAutonomy,
 } from "../../src/config/autonomy.ts";
@@ -506,6 +507,50 @@ describe("the factory keys", () => {
 
       expect(loosens(swapped, strictestAutonomy(swapped, person))).toBe(false);
       expect(loosens(swapped, person)).toBe(true);
+    });
+  });
+
+  describe("reviewToolConflict", () => {
+    const leg = (source: string, autonomy?: AutonomyConfig): { source: string; setting: ResolvedAutonomy } => ({ source, setting: resolved(autonomy) });
+    const { stateMarker: _marker, ...noMarker } = REVIEW_TOOL;
+    const { stateSection: _section, ...noSection } = REVIEW_TOOL;
+
+    it.each([
+      ["login", { ...REVIEW_TOOL, login: "another-reviewer[bot]" }],
+      ["clean", { ...REVIEW_TOOL, clean: "reaction" as const }],
+      ["stateMarker", { ...REVIEW_TOOL, stateMarker: "another-state:v1" }],
+      ["stateSection", { ...REVIEW_TOOL, stateSection: "another_section" }],
+      ["a stateMarker one leg lacks", noMarker],
+      ["a stateSection one leg lacks", noSection],
+    ])("names both legs where they differ on %s", (_name, other) => {
+      expect(reviewToolConflict([leg("one", { reviewTool: REVIEW_TOOL }), leg("two", { reviewTool: other })])).toEqual(["one", "two"]);
+    });
+
+    it("names both legs where a tool stands against none, whichever way round", () => {
+      expect(reviewToolConflict([leg("one", { reviewTool: REVIEW_TOOL }), leg("two")])).toEqual(["one", "two"]);
+      expect(reviewToolConflict([leg("one"), leg("two", { reviewTool: REVIEW_TOOL })])).toEqual(["one", "two"]);
+    });
+
+    it("names every leg in the order read, the two that agree too: a majority settles nothing", () => {
+      const other = { ...REVIEW_TOOL, login: "another-reviewer[bot]" };
+
+      expect(reviewToolConflict([leg("one", { reviewTool: REVIEW_TOOL }), leg("two", { reviewTool: REVIEW_TOOL }), leg("three", { reviewTool: other })])).toEqual([
+        "one",
+        "two",
+        "three",
+      ]);
+    });
+
+    it("names nothing where the legs name the same tool, whatever their rounds, wait or request", () => {
+      const tuned = { ...REVIEW_TOOL, rounds: 3, waitMinutes: 90, request: "@codex look again" };
+
+      expect(reviewToolConflict([leg("one", { reviewTool: REVIEW_TOOL }), leg("two", { reviewTool: tuned })])).toEqual([]);
+    });
+
+    it("names nothing where no leg names a tool, for one leg, or for none", () => {
+      expect(reviewToolConflict([leg("one"), leg("two", { mode: "ask" })])).toEqual([]);
+      expect(reviewToolConflict([leg("one", { reviewTool: REVIEW_TOOL })])).toEqual([]);
+      expect(reviewToolConflict([])).toEqual([]);
     });
   });
 

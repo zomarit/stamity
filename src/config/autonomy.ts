@@ -372,6 +372,24 @@ export function strictestAutonomy(first: ResolvedAutonomy, ...rest: readonly Res
   });
 }
 
+/** One leg of a strictest read: the setting it reads as, and what it is, in the words a person is told. */
+export interface AutonomyLeg {
+  readonly source: string;
+  readonly setting: ResolvedAutonomy;
+}
+
+/**
+ * Every leg, in the order given, where `legs` disagree on the review tool, or none where they agree (REQ-FLOW-138).
+ * Legs disagree on another `login`, `clean`, `stateMarker` or `stateSection`, or on a tool named against none; `rounds`
+ * and `waitMinutes` are {@link strictestAutonomy}'s to settle by the lowest. Every leg is named, the ones that agree
+ * too: no leg outranks another on who reviews, so none is singled out as the odd one, and a person settles it.
+ */
+export function reviewToolConflict(legs: readonly AutonomyLeg[]): string[] {
+  const identity = ({ setting: { reviewTool: tool } }: AutonomyLeg): string =>
+    JSON.stringify(tool === undefined ? null : [tool.login, tool.clean, tool.stateMarker, tool.stateSection]);
+  return new Set(legs.map(identity)).size > 1 ? legs.map((leg) => leg.source) : [];
+}
+
 /** What a guard copy's marker line starts with; the resolved setting follows as JSON. */
 const AUTONOMY_MARKER = "// stamity-autonomy ";
 

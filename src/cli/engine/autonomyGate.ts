@@ -9,6 +9,7 @@ import {
   parseAutonomyMarker,
   resolveAutonomy,
   strictestAutonomy,
+  type AutonomyLeg,
   type LooserKey,
   type ResolvedAutonomy,
 } from "../../config/autonomy.ts";
@@ -274,12 +275,6 @@ function insideCheckout(rootDir: string): boolean {
   }
 }
 
-/** One leg of the baseline: the setting it reads as, and what it is, in the words a refusal names it by. */
-interface BaselineLeg {
-  readonly source: string;
-  readonly setting: ResolvedAutonomy;
-}
-
 /** The manifest's path from the setup root, as git and the file system both take it. */
 const MANIFEST_REL = `${STATE_DIR}/${MANIFEST_FILE}`;
 
@@ -292,8 +287,8 @@ const MANIFEST_REL = `${STATE_DIR}/${MANIFEST_FILE}`;
  * the manifest on disk, which an agent can edit — so a planted file never does
  * without a commit.
  */
-async function baselineLegs(rootDir: string, planned: readonly string[]): Promise<BaselineLeg[]> {
-  const legs: BaselineLeg[] = [];
+async function baselineLegs(rootDir: string, planned: readonly string[]): Promise<AutonomyLeg[]> {
+  const legs: AutonomyLeg[] = [];
   const others = KNOWN_GUARD_PATHS.filter((path) => !planned.includes(path));
   const read = (path: string): Promise<string | null | undefined> => readRegularFile(join(rootDir, ...path.split("/")), GUARD_COPY_MAX_BYTES);
   const [onDisk, othersOnDisk] = await Promise.all([Promise.all(planned.map(read)), Promise.all(others.map(read))]);
@@ -350,7 +345,7 @@ async function baselineLegs(rootDir: string, planned: readonly string[]): Promis
 }
 
 /** The strictest of `legs`, or the default when there is none. */
-function strictestOf(legs: readonly BaselineLeg[]): ResolvedAutonomy {
+function strictestOf(legs: readonly AutonomyLeg[]): ResolvedAutonomy {
   const [first, ...rest] = legs.map((leg) => leg.setting);
   return first === undefined ? resolveAutonomy({}) : strictestAutonomy(first, ...rest);
 }
@@ -377,25 +372,39 @@ export async function readBaseline(rootDir: string, copyPaths: readonly string[]
 }
 
 /**
- * The setting the baked guard stands for: the fourth leg of what `run land` reads
- * (REQ-FLOW-138, `./landSetting.ts`), so a key merged to the default branch binds
- * only once a person has baked it with `--loosen`. The strictest of every copy at
- * a known guard path on disk ({@link guardCopySetting}) and every one `HEAD` holds,
- * so an edit of a copy on disk alone loosens nothing. Where none is at either, and
- * the manifest at `HEAD` records one among the files it owns, it reads `ask`, so
- * deleting them drops no leg; a git that fails inside a checkout reads as the
- * strictest setting. `null` when the setup has no guard to read: there is no leg.
+ * The baked guard's legs of what `run land` reads (REQ-FLOW-138, `./landSetting.ts`),
+ * so a key merged to the default branch binds only once a person has baked it with
+ * `--loosen`. One leg, named, for every copy at a known guard path `HEAD` holds and
+ * then every one on disk ({@link guardCopySetting}), so an edit of a copy on disk
+ * alone loosens nothing and a read can see two copies disagree on the review tool,
+ * which the strictest of them would hide. Where none is at either, and the manifest
+ * at `HEAD` records one among the files it owns, the leg reads `ask`, so deleting
+ * them drops no leg; a git that fails inside a checkout gives a leg of the strictest
+ * setting. Empty when the setup has no guard to read.
  */
-export async function readGuardSetting(rootDir: string): Promise<ResolvedAutonomy | null> {
+export async function readGuardLegs(rootDir: string): Promise<AutonomyLeg[]> {
   const read = (path: string): Promise<string | null | undefined> => readRegularFile(join(rootDir, ...path.split("/")), GUARD_COPY_MAX_BYTES);
   const [onDisk, head] = await Promise.all([Promise.all(KNOWN_GUARD_PATHS.map(read)), readHead(rootDir, [MANIFEST_REL, ...KNOWN_GUARD_PATHS])]);
-  const copies = [...onDisk.filter((text) => text !== null), ...KNOWN_GUARD_PATHS.filter((path) => head?.has(path) === true).map((path) => head?.get(path))];
-  const settings = copies.map((text) => (text === undefined ? UNREADABLE : guardCopySetting(text)));
-  if (head === null && insideCheckout(rootDir)) settings.push(UNREADABLE);
+  const copyLeg = (path: string, where: string, text: string | undefined): AutonomyLeg => ({
+    source: `the guard copy \`${path}\` ${where}`,
+    setting: text === undefined ? UNREADABLE : guardCopySetting(text),
+  });
+  const legs = KNOWN_GUARD_PATHS.filter((path) => head?.has(path) === true).map((path) => copyLeg(path, "committed at `HEAD`", head?.get(path)));
+  onDisk.forEach((text, index) => {
+    if (text !== null) legs.push(copyLeg(KNOWN_GUARD_PATHS[index] ?? "", "on disk", text));
+  });
+  if (head === null && insideCheckout(rootDir)) legs.push({ source: "`HEAD`, which git did not answer for", setting: UNREADABLE });
   const committed = head?.get(MANIFEST_REL);
-  if (settings.length === 0 && committed !== undefined && recordsGuardCopy(committed) === true) settings.push(ASK);
-  const [first, ...rest] = settings;
-  return first === undefined ? null : strictestAutonomy(first, ...rest);
+  if (legs.length === 0 && committed !== undefined && recordsGuardCopy(committed) === true) {
+    legs.push({ source: "no guard copy found at `HEAD` or on disk, though the setup committed at `HEAD` records one (read as `ask`)", setting: ASK });
+  }
+  return legs;
+}
+
+/** The strictest of {@link readGuardLegs}, `HEAD`'s tool first; `null` when the setup has no guard to read: there is no leg. */
+export async function readGuardSetting(rootDir: string): Promise<ResolvedAutonomy | null> {
+  const legs = await readGuardLegs(rootDir);
+  return legs.length === 0 ? null : strictestOf(legs);
 }
 
 /**
