@@ -19,6 +19,7 @@ import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
 import { gitSurfaceRecordPath, readPushed, readRunGitSurface, scanChange } from "./gate.ts";
+import { parseItemRef, runContract } from "./runContract.ts";
 import { runLand } from "./runLand.ts";
 
 /**
@@ -156,12 +157,16 @@ import { runLand } from "./runLand.ts";
  *
  * **`land`** (REQ-FLOW-132, REQ-FLOW-133) merges the run's own pull request, or fast-forwards the default branch to
  * its head, when the evidence holds, else asks or refuses; its body is `./runLand.ts`, registered here only.
+ *
+ * **`contract`** (REQ-FLOW-155) reads a ready item and writes the run's contract, pushing nothing; its body is
+ * `./runContract.ts`, registered here only.
  */
 
 const START = "start";
 const CHECKPOINT = "checkpoint";
 const END = "end";
 const LAND = "land";
+const CONTRACT = "contract";
 
 /** Every option beyond `--run`, by its key in commander's parsed options. */
 const OPTION_FLAGS: Readonly<Record<string, string>> = {
@@ -177,6 +182,7 @@ const OPTION_FLAGS: Readonly<Record<string, string>> = {
   ready: "--ready",
   wait: "--wait",
   approved: "--approved",
+  item: "--item",
 };
 
 /** The options each subcommand takes beyond `--run`; any other one given is a usage error. */
@@ -187,6 +193,7 @@ const SUBCOMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> = {
   [END]: ["paths", "title", "refused", "signoff", "finalRound", "dropHeld"],
   // No --paths and no --title: land stages and titles nothing.
   [LAND]: ["fastForward", "method", "ready", "wait", "approved"],
+  [CONTRACT]: ["item"],
 };
 
 /** `--wait`'s most minutes: under a client's ten-minute shell-call limit (decision D17). */
@@ -273,7 +280,7 @@ export const runCommand: CommandModule = {
 
   configure(cmd: Command): void {
     cmd
-      .addArgument(new Argument("<subcommand>", "which run action to run").choices([START, CHECKPOINT, END, LAND]))
+      .addArgument(new Argument("<subcommand>", "which run action to run").choices([START, CHECKPOINT, END, LAND, CONTRACT]))
       .option("--run <run-id>", "the run folder's name under .stamity/runs/", parseRun)
       .option("--paths <path...>", "checkpoint and end: also stage these paths, relative to the project root")
       .option("--pr", "checkpoint: open or update the run's draft pull request after the push (with --title)")
@@ -287,6 +294,7 @@ export const runCommand: CommandModule = {
       .option("--ready", "land: mark the run's draft ready for review once the evidence holds, then land it")
       .option("--wait <minutes>", `land: wait up to this many minutes (at most ${LAND_WAIT_MAX}) for pending check runs`, parseWait)
       .option("--approved <sha>", "land: the head commit the person approved over an asks outcome; land it if the head is still that commit and nothing refuses (never in an unattended run)", parseApproved)
+      .addOption(new Option("--item <owner/repo#n>", "contract: the GitHub issue the run takes as its input").argParser(parseItemRef))
       // Usage errors, so exit 2 before the action and before git runs.
       .hook("preAction", (command) => {
         const subcommand = String(command.processedArgs[0]);
@@ -296,6 +304,7 @@ export const runCommand: CommandModule = {
         const stray = Object.keys(OPTION_FLAGS).find((key) => given[key] !== undefined && !allowed.includes(key));
         if (stray !== undefined) command.error(`error: ${OPTION_FLAGS[stray] ?? stray} does not apply to ${subcommand}`, { exitCode: 2 });
         if (subcommand === END && given["title"] === undefined) command.error("error: run end needs --title <title>", { exitCode: 2 });
+        if (subcommand === CONTRACT && given["item"] === undefined) command.error("error: run contract needs --item <owner/repo#n>", { exitCode: 2 });
         if (subcommand === CHECKPOINT && (given["pr"] === true) !== (given["title"] !== undefined)) {
           command.error("error: --pr and --title <title> go together", { exitCode: 2 });
         }
@@ -313,6 +322,10 @@ export const runCommand: CommandModule = {
     if (args[0] === CHECKPOINT) return runCheckpoint(ctx, opts, CHECKPOINT);
     if (args[0] === END) return runCheckpoint(ctx, opts, END);
     if (args[0] === LAND) return runLand(ctx, opts);
+    if (args[0] === CONTRACT) {
+      checkRunId(ctx, CONTRACT, String(opts["run"]));
+      return runContract(ctx, opts);
+    }
     return runStart(ctx, String(opts["run"]));
   },
 };

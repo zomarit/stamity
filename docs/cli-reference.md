@@ -390,7 +390,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
-| `<subcommand>` | which run action to run — one of `start`, `checkpoint`, `end`, `land` |
+| `<subcommand>` | which run action to run — one of `start`, `checkpoint`, `end`, `land`, `contract` |
 
 | Flag | What it does | Default |
 |---|---|---|
@@ -407,5 +407,6 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--ready` | land: mark the run's draft ready for review once the evidence holds, then land it | — |
 | `--wait <minutes>` | land: wait up to this many minutes (at most 9) for pending check runs | — |
 | `--approved <sha>` | land: the head commit the person approved over an asks outcome; land it if the head is still that commit and nothing refuses (never in an unattended run) | — |
+| `--item <owner/repo#n>` | contract: the GitHub issue the run takes as its input | — |
 
 Regenerate this page with `node scripts/generate-docs.mjs`.
