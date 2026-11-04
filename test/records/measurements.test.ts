@@ -782,6 +782,14 @@ describe("the restated figures are held to the artifacts they come from", () => 
     expect(page).not.toContain("safety cases");
   });
 
+  // The upper edge on the real changelog: 1.16.0 is dated 2026-10-20, so run 57 named as 1.16.0's
+  // passes the bound below that release and is a week past the release itself.
+  it("refuses run 57 as the run of record of the release before its own, naming it", () => {
+    expect(() => underRelease("2026-10-27-run-57", "1.16.0")).toThrow(
+      /`2026-10-27-run-57` is dated after release 1\.16\.0's 2026-10-20/,
+    );
+  });
+
   it.each(["2026-10-27-run-56", "2026-10-27-run-57"])(
     "refuses %s as the run of record of the release after its own, naming it",
     (id) => {
@@ -1130,7 +1138,11 @@ describe("the page says why its run of record happened", () => {
       // TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases): the page reads the pinned
       // snapshot, not the newest file, so the scratch root writes its snapshot at the pinned date.
       writeMeasurementSnapshot(root, PINNED_DATE);
-      placeRenderInputs(root, results, { path: pathOf(id), release: "2.0.0" });
+      // TEST CHANGE, justified (2026-11-04, plan 023 file 1, unit release-speed; REQ-PROVE-020): the
+      // fixture changelog dates 2.0.0 in January, and a run of record dated after its release's own
+      // date is refused, so these September runs name a release that changelog does not date yet.
+      // Fixture setup only: no assertion of a caller moved.
+      placeRenderInputs(root, results, { path: pathOf(id), release: "3.0.0" });
       if (note) writeFileSync(join(root, "evals/runs", id, "NOTE.md"), "# A note\n");
       try {
         return renderMeasurements(root);
@@ -1194,7 +1206,8 @@ describe("the page says why its run of record happened", () => {
       // TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases): the page reads the pinned
       // snapshot, not the newest file, so the scratch root writes its snapshot at the pinned date.
       writeMeasurementSnapshot(root, PINNED_DATE);
-      placeRenderInputs(root, results, { path: pathOf(id), release: "2.0.0" });
+      // TEST CHANGE, justified (2026-11-04, unit release-speed): as in the case above.
+      placeRenderInputs(root, results, { path: pathOf(id), release: "3.0.0" });
       page = renderMeasurements(root);
     } finally {
       rmSync(root, { recursive: true, force: true });

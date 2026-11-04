@@ -1534,6 +1534,20 @@ describe("a run of record may chain back to a full measure", () => {
     expect(worded(fullRecord, {}, dayBefore).join(" ")).toContain("Run 62 measured every case in full");
   });
 
+  // The bound's upper edge: a `release` left at the release already shipped would hold run 62 to the
+  // older bound, so a run dated after its release's own date is refused. Same-day reads as that
+  // release's, and a release with no heading yet has no upper edge: the cut comes before the heading.
+  it("refuses a run of record dated after its own release's date, full or composed, naming it", () => {
+    const fullRecord = syntheticResults({ id: RECORD, status: "PASS", reason: "A full run." });
+    const shipped = (date: string): readonly Released[] => [[RELEASE, date], ...IN_RELEASE];
+    const refusal = new RegExp(`\`${RECORD}\` is dated after release 2\\.0\\.0's 2026-11-02`);
+    expect(() => worded(fullRecord, {}, shipped("2026-11-02"))).toThrow(refusal);
+    expect(() => worded(ofRecord(), {}, shipped("2026-11-02"))).toThrow(refusal);
+    expect(() => worded(oneLink([[TWIN, "case file bytes moved"]]), {}, shipped("2026-11-02"))).toThrow(refusal);
+    expect(worded(fullRecord, {}, shipped("2026-11-03")).join(" ")).toContain("Run 62 measured every case in full");
+    expect(worded(fullRecord, {}, IN_RELEASE).join(" ")).toContain("Run 62 measured every case in full");
+  });
+
   it("refuses a results file that is not the run of record's", () => {
     expect(() =>
       withChain({ [LINK]: link(), [FULL]: full() }, (root) => measurementMethod(root, "63", ofRecord())),

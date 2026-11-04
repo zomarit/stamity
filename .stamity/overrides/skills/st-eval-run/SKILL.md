@@ -284,9 +284,8 @@ A clean run reports the artifact path and one line per metric.
   by model, effort, rubric, harness, isolation controls and versioned inputs.
 - A content edit re-runs the affected cases, found by the `source` field each
   case declares, and carries their result.
-- A release runs the full set — a baseline run, or an incremental run composed
-  with one under the incremental rule of `evals/SET-v7.md` ("Which releases run
-  the set — amended 2026-10-08") — when its diff since the run of record touches
+- A release runs the full set, as `evals/SET-v7.md`'s "What a release measures"
+  defines those words and ranks over this line, when its diff since the run of record touches
   `content/**` or another file a case's `source:` names; the emitted client
   files (the cross-client goldens); the eval set's files (`evals/SET-v7.md`,
   `evals/README.md`, `evals/coverage-exemptions-v6.md`, the selected rubric

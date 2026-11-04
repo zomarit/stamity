@@ -1800,6 +1800,22 @@ describe("the release eval follows what changed", () => {
     expect(contractOn, "the contract still asks for a stated first run").not.toMatch(/begins at `<run id>`/);
   });
 
+  // ADDED 2026-11-04 (plan 023 file 1, unit release-speed, round 2; REQ-PROVE-033): the eval README's
+  // hard trigger 2 and the eval skill's rule line read under the ranking paragraph and name it. The
+  // plan gives this repository's emitted copies to the integration lane, so this reads the override.
+  it.each(["evals/README.md", ".stamity/overrides/skills/st-eval-run/SKILL.md"])(
+    "%s points at the paragraph that ranks",
+    (path) => {
+      const text = collapsed(read(path));
+      expect(text, `${path} does not name the paragraph that ranks`).toMatch(
+        /A release runs the full set, as [^"]*"What a release measures"|the run of record scores every case, measured as "What a release measures"/,
+      );
+      expect(text, `${path} still gives the older meaning`).not.toMatch(
+        /— a baseline run, or an incremental run composed with one/,
+      );
+    },
+  );
+
   it("keeps three samples, every threshold and calibration on every run beside the chain rule", () => {
     const set = collapsed(fileSection(EVAL_SET, "## Incremental runs — declared 2026-09-15"));
     const rule = set.slice(set.indexOf("**What a release measures — amended 2026-11-04.**"));

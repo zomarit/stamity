@@ -1315,7 +1315,9 @@ every safety case was measured on a candidate of its release. A run belongs to a
 text: `CHANGELOG.md` dates each release, the run id dates each run, and a run is in a release only when it is dated
 after the previous release's date (`releaseBound` in `src/cli/docs/measurements.ts`). `runOfRecordInRelease` holds every
 run of record, full or composed, to that bound and refuses one dated on or before that date, naming it, so a full run
-cannot be relabelled as a later release's. `proveChain` holds every composed run of record further, one link or more:
+cannot be relabelled as a later release's. Where the changelog dates the release itself, it also refuses a run dated
+after that date, naming it, so a `release` value left behind at the last cut turns no bound off; a release with no
+heading yet has no such edge, and a carried-forward release does not move the file. `proveChain` holds every composed run of record further, one link or more:
 the walk ends at a run that measured every case; the backstop has not come
 due; and every safety case the run's § 6 lists (`safetyCases`) was last measured, by the newest run on the chain whose
 re-measured table names it or else by the full measure, in a run of this release. `readPriorRun` still refuses a prior
@@ -1343,7 +1345,8 @@ runs 45, 46 and 53 to 55 stay as they were written, each true of its release.
   at an earlier release's full measure THEN the render throws, whatever the section's opening line says. GIVEN a chain
   THEN the page states every link's verdict and every link's moved case files, and the hand pages are held to every
   FAIL on it. GIVEN a run of record, full or composed, dated on or before the previous release's date THEN the render
-  throws naming it. GIVEN the changelog dates no earlier release THEN the render throws. Test evidence:
+  throws naming it. GIVEN one dated after its own release's changelog date THEN the render throws naming it. GIVEN the
+  changelog dates no earlier release THEN the render throws. Test evidence:
   `test/cli/docs/measurements.test.ts`, its describe "a run of record may chain back to a full measure";
   `test/records/measurements.test.ts`, "says how the run of record was measured: composed from the runs it names, or in
   full", "renders %s under the release rule" and "refuses %s as the run of record of the release after its own, naming
@@ -2002,8 +2005,7 @@ The third release or 30-day full run stays, computed from those dates at any cha
 case itself, carrying nothing. Three samples per case, every threshold and calibration on every run do not move. The
 trigger list above does not move: this says what a triggered release measures, not which release triggers. A release
 runs the full set when its run of record scores every case under that paragraph, which ranks over every other wording
-of the rule: `evals/SET-v7.md` and the checklist name that, and the older wording in `evals/README.md` and the eval
-skill reads under it until their own units reword them.
+of the rule: `evals/SET-v7.md`, the checklist, `evals/README.md`'s hard trigger 2 and the eval skill's rule line name that.
 
 - GIVEN the checklist's eval line and SET-v7's incremental section THEN each states the safety set, what a triggered
   release measures, the re-measure of a case moved after that run, the composed run after a FAIL, the chain back to a

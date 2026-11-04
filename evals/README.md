@@ -448,12 +448,13 @@ automation.
 1. **A `content/` edit re-runs the affected cases.** Find them by the `source` field in
    `cases-v6/**`; a claim that moved takes its case's `source` and inlined brief with it in
    the same diff. Stated in `CONTRIBUTING.md` under "Changing the corpus".
-2. **A release runs the full set when a model-facing input moved.** Before the tag is cut, and
+2. **A release runs the full set when a model-facing input moved.** Before the tag is cut, the
+   run of record scores every case, measured as "What a release measures" in `SET-v7.md` says, and
    the release carries the run artifact; a release that moved none of the triggers `SET-v7.md`
    names under "Incremental runs" carries the run of record forward instead. Wired into
    `.github/release-controls-checklist.md` under "Per-release record currency", so a release with
    neither is blocked by its own checklist. (Amended 2026-10-08; until then every release ran the
-   full set.)
+   full set. Amended 2026-11-04, under that paragraph, which ranks over this one.)
 3. **A model change re-runs every adversarial case, at a zero-break bar.** Guardrail
    behaviour belongs to the model-and-prose pair, so a model swap rewrites every case at
    once — adversarial cases re-run even when no prompt moved. A judge-model change re-runs

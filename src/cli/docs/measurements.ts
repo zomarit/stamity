@@ -1399,11 +1399,15 @@ function dayNumber(id: string): number {
 /** A released heading in the changelog, with its date where it states one. */
 const DATED_RELEASE = /^## \[(\d+\.\d+\.\d+)](?: - (\d{4}-\d{2}-\d{2}))?/gm;
 
-/** Where a release begins, by dates: the release before it, and every earlier release's date. */
+/**
+ * Where a release begins and ends, by dates: the release before it, every earlier release's date, and
+ * its own date, `null` until the changelog dates it.
+ */
 interface ReleaseBound {
   readonly previous: string;
   readonly date: string;
   readonly earlier: readonly string[];
+  readonly own: string | null;
 }
 
 /**
@@ -1418,23 +1422,34 @@ interface ReleaseBound {
 function releaseBound(root: string, release: string): ReleaseBound {
   const path = join(root, "CHANGELOG.md");
   if (!existsSync(path)) fail(`No CHANGELOG.md under ${root}, so the page cannot tell which runs are in release ${release}.`);
-  const earlier = [...readFileSync(path, "utf-8").matchAll(DATED_RELEASE)]
-    .map(([, version = "", date = ""]) => ({ version, date }))
+  const dated = [...readFileSync(path, "utf-8").matchAll(DATED_RELEASE)].map(
+    ([, version = "", date = ""]) => ({ version, date }),
+  );
+  const earlier = dated
     .filter(({ version }) => compareVersions(version, release) < 0)
     .toSorted((left, right) => compareVersions(right.version, left.version));
   const undated = earlier.find(({ date }) => date === "");
   if (undated !== undefined) fail(`CHANGELOG.md states no date for ${undated.version}, so the page cannot bound release ${release}.`);
   const [previous] = earlier;
   if (previous === undefined) fail(`CHANGELOG.md dates no release before ${release}, so the page cannot bound it.`);
-  return { previous: previous.version, date: previous.date, earlier: earlier.map(({ date }) => date) };
+  const own = dated.find(({ version }) => version === release)?.date;
+  return {
+    previous: previous.version,
+    date: previous.date,
+    earlier: earlier.map(({ date }) => date),
+    own: own === undefined || own === "" ? null : own,
+  };
 }
 
 /**
  * The run of record's directory id, its release and that release's bound, with the bound held to the
  * run itself: a run of record, full or composed, dated on or before the previous release's date
- * cannot be this release's. The id comes from `evals/run-of-record.json`, never from the run's text.
- * Throws what {@link releaseBound} throws, and `EngineError` (`VALIDATION_ERROR`) when that file
- * names another run, or when the date falls short, naming the run.
+ * cannot be this release's, and neither can one dated after this release's own date, which a
+ * `release` value left behind at the last cut would otherwise pass. A release the changelog does not
+ * date yet has no such edge, and a carried-forward release does not move the file, so neither is
+ * touched. The id comes from `evals/run-of-record.json`, never from the run's text. Throws what
+ * {@link releaseBound} throws, and `EngineError` (`VALIDATION_ERROR`) when that file names another
+ * run, or when the date falls outside the release, naming the run.
  */
 function runOfRecordInRelease(
   root: string,
@@ -1448,6 +1463,9 @@ function runOfRecordInRelease(
   const bound = releaseBound(root, release);
   if (runDate(self) <= bound.date) {
     fail(`\`${self}\` is dated on or before ${bound.previous}'s ${bound.date}, so it cannot be release ${release}'s run of record.`);
+  }
+  if (bound.own !== null && runDate(self) > bound.own) {
+    fail(`\`${self}\` is dated after release ${release}'s ${bound.own}, so it cannot be that release's run of record.`);
   }
   return { self, release, bound };
 }

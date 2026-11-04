@@ -203,7 +203,8 @@ a case moved after that run re-measures, a run after a FAIL is composed, and the
 chain back to a full measure when its results file lists every safety case as measured in this release.
 A run belongs to a release by dates: `CHANGELOG.md` dates each release, the run id dates each run, and a
 run of record, full or composed, dated on or before the previous release's date cannot be the next
-release's: the measurements page refuses it, naming it. A composed one, one link or more, must also show
+release's, and one dated after its own release's date in that file cannot be that release's: the
+measurements page refuses either, naming it. A composed one, one link or more, must also show
 every safety case measured in a run dated after that date, or the page refuses it, naming the case. The third-release or 30-day full
 run stays, at any chain length and computed from those dates, and it measures every case itself,
 carrying nothing; three samples, every threshold and calibration on every run do not move. That file's
