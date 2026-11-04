@@ -5,8 +5,8 @@ import { isIsoDate } from "./disposition.ts";
 
 /**
  * The run contract (REQ-FLOW-098): a committed YAML file that states, by
- * reference, what one unattended run is for. It is the groundwork a future
- * trigger reads; no trigger is built.
+ * reference, what one unattended run is for. A person writes one, or
+ * `stamity run contract` writes it from a ready item (REQ-FLOW-155).
  *
  * ```yaml
  * run-contract: 1
@@ -20,7 +20,7 @@ import { isIsoDate } from "./disposition.ts";
  *   - { name: ..., state: done }
  *   - { name: ..., state: owned, owner: "@ops" }
  * budget: { stop-by: "2026-10-16T06:00:00Z", max-units: 12 }
- * answerer: "@maintainer"         # who answers the morning list
+ * answerer: "@maintainer"         # who answers the morning list, and gets `run end`'s review request
  * preview: stop                   # fixed; absent reads as stop
  * move: off                       # fixed; absent reads as off
  * ```

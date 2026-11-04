@@ -223,7 +223,7 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         path: "docs/cloud.md",
         title: "Cloud runs",
         description:
-          "running a planned change in a vendor's cloud with nobody watching — each cloud's setup, branch protection, secrets, contract start and morning walk, the GitHub Action's limits and what a pull request still changes there, and the run contract.",
+          "running a planned change in a vendor's cloud with nobody watching — each cloud's setup, branch protection, secrets, contract start and morning walk, the GitHub Action's limits and what a pull request still changes there, the run contract, and the label, the review tool and the land job that take a ready item to a merge.",
         regenerateCommand: null,
       },
       {

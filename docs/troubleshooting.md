@@ -2,7 +2,7 @@
 title: Troubleshooting
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.17.0 release cut (2026-10-26). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit cc10ab71. Re-attested 2026-11-05 for the brake, the administrator's opt-in, the review tool, auto-ship and the land job. -->
 <!-- Re-open when: a `check` probe is added or removed, an error code starts or stops being
      thrown, or a remedy below stops working. `test/docsPages.test.ts` holds this page to the
      hand-page contract and reads the probe rows out of `src/cli/commands/check.ts`;
@@ -81,9 +81,10 @@ the two that exist only at the CLI edge. The codes this page names are `VALIDATI
 
 ## What `check` prints
 
-Eighteen probes, then the drift gate, then a provenance rollup. Two more rows print only where
-they apply, both before `invariants`: `cloud-install` in a repository that targets Cursor, then
-`change-classes` in one that holds a `.stamity/change-classes.json`. A run given an `--expect-*`
+Eighteen probes, then the drift gate, then a provenance rollup. Three more rows print only where
+they apply, all before `invariants`: `land-job-workflows` with `autonomy.landJob` on, `cloud-install`
+in a repository that targets Cursor, then `change-classes` in one that holds a
+`.stamity/change-classes.json`. A run given an `--expect-*`
 flag prints one more row, `expectations`, after `invariants`.
 
 Each probe reads `ok`, `warn` or `fail`. A `fail` takes the exit code to `1`. A `warn` is
@@ -113,6 +114,7 @@ run at all warns instead, saying `could not be checked:` and why. Every other ro
 | `moved-skills` | **Can fail.** Two skills left the core for the `frontend` pack in 1.17.0: `st-design-system-detect` and `st-browser-evidence`. The row reads your override folder and the manifest's ledger directly, so it still answers when an overlay stops the plan and drift reads `not evaluated`. It fails on an overlay of either skill, a `SKILL.customize.yaml` or `SKILL.customize.md` under `.stamity/overrides/skills/<id>/`. Overlays on pack skills are not applied, so `sync` refuses that file whether or not the pack is installed. Fold the change into a full override under another id, or remove the file. To keep the shipped skill, run `add frontend`. It warns on a full override of either skill: a `SKILL.md` under `.stamity/overrides/skills/` whose frontmatter `id` names it, in any folder, or one that declares no `id` in that skill's folder. With the pack absent, the override no longer replaces anything and tracks no shipped copy. Keep it, or remove it and run `add frontend`. With the pack installed, `sync` refuses that override, because it collides with the pack's copy. Remove or rename it, or remove the pack with `clean --pack frontend`. It also warns when the ledger still records the old core copies at `.claude/skills/st-<id>/` or `.agents/skills/st-<id>/` and the pack is not installed. `sync` removes an unedited copy and names an edited one it keeps. It passes otherwise. |
 | `legacy-files` | Warns, and never fails. It names each file an earlier release wrote that this setup no longer writes or tracks: a Copilot prompt file `.github/prompts/st-<id>.prompt.md` that no ledger row holds (Copilot's own touchpoint prompt files are still written and tracked), and a companion `.agents/skills/st-<id>/agents/openai.yaml` of a touchpoint or a pack command, which only Codex writes now. `sync` keeps such a file when it cannot prove the bytes are the engine's unedited output, names it once, and stops recording it, so after that run only this row names it. Delete each file it names by hand, unless it is yours. The row finds these files on disk by their fixed names, never through a ledger row. It reads names only, follows no link, and uses the ledger only to leave out a path a row still holds. It passes when no such file is there, or when there is no readable manifest to compare with. |
 | `autonomy-deploying` | Warns, and never fails. A push to a branch that `autonomy.deployingBranches` does not list runs unasked, and in `autonomy.mode: autonomous` (the default) the land verb merges into the default branch on its evidence alone unless the list names it. The row warns, in both modes, on each job under `.github/workflows/` that names an `environment`, itself or through a local reusable workflow it calls (`uses: ./.github/workflows/<file>`, followed at most three calls deep), and runs on a push to a branch the list does not cover. For a `branches:` list, that is the default branch when the list matches it, plus each branch or pattern the list names. A bare `push`, a push with no branch filter, and a `branches-ignore` filter run on every branch they do not exclude: the row warns on them until `autonomy.deployingBranches` holds `**`, and its fix is to add a `branches:` filter to the workflow or to set the list to `**`. In list entries and filters alike, `*` stays inside one path segment and `**` crosses segments. In mode `ask` the default branch counts as covered, since that mode asks before a push or a merge there. Each warning names the workflow, the job and the branch, says whether the land verb would merge into it (the default branch) or an agent's push to it runs unasked (any other branch), and gives the fix: `config set autonomy.deployingBranches <list>`, then `sync`. A push filtered on tags alone names no branch. It warns `not evaluated:` on a workflow file that is a link or does not parse, on a branch filter holding `?`, `+`, `[`, `]`, a leading `!`, or an entry YAML reads as a number, such as an unquoted `7.0` (name its branches in `autonomy.deployingBranches`; quoting the entry in the workflow lets the row read it), on a deploy reached through a `workflow_run` trigger, on one from a `pull_request` or `pull_request_target` event, whatever its `types`, on a call to a workflow in another repository, and on a local reusable-workflow call it cannot follow: a fourth call, a cycle, or a file that is not there. The default branch is the one `refs/remotes/origin/HEAD` names, else `main`, and the row then says it assumed `main`. It passes with no workflows folder and when every such branch is covered, and its pass names only what it read. A `schedule` trigger reads as a push to the default branch, outside mode `ask`, since a scheduled run deploys that branch's latest commit. A deploy reached through any other trigger the row does not read, such as `create` or `merge_group`, warns `not evaluated:` naming it. |
+| `land-job-workflows` | Warns, and never fails. Present only with `autonomy.landJob` on. GitHub starts nothing for a name no workflow carries, so a watched workflow that was renamed stops the land job with no other sign. Rename the entry in `autonomy.landJob.workflows`, or the workflow, so the two agree. |
 | `model-pins` | Warns, and never fails, when a model this repository pins or emits for a class is not on the client's own model list for your account, and an id the account does not offer fails the sub-agent's start on Cursor. For each targeted client that can list its models (Cursor, Copilot, Codex; Claude Code runs on its family aliases), the row reads the list the client's CLI prints now and, where the CLI is not on `PATH`, does not answer within 10 s or prints no list, the list the last `sync` saved in the git-ignored cache `.stamity/client-models.json` (or, on a 1.15.0 manifest, under its `models.listed`), never in the committed manifest. The model emission wrote is read from the committed files first. A cache that is there but cannot be read warns, naming it. For Codex the saved list is used whenever there is one, and only without one does the row read Codex's bundled catalogue, with no network call; the row says which list it compared with. With `STAMITY_NO_CLIENT_PROBE=1` set it starts no client and reads the saved list only. Each warning names the client, the class and the model. For a pinned model, pin one the list holds with `config set model.<class>.<client> <id>`. For an emitted model, run `sync`, which reads the list again and picks again. On Copilot it also warns, naming both models, when the live list would make `sync` write a different model than the files carry, whether or not a list was saved. On Cursor only a pin is written, as typed, so the row checks pins alone there, and a pin the list holds reads `unverified`: Cursor checks a sub-agent's model against a narrower list that no command prints, so it may still refuse that pin. When a client has neither a CLI that answers nor a saved list, as on a fresh clone, which holds no cache until its own `sync` writes one, the row passes and says `unverified` and why. |
 | `cloud-install` | Passes, or warns, and never fails. Printed only when this repository targets Cursor. It prints the lines a Cursor cloud environment's install step needs: `node --version`, then the global install of the CLI at the version that generated this setup (the manifest's `generatedBy`), `npm install --global <package>@<version>`, with a registry fork's `--@<scope>:registry=<url>` ahead of the package. Without the CLI the flows' `gate scan` and `ledger status` calls fail in that machine. Set the lines in the install step of the environment you saved in Cursor. `init` and `sync` write no `.cursor/environment.json`, because Cursor uses a saved environment before a repository file, and a saved environment reads the file only when it points at it (Cursor's cloud agent setup page, read 2026-10-26). A package with no npm channel gets no install line, since a registry install would fetch whatever another publisher holds under its name; the row says to install the copy your fork distributes instead. It warns when the manifest records the root `AGENTS.md` as `skip`: `sync` then leaves that file alone, so the "Cursor Cloud specific instructions" section the engine adds to it for Cursor is missing from the file a Cursor cloud agent reads. Record `supplement` for `AGENTS.md` in `.stamity/manifest.json` to keep your text and carry the section, or copy the section in by hand. Copilot needs no such row while `toolOptions.copilot.setupSteps` is `managed`, the default: its `copilot-setup-steps.yml` runs the same install, unless the project's Node pin sits below the CLI's floor, where the workflow carries a comment instead. Under `user` the workflow is yours and needs the same install line; under `off` no workflow is written, and the cloud agent has no CLI unless its environment installs one. |
 | `change-classes` | **Can fail.** Printed only when `.stamity/change-classes.json` exists. That file holds this repository's own change classes and test-input map, which `gate classify` reads from a pull request's base commit, never from the change itself. It passes when the file is valid. It fails naming the first error: text that is not a JSON object, a key that is not `classes` or `testInputs`, a name that is not a change class, an empty glob, a glob longer than 200 characters or holding more than four `**` (in `classes` and in `testInputs` alike), a glob under a class weaker than `product` that matches every path shape — a name, a dotted name, a dotfile, one and two folders deep — (such as `"records": ["**"]`), a `records` or `docs` glob whose extension holds a wildcard (such as `**/*.*` or `notes/*.m*`), which no extension list can bound, a `records` or `docs` glob whose last segment holds a `*` but ends in no concrete extension — a folder glob, a name wildcard or a wildcard folder, such as `notes/**`, `**/README*` or `*` (name the extension, as in `notes/**/*.md`, or the file), or a test entry that is not a plain repository-relative file path (one starting with `-`, holding a space or a glob character, absolute, or climbing out with `..`). Some entries the row accepts are bounded when `gate classify` applies them: a code file, a config-format file (`.json`, `.yml`, `.toml`, `.env` and the like) or an extensionless file other than a doc name such as `LICENSE` never lands in `records` or `docs`, except that a config-format file under the engine's own record paths (`.stamity/runs/`, `.stamity/handoffs/`, `.stamity/inbox.md`) stays `records`; and a code file lands in `tests` only when a built-in test glob (`test/`, `tests/`, `__tests__/`, `*.test.*`, `*.spec.*`) matches it too. While a base commit holds a copy this row fails on, `gate classify` applies only that copy's `product`, `public-contract` and `security-sensitive` entries, no lowering entry, and gives every change at least `product`, so the full gates run. Fix the entry the row names, then re-run `check`. |
@@ -339,7 +341,8 @@ warning. Adding a definition takes none.
 `stamity run land` merges the run's own pull request, or fast-forwards the default branch to it,
 only when the evidence holds: every required check run green on the exact head commit (commit
 statuses do not count), no unresolved review thread, no open Critical or Warning row in the run's
-ledger at that commit, and `mergeable_state` reading `clean`. The branch's own protection still
+ledger at that commit, `mergeable_state` reading `clean`, and, where `autonomy.reviewTool` names a
+tool, that tool's clean word on that commit. The branch's own protection still
 decides any required human review. Exit 0 means `landed` or `already-landed` (or `would-land`
 under `--dry-run`); exit 1 carries
 `outcome` in its `--json` output, `asks` or `refused`, and prints every reason. Once it has found
@@ -350,13 +353,17 @@ the guard asks for them attended and refuses them unattended, as it does for the
 list (a push of a tag, a release, a publish, a secret or protection write, an `--admin` merge, a write
 to another repository or a mention of a person, and a loosening of the setting). To tighten back to
 1.16.0's asks, set `autonomy.mode` to `ask` and run `sync`; to name what deploys, set
-`autonomy.deployingBranches` and `autonomy.deployingActs`, and the land verb asks for those.
+`autonomy.deployingBranches` and `autonomy.deployingActs`, and the land verb asks for those. A
+required check failing on the default branch's tip asks too: that is the brake. The land job is the
+verb's second caller, and its own reasons are in the last list below. Under
+`autonomy.adminRuleProof` an administrator can start a run, and the account could still lift the
+rule: only the guard stops that.
 
 **`asks`: the act is the person's.** The verb merged nothing, and the outcome names the head commit
 it holds for on its `approve with:` line. The reasons, and what each needs:
 
 - `autonomy.mode is ask`: the setting asks for every merge. The person decides. The verb reads the
-  strictest of the default branch's, `HEAD`'s and the work tree's manifest, so a setting loosened
+  strictest of the default branch's, `HEAD`'s and the work tree's manifest and the baked guard, so a setting loosened
   in the work tree (`autonomy.mode` set to `autonomous`, then `sync --loosen`) keeps it asking until
   that change reaches the default branch, and the change to the manifest itself asks: a person
   lands it.
@@ -369,7 +376,25 @@ it holds for on its `approve with:` line. The reasons, and what each needs:
 - `the diff carries a held patch`: an unattended run held a person-only change. A person applies
   the patch or drops it, then decides.
 - `<branch> is named in autonomy.deployingBranches`, or `autonomy.deployingActs names <act>`: the
-  repository says this merge or this ready mark deploys, so it asks in every mode.
+  repository says this merge or this ready mark deploys, so it asks in every mode, unless the change
+  fits `autonomy.autoShip`. A fast-forward always asks here.
+- `auto-ship: <rule>`, beside that branch line: the change did not fit, and the land names each rule.
+  They read `<n> files are over autonomy.autoShip.maxFiles`, `<n> lines are over
+  autonomy.autoShip.maxLines`, `<class> is outside autonomy.autoShip.classes`, `<path> is outside
+  autonomy.autoShip.paths`, `docs-class but not plain text`, `a specialist lens is asked for`, `the
+  change is empty`, `the file count … disagrees with the classified paths`, `the line count is
+  incomplete`, `the line count is not a finite number` and `the classification is incomplete`. The last one also names what could not be read:
+  GitHub's compare, the class file at the tip, a disagreement between the range and GitHub's file list
+  or line total, or a shallow clone. Fetch the whole history, or let a person decide. The rules read
+  paths, size and class, never content.
+- `<branch> is red: <checks> failing on its tip`: the brake. Fix the default branch first. The land
+  that carries the fix goes through on a person's `--approved`, since this is an ask and not a refusal.
+- `<branch>'s tip could not be read (…), so whether it is red is not known`: fix the read the reason
+  names, then run it again.
+- `the head's manifest loosens <keys> against <branch>'s`: the pull request loosens an `autonomy` key
+  in `.stamity/manifest.json`. A person lands that.
+- `the legs disagree on autonomy.reviewTool, and no leg wins: …`: the places the setting is read name
+  different tools, so the tool's word was not read. A person decides, then makes them agree.
 - For `--fast-forward`, a rule that requires a pull request, branch protection that may require one,
   or rules the account cannot read: land it as a merge instead, without `--fast-forward`.
 - `the hook declarations at <place> could not be read`: the reason names the fix and where it
@@ -389,12 +414,31 @@ flag holds only while the head is still that commit, and an unattended run refus
 - `required check <name> did not pass`: fix the change and push it.
 - `<n> review threads are unresolved`: resolve them. A thread the run's own login resolved stays
   open while another person's comment is in it, so that person resolves it.
+- `the tool's open review threads (<n>) wait on its word on this head`: a pending reason. The threads
+  the review tool opened stay open until it reads clean on this head. `run land` then resolves them
+  itself, so wait, and run it again.
+- `the tool's review thread <id> was not resolved (…)`: the land tried to resolve one of the tool's own
+  threads and could not, so nothing merged. Resolve it by hand, or run it again.
+- `waiting for <tool> on <sha>, up to <n> minutes from the request`, or `no result from <tool> on
+  <sha>, and no request on this head yet`: pending reasons. Wait, and run it again. A wait longer than
+  the call ends as `asks` with `asks.pending` and the line `pending: run land again for the review
+  tool's word; no approval passes a wait`, so `--approved` is no way past it.
+- `<tool> reports findings on <sha>, and only a new run clears them`: fix them, push, and let the tool
+  run again. Its flags stay true after every thread is resolved.
+- `<tool> gave no result on <sha> within <n> minutes`: the tool stayed silent, and silence never
+  passes. Check that the tool is installed on the repository, then decide. `no usable result` says the
+  tool answered with something this reader cannot use, and the reason says what.
+- `<n> of <m> review rounds spent with no clean head, so a person decides`: the run stops here.
 - `the ledger at <sha> holds open Critical or Warning rows`, `does not read`, or `the work tree's
   … differs from the commit's: checkpoint first`: close or fix the rows, then run `run checkpoint`,
   so the ledger the head commit holds is the one on disk.
 - `mergeable_state is not computed yet, run it again`; `is behind` or `is dirty`: bring the branch up
   to date with the default branch; `is unstable`: a check that is not required is failing; `is
   blocked`: the branch's rules stop the merge, and a merge past them is the person's.
+- `mergeable_state is blocked, and the tool's open review threads may be what holds it`: a pending
+  reason. A rule that requires resolved conversations reads `blocked` while the tool's own threads
+  stay open, so the land waits for the tool's word on them, as above. Once they are resolved the pull
+  request is read again, and a state still `blocked` is the plain reason.
 - `the pull request is a draft`: pass `--ready`, which marks it ready once everything else holds.
 - The pull request is not the run's own: another branch, a fork, another base, a body that does
   not end with the run's marker, a head that is not `HEAD` and origin's tip, an author other than
@@ -415,6 +459,29 @@ flag holds only while the head is still that commit, and an unattended run refus
 - `config changed: …` or `no pre-flight record`, in an unattended run: the configuration window in
   [`SECURITY.md`](../SECURITY.md). Git's configuration or environment moved since the pre-flight, or
   none ran.
+
+**The land job.** `stamity run land --job` is the second caller of this evidence. It merges through
+the same rules, with no bypass, so it reads the same reasons, and a few of its own. It exits 0 on a
+pending outcome, writing nothing but its review request, and on `not-a-run`, where the pull request's
+body names no run or an attended run's close opened it. It waits out a review tool's silence in one
+call, holding a runner up to `waitMinutes` per head, since a silent tool sends no event to wake it. A
+`silent` or `spent` hold then writes its `merge waits on:` line on the pull request and exits 1. Any
+other `asks` or `refused` outcome exits 1 and writes nothing, so that land waits for a person to run
+the land line. Its own reasons:
+
+- `autonomy.landJob is not on in every leg of the setting, so the job does not land here`: turn it on
+  through a person's `sync --loosen`, on the default branch too.
+- `the record at <sha> does not read Status: closed, so the run has not ended`: the run did not end.
+  End it with `run end`.
+- `the record at <sha> reads (blocked:, so a person decides`, or `holds a ## Refused row, so a person
+  decides`, or `the morning list at <sha> holds a ## Refused row, so a person decides`: the job never
+  lands such a run.
+- `the record at <sha> does not name #<n> on a PR: line`, or `names no Login:`: only `run end` writes
+  those lines, with the setting on. End the run with `run end` while the setting is on.
+
+The job never starting at all is a different failure. The `land-job-workflows` row of `stamity check`
+names a `landJob.workflows` entry no workflow carries, and a required workflow left off that list
+finishes with nothing to wake the job: name every required workflow there.
 
 ### `run land` cannot start a `gh` pinned only in the repository
 

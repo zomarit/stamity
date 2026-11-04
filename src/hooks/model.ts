@@ -253,6 +253,17 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
   },
   {
     tool: "claude",
+    subject: "Issue trigger",
+    fact:
+      "A scheduled task can start a new session on a GitHub event, the Issue category's `labeled` action " +
+      "among them, once the Claude GitHub App is installed on the repository. The page lists filters for " +
+      "pull requests only, and says events over its per-task and per-account hourly caps are dropped " +
+      "until the window resets. The feature is in research preview.",
+    status: "documented",
+    citation: { url: "https://code.claude.com/docs/en/routines", accessDate: "2026-11-05" },
+  },
+  {
+    tool: "claude",
     subject: "Questions",
     fact:
       "A question Claude asks holds the session idle until a person answers it, up to the " +
@@ -414,6 +425,16 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     status: "documented",
     citation: { url: "https://cursor.com/docs/hooks", accessDate: "2026-10-15" },
     glance: "repository hooks run, without `sessionStart`, `sessionEnd` or the MCP hooks",
+  },
+  {
+    tool: "cursor",
+    subject: "Issue trigger",
+    fact:
+      "An automation can start on GitHub's \"Issue label changed\" trigger, when a label is added to or " +
+      "removed from an issue that is not a pull request, or on a webhook trigger, a private endpoint " +
+      "an outside caller posts to.",
+    status: "documented",
+    citation: { url: "https://cursor.com/docs/cloud-agent/automations", accessDate: "2026-11-05" },
   },
   {
     tool: "cursor",

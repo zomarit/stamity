@@ -838,8 +838,16 @@ const RELEASE_CUT_DATE = "2026-10-26";
  * requires this constant to equal RELEASE_CUT_DATE. Their `Re-attested 2026-10-23` and
  * `Re-attested 2026-10-25` clauses are not carried: each page now says it was verified at the cut,
  * and the cut is the later pass.
+ *
+ * TEST CHANGE, justified: MOVED 2026-11-05, from 2026-10-26, by plan 023 file 1, unit docs-truth
+ * (REQ-FLOW-145, REQ-FLOW-151 to REQ-FLOW-158). `SECURITY.md`, `docs/security-mapping.md`,
+ * `docs/cloud.md`, `docs/troubleshooting.md` and `docs/working-with-stamity.md` were re-read for the
+ * brake, the administrator's opt-in, the review tool, auto-ship and the land job, and moved onto the
+ * commit form naming the lane base cc10ab71 plus `Re-attested 2026-11-05`. Those five are now the
+ * bucket's commit-form pages, so the else branch's pin to the cut date no longer applies, and a page
+ * re-read today can honestly carry only today's date. Every other page keeps its cut date.
  */
-const REATTESTATION_DATE = "2026-10-26";
+const REATTESTATION_DATE = "2026-11-05";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");
@@ -5792,6 +5800,156 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
     expect(page).toContain("The commit is no question");
     expect(page).toContain("then runs `stamity run land --ready`, which marks it ready and merges it when the evidence holds");
     expect(page).not.toContain("whose recommended option commits");
+  });
+});
+
+// ADDED 2026-11-05 (plan 023 file 1, unit docs-truth; REQ-FLOW-145, REQ-FLOW-151 to REQ-FLOW-158). The bridge moved the
+// land evidence, the pre-flight's administrator refusal and who may call the land verb, so the four pages say the same
+// three things, and each limit is stated as a limit. Each pin fails on the lane base cc10ab71, whose pages say none of it.
+describe("the security pages say one thing about the brake, the lift and the job (REQ-FLOW-145)", () => {
+  it.each([SECURITY, SECURITY_MAPPING, CLOUD, TROUBLESHOOTING])("%s names the brake, the lift and the job", (page) => {
+    const flat = flowed(read(page));
+    expect(flat, `${page} does not name the brake`).toContain("the brake");
+    expect(flat).toContain("`autonomy.adminRuleProof`");
+    expect(flat).toMatch(/could still lift the rule/);
+    expect(flat).toMatch(/only the guard stops/);
+    expect(flat).toContain("`stamity run land --job`");
+    expect(flat, `${page} does not call the job the evidence's second caller`).toContain("second caller");
+    expect(flat).toContain("with no bypass");
+  });
+
+  it("SECURITY.md no longer calls the pre-flight the wall for an administrator under the opt-in", () => {
+    const flat = flowed(read(SECURITY));
+    expect(flat).toContain("Under `autonomy.adminRuleProof` that account can push once it lifts the rule, and only the guard stops the lift.");
+    expect(flat).toContain("For an administrator under `autonomy.adminRuleProof` that wall is a rule the account could lift, so there the guard is what stops the lift.");
+    expect(flat).toContain("only an organization ruleset counts, so a repository ruleset leaves it refused, unless a person turned on `autonomy.adminRuleProof`");
+  });
+
+  it("states each real limit as a limit", () => {
+    const security = flowed(read(SECURITY));
+    for (const limit of [
+      "The rules read paths, size and class, never content, so a script inside a `.md` file passes them",
+      "should leave `docs` out of `autoShip.classes`",
+      "to fake them a run needs a raw write under `.git/`",
+      "A deleted comment leaves no last editor to read",
+      "`GITHUB_TOKEN` starts no `push` run after its merge",
+      "are `not run`: no real run has proven them",
+    ]) {
+      expect(security, `SECURITY.md does not state: ${limit}`).toContain(limit);
+    }
+    expect(flowed(read(CLOUD))).toContain("a deploy on push must not rely on this path");
+    expect(flowed(read(CLOUD))).toContain("A deleted state comment is not seen");
+  });
+
+  it("names the review request beside the door, and the five fixed calls of the land verb, on both pages", () => {
+    const security = flowed(read(SECURITY));
+    expect(security).toContain("Also beside the door, the first `run end` with a pull request sends one review request");
+    expect(security).toContain("`src/cli/engine/ghRunner.ts::ghRequestReview`");
+    expect(security).toContain("five GitHub calls the door itself still refuses");
+    expect(security, "the page still counts three").not.toContain("three GitHub calls the door");
+    const mapping = flowed(read(SECURITY_MAPPING));
+    expect(mapping).toContain("`run land` alone adds five fixed calls built from checked parts: the merge (`PUT …/pulls/<n>/merge`) and four constant GraphQL documents");
+    // The fixed calls are the runner's own: a fifth document would make both pages short by one.
+    const runner = read("src/cli/engine/ghRunner.ts");
+    expect(/const GRAPHQL_DOCUMENTS[^=]*= new Set\(\[([^\]]*)\]/.exec(runner)?.[1]?.split(",").length).toBe(4);
+  });
+
+  it("lists what a board write carries for an item with a plan, and keeps file contents out", () => {
+    const flat = flowed(read(SECURITY));
+    expect(flat).toContain("for an item with a plan only, a plain summary and its `Branch:` and `Plan:` lines, never file contents");
+    expect(flat).toContain("no file contents reach a write");
+  });
+
+  it("the QA script's prerequisite says the opt-in exists", () => {
+    expect(read("scripts/qa/cloud-check.mjs")).toContain("autonomy.adminRuleProof, when a ruleset that binds it now counts");
+  });
+});
+
+describe("the factory's cloud facts (REQ-FLOW-158)", () => {
+  it.each(["claude", "cursor"])("%s's issue trigger is dated and reads not run", (tool) => {
+    const row = CLIENT_CLOUD_FACTS.find((fact) => fact.tool === tool && fact.subject === "Issue trigger");
+    expect(row, `CLIENT_CLOUD_FACTS has no ${tool} issue trigger`).toBeDefined();
+    expect(row?.citation.accessDate).toBe("2026-11-05");
+    // Absent until a person check ran it: the matrix then reads "not run".
+    expect(row?.run).toBeUndefined();
+    const matrixRow = read(CAPABILITY_MATRIX).split("\n").find((line) => line.includes("Issue trigger") && line.includes(row?.citation.url ?? "?"));
+    expect(matrixRow, `the capability matrix has no ${tool} issue-trigger row`).toBeDefined();
+    expect(matrixRow).toContain("not run");
+  });
+
+  it("the cloud page has dropped the old claims and names no vendor address", () => {
+    const page = read(CLOUD);
+    expect(page).not.toContain("No trigger reads it yet");
+    expect(flowed(page)).toContain("both read `not run` in the [capability matrix](capability-matrix.md)'s cloud table");
+    expect(flowed(page)).toContain("events over its hourly caps are dropped");
+    expect(page, "the page names a vendor address").not.toMatch(/https?:\/\/(?:code\.claude\.com|cursor\.com)/);
+  });
+
+  it("the contract's header no longer says no trigger is built", () => {
+    const source = read("src/runs/runContract.ts");
+    expect(source).not.toContain("no trigger is built");
+    expect(source).toContain("`stamity run contract` writes it from a ready item");
+  });
+});
+
+describe("every land reason the code prints is on the troubleshooting page", () => {
+  const page = flowed(read(TROUBLESHOOTING));
+  // Held in both the source and the page, so a reason reworded on either side fails here.
+  it.each([
+    ["src/change/autoShip.ts", ["the classification is incomplete", "the line count is incomplete", "the line count is not a finite number", "lines are over autonomy.autoShip.maxLines", "the change is empty", "disagrees with the classified paths", "files are over autonomy.autoShip.maxFiles", "outside autonomy.autoShip.classes", "docs-class but not plain text", "outside autonomy.autoShip.paths", "a specialist lens is asked for"]],
+    ["src/runs/reviewTool.ts", ["minutes from the request", "review rounds spent with no clean head, so a person decides", "and only a new run clears them", "and no request on this head yet"]],
+    ["src/runs/landEvidence.ts", ["wait on its word on this head", "mergeable_state is blocked, and the tool's open review threads may be what holds it", "failing on its tip", "so whether it is red is not known", "the legs disagree on autonomy.reviewTool, and no leg wins", "the head's manifest loosens"]],
+    ["src/cli/commands/runLand.ts", ["was not resolved", "pending: run land again for the review tool's word; no approval passes a wait"]],
+  ] as const)("%s", (path, reasons) => {
+    const source = read(path);
+    for (const reason of reasons) {
+      expect(source, `${path} no longer prints: ${reason}`).toContain(reason);
+      expect(page, `the page does not quote: ${reason}`).toContain(reason);
+    }
+  });
+
+  it("has no auto-ship reason past the eleven it lists", () => {
+    // A new rule adds a `reasons.push`, so it fails here until the list above and the page name it.
+    expect([...read("src/change/autoShip.ts").matchAll(/reasons\.push\(/g)].length).toBe(11);
+  });
+
+  it("states the land job's own reasons, its exits and its check row", () => {
+    // Read from the page alone: `land-job` lands on its own lane, so these reasons are not in this tree's source yet.
+    for (const reason of [
+      "autonomy.landJob is not on in every leg of the setting, so the job does not land here",
+      "does not read Status: closed, so the run has not ended",
+      "reads (blocked:, so a person decides",
+      "holds a ## Refused row, so a person decides",
+      "does not name #<n> on a PR: line",
+      "names no Login:",
+      "holding a runner up to `waitMinutes` per head",
+      "A `silent` or `spent` hold then writes its `merge waits on:` line on the pull request and exits 1",
+    ]) {
+      expect(page, `the page does not state: ${reason}`).toContain(reason);
+    }
+    expect(page).toContain("Rename the entry in `autonomy.landJob.workflows`, or the workflow, so the two agree.");
+  });
+});
+
+describe("docs/specs/everyday-flows.md carries the bridge's delta", () => {
+  const spec = read("docs/specs/everyday-flows.md");
+  const criteria = spec.slice(spec.indexOf("## Acceptance criteria"));
+
+  it.each([151, 152, 153, 154, 155, 156, 157, 158, 159])("REQ-FLOW-%i has a requirement and its criteria", (id) => {
+    expect(spec).toContain(`### REQ-FLOW-${id} — `);
+    expect(criteria).toContain(`**REQ-FLOW-${id}** (added 2026-11-05)`);
+  });
+
+  it("moves the hand-kept text the delta changed", () => {
+    const flat = flowed(spec);
+    expect(flat).toContain("`config` registers all seven keys");
+    expect(flat).toContain("is the last `KEY_SPECS` entry, after `autonomy.landJob`");
+    expect(flat).toContain("the origin pin and, amended 2026-11-05, `contract.yml`");
+    expect(flat).toContain("The author rule has one exception, the tool `autonomy.reviewTool.login` names");
+    // The notice goes on the first `run end`, whatever the flag: the plan's first wording said the final round.
+    const notice = spec.slice(spec.indexOf("### REQ-FLOW-156 "), spec.indexOf("### REQ-FLOW-157 "));
+    expect(notice).toContain("the first `run end` with a pull request");
+    expect(notice.includes("--final-round"), "the notice still rides on the final round").toBe(false);
   });
 });
 

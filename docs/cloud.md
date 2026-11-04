@@ -2,7 +2,7 @@
 title: Cloud runs
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.17.0 release cut (2026-10-26). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit cc10ab71. Re-attested 2026-11-05 for the brake, the administrator's opt-in, the review tool, auto-ship and the land job. -->
 <!-- Re-open when: a row of `CLIENT_CLOUD_FACTS` moves, a run contract key or a pre-flight check
      changes, or a client's answer to a person-only act moves. `test/docsPages.test.ts` holds this
      page to the hand-page contract, the contract parser and that table; a vendor page that changed
@@ -15,7 +15,8 @@ web and Cursor's cloud agents it can run through a night with nobody there. Copi
 runs it as a chain of sessions, each stopped at 59 minutes, and a person continues each one, so it
 is no night with nobody there. For each cloud it gives the setup, the branch protection the run needs before it starts, the secrets, how to start a run under
 a run contract, and the morning walk. Then it covers Claude Code's GitHub Action, which is a short
-surface rather than an overnight one, and the run contract itself.
+surface rather than an overnight one, the run contract itself, and the parts that take a ready item
+through to a merge: the label, the review tool, auto-ship and the land job.
 
 The run is an ordinary touchpoint, usually `/st-work`, in unattended mode.
 [Working with stamity](working-with-stamity.md) covers the touchpoints, and the
@@ -36,10 +37,14 @@ set to any value but empty, `false` or `0`. A cloud's own marker means "cloud", 
   `stamity run land --ready`, which marks the run's own draft ready and merges it only when the
   evidence holds: every required check run green on the exact head commit
   (commit statuses do not count), no unresolved review thread, and no open Critical or Warning row
-  in the run's ledger, with the branch's own protection deciding any required human review. A diff
-  to the CI definitions or the guard's own files still asks, and an asks or refused outcome leaves
-  each reason as a held row on the morning list and in the pull request's body. A raw ready mark, a
-  raw merge and a raw push to the default branch stay refused.
+  in the run's ledger, with the branch's own protection deciding any required human review. Where
+  `autonomy.reviewTool` names a tool, that tool's clean word on the same head is evidence too, and
+  silence holds the merge. A diff to the CI definitions or the guard's own files still asks, a
+  required check failing on the default branch's tip asks (the brake), and an asks or refused outcome
+  leaves each reason as a held row on the morning list and in the pull request's body. A raw ready
+  mark, a raw merge and a raw push to the default branch stay refused. `run land` is not the only
+  caller of this evidence: [the land job](#the-land-job) re-proves it from GitHub where a cloud cannot
+  finish, and adds no trust.
 - **What runs without a click.** In `autonomy.mode: autonomous`, the default, a ready-for-review
   mark, a local tag and a workflow dispatch run unasked on Claude Code's and Copilot CLI's main
   thread, and never for a sub-agent. Cursor and Codex refuse them in every mode, since their hook
@@ -52,9 +57,10 @@ set to any value but empty, `false` or `0`. A cloud's own marker means "cloud", 
   `--admin` merge, a write to another repository or a mention of a person, and a loosening of the
   setting. To tighten back to 1.16.0's asks, set `autonomy.mode` to `ask` and run `sync`. To name
   what deploys, set `autonomy.deployingBranches` to the branches a push to which deploys (the
-  default branch included, so the land verb asks before it merges there) and
-  `autonomy.deployingActs` to the acts that ask in every mode; `stamity check` warns on a workflow
-  that deploys from a branch the list leaves out. Loosening either needs the person's `--loosen`.
+  default branch included, so the land verb asks before it merges there, unless the change fits
+  `autonomy.autoShip`) and `autonomy.deployingActs` to the acts that ask in every mode; `stamity
+  check` warns on a workflow that deploys from a branch the list leaves out. Loosening either needs
+  the person's `--loosen`.
 - **Attended, Claude Code asks for one click** on an act on the ask list that can be undone, such
   as a raw merge, a push of a tag or of the default branch, a release, a publish, or a secret or
   protection write, and the agent runs it on yes. It refuses instead where a sub-agent runs the
@@ -93,7 +99,11 @@ set to any value but empty, `false` or `0`. A cloud's own marker means "cloud", 
   counts, only one whose branch target is `~ALL` or the default branch by its own name, with no
   exclude that could match it, and whose repository target is this repository's id or every
   repository by name (not `~DEFAULT_BRANCH`, a name pattern or a property), and only while the
-  account is a plain member of the organization, never an owner. A refusal's evidence names the
+  account is a plain member of the organization, never an owner. `autonomy.adminRuleProof` is a
+  person's opt-in past that: on in every leg of the setting, a repository or organization ruleset
+  that binds the account now counts too, where GitHub says the account cannot bypass it, and the
+  verdict carries the warning `admin-can-lift`. Classic protection still does not count. The account
+  could still lift the rule, and only the guard stops that. A refusal's evidence names the
   rulesets and protection it read and why none counted. An account with no push right at all is
   refused too, since the run could not push its own branch.
 - **A plan the ready check passes.** `stamity plan check` must exit 0 on the plan and the contract
@@ -114,7 +124,7 @@ lockfile is there. Locally it does nothing. The GitHub proxy refuses GraphQL, so
 land` reads the review threads and marks a draft ready over GraphQL, so on this cloud it cannot
 land: it ends `refused` with "the review threads could not be read", the pull request stays a
 draft, and the merge waits as a held row. Walk it locally, where `/st-work --resume <run-id>`
-retries the land step. A machine
+retries the land step, or turn on [the land job](#the-land-job), which finishes it from GitHub. A machine
 that was reclaimed comes back fresh, and the review gate rebuilds its round counter from the run
 record on the branch.
 
@@ -128,7 +138,8 @@ credential helper: by default git pushed origin over https with no credential he
 
 The proxy refuses a tag push and a branch deletion, but not a branch push, the default branch's
 included. So branch protection or a ruleset is the only thing that keeps a run off the default
-branch, and the pre-flight's `direct-push` check refuses to start a run without it.
+branch, and the pre-flight's `direct-push` check refuses to start a run without it. The land job
+merges through the same rules, with no bypass.
 
 ### Secrets
 
@@ -178,7 +189,7 @@ environment.json location points at it (Cursor's cloud agent setup page, read 20
 
 The push Cursor's agent makes is the platform's, not a shell call, so no shell guard sees it. The
 remote's protection is what holds, and the pre-flight's `direct-push` check refuses to start a run
-without it.
+without it. The land job merges through the same rules, with no bypass.
 
 ### Secrets
 
@@ -304,9 +315,10 @@ run, so its new hooks and settings do not run there. And when the agent on that 
 
 ## The run contract
 
-A run contract is a committed YAML file that states, by reference, what one unattended run is for.
-No trigger reads it yet: you start the run and name the file. The engine reads it strictly. An
-unknown key at any level is refused, and so is every defect, all in one pass.
+A run contract is a YAML file that states, by reference, what one unattended run is for. You can
+write one, start the run and name the file, or let `stamity run contract` write it from a ready item
+([below](#from-a-label-to-a-contract)). The engine reads it strictly. An unknown key at any level is
+refused, and so is every defect, all in one pass.
 
 ```yaml
 run-contract: 1
@@ -331,11 +343,13 @@ move: off
 - `plan` is a repository-relative plan path and `item` a board item or issue. A contract names one or
   both.
 - `base` is the commit the run starts from, 7 to 64 hexadecimal characters.
-- `acceptance` is kept verbatim.
+- `acceptance` is kept verbatim. `run contract` strips the issue's criteria before it writes them.
 - `scope` lists the paths the run works `in` and keeps `out` of.
 - `prerequisites` are each `done`, or `owned` by a named `owner`.
 - `budget` holds `stop-by`, a day or a time with its offset, and `max-units`.
-- `answerer` is who answers the morning list.
+- `answerer` is who answers the morning list, as `@login` or `@org/team`. The first `run end` with a
+  pull request also sends them a GitHub review request, with no text, unless they opened that pull
+  request. A request that cannot reach them adds a `Not done:` line, and the run still ends.
 - `preview: stop` and `move: off` are fixed, and an absent key reads the same. A run under a
   contract stops at a board write's preview and moves no card: each write it would make is a
   morning-list row.
@@ -379,6 +393,92 @@ text, and the draft pull request's diff is where you check them.
   `Not done: draft PR not opened`, and is never retried with a raw push or a force.
 - **No CLI.** A run whose CLI stops answering closes its record and ends on
   `Not done: run end not run — CLI unavailable`.
+
+## From a ready item to a merge
+
+These parts are each off until you set them up. Each works without the others.
+
+### From a label to a contract
+
+The ready signal is the label `stamity:ready` on a GitHub issue. The board never creates a label, so
+a person creates it once. A run started from such an issue reads only its `Branch:` line, switches to
+that branch, and runs `stamity run contract --run <id> --item <owner/repo#n>`. The verb writes
+`.stamity/runs/<id>/contract.yml`, and the ready check then runs as usual. The issue's text is data.
+
+The verb refuses unless the item is an open issue in origin's repository that carries the label,
+and its author and the last person to apply the label each hold write or admin. It also refuses when
+the current branch is not the item's, or the plan's hash differs from the item's. That hash detects
+drift only: a person with write access may name any plan committed on the branch. The criteria lose
+control and invisible characters and HTML comments, are cut at the next heading, are held to 16,384
+bytes, and are scanned before anything is written. A comment opener with no closer refuses. A dropped
+comment is counted, and a run that sees a count above zero refuses to start, since a visible criterion
+may have gone with the comment: edit the issue, close the `Refused:` draft, and label it again.
+
+What starts the run is the vendor's. As read on 2026-11-05, Claude Code's scheduled tasks can start
+on an issue's `labeled` action once the Claude GitHub App is installed, and Cursor's automations
+offer an issue-label trigger and a webhook trigger. Claude's page shows filters for pull requests
+only, and says events over its hourly caps are dropped. Neither route has been proven by a real run,
+so both read `not run` in the [capability matrix](capability-matrix.md)'s cloud table.
+
+### The review tool
+
+With `autonomy.reviewTool` set, `run land` asks the named tool to review the head, once per head, and
+waits for it. Only that bot's own word on the exact head passes. Findings, no result within
+`waitMinutes`, spent `rounds` or a block it does not know each hold the merge and say why, and
+silence never passes. On findings the run fixes them through `/st-pr-resolve`, pushes, and lets the
+tool run again, at most `rounds` times. A wait longer than one `run land` call comes back as a pending
+outcome: run the land line again, since no approval passes a wait. Once the tool reads clean on the
+head, `run land` resolves the threads the tool opened and no person joined, never a person's.
+
+Limits: the Codex state comment this reads is not in Codex's documentation, so anything unknown reads
+not clean. A deleted state comment is not seen. A hand-written `clean: reaction` is the weakest proof,
+since a reaction cannot be tied to a commit.
+
+### Auto-ship
+
+By default a default branch named in `autonomy.deployingBranches` asks before every merge.
+`autonomy.autoShip` lets `run land` merge there with nobody asked when a change fits every rule: its
+file count, its line count, its classes, its paths where you set them, and no specialist lens. A
+`docs`-class path must also end in `.md` or `.txt`. The `low-risk` preset allows 10 files and 200 lines,
+all records, docs or tests. Any rule that fails, and anything that cannot be read, asks and names each
+reason. A fast-forward still asks, and Stamity never deploys, tags or releases by this route.
+
+Limits: the rules read paths, size and class, never content, so a script inside a `.md` file passes
+them. If your site tool passes raw HTML through `.md` files, leave `docs` out of `classes`. The hunks
+come from the clone: to fake them a run needs a raw write under `.git/`, and such a write moves nothing
+GitHub supplies.
+
+### The land job
+
+`autonomy.landJob` writes `.github/workflows/stamity-land.yml`, a GitHub job that finishes a run's
+land where its session cannot. It is off by default, and turning it on is a person's act. The job
+starts when a workflow `landJob.workflows` names finishes well on a pull request, when the review
+tool comments, or by hand with a pull request's number. Its concurrency group is one per pull request,
+so one pull request's events never cancel another's. It runs `stamity run land --job`, the second
+caller of the land evidence, and it adds no trust:
+
+- **It re-proves the same evidence** as `run land`, or exits leaving the pull request as it was. A
+  pending check exits 0 and leaves it for the next event. An `asks` or `refused` outcome exits 1 and
+  writes nothing, so that land waits for a person. The one exception is a review tool's hold, below.
+- **It lands only a run that ended.** The record at the head must read `Status: closed`, with no
+  `(blocked:` and no `## Refused` row. With the setting on, `run end` commits `PR:` and `Login:` lines at
+  the head so the job can read them, and that commit starts CI again. An attended run's pull request
+  carries no such lines, so the job leaves it to a person and exits 0.
+- **It treats the head as data.** The CLI installs by version before any head file exists, the
+  checkout keeps no credential, and nothing from the head runs. `GITHUB_TOKEN` is its only credential.
+- **It asks the review tool itself**, since a cloud that cannot run `run land` cannot post the request.
+  It then waits out the tool's silence in the one call, since a silent tool sends no event to wake it,
+  so it holds a runner up to `waitMinutes` per head. A `silent` or `spent` hold writes its
+  `merge waits on:` line on the pull request and exits 1, so a person can see it.
+- **It takes no approval.** `--approved` is refused in job mode, and the guard refuses that mode on any
+  agent's line.
+
+Limits: `GITHUB_TOKEN` starts no `push` run after the merge, so a deploy on push must not rely on this
+path. A "Restrict updates" rule refuses the job, and it is never given a bypass. List every required
+workflow in `landJob.workflows`: one left out finishes with nothing to wake the job. The
+`land-job-workflows` row of `stamity check` warns on a name no workflow carries, which is the only sign
+a renamed workflow gives. No real run has proven the job yet: the ready mark and the thread reads under
+`GITHUB_TOKEN`, and a request the job posts, read `not run` (read 2026-11-05).
 
 ## How this page stays current
 
