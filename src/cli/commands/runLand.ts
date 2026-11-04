@@ -2,6 +2,7 @@ import { lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync 
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, parse, resolve } from "node:path";
 import { autoShipVerdict, type AutoShipRules, type AutoShipVerdict } from "../../change/autoShip.ts";
+import { CLASS_FILE } from "../../change/classify.ts";
 import { matchesDeployingBranch } from "../../config/autonomy.ts";
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
 import { readGitSurface, SURFACE_RECORD_FILE, surfaceRefusal, type RecordFileReads } from "../../runs/gitSurface.ts";
@@ -17,6 +18,7 @@ import {
   parseBranchRules,
   parseCheckRuns,
   parseEditorsPage,
+  parseFileContent,
   parseFiles,
   parseIssueComments,
   parseMergeBase,
@@ -89,13 +91,15 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  *
  * **The factory's evidence.** A required check failing on the default branch's tip asks, and a tip that does not read asks
  * (REQ-FLOW-153); the branch is read again at each re-read, so a newer commit is the one judged. A deploying default branch
- * asks unless the change fits `autonomy.autoShip`, read from the commits that merge, with GitHub naming the merge base and
- * agreeing with the range (REQ-FLOW-152). A named review tool is read on the head, asked once where it has no run there, and
- * waited for: only its clean word passes (REQ-FLOW-154). The tip and the tool are read again before the act. A wait that
- * outlasts the verb ends as `asks` with `asks.pending`, which no `--approved` passes: the next call reads the tool's word.
- * On that clean word on the exact head, the tool's own open threads stop counting; just before the act they are resolved
- * and the threads read again, so a resolve that fails, or a thread still open, holds the merge (build/29). While the tool is
- * awaited they are a pending gap, so a head a fix round left them on still gets its request; on any other verdict, a plain one.
+ * asks unless the change fits `autonomy.autoShip`, read from the commits that merge, with GitHub naming the merge base, holding
+ * the class file and agreeing with the range (REQ-FLOW-152). A named review tool is read on the head, asked once where it has no
+ * run there, and waited for: only its clean word passes (REQ-FLOW-154). The tip and the tool are read again before the act. A wait
+ * that outlasts the verb ends as `asks` with `asks.pending`, which no `--approved` passes: the next call reads the tool's word.
+ * On that clean word on the exact head, the tool's own open threads stop counting, and a `blocked` merge state waits on them, as a
+ * rule requiring resolved conversations reads that way. Just before the act they are resolved, then the threads and the pull
+ * request read again, so a resolve that fails, a thread still open or a state still `blocked` holds the merge (build/29, review/68).
+ * While the tool is awaited they are a pending gap, `blocked` beside them too, so a head a fix round left them on still gets its
+ * request; on any other verdict, a plain one.
  *
  * **The act.** `--ready` marks a draft ready only once the rest holds, then merges. Before the merge the body gains
  * one "evidence checked at" line, never "landed"; only after the merge call succeeds does `record.md` gain
@@ -469,7 +473,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     // REQ-FLOW-152: read only where it can spare an ask, the tip being in this clone by now.
     const autoShip =
       setting.autoShip !== undefined && matchesDeployingBranch(defaultBranch, setting.deployingBranches)
-        ? await autoShipRead(cwd, { tip: branch.tip, head: sha, files, pr }, setting.autoShip, (path) => call(`${repoPath}/${path}`))
+        ? await autoShipRead(cwd, { tip: branch.tip, head: sha, prefix, files, pr }, setting.autoShip, (path) => call(`${repoPath}/${path}`))
         : undefined;
 
     // (7) The review threads, every page, read again on every later read (review/72).
@@ -556,6 +560,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       checks,
       threads: threads === null ? null : threads - setAside(now).length,
       pendingThreads: threads !== null && review?.state === "waiting" ? toolOpen.length : 0,
+      setAsideThreads: setAside(now).length,
       ledger,
       looserKeys,
       reviewToolConflict: setting.reviewToolConflict,
@@ -622,6 +627,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     // --approved an asks outcome goes on to the act as a land does; every refused condition still refuses.
     const proceeds = (now: LandDecision): boolean => now.outcome === "land" || (approved && now.outcome === "asks");
     const draftReady = pr.draft && ready;
+    const computing = (now: LandPr): boolean => now.mergeableState === null || now.mergeableState === "unknown";
     let decision = await waitOut(await askTool(decideLand(inputFor(pr, checks, draftReady)), draftReady), draftReady);
     if (proceeds(decision) && draftReady && !ctx.dryRun) {
       const marked = await answered(ghMarkReady({ hostname: repo.host, id: pr.nodeId }, ghOpts), "the ready mark");
@@ -631,7 +637,6 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       lines.push(`ready: marked #${number} ready for review`);
       // review/79, review/90: GitHub computes the merge state after the mark; it is read again until computed, at most
       // 60 s and never past the verb's budget, and still uncomputed it refuses as not computed yet.
-      const computing = (now: LandPr): boolean => now.mergeableState === null || now.mergeableState === "unknown";
       pr = await pollWhilePending(readPr, computing, Math.min(LAND_CLOCK.now() + READY_MERGEABLE_MS, budgetEnd), READY_POLL_MS, LAND_CLOCK);
       decision = await waitOut(await reread(false), false);
     } else if (proceeds(decision) && draftReady) {
@@ -679,6 +684,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     }
     if (ctx.dryRun) {
       result.outcome = "would-land";
+      const toResolve = setAside(pr).length;
+      if (toResolve > 0) lines.push(`threads: would resolve ${toResolve} of the tool's own, and only then is the merge state judged`);
       lines.push(fastForward ? `act: would fast-forward ${defaultBranch} to ${sha}` : `act: would merge #${number} at ${sha} (${method})`);
       return finish();
     }
@@ -712,6 +719,10 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       const failed = await resolveThreads(ownThreads, repo.host, ghOpts);
       resolving = false;
       threads = await readThreads();
+      // review/68: the pull request again, whose merge state counts from here. A rule requiring resolved conversations lifts
+      // `blocked` only now, and GitHub may take a moment over it, read as after the ready mark; with a thread still open nothing will lift it.
+      const lifting = (now: LandPr): boolean => failed.length === 0 && threads === 0 && (computing(now) || now.mergeableState === "blocked");
+      pr = await pollWhilePending(readPr, lifting, Math.min(LAND_CLOCK.now() + READY_MERGEABLE_MS, budgetEnd), READY_POLL_MS, LAND_CLOCK);
       show(checks, pr);
       const after = decideLand(inputFor(pr, checks, false));
       const stops = [...failed, ...(after.outcome === "refused" ? after.reasons : [])];
@@ -913,28 +924,47 @@ function rangeDisagreement(range: RangeFacts, files: readonly string[], pr: Land
 }
 
 /**
- * Whether what merges fits `rules` (REQ-FLOW-152). Nothing here rests on the clone's history, which the run can write: GitHub
- * names the merge base, and the range must then match the pull request's file list and line counts. The tip's class file
- * judges the change, since a run picks its merge base by where it forks; both commits are out of its hands, and the tip is
- * the rules as they stand today. A compare that names no base, a range that disagrees with GitHub and a commit this clone
- * does not hold (a shallow clone) all read as not eligible, so the land asks instead of failing.
+ * The class file GitHub holds at `tip`, for {@link classifyRange}: its text, `null` where the project at the top holds none, or
+ * why it is not known. A project below the top with none there is not known: only a walk up the clone's trees would say
+ * which rules it falls under, and the clone is what a run can write.
+ */
+async function classFileAt(tip: string, prefix: string, read: (path: string) => Promise<GhResponse | null>): Promise<{ text: string | null } | { failed: string }> {
+  const path = `${prefix}${CLASS_FILE}`;
+  const reply = await read(`contents/${path.split("/").map((segment) => encodeQuery(segment)).join("/")}?ref=${encodeQuery(tip)}`);
+  if (reply?.status === 404) return prefix === "" ? { text: null } : { failed: `GitHub holds no ${path} at ${tip}, so what judges a project below the top is not known` };
+  const text = reply?.status === 200 ? parseFileContent(reply.json) : null;
+  if (text !== null) return { text };
+  const why = reply === null ? "gh failed" : reply.status === 200 ? "GitHub's answer is no file" : `HTTP ${reply.status}`;
+  return { failed: `${path} did not read from GitHub at ${tip} (${why})` };
+}
+
+/**
+ * Whether what merges fits `rules` (REQ-FLOW-152). What a run could write in the clone comes from GitHub: the merge base, the
+ * file list and line counts the range must match, and the class file. The tip's file judges the change, since a run picks its
+ * merge base by where it forks, and the tip is the rules as they stand today. Only the hunks are the clone's, the stated limit
+ * in `../engine/changeRange.ts`. A compare that names no base, a class file that does not read, a range that disagrees with
+ * GitHub and a commit this clone does not hold (a shallow clone) all read as not eligible, so the land asks instead of failing.
  */
 async function autoShipRead(
   cwd: string,
-  at: { tip: string; head: string; files: readonly string[]; pr: LandPr },
+  at: { tip: string; head: string; prefix: string; files: readonly string[]; pr: LandPr },
   rules: AutoShipRules,
   call: (path: string) => Promise<GhResponse>,
 ): Promise<AutoShipVerdict> {
-  const { tip, head, files, pr } = at;
+  const { tip, head, prefix, files, pr } = at;
   const incomplete = (why: string): AutoShipVerdict => ({ eligible: false, reasons: [`the classification is incomplete: ${why}`] });
-  const compare = await call(`compare/${tip}...${head}`).catch((error: unknown) => {
-    if (error instanceof Refused) return null;
-    throw error;
-  });
+  const read = (path: string): Promise<GhResponse | null> =>
+    call(path).catch((error: unknown) => {
+      if (error instanceof Refused) return null;
+      throw error;
+    });
+  const compare = await read(`compare/${tip}...${head}`);
   const base = compare?.status === 200 ? parseMergeBase(compare.json) : null;
   if (base === null) return incomplete(`GitHub's compare of ${tip} and ${head} named no merge base (${compare === null ? "gh failed" : `HTTP ${compare.status}`})`);
+  const classFile = await classFileAt(tip, prefix, read);
+  if ("failed" in classFile) return incomplete(classFile.failed);
   try {
-    const range = await classifyRange(cwd, base, head, tip);
+    const range = await classifyRange(cwd, base, head, classFile.text);
     const differs = rangeDisagreement(range, files, pr);
     return differs === null ? autoShipVerdict(range, rules) : incomplete(differs);
   } catch (error) {

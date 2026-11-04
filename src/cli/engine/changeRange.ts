@@ -31,13 +31,18 @@ import { gitCheckRunner, keptFromGit, type GitInputRunner } from "./gitStatus.ts
  * **{@link classifyRange} is a read of its own.** `gate classify` compares a base with the work tree, the index and
  * the untracked files; a land acts on what merges, so this reads two commits from the object store alone: names and
  * counts by `git diff-tree`, hunks, heads and lockfile copies from blobs. A change committed and then reverted in the
- * work tree still counts, and nothing left uncommitted does. The class file is the base commit's unless the caller names
- * another commit the change cannot write, so no change sets its own rules. The tree-level attributes are always the
- * base's: git reads `.gitattributes` for a diff from the work tree even
+ * work tree still counts, and nothing left uncommitted does. The class file is the base commit's unless the caller hands in
+ * the text it read from a source the change cannot write, so no change sets its own rules. The tree-level attributes are
+ * always the base's: git reads `.gitattributes` for a diff from the work tree even
  * between two commits, and a `diff=` driver there moves where `-W` stops, which can take a call out of a hunk's context
  * and a class down with it. `--attr-source` needs git 2.41; an older git fails that read, and the range fails closed.
  * `--attr-source` moves the tree-level file alone. `GIT_ATTR_NOSYSTEM` turns the system file off and an empty
  * `core.attributesFile` the user's. Git's `info/attributes` has no such switch, so a non-empty one reads `complete` false.
+ *
+ * **A stated limit: the hunks are the clone's.** The hunks, the file heads and the lockfile copies are the bytes this clone's
+ * object store returns, and nothing here proves those bytes against their ids. To fake them a run needs a raw write under
+ * `.git/`, which this read cannot see. `run land` takes the merge base, the file list, the line total and the class file
+ * from GitHub, so such a write moves none of those, and the land job's fresh checkout does not hold one.
  *
  * **The rest moved here from `../commands/gate.ts`, unchanged,** because `gate.ts` and `../commands/runLand.ts` share
  * a wave and neither may import the other: the class-file read, the name, count and patch parsers, the project-root
@@ -368,6 +373,12 @@ export function findProjectRoot(runner: GitRunner, cwd: string, cwdPrefix: strin
   return { dir: topLevel, prefix: "", topLevel };
 }
 
+/** The cwd as the project root, with no tree read: for a caller that read the class file itself, from where it placed the project. */
+function projectAtCwd(cwd: string, cwdPrefix: string): ProjectRoot {
+  const depth = cwdPrefix.split("/").filter((segment) => segment !== "").length;
+  return { dir: cwd, prefix: cwdPrefix, topLevel: resolve(cwd, ...Array.from({ length: depth }, () => "..")) };
+}
+
 /** A full object id, SHA-1 or SHA-256. */
 const OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 
@@ -409,7 +420,13 @@ export function readBaseClassFile(runner: GitRunner, root: ProjectRoot, commit: 
   if (type === null) return { state: "absent" };
   const spec = `${commit}:${path}`;
   if (type !== "blob") return { state: "invalid", error: `the base holds a ${type} there, not a file`, raising: [] };
-  const parsed = parseClassFile(runGit(runner, root.dir, "cat-file blob", ["cat-file", "blob", spec]));
+  return classFileOf(runGit(runner, root.dir, "cat-file blob", ["cat-file", "blob", spec]));
+}
+
+/** A class file's text as every source's copy reads, or `null` where that source holds none. */
+function classFileOf(text: string | null): BaseClassFile {
+  if (text === null) return { state: "absent" };
+  const parsed = parseClassFile(text);
   if (parsed.ok) return { state: "valid", rules: parsed.rules, testInputs: parsed.testInputs, testGlobs: parsed.testGlobs };
   return { state: "invalid", error: parsed.errors[0] ?? "refused", raising: parsed.raising };
 }
@@ -755,7 +772,7 @@ function readRangeLockfiles(runner: GitRunner, root: ProjectRoot, base: string, 
 const RANGE_GIT_ENV: Readonly<Record<string, string>> = { GIT_ATTR_NOSYSTEM: "1", GIT_GRAFT_FILE: "/dev/null" };
 
 /** `ref` as a commit id the object store holds; anything else refuses, as a shallow clone's missing base does. */
-function commitOf(runner: GitRunner, cwd: string, side: "base" | "head" | "class file's commit", ref: string): string {
+function commitOf(runner: GitRunner, cwd: string, side: "base" | "head", ref: string): string {
   // No parser stands in front of this read as one does for `--base`, so the refusal of a `-`-led ref is here.
   const commit = ref.startsWith("-") ? null : resolveBase(runner, cwd, ref);
   if (commit !== null) return commit;
@@ -775,18 +792,18 @@ function commitOf(runner: GitRunner, cwd: string, side: "base" | "head" | "class
  * for a git directory whose own attributes file holds anything. Paths and reasons are the repository's bytes: a caller
  * sanitises them where they meet a terminal or a comment, as `gate classify` does.
  *
- * `classFileAt` is the commit whose class file judges the range, and whose tree places the project root: the base unless
- * named. `run land` names the default branch's tip, since a run picks its merge base by where it forks.
+ * With no `classFileText` the base's class file judges the range and the base's tree places the project root. Given, that
+ * text judges it, `null` saying its source holds none, and the cwd is the root, so no read of the clone picks the rules:
+ * `run land` hands in the default branch tip's file as GitHub holds it, since a run picks its merge base by where it forks.
  */
-export async function classifyRange(cwd: string, base: string, head: string, classFileAt: string = base): Promise<RangeFacts> {
+export async function classifyRange(cwd: string, base: string, head: string, classFileText?: string | null): Promise<RangeFacts> {
   const runner = gitCheckRunner({ timeoutMs: GATE_GIT_TIMEOUT_MS, maxBuffer: GATE_GIT_MAX_BUFFER, env: RANGE_GIT_ENV });
   try {
     const cwdPrefix = readCwdPrefix(runner, cwd);
     const from = commitOf(runner, cwd, "base", base);
     const to = commitOf(runner, cwd, "head", head);
-    const rulesCommit = classFileAt === base ? from : commitOf(runner, cwd, "class file's commit", classFileAt);
-    const root = findProjectRoot(runner, cwd, cwdPrefix, rulesCommit);
-    const classFile = readBaseClassFile(runner, root, rulesCommit);
+    const root = classFileText === undefined ? findProjectRoot(runner, cwd, cwdPrefix, from) : projectAtCwd(cwd, cwdPrefix);
+    const classFile = classFileText === undefined ? readBaseClassFile(runner, root, from) : classFileOf(classFileText);
     const { rules, reason } = rulesFrom(classFile);
     // On win32 git's names are read both ways (review/43); elsewhere literally (review/20).
     const windows = process.platform === "win32";

@@ -46,13 +46,15 @@ type Answer = { status: number; json: unknown };
  * computed late) and the program each call names are what this round's rows are about; one answer reads as before.
  */
 const gh = vi.hoisted(() => ({
-  calls: [] as { kind: string; method?: string; path?: string; body?: unknown; program?: string | undefined; cwd?: string | undefined; env?: string[] }[],
+  calls: [] as { kind: string; method?: string; path?: string; query?: string | undefined; body?: unknown; program?: string | undefined; cwd?: string | undefined; env?: string[] }[],
   /**
    * review/95, review/96: when set, each REST call also runs a stand-in shim in the folder the verb gave gh, which
    * reads a version file there and in each parent folder, as mise and asdf do; what it read is kept here.
    */
   probe: null as string[] | null,
   routes: new Map<string, Answer | Answer[]>(),
+  /** Routes where `gh` fails before GitHub answers. */
+  failing: new Set<string>(),
   merge: { status: 200, json: { merged: true } as unknown },
   threads: [] as unknown[],
   /** The comment editors' GraphQL answers (`ghCommentEditors`), in order; a rejection stands for a cloud whose proxy refuses GraphQL. */
@@ -60,6 +62,8 @@ const gh = vi.hoisted(() => ({
   editorsRefused: false,
   /** The answer every thread resolve gets (`ghResolveReviewThread`); `null` stands for `gh` failing before GitHub answers. */
   resolve: { status: 200, json: { data: { resolveReviewThread: { thread: { isResolved: true } } } } as unknown } as Answer | null,
+  /** review/68: the fields the pull request reads with after a thread resolve, in order; empty leaves it as it reads. */
+  afterResolve: [] as Record<string, unknown>[],
   /** The merge states the pull request reads with after the ready mark, in order. */
   afterReady: ["clean"] as (string | null)[],
   /** review/110: fields the pull request reads with after the ready mark, beside its merge state (a head that moved). */
@@ -79,13 +83,14 @@ vi.mock("../../../src/cli/engine/ghRunner.ts", async (importOriginal) => ({
   withoutVersionChoice: (await importOriginal<typeof GhRunnerModule>()).withoutVersionChoice,
   ghApi: (request: { method: string; path: string; body?: unknown }, opts?: { program?: string; cwd?: string; env?: Record<string, string | undefined> }) => {
     const path = request.path.replace(/^\//, "").replace(/\?.*$/, "");
-    gh.calls.push({ kind: "api", method: request.method, path, body: request.body, program: opts?.program, cwd: opts?.cwd, env: Object.keys(opts?.env ?? {}) });
+    gh.calls.push({ kind: "api", method: request.method, path, query: /\?(.*)$/.exec(request.path)?.[1], body: request.body, program: opts?.program, cwd: opts?.cwd, env: Object.keys(opts?.env ?? {}) });
     // Mock reason (review/95): no version manager is installed for the suite; this program reads a version file from
     // its working folder as a shim does, so the case sees whether the run's folder reaches one.
     if (gh.probe !== null) {
       const walk = 'd=$(pwd -P); while :; do cat "$d/.tool-versions" 2>/dev/null; [ "$d" = / ] && break; d=$(dirname "$d"); done; true';
       gh.probe.push(execFileSync("/bin/sh", ["-c", walk], { cwd: opts?.cwd, encoding: "utf8" }));
     }
+    if (gh.failing.has(`${request.method} ${path}`)) return Promise.reject(new Error("gh failed"));
     const answer = gh.routes.get(`${request.method} ${path}`);
     return Promise.resolve(answer === undefined ? { status: 404, json: { message: "Not Found" } } : next(answer));
   },
@@ -103,6 +108,9 @@ vi.mock("../../../src/cli/engine/ghRunner.ts", async (importOriginal) => ({
   },
   ghResolveReviewThread: (request: { id: string }, opts?: { program?: string }) => {
     gh.calls.push({ kind: "resolve", body: request.id, program: opts?.program });
+    const pr = gh.routes.get("GET repos/o/r/pulls/7");
+    const json = (Array.isArray(pr) ? pr[0] : pr)?.json as object;
+    if (gh.afterResolve.length > 0) gh.routes.set("GET repos/o/r/pulls/7", gh.afterResolve.map((fields) => ({ status: 200, json: { ...json, ...fields } })));
     return gh.resolve === null ? Promise.reject(new Error("gh failed")) : Promise.resolve(gh.resolve);
   },
   ghMarkReady: (request: { id: string }, opts?: { program?: string }) => {
@@ -240,6 +248,8 @@ describe("stamity run land", () => {
   beforeEach(() => {
     gh.calls.length = 0;
     gh.routes.clear();
+    gh.failing.clear();
+    gh.afterResolve = [];
     gh.merge = { status: 200, json: { merged: true } };
     gh.threads = [threadsPage([])];
     gh.editors = [editorsPage([])];
@@ -1311,6 +1321,10 @@ describe("stamity run land", () => {
       outcome: "asks",
       asks: { reasons: ["main is named in autonomy.deployingBranches", `auto-ship: the classification is incomplete: ${why}`] },
     });
+    const CLASS_READ = "repos/o/r/contents/.stamity/change-classes.json";
+    /** A file as GitHub's contents read answers one. */
+    const fileAnswer = (text: string): object => ({ type: "file", encoding: "base64", content: Buffer.from(text).toString("base64") });
+    const raisesTheChange = `${JSON.stringify({ classes: { "security-sensitive": ["a.txt"] } })}\n`;
 
     it("merges onto a deploying branch with no ask when the change fits, the evidence line naming the rules", async () => {
       const { repo } = await seedOn();
@@ -1440,7 +1454,7 @@ describe("stamity run land", () => {
     it("judges the change by the tip's class file, not the one its fork point holds (review/53)", async () => {
       const { repo, base, head } = await seedOn();
       git(repo, ["switch", "-q", "main"]);
-      await put(repo, ".stamity/change-classes.json", `${JSON.stringify({ classes: { "security-sensitive": ["a.txt"] } })}\n`);
+      await put(repo, ".stamity/change-classes.json", raisesTheChange);
       git(repo, ["add", "-A"]);
       git(repo, ["commit", "-q", "-m", "a rule tightened after the run forked"]);
       const tip = git(repo, ["rev-parse", "HEAD"]);
@@ -1448,10 +1462,81 @@ describe("stamity run land", () => {
       route("GET repos/o/r/branches/main", { commit: { sha: tip }, protection: { enabled: false } });
       route(`GET repos/o/r/commits/${tip}/check-runs`, green);
       github(repo, tip, head, base);
+      // TEST CHANGE, justified (review/69, signed off): the tip's class file is read from GitHub now, so GitHub answers with it.
+      route(`GET ${CLASS_READ}`, fileAnswer(raisesTheChange));
 
       const result = await run(repo, ["land", "--run", RUN]);
 
       expect(result.doc).toMatchObject({ outcome: "asks", evidence: { autoShip: { eligible: false, reasons: expect.arrayContaining([expect.stringContaining("security-sensitive")]) } } });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("reads the class file from GitHub at the tip's own commit, whatever the clone holds there (review/69)", async () => {
+      const { repo, base } = await seedOn();
+      route(`GET ${CLASS_READ}`, fileAnswer(raisesTheChange));
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "asks", evidence: { autoShip: { eligible: false, reasons: expect.arrayContaining([expect.stringContaining("security-sensitive")]) } } });
+      expect(gh.calls.filter((call) => call.path === CLASS_READ).map((call) => call.query)).toEqual([`ref=${base}`]);
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("takes no rule from a class file only the clone holds (review/69)", async () => {
+      const manifest = manifestOn({});
+      const seeded = await seed({ manifest, files: { ".stamity/change-classes.json": raisesTheChange } });
+      route("GET repos/o/r/contents/.stamity/manifest.json", { content: Buffer.from(manifest).toString("base64"), encoding: "base64" });
+      github(seeded.repo, seeded.base, seeded.head);
+
+      expect((await run(seeded.repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed", evidence: { autoShip: { eligible: true } } });
+    });
+
+    it.each([
+      ["answers 502", { status: 502, json: { message: "Bad Gateway" } }, "HTTP 502"],
+      ["answers a folder", { status: 200, json: [{ type: "file", name: "x" }] }, "GitHub's answer is no file"],
+      ["answers a link", { status: 200, json: { type: "symlink", target: "x" } }, "GitHub's answer is no file"],
+      ["answers a file too large to carry its bytes", { status: 200, json: { type: "file", encoding: "none", content: "" } }, "GitHub's answer is no file"],
+    ])("asks when the class file's read %s, naming it (review/69)", async (_name, answer, words) => {
+      const { repo, base } = await seedOn();
+      gh.routes.set(`GET ${CLASS_READ}`, answer);
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject(incomplete(`.stamity/change-classes.json did not read from GitHub at ${base} (${words})`));
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("asks when gh fails on the class file's read, naming it (review/69)", async () => {
+      const { repo, base } = await seedOn();
+      gh.failing.add(`GET ${CLASS_READ}`);
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject(incomplete(`.stamity/change-classes.json did not read from GitHub at ${base} (gh failed)`));
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("reads a project below the top at its own path, and asks where GitHub holds no class file there (review/69)", async () => {
+      const manifest = manifestOn({});
+      const seeded = await seed({ files: { "apps/web/.stamity/manifest.json": manifest } });
+      const web = join(seeded.repo, "apps/web");
+      route("GET repos/o/r/contents/apps/web/.stamity/manifest.json", { content: Buffer.from(manifest).toString("base64"), encoding: "base64" });
+      await put(web, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\nMode: attended\nBranch: ${RUN_BRANCH}\nBase: ${seeded.base}\n`);
+      await put(web, `${RUN_DIR}/ledger.jsonl`, row(`${RUN}/review/1`, "Warning", "fixed"));
+      git(seeded.repo, ["add", "-A"]);
+      git(seeded.repo, ["commit", "-q", "-m", "the project's own record"]);
+      git(seeded.repo, ["push", "-q", seeded.remote, `HEAD:refs/heads/${RUN_BRANCH}`]);
+      const head = git(seeded.repo, ["rev-parse", "HEAD"]);
+      github(seeded.repo, seeded.base, head, seeded.base, { changed_files: 5 });
+      route("GET repos/o/r/pulls/7/files", [...seededFiles, { filename: `apps/web/${RUN_DIR}/record.md` }, { filename: `apps/web/${RUN_DIR}/ledger.jsonl` }]);
+      route(`GET repos/o/r/commits/${head}/check-runs`, green);
+      // The spy above finds the bare remote beside the verb's cwd.
+      await symlink(seeded.remote, join(seeded.repo, "apps", "remote.git"));
+
+      const result = await run(web, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "asks", notDone: [], evidence: { autoShip: { eligible: false, reasons: [`the classification is incomplete: GitHub holds no apps/web/.stamity/change-classes.json at ${seeded.base}, so what judges a project below the top is not known`] } } });
+      expect(gh.calls.filter((call) => call.path === "repos/o/r/contents/apps/web/.stamity/change-classes.json").map((call) => call.query)).toEqual([`ref=${seeded.base}`]);
       expect(kinds()).not.toContain("merge");
     });
 
@@ -2025,6 +2110,156 @@ describe("stamity run land", () => {
 
       expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
       expect(kinds()).not.toContain("merge");
+    });
+
+    describe("under a rule requiring resolved conversations (review/68)", () => {
+      const HOLDS = "mergeable_state is blocked: an admin merge past the branch's rules asks";
+      /** Where such a rule leaves a clean head: the pull request reads `blocked` while the tool's thread stays open. */
+      const seedHeld = async (): Promise<Seeded> => {
+        const seeded = await seedClean();
+        route("GET repos/o/r/pulls/7", pull(seeded.head, { mergeable_state: "blocked" }));
+        gh.threads = [threadsPage([fromTool("T1")]), threadsPage([fromTool("T1")]), threadsPage([closed("T1")])];
+        return seeded;
+      };
+
+      it("resolves before it judges the merge state, reads the pull request again, and merges", async () => {
+        const { repo } = await seedHeld();
+        gh.afterResolve = [{ mergeable_state: "clean" }];
+
+        const result = await run(repo, ["land", "--run", RUN]);
+
+        expect(result.doc).toMatchObject({ outcome: "landed", evidence: { mergeableState: "clean", threads: { unresolved: 0 } } });
+        expect(resolved()).toEqual(["T1"]);
+        const order = kinds();
+        expect(order.lastIndexOf("GET repos/o/r/pulls/7")).toBeGreaterThan(order.indexOf("resolve"));
+        expect(order.lastIndexOf("GET repos/o/r/pulls/7")).toBeLessThan(order.indexOf("PATCH repos/o/r/pulls/7"));
+        expect(order.indexOf("merge")).toBeGreaterThan(order.indexOf("resolve"));
+      });
+
+      it("reads the pull request again until GitHub has moved the merge state", async () => {
+        const { slept } = fakeClock();
+        const { repo } = await seedHeld();
+        gh.afterResolve = [{ mergeable_state: "blocked" }, { mergeable_state: "unknown" }, { mergeable_state: "clean" }];
+
+        expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed", evidence: { mergeableState: "clean" } });
+        expect(slept).toEqual([5_000, 5_000]);
+      });
+
+      it("refuses where `blocked` outlasts the resolve, so another rule holds it, with the threads closed and no merge", async () => {
+        const { slept } = fakeClock();
+        const { repo } = await seedHeld();
+
+        const result = await run(repo, ["land", "--run", RUN]);
+
+        expect(result.doc).toMatchObject({ outcome: "refused", notDone: [HOLDS], evidence: { mergeableState: "blocked" } });
+        expect(resolved()).toEqual(["T1"]);
+        expect(slept).toEqual(Array.from({ length: 12 }, () => 5_000));
+        expect(kinds()).not.toContain("merge");
+      });
+
+      it("refuses where the read after the resolve finds another head", async () => {
+        const { repo, head } = await seedHeld();
+        const moved = "e".repeat(40);
+        gh.afterResolve = [{ mergeable_state: "clean", head: { ref: RUN_BRANCH, sha: moved, repo: { full_name: "o/r" } } }];
+
+        const result = await run(repo, ["land", "--run", RUN]);
+
+        expect(result.doc).toMatchObject({ outcome: "refused", notDone: [`pull request #7's head ${moved} is not HEAD ${head}`] });
+        expect(kinds()).not.toContain("merge");
+      });
+
+      it("reads a failed resolve as a gap and waits on no merge state after it", async () => {
+        const { slept } = fakeClock();
+        const { repo } = await seedHeld();
+        gh.threads = [threadsPage([fromTool("T1")])];
+        gh.resolve = { status: 403, json: { message: "Forbidden" } };
+
+        const result = await run(repo, ["land", "--run", RUN]);
+
+        expect(result.doc).toMatchObject({ outcome: "refused", notDone: ["the tool's review thread T1 was not resolved (HTTP 403)", "1 review thread is unresolved", HOLDS] });
+        expect(slept).toEqual([]);
+        expect(kinds()).not.toContain("merge");
+      });
+
+      it("keeps `blocked` a plain gap beside a person's thread, and resolves nothing", async () => {
+        const { repo } = await seedHeld();
+        gh.threads = [threadsPage([fromTool("T1"), named("T2", ["User", "alice"])])];
+
+        const result = await run(repo, ["land", "--run", RUN]);
+
+        expect(result.doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
+        expect(resolved()).toEqual([]);
+        expect(kinds()).not.toContain("merge");
+      });
+
+      it("keeps `blocked` a plain gap with none of the tool's threads open: nothing is left to resolve", async () => {
+        const { repo } = await seedHeld();
+        gh.threads = [threadsPage([])];
+
+        expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: [HOLDS] });
+      });
+
+      it("resolves nothing on a dry run, and says the merge state waits on the resolve", async () => {
+        const { repo } = await seedHeld();
+
+        expect((await run(repo, ["land", "--run", RUN, "--dry-run"])).doc).toMatchObject({ outcome: "would-land", evidence: { mergeableState: "blocked" } });
+
+        gh.threads = [threadsPage([fromTool("T1")])];
+        const plain = await runInProcess([runCommand], ["run", "land", "--run", RUN, "--dry-run"], { cwd: repo });
+        expect(plain.stdout).toContain("threads: would resolve 1 of the tool's own, and only then is the merge state judged");
+        expect(resolved()).toEqual([]);
+      });
+
+      it("resolves nothing while a person still has to answer an ask", async () => {
+        const { repo } = await seedHeld();
+        route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: ".github/workflows/ci.yml" }, { filename: "b" }]);
+
+        expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks" });
+        expect(resolved()).toEqual([]);
+      });
+
+      it("posts the request on a new head that reads `blocked`, so the tool can still read clean", async () => {
+        const { repo, head } = await seedHeld();
+        route("GET repos/o/r/issues/7/comments", afterAFixRound());
+        gh.threads = [threadsPage([fromTool("T1")])];
+
+        const result = await run(repo, ["land", "--run", RUN]);
+
+        expect(gh.calls.filter((call) => call.method === "POST").map((call) => (call.body as { body: string }).body)).toEqual([`@codex review\n\n${requestMarker(head)}`]);
+        expect(result.doc).toMatchObject({
+          outcome: "asks",
+          asks: { pending: true, reasons: expect.arrayContaining(["mergeable_state is blocked, and the tool's open review threads may be what holds it"]) },
+          evidence: { review: { state: "waiting" } },
+        });
+        expect(resolved()).toEqual([]);
+      });
+
+      it("keeps a person's thread a plain gap on a new head, so no request goes on a head that cannot land", async () => {
+        const { repo } = await seedHeld();
+        route("GET repos/o/r/issues/7/comments", afterAFixRound());
+        gh.threads = [threadsPage([fromTool("T1"), named("T2", ["User", "alice"])])];
+
+        expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: expect.arrayContaining(["1 review thread is unresolved"]) });
+        expect(gh.calls.filter((call) => call.method === "POST")).toEqual([]);
+      });
+
+      it("runs the whole loop on --wait: the request, the tool's clean word, the resolve, the read and the merge", async () => {
+        fakeClock();
+        const { repo, head } = await seedHeld();
+        const asked = comment(3, "runner", "User", requestMarker(head));
+        const [earlier] = afterAFixRound();
+        gh.routes.set("GET repos/o/r/issues/7/comments", [
+          { status: 200, json: afterAFixRound() },
+          { status: 200, json: [...afterAFixRound(), asked] },
+          { status: 200, json: [earlier, comment(2, LOGIN, "Bot", block(head)), asked] },
+        ]);
+        gh.editors = [editorsPage([never(1), never(2), never(3)])];
+        gh.threads = [threadsPage([fromTool("T1")]), threadsPage([fromTool("T1")]), threadsPage([fromTool("T1")]), threadsPage([fromTool("T1")]), threadsPage([closed("T1")])];
+        gh.afterResolve = [{ mergeable_state: "clean" }];
+
+        expect((await run(repo, ["land", "--run", RUN, "--wait", "2"])).doc).toMatchObject({ outcome: "landed", notDone: [], evidence: { mergeableState: "clean" } });
+        expect(resolved()).toEqual(["T1"]);
+      });
     });
   });
 

@@ -420,6 +420,13 @@ export function parseMergeBase(json: unknown): string | null {
   return typeof sha === "string" && /^[0-9a-f]{40,64}$/.test(sha) ? sha : null;
 }
 
+/** A file's text from a `contents/<path>` answer, or `null` for anything else: a folder, a link, a file too large to carry its bytes. */
+export function parseFileContent(json: unknown): string | null {
+  const content = field(json, "content");
+  if (field(json, "type") !== "file" || field(json, "encoding") !== "base64" || typeof content !== "string") return null;
+  return Buffer.from(content, "base64").toString("utf8");
+}
+
 /** The fields of a pull request the land verb reads. */
 export interface LandPr {
   number: number;
@@ -559,6 +566,11 @@ export interface LandInput {
    * plain one, or a head a fix round left them on would never get its request, and the clean word could never come.
    */
   pendingThreads: number;
+  /**
+   * How many of the tool's own threads were taken out of `threads` on its clean word, to be resolved just before the act: a
+   * `blocked` merge state may be those threads, so it is judged after them (review/68).
+   */
+  setAsideThreads: number;
   ledger: { open: string[] } | { refused: string };
   /** Present for `--fast-forward`. */
   forward?: ForwardFacts;
@@ -594,6 +606,19 @@ function mergeableRefusal(state: string | null): string | null {
   if (state === "unstable") return "mergeable_state is unstable: a check that is not required is failing";
   if (state === "draft") return "mergeable_state reads draft: GitHub computes it after the ready mark, which a dry run does not make";
   return `mergeable_state is ${state}, not clean`;
+}
+
+/**
+ * The gap the merge state leaves, or `null` for none (review/68). A rule requiring resolved conversations reads `blocked` while
+ * the tool's own threads stay open, and no read here tells that rule from another. So `blocked` is not judged while those
+ * threads are set aside: the verb judges it after it resolves them. While the tool's word on them is awaited it waits with them.
+ */
+function mergeGap(input: LandInput): { reason: string; pending: boolean } | null {
+  const state = input.pr.mergeableState;
+  if (state === "blocked" && input.setAsideThreads > 0) return null;
+  if (state === "blocked" && input.pendingThreads > 0) return { reason: "mergeable_state is blocked, and the tool's open review threads may be what holds it", pending: true };
+  const reason = mergeableRefusal(state);
+  return reason === null ? null : { reason, pending: state === null || state === "unknown" };
 }
 
 /**
@@ -633,8 +658,8 @@ export function decideLand(input: LandInput): LandDecision {
   const review = input.reviewTool;
   if (review !== undefined && review.state !== "clean") gap(review.reason, review.state === "waiting");
   if (input.beforeReady !== true) {
-    const mergeable = mergeableRefusal(pr.mergeableState);
-    if (mergeable !== null) gap(mergeable, pr.mergeableState === null || pr.mergeableState === "unknown");
+    const mergeable = mergeGap(input);
+    if (mergeable !== null) gap(mergeable.reason, mergeable.pending);
   }
   const forward = input.forward;
   if (forward !== undefined && forward.compare !== "ahead") {

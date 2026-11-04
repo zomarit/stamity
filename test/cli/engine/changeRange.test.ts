@@ -660,35 +660,67 @@ describe.skipIf(!gitAvailable)("classifyRange", () => {
     });
   });
 
-  describe("the commit the class file is read at (review/53)", () => {
+  // TEST CHANGE, justified (review/69, signed off): the land reads the tip's class file from GitHub, so what it hands in is the
+  // file's text and no longer a commit of the clone's. The two cases naming a commit go with that, and these pin the text.
+  describe("the class file a caller read itself (review/53, review/69)", () => {
+    const raised = fileOf({ "security-sensitive": ["docs/x.md"] });
+
     /** A change to a docs path, and beside it on another line of history a commit whose class file raises that path. */
-    async function forked(): Promise<{ repo: string; base: string; head: string; tip: string }> {
+    async function forked(): Promise<{ repo: string; base: string; head: string }> {
       const { repo, base } = await seed({ "docs/x.md": "a\n" });
       const head = await commit(repo, { "docs/x.md": "b\n" });
       git(repo, ["switch", "-q", "--detach", base]);
-      const tip = await commit(repo, { [CLASS_FILE]: fileOf({ "security-sensitive": ["docs/x.md"] }) });
-      return { repo, base, head, tip };
+      await commit(repo, { [CLASS_FILE]: raised });
+      return { repo, base, head };
     }
 
-    it("is the base with none named, as `gate` and every other caller read it", async () => {
+    it("is the base's with none handed in, as `gate` and every other caller read it", async () => {
       const { repo, base, head } = await forked();
 
       expect((await range(repo, base, head)).result.class).toBe("docs");
     });
 
-    it("is the commit named where one is, and the range stays base to head", async () => {
-      const { repo, base, head, tip } = await forked();
+    it("judges by the text handed in, the store's copy read by no call, and the range stays base to head", async () => {
+      const { repo, base, head } = await forked();
 
-      const facts = await isolated(() => classifyRange(repo, base, head, tip));
+      const facts = await isolated(() => classifyRange(repo, base, head, raised));
 
       expect(facts.result.class).toBe("security-sensitive");
       expect(facts.paths).toEqual(["docs/x.md"]);
     });
 
-    it("refuses a commit the store does not hold, as it does a base", async () => {
-      const { repo, base, head } = await forked();
+    it("reads `null` as no class file, whatever the base's copy holds", async () => {
+      const { repo, base } = await seed({ [CLASS_FILE]: raised, "docs/x.md": "a\n" });
+      const head = await commit(repo, { "docs/x.md": "b\n" });
 
-      await expect(isolated(() => classifyRange(repo, base, head, "0".repeat(40)))).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+      const facts = await isolated(() => classifyRange(repo, base, head, null));
+
+      expect(facts.result.class).toBe("docs");
+      expect(facts.complete).toBe(true);
+    });
+
+    it("reads a text the validator refuses as a refused base copy reads: its raising rows, the class at least product", async () => {
+      const { repo, base } = await seed({ "docs/x.md": "a\n" });
+      const head = await commit(repo, { "docs/x.md": "b\n" });
+
+      const facts = await isolated(() => classifyRange(repo, base, head, "not a class file"));
+
+      expect(facts.result.class).toBe("product");
+      expect(facts.result.reason).toContain("is invalid");
+    });
+
+    it("places the project at the cwd with no tree read, so the store cannot move what the rows are read against", async () => {
+      const { repo, base } = await seed({ "app/docs/x.md": "a\n" });
+      const head = await commit(repo, { "app/docs/x.md": "b\n" });
+      const app = join(repo, "app");
+
+      // No commit holds `app/.stamity`, so the walk the base's read takes ends at the top, where the row below names nothing.
+      expect((await range(app, base, head)).result.class).toBe("product");
+
+      const facts = await isolated(() => classifyRange(app, base, head, raised));
+
+      expect(facts.result.class).toBe("security-sensitive");
+      expect(facts.paths).toEqual(["app/docs/x.md"]);
     });
   });
 });

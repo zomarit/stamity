@@ -18,6 +18,7 @@ import {
   parseBranchRules,
   parseCheckRuns,
   parseEditorsPage,
+  parseFileContent,
   parseFiles,
   parseIssueComments,
   parsePr,
@@ -82,6 +83,7 @@ function input(over: Partial<LandInput> = {}, pr: Partial<LandPr> = {}): LandInp
     threads: 0,
     ledger: { open: [] },
     pendingThreads: 0,
+    setAsideThreads: 0,
     looserKeys: [],
     reviewToolConflict: [],
     ...over,
@@ -512,6 +514,32 @@ describe("decideLand, the factory's evidence (REQ-FLOW-152 to REQ-FLOW-154)", ()
     const waiting = "the tool's open review threads (2) wait on its word on this head";
     expect(decideLand(input({ threads: 2, pendingThreads: 2 }))).toEqual({ outcome: "refused", reasons: [waiting], pending: true });
     expect(decideLand(input({ threads: 3, pendingThreads: 2 }))).toEqual({ outcome: "refused", reasons: ["1 review thread is unresolved", waiting], pending: false });
+  });
+
+  it("leaves `blocked` unjudged while the tool's own threads are set aside, and every other state judged (review/68)", () => {
+    expect(decideLand(input({ setAsideThreads: 2 }, { mergeableState: "blocked" }))).toEqual({ outcome: "land" });
+    expect(decideLand(input({ setAsideThreads: 2, threads: 1 }, { mergeableState: "blocked" }))).toEqual({ outcome: "refused", reasons: ["1 review thread is unresolved"], pending: false });
+    expect(decideLand(input({ setAsideThreads: 2 }, { mergeableState: "dirty" }))).toEqual({ outcome: "refused", reasons: ["mergeable_state is dirty: the branch conflicts with the default branch"], pending: false });
+    expect(decideLand(input({}, { mergeableState: "blocked" }))).toEqual({ outcome: "refused", reasons: ["mergeable_state is blocked: an admin merge past the branch's rules asks"], pending: false });
+  });
+
+  it("waits on `blocked` beside the tool's awaited threads, which may be what holds it, and only then (review/68)", () => {
+    const waiting = "the tool's open review threads (1) wait on its word on this head";
+    const held = "mergeable_state is blocked, and the tool's open review threads may be what holds it";
+    expect(decideLand(input({ threads: 1, pendingThreads: 1 }, { mergeableState: "blocked" }))).toEqual({ outcome: "refused", reasons: [waiting, held], pending: true });
+    expect(decideLand(input({ threads: 2, pendingThreads: 1 }, { mergeableState: "blocked" }))).toEqual({ outcome: "refused", reasons: ["1 review thread is unresolved", waiting, held], pending: false });
+    expect(decideLand(input({ threads: 1, pendingThreads: 1 }, { mergeableState: "dirty" }))).toMatchObject({ outcome: "refused", pending: false });
+  });
+
+  it("reads a file from GitHub's contents answer, and nothing else as one (review/69)", () => {
+    const text = 'a "class" file\n';
+    const content = Buffer.from(text).toString("base64");
+    expect(parseFileContent({ type: "file", encoding: "base64", content })).toBe(text);
+    expect(parseFileContent({ type: "file", encoding: "base64", content: `${content.slice(0, 4)}\n${content.slice(4)}\n` })).toBe(text);
+    expect(parseFileContent({ type: "file", encoding: "base64", content: "" })).toBe("");
+    for (const answer of [null, [], [{ type: "file" }], { type: "dir" }, { type: "symlink", target: "x" }, { type: "submodule" }, { type: "file", encoding: "none", content: "" }, { type: "file", encoding: "base64" }]) {
+      expect(parseFileContent(answer)).toBeNull();
+    }
   });
 
   it("keeps a refusal first: a red tip never turns a gap into an ask", () => {
