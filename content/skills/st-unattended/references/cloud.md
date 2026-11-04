@@ -84,7 +84,8 @@ On that branch the run runs `stamity run contract --run <id> --item <owner/repo#
 name. The verb proves who stands behind the issue and writes `.stamity/runs/<id>/contract.yml`. Any exit but 0 is a
 refusal: its `notDone[]` lines go first on the morning list under `## Refused`. When its JSON reports
 `strippedComments` above zero, the run refuses to start, before Frame, since a visible criterion may have gone with the
-comment: a `## Refused` row names that count and the fix, a person edits the issue. The ready check then names that file:
+comment: a `## Refused` row names that count and the fix, a person edits the issue and closes the `Refused:` draft before
+the label goes on again. The ready check then names that file:
 `stamity plan check <plan> --contract .stamity/runs/<id>/contract.yml --json`, `<plan>` the path in the contract's
 `plan` key.
 
