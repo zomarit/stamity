@@ -1,4 +1,4 @@
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   BUILT_IN_RULES,
@@ -32,9 +32,12 @@ import { gitCheckRunner, keptFromGit, type GitInputRunner } from "./gitStatus.ts
  * the untracked files; a land acts on what merges, so this reads two commits from the object store alone: names and
  * counts by `git diff-tree`, hunks, heads and lockfile copies from blobs. A change committed and then reverted in the
  * work tree still counts, and nothing left uncommitted does. The class file is the base commit's, so no change sets
- * its own rules, and so are the attributes: git reads `.gitattributes` for a diff from the work tree even between two
- * commits, and a `diff=` driver there moves where `-W` stops, which can take a call out of a hunk's context and a
- * class down with it. `--attr-source` needs git 2.41; an older git fails that read, and the range fails closed.
+ * its own rules, and so are the tree-level attributes: git reads `.gitattributes` for a diff from the work tree even
+ * between two commits, and a `diff=` driver there moves where `-W` stops, which can take a call out of a hunk's context
+ * and a class down with it. `--attr-source` needs git 2.41; an older git fails that read, and the range fails closed.
+ * `--attr-source` moves the tree-level file alone. An empty `core.attributesFile` turns the user's file off. Git's
+ * `info/attributes` has no such switch, so a non-empty one reads `complete` false. The system file is still read: its
+ * switch, `GIT_ATTR_NOSYSTEM`, is a variable, and `gitCheckRunner` strips every `GIT_*` one from what it starts.
  *
  * **The rest moved here from `../commands/gate.ts`, unchanged,** because `gate.ts` and `../commands/runLand.ts` share
  * a wave and neither may import the other: the class-file read, the name, count and patch parsers, the project-root
@@ -583,13 +586,28 @@ interface RangeLines {
   unscanned: string[];
   /** Those of `unscanned` a covered shebang or the executable mode, not an extension, makes code (review/200). */
   unscannedCode: string[];
+  /** Top-level-relative submodule paths the range touches: a pointer's lines say nothing of the code behind it. */
+  gitlinks: string[];
   /** `null` when a file has no count, or its lines were not read. */
   total: number | null;
 }
 
-/** A range's `diff-tree` call, up to its output flag: the base's attributes, then {@link DIFF_PINS}. */
+/** A range's `diff-tree` call, up to its output flag: the base's attributes and no user file, then {@link DIFF_PINS}. */
 function rangeDiff(base: string): string[] {
-  return [`--attr-source=${base}`, "diff-tree", "-r", "-M", ...DIFF_PINS];
+  return [`--attr-source=${base}`, "-c", "core.attributesFile=", "diff-tree", "-r", "-M", ...DIFF_PINS];
+}
+
+/**
+ * Whether the repository's own `info/attributes` holds anything. Git reads it above the base's attributes and no option
+ * turns it off, so a read that cannot rule it out is treated as one that found it; only git's "no such file" is absent.
+ */
+function holdsLocalAttributes(runner: GitRunner, root: ProjectRoot): boolean {
+  const name = runGit(runner, root.dir, "rev-parse --git-path", ["rev-parse", "--git-path", "info/attributes"]).replace(/\r?\n$/, "");
+  try {
+    return statSync(resolve(root.dir, name)).size > 0;
+  } catch (err) {
+    return (err as { code?: unknown }).code !== "ENOENT";
+  }
 }
 
 /** The first read of a range, named so a git too old for `--attr-source` says what it lacks. */
@@ -655,7 +673,10 @@ function readRangeLines(
     "--",
     ...pathspec,
   ]);
-  const read: Omit<RangeLines, "total"> = { hunks: [], skipped: 0, unscanned: [], unscannedCode: [] };
+  // Two fields a row with renames off, so a name that reads like a row is never taken for one.
+  const rows = runGit(runner, root.dir, "diff-tree --raw", ["diff-tree", "-r", ...DIFF_PINS, "--no-renames", "--raw", "-z", ...revs, "--"]).split("\0");
+  const gitlinks = rows.flatMap((field, at) => (at % 2 === 0 && field.slice(1).split(" ", 2).includes("160000") ? [rows[at + 1] ?? ""] : []));
+  const read: Omit<RangeLines, "total"> = { hunks: [], skipped: 0, unscanned: [], unscannedCode: [], gitlinks };
   // review/200: whether git records the file executable (mode 100755) on either side.
   const executable = (name: string): boolean => {
     const raw = runGit(runner, root.dir, "diff-tree --raw", ["diff-tree", "-r", ...DIFF_PINS, "--raw", "-z", ...revs, "--", `:(top,literal)${name}`]);
@@ -691,9 +712,11 @@ function readRangeLines(
     // The classifier reads no file outside the project (review/96), and `complete` says so.
     if (path === null) return;
     const opening = body ?? (section.deleted ? lines.join("\n") : undefined);
+    // Past the runner's bound there is no head to read, so a shebang or import outside the hunks goes unseen.
+    if (opening === undefined && !gitlinks.includes(name)) read.skipped += 1;
     for (const hunk of section.hunks) read.hunks.push({ path, ...hunk, ...(opening === undefined ? {} : { head: opening.slice(0, HEAD_BYTES) }) });
   });
-  const unread = numstat.some((row) => row.binary) || read.skipped > 0 || read.unscanned.length > 0;
+  const unread = numstat.some((row) => row.binary) || read.skipped > 0 || read.unscanned.length > 0 || gitlinks.length > 0;
   return { ...read, total: unread ? null : numstat.reduce((sum, row) => sum + row.lines, 0) };
 }
 
@@ -739,7 +762,8 @@ function commitOf(runner: GitRunner, cwd: string, side: "base" | "head", ref: st
  * store does not hold rejects with a coded error. Any other failed read gives what `gate classify` gives, `product`
  * with the failure named, here with nothing counted and `complete` false; a failed line read keeps the path classes
  * and makes the class `security-sensitive`. `complete` is false for a file the classifier read no line of: a binary,
- * one past the runner's bound, or one outside the project. Paths and reasons are the repository's bytes: a caller
+ * one past the runner's bound, one outside the project, or a submodule, whose pointer stands for code nobody read; and
+ * for a git directory whose own attributes file holds anything. Paths and reasons are the repository's bytes: a caller
  * sanitises them where they meet a terminal or a comment, as `gate classify` does.
  */
 export async function classifyRange(cwd: string, base: string, head: string): Promise<RangeFacts> {
@@ -770,11 +794,18 @@ export async function classifyRange(cwd: string, base: string, head: string): Pr
     const floored = applyReadFloors(classified, { ...placed, lines }, source);
     const raised = classFile.state === "invalid" ? raiseTo(floored, "product") : floored;
     const total = "failed" in lines ? null : lines.total;
+    const localAttributes = holdsLocalAttributes(runner, root);
+    const gitlinks = "failed" in lines ? [] : lines.gitlinks;
+    const unread = [
+      ...(reason === undefined ? [] : [reason]),
+      ...(localAttributes ? ["info/attributes in the git directory is not empty and git reads it above the base's attributes, so the hunks may not be the base's and the read is not complete"] : []),
+      ...(gitlinks.length === 0 ? [] : [`no line of the code behind a submodule pointer was read, so the read is not complete: ${namePaths(gitlinks)}`]),
+    ];
     return {
-      result: applyNameFloor(withReasons(raised, reason === undefined ? [] : [reason])),
+      result: applyNameFloor(withReasons(raised, unread)),
       files: new Set([...named.paths, ...named.renames.flatMap((rename) => [rename.from, rename.to])]).size,
       lines: total,
-      complete: total !== null && placed.outside.length === 0,
+      complete: total !== null && placed.outside.length === 0 && !localAttributes,
     };
   } catch (err) {
     if (!(err instanceof GitReadError)) throw err;

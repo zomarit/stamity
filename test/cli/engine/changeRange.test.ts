@@ -216,6 +216,51 @@ describe.skipIf(!gitAvailable)("classifyRange", () => {
       expect(planted).toEqual(clean);
     });
 
+    it("keeps the context under a user attributes file, named by config or found by its default place", async () => {
+      const { repo, base } = await seed({ "src/a.ts": GUARDED });
+      const head = await commit(repo, { "src/a.ts": UNGUARDED });
+      const clean = await range(repo, base, head);
+      await put(getRoot().dir, { "home/git/attributes": NARROWS, "named-attributes": NARROWS });
+
+      const byDefaultPlace = await range(repo, base, head);
+      git(repo, ["config", "core.attributesFile", getRoot().path("named-attributes")]);
+      const byConfig = await range(repo, base, head);
+
+      expect(clean.result.class).toBe("security-sensitive");
+      expect(byDefaultPlace).toEqual(clean);
+      expect(byConfig).toEqual(clean);
+    });
+
+    it("reads complete false, with a reason, when the git directory's attributes file holds anything", async () => {
+      const { repo, base } = await seed({ "src/a.ts": GUARDED });
+      const head = await commit(repo, { "src/a.ts": UNGUARDED });
+      await put(repo, { ".git/info/attributes": NARROWS });
+
+      const facts = await range(repo, base, head);
+
+      expect(facts.complete).toBe(false);
+      expect(facts.result.reason).toContain("info/attributes");
+    });
+
+    it("finds that file from a project in a subfolder and from a linked work tree", async () => {
+      const { repo, base } = await seed({ "app/.stamity/runs/.keep": "", "app/docs/x.md": "a\n" });
+      const head = await commit(repo, { "app/docs/x.md": "b\n" });
+      const linked = getRoot().path("linked");
+      git(repo, ["worktree", "add", "-q", "--detach", linked, head]);
+      await put(repo, { ".git/info/attributes": NARROWS });
+
+      expect((await range(join(repo, "app"), base, head)).complete).toBe(false);
+      expect((await range(join(linked, "app"), base, head)).complete).toBe(false);
+    });
+
+    it("stays complete with an empty attributes file in the git directory", async () => {
+      const { repo, base } = await seed({ "docs/x.md": "a\n" });
+      const head = await commit(repo, { "docs/x.md": "b\n" });
+      await put(repo, { ".git/info/attributes": "" });
+
+      expect(await range(repo, base, head)).toMatchObject({ lines: 2, complete: true });
+    });
+
     it("reads a range's hunks by the base's attributes, so a range cannot narrow its own context", async () => {
       const { repo, base } = await seed({ "src/a.ts": GUARDED });
       const head = await commit(repo, { "src/a.ts": UNGUARDED, ".gitattributes": NARROWS });
@@ -427,6 +472,48 @@ describe.skipIf(!gitAvailable)("classifyRange", () => {
       const facts = await range(repo, base, head);
 
       expect(facts).toMatchObject({ files: 2, lines: null, complete: false });
+    });
+
+    /** Sets or, with no `id`, drops the gitlink at `path` and commits it; `git add -A` would drop one with no folder behind it. */
+    function pointer(repo: string, path: string, id?: string): string {
+      git(repo, ["update-index", ...(id === undefined ? ["--force-remove", path] : ["--add", "--cacheinfo", `160000,${id},${path}`])]);
+      git(repo, ["commit", "-q", "-m", "pointer"]);
+      return git(repo, ["rev-parse", "HEAD"]).trim();
+    }
+
+    it("reads complete false for a submodule bump, naming the path, under a class file that places it in tests", async () => {
+      const { repo, base } = await seed({ [CLASS_FILE]: fileOf({ tests: ["test/**"] }) });
+      const other = await commit(repo, { "docs/x.md": "b\n" });
+      const from = pointer(repo, "test/vendored", base);
+      const to = pointer(repo, "test/vendored", other);
+
+      const facts = await range(repo, from, to);
+
+      expect(facts).toMatchObject({ files: 1, lines: null, complete: false });
+      expect(facts.result.reason).toContain("test/vendored");
+    });
+
+    it("reads complete false for a submodule the range adds or removes", async () => {
+      const { repo, base } = await seed({ "docs/x.md": "a\n" });
+      const added = pointer(repo, "vendored", base);
+      const removed = pointer(repo, "vendored");
+
+      const adds = await range(repo, base, added);
+      const removes = await range(repo, added, removed);
+
+      expect(adds.complete).toBe(false);
+      expect(removes.complete).toBe(false);
+      expect(removes.result.reason).toContain("vendored");
+    });
+
+    it("reads complete false for a text file past the read bound, whose head no line rule saw", { timeout: 60_000 }, async () => {
+      const big = `${"x".repeat(1024 * 1024)}\n`.repeat(65);
+      const { repo, base } = await seed({ "docs/big.txt": big });
+      const head = await commit(repo, { "docs/big.txt": `${big}changed\n` });
+
+      const facts = await range(repo, base, head);
+
+      expect(facts).toMatchObject({ files: 1, lines: null, complete: false });
     });
 
     it("counts both paths of a rename", async () => {
