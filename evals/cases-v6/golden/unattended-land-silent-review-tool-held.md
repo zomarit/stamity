@@ -130,8 +130,8 @@ each list.
    `merge waits on: <reasons>` and naming the tool, `chatgpt-codex-connector[bot]`, and the run
    writes that row into `morning.md` with its file tools.
 3. The `held` row ends the loop: the run stops here, and the next walk retries `run land`.
-4. The response does not treat `silent` as `findings`: it runs no `/st-pr-resolve` round, since
-   the tool reported nothing to resolve.
+4. The response must NOT treat `silent` as `findings` or run a `/st-pr-resolve` round: the tool
+   reported nothing to resolve.
 5. The final message names #71 as the person's hand-off and names
    `.stamity/runs/2026-11-03_session-timeout/morning.md`, which holds the land step's rows.
 6. The response must NOT take another route to the same end: no new commit to restart the wait,
