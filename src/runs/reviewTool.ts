@@ -8,7 +8,8 @@
  *
  * **The state comment** is the proven signal. Only a comment whose author is a `Bot` of the configured login, and whose
  * last editor is that login or nobody, counts: a person pasting the same text proves nothing, and neither does a write
- * token rewriting the tool's own comment, which keeps the bot as author. The tool edits one comment in place, so that
+ * token rewriting the tool's own comment, which keeps the bot as author. One rewritten that way holds the read rather than
+ * dropping out of it, or a reply could stand in for it. The tool edits one comment in place, so that
  * comment's `createdAt` can sit long before the run it reports: the wait is timed from the request marker, never from the
  * comment. A flag stays true after every thread is resolved, so only a new run clears findings. `review-state` needs
  * `APPROVED` on the head. `reaction` needs `+1` and is the weakest: a reaction cannot be tied to a commit, so one left on an
@@ -87,6 +88,11 @@ export function requestMarker(head: string): string {
   return `<!-- stamity:review-request ${head} -->`;
 }
 
+/** `body` with no request marker: what `run land` passes for a comment the run did not write, so it spends no round. */
+export function withoutRequestMarkers(body: string): string {
+  return body.replaceAll(REQUEST_MARKER, "");
+}
+
 /** Text from a comment, for a line a person reads: it can hold anything, so only plain text is shown. */
 function shown(text: string): string {
   return /^[\w.:\-[\]]{1,64}$/.test(text) ? text : "an unreadable value";
@@ -157,9 +163,10 @@ function reacted(facts: ReviewToolFacts, tool: ReviewToolConfig): boolean {
 }
 
 /**
- * The tool keeps one state comment per pull request, so two trusted comments carrying the marker cannot both be it, and
- * neither is read, whichever commit each names. A reply echoing a block would otherwise stand in for a run that never
- * happened. Text naming the marker counts too: at worst that holds a merge for a person.
+ * The tool keeps one state comment per pull request, so two comments carrying the marker cannot both be it, and neither is
+ * read, whichever commit each names. A reply echoing a block would otherwise stand in for a run that never happened. Text
+ * naming the marker counts too: at worst that holds a merge for a person. One someone else last edited holds the read
+ * first, whatever the rest say: it may be the state comment, so the comment beside it cannot be trusted to be.
  *
  * `clean` also needs the tool's `+1` on the pull request. Text can be echoed or edited, and nobody else can react under the
  * tool's login; the tool leaves it seconds after a clean run. The limit: a reaction names no commit, so this proves the tool
@@ -170,12 +177,13 @@ function stateCommentReading(facts: ReviewToolFacts, tool: ReviewToolConfig): Re
   if (marker === undefined || section === undefined) return "none";
   const fromTool = facts.comments.filter((comment) => comment.userType === "Bot" && comment.userLogin === tool.login);
   const trusted = (comment: ReviewToolFacts["comments"][number]): boolean => comment.editor === null || comment.editor === tool.login;
-  const carrying = fromTool.filter((comment) => trusted(comment) && comment.body.includes(marker)).length;
-  if (carrying > 1) return { why: `${carrying} of its comments carry the marker, and it keeps one state comment` };
+  const carrying = fromTool.filter((comment) => comment.body.includes(marker));
+  const rewritten = carrying.find((comment) => !trusted(comment));
+  if (rewritten !== undefined) return { why: `its comment was last edited by ${shown(String(rewritten.editor))}, not by the tool` };
+  if (carrying.length > 1) return { why: `${carrying.length} of its comments carry the marker, and it keeps one state comment` };
   const reads = fromTool.flatMap((comment): (StateBlock | Unusable)[] => {
     const read = readBlock(comment.body, marker, section);
-    if (read === null) return [];
-    return [trusted(comment) ? read : { why: `its comment was last edited by ${shown(String(comment.editor))}, not by the tool` }];
+    return read === null ? [] : [read];
   });
   const blocks = reads.filter((read): read is StateBlock => !("why" in read)).filter((block) => block.commitSha === facts.head);
   const completed = blocks.filter((block) => block.status === "completed");

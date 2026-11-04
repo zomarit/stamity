@@ -2,8 +2,10 @@ import { chmod, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
+  COMMENT_EDITORS_QUERY,
   ghApi,
   ghApiArgs,
+  ghCommentEditors,
   ghGraphqlArgs,
   ghMarkReady,
   ghMergeArgs,
@@ -116,14 +118,21 @@ describe("the land verb's calls", () => {
     }
   });
 
-  it("sends graphql only with its two constant documents, any other refused before gh starts", async () => {
+  // TEST CHANGE, justified (land-wiring, REQ-FLOW-154): a third constant document joins the two, the comment editors' read.
+  it("sends graphql only with its three constant documents, any other refused before gh starts", async () => {
     expect(ghGraphqlArgs({ hostname: HOST, query: REVIEW_THREADS_QUERY })).toEqual(["api", "--hostname", "github.com", "--include", "--method", "POST", "--input", "-", "graphql"]);
     expect(() => ghGraphqlArgs({ hostname: HOST, query: MARK_READY_MUTATION })).not.toThrow();
+    expect(() => ghGraphqlArgs({ hostname: HOST, query: COMMENT_EDITORS_QUERY })).not.toThrow();
     for (const query of [`${REVIEW_THREADS_QUERY} `, "mutation { mergePullRequest(input:{}) { clientMutationId } }", ""]) {
       expect(() => ghGraphqlArgs({ hostname: HOST, query }), query).toThrow(/gh graphql: the document/);
     }
     await expect(ghMarkReady({ hostname: HOST, id: "x y" }, { env: { PATH: "" } })).rejects.toMatchObject({ code: "GH_REFUSED" });
     await expect(ghReviewThreads({ ...PULL, owner: "a b" }, { env: { PATH: "" } })).rejects.toMatchObject({ code: "GH_REFUSED" });
+    await expect(ghCommentEditors({ ...PULL, number: 0 }, { env: { PATH: "" } })).rejects.toMatchObject({ code: "GH_REFUSED" });
+  });
+
+  it("names a comment's editor and its edit time, and pages, in the editors' document", () => {
+    expect(COMMENT_EDITORS_QUERY).toContain("comments(first:100,after:$after){nodes{databaseId lastEditedAt editor{__typename login}}pageInfo{hasNextPage endCursor}}");
   });
 });
 
@@ -229,6 +238,9 @@ describe("ghApi", () => {
 
     await ghReviewThreads({ hostname: HOST, owner: "acme", repo: "app", number: 7 }, { cwd: work, env: { PATH: bin } });
     expect(JSON.parse(await readFile(input, "utf8"))).toEqual({ query: REVIEW_THREADS_QUERY, variables: { owner: "acme", repo: "app", number: 7, after: null } });
+
+    await ghCommentEditors({ hostname: HOST, owner: "acme", repo: "app", number: 7, after: "Y3Vyc29y" }, { cwd: work, env: { PATH: bin } });
+    expect(JSON.parse(await readFile(input, "utf8"))).toEqual({ query: COMMENT_EDITORS_QUERY, variables: { owner: "acme", repo: "app", number: 7, after: "Y3Vyc29y" } });
   });
 
   it.skipIf(process.platform === "win32")("starts the program it is given, not one PATH names, and refuses a relative one (review/75)", async () => {

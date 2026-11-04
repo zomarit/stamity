@@ -386,12 +386,19 @@ export const REVIEW_THREADS_QUERY =
 export const MARK_READY_MUTATION =
   "mutation($id:ID!){markPullRequestReadyForReview(input:{pullRequestId:$id}){pullRequest{isDraft}}}";
 
-const GRAPHQL_DOCUMENTS: ReadonlySet<string> = new Set([REVIEW_THREADS_QUERY, MARK_READY_MUTATION]);
+/**
+ * The one comment-editor read (a constant document): who last edited each of a pull request's comments, which REST does
+ * not say, and when. GraphQL names an app `app` where REST names it `app[bot]`, so `__typename` comes with the login.
+ */
+export const COMMENT_EDITORS_QUERY =
+  "query($owner:String!,$repo:String!,$number:Int!,$after:String){repository(owner:$owner,name:$repo){pullRequest(number:$number){comments(first:100,after:$after){nodes{databaseId lastEditedAt editor{__typename login}}pageInfo{hasNextPage endCursor}}}}}";
+
+const GRAPHQL_DOCUMENTS: ReadonlySet<string> = new Set([REVIEW_THREADS_QUERY, MARK_READY_MUTATION, COMMENT_EDITORS_QUERY]);
 
 /**
  * The argument vector of a GraphQL call: `POST graphql`, the document and its variables on stdin. Throws a
- * {@link GhRefusal} for any document but {@link REVIEW_THREADS_QUERY} and {@link MARK_READY_MUTATION}, so no caller
- * reaches GitHub's GraphQL with text of its own.
+ * {@link GhRefusal} for any document but {@link REVIEW_THREADS_QUERY}, {@link MARK_READY_MUTATION} and
+ * {@link COMMENT_EDITORS_QUERY}, so no caller reaches GitHub's GraphQL with text of its own.
  */
 export function ghGraphqlArgs(request: { hostname: string; query: string }): string[] {
   if (typeof request.hostname !== "string" || !HOST_NAME.test(request.hostname)) throw refusal("gh graphql: the host is not a host name this runner sends to");
@@ -409,6 +416,14 @@ export function ghReviewThreads(request: PullRef & { after?: string }, opts: GhA
   if (refused !== null) return Promise.reject(refusal(`gh graphql: ${refused}`));
   const { owner, repo, number } = request;
   return graphql(request.hostname, REVIEW_THREADS_QUERY, { owner, repo, number, after: request.after ?? null }, opts);
+}
+
+/** One page (100 comments) of who last edited a pull request's comments, after the cursor `after` where given. */
+export function ghCommentEditors(request: PullRef & { after?: string }, opts: GhApiOptions = {}): Promise<GhResponse> {
+  const refused = pullRefRefusal(request);
+  if (refused !== null) return Promise.reject(refusal(`gh graphql: ${refused}`));
+  const { owner, repo, number } = request;
+  return graphql(request.hostname, COMMENT_EDITORS_QUERY, { owner, repo, number, after: request.after ?? null }, opts);
 }
 
 /** Mark the pull request whose GraphQL node id is `id` ready for review. */

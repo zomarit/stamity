@@ -380,13 +380,13 @@ export interface AutonomyLeg {
 
 /**
  * Every leg, in the order given, where `legs` disagree on the review tool, or none where they agree (REQ-FLOW-138).
- * Legs disagree on another `login`, `clean`, `stateMarker` or `stateSection`, or on a tool named against none; `rounds`
- * and `waitMinutes` are {@link strictestAutonomy}'s to settle by the lowest. Every leg is named, the ones that agree
- * too: no leg outranks another on who reviews, so none is singled out as the odd one, and a person settles it.
+ * Legs disagree on another `login`, `request`, `clean`, `stateMarker` or `stateSection`, or on a tool named against
+ * none; `rounds` and `waitMinutes` are {@link strictestAutonomy}'s to settle by the lowest. Every leg is named, the ones
+ * that agree too: no leg outranks another on who reviews, so none is singled out as the odd one, and a person settles it.
  */
 export function reviewToolConflict(legs: readonly AutonomyLeg[]): string[] {
   const identity = ({ setting: { reviewTool: tool } }: AutonomyLeg): string =>
-    JSON.stringify(tool === undefined ? null : [tool.login, tool.clean, tool.stateMarker, tool.stateSection]);
+    JSON.stringify(tool === undefined ? null : [tool.login, tool.request, tool.clean, tool.stateMarker, tool.stateSection]);
   return new Set(legs.map(identity)).size > 1 ? legs.map((leg) => leg.source) : [];
 }
 

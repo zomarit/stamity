@@ -3,6 +3,7 @@ import {
   parseStateBlock,
   requestMarker,
   reviewToolVerdict,
+  withoutRequestMarkers,
   type ReviewToolFacts,
   type ReviewToolState,
 } from "../../src/runs/reviewTool.ts";
@@ -361,7 +362,6 @@ describe("reviewToolVerdict, more than one comment carrying the marker", () => {
     ["the tool's reply with no marker", () => fromTool("Here is a reply with nothing in it.")],
     ["a person's pasted block", () => ({ ...fromTool(echoed(CLEAN_HEAD)), userType: "User", userLogin: "a-person" })],
     ["another bot's block", () => ({ ...fromTool(echoed(CLEAN_HEAD)), userLogin: "another-tool[bot]" })],
-    ["a comment of the tool's last edited by someone else", () => ({ ...fromTool(echoed(CLEAN_HEAD)), editor: "a-person" })],
     ["a block of another version", () => fromTool(CLEAN_BODY.replace("review-state:v1", "review-state:v2"))],
   ])("still reads one state comment as clean beside %s, which carries no trusted marker", (_name, other) => {
     expect(state(facts(CLEAN_HEAD, [request(CLEAN_HEAD), fromTool(CLEAN_BODY), other()]))).toBe("clean");
@@ -423,6 +423,13 @@ describe("reviewToolVerdict, the tool's +1 on a clean state comment", () => {
   });
 });
 
+describe("withoutRequestMarkers", () => {
+  it("takes every request marker out and leaves the rest of the body", () => {
+    expect(withoutRequestMarkers(`a ${requestMarker(CLEAN_HEAD)} b ${requestMarker(OTHER_HEAD)} c`)).toBe("a  b  c");
+    expect(withoutRequestMarkers("no marker here")).toBe("no marker here");
+  });
+});
+
 describe("reviewToolVerdict, the state comment's last editor", () => {
   const edited = (editor: string | null): Comment => ({ ...fromTool(CLEAN_BODY), editor });
 
@@ -451,6 +458,23 @@ describe("reviewToolVerdict, the state comment's last editor", () => {
   it("gives findings from an edited block nothing either, since only the tool's own word counts", () => {
     const comment: Comment = { ...fromTool(FINDINGS_BODY), editor: "a-person" };
     expect(state(facts(FINDINGS_HEAD, [request(FINDINGS_HEAD), comment]))).toBe("waiting");
+  });
+
+  /*
+   * TEST CHANGE, justified (land-wiring's edge case, REQ-FLOW-154): a comment of the tool's carrying the marker, last edited by
+   * someone else, used to drop out of the count, so a clean comment beside it still read clean. It holds now: the reader can
+   * see the edit, and an edited state comment would otherwise leave a lone reply standing in for it.
+   */
+  it.each([
+    ["beside a clean state comment", () => [fromTool(CLEAN_BODY), { ...fromTool(block(CLEAN_HEAD, "completed", false, false)), editor: "a-person" }]],
+    ["with a lone reply on the head, the state comment on an older sha", () => [{ ...fromTool(block(OTHER_HEAD, "completed", false, false)), editor: "a-person" }, fromTool(`Echoed:\n${CLEAN_BODY}`)]],
+    ["with text naming the marker, block or no block", () => [fromTool(CLEAN_BODY), { ...fromTool("That is codex-review-state:v1."), editor: "a-person" }]],
+  ])("holds on a tool comment carrying the marker and edited by someone else, %s", (_name, comments) => {
+    const all = [request(CLEAN_HEAD), ...comments()];
+    expect(state(facts(CLEAN_HEAD, all))).toBe("waiting");
+    const verdict = reviewToolVerdict(facts(CLEAN_HEAD, all, { now: WAIT_ENDED }), TOOL);
+    expect(verdict.state).toBe("silent");
+    expect(verdict.reason).toContain("last edited by a-person");
   });
 
   it("says nothing about an edit to a comment holding no block", () => {

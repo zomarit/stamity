@@ -541,10 +541,18 @@ describe("the factory keys", () => {
       ]);
     });
 
-    it("names nothing where the legs name the same tool, whatever their rounds, wait or request", () => {
-      const tuned = { ...REVIEW_TOOL, rounds: 3, waitMinutes: 90, request: "@codex look again" };
+    // TEST CHANGE, justified (land-wiring, the settings reviewer's note on `request`): `run land` now posts `request`, so legs
+    // that differ on it differ on what the tool is asked. Rounds and wait stay the strictest read's to settle.
+    it("names nothing where the legs name the same tool, whatever their rounds or wait", () => {
+      const tuned = { ...REVIEW_TOOL, rounds: 3, waitMinutes: 90 };
 
       expect(reviewToolConflict([leg("one", { reviewTool: REVIEW_TOOL }), leg("two", { reviewTool: tuned })])).toEqual([]);
+    });
+
+    it("names both legs where they differ on the request alone", () => {
+      const asked = { ...REVIEW_TOOL, request: "@codex look again" };
+
+      expect(reviewToolConflict([leg("one", { reviewTool: REVIEW_TOOL }), leg("two", { reviewTool: asked })])).toEqual(["one", "two"]);
     });
 
     it("names nothing where no leg names a tool, for one leg, or for none", () => {
