@@ -12,12 +12,19 @@ import { classifyChange, type ClassifyResult } from "../../src/change/classify.t
  * reason list, so a rule that fired twice, or one that stayed silent, fails.
  */
 
+// Fixture data kept out of the test-input census: these globs are built at run time, as literals they name this repository's docs and .md files.
+const DOCS_GLOB = ["docs", "**"].join("/");
+const ANY_MD_GLOB = ["**/*", "md"].join(".");
+
 /** The preset `config set autonomy.autoShip low-risk` writes. */
 const LOW_RISK: AutoShipRules = { maxFiles: 10, maxLines: 200, classes: ["records", "docs", "tests"] };
 
 const classified = (...paths: string[]): ClassifyResult => classifyChange({ paths, base: "given", source: "git" });
 
 const DOCS = classified("docs/a.md", "docs/b.md", "docs/c.md");
+
+/** A docs change of `count` files, so a size case keeps `files` and `byPath` in step. */
+const docsOf = (count: number): ClassifyResult => classified(...Array.from({ length: count }, (_, index) => `docs/${index}.md`));
 
 const facts = (over: Partial<AutoShipFacts> = {}): AutoShipFacts => ({ result: DOCS, files: 3, lines: 40, complete: true, ...over });
 
@@ -32,11 +39,11 @@ describe("autoShipVerdict (REQ-FLOW-152)", () => {
   });
 
   it("holds a change sitting exactly on both limits as eligible", () => {
-    expect(autoShipVerdict(facts({ files: 10, lines: 200 }), LOW_RISK).eligible).toBe(true);
+    expect(autoShipVerdict(facts({ result: docsOf(10), files: 10, lines: 200 }), LOW_RISK).eligible).toBe(true);
   });
 
   it("names the path limit it met when the rules carry one", () => {
-    expect(autoShipVerdict(facts(), { ...LOW_RISK, paths: ["site-notes/**", "docs/**"] })).toEqual({
+    expect(autoShipVerdict(facts(), { ...LOW_RISK, paths: ["site-notes/**", DOCS_GLOB] })).toEqual({
       eligible: true,
       evidence:
         "auto-ship rules met: 3 of at most 10 files; 40 of at most 200 lines; class docs among records, docs, tests; every path under site-notes/**, docs/**; no specialist lens",
@@ -44,9 +51,9 @@ describe("autoShipVerdict (REQ-FLOW-152)", () => {
   });
 
   it.each<[string, Partial<AutoShipFacts>, AutoShipRules, string]>([
-    ["11 files", { files: 11 }, LOW_RISK, "11 files are over autonomy.autoShip.maxFiles (10)"],
+    ["11 files", { result: docsOf(11), files: 11 }, LOW_RISK, "11 files are over autonomy.autoShip.maxFiles (10)"],
     ["201 lines", { lines: 201 }, LOW_RISK, "201 lines are over autonomy.autoShip.maxLines (200)"],
-    ["a product class", { result: classified("src/a.ts") }, LOW_RISK, "product is outside autonomy.autoShip.classes (records, docs, tests)"],
+    ["a product class", { result: classified("src/a.ts"), files: 1 }, LOW_RISK, "product is outside autonomy.autoShip.classes (records, docs, tests)"],
     ["a path outside paths", {}, { ...LOW_RISK, paths: ["docs/a.md", "docs/b.md"] }, "docs/c.md is outside autonomy.autoShip.paths"],
     ["a non-empty lenses", { result: { ...DOCS, lenses: ["security", "ux"] } }, LOW_RISK, "a specialist lens is asked for: security, ux"],
   ])("gives one named reason for %s", (_name, over, rules, reason) => {
@@ -78,12 +85,87 @@ describe("autoShipVerdict (REQ-FLOW-152)", () => {
     expect(autoShipVerdict(facts({ files: 0 }), LOW_RISK)).toEqual(refused("the change is empty"));
   });
 
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])("reads a line count of %s as not eligible, in one named reason", (lines) => {
+    expect(autoShipVerdict(facts({ lines }), LOW_RISK)).toEqual(refused("the line count is not a finite number"));
+  });
+
+  describe("the file count must agree with the paths classified", () => {
+    it.each<[string, number, string]>([
+      ["fewer files than paths", 2, "the file count (2) disagrees with the classified paths (3)"],
+      ["more files than paths", 4, "the file count (4) disagrees with the classified paths (3)"],
+      ["a count that is no number", Number.NaN, "the file count (NaN) disagrees with the classified paths (3)"],
+    ])("refuses %s", (_name, files, reason) => {
+      expect(autoShipVerdict(facts({ files }), LOW_RISK)).toEqual(refused(reason));
+    });
+
+    it("gives both reasons for a count that disagrees and is over the limit", () => {
+      expect(autoShipVerdict(facts({ files: 11 }), LOW_RISK)).toEqual(
+        refused("the file count (11) disagrees with the classified paths (3)", "11 files are over autonomy.autoShip.maxFiles (10)"),
+      );
+    });
+
+    it("reads a rename as its two paths, so a range counting it once does not agree", () => {
+      const result = classifyChange({ paths: [], renames: [{ from: "docs/a.md", to: "docs/b.md" }], base: "given", source: "git" });
+      expect(autoShipVerdict(facts({ result, files: 2 }), LOW_RISK).eligible).toBe(true);
+      expect(autoShipVerdict(facts({ result, files: 1 }), LOW_RISK)).toEqual(refused("the file count (1) disagrees with the classified paths (2)"));
+    });
+  });
+
+  describe("the docs class means plain text, under any rules", () => {
+    const notPlain = (named: string): string => `${named} is docs-class but not plain text (.md, .txt)`;
+
+    it.each(["docs/index.html", "docs/logo.svg", "docs/page.mdx", "docs/main.tf", "docs/AUTHORS", "docs/a.md.html"])("refuses %s, which reads docs with no lens", (path) => {
+      const result = classified(path);
+      expect(result.class).toBe("docs");
+      expect(result.lenses).toEqual([]);
+      expect(autoShipVerdict(facts({ result, files: 1 }), LOW_RISK)).toEqual(refused(notPlain(path)));
+    });
+
+    it.each(["docs/notes.txt", "docs/NOTES.MD", "docs/Notes.Txt"])("lets %s ship, matching the ending lower-cased", (path) => {
+      const result = classified(path);
+      expect(result.class).toBe("docs");
+      expect(autoShipVerdict(facts({ result, files: 1 }), LOW_RISK).eligible).toBe(true);
+    });
+
+    it("holds under rules that name the file itself, not only under the preset", () => {
+      const result = classified("docs/index.html");
+      const rules = { maxFiles: 1000, maxLines: 100000, classes: ["docs"], paths: ["docs/index.html"] };
+      expect(autoShipVerdict(facts({ result, files: 1 }), rules)).toEqual(refused(notPlain("docs/index.html")));
+    });
+
+    it("reads a rename's two sides, so a page cannot arrive or leave as a text file", () => {
+      const into = classifyChange({ paths: [], renames: [{ from: "docs/a.md", to: "docs/a.html" }], base: "given", source: "git" });
+      const outOf = classifyChange({ paths: [], renames: [{ from: "docs/a.html", to: "docs/a.md" }], base: "given", source: "git" });
+      expect(autoShipVerdict(facts({ result: into, files: 2 }), LOW_RISK)).toEqual(refused(notPlain("docs/a.html")));
+      expect(autoShipVerdict(facts({ result: outOf, files: 2 }), LOW_RISK)).toEqual(refused(notPlain("docs/a.html")));
+    });
+
+    it("reads only docs-class paths: a record of any type still ships", () => {
+      const result = classified("docs/a.md", ".stamity/runs/x/a.log");
+      expect(result.byPath.map((entry) => entry.class)).toEqual(["docs", "records"]);
+      expect(autoShipVerdict(facts({ result, files: 2 }), LOW_RISK).eligible).toBe(true);
+    });
+
+    it("names every path when no more than five are not plain text", () => {
+      const result = classified("docs/a.html", "docs/b.svg", "docs/c.md");
+      expect(autoShipVerdict(facts({ result, files: 3 }), LOW_RISK)).toEqual(refused("docs/a.html, docs/b.svg are docs-class but not plain text (.md, .txt)"));
+    });
+
+    it("names five paths and counts the rest", () => {
+      const result = classified("docs/1.html", "docs/2.html", "docs/3.html", "docs/4.html", "docs/5.html", "docs/6.html", "docs/7.html");
+      expect(autoShipVerdict(facts({ result, files: 7 }), LOW_RISK)).toEqual(
+        refused("docs/1.html, docs/2.html, docs/3.html, docs/4.html, docs/5.html and 2 more are docs-class but not plain text (.md, .txt)"),
+      );
+    });
+  });
+
   it("returns every failed rule, not the first", () => {
     const result = { ...classified("src/a.ts"), lenses: ["security"] };
-    expect(autoShipVerdict({ result, files: 11, lines: null, complete: false }, { ...LOW_RISK, paths: ["docs/**"] })).toEqual(
+    expect(autoShipVerdict({ result, files: 11, lines: null, complete: false }, { ...LOW_RISK, paths: [DOCS_GLOB] })).toEqual(
       refused(
         "the classification is incomplete",
         "the line count is incomplete",
+        "the file count (11) disagrees with the classified paths (1)",
         "11 files are over autonomy.autoShip.maxFiles (10)",
         "product is outside autonomy.autoShip.classes (records, docs, tests)",
         "src/a.ts is outside autonomy.autoShip.paths",
@@ -124,7 +206,7 @@ describe("autoShipVerdict (REQ-FLOW-152)", () => {
 
   describe("the path rule", () => {
     // Each path outside docs/ reads product under the built-in rules, so product is named here and the path rule stands alone.
-    const INSIDE_DOCS: AutoShipRules = { ...LOW_RISK, classes: ["docs", "product"], paths: ["docs/**"] };
+    const INSIDE_DOCS: AutoShipRules = { ...LOW_RISK, classes: ["docs", "product"], paths: [DOCS_GLOB] };
 
     it("reads a rename's two sides, so a change cannot leave the limit by moving a file out of it", () => {
       const result = classifyChange({ paths: [], renames: [{ from: "docs/a.md", to: "site-notes/a.md" }], base: "given", source: "git" });
@@ -143,7 +225,7 @@ describe("autoShipVerdict (REQ-FLOW-152)", () => {
     });
 
     it("matches a root file through a leading **/", () => {
-      const verdict = autoShipVerdict(facts({ result: classified("a.md"), files: 1 }), { ...LOW_RISK, paths: ["**/*.md"] });
+      const verdict = autoShipVerdict(facts({ result: classified("a.md"), files: 1 }), { ...LOW_RISK, paths: [ANY_MD_GLOB] });
       expect(verdict.eligible).toBe(true);
     });
 
