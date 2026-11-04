@@ -9,13 +9,18 @@
  *
  * **The evidence**: every required check run on the head green (a commit status never counts), no unresolved review
  * thread, the ledger at the head readable with no open Critical or Warning row, and `mergeable_state` `clean`, the
- * one state an admin's merge cannot pass silently.
+ * one state an admin's merge cannot pass silently. Where a review tool is named, its verdict on the head too.
+ *
+ * **What the verb decides over.** The review tool's verdict and the auto-ship verdict arrive computed: this file takes
+ * their types alone and loads neither module.
  */
 import { posix, win32 } from "node:path";
+import type { AutoShipVerdict } from "../change/autoShip.ts";
 import { matchGlob } from "../change/classify.ts";
 import { fromProjectRoot, PERSON_ONLY_PATHS } from "../change/personOnlyPaths.ts";
 import { matchesDeployingBranch, type ResolvedAutonomy } from "../config/autonomy.ts";
 import { parseLedgerText } from "./ledgerStore.ts";
+import type { ReviewToolFacts, ReviewToolVerdict } from "./reviewTool.ts";
 
 /** The person-only globs that land on the evidence: the charter, the rule files and the agent definitions (D2). */
 export const LANDS_ON_EVIDENCE: readonly string[] = [
@@ -307,6 +312,79 @@ export function parseFiles(json: unknown): { paths: string[]; count: number } | 
   return { paths, count: json.length };
 }
 
+/** `user` of a REST entry: its `login` and `type`, empty where GitHub names no account. */
+function userOf(entry: unknown): { login: string; type: string } {
+  const login = field(entry, "user", "login");
+  const type = field(entry, "user", "type");
+  return { login: typeof login === "string" ? login : "", type: typeof type === "string" ? type : "" };
+}
+
+/** Every entry of `json` as `read` gives it, or `null` for an answer that is no list or an entry `read` refuses. */
+function listOf<T>(json: unknown, read: (entry: unknown) => T | null): T[] | null {
+  if (!Array.isArray(json)) return null;
+  const entries = json.map(read);
+  return entries.some((entry) => entry === null) ? null : (entries as T[]);
+}
+
+/** One page of `issues/<n>/comments`, or `null` where it does not read. The last editor is GraphQL's to say. */
+export function parseIssueComments(json: unknown): Omit<ReviewToolFacts["comments"][number], "editor">[] | null {
+  return listOf(json, (entry) => {
+    const id = field(entry, "id");
+    const body = field(entry, "body");
+    const createdAt = field(entry, "created_at");
+    if (typeof id !== "number" || typeof body !== "string" || typeof createdAt !== "string") return null;
+    const { login, type } = userOf(entry);
+    return { id, userLogin: login, userType: type, body, createdAt };
+  });
+}
+
+/** One page of `pulls/<n>/reviews`, or `null` where it does not read. */
+export function parseReviews(json: unknown): ReviewToolFacts["reviews"] | null {
+  return listOf(json, (entry) => {
+    const state = field(entry, "state");
+    const commitId = field(entry, "commit_id");
+    return typeof state === "string" ? { userLogin: userOf(entry).login, commitId: typeof commitId === "string" ? commitId : "", state } : null;
+  });
+}
+
+/** One page of `issues/<n>/reactions`, or `null` where it does not read. `user.type` is no filter: the tool's real `+1` reads `User`. */
+export function parseReactions(json: unknown): ReviewToolFacts["reactions"] | null {
+  return listOf(json, (entry) => {
+    const content = field(entry, "content");
+    return typeof content === "string" ? { userLogin: userOf(entry).login, content } : null;
+  });
+}
+
+/** What stands for an editor that was not read: no login's form, so the reader never trusts it. */
+export const UNREAD_EDITOR = "unknown";
+
+/** A comment's last editor in REST's form, a bot's with its `[bot]` ending; `null` only for a comment read as never edited. */
+function editorOf(node: unknown): string | null {
+  const editor = field(node, "editor");
+  if (field(node, "lastEditedAt") === null && editor === null) return null;
+  const login = field(editor, "login");
+  const type = field(editor, "__typename");
+  if (typeof login !== "string" || login === "" || typeof type !== "string" || field(node, "lastEditedAt") === undefined) return UNREAD_EDITOR;
+  return type === "Bot" ? `${login}[bot]` : login;
+}
+
+/** One page of comment editors by database id with the next cursor, or `null` for an answer that does not read. */
+export function parseEditorsPage(json: unknown): { editors: Map<number, string | null>; next: string | null } | null {
+  if (field(json, "errors") !== undefined) return null;
+  const page = field(json, "data", "repository", "pullRequest", "comments");
+  const nodes = field(page, "nodes");
+  if (!Array.isArray(nodes)) return null;
+  const editors = new Map<number, string | null>();
+  for (const node of nodes) {
+    const id = field(node, "databaseId");
+    if (typeof id === "number") editors.set(id, editorOf(node));
+  }
+  const more = field(page, "pageInfo", "hasNextPage") === true;
+  const cursor = field(page, "pageInfo", "endCursor");
+  if (more && typeof cursor !== "string") return null;
+  return { editors, next: more ? (cursor as string) : null };
+}
+
 /** The fields of a pull request the land verb reads. */
 export interface LandPr {
   number: number;
@@ -437,6 +515,16 @@ export interface LandInput {
   ledger: { open: string[] } | { refused: string };
   /** Present for `--fast-forward`. */
   forward?: ForwardFacts;
+  /** The named review tool's verdict on the head; absent where no tool is named, or where the legs disagree on it. */
+  reviewTool?: ReviewToolVerdict;
+  /** Each leg, where the legs disagree on the review tool: the setting's `reviewTool` then decides nothing, and a person does. */
+  reviewToolConflict: readonly string[];
+  /** The `autonomy` keys the head's manifest loosens against the default branch's, as `config` spells them. */
+  looserKeys: readonly string[];
+  /** The required checks failing on the default branch's tip, or why that tip did not read. */
+  defaultBranchRed?: { failing: string[]; unread: string | null };
+  /** Whether the change fits `autonomy.autoShip`; absent where the setting is off or the default branch deploys nothing. */
+  autoShip?: AutoShipVerdict;
 }
 
 /** The act a person is asked for. */
@@ -463,9 +551,10 @@ function mergeableRefusal(state: string | null): string | null {
 
 /**
  * The decision, in this order: not the run's own (refused) or merged already (already-landed); then every gap in the
- * evidence (refused, `pending` where checks still run or GitHub has not computed the merge state, so a wait may help);
- * then every reason the act is the person's (asks: mode `ask`, the ask set or a held patch, a deploying branch or act,
- * a rule requiring a pull request for a fast-forward); else land.
+ * evidence (refused, `pending` where checks still run, the review tool is awaited or GitHub has not computed the merge
+ * state, so a wait may help); then every reason the act is the person's (asks: mode `ask`, the ask set or a held patch, a
+ * loosened key, legs disagreeing on the review tool, a red default branch, a deploying branch the change does not
+ * auto-ship onto, a deploying act, a rule requiring a pull request for a fast-forward); else land.
  */
 export function decideLand(input: LandInput): LandDecision {
   const { pr, setting } = input;
@@ -490,6 +579,8 @@ export function decideLand(input: LandInput): LandDecision {
   else if (input.threads > 0) gap(`${input.threads} review thread${input.threads === 1 ? " is" : "s are"} unresolved`);
   if ("refused" in input.ledger) gap(`the ledger at ${pr.headSha} does not read: ${input.ledger.refused}`);
   else if (input.ledger.open.length > 0) gap(`the ledger at ${pr.headSha} holds open Critical or Warning rows: ${input.ledger.open.join(", ")}`);
+  const review = input.reviewTool;
+  if (review !== undefined && review.state !== "clean") gap(review.reason, review.state === "waiting");
   if (input.beforeReady !== true) {
     const mergeable = mergeableRefusal(pr.mergeableState);
     if (mergeable !== null) gap(mergeable, pr.mergeableState === null || pr.mergeableState === "unknown");
@@ -511,7 +602,17 @@ export function decideLand(input: LandInput): LandDecision {
   const others = held.filter((path) => !isHeldPatch(path));
   if (patches.length > 0) asks.push({ reason: `the diff carries a held patch (${patches.join(", ")})`, act });
   if (others.length > 0) asks.push({ reason: `the diff touches paths that define the evidence: ${others.join(", ")}`, act });
-  if (matchesDeployingBranch(input.own.defaultBranch, setting.deployingBranches)) asks.push({ reason: `${input.own.defaultBranch} is named in autonomy.deployingBranches`, act });
+  const { defaultBranch } = input.own;
+  if (input.looserKeys.length > 0) asks.push({ reason: `the head's manifest loosens ${input.looserKeys.join(", ")} against ${defaultBranch}'s`, act });
+  if (input.reviewToolConflict.length > 0) asks.push({ reason: `the legs disagree on autonomy.reviewTool, and no leg wins: ${input.reviewToolConflict.join(", ")}`, act });
+  const red = input.defaultBranchRed;
+  if (red !== undefined && red.failing.length > 0) asks.push({ reason: `${defaultBranch} is red: ${red.failing.join(", ")} failing on its tip`, act });
+  if (red !== undefined && red.unread !== null) asks.push({ reason: `${defaultBranch}'s tip could not be read (${red.unread}), so whether it is red is not known`, act });
+  const { autoShip } = input;
+  if (matchesDeployingBranch(defaultBranch, setting.deployingBranches) && !(autoShip?.eligible === true && forward === undefined)) {
+    asks.push({ reason: `${defaultBranch} is named in autonomy.deployingBranches`, act });
+    if (autoShip?.eligible === false) asks.push(...autoShip.reasons.map((reason) => ({ reason: `auto-ship: ${reason}`, act })));
+  }
   if (pr.draft && input.ready && setting.deploying.includes("pr-ready")) asks.push({ reason: "autonomy.deployingActs names pr-ready", act: "pr-ready" });
   if (setting.deploying.includes(act)) asks.push({ reason: `autonomy.deployingActs names ${act}`, act });
   if (forward !== undefined && forward.requiresPr !== null) asks.push({ reason: forward.requiresPr, act });
@@ -527,13 +628,24 @@ const EVIDENCE_OPENING = "evidence checked at ";
 const WAITS_OPENING = "merge waits on: ";
 
 /**
- * The evidence line: what was checked, when and for which head, never that it landed; with `approval`, the head the
- * person approved and every asks reason they approved it over (review/103, review/110).
+ * The evidence line: what was checked, when and for which head, with each of `notes` (the review tool's word, the rules
+ * an auto-ship met, a tip not read as red), never that it landed; with `approval`, the head the person approved and every
+ * asks reason they approved it over (review/103, review/110).
  */
-export function evidenceLine(at: string, sha: string, greenChecks: number, threads: number, openRows: number, approval?: { sha: string; reasons: readonly string[] }): string {
-  const checked = `${EVIDENCE_OPENING}${at} for ${sha}: ${greenChecks} required check runs green, ${threads} open threads, ${openRows} open Critical/Warning rows`;
+export function evidenceLine(
+  at: string,
+  sha: string,
+  greenChecks: number,
+  threads: number,
+  openRows: number,
+  approval?: { sha: string; reasons: readonly string[] },
+  notes: readonly string[] = [],
+): string {
+  const oneLine = (text: string): string => text.replaceAll(/\s*\r?\n\s*/g, " ");
+  const noted = notes.map((note) => `; ${oneLine(note)}`).join("");
+  const checked = `${EVIDENCE_OPENING}${at} for ${sha}: ${greenChecks} required check runs green, ${threads} open threads, ${openRows} open Critical/Warning rows${noted}`;
   if (approval === undefined) return checked;
-  const over = approval.reasons.map((reason) => reason.replaceAll(/\s*\r?\n\s*/g, " ")).join("; ");
+  const over = approval.reasons.map(oneLine).join("; ");
   return `${checked}; approved by the person for ${approval.sha} over: ${over}`;
 }
 

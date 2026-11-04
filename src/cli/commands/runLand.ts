@@ -1,6 +1,8 @@
 import { lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, parse, resolve } from "node:path";
+import { autoShipVerdict, type AutoShipRules, type AutoShipVerdict } from "../../change/autoShip.ts";
+import { matchesDeployingBranch } from "../../config/autonomy.ts";
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
 import { readGitSurface, SURFACE_RECORD_FILE, surfaceRefusal, type RecordFileReads } from "../../runs/gitSurface.ts";
 import { hookPathsRead, setupRootsAt, type HookScratch } from "../../runs/hookPaths.ts";
@@ -14,12 +16,17 @@ import {
   parseBranch,
   parseBranchRules,
   parseCheckRuns,
+  parseEditorsPage,
   parseFiles,
+  parseIssueComments,
   parsePr,
+  parseReactions,
+  parseReviews,
   placeOf,
   parseThreadsPage,
   ownPr,
   pollWhilePending,
+  UNREAD_EDITOR,
   withinAny,
   unresolvedThreads,
   waitsLine,
@@ -37,9 +44,14 @@ import {
 } from "../../runs/landEvidence.ts";
 import { screenOutbound } from "../../runs/morning.ts";
 import { PR_RECORD_FILE, prRecordRefusal, resolveRepo, runMarker } from "../../runs/pullRequest.ts";
+import { parseStateBlock, requestMarker, reviewToolVerdict, withoutRequestMarkers, type ReviewToolFacts, type ReviewToolVerdict } from "../../runs/reviewTool.ts";
 import { gitProgramFor } from "../../shared/programPath.ts";
+import { EngineError } from "../../types/errors.ts";
+import type { ReviewToolConfig } from "../../types/manifest.ts";
+import { classifyRange } from "../engine/changeRange.ts";
 import {
   ghApi,
+  ghCommentEditors,
   ghMarkReady,
   ghMergePull,
   ghProgramPath,
@@ -51,7 +63,7 @@ import {
 } from "../engine/ghRunner.ts";
 import { readGuardLegs } from "../engine/autonomyGate.ts";
 import { gitWrite, gitWriteEnv, type GitWriteResult } from "../engine/gitWrite.ts";
-import { encodeQuery, READ_MAX_BYTES, readCapped, readSetting, Refused } from "../engine/landSetting.ts";
+import { encodeQuery, READ_MAX_BYTES, readCapped, readLooserKeys, readSetting, Refused } from "../engine/landSetting.ts";
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
@@ -71,6 +83,12 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * work tree's copy must equal it), `mergeable_state`. The setting is the strictest of the default branch's, `HEAD`'s
  * and the work tree's manifest and the baked guard. `gh` must resolve outside the work tree and the temp folders. Unattended, git's
  * surface must still be the pre-flight's (REQ-FLOW-131), at the start and again just before the act.
+ *
+ * **The factory's evidence.** A required check failing on the default branch's tip asks, and a tip that does not read asks
+ * (REQ-FLOW-153). A deploying default branch asks unless the change fits `autonomy.autoShip`, read from the commits that
+ * merge (REQ-FLOW-152). A named review tool is read on the head, asked once where it has no run there, and waited for: only
+ * its clean word passes (REQ-FLOW-154). Each is read again before the act. A wait that outlasts the verb ends as `asks` with
+ * `asks.pending`, which no `--approved` passes: the next call reads the tool's word.
  *
  * **The act.** `--ready` marks a draft ready only once the rest holds, then merges. Before the merge the body gains
  * one "evidence checked at" line, never "landed"; only after the merge call succeeds does `record.md` gain
@@ -108,6 +126,12 @@ const MAX_PAGES = 10;
 const MAX_FILE_PAGES = 30;
 /** A branch name as it goes into a path unencoded, as the push check reads it. */
 const PATH_BRANCH = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/-]+$/;
+/** The default branch's tip as read (REQ-FLOW-153): only `failing` is red. */
+interface TipRead {
+  failing: string[];
+  unread: string | null;
+  notRed: string[];
+}
 /** What the verb's JSON carries. */
 interface LandResult {
   outcome: "landed" | "already-landed" | "asks" | "refused" | "would-land";
@@ -118,9 +142,18 @@ interface LandResult {
     ledger: { open: string[] };
     held: string[];
     mergeableState: string | null;
+    /** The default branch's tip: what fails there, why it did not read, and what is missing or pending, which is not red. */
+    defaultBranch: TipRead;
+    /** The named review tool's verdict on the head; `null` where none was read. */
+    review: { state: string; reason: string } | null;
+    /** Whether the change fits `autonomy.autoShip`; `null` where the rules were not read. */
+    autoShip: AutoShipVerdict | null;
   };
-  /** review/110: every reason, `reason` the first for older readers, and the head an approval must name. */
-  asks?: { reason: string; reasons: string[]; act: string; head: string };
+  /**
+   * review/110: every reason, `reason` the first for older readers, and the head an approval must name. `pending`: the
+   * review tool is still awaited, so the next call decides, and an approval passes nothing.
+   */
+  asks?: { reason: string; reasons: string[]; act: string; head: string; pending?: true };
   /** review/103, review/110: the asks outcome the person approved with --approved <sha>, where the verb landed over one. */
   approved?: { sha: string; reason: string; reasons: string[]; act: string };
   notDone: string[];
@@ -207,18 +240,25 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
   const waitMinutes = typeof opts["wait"] === "number" ? opts["wait"] : 0;
   const budgetEnd = LAND_CLOCK.now() + LAND_BUDGET_MS - ACT_RESERVE_MS;
 
-  const result: LandResult = { outcome: "refused", pr: null, evidence: { checks: [], threads: { unresolved: null }, ledger: { open: [] }, held: [], mergeableState: null }, notDone: [] };
+  const result: LandResult = {
+    outcome: "refused",
+    pr: null,
+    evidence: { checks: [], threads: { unresolved: null }, ledger: { open: [] }, held: [], mergeableState: null, defaultBranch: { failing: [], unread: null, notRed: [] }, review: null, autoShip: null },
+    notDone: [],
+  };
   const lines: string[] = [`run: ${run} (${unattended ? "unattended" : "attended"})`];
   const finish = (): CommandResult => {
     result.notDone = result.notDone.map((entry) => sanitizeLabel(entry));
     if (result.pr !== null) lines.push(`pr: #${result.pr.number} ${result.pr.url} at ${result.pr.head}`);
-    const { checks, threads, ledger, held, mergeableState } = result.evidence;
+    const { checks, threads, ledger, held, mergeableState, review } = result.evidence;
     if (checks.length > 0) lines.push(`checks: ${checks.map((check) => `${check.name} ${check.state}`).join(", ")}`);
     if (threads.unresolved !== null) lines.push(`threads: ${threads.unresolved} unresolved`);
     lines.push(`ledger: ${ledger.open.length} open Critical/Warning rows`, ...(held.length === 0 ? [] : [`asks for: ${held.join(", ")}`]));
     if (mergeableState !== null) lines.push(`mergeable_state: ${mergeableState}`);
+    if (review !== null) lines.push(`review: ${review.state}: ${sanitizeLabel(review.reason)}`);
     if (result.asks !== undefined) {
-      lines.push(...result.asks.reasons.map((reason) => `asks: ${sanitizeLabel(reason)}`), `approve with: --approved ${result.asks.head} (${result.asks.act}, the head commit these reasons hold for)`);
+      const next = result.asks.pending === true ? "pending: run land again for the review tool's word; no approval passes a wait" : `approve with: --approved ${result.asks.head} (${result.asks.act}, the head commit these reasons hold for)`;
+      lines.push(...result.asks.reasons.map((reason) => `asks: ${sanitizeLabel(reason)}`), next);
     }
     lines.push(`outcome: ${result.outcome}`);
     const notDone = result.notDone;
@@ -370,6 +410,9 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
 
     // (4) The setting: the strictest of the default branch's, HEAD's and the work tree's manifest and the baked guard.
     const setting = await readSetting(cwd, prefix, repoPath, defaultBranch, gitLine, call, readGuardLegs);
+    const looserKeys = await readLooserKeys(prefix, repoPath, defaultBranch, gitLine, call);
+    // Legs that disagree on the review tool go to a person: `setting.reviewTool` is then only the first leg's, and it judges nothing.
+    const tool = setting.reviewToolConflict.length === 0 ? setting.reviewTool : undefined;
 
     // (5) The changed files, every page, a rename's old name included.
     const files: string[] = [];
@@ -391,6 +434,16 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     if (branch === null) throw new Refused("the default branch did not read");
     const required: RequiredCheck[] = [...(ruleRead?.required ?? []), ...branch.required];
     const readChecks = async (): Promise<CheckEvidence> => checkEvidence(required, await checkRuns(json, repoPath, sha));
+    /** REQ-FLOW-153: the tip's required checks; a context missing or pending there is not red, and a read that fails asks. */
+    const readTip = async (): Promise<TipRead> => {
+      try {
+        const now = checkEvidence(required, await checkRuns(json, repoPath, branch.tip));
+        return { failing: now.failing, unread: null, notRed: [...now.pending, ...now.missing] };
+      } catch (error) {
+        if (!(error instanceof Refused)) throw error;
+        return { failing: [], unread: error.message, notRed: [] };
+      }
+    };
 
     // build/2, review/74, review/80: the hook files and the scripts the repository's own declarations name, at Base:,
     // at the head and at the default branch's tip, ask in every mode: a run that edits a declared hook script reaches
@@ -398,6 +451,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     // REQ-FLOW-102: from every setup root the three trees hold, as the hold reads them.
     const { paths: hookPaths, setups } = await declaredHookPaths({ base: head.base, head: sha, tip: branch.tip, defaultBranch, prefix }, git, gitLine);
     result.evidence.held = askPathsOf(files, setups, typeof hookPaths === "string" ? [] : hookPaths);
+    // REQ-FLOW-152: read only where it can spare an ask, the tip being in this clone by now.
+    const autoShip = setting.autoShip !== undefined && matchesDeployingBranch(defaultBranch, setting.deployingBranches) ? await autoShipRead(cwd, branch.tip, sha, setting.autoShip, gitLine) : undefined;
 
     // (7) The review threads, every page, read again on every later read (review/72).
     const readThreads = async (): Promise<number | null> => {
@@ -426,6 +481,40 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       forward = { requiresPr, compare: typeof status === "string" ? status : null };
     }
 
+    // (9b) The review tool's three reads, the editors last, so an edit landing between the reads shows as a foreign editor.
+    // Only the run's own request markers go in: a stranger's cannot spend a round or stand for a request. REST spells an
+    // app `app[bot]` where viewer names it `app` (review/94).
+    const fromRun = (login: string): boolean => login.replace(/\[bot\]$/, "").toLowerCase() === viewer.toLowerCase();
+    const readFacts = async (): Promise<ReviewToolFacts> => {
+      const comments = await everyPage(json, `${repoPath}/issues/${number}/comments`, "the pull request's comments read", parseIssueComments);
+      const reviews = await everyPage(json, `${repoPath}/pulls/${number}/reviews`, "the pull request's reviews read", parseReviews);
+      const reactions = await everyPage(json, `${repoPath}/issues/${number}/reactions`, "the pull request's reactions read", parseReactions);
+      const editors = await commentEditors(repo.host, repo.owner, repo.repo, number, ghOpts);
+      return {
+        head: sha,
+        now: LAND_CLOCK.now(),
+        comments: comments.map(({ id, userLogin, userType, body, createdAt }) => ({
+          id,
+          userLogin,
+          userType,
+          createdAt,
+          body: fromRun(userLogin) ? body : withoutRequestMarkers(body),
+          editor: editors?.has(id) === true ? (editors.get(id) as string | null) : UNREAD_EDITOR,
+        })),
+        reviews,
+        reactions,
+      };
+    };
+    let facts: ReviewToolFacts | undefined;
+    let review: ReviewToolVerdict | undefined;
+    const readReview = async (): Promise<void> => {
+      if (tool === undefined) return;
+      facts = await readFacts();
+      review = reviewToolVerdict(facts, tool);
+    };
+    await readReview();
+    let tip = await readTip();
+
     const inputFor = (now: LandPr, checks: CheckEvidence, beforeReady: boolean): LandInput => ({
       pr: now,
       own,
@@ -438,12 +527,20 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       checks,
       threads,
       ledger,
+      looserKeys,
+      reviewToolConflict: setting.reviewToolConflict,
+      defaultBranchRed: tip,
       ...(forward === undefined ? {} : { forward }),
+      ...(review === undefined ? {} : { reviewTool: review }),
+      ...(autoShip === undefined ? {} : { autoShip }),
     });
     const show = (checks: CheckEvidence, now: LandPr): void => {
       result.pr = { number: now.number, url: now.url, head: now.headSha };
       result.evidence.mergeableState = now.mergeableState;
       result.evidence.threads.unresolved = threads;
+      result.evidence.defaultBranch = tip;
+      result.evidence.review = review === undefined ? null : { state: review.state, reason: review.reason };
+      result.evidence.autoShip = autoShip ?? null;
       result.evidence.checks = [
         ...checks.green.map((name) => ({ name, state: "green" as const })),
         ...checks.pending.map((name) => ({ name, state: "pending" as const })),
@@ -453,14 +550,31 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     };
     let checks: CheckEvidence = await readChecks();
     const deadline = Math.min(LAND_CLOCK.now() + waitMinutes * 60_000, budgetEnd);
-    /** One fresh read of everything that moves: the check runs, the threads and (after any ready mark) the pull request. */
+    /** One fresh read of everything that moves: the check runs, the threads, the tip, the tool and (after any ready mark) the pull request. */
     const reread = async (beforeReady: boolean): Promise<LandDecision> => {
       checks = await readChecks();
       threads = await readThreads();
       if (!beforeReady) pr = await readPr();
+      tip = await readTip();
+      await readReview();
       return decideLand(inputFor(pr, checks, beforeReady));
     };
     const pending = (decision: LandDecision): boolean => decision.outcome === "refused" && decision.pending;
+    /**
+     * REQ-FLOW-154: asks the tool on a head whose only stops are waits, so no round goes on a head that cannot land, and
+     * only where the run has not asked on it yet. A run the tool started itself gets the marker alone (build/11): the clock
+     * starts and no second run does. A dry run writes nothing, and a request that fails leaves the land waiting.
+     */
+    const askTool = async (now: LandDecision, beforeReady: boolean): Promise<LandDecision> => {
+      if (tool === undefined || facts === undefined || ctx.dryRun || !pending(now) || review?.state !== "waiting") return now;
+      const asked = requestMarker(sha);
+      if (facts.comments.some((comment) => comment.body.includes(asked))) return now;
+      const body = ranOnHead(facts, tool) ? asked : `${tool.request}\n\n${asked}`;
+      const written = await ghApi({ method: "POST", path: `${repoPath}/issues/${number}/comments`, body: { body }, hostname: repo.host }, ghOpts).catch(() => null);
+      if (written?.status === 201) return reread(beforeReady);
+      result.notDone.push(`the review request was not posted to #${number} (${written === null ? "gh failed before GitHub answered" : `HTTP ${written.status}`})`);
+      return now;
+    };
     /** `--wait`: while only pending checks or an uncomputed merge state stop it, sleep a poll's interval, then read again. */
     const waitOut = async (decision: LandDecision, beforeReady: boolean): Promise<LandDecision> => {
       let now = decision;
@@ -478,7 +592,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     // --approved an asks outcome goes on to the act as a land does; every refused condition still refuses.
     const proceeds = (now: LandDecision): boolean => now.outcome === "land" || (approved && now.outcome === "asks");
     const draftReady = pr.draft && ready;
-    let decision = await waitOut(decideLand(inputFor(pr, checks, draftReady)), draftReady);
+    let decision = await waitOut(await askTool(decideLand(inputFor(pr, checks, draftReady)), draftReady), draftReady);
     if (proceeds(decision) && draftReady && !ctx.dryRun) {
       const marked = await answered(ghMarkReady({ hostname: repo.host, id: pr.nodeId }, ghOpts), "the ready mark");
       if (marked.status !== 200 || typeof marked.json !== "object" || marked.json === null || "errors" in marked.json) {
@@ -497,8 +611,12 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     if (approvedSha !== null && pr.headSha !== approvedSha) throw headMoved(pr.headSha);
     // review/72, review/78: the threads once more just before the act, and the decision on that last count; a dry run
     // on a draft decides on its merge state as it reads now (review/82), which a ready mark has not computed yet.
+    // The tip and the tool too, the tool's word against the pull request's head as it reads now.
     if (proceeds(decision)) {
       threads = await readThreads();
+      tip = await readTip();
+      if (tool !== undefined) pr = await readPr();
+      await readReview();
       decision = decideLand(inputFor(ctx.dryRun && draftReady ? { ...pr, draft: false } : pr, checks, false));
     }
     show(checks, pr);
@@ -508,7 +626,14 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       return finish();
     }
     if (decision.outcome === "refused") {
-      result.notDone.push(...decision.reasons);
+      // A tool wait runs up to `waitMinutes`, past the verb's budget, so what is left of it goes to the next call.
+      if (decision.pending && review?.state === "waiting") {
+        const [reason = ""] = decision.reasons;
+        result.outcome = "asks";
+        result.asks = { reason, reasons: decision.reasons, act: fastForward ? "push-default" : "pr-merge", head: sha, pending: true };
+      } else {
+        result.notDone.push(...decision.reasons);
+      }
       await noteWaits(decision.reasons);
       return finish();
     }
@@ -551,7 +676,20 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       if (verdict.deny && asked !== "push-default" && !(asked === "push-deploying" && approval !== null)) throw new Refused(`push refused: ${verdict.reason}`);
     }
     const at = new Date().toISOString();
-    const line = evidenceLine(at, sha, checks.green.length, threads ?? 0, 0, approval === null ? undefined : { sha: approval.sha, reasons: approval.reasons.map((reason) => sanitizeLabel(reason)) });
+    const notes = [
+      ...(review === undefined ? [] : [review.reason]),
+      ...(tip.notRed.length === 0 ? [] : [`${defaultBranch}'s tip reads not red with ${tip.notRed.join(", ")} missing or pending`]),
+      ...(autoShip?.eligible === true && !fastForward ? [autoShip.evidence] : []),
+    ];
+    const line = evidenceLine(
+      at,
+      sha,
+      checks.green.length,
+      threads ?? 0,
+      0,
+      approval === null ? undefined : { sha: approval.sha, reasons: approval.reasons.map((reason) => sanitizeLabel(reason)) },
+      notes.map((note) => sanitizeLabel(note)),
+    );
     const patched = await answered(
       ghApi({ method: "PATCH", path: `${repoPath}/pulls/${number}`, body: { body: withStatusLine(pr.body, marker, line) }, hostname: repo.host }, ghOpts),
       "the evidence write",
@@ -674,6 +812,67 @@ async function checkRuns(json: (path: string, what: string) => Promise<unknown>,
     if (runs.length >= read.total || read.runs.length < 100) return runs;
   }
   throw new Refused(`more than ${MAX_PAGES * 100} check runs on ${sha}, so the required ones are not proven read`);
+}
+
+/** Every entry of the paged list at `path`, at most {@link MAX_PAGES} pages; more than that, or a page that does not read, refuses. */
+async function everyPage<T>(json: (path: string, what: string) => Promise<unknown>, path: string, what: string, entriesOf: (page: unknown) => T[] | null): Promise<T[]> {
+  const entries: T[] = [];
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    // oxlint-disable-next-line no-await-in-loop -- a page past a short one is not asked for
+    const read = entriesOf(await json(`${path}?per_page=100&page=${page}`, what));
+    if (read === null) throw new Refused(`${what} did not read`);
+    entries.push(...read);
+    if (read.length < 100) return entries;
+  }
+  throw new Refused(`${what} holds more than ${MAX_PAGES * 100} entries, so it is not proven read whole`);
+}
+
+/**
+ * Who last edited each comment, by id, every page; `null` where a page does not read, a cloud's proxy refusing GraphQL
+ * among them. Every comment then reads as edited by nobody it can trust, which holds a land on the tool's state comment.
+ */
+async function commentEditors(hostname: string, owner: string, repo: string, number: number, opts: GhApiOptions): Promise<Map<number, string | null> | null> {
+  const editors = new Map<number, string | null>();
+  let after: string | undefined;
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    let reply: GhResponse;
+    try {
+      // oxlint-disable-next-line no-await-in-loop -- each page's cursor comes from the page before
+      reply = await ghCommentEditors({ hostname, owner, repo, number, ...(after === undefined ? {} : { after }) }, opts);
+    } catch {
+      return null;
+    }
+    const read = reply.status === 200 ? parseEditorsPage(reply.json) : null;
+    if (read === null) return null;
+    for (const [id, editor] of read.editors) editors.set(id, editor);
+    if (read.next === null) return editors;
+    after = read.next;
+  }
+  return null;
+}
+
+/** Whether the tool has a run on the head: a block or a review of its own there, whatever the run's state. */
+function ranOnHead(facts: ReviewToolFacts, tool: ReviewToolConfig): boolean {
+  const { stateMarker: marker, stateSection: section } = tool;
+  const blockOn = (body: string): boolean => marker !== undefined && section !== undefined && parseStateBlock(body, marker, section)?.commitSha === facts.head;
+  return facts.reviews.some((review) => review.userLogin === tool.login && review.commitId === facts.head) || facts.comments.some((comment) => comment.userLogin === tool.login && blockOn(comment.body));
+}
+
+/**
+ * Whether what merges fits `rules` (REQ-FLOW-152): the range from the merge base with the default branch's tip, a commit
+ * the default branch holds, so a run cannot pick it, as the record's `Base:` could. No merge base (a shallow clone) and a
+ * commit the range read cannot find both read as not eligible, so the land asks instead of failing.
+ */
+async function autoShipRead(cwd: string, tip: string, head: string, rules: AutoShipRules, gitLine: (args: readonly string[]) => Promise<string | null>): Promise<AutoShipVerdict> {
+  const incomplete = (why: string): AutoShipVerdict => ({ eligible: false, reasons: [`the classification is incomplete: ${why}`] });
+  const base = await gitLine(["merge-base", tip, head]);
+  if (base === null) return incomplete(`this clone holds no merge base of ${tip} and ${head}`);
+  try {
+    return autoShipVerdict(await classifyRange(cwd, base, head), rules);
+  } catch (error) {
+    if (!(error instanceof EngineError) || error.code !== "VALIDATION_ERROR") throw error;
+    return incomplete(error.message);
+  }
 }
 
 /** The unresolved review threads ({@link unresolvedThreads}) and the login they were read as, every page; `null` where a page does not read. */

@@ -10,6 +10,7 @@ import { runCommand } from "../../../src/cli/commands/run.ts";
 import { LAND_CLOCK } from "../../../src/cli/commands/runLand.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
 import type * as GhRunnerModule from "../../../src/cli/engine/ghRunner.ts";
+import type * as ChangeRangeModule from "../../../src/cli/engine/changeRange.ts";
 import type * as FsModule from "node:fs";
 import { resolveAutonomy } from "../../../src/config/autonomy.ts";
 import { CLAUDE_HOOKS_DIR } from "../../../src/hooks/model.ts";
@@ -18,6 +19,8 @@ import { buildPersonOnlyGuardScript, PERSON_ONLY_GUARD_FILE } from "../../../src
 import { surfaceRecord } from "../../../src/runs/gitSurface.ts";
 import { insideAny } from "../../../src/runs/landEvidence.ts";
 import { prRecordText } from "../../../src/runs/pullRequest.ts";
+import { requestMarker } from "../../../src/runs/reviewTool.ts";
+import { EngineError } from "../../../src/types/errors.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -52,6 +55,9 @@ const gh = vi.hoisted(() => ({
   routes: new Map<string, Answer | Answer[]>(),
   merge: { status: 200, json: { merged: true } as unknown },
   threads: [] as unknown[],
+  /** The comment editors' GraphQL answers (`ghCommentEditors`), in order; a rejection stands for a cloud whose proxy refuses GraphQL. */
+  editors: [] as unknown[],
+  editorsRefused: false,
   /** The merge states the pull request reads with after the ready mark, in order. */
   afterReady: ["clean"] as (string | null)[],
   /** review/110: fields the pull request reads with after the ready mark, beside its merge state (a head that moved). */
@@ -88,6 +94,10 @@ vi.mock("../../../src/cli/engine/ghRunner.ts", async (importOriginal) => ({
   ghReviewThreads: (_request: unknown, opts?: { program?: string }) => {
     gh.calls.push({ kind: "threads", program: opts?.program });
     return Promise.resolve({ status: 200, json: next(gh.threads) });
+  },
+  ghCommentEditors: (_request: unknown, opts?: { program?: string }) => {
+    gh.calls.push({ kind: "editors", program: opts?.program });
+    return gh.editorsRefused ? Promise.reject(new Error("gh failed")) : Promise.resolve({ status: 200, json: next(gh.editors) });
   },
   ghMarkReady: (request: { id: string }, opts?: { program?: string }) => {
     gh.calls.push({ kind: "ready", body: request, program: opts?.program });
@@ -131,6 +141,11 @@ function threadsPage(nodes: unknown[], viewer = "runner", author = "runner"): un
   };
 }
 
+/** A page of comment editors, as the constant query answers. */
+function editorsPage(nodes: unknown[], pageInfo: unknown = { hasNextPage: false, endCursor: null }): unknown {
+  return { data: { repository: { pullRequest: { comments: { nodes, pageInfo } } } } };
+}
+
 /** One review thread: resolved or not, by whom, and its comments' authors as `[__typename, login]`. */
 function thread(isResolved: boolean, resolvedBy: string | null, ...authors: [string, string][]): unknown {
   return {
@@ -164,6 +179,19 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
         }
       }
     },
+  };
+});
+
+/** A refusal a case hands the range read in place of the real one; `null` runs the real read. */
+const range = vi.hoisted(() => ({ refusal: null as Error | null }));
+
+// A spy over the real read, which runs in every case but one. Mock reason: `run land` finds the base with `git merge-base`,
+// which only names a commit the store holds, so no real repository reaches the read's refusal of an absent commit.
+vi.mock("../../../src/cli/engine/changeRange.ts", async (importOriginal) => {
+  const real = await importOriginal<typeof ChangeRangeModule>();
+  return {
+    ...real,
+    classifyRange: (...args: Parameters<typeof real.classifyRange>) => (range.refusal === null ? real.classifyRange(...args) : Promise.reject(range.refusal)),
   };
 });
 
@@ -208,6 +236,9 @@ describe("stamity run land", () => {
     gh.routes.clear();
     gh.merge = { status: 200, json: { merged: true } };
     gh.threads = [threadsPage([])];
+    gh.editors = [editorsPage([])];
+    gh.editorsRefused = false;
+    range.refusal = null;
     gh.afterReady = ["clean"];
     gh.afterReadyPr = {};
     gh.program = "/usr/bin/gh";
@@ -288,6 +319,9 @@ describe("stamity run land", () => {
     route("GET repos/o/r/rules/branches/main", [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "test" }] } }]);
     route("GET repos/o/r/branches/main", { commit: { sha: base }, protection: { enabled: false } });
     route(`GET repos/o/r/commits/${head}/check-runs`, { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] });
+    // TEST CHANGE, justified (land-wiring, REQ-FLOW-153): the verb reads the tip's check runs for the brake, and this fake
+    // answers 404 on an unknown route, which reads as a tip it could not read; every seeded tip is green.
+    route(`GET repos/o/r/commits/${base}/check-runs`, { total_count: 1, check_runs: [{ id: 2, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] });
     route("PATCH repos/o/r/pulls/7", { number: 7 });
     return { repo, remote, base, head };
   }
@@ -710,6 +744,8 @@ describe("stamity run land", () => {
     const tip = git(other, ["rev-parse", "HEAD"]);
     expect(tip).not.toBe(base);
     route("GET repos/o/r/branches/main", { commit: { sha: tip }, protection: { enabled: false } });
+    // TEST CHANGE, justified (land-wiring, REQ-FLOW-153): this case moves the tip, so the brake reads that tip's check runs.
+    route(`GET repos/o/r/commits/${tip}/check-runs`, { total_count: 1, check_runs: [{ id: 2, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] });
     route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: "tools/guard.mjs" }, { filename: "b" }]);
     expect(() => git(repo, ["cat-file", "-e", `${tip}^{commit}`])).toThrow();
 
@@ -1013,8 +1049,11 @@ describe("stamity run land", () => {
     // The approval names the head, not the reasons (the SECURITY.md residual): the reason added after it does not stop
     // the land. The evidence line marks every reason found when the land acted as approved, the later one too, and the
     // land replaces the `merge waits on:` line the person was shown, so no record tells the reasons they saw apart.
-    expect(result.doc).toMatchObject({ outcome: "landed", approved: { sha: head, reasons: [paths, "main is named in autonomy.deployingBranches"] } });
-    expect(bodies().at(-1)).toContain(`; approved by the person for ${head} over: ${paths}; main is named in autonomy.deployingBranches`);
+    // TEST CHANGE, justified (land-wiring, review/15): the head's manifest names no deploying branch and the default branch's
+    // now does, so the land also names that key. The pin stands: a reason added after the approval does not stop the land.
+    const loosened = "the head's manifest loosens autonomy.deployingBranches against main's";
+    expect(result.doc).toMatchObject({ outcome: "landed", approved: { sha: head, reasons: [paths, loosened, "main is named in autonomy.deployingBranches"] } });
+    expect(bodies().at(-1)).toContain(`; approved by the person for ${head} over: ${paths}; ${loosened}; main is named in autonomy.deployingBranches`);
   });
 
   it("still refuses a refused outcome with --approved, and leaves an asks outcome unchanged without it (review/103)", async () => {
@@ -1137,6 +1176,510 @@ describe("stamity run land", () => {
 
     expect(result.doc).toMatchObject({ outcome: "asks", evidence: { held: ["tools/guard.mjs"] } });
     expect(kinds()).not.toContain("merge");
+  });
+
+  describe("the brake (REQ-FLOW-153)", () => {
+    const failing = { total_count: 1, check_runs: [{ id: 3, name: "test", status: "completed", conclusion: "failure", app: { id: 15368 } }] };
+
+    it("asks while a required check fails on the tip, naming it, and merges nothing", async () => {
+      const { repo, base } = await seed();
+      route(`GET repos/o/r/commits/${base}/check-runs`, failing);
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.code).toBe(1);
+      expect(result.doc).toMatchObject({ outcome: "asks", asks: { reasons: ["main is red: test failing on its tip"], act: "pr-merge" }, evidence: { defaultBranch: { failing: ["test"], unread: null } } });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("lets --approved pass the brake, but not a refusal", async () => {
+      const { repo, base, head } = await seed();
+      route(`GET repos/o/r/commits/${base}/check-runs`, failing);
+
+      expect((await run(repo, ["land", "--run", RUN, "--approved", head])).doc).toMatchObject({ outcome: "landed", approved: { reasons: ["main is red: test failing on its tip"] } });
+
+      gh.threads = [threadsPage([thread(false, null, ["User", "alice"])])];
+      expect((await run(repo, ["land", "--run", RUN, "--approved", head])).doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
+    });
+
+    it("still asks with a red tip on --fast-forward", async () => {
+      const { repo, base } = await seed();
+      route("GET repos/o/r/rules/branches/main", [{ type: "required_status_checks", parameters: { required_status_checks: [{ context: "test" }] } }]);
+      route(`GET repos/o/r/commits/${base}/check-runs`, failing);
+      route(`GET repos/o/r/compare/${base}...${git(repo, ["rev-parse", "HEAD"])}`, { status: "ahead" });
+
+      expect((await run(repo, ["land", "--run", RUN, "--fast-forward"])).doc).toMatchObject({ outcome: "asks", asks: { reasons: ["main is red: test failing on its tip"], act: "push-default" } });
+    });
+
+    it("asks when the tip's read fails, naming the read", async () => {
+      const { repo, base } = await seed();
+      route(`GET repos/o/r/commits/${base}/check-runs`, { message: "Bad Gateway" }, 502);
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({
+        outcome: "asks",
+        asks: { reasons: ["main's tip could not be read (the check runs read answered HTTP 502), so whether it is red is not known"] },
+      });
+    });
+
+    it("reads a required context missing or pending on the tip as not red, and says so in the evidence line", async () => {
+      const { repo, base } = await seed();
+      route(`GET repos/o/r/commits/${base}/check-runs`, { total_count: 1, check_runs: [{ id: 3, name: "other", status: "completed", conclusion: "failure", app: { id: 15368 } }] });
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "landed", evidence: { defaultBranch: { failing: [], notRed: ["test"] } } });
+      const patched = gh.calls.find((call) => call.method === "PATCH")?.body as { body: string };
+      expect(patched.body).toContain("0 open Critical/Warning rows; main's tip reads not red with test missing or pending");
+    });
+  });
+
+  describe("auto-ship (REQ-FLOW-152)", () => {
+    const manifestOn = (autoShip: Record<string, unknown>): string =>
+      `${JSON.stringify({ version: 1, autonomy: { deployingBranches: ["main"], autoShip: { maxFiles: 10, maxLines: 100, classes: ["product", "records"], ...autoShip } } })}\n`;
+    const seedOn = async (autoShip: Record<string, unknown> = {}): Promise<Seeded> => {
+      const manifest = manifestOn(autoShip);
+      const seeded = await seed({ manifest });
+      route("GET repos/o/r/contents/.stamity/manifest.json", { content: Buffer.from(manifest).toString("base64"), encoding: "base64" });
+      return seeded;
+    };
+
+    it("merges onto a deploying branch with no ask when the change fits, the evidence line naming the rules", async () => {
+      const { repo } = await seedOn();
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "landed", evidence: { autoShip: { eligible: true } } });
+      const patched = gh.calls.find((call) => call.method === "PATCH")?.body as { body: string };
+      expect(patched.body).toMatch(/; auto-ship rules met: 3 of at most 10 files; \d+ of at most 100 lines; class /);
+    });
+
+    it("counts a rename's two sides through the real range read, and a change that fits still lands", async () => {
+      const { repo, remote } = await seedOn();
+      git(repo, ["mv", "a.txt", "b.txt"]);
+      git(repo, ["commit", "-q", "-m", "a rename"]);
+      git(repo, ["push", "-q", remote, `HEAD:refs/heads/${RUN_BRANCH}`]);
+      const head = git(repo, ["rev-parse", "HEAD"]);
+      route("GET repos/o/r/pulls/7", pull(head));
+      route(`GET repos/o/r/commits/${head}/check-runs`, { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] });
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "landed", evidence: { autoShip: { eligible: true, evidence: expect.stringContaining("auto-ship rules met: 4 of at most 10 files") } } });
+    });
+
+    it("asks, naming each rule the change fails", async () => {
+      const { repo } = await seedOn({ maxFiles: 1, maxLines: 1, classes: ["records"] });
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({
+        outcome: "asks",
+        asks: {
+          reasons: [
+            "main is named in autonomy.deployingBranches",
+            expect.stringMatching(/^auto-ship: \d+ lines are over autonomy\.autoShip\.maxLines \(1\)$/),
+            "auto-ship: 3 files are over autonomy.autoShip.maxFiles (1)",
+            "auto-ship: product is outside autonomy.autoShip.classes (records)",
+          ],
+        },
+      });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("asks on a shallow clone, where the base cannot be found, rather than failing", async () => {
+      const { repo, head } = await seedOn();
+      await writeFile(join(repo, ".git", "shallow"), `${head}\n`);
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "asks", asks: { reasons: ["main is named in autonomy.deployingBranches", expect.stringContaining("auto-ship: the classification is incomplete")] } });
+    });
+
+    it("reads the range's refusal of an absent commit as incomplete, so the land asks instead of failing", async () => {
+      const { repo } = await seedOn();
+      range.refusal = new EngineError("the base x is not a commit the object store holds", { code: "VALIDATION_ERROR" });
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.code).toBe(1);
+      expect(result.doc).toMatchObject({ outcome: "asks", asks: { reasons: ["main is named in autonomy.deployingBranches", "auto-ship: the classification is incomplete: the base x is not a commit the object store holds"] } });
+    });
+
+    it("lets any other failure of the range read stand", async () => {
+      const { repo } = await seedOn();
+      range.refusal = new Error("a defect");
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.code).toBe(1);
+      expect(result.doc).not.toHaveProperty("outcome");
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("still asks for --fast-forward, the rules met", async () => {
+      const { repo, base, head } = await seedOn();
+      route("GET repos/o/r/rules/branches/main", []);
+      route(`GET repos/o/r/compare/${base}...${head}`, { status: "ahead" });
+
+      expect((await run(repo, ["land", "--run", RUN, "--fast-forward"])).doc).toMatchObject({ outcome: "asks", asks: { reasons: ["main is named in autonomy.deployingBranches"], act: "push-default" } });
+    });
+
+    it("reads no range where the default branch is not deploying", async () => {
+      const manifest = `${JSON.stringify({ version: 1, autonomy: { autoShip: { maxFiles: 1, maxLines: 1, classes: ["docs"] } } })}\n`;
+      const { repo } = await seed({ manifest });
+      route("GET repos/o/r/contents/.stamity/manifest.json", { content: Buffer.from(manifest).toString("base64"), encoding: "base64" });
+      range.refusal = new Error("a range was read");
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed", evidence: { autoShip: null } });
+    });
+  });
+
+  describe("the review tool (REQ-FLOW-154)", () => {
+    const LOGIN = "chatgpt-codex-connector[bot]";
+    const TOOL = { login: LOGIN, request: "@codex review", clean: "state-comment", stateMarker: "codex-review-state:v1", stateSection: "code_review", waitMinutes: 40, rounds: 2 };
+    const block = (sha: string, status = "completed", findings = false): string =>
+      `<!-- codex-review-state:v1 ${JSON.stringify({ code_review: { commit_sha: sha, has_any_findings: findings, has_unresolved_findings: findings, status } })} -->`;
+    const minutesAgo = (minutes: number): string => new Date(Date.now() - minutes * 60_000).toISOString();
+    const comment = (id: number, login: string, type: string, body: string, createdAt = minutesAgo(5)): unknown => ({ id, user: { login, type }, body, created_at: createdAt });
+    const fromRun = (id: number, head: string, createdAt?: string): unknown => comment(id, "runner", "User", `@codex review\n\n${requestMarker(head)}`, createdAt);
+    const fromTool = (id: number, body: string): unknown => comment(id, LOGIN, "Bot", body);
+    const never = (id: number): unknown => ({ databaseId: id, lastEditedAt: null, editor: null });
+    const editedBy = (id: number, type: string, login: string): unknown => ({ databaseId: id, lastEditedAt: minutesAgo(1), editor: { __typename: type, login } });
+    // The bot's real `+1` reads `User` in REST: the type is no filter, the login is.
+    const plusOne = { user: { login: LOGIN, type: "User" }, content: "+1" };
+
+    const seedTool = async (tool: Record<string, unknown> = TOOL): Promise<Seeded> => {
+      const manifest = `${JSON.stringify({ version: 1, autonomy: { reviewTool: tool } })}\n`;
+      const seeded = await seed({ manifest });
+      route("GET repos/o/r/contents/.stamity/manifest.json", { content: Buffer.from(manifest).toString("base64"), encoding: "base64" });
+      route("POST repos/o/r/issues/7/comments", { id: 900 }, 201);
+      return seeded;
+    };
+    /** The three REST reads, and the editors as the tool's own edit reads: GraphQL's bare name on a `Bot`. */
+    const answers = (comments: unknown[], reactions: unknown[] = [plusOne], reviews: unknown[] = []): void => {
+      route("GET repos/o/r/issues/7/comments", comments);
+      route("GET repos/o/r/issues/7/reactions", reactions);
+      route("GET repos/o/r/pulls/7/reviews", reviews);
+    };
+    const posted = (): string[] => gh.calls.filter((call) => call.method === "POST").map((call) => (call.body as { body: string }).body);
+
+    it("reads no comment, posts nothing and asks no editor with no review tool set", async () => {
+      const { repo } = await seed();
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed", evidence: { review: null } });
+      expect(kinds().filter((kind) => kind.includes("issues/") || kind.includes("/reviews") || kind === "editors")).toEqual([]);
+    });
+
+    it("merges on a clean state comment the tool last edited, joined through GraphQL's bare name, with its +1", async () => {
+      const { repo, head } = await seedTool();
+      answers([fromRun(1, head), fromTool(2, block(head))]);
+      gh.editors = [editorsPage([never(1), editedBy(2, "Bot", "chatgpt-codex-connector")])];
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "landed", evidence: { review: { state: "clean" } } });
+      expect(posted()).toEqual([]);
+      // The editors after the bodies, so an edit landing between the two reads shows as a foreign editor rather than being missed.
+      expect(kinds().indexOf("editors")).toBeGreaterThan(kinds().indexOf("GET repos/o/r/issues/7/comments"));
+      const patched = gh.calls.find((call) => call.method === "PATCH")?.body as { body: string };
+      expect(patched.body).toContain(`${LOGIN} reads clean on ${head.slice(0, 7)}`);
+    });
+
+    it("re-reads all three reads just before the act: a +1 taken back holds the merge", async () => {
+      const { repo, head } = await seedTool();
+      answers([fromRun(1, head), fromTool(2, block(head))]);
+      gh.routes.set("GET repos/o/r/issues/7/reactions", [{ status: 200, json: [plusOne] }, { status: 200, json: [] }]);
+      gh.editors = [editorsPage([never(1), never(2)])];
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ evidence: { review: { state: "waiting", reason: expect.stringContaining("+1") } } });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("refuses on a head moved between the verdict and the act", async () => {
+      const { repo, head } = await seedTool();
+      answers([fromRun(1, head), fromTool(2, block(head))]);
+      gh.editors = [editorsPage([never(1), never(2)])];
+      gh.routes.set("GET repos/o/r/pulls/7", [{ status: 200, json: pull(head) }, { status: 200, json: pull("c".repeat(40)) }]);
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: [`pull request #7's head ${"c".repeat(40)} is not HEAD ${head}`] });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("asks the tool once on a head with no run, and leaves the rest for the next call", async () => {
+      const { repo, head } = await seedTool();
+      answers([]);
+      gh.routes.set("GET repos/o/r/issues/7/comments", [{ status: 200, json: [] }, { status: 200, json: [fromRun(1, head)] }]);
+      gh.editors = [editorsPage([never(1)])];
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(posted()).toEqual([`@codex review\n\n${requestMarker(head)}`]);
+      expect(result.code).toBe(1);
+      expect(result.doc).toMatchObject({
+        outcome: "asks",
+        asks: { act: "pr-merge", head, pending: true, reasons: [expect.stringContaining("waiting for")] },
+        evidence: { review: { state: "waiting" } },
+      });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("does not ask again on a head already asked, and --approved does not pass a wait", async () => {
+      const { repo, head } = await seedTool();
+      answers([fromRun(1, head)]);
+      gh.editors = [editorsPage([never(1)])];
+
+      const result = await run(repo, ["land", "--run", RUN, "--approved", head]);
+
+      expect(posted()).toEqual([]);
+      expect(result.doc).toMatchObject({ outcome: "asks", asks: { pending: true } });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("starts the clock with the marker alone where a run is already going on the head", async () => {
+      const { repo, head } = await seedTool();
+      answers([fromTool(2, block(head, "running"))]);
+      gh.editors = [editorsPage([never(2)])];
+
+      await run(repo, ["land", "--run", RUN]);
+
+      expect(posted()).toEqual([requestMarker(head)]);
+    });
+
+    it("writes nothing on a dry run", async () => {
+      const { repo } = await seedTool();
+      answers([]);
+
+      const result = await run(repo, ["land", "--run", RUN, "--dry-run"]);
+
+      expect(posted()).toEqual([]);
+      expect(result.doc).toMatchObject({ outcome: "asks", asks: { pending: true } });
+    });
+
+    it("posts no request while a plain gap stands, so no round goes on a head that cannot land", async () => {
+      const { repo } = await seedTool();
+      answers([]);
+      gh.threads = [threadsPage([thread(false, null, ["User", "alice"])])];
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(posted()).toEqual([]);
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved", expect.stringContaining("no request on this head yet")] });
+    });
+
+    it("names a request that did not post, and the run goes on", async () => {
+      const { repo } = await seedTool();
+      answers([]);
+      route("POST repos/o/r/issues/7/comments", { message: "Forbidden" }, 403);
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", notDone: ["the review request was not posted to #7 (HTTP 403)"] });
+    });
+
+    it("keeps polling on --wait while the tool works, then lands on its word", async () => {
+      fakeClock();
+      const { repo, head } = await seedTool();
+      answers([fromRun(1, head), fromTool(2, block(head))]);
+      gh.routes.set("GET repos/o/r/issues/7/comments", [
+        { status: 200, json: [fromRun(1, head), fromTool(2, block(head, "running"))] },
+        { status: 200, json: [fromRun(1, head), fromTool(2, block(head))] },
+      ]);
+      gh.editors = [editorsPage([never(1), editedBy(2, "Bot", "chatgpt-codex-connector")])];
+
+      expect((await run(repo, ["land", "--run", RUN, "--wait", "2"])).doc).toMatchObject({ outcome: "landed" });
+    });
+
+    it("ends a wait past the verb's budget as asks with a pending line, for the next call", async () => {
+      const { slept } = fakeClock();
+      const { repo, head } = await seedTool();
+      answers([fromRun(1, head), fromTool(2, block(head, "running"))]);
+      gh.editors = [editorsPage([never(1), never(2)])];
+
+      const result = await run(repo, ["land", "--run", RUN, "--wait", "9"]);
+
+      expect(slept.reduce((sum, ms) => sum + ms, 0)).toBeLessThanOrEqual(9 * 60_000);
+      expect(result.doc).toMatchObject({ outcome: "asks", asks: { pending: true } });
+      expect(kinds()).not.toContain("merge");
+
+      // The person's lines, which `--json` leaves out: the wait is named, and no approval is offered for it.
+      const plain = await runInProcess([runCommand], ["run", "land", "--run", RUN], { cwd: repo });
+      expect(plain.stdout).toContain("pending: run land again");
+      expect(plain.stdout).toContain("review: waiting:");
+      expect(plain.stdout).not.toContain("approve with");
+    });
+
+    it.each([
+      ["a person", "User", "a-person", "last edited by a-person"],
+      ["a person holding the bot's bare name", "User", "chatgpt-codex-connector", "last edited by chatgpt-codex-connector"],
+    ])("holds a state comment last edited by %s rather than dropping it from the count", async (_name, type, login, words) => {
+      const { repo, head } = await seedTool();
+      // The tool's other comment holds a block too, and alone it would read clean.
+      answers([fromRun(1, head, minutesAgo(90)), fromTool(2, block("d".repeat(40))), fromTool(3, block(head))]);
+      gh.editors = [editorsPage([never(1), editedBy(2, type, login), never(3)])];
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: [expect.stringContaining(words)], evidence: { review: { state: "silent" } } });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it.each([
+      ["GraphQL refused", () => (gh.editorsRefused = true)],
+      ["a page with errors", () => (gh.editors = [{ errors: [{ message: "denied" }] }])],
+      ["a comment missing from the answer", () => (gh.editors = [editorsPage([])])],
+      ["paging cut short", () => (gh.editors = [editorsPage([never(2)], { hasNextPage: true, endCursor: "x" }), { errors: [{ message: "denied" }] }])],
+    ])("reads an editor it could not read as unknown, never as null, on %s", async (_name, arrange) => {
+      const { repo, head } = await seedTool();
+      answers([fromRun(1, head, minutesAgo(90)), fromTool(2, block(head))]);
+      arrange();
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: [expect.stringContaining("last edited by unknown")] });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("reads every page of the editors", async () => {
+      const { repo, head } = await seedTool();
+      answers([fromRun(1, head), fromTool(2, block(head))]);
+      gh.editors = [editorsPage([never(1)], { hasNextPage: true, endCursor: "x" }), editorsPage([never(2)])];
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed" });
+    });
+
+    it.each([
+      ["findings", () => "findings", "reports findings"],
+      ["no +1 past the wait", () => "no-plus-one", "+1"],
+    ])("holds on %s", async (_name, which, words) => {
+      const { repo, head } = await seedTool();
+      const kind = which();
+      answers([fromRun(1, head, minutesAgo(90)), fromTool(2, block(head, "completed", kind === "findings"))], kind === "findings" ? [plusOne] : []);
+      gh.editors = [editorsPage([never(1), never(2)])];
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: [expect.stringContaining(words)] });
+    });
+
+    it("holds for a person when the rounds are spent, naming them", async () => {
+      const { repo, head } = await seedTool();
+      answers([fromRun(1, "e".repeat(40), minutesAgo(200)), fromRun(2, "f".repeat(40), minutesAgo(100)), fromTool(3, block("f".repeat(40), "completed", true))]);
+      gh.editors = [editorsPage([never(1), never(2), never(3)])];
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: [expect.stringContaining("2 of 2 review rounds spent")] });
+      expect(posted()).toEqual([]);
+      expect(head).not.toBe("e".repeat(40));
+    });
+
+    it("counts only the run's own request markers, so a stranger's cannot spend a round or stand for a request", async () => {
+      const { repo, head } = await seedTool();
+      const strangers = [comment(1, "stranger", "User", requestMarker("e".repeat(40))), comment(2, "stranger", "User", requestMarker("f".repeat(40))), comment(3, "stranger", "User", requestMarker(head))];
+      answers(strangers);
+      gh.editors = [editorsPage([never(1), never(2), never(3)])];
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ evidence: { review: { state: "waiting" } } });
+      expect(posted()).toEqual([`@codex review\n\n${requestMarker(head)}`]);
+    });
+
+    it("reads an app's own request markers in REST's spelling, where viewer names the bare login", async () => {
+      const { repo, head } = await seedTool();
+      gh.threads = [threadsPage([], "stamity-app", "stamity-app")];
+      answers([comment(1, "stamity-app[bot]", "Bot", requestMarker(head))]);
+      gh.editors = [editorsPage([never(1)])];
+
+      await run(repo, ["land", "--run", RUN]);
+
+      expect(posted()).toEqual([]);
+    });
+
+    it("passes a pasted block from a person for nothing", async () => {
+      const { repo, head } = await seedTool();
+      answers([fromRun(1, head), comment(2, "a-person", "User", block(head))]);
+      gh.editors = [editorsPage([never(1), never(2)])];
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { pending: true }, evidence: { review: { state: "waiting" } } });
+    });
+
+    it("reads review-state's review over REST, paged reads naming no other route", async () => {
+      const { repo, head } = await seedTool({ login: "reviewer[bot]", request: "please review", clean: "review-state", waitMinutes: 40, rounds: 2 });
+      answers([fromRun(1, head)], [], [{ user: { login: "reviewer[bot]" }, commit_id: head, state: "APPROVED" }]);
+      gh.editors = [editorsPage([never(1)])];
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed" });
+    });
+
+    it("refuses when a comment read fails, naming it, and when a list is no list", async () => {
+      const { repo } = await seedTool();
+      answers([]);
+      route("GET repos/o/r/issues/7/comments", { message: "Bad Gateway" }, 502);
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["the pull request's comments read answered HTTP 502"] });
+
+      route("GET repos/o/r/issues/7/comments", { message: "not a list" });
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["the pull request's comments read did not read"] });
+    });
+
+    it("refuses past the pages it reads, so a comment past the last page cannot go unseen", async () => {
+      const { repo } = await seedTool();
+      answers(Array.from({ length: 100 }, (_, index) => comment(index + 1, "someone", "User", "text")));
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: [expect.stringContaining("more than 1000 entries")] });
+    });
+
+    it("asks, naming every leg, where the legs disagree, and judges nothing on the first leg's tool", async () => {
+      const { repo, head } = await seedTool();
+      answers([fromRun(1, head), fromTool(2, block(head))]);
+      const other = { ...TOOL, login: "another-reviewer[bot]" };
+      await writeFile(join(repo, ".stamity/manifest.json"), `${JSON.stringify({ version: 1, autonomy: { reviewTool: other } })}\n`);
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({
+        outcome: "asks",
+        asks: { reasons: [expect.stringMatching(/^the legs disagree on autonomy\.reviewTool, and no leg wins: the default branch's manifest, the manifest committed at `HEAD`, the manifest on disk$/)] },
+        evidence: { review: null },
+      });
+      expect(kinds().filter((kind) => kind.includes("issues/7") || kind === "editors")).toEqual([]);
+    });
+
+    it("asks, naming the legs, where they differ on the request alone", async () => {
+      const { repo } = await seedTool();
+      await writeFile(join(repo, ".stamity/manifest.json"), `${JSON.stringify({ version: 1, autonomy: { reviewTool: { ...TOOL, request: "@codex look away" } } })}\n`);
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reasons: [expect.stringContaining("the legs disagree on autonomy.reviewTool")] } });
+    });
+  });
+
+  describe("a change that loosens a key (REQ-FLOW-138)", () => {
+    it("names the key beside the path", async () => {
+      const { repo, remote } = await seed();
+      route("GET repos/o/r/contents/.stamity/manifest.json", { content: Buffer.from('{"version":1}\n').toString("base64"), encoding: "base64" });
+      await writeFile(join(repo, ".stamity/manifest.json"), `${JSON.stringify({ version: 1, autonomy: { deployingBranches: ["release"], adminRuleProof: true } })}\n`);
+      git(repo, ["add", "-A"]);
+      git(repo, ["commit", "-q", "-m", "loosen"]);
+      git(repo, ["push", "-q", remote, `HEAD:refs/heads/${RUN_BRANCH}`]);
+      const head = git(repo, ["rev-parse", "HEAD"]);
+      route("GET repos/o/r/pulls/7", pull(head));
+      route(`GET repos/o/r/commits/${head}/check-runs`, { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] });
+      route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: ".stamity/manifest.json" }, { filename: `${RUN_DIR}/record.md` }]);
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({
+        outcome: "asks",
+        asks: { reasons: ["the diff touches paths that define the evidence: .stamity/manifest.json", "the head's manifest loosens autonomy.adminRuleProof against main's"] },
+      });
+    });
+
+    it("refuses a default-branch read that answers neither 200 nor 404, through the same catch", async () => {
+      const { repo } = await seed();
+      route("GET repos/o/r/contents/.stamity/manifest.json", { message: "Bad Gateway" }, 502);
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["the default branch's manifest read answered HTTP 502"] });
+    });
   });
 
   it("takes --title, --paths, --wait past 9 and --method with --fast-forward as usage errors", async () => {

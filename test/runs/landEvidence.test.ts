@@ -17,8 +17,12 @@ import {
   parseBranch,
   parseBranchRules,
   parseCheckRuns,
+  parseEditorsPage,
   parseFiles,
+  parseIssueComments,
   parsePr,
+  parseReactions,
+  parseReviews,
   placeOf,
   parseThreadsPage,
   pollWhilePending,
@@ -30,6 +34,7 @@ import {
   type LandPr,
   type PlaceReads,
 } from "../../src/runs/landEvidence.ts";
+import type { ReviewToolState, ReviewToolVerdict } from "../../src/runs/reviewTool.ts";
 
 /**
  * a6-land-verb (REQ-FLOW-132, REQ-FLOW-133): the evidence `stamity run land` merges on and the decision it reaches,
@@ -71,6 +76,8 @@ function input(over: Partial<LandInput> = {}, pr: Partial<LandPr> = {}): LandInp
     checks: GREEN,
     threads: 0,
     ledger: { open: [] },
+    looserKeys: [],
+    reviewToolConflict: [],
     ...over,
   };
 }
@@ -397,7 +404,154 @@ describe("decideLand", () => {
   });
 });
 
+describe("decideLand, the factory's evidence (REQ-FLOW-152 to REQ-FLOW-154)", () => {
+  const verdict = (state: ReviewToolState): ReviewToolVerdict => ({ state, reason: `the tool reads ${state}`, head: SHA });
+  const deploying = resolveAutonomy({ autonomy: { deployingBranches: ["main"] } });
+  const DEPLOYING_ASK = "main is named in autonomy.deployingBranches";
+  const eligible = { eligible: true as const, evidence: "auto-ship rules met" };
+  const unfit = { eligible: false as const, reasons: ["the classification is incomplete", "a specialist lens is asked for: security"] };
+  const reasonsOf = (over: Partial<LandInput>, pr: Partial<LandPr> = {}): string[] => {
+    const decision = decideLand(input(over, pr));
+    return decision.outcome === "asks" || decision.outcome === "refused" ? decision.reasons : [];
+  };
+
+  it("lands on a clean verdict and a green tip, as it does with neither read", () => {
+    expect(decideLand(input({ reviewTool: verdict("clean"), defaultBranchRed: { failing: [], unread: null } }))).toEqual({ outcome: "land" });
+  });
+
+  it.each([
+    ["waiting", true],
+    ["findings", false],
+    ["silent", false],
+    ["spent", false],
+  ] as const)("holds a %s verdict as a gap, waitable only while waiting", (state, pending) => {
+    expect(decideLand(input({ reviewTool: verdict(state) }))).toEqual({ outcome: "refused", reasons: [`the tool reads ${state}`], pending });
+  });
+
+  it("places the verdict after the ledger's gap, and a plain gap beside it stops the wait", () => {
+    expect(decideLand(input({ reviewTool: verdict("waiting"), ledger: { open: ["r/1"] } }))).toEqual({
+      outcome: "refused",
+      reasons: [`the ledger at ${SHA} holds open Critical or Warning rows: r/1`, "the tool reads waiting"],
+      pending: false,
+    });
+  });
+
+  it("asks on a red tip, naming each failing check, and on a tip that did not read, naming the read", () => {
+    expect(decideLand(input({ defaultBranchRed: { failing: ["test", "lint"], unread: null } }))).toEqual({
+      outcome: "asks",
+      reason: "main is red: test, lint failing on its tip",
+      reasons: ["main is red: test, lint failing on its tip"],
+      act: "pr-merge",
+    });
+    expect(reasonsOf({ defaultBranchRed: { failing: [], unread: "the check runs read answered HTTP 502" } })).toEqual([
+      "main's tip could not be read (the check runs read answered HTTP 502), so whether it is red is not known",
+    ]);
+  });
+
+  it("asks on a red tip for a fast-forward too, as the push", () => {
+    expect(decideLand(input({ defaultBranchRed: { failing: ["test"], unread: null }, forward: { requiresPr: null, compare: "ahead" } }))).toMatchObject({ outcome: "asks", act: "push-default" });
+  });
+
+  it("keeps a refusal first: a red tip never turns a gap into an ask", () => {
+    expect(decideLand(input({ defaultBranchRed: { failing: ["test"], unread: null }, threads: 1 }))).toMatchObject({ outcome: "refused", reasons: ["1 review thread is unresolved"] });
+  });
+
+  it("names every leg where the legs disagree on the review tool, a clean verdict or none beside it", () => {
+    const legs = ["the default branch's manifest", "the manifest on disk"];
+    const reason = "the legs disagree on autonomy.reviewTool, and no leg wins: the default branch's manifest, the manifest on disk";
+    expect(reasonsOf({ reviewToolConflict: legs })).toEqual([reason]);
+    expect(reasonsOf({ reviewToolConflict: legs, reviewTool: verdict("clean") })).toEqual([reason]);
+  });
+
+  it("names each key a change loosens, in an ask of its own", () => {
+    expect(reasonsOf({ looserKeys: ["autonomy.autoShip", "autonomy.reviewTool"] })).toEqual(["the head's manifest loosens autonomy.autoShip, autonomy.reviewTool against main's"]);
+  });
+
+  it("merges onto a deploying branch with no ask only where auto-ship is eligible", () => {
+    expect(decideLand(input({ setting: deploying, autoShip: eligible }))).toEqual({ outcome: "land" });
+    expect(reasonsOf({ setting: deploying })).toEqual([DEPLOYING_ASK]);
+  });
+
+  it("names each rule that failed beside the deploying branch", () => {
+    expect(reasonsOf({ setting: deploying, autoShip: unfit })).toEqual([DEPLOYING_ASK, "auto-ship: the classification is incomplete", "auto-ship: a specialist lens is asked for: security"]);
+  });
+
+  it("still asks for a fast-forward onto a deploying branch, eligible or not", () => {
+    expect(reasonsOf({ setting: deploying, autoShip: eligible, forward: { requiresPr: null, compare: "ahead" } })).toEqual([DEPLOYING_ASK]);
+  });
+
+  it.each<[string, Partial<LandInput>, string]>([
+    ["mode ask", { setting: resolveAutonomy({ autonomy: { mode: "ask", deployingBranches: ["main"] } }) }, "autonomy.mode is ask"],
+    ["an act named deploying", { setting: resolveAutonomy({ autonomy: { deployingBranches: ["main"], deployingActs: ["pr-merge"] } }) }, "autonomy.deployingActs names pr-merge"],
+    ["a held path", { files: { paths: [".github/workflows/ci.yml"], complete: true } }, "the diff touches paths that define the evidence: .github/workflows/ci.yml"],
+    ["a loosened key", { looserKeys: ["autonomy.autoShip"] }, "the head's manifest loosens autonomy.autoShip against main's"],
+    ["a red tip", { defaultBranchRed: { failing: ["test"], unread: null } }, "main is red: test failing on its tip"],
+    ["legs that disagree", { reviewToolConflict: ["one", "two"] }, "the legs disagree on autonomy.reviewTool, and no leg wins: one, two"],
+  ])("does not let an eligible auto-ship pass over %s", (_name, over, reason) => {
+    expect(reasonsOf({ setting: deploying, autoShip: eligible, ...over })).toEqual([reason]);
+  });
+});
+
+describe("the review tool's reads", () => {
+  it("reads comments, reviews and reactions, a null user or commit reading as no one's", () => {
+    const comment = { id: 9, user: { login: "chatgpt-codex-connector[bot]", type: "Bot" }, body: "text", created_at: "2026-11-04T10:00:00Z" };
+    expect(parseIssueComments([comment, { ...comment, id: 10, user: null }])).toEqual([
+      { id: 9, userLogin: "chatgpt-codex-connector[bot]", userType: "Bot", body: "text", createdAt: "2026-11-04T10:00:00Z" },
+      { id: 10, userLogin: "", userType: "", body: "text", createdAt: "2026-11-04T10:00:00Z" },
+    ]);
+    expect(parseReviews([{ user: { login: "tool" }, commit_id: SHA, state: "APPROVED" }, { user: null, commit_id: null, state: "COMMENTED" }])).toEqual([
+      { userLogin: "tool", commitId: SHA, state: "APPROVED" },
+      { userLogin: "", commitId: "", state: "COMMENTED" },
+    ]);
+    expect(parseReactions([{ user: { login: "chatgpt-codex-connector[bot]", type: "User" }, content: "+1" }, { user: null, content: "eyes" }])).toEqual([
+      { userLogin: "chatgpt-codex-connector[bot]", content: "+1" },
+      { userLogin: "", content: "eyes" },
+    ]);
+  });
+
+  it("refuses an answer that is no list, or an entry missing a field it needs", () => {
+    for (const parse of [parseIssueComments, parseReviews, parseReactions]) {
+      expect(parse({ message: "Not Found" })).toBeNull();
+      expect(parse([{ id: 1 }])).toBeNull();
+    }
+  });
+
+  const page = (nodes: unknown[], pageInfo: unknown = { hasNextPage: false, endCursor: null }): unknown => ({ data: { repository: { pullRequest: { comments: { nodes, pageInfo } } } } });
+  const node = (databaseId: unknown, lastEditedAt: unknown, editor: unknown): unknown => ({ databaseId, lastEditedAt, editor });
+  const AT = "2026-11-04T10:00:00Z";
+
+  it.each([
+    ["never edited", node(1, null, null), null],
+    ["edited by a bot, GraphQL's bare name given back its ending", node(1, AT, { __typename: "Bot", login: "chatgpt-codex-connector" }), "chatgpt-codex-connector[bot]"],
+    ["edited by a person holding the bare name, who is not the tool", node(1, AT, { __typename: "User", login: "chatgpt-codex-connector" }), "chatgpt-codex-connector"],
+    ["edited by a mannequin, any other type read as given", node(1, AT, { __typename: "Mannequin", login: "old" }), "old"],
+    ["edited with no editor named", node(1, AT, null), "unknown"],
+    ["an editor with no login", node(1, AT, { __typename: "Bot" }), "unknown"],
+    ["an editor with no type, read as nobody it can trust", node(1, AT, { login: "chatgpt-codex-connector" }), "unknown"],
+    ["no edit time in the answer", node(1, undefined, null), "unknown"],
+  ])("reads a comment %s", (_name, entry, editor) => {
+    expect(parseEditorsPage(page([entry]))).toEqual({ editors: new Map([[1, editor]]), next: null });
+  });
+
+  it("gives the next cursor, and leaves out a node with no id so its comment joins to nothing", () => {
+    expect(parseEditorsPage(page([node(2, null, null), node(null, null, null)], { hasNextPage: true, endCursor: "Y3Vyc29y" }))).toEqual({ editors: new Map([[2, null]]), next: "Y3Vyc29y" });
+  });
+
+  it("refuses GraphQL errors, no nodes, and more pages with no cursor", () => {
+    expect(parseEditorsPage({ errors: [{ message: "denied" }], ...(page([]) as object) })).toBeNull();
+    expect(parseEditorsPage({ data: {} })).toBeNull();
+    expect(parseEditorsPage(page([], { hasNextPage: true, endCursor: null }))).toBeNull();
+  });
+});
+
 describe("the evidence line and the poll", () => {
+  it("carries each note on the one line, before an approval", () => {
+    expect(evidenceLine("2026-10-23T10:00:00.000Z", SHA, 1, 0, 0, undefined, ["codex reads clean\non abc", "main's tip reads not red"])).toBe(
+      `evidence checked at 2026-10-23T10:00:00.000Z for ${SHA}: 1 required check runs green, 0 open threads, 0 open Critical/Warning rows; codex reads clean on abc; main's tip reads not red`,
+    );
+    expect(evidenceLine("2026-10-23T10:00:00.000Z", SHA, 1, 0, 0, { sha: SHA, reasons: ["a"] }, ["a note"])).toMatch(/rows; a note; approved by the person for /);
+  });
+
   it("puts one evidence line before the marker, replacing an earlier one, and never says landed", () => {
     const line = evidenceLine("2026-10-23T08:00:00.000Z", SHA, 3, 0, 0);
     const once = withStatusLine(PR.body, MARKER, line);
