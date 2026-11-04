@@ -119,7 +119,7 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/configuration.md`](docs/configuration.md) | Generated: the addressable config surface, rendered from the `config` command's key registry, each row's unset value measured against a probe manifest. |
 | [`docs/measurements.md`](docs/measurements.md) | Generated: the verified merge-ready rate over this repository's own run records, the npm reach proxy, the eval run of record, and the first-run proof lanes. |
 | [`docs/reference/`](docs/reference/) | Generated: one page per content class projected from artifact frontmatter, plus the pack inventory and the MCP server reference. |
-| [`llms.txt`](llms.txt) | Generated: the agent-native index of the published pages — the five root pages, the twelve guides, the charter and every generated reference page. |
+| [`llms.txt`](llms.txt) | Generated: the agent-native index of the published pages — the five root pages, the thirteen guides, the charter and every generated reference page. |
 | [`website/`](website/) | The Docusaurus site that renders the `docs/` pages from the tree. Its one page of its own is the landing page at `website/src/pages/index.tsx`. |
 | [`SECURITY.md`](SECURITY.md) | What the engine defends today, what it does not, and how to report a vulnerability. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | The contributor gate CI runs, the three test lanes, and how to regenerate a derived file. |
@@ -136,6 +136,7 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/enterprise-forks.md`](docs/enterprise-forks.md) | Taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, landing, the fork layer, and releasing the fork through its own workflow. |
 | [`docs/security-mapping.md`](docs/security-mapping.md) | The version-pinned crosswalk from this repository's controls to the OWASP, joint-guidance and NIST AI RMF catalogues — seven surfaces, their residuals, and the gaps. |
 | [`docs/cloud.md`](docs/cloud.md) | Running a planned change in a vendor's cloud with nobody watching — each cloud's setup, branch protection, secrets, contract start and morning walk, the GitHub Action's limits, and the run contract. |
+| [`docs/factory.md`](docs/factory.md) | Setting up a ready issue to merge with nobody watching, in order, on Claude's cloud, Cursor's cloud and your own machine — who does each step and where, what is not proven yet, and what to do when nothing fired. |
 
 Hook scripts are not in that corpus row, because they are not corpus content. The four portable bodies, the
 person-only shell guard among them, are generated from `src/hooks/scripts.ts` for every selected client. Claude Code

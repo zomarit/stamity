@@ -129,8 +129,8 @@ An artifact that was true once and says nothing about when is unfalsifiable.
   sources. A platform fact is only as current as the date beside it.
 - Every page in the hand-written bucket carries a currency stamp and a re-open trigger. They are
   the two comments at the top of this page. The bucket is `README.md`, `SECURITY.md`,
-  `CONTRIBUTING.md` and the twelve guides under `docs/`, and `test/docsPages.test.ts` holds all
-  fifteen to that pair. [`GOVERNANCE.md`](../GOVERNANCE.md) carries the same pair on its own
+  `CONTRIBUTING.md` and the thirteen guides under `docs/`, and `test/docsPages.test.ts` holds all
+  sixteen to that pair. [`GOVERNANCE.md`](../GOVERNANCE.md) carries the same pair on its own
   trigger.
 - The release controls checklist carries a per-release currency section. Re-verification is part
   of cutting a release, rather than something somebody has to remember.

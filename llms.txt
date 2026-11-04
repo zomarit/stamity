@@ -31,6 +31,7 @@ hand-written or corpus source. Nothing here links outside this tree.
 - [Enterprise forks](docs/enterprise-forks.md): taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, the gates that decide, landing, the fork layer, releasing the fork through its own workflow, and the opt-in update workflow.
 - [Security mapping](docs/security-mapping.md): the version-pinned crosswalk from this repository's own controls to the OWASP agentic, LLM and web lists, the joint guidance and the NIST AI RMF — seven surfaces, their residuals, and the gaps.
 - [Cloud runs](docs/cloud.md): running a planned change in a vendor's cloud with nobody watching — each cloud's setup, branch protection, secrets, contract start and morning walk, the GitHub Action's limits and what a pull request still changes there, the run contract, and the label, the review tool and the land job that take a ready item to a merge.
+- [The factory](docs/factory.md): setting up a ready issue to merge with nobody watching, in order, on Claude's cloud, Cursor's cloud and your own machine — who does each step and where, what each optional setting loosens, what is not proven yet, and what to do when nothing fired.
 - [Migration](docs/migration.md): moving a repository off the predecessor setup — the in-place path, the uninstall-first path, what transfers, and the removal left to you.
 
 ## Generated reference

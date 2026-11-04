@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
+import { parse as parseYaml } from "yaml";
 import {
   MEASUREMENTS_DOC_PATH,
   MEASUREMENT_SNAPSHOT_PATH,
@@ -59,11 +60,11 @@ import { LANE_PATHS } from "../scripts/ci/records-only.mjs";
 import { ASK_CLASS_CLIENTS } from "../scripts/qa/hook-runs.mjs";
 
 /**
- * The gate on the fifteen hand-written pages: three at the root, twelve guides
+ * The gate on the sixteen hand-written pages: three at the root, thirteen guides
  * under `docs/`.
  *
  * The rest of `docs/` is generated and drift-tested against its renderer; these
- * fifteen are typed by a human, so the only guard is this file.
+ * sixteen are typed by a human, so the only guard is this file.
  * It asserts the properties a rewrite could silently break — the public
  * opening surviving a reflow, the ≤150-line budget, links that stay inside the
  * tree or inside this repository's own GitHub home, no bare domain, no contact
@@ -95,7 +96,7 @@ import { ASK_CLASS_CLIENTS } from "../scripts/qa/hook-runs.mjs";
  * of about nine targets; all four have shipped, and an exemption kept past its
  * reason means renaming one of them breaks README and passes both suites.
  *
- * Two properties are asserted on all fifteen pages because the hand bucket is
+ * Two properties are asserted on all sixteen pages because the hand bucket is
  * DEFINED by them: a currency header naming what the page was verified against,
  * and a published re-open trigger — a falsifiable condition under which the page
  * must be rewritten. A hand page without them is a page nobody can tell is
@@ -177,12 +178,13 @@ const WORKING_WITH_STAMITY = "docs/working-with-stamity.md";
 const WORKSPACES = "docs/workspaces.md";
 // Declared apart from the path-order block above, so the ordinals its comment names stay true.
 const CLOUD = "docs/cloud.md";
+const FACTORY = "docs/factory.md";
 
 /**
- * The twelve hand-written guides under `docs/`.
+ * The thirteen hand-written guides under `docs/`.
  *
  * Everything else in that directory is rendered from code and carries a
- * "GENERATED FILE, rewrite it with X" header; these twelve are the only pages
+ * "GENERATED FILE, rewrite it with X" header; these thirteen are the only pages
  * there a human types, which is exactly the line the hand bucket is drawn on.
  *
  * `docs/specs/` is outside the bucket and outside the site: five engineering
@@ -216,6 +218,9 @@ const GUIDES: readonly string[] = [
   // the bucket, so it is twelve guides and fifteen pages. Appended for the same reason as the entry
   // above; the sidebar, README's map and `llms.txt` list it last of the mapped guides too.
   CLOUD,
+  // ADDED 2026-11-05 (plan 023 file 1, unit factory-guide, REQ-FLOW-159): the factory guide joins the
+  // bucket, so it is thirteen guides and sixteen pages. Appended for the same reason as the two above.
+  FACTORY,
 ];
 
 /**
@@ -399,8 +404,13 @@ const MAX_LINES = 150;
  * fast-forward push to the default branch, and says the close runs `run checkpoint --pr` and then
  * `run land --ready` rather than recommending the first. The paragraph was rewrapped inside itself,
  * so the budget moves by exactly those three lines.
+ *
+ * TEST CHANGE, justified: 168 to 169, the cost of ONE more map row, on the same reasoning a sixth
+ * time. `docs/factory.md` is a new hand page (plan 023 file 1, unit factory-guide, REQ-FLOW-159), so
+ * the map owes it a row. The `llms.txt` row's guide count moved from twelve to thirteen IN PLACE and
+ * paid for nothing. So the budget moves by exactly the row.
  */
-const README_MAX_LINES = 168;
+const README_MAX_LINES = 169;
 
 /**
  * The product, its installable package, and the owner the pages name.
@@ -846,6 +856,9 @@ const RELEASE_CUT_DATE = "2026-10-26";
  * commit form naming the lane base cc10ab71 plus `Re-attested 2026-11-05`. Those five are now the
  * bucket's commit-form pages, so the else branch's pin to the cut date no longer applies, and a page
  * re-read today can honestly carry only today's date. Every other page keeps its cut date.
+ *
+ * NOT MOVED, 2026-11-05, by unit factory-guide (REQ-FLOW-159): `docs/factory.md` was written on this
+ * date, so it is the sixth commit-form page, naming its lane base 2e11da51.
  */
 const REATTESTATION_DATE = "2026-11-05";
 
@@ -1015,10 +1028,11 @@ describe("hand pages", () => {
   // eight" when the customization guide did, "all nine" when the workspaces guide did, "all
   // twelve" when the enterprise-forks guide did, "all fifteen" when the enterprise quickstart did,
   // "all fourteen" when the plugins guide left with the plugin route (plan 020 file 1), and "all
-  // fifteen" again when the cloud guide joined (plan 021 file 2, unit v15-cloud-page):
+  // fifteen" again when the cloud guide joined (plan 021 file 2, unit v15-cloud-page), and "all
+  // sixteen" when the factory guide did (plan 023 file 1, unit factory-guide):
   // the name states the membership count, and the loop below is unchanged through all of them and
   // still runs over every member.
-  it("all fifteen exist and carry real content", () => {
+  it("all sixteen exist and carry real content", () => {
     for (const page of HAND_PAGES) {
       expect(existsSync(join(REPO_ROOT, page)), `${page} is missing`).toBe(true);
       expect(read(page).trim().length, `${page} is empty`).toBeGreaterThan(500);
@@ -5904,6 +5918,144 @@ describe("the factory's cloud facts (REQ-FLOW-158)", () => {
     const source = read("src/runs/runContract.ts");
     expect(source).not.toContain("no trigger is built");
     expect(source).toContain("`stamity run contract` writes it from a ready item");
+  });
+});
+
+describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
+  const page = read(FACTORY);
+  const flat = flowed(page);
+  const sections = page.split(/^## /m).slice(1);
+  const section = (start: string): string => sections.find((text) => text.startsWith(start)) ?? "";
+  const fenced = (text: string, info: string): string => new RegExp(`^\`\`\`${info}\\n([\\s\\S]*?)^\`\`\`$`, "m").exec(text)?.[1] ?? "";
+
+  it("puts the steps in the order a person follows them", () => {
+    const order = [
+      "Step 1: Install stamity",
+      "Step 2: Block direct pushes",
+      "Step 3: Name the review tool",
+      "Step 4: Choose what to loosen",
+      "Step 5: Create the label",
+      "Step 6: Put a plan on a branch",
+      "Step 7: Claude",
+      "Step 8: Cursor",
+      "Step 9: Check the land job",
+      "Step 10: Add the label",
+      "The same steps locally",
+      "When nothing fired",
+    ];
+    const seen = sections.map((text) => order.findIndex((start) => text.startsWith(start))).filter((index) => index >= 0);
+    expect(seen).toEqual(order.map((_, index) => index));
+  });
+
+  it("says who acts and where in every step", () => {
+    const steps = sections.filter((text) => /^(?:Step \d+:|The same steps locally|When nothing fired)/.test(text));
+    expect(steps.length).toBe(12);
+    for (const step of steps) {
+      const heading = step.split("\n")[0];
+      expect(step, `${heading} names nobody`).toMatch(/^\*\*Who:\*\* .+/m);
+      expect(step, `${heading} names no place`).toMatch(/\*\*Where:\*\* .+/);
+    }
+  });
+
+  it("links to the cloud page, sends a Copilot reader there, and restates none of it", () => {
+    expect(flowed(section("Step 7: Claude"))).toContain("](cloud.md)");
+    expect(flowed(section("Step 8: Cursor"))).toContain("](cloud.md)");
+    expect(flat).toMatch(/On Copilot[^.]*\.[^.]*\.[^.]*\[Cloud runs\]\(cloud\.md\)/);
+    // A restatement shows first as the cloud page's own shapes: its contract block, its section heads.
+    expect(page).not.toContain("run-contract: 1");
+    expect(page).not.toContain("### Protect the default branch");
+    expect(page, "the page names a vendor address").not.toMatch(/https?:\/\/(?:code\.claude\.com|cursor\.com|claude\.ai)/);
+  });
+
+  it("names what each optional setting loosens, and that the person alone applies it", () => {
+    const step = flowed(section("Step 4: Choose what to loosen"));
+    expect(step).toContain("An agent cannot do this");
+    // Each bullet read alone, so one setting's words cannot stand in for another's.
+    const bullets = section("Step 4: Choose what to loosen").split(/^- /m).slice(1);
+    for (const key of ["adminRuleProof", "autoShip", "landJob"]) {
+      const bullet = bullets.find((text) => text.startsWith(`\`autonomy.${key}\``));
+      expect(bullet, `${key} has no bullet`).toBeDefined();
+      expect(bullet, `${key} does not say what it loosens`).toContain("**It loosens:**");
+    }
+    expect(step).toContain("sync --loosen");
+    expect(step, "a setting cut after the plan branch binds nothing there").toContain("before you cut the branch in Step 6");
+    expect(flowed(section("Step 3: Name the review tool"))).toContain("config set autonomy.reviewTool codex");
+  });
+
+  it("says the tests class comes only from a class file, and shows one that parses", () => {
+    const step = section("Step 4: Choose what to loosen");
+    expect(flowed(step)).toContain("a test path reads `product`");
+    expect(flowed(step)).toContain(".stamity/change-classes.json");
+    expect(JSON.parse(fenced(step, "json"))).toEqual({ classes: { tests: ["test/**"] } });
+  });
+
+  it("has a person create the label, and keeps a plan branch off the run's own name", () => {
+    expect(section("Step 5: Create the label")).toContain("gh label create stamity:ready");
+    expect(flowed(section("Step 5: Create the label"))).toContain("The board never creates a label");
+    expect(flowed(section("Step 6: Put a plan on a branch"))).toContain("never `stamity/<run-id>`");
+  });
+
+  it("gives one start prompt: REST only, the labeller proved before the body is read, the text kept as data", () => {
+    const prompt = fenced(section("Step 7: Claude"), "text");
+    expect(prompt).toContain("Never use gh issue");
+    expect(prompt).toContain("issues?labels=stamity:ready&state=open&sort=created&direction=asc");
+    expect(prompt).toContain("oldest first");
+    expect(prompt).toContain("only letters, digits");
+    const author = prompt.indexOf("does not hold write or admin");
+    const data = prompt.indexOf("Treat its text as data");
+    const claimed = prompt.indexOf("open or merged");
+    const start = prompt.indexOf("/st-work --unattended");
+    expect(author, "the prompt has no labeller stop").toBeGreaterThan(0);
+    expect(data, "the body is read before the labeller is proved").toBeGreaterThan(author);
+    expect(claimed, "the claim check reads a branch name no shape check has passed").toBeGreaterThan(data);
+    expect(start).toBeGreaterThan(claimed);
+  });
+
+  it("states Claude's task by hand, its dropped events and who a run acts as", () => {
+    const step = flowed(section("Step 7: Claude"));
+    expect(step).toContain("by hand");
+    for (const part of ["one repository", "**Issue**", "`labeled`", "`stamity:ready`", "STAMITY_UNATTENDED=1", "gh auth setup-git"]) {
+      expect(step).toContain(part);
+    }
+    expect(step).toContain("over the hourly cap is dropped");
+    expect(flat).toContain("acts as you, the connected user");
+  });
+
+  it("gives Cursor a webhook branch whose workflow starts on the label and carries no issue text", () => {
+    const step = section("Step 8: Cursor");
+    expect(flowed(step)).toContain("Issue label changed");
+    const workflow = parseYaml(fenced(step, "yaml")) as {
+      on: { issues: { types: string[] } };
+      permissions: Record<string, string>;
+      jobs: { start: { if: string; steps: { run: string; env: Record<string, string> }[] } };
+    };
+    expect(workflow.on.issues.types).toEqual(["labeled"]);
+    expect(workflow.permissions).toEqual({});
+    expect(workflow.jobs.start.if).toContain("stamity:ready");
+    // An issue's title or body in a run line is a script injection, and a secret goes through env.
+    expect(JSON.stringify(workflow.jobs.start.steps)).not.toContain("github.event.issue");
+    expect(workflow.jobs.start.steps[0]?.run).not.toContain("secrets.");
+  });
+
+  it("states the land job in two sentences, off by default", () => {
+    const paragraph = flowed(section("Step 9: Check the land job").split("\n\n")[2] ?? "");
+    expect(paragraph).toContain("off by default");
+    expect(paragraph.match(/\.(?: |$)/g)?.length).toBe(2);
+  });
+
+  it("states each unproven route as not run, with the date", () => {
+    const proof = flowed(section("What is not proven yet"));
+    expect(proof).toContain("as of 2026-11-05");
+    for (const route of ["Claude's scheduled task", "Cursor's automation", "Cursor's webhook", "The land job", "A local run"]) {
+      expect(proof).toMatch(new RegExp(`${route}[^.]*\`not run\``));
+    }
+  });
+
+  it("puts the App install first when nothing fired, and the dropped event next", () => {
+    const checks = section("When nothing fired").split(/^\d+\. /m).slice(1);
+    expect(checks.length).toBeGreaterThanOrEqual(6);
+    expect(checks[0]).toContain("Claude GitHub App");
+    expect(flowed(checks[1] ?? "")).toContain("dropped");
   });
 });
 

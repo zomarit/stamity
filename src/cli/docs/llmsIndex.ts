@@ -12,7 +12,7 @@
  * constants their renderers export, so a page cannot be generated without
  * being listed here, or listed here without something generating it. Only the
  * hand-written pages — the five root pages (README, CONTRIBUTING, SECURITY,
- * GOVERNANCE, CODE_OF_CONDUCT) and the twelve guides under `docs/` — and the
+ * GOVERNANCE, CODE_OF_CONDUCT) and the thirteen guides under `docs/` — and the
  * charter are named literally, because nothing generates them to be read from.
  * The guides are held to the same dated hand-page contract as three of those
  * root pages — README, SECURITY, CONTRIBUTING — by `test/docsPages.test.ts`,
@@ -224,6 +224,13 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         title: "Cloud runs",
         description:
           "running a planned change in a vendor's cloud with nobody watching — each cloud's setup, branch protection, secrets, contract start and morning walk, the GitHub Action's limits and what a pull request still changes there, the run contract, and the label, the review tool and the land job that take a ready item to a merge.",
+        regenerateCommand: null,
+      },
+      {
+        path: "docs/factory.md",
+        title: "The factory",
+        description:
+          "setting up a ready issue to merge with nobody watching, in order, on Claude's cloud, Cursor's cloud and your own machine — who does each step and where, what each optional setting loosens, what is not proven yet, and what to do when nothing fired.",
         regenerateCommand: null,
       },
       {
