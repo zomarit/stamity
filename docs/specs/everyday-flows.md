@@ -1,6 +1,6 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended at the 1.17.0 release cut on 2026-10-27, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended at the 1.17.0 release cut on 2026-10-27, amended from docs/plans/023-factory-bridge-01.md in run 2026-11-04_factory-bridge on 2026-11-05, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.17.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
@@ -200,6 +200,14 @@ The text dated 2026-10-27, under REQ-FLOW-021, REQ-FLOW-088, REQ-FLOW-091, REQ-F
 the spec delta of Package 20's units R2 to R5, which landed at the 1.17.0 release cut, each entry read with the as-built
 deltas its implementer and fixer reports declared and against the landed code. It cites the code by file and symbol,
 and each test by its title. It shipped with 1.17.0.
+
+REQ-FLOW-151 to REQ-FLOW-159, and the text dated 2026-11-05 under REQ-FLOW-092, REQ-FLOW-100, REQ-FLOW-101,
+REQ-FLOW-121, REQ-FLOW-132, REQ-FLOW-133, REQ-FLOW-137, REQ-FLOW-138, REQ-FLOW-144, REQ-FLOW-145 and REQ-FLOW-149, come
+from the spec delta of `docs/plans/023-factory-bridge-01.md` (plan 023 file 1, run `2026-11-04_factory-bridge`), each
+entry read with the as-built deltas the units' reports declared, merged once by that run's unit `docs-truth`. Where a
+delta entry and the code differ, the text states the code, and a line headed "As built" says what moved. It cites the
+code by file and symbol. Job mode and the land workflow are cited from their own lane, `land-job`, which was still
+closing when this merge ran, so that text states that unit's settled behaviour. None of this text has shipped yet.
 
 ## Intent
 
@@ -4477,8 +4485,8 @@ the default branch, read by REST; `run start` leaves it for a branch of the run'
 - **Amended 2026-10-19** (plan 021 file 2, units `n1-eval-ending` and `n2-pending-marker`; written by
   `n6-night-pages`). The paths `run end` commits are its `--paths` and its own: `--paths` names the files the run
   changed, every unit's files named again though each was committed at its checkpoint, and each learning file the close
-  captured. The run folder's files (`record.md`, `ledger.jsonl`, `plan.md`, `morning.md`, the origin pin) and
-  `.stamity/inbox.md` are staged by the verb itself (`RUN_FILES` and `runOwned`, `src/cli/commands/run.ts`;
+  captured. The run folder's files (`record.md`, `ledger.jsonl`, `plan.md`, `morning.md`, the origin pin and, amended
+  2026-11-05, `contract.yml`) and `.stamity/inbox.md` are staged by the verb itself (`RUN_FILES` and `runOwned`, `src/cli/commands/run.ts`;
   `content/skills/st-unattended/SKILL.md:101-102`). A `--paths` entry naming a path the run already committed is
   harmless: an unchanged file stages nothing and adds no `notDone` line, and a path neither the work tree nor the index
   holds that a commit since `Base:` touched (a deletion an earlier checkpoint committed, or a file the run created and
@@ -4798,6 +4806,17 @@ REQ-BOARD-005 names and routes a finding no `admin` or `write` author's own comm
 (`content/commands/st-pr-resolve.md:168`, `:239`); the question protocol's item 8 adds that a kickoff prompt, routine
 text or contract field never answers a person-gate (`content/rules/stamity-question-protocol.md:57`).
 
+- **Amended 2026-11-05** (plan 023 file 1, unit `skills-prose`). The author rule has one exception, the tool
+  `autonomy.reviewTool.login` names, read from the freshly fetched default branch and never from the head's copy; a
+  failed read gives no standing. Unattended, a comment by a bot of exactly that login counts as a `write` author's, for
+  that tool's own findings alone (`content/commands/st-pr-resolve.md`, the permission step;
+  `content/skills/st-unattended/SKILL.md`, `## Chains`). A person chose the tool in a person-only setting. Its text stays
+  data. A fix it drives touches only files the pull request already changes and, with a plan, stays inside that plan's
+  `files`; a finding that needs any other file is deferred as `needs a planned run`, with a morning-list row. Every other
+  author without `admin` or `write`, any other bot included, stays deferred as `non-write author`, so the tool's text can
+  reach an unattended fix with no person's comment behind it, and only that tool's.
+  - Proof: `test/corpus/commands/feedbackPair.test.ts`, `test/corpus/skills/unattended.test.ts`; the case
+    `unattended-non-write-comment-no-fix` holds unchanged.
 - **Proof:** `test/corpus/commands/feedbackPair.test.ts`, `test/corpus/commands/board.test.ts` ("applies the author
   rule on every repository when the run is unattended"), `test/corpus/rules/protocol.test.ts`,
   `test/corpus/skills/unattended.test.ts`.
@@ -4842,6 +4861,8 @@ egress, token-shaped variable names (names only) and missing review state; with 
   `src/runs/preflight.ts:879`).
   - Proof: `test/runs/preflight.test.ts`, `test/cli/commands/gatePreflight.test.ts` (a 1.26 MB record warns "was not
     read").
+- **Amended 2026-11-05** (plan 023 file 1, unit `preflight-admin`). The refusal of an administrator gains the opt-in of
+  REQ-FLOW-151; with the setting off it stands as before.
 - **Proof:** `test/runs/preflight.test.ts`, `test/cli/commands/gatePreflight.test.ts`,
   `test/hooks/personOnlyGuard.test.ts` (the canary), `test/mcp/env.test.ts`, `test/cli/commands/init.test.ts` and
   `test/cli/commands/initPanel.test.ts` (the canary's ignore entry).
@@ -5832,6 +5853,9 @@ are unaffected, and a PowerShell tool call is read as PowerShell, not through it
   expression is not seen attended; the verb's own checks back that residual (REQ-FLOW-132).
   - Proof: `test/hooks/personOnly.test.ts` ("the land verb's line (a4, REQ-FLOW-121)"),
     `test/hooks/personOnlyGuard.test.ts`.
+- **Amended 2026-11-05** (plan 023 file 1, unit `land-job`). The land line refuses `--job`, or `--job=`, in any word
+  after the verb, in every mode and on every client, for a sub-agent too: that mode is the land workflow's alone
+  (`verbShape`, `src/hooks/personOnly.ts`). Proof: `test/hooks/personOnlyGuard.test.ts` (one case per client).
 - **Proof:** `test/hooks/personOnly.test.ts` (the stand-alone rule's denies and allows, POSIX and PowerShell, and the
   `st` twins of every launch route), `test/hooks/personOnlyGuard.test.ts` (the unattended block on every client),
   `test/hooks/personOnlyGuardDist.e2e.test.ts`, `test/corpus/skills/unattended.test.ts`.
@@ -6319,6 +6343,12 @@ whole number from 0 to 9, polls pending check runs every 30 s. Exit 0 for `lande
     `docs/specs/prove-behavior-and-value.md`, amended 2026-10-26; `build/5`); it stands for any other repository.
   - Proof: `test/cli/commands/runLand.test.ts` (an approved fast-forward onto a deploying default branch lands; a
     refused verdict sends only the waits write; the `review/174` pin).
+- **Amended 2026-11-05** (plan 023 file 1, units `land-wiring` and `land-job`). The evidence gains the review verdict of
+  REQ-FLOW-154, a gap decided with the others, and the brake of REQ-FLOW-153, an ask. The setting is now the strictest of
+  four legs: the default branch's manifest, `HEAD`'s, the work tree's and the baked guard's copy (`readSetting`,
+  `src/cli/engine/landSetting.ts`). The tip and the review tool are read again at each re-read and just before the act. A
+  wait the 9-minute budget cuts short ends as `asks` with `asks.pending`, which no `--approved` passes. `--pr [number]`
+  applies to land only with `--job`, and `--job` refuses `--run`, `--approved`, `--wait` and `--fast-forward` (REQ-FLOW-157).
 - **Proof:** `test/runs/landEvidence.test.ts`, `test/cli/commands/runLand.test.ts`, `test/cli/engine/ghRunner.test.ts`
   (`ghApi` still refusing a PUT merge and GraphQL, each new call refusing any document but its constant).
 - **Source:** `src/cli/commands/runLand.ts`, `src/runs/landEvidence.ts`, `src/cli/engine/ghRunner.ts`,
@@ -6361,6 +6391,10 @@ refuses.
   the three now asks in every mode, unattended included; a person lands a classifier change.
   - Proof: `test/runs/landEvidence.test.ts` ("asks about each file of the CI classifier's import closure, and lets a
     change elsewhere land", which walks the classifier's import closure and pins it to the three files).
+- **Amended 2026-11-05** (plan 023 file 1, unit `land-wiring`). A deploying default branch asks unless the rules of
+  REQ-FLOW-152 are met. Four more reasons ask: a red default branch, or a tip that did not read (REQ-FLOW-153); legs that
+  disagree on `autonomy.reviewTool` (REQ-FLOW-138); and a head whose manifest loosens a key against the default branch's,
+  named by key, where the pull request's file list holds the manifest.
 - **Proof:** `test/runs/landEvidence.test.ts` (each class of the ask set matched), `test/cli/commands/runLand.test.ts`.
 - **Source:** `src/runs/landEvidence.ts`, `src/runs/hookPaths.ts`, `src/cli/commands/runLand.ts`.
 
@@ -6428,11 +6462,12 @@ one path segment and whose `**` crosses segments, matched case-folded with `refs
 
 - **As built, beyond the delta:**
   - The key holds `mode` (`autonomous` | `ask`), `deployingBranches` (at most 32, each at most 255 characters and a
-    branch name by git's ref rules, a `*` allowed) and `deployingActs` from `pr-ready`, `tag`, `workflow-dispatch`,
+    branch name by git's ref rules, a `*` allowed), `deployingActs` from `pr-ready`, `tag`, `workflow-dispatch`,
     `pr-merge` and `push-default`, an unknown act refused naming the five (`AutonomyConfig` and `DEPLOYING_ACTS`,
     `src/types/manifest.ts:167-207`; `deployingBranchDefect` and `collectAutonomyErrors`,
-    `src/manifest/manifest.ts:787-834`). The field is additive, so the manifest version does not move; `config`
-    registers the three keys.
+    `src/manifest/manifest.ts:787-834`), and, amended 2026-11-05, the four keys of the bullet below. The field is
+    additive, so the manifest version does not move; `config` registers all seven keys (amended 2026-11-05; it read
+    "registers the three keys").
   - A block the schema would refuse resolves to the strictest setting it can state, mode `ask` with every act named,
     never to the default; a marker that does not parse, or disagrees with itself, reads the same
     (`src/config/autonomy.ts:78-107`, `:157-166`).
@@ -6446,6 +6481,15 @@ one path segment and whose `**` crosses segments, matched case-folded with `refs
     (`review/21`).
   - An upgrade from 1.16.0 adopts the default with no flag, since a 1.16.0 guard carries no marker (decision D6;
     REQ-FLOW-138), and the CHANGELOG's upgrade notes say so.
+- **Amended 2026-11-05** (plan 023 file 1, unit `settings`). The setting gains four keys, each emitted only when on, so
+  default guard bytes do not move: `adminRuleProof` (`config` `on|off`), `autoShip` (`off|low-risk`, where `low-risk`
+  writes at most 10 files and 200 lines in the classes `records`, `docs` and `tests`), `reviewTool` (`none|codex`, where
+  `codex` writes the Codex preset, a 40-minute wait and 2 rounds) and `landJob` (`off|ci`, where `ci` watches the workflow
+  `CI`). The manifest check holds `rounds` to 1–3, `waitMinutes` to 1–120, `maxFiles` and `maxLines` to positive whole
+  numbers, `classes` to the classifier's classes, `request` to one line of at most 200 characters, and `login` to
+  GitHub's shape. A guard copy baked by an older CLI has none of the keys and reads as off. The strictest read keeps
+  `adminRuleProof`, `autoShip` and `landJob` only where every leg agrees; `reviewTool` stands if any leg names it, with the
+  lowest `rounds` and `waitMinutes` (`strictestAutonomy`, `src/config/autonomy.ts`).
 - **Proof:** `test/config/autonomy.test.ts`, `test/cli/commands/config.test.ts`, `test/manifest/manifest.test.ts`,
   `test/hooks/personOnly.test.ts` (the setting's acts; "the deploying-branch matcher's copy", one table read by both
   copies), `test/hooks/personOnlyGuard.test.ts`.
@@ -6499,6 +6543,15 @@ or `init --force` while the baked setting is stricter than the default (`autonom
   `docs/troubleshooting.md`, and on `b1`'s lane `SECURITY.md` and `docs/security-mapping.md`.
   - Proof: `test/cli/commands/upgrade.test.ts` (the loosened manifest refused byte for byte, `--loosen` passing),
     `test/cli/docs/cliReference.test.ts`, `test/docsPages.test.ts`.
+- **Amended 2026-11-05** (plan 023 file 1, units `settings`, `land-wiring` and `land-job`). Turning on `adminRuleProof`,
+  `autoShip` or `landJob`, widening `autoShip`, dropping `reviewTool`, changing its tool or proof of clean, and raising its
+  `rounds` or `waitMinutes` are loosenings (`loosens`, `src/config/autonomy.ts`). The gate now reads every leg, not only
+  the strictest, so a swap of tools on one leg is refused too (`assertNotLoosened`). Legs that name different review tools
+  go to a person: no leg wins, the tool's word is not read, and `run land` asks, naming them (`reviewToolConflict`). A land
+  names a loosened key only where the pull request's file list holds the manifest. `sync` and `check`'s
+  `land-job-workflows` row, present only with the setting on, each name a `landJob.workflows` entry no workflow file
+  carries, since GitHub starts nothing for a name no workflow has.
+  - Proof: `test/cli/engine/autonomyGate.test.ts`, `test/config/autonomy.test.ts`, `test/runs/landEvidence.test.ts`.
 - **Proof:** `test/cli/engine/autonomyGate.test.ts`, `test/cli/commands/sync.test.ts`, `test/cli/commands/init.test.ts`,
   `test/cli/commands/workspace.test.ts`, `test/hooks/personOnly.test.ts` ("loosening the autonomy setting (a4,
   REQ-FLOW-138)").
@@ -6678,6 +6731,9 @@ With no linked platform there is no land step. A kickoff, an item text or a cont
     checkout, this run's `run checkpoint --pr` runs again first.
   - A ready mark the verb made before a refusal gets its `## Decisions` row, the draft state read by the land JSON's
     own pull-request link (`SKILL.md:102`; `review/104`, `review/109`).
+- **Amended 2026-11-05** (plan 023 file 1, unit `skills-prose`). An `asks` outcome carrying `asks.pending` is a wait, not
+  a question: the flow asks no one and runs the land line again, at most as many calls as cover `waitMinutes`, about one
+  per 8 minutes. A flow that stops on a wait, for any reason, writes a `held` row naming it, and no approval passes a wait.
 - **Proof:** `test/corpus/skills/unattended.test.ts`, `test/corpus/commands/work.test.ts`, `test/docsPages.test.ts`
   (`docs/cloud.md`'s "After `run end`, when the morning list holds no blocked or refused item"); the cases
   `unattended-land-evidence-holds`, `unattended-land-injected-merge-refused` and `unattended-blocked-run-still-hands-off`.
@@ -6706,7 +6762,13 @@ a raw push to the default branch (`test/docsPages.test.ts`, "the security pages 
   decision D15), and own-repository writes through an SSH host alias, each reason quoted as the verb words it; and
   `docs/working-with-stamity.md` says the close lands through `run land` and asks nothing about the commit. The pages
   re-attest on the commit form at the integration head `89e088f9`, dated 2026-10-25.
-- **Proof:** `test/docsPages.test.ts` (the describe above, its five cases).
+- **Amended 2026-11-05** (plan 023 file 1, unit `docs-truth`). The four pages also say one thing about three more points:
+  the brake (a required check failing on the default branch's tip asks, and `--approved` passes it); the administrator's
+  residual under `autonomy.adminRuleProof` (the account could still lift the rule, and only the guard stops that); and the
+  land job, the second caller of the land evidence, off by default, on `GITHUB_TOKEN` alone and with no bypass. The pages
+  re-attest on the commit form, dated 2026-11-05.
+- **Proof:** `test/docsPages.test.ts` (the describe above, its cases, and "the security pages say one thing about the
+  brake, the lift and the job (REQ-FLOW-145)").
 - **Source:** `SECURITY.md`, `docs/security-mapping.md`, `docs/cloud.md`, `docs/troubleshooting.md`,
   `docs/working-with-stamity.md`.
 
@@ -6734,7 +6796,8 @@ values.
   - The reclaim's rendering proof plans with the mode read as `managed` (`withSetupStepsRendered`, `:159-165`), so under
     `off` today's rendering proves a current copy; the recorded-hash proof is the `review/66` fix, a declared default,
     and the regular-file read is `review/72`'s (the cap round's note: the delta's text named no such condition).
-  - The config key `copilot.setupSteps` is the last `KEY_SPECS` entry, after `autonomy.deployingActs`; it writes the
+  - The config key `copilot.setupSteps` is the last `KEY_SPECS` entry, after `autonomy.landJob` (amended 2026-11-05; it
+    read "after `autonomy.deployingActs`"); it writes the
     nested bag as the autonomy rows write theirs, keeps the bag's other keys, and closes on the plain sync line, never
     the loosen line (`src/cli/commands/config.ts`); `docs/configuration.md` carries the row, default `managed`. It is
     the one validated key of Copilot's otherwise opaque `toolOptions` bag (`readCopilotSetupSteps`,
@@ -6785,6 +6848,233 @@ the role can still read.
     "tools that act on the host").
 - **Proof:** `test/adapters/codex.test.ts`, `test/emit/capabilityMatrix.test.ts`.
 - **Source:** `src/adapters/codex.ts`, `src/tools/translator.ts`.
+
+### REQ-FLOW-151 — An administrator passes the pre-flight only under the opt-in and a rule that binds
+
+Added 2026-11-05 (plan 023 file 1, unit `preflight-admin`).
+
+Given `autonomy.adminRuleProof` is on in every leg the strictest read covers, a ruleset blocks a direct push to the
+default branch, and GitHub reports the account cannot bypass it, When `gate preflight --unattended` runs, Then
+`direct-push` reads `blocked` and the verdict carries the warning `admin-can-lift` (`inspectDirectPush`,
+`src/runs/preflight.ts`). Given the setting is off, or on in only some legs, When an administrator runs the same check,
+Then the refusal stands as before. Given a bypass value GitHub reports that is neither `never` nor `pull_requests_only`,
+Then the check fails closed.
+
+- **As built, beyond the delta:**
+  - The legs are the default branch's manifest, `HEAD`'s, the work tree's and the baked guard's copy, so an agent's edit of
+    the work tree alone does not pass (`adminRuleProofInForce`, `src/cli/commands/gate.ts`).
+  - A repository ruleset counts, and so does an organization ruleset that is not pinned to this repository, or one held
+    by an organization owner, where the ruleset says the account cannot bypass it. Classic branch protection never
+    counts for an administrator, and a ruleset in `evaluate` mode is not active and counts for nothing.
+- **Residual** (`SECURITY.md`): the rule binds now, and the account could still lift it. Only the guard stops that, and
+  the guard reads shell calls alone. A person turns the setting on and accepts that.
+- **Proof:** `test/runs/preflight.test.ts`, `test/cli/commands/gatePreflight.test.ts`.
+- **Source:** `src/runs/preflight.ts`, `src/cli/commands/gate.ts`.
+
+### REQ-FLOW-152 — `run land` may merge onto a deploying branch only inside declared rules
+
+Added 2026-11-05 (plan 023 file 1, units `auto-ship-rules`, `change-range` and `land-wiring`).
+
+Given `autonomy.autoShip` is set, the default branch is in `autonomy.deployingBranches`, and the change fits every rule
+(files, lines, classes, paths, no specialist lens), When `run land` decides, Then it merges with no ask and the pull
+request's evidence line names the rules it met (`autoShipVerdict`, `src/change/autoShip.ts`; `decideLand`,
+`src/runs/landEvidence.ts`). Given any rule fails, or the line count or classification is incomplete, Then the land asks
+and names each reason. Given `--fast-forward`, Then the land still asks. Stamity never deploys, tags or releases by this
+route.
+
+- **As built, beyond the delta:**
+  - Two more rules hold whatever `classes` and `paths` declare: a `docs`-class path must end in `.md` or `.txt`, and the
+    file count must agree with the classifier's paths. An empty change is not eligible.
+  - The facts come from the commits that merge, never the work tree or the index (`classifyRange`,
+    `src/cli/engine/changeRange.ts`). The merge base is GitHub's compare's, never local git's, and the range must match
+    the pull request's file list and line total. Any disagreement or failed read is not eligible, naming it.
+  - At land, the class file that judges the change is the default branch tip's, as GitHub holds it at that commit. A read
+    that fails is not eligible, and so is a project below the top with no class file there.
+  - A binary file, a commit the clone does not hold (a shallow clone), a non-empty git-dir attributes file and a gitlink
+    each leave the classification incomplete, so the land asks.
+- **Limits** (`SECURITY.md`): the rules read paths, size and class, never content, so a script inside a `.md` file is
+  not seen. A repository whose site tool passes raw HTML through `.md` files should leave `docs` out of `classes`. The
+  hunks, file heads and lockfile copies are the clone's: to fake them a run needs a raw write under `.git/`, which this
+  read cannot see. Such a write moves nothing GitHub supplies, and the land job's fresh checkout does not hold one.
+- **Proof:** `test/change/autoShip.test.ts`, `test/cli/engine/changeRange.test.ts`, `test/runs/landEvidence.test.ts`,
+  `test/cli/commands/runLand.test.ts`.
+- **Source:** `src/change/autoShip.ts`, `src/cli/engine/changeRange.ts`, `src/cli/commands/runLand.ts`,
+  `src/runs/landEvidence.ts`.
+
+### REQ-FLOW-153 — `run land` stops while the default branch is red
+
+Added 2026-11-05 (plan 023 file 1, unit `land-wiring`).
+
+Given a required check run on the default branch's tip reads failing, When `run land` decides without `--approved`, Then
+it asks and names the failing checks. A required context that is missing or pending on the tip does not read as red, and
+the land's evidence line says so. Given the tip cannot be read, Then it asks, naming the read that failed (`readTip`,
+`src/cli/commands/runLand.ts`; `decideLand`, `src/runs/landEvidence.ts`).
+
+- **As built, beyond the delta:** the branch is read again at every re-read and just before the act, so a newer commit is
+  the one judged. The brake is an ask, not a refusal, since `--approved` never passes a refusal and a refusal would lock
+  out the fix for a red default branch.
+- **Proof:** `test/runs/landEvidence.test.ts`, `test/cli/commands/runLand.test.ts`.
+- **Source:** `src/cli/commands/runLand.ts`, `src/runs/landEvidence.ts`.
+
+### REQ-FLOW-154 — A named review tool is asked, waited for, and never passed by silence
+
+Added 2026-11-05 (plan 023 file 1, units `review-tool-reader`, `land-wiring` and `skills-prose`).
+
+Given `autonomy.reviewTool` is set, When `run land` reads a state comment from the configured bot on the exact head with
+`status` `completed` and both findings flags false, Then the review evidence holds (`reviewToolVerdict`,
+`src/runs/reviewTool.ts`). Given findings on the head, or no result when the wait runs out, or an unknown block, Then the
+merge holds and names why. Given rounds already spent reaches `rounds` (default 2, at most 3) without a clean head, Then
+the merge holds for a person. Given a comment carrying the same text from any other author, or any comment by the tool
+last edited by anyone but the tool, marker or not, Then it counts for nothing and the merge holds. Given `clean` by the
+state comment, Then the tool's own `+1` reaction must also be on the pull request, and exactly one trusted comment may
+carry the marker.
+
+- **As built, beyond the delta:**
+  - The land posts `request` and a `<!-- stamity:review-request <head> -->` marker once per head, and only where the head's
+    only stops are waits, so no round goes on a head that cannot land. A run the tool started itself gets the marker
+    alone. A round is a distinct head carrying a request marker. Only the run's own markers count, so a stranger's
+    comment cannot spend one, and, with `autonomy.landJob` on, `github-actions[bot]`'s beside them, since the job posts
+    under that login.
+  - `waiting` is a pending gap, so `--wait` keeps polling; `findings`, `silent` and `spent` are plain gaps. The wait is timed
+    from the request marker, never from the tool's comment, which it edits in place.
+  - `state-comment` is proven for Codex. `review-state` needs `APPROVED` on the head. `reaction` needs `+1` and is the
+    weakest: a reaction cannot be tied to a commit, so one left on an earlier head still reads.
+  - On `clean` on the exact head, the open threads the tool opened and no person joined stop counting, and `run land`
+    resolves them just before the act, then reads the threads and the pull request again, for at most 60 seconds. A
+    failed resolve is a gap. A `reaction` tool resolves nothing. While `waiting` those threads are a pending gap, and
+    `blocked` beside them is too, since a rule requiring resolved conversations reads that way; on `findings`, `silent`
+    and `spent` they are plain gaps.
+  - **The loop.** On `findings` the run runs `/st-pr-resolve --unattended`, which pushes through its own run verbs, and runs
+    the land line again under its own run id, at most `rounds` times; `/st-pr-resolve`'s cap is the setting's `rounds`.
+    `silent`, `spent` and a round that pushes nothing are each a `held` row. A `held` row ends the loop, and the run takes
+    no other route to the same end: no new commit to restart a wait, no second pull request, no edit or delete of a
+    comment.
+- **Limits** (`SECURITY.md`): a deleted comment leaves no last editor to read, so a state comment deleted by a token that
+  can do so is not seen. The state block is undocumented, so anything unrecognised reads not clean. On a single-account
+  repository a person's reply reads as the run's, so a thread that person joined can still be resolved.
+- **Proof:** `test/runs/reviewTool.test.ts`, `test/runs/landEvidence.test.ts`, `test/cli/commands/runLand.test.ts`,
+  `test/corpus/skills/unattended.test.ts`.
+- **Source:** `src/runs/reviewTool.ts`, `src/runs/landEvidence.ts`, `src/cli/commands/runLand.ts`,
+  `content/skills/st-unattended/references/cloud.md`, `content/commands/st-pr-resolve.md`.
+
+### REQ-FLOW-155 — A ready item produces a run contract `plan check --contract` passes
+
+Added 2026-11-05 (plan 023 file 1, units `item-contract`, `board-item` and `skills-prose`).
+
+Given an issue whose body carries a summary, criteria, `Branch:`, `Plan:` and `Ref:`, on that branch, When `stamity run
+contract --run <id> --item <owner/repo#n>` runs, Then `.stamity/runs/<id>/contract.yml` is written and `stamity plan check
+<plan> --contract <that file>` exits 0. Given the current branch is not the item's, or the plan's hash differs from the
+item's, Then the verb refuses and names which (`runContract`, `src/cli/commands/runContract.ts`; `parseItemBody` and
+`contractFromItem`, `src/runs/itemContract.ts`).
+
+- **As built, beyond the delta:**
+  - The verb proves who stands behind the issue with its own REST reads, never `gh issue`: the item is in origin's
+    repository, it is an open issue carrying `stamity:ready`, and its author and the last to apply that label each hold
+    `write` or `admin`. Anything unread refuses.
+  - The criteria are stripped of control and invisible characters, HTML comments dropped, cut at the next heading or the
+    closing links, held to 16,384 bytes and deny-scanned before anything is written, a hit refusing by pattern id. Item
+    text never enters the contract except the criteria.
+  - A comment opener with no closer refuses, anywhere above the links. Each dropped comment is counted in
+    `strippedComments`, and a start that reads a count above zero refuses before Frame, with a row naming the count and
+    the fix, since a visible criterion may have gone with the comment.
+  - A start from a ready item runs in this order: the pre-flight with `--item`, the ref check, fetch and switch to the
+    item's branch, `run contract`, then the ready check with `--contract`. Any exit but 0 from `run contract` is a refusal.
+  - `contract.yml` joins the files the run verbs stage themselves (`RUN_FILES`, `src/cli/commands/run.ts`). The contract
+    stays at version 1.
+- **Limits:** the plan's hash detects drift only. A person with write access may name any plan committed on the branch.
+- **Proof:** `test/runs/itemContract.test.ts`, `test/cli/commands/runContract.test.ts`, `test/runs/runContract.test.ts`.
+- **Source:** `src/cli/commands/runContract.ts`, `src/runs/itemContract.ts`, `content/skills/st-unattended/references/cloud.md`.
+
+### REQ-FLOW-156 — The people a run contract names hear when the run ends
+
+Added 2026-11-05 (plan 023 file 1, unit `run-end-notice`).
+
+Given a contract whose `answerer` is a login or team, When the first `run end` with a pull request finishes, Then a GitHub
+review request reaches that reviewer, unless the reviewer is the pull request's author, and the record gains a `notice:`
+line (`ghRequestReview`, `src/cli/engine/ghRunner.ts`; `runEndNotice`, `src/cli/commands/run.ts`). Given the request fails
+or cannot reach anyone, Then the run still ends and `Not done:` names the notice. Given a record holding that line, Then a
+later `run end` sends nothing. Given `--refused`, Then nothing is sent.
+
+- **As built, beyond the delta:**
+  - An answerer of the form `@org/team` goes by the team's slug alone, since GitHub reads a slug in the repository's own
+    organization, so an `org` other than the repository's owner, ignoring case, sends nothing and `Not done:` names the
+    notice. A pull request author that cannot be read also sends nothing, and adds that line.
+  - No contract file sends nothing and writes no line. A path that holds something unreadable is not "no file": it adds a
+    line. A failed request writes no record line, so the next `end` tries again.
+  - On a chain the notice goes at the first file's `end`, so the person may be asked while later files still run. The
+    line is written after the push, so a run's last `end` leaves it uncommitted.
+  - No free text goes with the request, and no `@` mention is written anywhere.
+- **Limits:** the contract and the record are files the run can edit, so a run could point the notice at another
+  collaborator, or silence it. The only effect of the first is one review request with no text.
+- **Proof:** `test/cli/engine/ghRunner.test.ts`, `test/cli/commands/runEnd.test.ts`.
+- **Source:** `src/cli/engine/ghRunner.ts`, `src/cli/commands/run.ts`.
+
+### REQ-FLOW-157 — A GitHub job can finish a land where the cloud cannot
+
+Added 2026-11-05 (plan 023 file 1, unit `land-job`).
+
+Given `autonomy.landJob` is on and a run has ended unblocked, When the watched workflow completes on the head, Then the job
+re-proves the same evidence `run land` uses and merges, or exits leaving the pull request as it was. Given a thread a
+person opened and the run closed, Then it stays unresolved evidence whichever account the job runs as. Given job mode on an
+agent's command line, Then the guard refuses it (REQ-FLOW-121).
+
+- **As built, beyond the delta:**
+  - `sync` writes `.github/workflows/stamity-land.yml` only while `autonomy.landJob` is on, and takes it back after. It
+    starts on `workflow_run` of `landJob.workflows`, on `workflow_dispatch` with a `pr` input and, only where `reviewTool`
+    is set, on the tool's own comments. The queue sits on the job and is one per pull request, the head branch as
+    fallback, so one pull request's events never cancel another's and an event the job skips takes no place. The job's
+    time limit is 15 minutes plus the tool's `waitMinutes`.
+  - The job's only credential is `GITHUB_TOKEN`. It installs the CLI by version before any head file exists, checks the
+    head out as data with no stored credential, and runs nothing from the head.
+  - `stamity run land --job --pr <n>` reads the run from the marker ending the body, and the number and the login from
+    `PR:` and `Login:` lines at the head. A pull request with no marker exits 0 as `not-a-run`, and so does an attended
+    run's that no `end` stamped. The login stands in for the viewer in the author check, the thread rule and whose request
+    markers count.
+  - With `autonomy.landJob` on, an `end` with its own pull request commits `PR: <n>` and `Login: <login>` at the head, in a
+    second commit when the first opened the pull request. That commit starts CI again.
+  - The record at the head must read `Status: closed` with no `(blocked:`, and neither it nor the morning list may hold a
+    `## Refused` row. Job mode refuses unless `autonomy.landJob` is on in every leg, so a head cannot turn it on for itself.
+  - The job posts the review tool's request itself, since a cloud that cannot run `run land` cannot post it. A silent
+    tool sends no event, so the job waits it out in the one call, holding a runner up to `waitMinutes` per head; a
+    `silent` or `spent` hold then writes the `merge waits on:` status line on the pull request and exits 1, the hold a
+    person can see. Other pending evidence exits 0 as `pending` and writes nothing else, and any other `asks` or `refused`
+    exits 1 and writes nothing. It writes no `land:` line: the body's evidence line stands. A head pushed while the job
+    runs fails on the merge's `sha`, leaving the pull request as it was.
+- **Limits:** `GITHUB_TOKEN` starts no `push` run after the merge, so a deploy on push must not rely on this path. A
+  "Restrict updates" rule refuses the job, and it is never given a bypass. A required check outside `landJob.workflows`
+  finishes with nothing to wake the job, so every required workflow should be named. A watched workflow that was renamed
+  stops the job with no other sign than `check`'s `land-job-workflows` row, which warns and never fails. The ready mark and the thread reads under
+  `GITHUB_TOKEN`, a request posted by the job and the checkout of `refs/pull/<n>/head` are `not run`: no real run has
+  proven them.
+- **Proof:** `test/adapters/landWorkflow.test.ts`, `test/cli/commands/runLand.test.ts`, `test/hooks/personOnlyGuard.test.ts`.
+- **Source:** `src/adapters/landWorkflow.ts`, `src/cli/commands/runLand.ts`, `src/cli/commands/run.ts`,
+  `src/hooks/personOnly.ts`.
+
+### REQ-FLOW-158 — A label on an issue starts a cloud run on Claude and Cursor
+
+Added 2026-11-05 (plan 023 file 1, units `skills-prose` and `factory-guide`).
+
+Given the setup the factory guide states, When `stamity:ready` lands on an issue from a write or admin author, Then a cloud
+run starts by reference and treats the issue text as data. Given the label comes from an author without write access, Then
+the run refuses to start.
+
+- **As built, beyond the delta:** the run reads only the issue's `Branch:` line, and that name is checked before it enters a
+  command: it holds only letters, digits, `.`, `_`, `/` and `-`, and passes `git check-ref-format --branch`.
+- **Limits:** the triggers are the vendors'. Their rows in `CLIENT_CLOUD_FACTS` carry the page and the date read, and each
+  reads `not run` until a person check has run it on a scratch repository. Claude's page says events over its hourly caps
+  are dropped.
+- **Proof:** `test/corpus/skills/unattended.test.ts`; the eval cases are written and not run.
+- **Source:** `content/skills/st-unattended/references/cloud.md`, `src/hooks/model.ts`.
+
+### REQ-FLOW-159 — One page states how to set up the factory, cloud and local
+
+Added 2026-11-05 (plan 023 file 1, unit `factory-guide`).
+
+Given a reader with a repository and a client, When they follow `docs/factory.md` in order, Then each step names who does it
+and where, and the page links to `docs/cloud.md` rather than restating it.
+
+- **Proof:** `test/docsPages.test.ts`.
+- **Source:** `docs/factory.md`.
 
 ## Acceptance criteria
 
@@ -7980,6 +8270,9 @@ above.
   `non-write author`, `unknown` counting as none; GIVEN `/st-board` unattended THEN the author rule holds on a private
   repository; GIVEN the protocol THEN item 8's kickoff sentence. *(corpus: `feedbackPair.test.ts`, `board.test.ts`;
   `test/corpus/rules/protocol.test.ts`)*
+- GIVEN a bot of exactly the login `autonomy.reviewTool` names on the default branch THEN `/st-pr-resolve` reads its own
+  findings as a `write` author's, and any other bot or a failed read stays `non-write author` (added 2026-11-05). *(corpus:
+  `feedbackPair.test.ts`, `test/corpus/skills/unattended.test.ts`)*
 
 **REQ-FLOW-101** (added 2026-10-16)
 
@@ -8397,6 +8690,79 @@ above.
   `sandbox_mode = "read-only"` is still emitted. *(test: `test/adapters/codex.test.ts`)*
 - GIVEN the reviewer's agent file and the `per-agent tool allowlist` cap THEN each carries "tools that act on the host"
   (added 2026-10-26). *(test: `test/adapters/codex.test.ts`)*
+
+**REQ-FLOW-151** (added 2026-11-05)
+
+- GIVEN an administrator, an active ruleset whose bypass reads `never` or `pull_requests_only`, and the option on THEN
+  `blocked` with the warning `admin-can-lift`; GIVEN `always` or an unknown word THEN `open` or `unknown`, never `blocked`;
+  GIVEN the option off THEN every earlier case holds; GIVEN classic protection alone THEN never `blocked`; GIVEN an edit
+  of the work tree's manifest alone THEN the refusal stands. *(test: `test/runs/preflight.test.ts`,
+  `test/cli/commands/gatePreflight.test.ts`)*
+
+**REQ-FLOW-152** (added 2026-11-05)
+
+- GIVEN a docs-only change of 3 files and 40 lines under `low-risk` THEN eligible, and the evidence names both limits;
+  GIVEN 11 files, 201 lines, a `product` class, a path outside `paths`, a lens, a `docs`-class path not ending in `.md` or
+  `.txt`, or a file count that disagrees THEN each gives one named reason, two failed rules give both, and `lines` null,
+  `complete` false or an empty change is not eligible. *(test: `test/change/autoShip.test.ts`)*
+- GIVEN a product edit committed then reverted in the work tree THEN it classifies `product`; GIVEN `--fast-forward` THEN
+  the land still asks; GIVEN a range that disagrees with GitHub's file list or line total, or a class file that does not
+  read THEN not eligible. *(test: `test/cli/engine/changeRange.test.ts`, `test/cli/commands/runLand.test.ts`)*
+
+**REQ-FLOW-153** (added 2026-11-05)
+
+- GIVEN a required check failing on the tip THEN `asks` naming it, and `--approved` lands over it; GIVEN a required context
+  missing or pending there THEN not red, named in the evidence; GIVEN a tip read that fails THEN `asks` naming it; GIVEN a
+  red tip with `--fast-forward` THEN it still asks. *(test: `test/runs/landEvidence.test.ts`,
+  `test/cli/commands/runLand.test.ts`)*
+
+**REQ-FLOW-154** (added 2026-11-05)
+
+- GIVEN a clean block on the head THEN `clean`; on another sha, or from a `User`, or malformed, THEN `waiting`; GIVEN
+  `completed` with a true flag THEN `findings`; GIVEN `running` past `waitMinutes` from the request marker THEN `silent`;
+  GIVEN spent rounds without a clean head THEN `spent`; GIVEN any comment by the tool last edited by anyone else THEN the
+  merge holds. *(test: `test/runs/reviewTool.test.ts`)*
+- GIVEN a `waiting` verdict THEN `--wait` keeps polling, and past the budget `asks` with `asks.pending`, which `--approved`
+  does not pass; GIVEN `clean` on the head and open threads the tool opened THEN the land resolves them, reads again and
+  merges; GIVEN a failed resolve THEN it refuses, naming the thread. *(test: `test/cli/commands/runLand.test.ts`)*
+
+**REQ-FLOW-155** (added 2026-11-05)
+
+- GIVEN a sample item THEN `parseRunContract` accepts the YAML, and `plan check` with it exits 0; GIVEN another branch, a
+  hash differing from the plan, or no `Plan:` THEN it refuses naming which; GIVEN an author or label applier without write
+  or admin, an item in another repository, or a closed issue THEN it refuses; GIVEN a comment opener with no closer THEN
+  it refuses; GIVEN a closed comment THEN `strippedComments` counts it. *(test: `test/runs/itemContract.test.ts`,
+  `test/cli/commands/runContract.test.ts`)*
+
+**REQ-FLOW-156** (added 2026-11-05)
+
+- GIVEN `answerer: "@a-person"` THEN the request carries that login; GIVEN `@org/team` of the repository's owner THEN
+  `team_reviewers` carries the slug; GIVEN an answerer who is the author, or a 422, THEN nothing lands, `Not done:` gains a
+  line and the run still ends 0; GIVEN a free-text answerer THEN nothing is sent; GIVEN no contract THEN nothing is sent
+  and no line is written; GIVEN a record holding the `notice:` line, or `--refused`, THEN nothing is sent. *(test:
+  `test/cli/engine/ghRunner.test.ts`, `test/cli/commands/runEnd.test.ts`)*
+
+**REQ-FLOW-157** (added 2026-11-05)
+
+- GIVEN a thread a person opened and the run closed THEN it stays unresolved under a bot viewer; GIVEN a run whose record
+  reads open, or `(blocked:`, or a `## Refused` row THEN refused; GIVEN `--job` with `--approved` THEN exit 2; GIVEN a guard
+  payload carrying `--job` THEN refused on every client; GIVEN `landJob` off THEN no workflow file is emitted, and `clean`
+  removes it after turning off; GIVEN the emitted file THEN its steps are in the stated order and name no head code; GIVEN
+  a `landJob.workflows` name no workflow file carries THEN `check`'s `land-job-workflows` row warns; GIVEN a silent tool
+  THEN the job waits it out, writes the status line and exits 1. *(test: `test/adapters/landWorkflow.test.ts`,
+  `test/cli/commands/runLand.test.ts`, `test/cli/commands/check.test.ts`, `test/hooks/personOnlyGuard.test.ts`)*
+
+**REQ-FLOW-158** (added 2026-11-05)
+
+- GIVEN the unattended reference THEN a start from a ready item reads only `Branch:`, over REST, and checks the name before
+  any command; GIVEN a label from an author without write access THEN `run contract` refuses, so the run does not start.
+  *(corpus: `test/corpus/skills/unattended.test.ts`; test: `test/cli/commands/runContract.test.ts`)*
+- judgment: one real run per cloud on a scratch repository goes from a ready item to a merged pull request. Not run.
+
+**REQ-FLOW-159** (added 2026-11-05)
+
+- GIVEN `docs/factory.md` THEN every step names who acts, it links to `docs/cloud.md`, and it says a Claude event over the
+  cap is dropped. *(test: `test/docsPages.test.ts`)*
 
 ## References
 
