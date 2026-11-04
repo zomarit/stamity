@@ -621,6 +621,7 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // setting, the wave-4 guard file name and bare look and the wave-1 PATH walk,
   // below the wave-14 write loops (`init/apply.ts`, `sync/engine.ts`) that run it.
   "src/cli/engine/autonomyGate.ts": { unit: "a3b-loosen-gate", wave: 13 },
+  "src/cli/engine/landSetting.ts": { unit: "settings", wave: 13 },
   // Plan 021 file 1 (u4): the engine's one git runner that writes and its one
   // door onto GitHub's REST API, over the wave-1 PATH walk and the wave-4 bare
   // look, below the wave-14 `gate` and run verbs that start them.
