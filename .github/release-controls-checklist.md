@@ -200,12 +200,16 @@ every file a case's `source:` names, and the docs tests read those and refuse a 
 one. The safety set is every floor case, every adversarial case and every benign twin, and a release
 that runs this line measures the whole safety set and every moved case on a candidate of that release:
 a case moved after that run re-measures, a run after a FAIL is composed, and the run of record may
-chain back to a full measure when its results file lists every safety case as measured in this release
-(that file's "What a release measures", amended 2026-11-04). The third-release or 30-day full run
-stays, and it measures every case itself, carrying nothing; three samples, every threshold and
-calibration on every run do not move. When it runs, the full set is measured — by the release's
-baseline run, or by an incremental run composed with it under that file's incremental rule — and the release
-carries the composed artifact under `evals/runs/` on the `records` branch, published with
+chain back to a full measure when its results file lists every safety case as measured in this release.
+A run belongs to a release by dates: `CHANGELOG.md` dates each release, the run id dates each run, and a
+run of record, one link or more, must show every safety case measured in a run dated after the previous
+release's date, or the measurements page refuses it, naming the case. The third-release or 30-day full
+run stays, at any chain length and computed from those dates, and it measures every case itself,
+carrying nothing; three samples, every threshold and calibration on every run do not move. That file's
+"What a release measures", amended 2026-11-04, ranks over every other wording of the rule, and a release
+runs the full set, wherever this checklist says so, when its run of record scores every case of the set
+under it. When this line runs, the release
+carries the run's artifact under `evals/runs/` on the `records` branch, published with
 `node scripts/records.mjs commit -m <message>` before the tag. The `main` commit that moves
 `evals/run-of-record.json` to that run follows the publish: before it, the merge-blocking `records`
 job's measurements step refuses the missing results file. When none of those holds, the

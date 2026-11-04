@@ -45,6 +45,7 @@ import {
   readReachSnapshot,
   readRunOfRecord,
   renderMeasurements,
+  runOfRecordReason,
   runStatus,
   unmetMetrics,
   writeMeasurementSnapshot,
@@ -775,6 +776,15 @@ function placeRunOfRecord(root: string, body: unknown): void {
   );
 }
 
+/** A released heading: its version and its date. */
+type Released = readonly [version: string, date: string];
+
+/** Write a `CHANGELOG.md` dating the given releases under a fixture root. */
+function placeChangelog(root: string, released: readonly Released[]): void {
+  const headings = released.map(([version, date]) => `## [${version}] - ${date}\n\n- A release.\n`);
+  writeFileSync(join(root, "CHANGELOG.md"), ["# Changelog\n\n## [Unreleased]\n", ...headings].join("\n"));
+}
+
 /** Write a results file at `evals/runs/<id>/RESULTS.md` under a fixture root. */
 function placeResults(root: string, id: string, results: string): void {
   const path = join(root, "evals/runs", id, "RESULTS.md");
@@ -922,14 +932,14 @@ describe("a full run of record", () => {
   });
 
   it("renders a full baseline's prose from a full results file, and the composition from a composed one", () => {
-    const render = (results: string): string => {
+    const render = (results: string, ofRecord: Partial<RunOfRecord> = {}): string => {
       const root = fixture({
         "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
       });
       // TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases): the page reads the pinned
       // snapshot, not the newest file, so the scratch root writes its snapshot at the pinned date.
       writeMeasurementSnapshot(root, PINNED_DATE);
-      placeRenderInputs(root, results);
+      placeRenderInputs(root, results, ofRecord);
       try {
         return renderMeasurements(root);
       } finally {
@@ -938,7 +948,10 @@ describe("a full run of record", () => {
     };
     const fullResults = readResults(FULL_RUN);
     const fullPage = render(fullResults);
-    const composedPage = render(readResults(COMPOSED_RUN));
+    // TEST CHANGE, justified (2026-11-04, plan 023 file 1, unit release-speed; REQ-PROVE-033): the
+    // backstop now fires on one link and reads the run of record's date off its path, so the composed
+    // file sits at its own path, not at the tree's run a month after its prior. Fixture setup only.
+    const composedPage = render(readResults(COMPOSED_RUN), { path: `evals/runs/${COMPOSED_RUN}/RESULTS.md` });
 
     // The fixture's results file sits at the run of record's path, so the chain starts at that id
     // and reads the fixture's text for it: a full results file ends the chain where it starts.
@@ -1077,10 +1090,20 @@ describe("the composed paragraph is derived from the two results files", () => {
     "ranges found identical at both candidates. The set is SET-v7.",
   ];
 
-  /** Run `measurementMethod` over a fixture root holding the given results files by run id. */
+  /**
+   * Run `measurementMethod` over a fixture root holding the given results files by run id.
+   *
+   * TEST CHANGE, justified (2026-11-04, plan 023 file 1, unit release-speed; REQ-PROVE-033): one link
+   * is now held to the release rule, which reads the run of record's release and the changelog's
+   * dates, so the root carries both, the run of record dated as its prior run is and every run these
+   * cases name in the release. Fixture setup only: no assertion of a caller moved.
+   */
   const method = (run: string, results: string, priors: Record<string, string>): readonly string[] => {
     const root = mkdtempSync(join(tmpdir(), "stamity-composed-"));
     try {
+      const date = (Object.keys(priors)[0] ?? "").slice(0, 10);
+      placeRunOfRecord(root, { path: `evals/runs/${date}-run-${run}/RESULTS.md`, release: "2.0.0", exception: null });
+      placeChangelog(root, [["1.0.0", "2026-01-01"]]);
       for (const [id, text] of Object.entries(priors)) placeResults(root, id, text);
       return measurementMethod(root, run, results);
     } finally {
@@ -1289,8 +1312,15 @@ describe("a run of record may chain back to a full measure", () => {
   const FLOOR_HASH = "a".repeat(64);
   const HOLD_HASH = "b".repeat(64);
   const TWIN_HASH = "c".repeat(64);
-  const OPENING = `Release \`${RELEASE}\` begins at \`${LINK}\`, 1 release(s) after the full measure.`;
-  const OWN_RELEASE = `Release \`${RELEASE}\` begins at \`${FULL}\`, 0 release(s) after the full measure.`;
+  const OPENING = `Release \`${RELEASE}\`.`;
+
+  /**
+   * The release before `RELEASE`, shipped the day run 60 ran: a same-day run reads as earlier, so run
+   * 60 belongs to it and run 61 is the first run of `RELEASE`.
+   */
+  const EARLIER: readonly Released[] = [["1.9.0", "2026-11-01"]];
+  /** The same release a day sooner, which puts run 60 in `RELEASE` too. */
+  const IN_RELEASE: readonly Released[] = [["1.9.0", "2026-10-31"]];
 
   type SafetyRow = readonly [id: string, hash: string, source: string];
   const FLOOR_ROW: SafetyRow = [FLOOR, FLOOR_HASH, LINK];
@@ -1344,9 +1374,22 @@ describe("a run of record may chain back to a full measure", () => {
       golden: ["**0.962** (50/52)", `rate met; floors 22/23 — failing: \`${FLOOR}\``],
     });
   const full = (): string => syntheticResults({ id: FULL, status: "PASS", reason: "The full measure." });
+  /** Run 62 composed straight onto run 60: one link, so it carries no safety section. */
+  const oneLink = (remeasured: readonly (readonly [string, string])[], prior: string = FULL): string =>
+    syntheticResults({
+      id: RECORD,
+      status: "PASS",
+      composition: { prior, remeasured, carried: 4 - remeasured.length },
+      reason: "The release check, one link from the full measure.",
+      verdicts: VERDICTS,
+    });
 
-  /** Run `use` over a root holding `evals/run-of-record.json` and the given results files by id. */
-  const withChain = <T>(results: Record<string, string>, use: (root: string) => T): T => {
+  /** Run `use` over a root holding `evals/run-of-record.json`, a changelog and results files by id. */
+  const withChain = <T>(
+    results: Record<string, string>,
+    use: (root: string) => T,
+    released: readonly Released[] = EARLIER,
+  ): T => {
     const root = mkdtempSync(join(tmpdir(), "stamity-chain-"));
     try {
       placeRunOfRecord(root, {
@@ -1354,6 +1397,7 @@ describe("a run of record may chain back to a full measure", () => {
         release: RELEASE,
         exception: null,
       });
+      placeChangelog(root, released);
       for (const [id, text] of Object.entries(results)) placeResults(root, id, text);
       return use(root);
     } finally {
@@ -1361,9 +1405,15 @@ describe("a run of record may chain back to a full measure", () => {
     }
   };
   /** The composed paragraph for `results`, over the two runs behind it unless a case replaces them. */
-  const worded = (results: string, behind: Record<string, string> = {}): readonly string[] =>
-    withChain({ [LINK]: link(), [FULL]: full(), ...behind }, (root) =>
-      measurementMethod(root, "62", results),
+  const worded = (
+    results: string,
+    behind: Record<string, string> = {},
+    released: readonly Released[] = EARLIER,
+  ): readonly string[] =>
+    withChain(
+      { [LINK]: link(), [FULL]: full(), ...behind },
+      (root) => measurementMethod(root, "62", results),
+      released,
     );
 
   it("renders a chain of two composed runs whose artifact lists every safety case", () => {
@@ -1376,9 +1426,12 @@ describe("a run of record may chain back to a full measure", () => {
         `floor case, \`${FLOOR}\`; run 62 re-measured one case, composed with run 61, and carried the ` +
         "other 3 from it.",
       `The re-measured case is \`${TWIN}\` (case file bytes moved).`,
+      `[Run 60](${RECORDS_BLOB_URL}evals/runs/${FULL}/RESULTS.md) alone was PASS; run 61 re-measured two ` +
+        "cases, composed with run 60, and carried the other 2 from it.",
+      `The re-measured cases are \`${FLOOR}\` (named by the operator) and \`${HOLD}\` (named by the operator).`,
       `All three safety cases were measured on candidates of release ${RELEASE}, each named in run 62's ` +
-        "results file with its case-file hash and source run; the rest of the set carries back to " +
-        "run 60, one release earlier.",
+        "results file with its case-file hash and source run; the rest of the set reaches no further " +
+        "back than run 60, one release earlier.",
       "Each carried case is named in the composed artifact with its case-file hash and the source",
       "ranges found identical at both candidates. The set is SET-v7.",
     ]);
@@ -1389,9 +1442,127 @@ describe("a run of record may chain back to a full measure", () => {
     const carriedThrough = link()
       .replace(`| \`${FLOOR}\` | named by the operator |\n`, "")
       .replace("2 case(s) re-measured", "1 case(s) re-measured");
-    const page = worded(ofRecord({ safety: safety(rows, OWN_RELEASE) }), { [LINK]: carriedThrough }).join(" ");
+    const page = worded(ofRecord({ safety: safety(rows) }), { [LINK]: carriedThrough }, IN_RELEASE).join(" ");
     expect(page).toContain("All three safety cases");
-    expect(page).toContain("the rest of the set carries back to run 60, in the same release.");
+    expect(page).toContain("the rest of the set reaches no further back than run 60, in the same release.");
+  });
+
+  // W-3: a chain states what one link states, for every link. Run 60 is a FAIL full measure and run
+  // 61 moved a case file after its scores, the shape 58 -> 57 -> 56 would have.
+  it("states every link's verdict and every link's moved case files", () => {
+    const failed = syntheticResults({
+      id: FULL,
+      status: "FAIL",
+      reason: "The full measure.",
+      guardrail: ["**0.98** (48/49)", `NOT met — failing: \`${HOLD}\``],
+    });
+    const moved = link().replace(`| \`${FLOOR}\` | named by the operator |`, `| \`${FLOOR}\` | case file bytes moved |`);
+    expect(moved, "the fixture edit did not land").not.toBe(link());
+    const results = ofRecord();
+    const page = worded(results, { [FULL]: failed, [LINK]: moved }).join(" ");
+    expect(page).toContain(`[Run 60](${RECORDS_BLOB_URL}evals/runs/${FULL}/RESULTS.md) alone was FAIL`);
+    expect(page).toContain(`\`${FLOOR}\` (case file bytes moved)`);
+
+    const reason = withChain({ [LINK]: moved, [FULL]: failed }, (root) =>
+      runOfRecordReason(root, `evals/runs/${RECORD}/RESULTS.md`, results),
+    ).join(" ");
+    expect(reason).toContain("between run 61 and run 62 was changed after run 61's scores were known.");
+    expect(reason).toContain("between run 60 and run 61 was changed after run 60's scores were known,");
+    expect(reason).toContain("and the dated paragraphs of");
+  });
+
+  it("names only the link that moved a case file", () => {
+    const results = ofRecord();
+    const reason = withChain({ [LINK]: link(), [FULL]: full() }, (root) =>
+      runOfRecordReason(root, `evals/runs/${RECORD}/RESULTS.md`, results),
+    ).join(" ");
+    expect(reason).toContain("between run 61 and run 62 was changed after run 61's scores were known,");
+    expect(reason).not.toContain("between run 60 and run 61");
+  });
+
+  it("keeps one link from this release's full measure as it was: no list, no safety sentence", () => {
+    const page = worded(oneLink([[TWIN, "case file bytes moved"]]), {}, IN_RELEASE).join(" ");
+    expect(page).toContain("Run 60 measured every case in full.");
+    expect(page).not.toContain("safety cases");
+    // Same-day reads as earlier, so the same run is refused when the last release shipped that day.
+    expect(() => worded(oneLink([[TWIN, "case file bytes moved"]]))).toThrow(/before release 2\.0\.0/);
+  });
+
+  it("renders one link from an earlier release's full measure when it re-measured every safety case", () => {
+    const all: readonly (readonly [string, string])[] = [
+      [FLOOR, "named by the operator"],
+      [HOLD, "named by the operator"],
+      [TWIN, "named by the operator"],
+    ];
+    const page = worded(oneLink(all)).join(" ");
+    expect(page).toContain("Run 60 measured every case in full.");
+    expect(page).toContain(
+      "All three safety cases were measured on candidates of release 2.0.0, each named in run 62's " +
+        "re-measured table; the rest of the set reaches no further back than run 60, one release earlier.",
+    );
+    // One carried case is enough to refuse it, and that case is the one named.
+    expect(() => worded(oneLink(all.slice(1)))).toThrow(new RegExp(`shows \`${FLOOR}\` last measured`));
+  });
+
+  it("refuses a release it cannot bound from the changelog", () => {
+    const results = oneLink([[TWIN, "case file bytes moved"]]);
+    expect(() => worded(results, {}, [])).toThrow(/dates no release before 2\.0\.0/);
+    expect(() => worded(results, {}, [["2.1.0", "2026-12-01"]])).toThrow(/dates no release before 2\.0\.0/);
+    expect(() =>
+      withChain({ [FULL]: full() }, (root) => {
+        writeFileSync(join(root, "CHANGELOG.md"), "# Changelog\n\n## [1.9.0]\n\n- Undated.\n");
+        return measurementMethod(root, "62", results);
+      }),
+    ).toThrow(/states no date for 1\.9\.0/);
+    expect(() =>
+      withChain({ [FULL]: full() }, (root) => {
+        rmSync(join(root, "CHANGELOG.md"));
+        return measurementMethod(root, "62", results);
+      }),
+    ).toThrow(/No CHANGELOG\.md under/);
+  });
+
+  it("refuses a results file that is not the run of record's", () => {
+    expect(() =>
+      withChain({ [LINK]: link(), [FULL]: full() }, (root) => measurementMethod(root, "63", ofRecord())),
+    ).toThrow(/names evals\/runs\/2026-11-03-run-62\/RESULTS\.md, not run 63/);
+  });
+
+  // The first of the reviewer's two paths: one link, and nothing checked at all. Run 62 composes
+  // straight onto run 60, which belongs to the release before, and re-measures one twin.
+  it("refuses one link from an earlier release's full measure, naming each safety case it carried", () => {
+    expect(() => worded(oneLink([[TWIN, "case file bytes moved"]]))).toThrow(
+      new RegExp(`\`${FLOOR}\` and \`${HOLD}\`.* before release 2\\.0\\.0`),
+    );
+  });
+
+  // The second path: every row's source sits on the chain and measured the case, the hashes hold,
+  // and the opening line says the release began at the full measure. The line decides nothing now.
+  it("refuses a chain whose opening line claims an earlier release's full measure for this one", () => {
+    const claimed = `Release \`${RELEASE}\` begins at \`${FULL}\`, 0 release(s) after the full measure.`;
+    const rows: readonly SafetyRow[] = [
+      [FLOOR, FLOOR_HASH, FULL],
+      [HOLD, HOLD_HASH, FULL],
+      [TWIN, TWIN_HASH, FULL],
+    ];
+    const carrying = syntheticResults({
+      id: LINK,
+      status: "PASS",
+      composition: { prior: FULL, remeasured: [[GOLDEN, "case file bytes moved"]], carried: 3 },
+      reason: "A composed run that measured no safety case.",
+    });
+    const results = ofRecord({
+      composition: { prior: LINK, remeasured: [[GOLDEN, "case file bytes moved"]], carried: 3 },
+      carriedRows: [
+        [FLOOR, FLOOR_HASH],
+        [HOLD, HOLD_HASH],
+        [TWIN, TWIN_HASH],
+      ],
+      safety: safety(rows, claimed),
+    });
+    expect(() => worded(results, { [LINK]: carrying })).toThrow(
+      new RegExp(`\`${FLOOR}\` to \`${FULL}\`, measured before release 2\\.0\\.0 began`),
+    );
   });
 
   it("refuses a chain with no safety section, and one whose § 6 names no safety case", () => {
@@ -1461,8 +1632,8 @@ describe("a run of record may chain back to a full measure", () => {
       worded(ofRecord({ safety: safety([FLOOR_ROW, HOLD_ROW, [TWIN, TWIN_HASH, LINK]]) })),
     ).toThrow(new RegExp(`\`${TWIN}\` to \`${LINK}\`, and run 62 re-measured it`));
     // Re-measured by a link newer than the source: the full measure is no longer the case's latest.
-    const own = safety([[FLOOR, FLOOR_HASH, FULL], HOLD_ROW, TWIN_ROW], OWN_RELEASE);
-    expect(() => worded(ofRecord({ safety: own }), { [LINK]: link() })).toThrow(
+    const own = safety([[FLOOR, FLOOR_HASH, FULL], HOLD_ROW, TWIN_ROW]);
+    expect(() => worded(ofRecord({ safety: own }), { [LINK]: link() }, IN_RELEASE)).toThrow(
       new RegExp(`\`${FLOOR}\` to \`${FULL}\`, and run 61 re-measured it`),
     );
     // In the release, but the run carried the case rather than measuring it.
@@ -1491,19 +1662,38 @@ describe("a run of record may chain back to a full measure", () => {
     expect(() => worded(ofRecord({ safety: unreadable }))).toThrow(/a row it cannot read/);
   });
 
-  it("keeps the backstop: the third release, or 30 days, since the full measure is a full run", () => {
-    const third = OPENING.replace("1 release(s)", "3 release(s)");
-    expect(() => worded(ofRecord({ safety: safety(ROWS, third) }))).toThrow(/a full run is due/);
-    const second = OPENING.replace("1 release(s)", "2 release(s)");
-    expect(worded(ofRecord({ safety: safety(ROWS, second) })).join(" ")).toContain("two releases earlier");
+  // TEST CHANGE, justified (2026-11-04, unit release-speed, round 1): the third release came from a
+  // number the section stated, and one link met no backstop at all. Both now come from dates, so the
+  // count is the changelog's, and each check runs on one link as well as on a chain.
+  it("keeps the backstop on every chain length: the third release, or 30 days, is a full run", () => {
+    const shipped = (count: number): readonly Released[] =>
+      ["1.9.0", "1.8.0", "1.7.0"].slice(0, count).map((version) => [version, "2026-11-01"]);
+    const everySafetyCase: readonly (readonly [string, string])[] = [
+      [FLOOR, "named by the operator"],
+      [HOLD, "named by the operator"],
+      [TWIN, "named by the operator"],
+    ];
+    const claimedNone = `Release \`${RELEASE}\` begins at \`${LINK}\`, 0 release(s) after the full measure.`;
+
+    expect(() => worded(ofRecord(), {}, shipped(3))).toThrow(/third release .*a full run is due/);
+    expect(() => worded(oneLink(everySafetyCase), {}, shipped(3))).toThrow(/third release .*a full run is due/);
+    expect(() => worded(ofRecord({ safety: safety(ROWS, claimedNone) }), {}, shipped(3))).toThrow(
+      /third release .*a full run is due/,
+    );
+    expect(worded(ofRecord(), {}, shipped(2)).join(" ")).toContain("two releases earlier");
+    expect(worded(oneLink(everySafetyCase), {}, shipped(2)).join(" ")).toContain("two releases earlier");
 
     // 30 days between the full measure's date and the run of record's, read off their two ids.
     const late = "2026-10-04-run-60";
     expect(() => worded(ofRecord(), { [LINK]: link(late), [late]: full() })).toThrow(
       /30 days .*a full run is due/,
     );
+    expect(() => worded(oneLink(everySafetyCase, late), { [late]: full() })).toThrow(/30 days .*a full run is due/);
     const inTime = "2026-10-05-run-60";
     expect(worded(ofRecord(), { [LINK]: link(inTime), [inTime]: full() }).join(" ")).toContain(
+      "All three safety cases",
+    );
+    expect(worded(oneLink(everySafetyCase, inTime), { [inTime]: full() }).join(" ")).toContain(
       "All three safety cases",
     );
   });

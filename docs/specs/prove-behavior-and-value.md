@@ -1311,15 +1311,20 @@ link, a prior run that measured every case in full. The merge-ready snapshot mov
   to the run of record and to every miss it excuses".
 
 Amended 2026-11-04 (plan 023 file 1, unit `release-speed`). A run of record may chain back to a full measure when
-every safety case was measured on a candidate of its release. `readPriorRun` (`src/cli/docs/measurements.ts`) still
-renders one composition link as it did, and still refuses a prior run that is itself composed when the run of record's
-results file carries no `## 0a. Safety measure` section, naming the chain. With the section, `proveChain` renders the
-chain only when the walk ends at a run that measured every case; when the section's release equals
-`evals/run-of-record.json`'s; when the backstop has not come due; and when every safety case the run's § 6 lists
-(`safetyCases`) has a row whose source run is on the chain, in this release and a run that measured the case, under the
-hash its carried-case row states. A case the run of record re-measured has that run as its source. The safety set is
-read off the run's own § 6 and never off the tree, so a case added on `main` between releases leaves the page as it is.
-The page says which runs it passes through and that the rest of the set carries further back, and its rule sentence no
+every safety case was measured on a candidate of its release. A run belongs to a release by dates, never by its own
+text: `CHANGELOG.md` dates each release, the run id dates each run, and a run is in a release only when it is dated
+after the previous release's date (`releaseBound` in `src/cli/docs/measurements.ts`). `proveChain` holds every composed
+run of record to that, one link or more: the walk ends at a run that measured every case; the backstop has not come
+due; and every safety case the run's § 6 lists (`safetyCases`) was last measured, by the newest run on the chain whose
+re-measured table names it or else by the full measure, in a run of this release. `readPriorRun` still refuses a prior
+run that is itself composed when the run of record's results file carries no `## 0a. Safety measure` section, naming
+the chain. With the section, its release equals `evals/run-of-record.json`'s and every safety case has a row whose
+source run is on the chain, in this release and a run that measured the case, under the hash its carried-case row
+states. A case the run of record re-measured has that run as its source. The safety set is read off the run's own § 6
+and never off the tree, so a case added on `main` between releases leaves the page as it is. One link from a full
+measure of its own release renders as it did. The page says which runs a chain passes through, states every link's
+verdict and re-measured cases, and says the same of every link that moved a case file; where the full measure is not
+this release's alone, it says the rest of the set reaches no further back than that run. Its rule sentence no
 longer says one full baseline run per release, which `evals/SET-v7.md` stopped asking. `measurementInputs` lists every
 run on the chain, so the inputs are no longer four at most. This supersedes the 2026-10-14 bullet "One composition
 link" and the sentence "The page words one composition link" above for a run that carries the section; the accounts of
@@ -1329,10 +1334,16 @@ runs 45, 46 and 53 to 55 stay as they were written, each true of its release.
   full measure and the run between. GIVEN one safety case missing from the list THEN the render throws naming the case.
   GIVEN a safety case added after the chain's measure THEN it counts as unmeasured until the run of record measures it.
   GIVEN a chain that reaches no full measure THEN the render throws. GIVEN the third release since the full measure, or
-  30 days since it, THEN the render throws saying a full run is due. GIVEN one composition link and no list THEN the
-  page renders as before. Test evidence: `test/cli/docs/measurements.test.ts`, its describe "a run of record may chain
-  back to a full measure", and `test/records/measurements.test.ts`, "says how the run of record was measured: composed
-  from the runs it names, or in full".
+  30 days since it, read off the changelog's dates and the run ids, at any chain length THEN the render throws saying a
+  full run is due. GIVEN one composition link from a full measure of its own release and no list THEN the page renders
+  as before. GIVEN one link from an earlier release's full measure THEN the render throws naming each safety case the
+  run of record carried, and renders only when its re-measured table names every one. GIVEN a chain whose rows all point
+  at an earlier release's full measure THEN the render throws, whatever the section's opening line says. GIVEN a chain
+  THEN the page states every link's verdict and every link's moved case files. GIVEN the changelog dates no earlier
+  release THEN the render throws. Test evidence: `test/cli/docs/measurements.test.ts`, its describe "a run of record may
+  chain back to a full measure", and `test/records/measurements.test.ts`, "says how the run of record was measured:
+  composed from the runs it names, or in full", "renders %s under the release rule" and "refuses run 57 as the run of
+  record of the release after its own, naming a safety case".
 
 ### REQ-PROVE-021 — QA automation and binding
 
@@ -1981,17 +1992,23 @@ coverage gate's block on sources outside the surface now measures against both r
 Amended 2026-11-04 (plan 023 file 1, unit `release-speed`; the rule is dated in `evals/SET-v7.md`, "What a release
 measures"). Every release that triggers the eval measures the whole safety set, every floor case, every adversarial
 case and every benign twin, and every moved case on a candidate of that release; a case moved after that run
-re-measures; a run after a FAIL is composed. Only the rest of the set carries from one release to the next. The third
-release or 30-day full run stays, and that run measures every case itself, carrying nothing. Three samples per case,
-every threshold and calibration on every run do not move. The trigger list above does not move: this says what a
-triggered release measures, not which release triggers.
+re-measures; a run after a FAIL is composed. Only the rest of the set carries from one release to the next. A run
+belongs to a release by dates: it is in a release only when dated after the previous release's date in `CHANGELOG.md`.
+The third release or 30-day full run stays, computed from those dates at any chain length, and that run measures every
+case itself, carrying nothing. Three samples per case, every threshold and calibration on every run do not move. The
+trigger list above does not move: this says what a triggered release measures, not which release triggers. A release
+runs the full set when its run of record scores every case under that paragraph, which ranks over every other wording
+of the rule: `evals/SET-v7.md` and the checklist name that, and the older wording in `evals/README.md` and the eval
+skill reads under it until their own units reword them.
 
 - GIVEN the checklist's eval line and SET-v7's incremental section THEN each states the safety set, what a triggered
   release measures, the re-measure of a case moved after that run, the composed run after a FAIL, the chain back to a
-  full measure and the backstop's full run; GIVEN SET-v7 THEN it keeps three samples, every threshold and calibration on
-  every run, and its run-artifact contract names the section the chain needs. Test evidence: `test/docsPages.test.ts`,
-  its describe "the release eval follows what changed", "states %s in the checklist and in SET-v7" and "keeps three
-  samples, every threshold and calibration on every run beside the chain rule".
+  full measure, the backstop's full run, the dates that place a run in a release and the paragraph that ranks, and
+  neither says the release's baseline run measures the set or that the whole set runs; GIVEN SET-v7 THEN it keeps three
+  samples, every threshold and calibration on every run, and its run-artifact contract names the section the chain needs
+  and states no first run and no release count. Test evidence: `test/docsPages.test.ts`, its describe "the release eval
+  follows what changed", "states %s in the checklist and in SET-v7", "says one rule: no older wording stands beside it"
+  and "keeps three samples, every threshold and calibration on every run beside the chain rule".
 
 ### REQ-PROVE-034 — A patch takes the patch lane
 

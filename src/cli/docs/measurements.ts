@@ -1292,18 +1292,18 @@ function priorRunNumber(runOfRecord: string, id: string): string {
 /** The heading a chained run of record lists its safety measure under. */
 const SAFETY_HEADING = "## 0a. Safety measure";
 
-/** That section's opening line: the release, the run it began at, and how far the full measure is. */
-const SAFETY_OPENING =
-  /^Release `(\d+\.\d+\.\d+)` begins at `([\w.-]+)`, (\d+) release\(s\) after the full measure\.\s*$/m;
+/**
+ * That section's opening line, which names the release. Nothing after the version is read: which runs
+ * belong to the release, and how far back the full measure is, come from dates ({@link releaseBound}).
+ */
+const SAFETY_OPENING = /^Release `(\d+\.\d+\.\d+)`/m;
 
 /** One row of that section's table: the case id, its case-file sha256 and the run that measured it. */
 const SAFETY_ROW = /^\|\s*`([^`]+)`\s*\|\s*`([0-9a-f]{64})`\s*\|\s*`([\w.-]+)`\s*\|\s*$/;
 
-/** What a {@link SAFETY_HEADING} section states; `began` is the release's earliest run on the chain. */
+/** What a {@link SAFETY_HEADING} section states. */
 interface SafetyMeasure {
   readonly release: string;
-  readonly began: string;
-  readonly releases: number;
   readonly rows: ReadonlyMap<string, { readonly hash: string; readonly source: string }>;
 }
 
@@ -1317,7 +1317,7 @@ function safetyMeasureOf(results: string): SafetyMeasure | null {
   if (section === null) return null;
   const opening = SAFETY_OPENING.exec(section);
   if (opening === null) {
-    fail(`The results file's \`${SAFETY_HEADING}\` section states no release, no first run or no distance from the full measure.`);
+    fail(`The results file's \`${SAFETY_HEADING}\` section states no release.`);
   }
   const rows = new Map<string, { hash: string; source: string }>();
   for (const line of section.split("\n")) {
@@ -1326,7 +1326,7 @@ function safetyMeasureOf(results: string): SafetyMeasure | null {
     if (row === null) fail(`The results file's \`${SAFETY_HEADING}\` table holds a row it cannot read: ${line}`);
     rows.set(row[1] ?? "", { hash: row[2] ?? "", source: row[3] ?? "" });
   }
-  return { release: opening[1] ?? "", began: opening[2] ?? "", releases: Number(opening[3]), rows };
+  return { release: opening[1] ?? "", rows };
 }
 
 /** The heading a results file states its per-case verdicts under: item 6 of the run-artifact contract. */
@@ -1382,6 +1382,9 @@ function chainIds(root: string, runOfRecord: string, results: string): readonly 
   return ids;
 }
 
+/** A run id's date, `YYYY-MM-DD`: such strings order as their dates do. */
+const runDate = (id: string): string => id.slice(0, 10);
+
 /**
  * The day number of a run id's date, counted on the civil calendar: this module reads no `Date`, so
  * the suite can hold it to reading no clock, and the difference of two such numbers is days.
@@ -1393,65 +1396,86 @@ function dayNumber(id: string): number {
   return 365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) + Math.floor((153 * m + 2) / 5) + day;
 }
 
-/** A results file's first line: `# Eval <run id>`. */
-const EVAL_HEADING = /^# Eval (\S+)\s*$/m;
+/** A released heading in the changelog, with its date where it states one. */
+const DATED_RELEASE = /^## \[(\d+\.\d+\.\d+)](?: - (\d{4}-\d{2}-\d{2}))?/gm;
 
-/** What the page says about a proven chain: `full` and `through` are run numbers, newest last and first. */
-interface ProvenChain {
-  readonly full: string;
-  readonly through: readonly string[];
-  readonly release: string;
-  readonly releases: number;
-  readonly safety: number;
+/** Where a release begins, by dates: the release before it, and every earlier release's date. */
+interface ReleaseBound {
+  readonly previous: string;
+  readonly date: string;
+  readonly earlier: readonly string[];
 }
 
 /**
- * Prove a chain longer than one link under SET-v7's release rule (REQ-PROVE-033), or refuse it.
+ * The bound of `release`, read off `CHANGELOG.md` under `root`: a run belongs to the release only
+ * when its id's date is after the previous release's date, so a run dated the day a release shipped
+ * reads as that release's, which fails safe. The release itself need not be in the changelog yet.
  *
- * The walk must end at a run that measured every case, and the third-release or 30-day backstop must
- * not have come due. The list must name the run of record's release and hold every safety case of
- * its § 6 ({@link safetyCases}). Each row's source must be on the chain, in this release and a run
- * that measured the case: a composed run measured what its re-measured table names, and a full run
+ * No results file states which release its candidate shipped as, and a run's own text never decides
+ * it. Throws `EngineError` (`VALIDATION_ERROR`) when the changelog is absent, dates no earlier
+ * release, or leaves an earlier release undated: any of those would pass a run it cannot place.
+ */
+function releaseBound(root: string, release: string): ReleaseBound {
+  const path = join(root, "CHANGELOG.md");
+  if (!existsSync(path)) fail(`No CHANGELOG.md under ${root}, so the page cannot tell which runs are in release ${release}.`);
+  const earlier = [...readFileSync(path, "utf-8").matchAll(DATED_RELEASE)]
+    .map(([, version = "", date = ""]) => ({ version, date }))
+    .filter(({ version }) => compareVersions(version, release) < 0)
+    .toSorted((left, right) => compareVersions(right.version, left.version));
+  const undated = earlier.find(({ date }) => date === "");
+  if (undated !== undefined) fail(`CHANGELOG.md states no date for ${undated.version}, so the page cannot bound release ${release}.`);
+  const [previous] = earlier;
+  if (previous === undefined) fail(`CHANGELOG.md dates no release before ${release}, so the page cannot bound it.`);
+  return { previous: previous.version, date: previous.date, earlier: earlier.map(({ date }) => date) };
+}
+
+/** A run behind the run of record: its number on the page, its results path and its results file. */
+interface ChainLink {
+  readonly number: string;
+  readonly path: string;
+  readonly results: string;
+}
+
+/** What the page says about a proven chain, one link or more. */
+interface ProvenChain {
+  /** The runs behind the run of record, newest first, the full measure last. */
+  readonly links: readonly ChainLink[];
+  /** The full measure's run number, and the run numbers between it and the run of record. */
+  readonly full: string;
+  readonly through: readonly string[];
+  readonly release: string;
+  /** How many releases the full measure's release is behind this one, from {@link releaseBound}. */
+  readonly releases: number;
+  /** How many safety cases this release measured, or `null` where the full measure alone says so. */
+  readonly safety: number | null;
+  /** Whether the run of record carries a {@link SAFETY_HEADING} section, proven row by row. */
+  readonly listed: boolean;
+}
+
+/**
+ * Hold a {@link SAFETY_HEADING} section to the chain: it must name the run of record's release and
+ * hold every safety case. Each row's source must be on the chain, in this release and a run that
+ * measured the case: a composed run measured what its re-measured table names, and a full run
  * measured everything. A case a newer run on the chain re-measured moved after that measure, so its
  * source is the newest run that measured it; a case the run of record carried is listed under the
  * hash its carried-case row states.
- *
- * Which release a candidate shipped as is in no results file, so the release and the run it began at
- * are the section's own statement; this checks them against `evals/run-of-record.json` and the chain.
  */
-function proveChain(root: string, runOfRecord: string, results: string, measure: SafetyMeasure): ProvenChain {
-  const self = EVAL_HEADING.exec(results)?.[1];
-  if (self === undefined || EVAL_RUN_ID.exec(self)?.[1] !== runOfRecord) {
-    fail(`Run ${runOfRecord}'s results file does not open with its own run id; the page cannot place it on its chain.`);
-  }
-  const links = chainIds(root, runOfRecord, results).map((id) => {
-    const path = evalResultsPath(id);
-    if (!existsSync(join(root, path))) {
-      fail(`No results file at ${path}; the composition chain from run ${runOfRecord} reaches no full measure.`);
-    }
-    return { id, results: readFileSync(join(root, path), "utf-8") };
-  });
-  const end = links.at(-1);
-  if (end === undefined || priorCompleteRun(end.results) !== null) {
-    fail(`The composition chain from run ${runOfRecord} walks back into itself and reaches no full measure.`);
-  }
-
-  const { release } = readRunOfRecord(root);
+function proveRows(
+  measure: SafetyMeasure,
+  { runOfRecord, results, release, bound, chain, numbers, measuredIn, cases }: {
+    readonly runOfRecord: string;
+    readonly results: string;
+    readonly release: string;
+    readonly bound: ReleaseBound;
+    readonly chain: readonly string[];
+    readonly numbers: readonly string[];
+    readonly measuredIn: readonly ReadonlySet<string>[];
+    readonly cases: readonly string[];
+  },
+): void {
   if (measure.release !== release) {
     fail(`The safety measure states release ${measure.release}, and the run of record is release ${release}.`);
   }
-  const chain = [self, ...links.map(({ id }) => id)];
-  const began = chain.indexOf(measure.began);
-  if (began === -1) fail(`The safety measure says the release began at \`${measure.began}\`, which is not on the chain.`);
-  if (measure.releases >= 3) {
-    fail(`Release ${release} is the third release since the full measure or later, so a full run is due and no chain renders.`);
-  }
-  if (dayNumber(self) - dayNumber(end.id) >= 30) {
-    fail(`Run ${runOfRecord} is 30 days or more after the full measure \`${end.id}\`, so a full run is due and no chain renders.`);
-  }
-
-  const cases = safetyCases(results);
-  if (cases.length === 0) fail(`Run ${runOfRecord}'s § 6 names no safety case; the page cannot hold the chain to the set.`);
   const unlisted = cases.filter((id) => !measure.rows.has(id));
   if (unlisted.length > 0) {
     fail(
@@ -1460,17 +1484,13 @@ function proveChain(root: string, runOfRecord: string, results: string, measure:
         "every safety case is measured in the release.",
     );
   }
-  const measuredIn = [results, ...links.map((link) => link.results)].map(
-    (text) => new Set(compositionOf(text)?.remeasured.map(({ id }) => id)),
-  );
-  const numbers = [runOfRecord, ...links.map(({ id }) => priorRunNumber(runOfRecord, id))];
   const carried = carriedHashes(results);
   for (const [id, { hash, source }] of measure.rows) {
     if (!cases.includes(id)) continue;
     const at = chain.indexOf(source);
     const where = `The safety measure points \`${id}\` to \`${source}\``;
     if (at === -1) fail(`${where}, which is not on the chain.`);
-    if (at > began) fail(`${where}, measured before release ${release} began.`);
+    if (runDate(source) <= bound.date) fail(`${where}, measured before release ${release} began.`);
     const newer = measuredIn.slice(0, at).findIndex((measured) => measured.has(id));
     if (newer !== -1) fail(`${where}, and run ${numbers[newer]} re-measured it: the case moved after that measure.`);
     if (at !== chain.length - 1 && measuredIn[at]?.has(id) !== true) fail(`${where}, which did not measure it.`);
@@ -1478,43 +1498,105 @@ function proveChain(root: string, runOfRecord: string, results: string, measure:
       fail(`The safety measure lists \`${id}\` under a hash its carried-case row does not state.`);
     }
   }
+}
+
+/**
+ * Prove a composed run of record under SET-v7's release rule (REQ-PROVE-033), one link or more, or
+ * refuse it.
+ *
+ * The walk must end at a run that measured every case, and the third-release or 30-day backstop must
+ * not have come due: both come from dates, the changelog's and the run ids', on every chain length.
+ * Every safety case of the run's § 6 ({@link safetyCases}) must have been measured in a run dated
+ * after the previous release ({@link releaseBound}): the newest run on the chain whose re-measured
+ * table names it, or else the full measure. A results file's own words place no run in a release.
+ *
+ * One link from a full measure of this release needs no more: its two runs are this release's, so
+ * every case was measured in it. Any other shape must name its safety cases: a longer chain through
+ * a {@link SAFETY_HEADING} section ({@link proveRows}, and {@link readPriorRun} refuses one with
+ * none), and one link from an earlier release's full measure through its re-measured table.
+ */
+function proveChain(root: string, runOfRecord: string, results: string, measure: SafetyMeasure | null): ProvenChain {
+  const { path: ownPath, release } = readRunOfRecord(root);
+  const self = ownPath.split("/").at(-2) ?? "";
+  if (EVAL_RUN_ID.exec(self)?.[1] !== runOfRecord) {
+    fail(`${RUN_OF_RECORD_FILE} names ${ownPath}, not run ${runOfRecord}; the page cannot place that run on its chain.`);
+  }
+  const ids = chainIds(root, runOfRecord, results);
+  const links = ids.map((id) => {
+    const path = evalResultsPath(id);
+    if (!existsSync(join(root, path))) {
+      fail(`No results file at ${path}; the composition chain from run ${runOfRecord} reaches no full measure.`);
+    }
+    return { number: priorRunNumber(runOfRecord, id), path, results: readFileSync(join(root, path), "utf-8") };
+  });
+  const end = links.at(-1);
+  const endId = ids.at(-1);
+  if (end === undefined || endId === undefined || priorCompleteRun(end.results) !== null) {
+    fail(`The composition chain from run ${runOfRecord} walks back into itself and reaches no full measure.`);
+  }
+
+  const bound = releaseBound(root, release);
+  const releases = bound.earlier.filter((date) => date >= runDate(endId)).length;
+  if (releases >= 3) {
+    fail(`Release ${release} is the third release since the full measure \`${endId}\` or later, so a full run is due and no composed run renders.`);
+  }
+  if (dayNumber(self) - dayNumber(endId) >= 30) {
+    fail(`Run ${runOfRecord} is 30 days or more after the full measure \`${endId}\`, so a full run is due and no composed run renders.`);
+  }
+
+  const cases = safetyCases(results);
+  const named = links.length > 1 || releases > 0;
+  if (named && cases.length === 0) {
+    fail(`Run ${runOfRecord}'s § 6 names no safety case; the page cannot hold the chain to the set.`);
+  }
+  const chain = [self, ...ids];
+  const numbers = [runOfRecord, ...links.map(({ number }) => number)];
+  const measuredIn = [results, ...links.map((link) => link.results)].map(
+    (text) => new Set(compositionOf(text)?.remeasured.map(({ id }) => id)),
+  );
+  if (measure !== null) {
+    proveRows(measure, { runOfRecord, results, release, bound, chain, numbers, measuredIn, cases });
+  }
+  const sourceOf = (id: string): string =>
+    chain[measuredIn.findIndex((measured) => measured.has(id))] ?? endId;
+  const stale = cases.filter((id) => runDate(sourceOf(id)) <= bound.date);
+  if (stale.length > 0) {
+    fail(
+      `Run ${runOfRecord} shows ${conjoined(stale.map((id) => `\`${id}\``))} last measured before release ` +
+        `${release}: no run dated after ${bound.previous}'s ${bound.date} measured ` +
+        `${stale.length === 1 ? "it" : "them"}, and every safety case is measured in the release.`,
+    );
+  }
   return {
-    full: numbers.at(-1) ?? "",
+    links,
+    full: end.number,
     through: numbers.slice(1, -1),
     release,
-    releases: measure.releases,
-    safety: cases.length,
+    releases,
+    safety: named ? cases.length : null,
+    listed: measure !== null,
   };
 }
 
 /**
- * The prior complete run a composed run of record names: its number, its results path, its results
- * file, read under the checkout being rendered, and the proven chain behind it, or `null` for one
- * composition link.
+ * The proven chain behind a composed run of record, from the prior complete run it names, read under
+ * the checkout being rendered.
  *
- * Read so the composed paragraph can state the prior run's own status and failing cases rather than
+ * Read so the composed paragraph can state each run's own status and failing cases rather than
  * typing them. Throws when the id is not an eval run id (it becomes a path here), when the file is
- * absent, and when the prior run is itself composed and the run of record cannot prove the chain: the
- * page words one composition link, a prior run that measured every case in full, unless every safety
- * case was measured in this release ({@link proveChain}), so a chain with no such list is refused by
- * name (run 32 -> run 31 -> run 30 is a real one) rather than rendered.
+ * absent, and when {@link proveChain} refuses. A prior run that is itself composed needs the run of
+ * record to list its safety measure, so a chain with no such list is refused by name (run 32 -> run
+ * 31 -> run 30 is a real one) rather than rendered.
  */
-function readPriorRun(
-  root: string,
-  runOfRecord: string,
-  ofRecord: string,
-  id: string,
-): { number: string; path: string; results: string; chain: ProvenChain | null } {
+function readPriorRun(root: string, runOfRecord: string, ofRecord: string, id: string): ProvenChain {
   const number = priorRunNumber(runOfRecord, id);
   const path = evalResultsPath(id);
   if (!existsSync(join(root, path))) {
     fail(`No results file at ${path}; the page cannot state how the run of record's prior run ended.`);
   }
-  const results = readFileSync(join(root, path), "utf-8");
-  const further = priorCompleteRun(results);
-  if (further === null) return { number, path, results, chain: null };
+  const further = priorCompleteRun(readFileSync(join(root, path), "utf-8"));
   const measure = safetyMeasureOf(ofRecord);
-  if (measure === null) {
+  if (further !== null && measure === null) {
     const furtherRun = EVAL_RUN_ID.exec(further)?.[1];
     const chain = `run ${runOfRecord} -> run ${number} -> ${furtherRun === undefined ? `\`${further}\`` : `run ${furtherRun}`}`;
     fail(
@@ -1525,7 +1607,7 @@ function readPriorRun(
         "longer chain rather than render it.",
     );
   }
-  return { number, path, results, chain: proveChain(root, runOfRecord, ofRecord, measure) };
+  return proveChain(root, runOfRecord, ofRecord, measure);
 }
 
 /** The page's inputs on disk under a root, and the ones it lacks, repo-relative. */
@@ -1617,6 +1699,24 @@ function priorVerdict(results: string): string {
 }
 
 /**
+ * What one composition link says: the prior run's own verdict, then what the later run re-measured,
+ * by id and with the reason its `## 0. Composition` table gives, and how many cases it carried.
+ */
+function linkSentences(later: string, composition: Composition, prior: ChainLink): readonly string[] {
+  const { remeasured } = composition;
+  const count = `${countWord(remeasured.length)} ${remeasured.length === 1 ? "case" : "cases"}`;
+  const named = remeasured.map(({ id, why }) => (why === null ? `\`${id}\`` : `\`${id}\` (${why})`));
+  return [
+    `[Run ${prior.number}](${RECORDS_BLOB_URL}${prior.path}) alone was ${priorVerdict(prior.results)}; ` +
+      `run ${later} re-measured ${count}, composed with run ${prior.number}, ` +
+      `and carried the other ${composition.carried} from it.`,
+    ...(remeasured.length === 0
+      ? []
+      : [`The re-measured ${remeasured.length === 1 ? "case is" : "cases are"} ${conjoined(named)}.`]),
+  ];
+}
+
+/**
  * How the run of record was measured, as the corpus section's second paragraph states it.
  *
  * Two shapes, chosen by {@link priorCompleteRun}. A composed run names its composition, every
@@ -1624,8 +1724,10 @@ function priorVerdict(results: string): string {
  * and failing floor or guardrail cases (its `Status:` line and § 5 rows), and how many cases the run
  * of record re-measured — by id, with the reason its `## 0. Composition` table gives — and how many
  * it carried. A longer chain ({@link proveChain}) names the full measure at its end and the runs it
- * passes through, and says the safety set alone was measured in this release while the rest of the
- * set carries further back: the sentence "Run N measured every case in full" alone would let a
+ * passes through, and states those same clauses for every link, so a FAIL full measure or a case file
+ * moved further back is as plain as on one link. It, and one link from an earlier release's full
+ * measure, also says the safety set alone was measured in this release while the rest of the set
+ * reaches further back: the sentence "Run N measured every case in full" alone would let a
  * reader take the whole set for this release's measure. The reason a release had to re-measure
  * (a rule tightened, a sample lost, a case amended) is not worded here: where the run of record states one it is § 3 of its own results
  * file, "Why the run happened", and {@link runOfRecordReason} prints that section after this
@@ -1651,31 +1753,33 @@ export function measurementMethod(
       `Run ${runOfRecord} measured every case in full on its own candidate. The set is SET-v7.`,
     ];
   }
-  const prior = readPriorRun(root, runOfRecord, results, composition.prior);
-  const { chain } = prior;
-  const { remeasured } = composition;
-  const count = `${countWord(remeasured.length)} ${remeasured.length === 1 ? "case" : "cases"}`;
-  const named = remeasured.map(({ id, why }) => (why === null ? `\`${id}\`` : `\`${id}\` (${why})`));
+  const chain = readPriorRun(root, runOfRecord, results, composition.prior);
+  const steps: string[] = [];
+  let later = runOfRecord;
+  let composed: Composition | null = composition;
+  for (const link of chain.links) {
+    if (composed === null) break;
+    steps.push(...linkSentences(later, composed, link));
+    later = link.number;
+    composed = compositionOf(link.results);
+  }
   return [
     "That run is composed rather than measured end to end, under SET-v7's incremental rule: a later",
     "run on another candidate re-measures only the cases whose inputs moved and carries the rest with",
     "provenance.",
-    chain === null
-      ? `Run ${prior.number} measured every case in full.`
+    chain.through.length === 0
+      ? `Run ${chain.full} measured every case in full.`
       : `Run ${chain.full} measured every case in full; run ${runOfRecord} reaches it through ` +
         `${chain.through.length === 1 ? "run" : "runs"} ${conjoined(chain.through)}.`,
-    `[Run ${prior.number}](${RECORDS_BLOB_URL}${prior.path}) alone was ${priorVerdict(prior.results)}; ` +
-      `run ${runOfRecord} re-measured ${count}, composed with run ${prior.number}, ` +
-      `and carried the other ${composition.carried} from it.`,
-    ...(remeasured.length === 0
-      ? []
-      : [`The re-measured ${remeasured.length === 1 ? "case is" : "cases are"} ${conjoined(named)}.`]),
-    ...(chain === null
+    ...steps,
+    ...(chain.safety === null
       ? []
       : [
           `All ${countWord(chain.safety)} safety cases were measured on candidates of release ${chain.release}, ` +
-            `each named in run ${runOfRecord}'s results file with its case-file hash and source run; ` +
-            `the rest of the set carries back to run ${chain.full}, ` +
+            (chain.listed
+              ? `each named in run ${runOfRecord}'s results file with its case-file hash and source run; `
+              : `each named in run ${runOfRecord}'s re-measured table; `) +
+            `the rest of the set reaches no further back than run ${chain.full}, ` +
             (chain.releases === 0
               ? "in the same release."
               : `${countWord(chain.releases)} ${chain.releases === 1 ? "release" : "releases"} earlier.`),
@@ -1699,6 +1803,25 @@ const EVAL_SET_PATH = "evals/SET-v7.md";
  */
 const CASE_FILE_MOVED = /^case file bytes moved\b/;
 
+/**
+ * Every composition link behind the run of record that re-measured a moved case file, newest first,
+ * as prior and later run numbers: on a chain the disclosure walks each link, not the nearest alone.
+ */
+function linksMovingCaseFiles(
+  root: string,
+  run: string,
+  results: string,
+): readonly (readonly [prior: string, later: string])[] {
+  const ids = chainIds(root, run, results);
+  const texts = [results, ...ids.map((id) => join(root, evalResultsPath(id)))
+    .map((path) => (existsSync(path) ? readFileSync(path, "utf-8") : ""))];
+  const numbers = [run, ...ids.map((id) => priorRunNumber(run, id))];
+  return ids.flatMap((_, at) => {
+    const moved = compositionOf(texts[at] ?? "")?.remeasured.some(({ why }) => why !== null && CASE_FILE_MOVED.test(why));
+    return moved === true ? [[numbers[at + 1] ?? "", numbers[at] ?? ""] as const] : [];
+  });
+}
+
 /** A note written by hand beside a run's exported files, where its folder holds one. */
 const RUN_NOTE_FILE = "NOTE.md";
 
@@ -1711,11 +1834,11 @@ const RUN_NOTE_FILE = "NOTE.md";
  *   line that names the file. The page used to say the reason was in neither results file; for
  *   the 1.14.0 run of record it is in that section ("four Expected rows amended"), and a reader of
  *   the page alone never met it. A file with no such section, or an empty one, prints no quote.
- * - One fixed sentence where the run is composed and at least one re-measured case's reason is a
- *   moved case file ({@link CASE_FILE_MOVED}): such a file was changed after the prior run's
- *   scores were known, and the set's dated paragraphs, linked, say what each change is and what
- *   it admits. The composition table says only that bytes moved; this says what that means for a
- *   pass, and where each change is written down. A full run, and a composed run that re-measured
+ * - One fixed sentence for each composition link behind the run where at least one re-measured
+ *   case's reason is a moved case file ({@link CASE_FILE_MOVED}): such a file was changed after the
+ *   prior run's scores were known, and the set's dated paragraphs, linked, say what each change is
+ *   and what it admits. The composition table says only that bytes moved; this says what that means
+ *   for a pass, and where each change is written down. A full run, and a composed run that re-measured
  *   for any other reason, prints no such sentence: it would describe a change that was not made.
  * - One line linking `NOTE.md` in the run of record's folder, where that folder holds one.
  *
@@ -1743,11 +1866,14 @@ export function runOfRecordReason(root: string, path: string, results: string): 
   }
 
   const closing: string[] = [];
-  const composition = compositionOf(results);
-  if (composition?.remeasured.some(({ why }) => why !== null && CASE_FILE_MOVED.test(why)) === true) {
-    const prior = priorRunNumber(run, composition.prior);
+  const moved = linksMovingCaseFiles(root, run, results);
+  if (moved.length > 0) {
     closing.push(
-      `A case file that moved between run ${prior} and run ${run} was changed after run ${prior}'s scores were known,`,
+      ...moved.map(
+        ([prior, later], at) =>
+          `A case file that moved between run ${prior} and run ${later} was changed after run ${prior}'s scores were known` +
+          (at === moved.length - 1 ? "," : "."),
+      ),
       `and the dated paragraphs of [\`${EVAL_SET_PATH}\`](../${EVAL_SET_PATH}) say what each change is and what it admits.`,
     );
   }

@@ -4,8 +4,9 @@ v7 changes inputs, not the rule. The scoring rule, the four metric names and the
 numbers, the run-artifact contract, the hard triggers and the non-negotiable appendix are
 SET-v6's, carried over unchanged and not rescored, except where a dated amendment below says
 otherwise: on 2026-10-08 hard trigger 2 and § 8's comparator sentence moved with the change-aware
-release rule (REQ-PROVE-033), and on 2026-10-14 the run-artifact contract's first sentence moved
-the artifact to the `records` branch. Two inputs move. The case directory is
+release rule (REQ-PROVE-033), on 2026-10-14 the run-artifact contract's first sentence moved
+the artifact to the `records` branch, and on 2026-11-04 hard trigger 2 moved again and the contract
+gained item 12, under "What a release measures". Two inputs move. The case directory is
 now `evals/cases-v6/**`; every carried case's frontmatter id, class, metric and floor tag are
 identical to `cases-v5`'s, and its `## Expected` block too unless a reviewed disposition,
 amendment or re-sync moved it (twenty-five cases, each with an `EXPECTED_MOVES` row), enforced by
@@ -219,8 +220,8 @@ re-measured cases only from the next run on.)
 
 **Which releases run the set — amended 2026-10-08.** A maintainer decision of 2026-10-08
 (REQ-PROVE-033), declared before any release uses it, replaces "every release runs the full set".
-A release runs the full set — a baseline run, or an incremental run composed with one under the
-incremental rule above — when its diff since the run of record touches `content/**` or another
+A release runs the full set, as "What a release measures" below defines those words,
+when its diff since the run of record touches `content/**` or another
 file a case's `source:` names; the emitted client files (the
 cross-client goldens); the eval set's files (`evals/SET-v7.md`, `evals/README.md`,
 `evals/coverage-exemptions-v6.md`, the selected rubric `evals/rubric-v7.md`, the model profiles
@@ -251,15 +252,27 @@ which a results file's § 6 shows. Every release that triggers the eval measures
 and every moved case on a candidate of that release, three admitted samples each, a safety case that
 did not move being added by name under the incremental rule; a case moved after that run re-measures;
 a run after a FAIL is composed. Only the rest of the set, the cases that are neither safety cases nor
-moved, carries from one release to the next. The run of record may chain back to a full measure
-through more than one composition link when its results file carries the safety measure, item 12 of
-the run-artifact contract, which lists every safety case as measured in this release with its
-case-file hash and source run; without that list it composes through one link, as before, and the
-measurements page refuses a longer chain by name. The third-release or 30-day rule stands: the full
-run it asks for measures every case itself, carrying nothing, and the page refuses a chain whose full
-measure is that far back. The scoring rule, three samples per case and every threshold do not move,
-and calibration runs afresh on every run. The refusal this replaces cost the 1.17.0 release a full run
-and its repeat, about four hours, after a composed run had already passed. No count, case or
+moved, carries from one release to the next. A release **runs the full set**, wherever those words
+stand, when its run of record scores every case of the set under this paragraph. This paragraph ranks
+over every other wording of the rule: it replaces "a baseline run, or an incremental run composed with
+one", which this section gave as the meaning of those words until this date, and "the whole set runs"
+in hard trigger 2, and where `evals/README.md` or the eval skill still says otherwise, this paragraph
+holds. A run belongs to a release by dates: `CHANGELOG.md` dates each release, the run id dates each
+run, and a run is in a release only when it is dated after the previous release's date, so a run dated
+the day a release shipped reads as that release's. No results file's own text places a run. A run of
+record, one composition link from a full measure or more, must show every safety case measured in a
+run of its release, or the measurements page refuses it, naming the case. One link from a full measure
+of its own release shows that by the two run ids. One link from an earlier release's full measure shows
+it by its re-measured table, which then names every safety case. The run of record may chain back to a
+full measure through more than one link when its results file also carries the safety measure, item 12
+of the run-artifact contract, which lists every safety case as measured in this release with its
+case-file hash and source run; without that list the page refuses the chain by name. The third-release
+or 30-day rule stands: the full run it asks for measures every case itself, carrying nothing, and the
+page refuses a run of record whose full measure is that far back, at any chain length. It counts the
+changelog's earlier releases dated on or after the full measure's date, and the days between the two
+run ids, and reads no stated number. The scoring rule, three samples per case and every threshold do
+not move, and calibration runs afresh on every run. The refusal this replaces cost the 1.17.0 release a
+full run and its repeat, about four hours, after a composed run had already passed. No count, case or
 `## Expected` block moves with this paragraph. Editing this file is itself an eval-set change, so the
 release that ships it runs under this rule.
 
@@ -4108,17 +4121,19 @@ A run writes `evals/runs/<date>-run-<n>/RESULTS.md` and publishes it to the `rec
     skipped; a set with skipped cases does not report a clean pass.
 12. **Safety measure** — a composed run whose prior complete run is itself composed carries a
     `## 0a. Safety measure` section after `## 0. Composition`, or the measurements page refuses it
-    as a run of record. The section opens with one line, `` Release `<version>` begins at `<run id>`,
-    <n> release(s) after the full measure. ``: the release as `evals/run-of-record.json` names it,
-    the earliest run on the chain that belongs to it, and how many releases separate it from the
-    full measure's. A table follows, `| Safety case | Case file sha256 | Source run |`, with one row
-    for every safety case the run's § 6 lists: the case id, its case-file sha256 and the run of this
-    release that measured it. (Added 2026-11-04, under "What a release measures".)
+    as a run of record. The route of record's driver writes the section from the composition tables;
+    until it does no chained run is a run of record, and a section typed by hand does not count.
+    The section opens with one line, `` Release `<version>`. ``: the release as
+    `evals/run-of-record.json` names it. A table follows,
+    `| Safety case | Case file sha256 | Source run |`, with one row for every safety case the run's
+    § 6 lists: the case id, its case-file sha256 and the run of this release that measured it. Which
+    runs are in the release, and how far back the full measure is, come from dates and are not
+    stated here. (Added 2026-11-04, under "What a release measures".)
 
 ## Hard triggers
 
-Unchanged in substance except trigger 2, amended 2026-10-08; the paths point at cases-v6 and at
-this file. The set runs manually,
+Unchanged in substance except trigger 2, amended 2026-10-08 and 2026-11-04; the paths point at
+cases-v6 and at this file. The set runs manually,
 in a harness session, on the operator's word. Nothing schedules it and no lane fires it
 automatically. The three triggers below are process obligations written where the person
 doing the work reads them — text, not automation — and two deterministic gates sit under the
@@ -4134,14 +4149,16 @@ first of them.
    the first turns the second half of that obligation into a red test, and the second turns a
    newly added artifact with no case into one.
 2. **A release runs the full set when a model-facing input moved.** Before the tag is cut, the
-   whole set runs and the release carries the run artifact when the change-aware rule under
+   run of record scores every case, measured as "What a release measures" says, and the release
+   carries the run artifact when the change-aware rule under
    "Incremental runs" names a trigger — a file the run of record or the public runner hashes, a
    file a case's `source:` names, the emitted client files, the scenario or judge model, the
    harness and its pinned client version, a FAIL run of record — or the third release or 30 days
    since the last full run comes due; otherwise the release carries the run of record forward. This is wired into
    `.github/release-controls-checklist.md`, so a release with neither the artifact nor the
    carried-forward note is blocked by its own checklist rather than by anyone's memory. (Amended
-   2026-10-08; until then every release ran the full set.)
+   2026-10-08; until then every release ran the full set. Amended 2026-11-04, under "What a release
+   measures".)
 3. **A model change re-runs every adversarial case, at a zero-break bar.** Guardrail behaviour
    is a property of the model-and-prose pair, not of the prose, so a swap of the model under
    test rewrites every case at once. Adversarial cases re-run on a model change even when no

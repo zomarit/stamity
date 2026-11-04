@@ -1770,10 +1770,33 @@ describe("the release eval follows what changed", () => {
     ["the composed run after a FAIL", /a run after a FAIL is composed/],
     ["the chain back to a full measure", /may chain back to a full measure/],
     ["the backstop's full run", /carrying nothing/],
+    ["the dates that place a run in a release", /`CHANGELOG\.md` dates each release, the run id dates each run/],
+    ["which wording ranks", /"What a release measures"[^.]*ranks over every other wording of the rule|This paragraph ranks over every other wording of the rule/],
+    ["what running the full set means", /when its run of record scores every case of the set under/],
   ])("states %s in the checklist and in SET-v7", (name, pattern) => {
     for (const [where, text] of releaseRuleTexts()) {
       expect(text, `${where} does not state ${name} (${String(pattern)})`).toMatch(pattern);
     }
+  });
+
+  // ADDED 2026-11-04 (plan 023 file 1, unit release-speed, round 1; REQ-PROVE-033): the older wording
+  // sat beside the new rule and said the opposite. The rule's own paragraph quotes what it replaces, so
+  // the read stops short of it; a sentence that comes back here fails by name.
+  it("says one rule: no older wording stands beside it", () => {
+    const beforeTheRule = (text: string): string => text.split("What a release measures — amended")[0] ?? text;
+    const set = collapsed(read(EVAL_SET));
+    const contractOn = set.slice(set.indexOf("## Run-artifact contract"));
+    for (const [where, text] of [
+      [RELEASE_CHECKLIST, collapsed(read(RELEASE_CHECKLIST))],
+      [`${EVAL_SET} before the rule`, beforeTheRule(set)],
+      [`${EVAL_SET} from the contract on`, contractOn],
+    ] as const) {
+      expect(text, `${where} still names the release's baseline as the measure`).not.toMatch(
+        /by the release's baseline run|— a baseline run, or an incremental run composed with one/,
+      );
+      expect(text, `${where} still says the whole set runs`).not.toMatch(/the whole set runs/);
+    }
+    expect(contractOn, "the contract still asks for a stated first run").not.toMatch(/begins at `<run id>`/);
   });
 
   it("keeps three samples, every threshold and calibration on every run beside the chain rule", () => {
