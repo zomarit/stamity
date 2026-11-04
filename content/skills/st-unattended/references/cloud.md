@@ -83,8 +83,8 @@ only letters, digits, `.`, `_`, `/` and `-`, and passes `git check-ref-format --
 On that branch the run runs `stamity run contract --run <id> --item <owner/repo#n> --json`, `<id>` the run folder's
 name. The verb proves who stands behind the issue and writes `.stamity/runs/<id>/contract.yml`. Any exit but 0 is a
 refusal: its `notDone[]` lines go first on the morning list under `## Refused`. When its JSON reports
-`strippedComments` above zero, the run holds a row for a person (kind `held`) naming that count, since a visible
-criterion may have gone with the comment. The ready check then names that file:
+`strippedComments` above zero, the run refuses to start, before Frame, since a visible criterion may have gone with the
+comment: a `## Refused` row names that count and the fix, a person edits the issue. The ready check then names that file:
 `stamity plan check <plan> --contract .stamity/runs/<id>/contract.yml --json`, `<plan>` the path in the contract's
 `plan` key.
 
@@ -95,12 +95,15 @@ adds nothing. `run land` asks the tool and waits for it, and `evidence.review.st
 stands on the head. `clean` lets the land go on, and `waiting` comes back as `asks.pending`, which the skill's
 `## Chains` answers. `findings`, `silent` and `spent` come back as `refused`.
 
-On `findings`, the run runs `/st-pr-resolve` on its pull request, lets that round push through its own run verbs, then
-runs the land step's own line again, `<id>` still this run's, which lets the tool run on the new head, at most `rounds`
-times in all. A round that pushes nothing leaves `findings` standing, so that too is a `held` row. A thread the tool
-opened holds no row: once the tool reads `clean` on the exact head, `run land` resolves the tool's own threads itself,
-never a person's. A `silent` or `spent` tool is a `held` row naming the tool (`merge waits on: <reasons>`), never a workaround: the run writes no clean block,
-adds no reaction, edits no comment of the tool's, posts no request of its own and changes no setting.
+On `findings`, the run runs `/st-pr-resolve --unattended` on its pull request, lets that round push through its own run
+verbs, then runs the land step's own line again, `<id>` still this run's, which lets the tool run on the new head, at
+most `rounds` times in all. A round that pushes nothing leaves `findings` standing, so that too is a `held` row. A thread
+the tool opened holds no row on its own: once the tool reads `clean` on the exact head, `run land` resolves the tool's
+own threads itself, never a person's, and a land still refused over a thread keeps that reason as a `held` row. A
+`silent` or `spent` tool is a `held` row naming the tool (`merge waits on: <reasons>`).
+
+Held means stop: a `held` row ends the loop, and the run takes no other route to the same end. For example, and not as a
+limit: no new commit to restart a wait, no second pull request, no edit or delete of a comment.
 
 ## Commits after the last checkpoint
 

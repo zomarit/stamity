@@ -1569,7 +1569,7 @@ describe("/st-work — Prove", () => {
     // Eval cases quote the close paragraph whole and cite the lines below it, so the rule takes the blank line after it,
     // which moves no `source:` range and spends no line of the budget above.
     const pendingAsks =
-      "An `asks` outcome whose JSON carries `asks.pending` is neither that question nor a `held` row: the review tool is still awaited, so the close asks no one and runs `stamity run land --run <run-id> --ready --wait 8 --json` again, alone on its line, whose `--wait` does the waiting; `--approved` passes no wait.";
+      "An `asks` outcome whose JSON carries `asks.pending` is neither that question nor yet a `held` row: the review tool is still awaited, so the close asks no one and runs `stamity run land --run <run-id> --ready --wait 8 --json` again, alone on its line, whose `--wait` does the waiting; `--approved` passes no wait. It makes at most as many calls as cover the setting's `waitMinutes`, about one per 8 minutes; a close that stops on a wait, there or for any other reason, writes a `held` row naming the wait.";
     expect(qa).toContain(pendingAsks);
     expect(qa.indexOf(pendingAsks)).toBeGreaterThan(qa.indexOf(approved));
     // TEST CHANGE, justified (fix round 5, review/111; REQ-FLOW-144): the approved line carries `--ready`, the walk's retry
