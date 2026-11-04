@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.17.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-11-04T22:51:59.118Z",
+  "updatedAt": "2026-11-04T22:48:29.113Z",
   "tools": [
     "claude"
   ],
@@ -218,7 +218,7 @@
       "adapter": "claude",
       "artifactId": "stamity-person-only-guard",
       "artifactType": "infra",
-      "contentHash": "8c8de6d548d0feb09d2900cc8db091ed25ab3710c99eec8fd8b3da24efd2cef7",
+      "contentHash": "705305e5fbb128af539687da0ddc5eab63346fb32fdb25abecb90145f3a73df7",
       "path": ".claude/hooks/stamity/stamity-person-only-guard.mjs"
     },
     {
@@ -455,7 +455,7 @@
       "adapter": "claude",
       "artifactId": "st-eval-run",
       "artifactType": "skill",
-      "contentHash": "869efda5797de62690c4a6be6fb919c0acaf201bf89031692728283e3d929eef",
+      "contentHash": "de4e0daa55b8c13819015302760d61cf912f0827c9055405b49e58781626ee5f",
       "path": ".claude/skills/st-eval-run/SKILL.md"
     },
     {
@@ -553,7 +553,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "a527e77353b26a15cf16d20a7a6b9f1dd60aee61e86cbfc92df33dc1cf252378",
+      "contentHash": "bd9e2aa0cd83091f8d63533bfa98a2e6d34fb5b10ce4ca4209cf90f25ebbf82d",
       "path": ".claude/skills/st-unattended/references/cloud.md"
     },
     {

@@ -396,7 +396,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 |---|---|---|
 | `--run <run-id>` | the run folder's name under .stamity/runs/ | — |
 | `--paths <path...>` | checkpoint and end: also stage these paths, relative to the project root | — |
-| `--pr` | checkpoint: open or update the run's draft pull request after the push (with --title) | — |
+| `--pr [number]` | checkpoint: open or update the run's draft pull request after the push (with --title); land --job: the pull request to land | — |
 | `--title <title>` | checkpoint and end: the draft pull request's title (end needs it) | — |
 | `--signoff` | checkpoint and end: add the Signed-off-by line to the commit | — |
 | `--refused` | end: title the draft pull request Refused: <title>, for a run that refused to start | — |
@@ -407,6 +407,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--ready` | land: mark the run's draft ready for review once the evidence holds, then land it | — |
 | `--wait <minutes>` | land: wait up to this many minutes (at most 9) for pending check runs | — |
 | `--approved <sha>` | land: the head commit the person approved over an asks outcome; land it if the head is still that commit and nothing refuses (never in an unattended run) | — |
+| `--job` | land: run as the land workflow's job, which alone may use it: the run comes from the pull request's marker, and pending evidence exits 0 | — |
 | `--item <owner/repo#n>` | contract: the GitHub issue the run takes as its input | — |
 
 Regenerate this page with `node scripts/generate-docs.mjs`.
