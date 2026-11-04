@@ -145,6 +145,8 @@ describe("planLandWorkflow", () => {
 
 describe("the land job's row through init, sync and clean", () => {
   const temp = useTempDir("land-row");
+  /** A real `init` and two real syncs: one case took over the 20 s default on a machine running other suites. */
+  const REAL_SETUP_MS = 60_000;
 
   async function initialised(): Promise<string> {
     const root = temp().path(`repo-${Math.random().toString(36).slice(2, 8)}`);
@@ -185,7 +187,7 @@ describe("the land job's row through init, sync and clean", () => {
     expect(await readFile(join(root, LAND_WORKFLOW_PATH), "utf8")).toMatch(/npm install --global \S+@\d+\.\d+\.\d+/);
     expect(await rows(root)).toEqual([`claude:${LAND_WORKFLOW_ARTIFACT_ID}`, `cursor:${LAND_WORKFLOW_ARTIFACT_ID}`]);
     expect(sync.stdout).toContain('autonomy.landJob.workflows names "CI"');
-  });
+  }, REAL_SETUP_MS);
 
   it("takes the unedited file back with clean once the setting is off, with no sync between", async () => {
     const root = await initialised();
@@ -197,21 +199,24 @@ describe("the land job's row through init, sync and clean", () => {
 
     expect(clean.code, clean.stderr).toBe(0);
     expect(existsSync(join(root, LAND_WORKFLOW_PATH))).toBe(false);
-  });
+  }, REAL_SETUP_MS);
 
-  it("takes it back with a sync too, so turning the setting off stops the job, and leaves an edited copy", async () => {
+  it("takes it back with a sync too, so turning the setting off stops the job", async () => {
     const root = await initialised();
     await setLandJob(root, true);
     await syncs(root);
     await setLandJob(root, false);
     await syncs(root);
     expect(existsSync(join(root, LAND_WORKFLOW_PATH))).toBe(false);
+  }, REAL_SETUP_MS);
 
+  it("leaves a copy a person edited when the setting goes off", async () => {
+    const root = await initialised();
     await setLandJob(root, true);
     await syncs(root);
     await writeFile(join(root, LAND_WORKFLOW_PATH), `${await readFile(join(root, LAND_WORKFLOW_PATH), "utf8")}# mine\n`);
     await setLandJob(root, false);
     await syncs(root);
     expect(await readFile(join(root, LAND_WORKFLOW_PATH), "utf8")).toContain("# mine");
-  });
+  }, REAL_SETUP_MS);
 });
