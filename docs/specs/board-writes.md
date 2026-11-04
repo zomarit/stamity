@@ -1,6 +1,6 @@
 ---
 id: board-writes
-# A design document, authored from docs/plans/015-board-writes.md on 2026-10-01; its requirement text merged on 2026-10-12 at the Prove phase of run 2026-10-12_board-writes, by its unit s1-spec-merge against the integration head 3415e721, amended in run 2026-10-14_cli-native on 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, one proof pointer amended in run 2026-10-20_packs-rebuilt on 2026-10-21, REQ-BOARD-010 retired in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, and excluded from the site build.
+# A design document, authored from docs/plans/015-board-writes.md on 2026-10-01; its requirement text merged on 2026-10-12 at the Prove phase of run 2026-10-12_board-writes, by its unit s1-spec-merge against the integration head 3415e721, amended in run 2026-10-14_cli-native on 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, one proof pointer amended in run 2026-10-20_packs-rebuilt on 2026-10-21, REQ-BOARD-010 retired in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended in run 2026-11-04_factory-bridge on 2026-11-04, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.17.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
@@ -18,7 +18,10 @@ re-pointed one citation of REQ-BOARD-002's amendment on 2026-10-19; both shipped
 `status: shipped-with-1.16.0`. Plan 018's first file, `docs/plans/018-packs-rebuilt-01.md` (pull request #118),
 amended one proof pointer on 2026-10-21, and its second, `docs/plans/018-packs-rebuilt-02.md` (run
 `2026-10-21_packs-rebuilt-02`, merged by its unit `u18-spec` on 2026-10-22, pull request #124), retired REQ-BOARD-010
-with the pack it bound; both shipped with 1.17.0, which set `status: shipped-with-1.17.0`.
+with the pack it bound; both shipped with 1.17.0, which set `status: shipped-with-1.17.0`. Plan 023's first file,
+`docs/plans/023-factory-bridge-01.md` (run `2026-11-04_factory-bridge`, unit `board-item`), amended REQ-BOARD-001 and
+REQ-BOARD-006 on 2026-11-04, so that a ready item carries what `stamity run contract` reads (REQ-FLOW-155 in
+`docs/specs/everyday-flows.md`).
 
 The requirement text comes from the `## Spec delta` of `docs/plans/015-board-writes.md` (`:101-347`), as the run's
 in-flow re-plan, `.stamity/runs/2026-10-12_board-writes/plan.md` (pass r2), amended it, and from the run's sign-offs
@@ -58,14 +61,15 @@ outlives the session (`:171-177`).
 
 `fill` files each `ready` item after the run's preview as an issue in the linked repository, added to the linked
 project when one is linked, its body carrying the acceptance criteria, a `Ref:` when the item names a spec, and the
-filed-item marker; an unready item, or a row the preview did not apply, stays a proposal in the run report (`:90-94`).
+filed-item marker, in REQ-BOARD-006's order; an unready item, or a row the preview did not apply, stays a proposal in
+the run report (`:90-94`).
 An item files with the labels the repository already has; a label it lacks is never created, never withholds the item,
 and stays a proposal in the report; with no taxonomy, `type:*`, `priority:*` and `area:*` are proposed (`:96-98`, read
 at `0b3f8bd3`). `groom` applies evidence comments and edits to open items on `apply` (`:148-149`). Progress
 comments, checklist ticks and PR links from `/st-work` events are written without `--move`, and a tick re-reads the body just before writing and changes only that criterion's box
 (`:261-265`, `:338-343`). Writes go out one at a time, at least one second apart, and stop on a `retry-after`; a write
-carries only an item's title, criteria, labels, `Ref:` and marker, phase or outcome words and ids — never file contents,
-logs, environment values or credentials (`:268-270`).
+carries only an item's title, summary, criteria, labels, `Branch:`, `Plan:`, `Ref:` and marker, phase or outcome words
+and ids — never file contents, logs, environment values or credentials (`:268-270`).
 
 - **As built:** the bound on what a write carries is beyond plan 015's text (`review/23`). The write check is stated
   once, in the Write-back contract's opening, and setup step 2 and `fill` step 1 point at it (`:52-54`, `:175-176`,
@@ -78,6 +82,12 @@ logs, environment values or credentials (`:268-270`).
   `test/corpus/commands/board.test.ts:381-392` there); before a New item or a label edit the run reads the linked
   repository's labels and passes only those on the list, since an issue write sent an unknown label can create it
   (`content/commands/st-board.md:96-98`; pinned at `test/corpus/commands/board.test.ts:394-405`).
+- **Amended 2026-11-04** (plan 023 file 1, run `2026-11-04_factory-bridge`, unit `board-item`; read at the amending
+  commit): the bound on what a write carries gains the summary, `Branch:` and `Plan:`, and the New item write and `fill`
+  step 6 point at the filed body of REQ-BOARD-006 (`content/commands/st-board.md:90-94`, `:259-260`, `:268-270`). The
+  "never" half of the bound did not move, and the board still creates no label. The summary is a rewrite of the plan's
+  Context, never a copy of the file. Pinned at `test/corpus/commands/board.test.ts`, the cases named for this bound and
+  for the writes that file an item.
 - **Proof:** `test/corpus/commands/board.test.ts`; the eval case `board-write-back-four-channels`; QA row R2.
 
 1. GIVEN `### setup — wiring` WHEN read THEN it has no step that chooses or enables write channels, the body nowhere
@@ -274,6 +284,12 @@ text (`:313-318`).
 
 ### REQ-BOARD-006 — Filed items converge on retry
 
+A filed body runs in order: a plain summary of two to four sentences (the plan's Context through the `st-plain` skill,
+a view of the plan and never truth), `## Acceptance criteria`, `Branch: <name>`, `Plan: docs/plans/<file>.md <hex12>`
+(there `<hex12>` is the first twelve hex digits of the sha256 of the plan's text), `Ref: docs/specs/<file>.md`, and the
+marker last. `Branch:` never names `stamity/<run-id>`, which `run start` refuses with no record. An item with no plan
+has no `Plan:` or `Branch:` line and stays a plain item (`content/commands/st-board.md:322`, read at the amending commit).
+
 Every filed item's body ends with `<!-- stamity:item <key> -->`, `<key>` its source locator: `<path>#<anchor>/<hex12>`
 for a file source, `<hex12>` the first twelve hex digits of the sha256 of the item's first line as written;
 `inbox:<hex12>` for an inbox row, over its identity fields — severity, location, description, `source:` value and
@@ -291,6 +307,10 @@ comment, only a comment the account wrote matches, and a comment is edited by it
   identity fields, where plan 015 hashed the whole row (the re-plan; inbox row
   `2026-10-11_release-1-14-0/close/1`). A marker matches only on a body's final line (`review/24`), and a progress
   comment matches only when the account wrote it (`review/26`).
+- **Amended 2026-11-04** (plan 023 file 1, run `2026-11-04_factory-bridge`, unit `board-item`): the filed body's order
+  above is new; `stamity run contract` reads it (REQ-FLOW-155). The command text names the summary's source as the
+  `st-plain` skill, where the plan wrote `/st-plain`: the skill is not one of the nine touchpoints, and the command's
+  suite refuses a `/st-*` name outside them.
 - **Proof:** `test/corpus/commands/board.test.ts`; QA row R2.
 
 1. GIVEN `### Filed items converge` WHEN read THEN it contains `<!-- stamity:item <key> -->`, `<path>#<anchor>/<hex12>`
@@ -306,6 +326,9 @@ comment, only a comment the account wrote matches, and a comment is edited by it
 4. GIVEN a `fill --source <file>` applied on the scratch repository WHEN the same `fill` runs again and is applied THEN
    no second issue exists for any key and the report names the matched issues, updated or unchanged. *(QA R2;
    amended 2026-10-15, ledger row `close/3`, QA note N1; it read "the report names the updated issues")*
+5. GIVEN `### Filed items converge` WHEN read THEN it names the summary, `## Acceptance criteria`, `Branch:`, `Plan:` and
+   `Ref:` in that order with the marker last, says the summary is a view of the plan and never truth, and says an item
+   with no plan has no `Plan:` or `Branch:` line. *(corpus; added 2026-11-04)*
 
 ### REQ-BOARD-007 — The GitHub row names every write it allows
 

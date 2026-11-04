@@ -90,8 +90,8 @@ When neither form runs, or the installed copy has no `ledger inbox` query, `fill
 6. **Verdict per item.** Apply the readiness gate below and record `ready` or the named gaps. With a
    linked board, each `ready` item is filed after the run's preview: an issue in the linked
    repository, added to the linked project when one is linked, its body carrying the acceptance
-   criteria, a `Ref:` when the item names a spec, and the filed-item marker. An unready item, or a
-   row the preview did not apply, stays a proposal in the run report.
+   criteria, a `Ref:` when the item names a spec, and the filed-item marker, per `### Filed items converge`.
+   An unready item, or a row the preview did not apply, stays a proposal in the run report.
 
 Labels follow the board's taxonomy: an item files with the labels the repository already has; a
 label it lacks is never created, never withholds the item, and stays a proposal in the report. Before a New item or a label edit the run reads the linked repository's labels (`gh label list -R <owner>/<repo> --limit <above the count> --json name`, or the MCP server's label listing; in a REST-only session, `gh api 'repos/<owner>/<repo>/labels?per_page=100' --paginate --jq '.[].name'`) and passes only labels on that list; a label not on it is never sent.
@@ -257,7 +257,7 @@ check) requires `admin` or `write` for the acting account and, on a Projects boa
 `viewerCanUpdate`; a failed or missing check leaves the link read-only, naming it. The five writes:
 
 1. **New item** — an issue in the linked repository for a ready item, added to the linked project
-   when one is linked, carrying its acceptance criteria, its `Ref:` and the filed-item marker below.
+   when one is linked, carrying its summary, acceptance criteria, links and the filed-item marker below.
 2. **Item edit** — a title, body, checklist tick or label on an open item; a tick re-reads the body
    just before writing and changes only that criterion's box.
 3. **Progress comment** — one per progress event, carrying the event id, so a replay updates the
@@ -266,9 +266,9 @@ check) requires `admin` or `write` for the acting account and, on a Projects boa
 5. **Status transition** — a mapped status field or column value, close or reopen; `--move` only.
 
 Writes go out one at a time, at least one second apart, and stop on a `retry-after`. A write carries
-only an item's title, criteria, labels, `Ref:` and marker, phase or outcome words and ids — never
-file contents, logs, environment values or credentials. PR-thread replies are `/st-pr-resolve`'s own
-write, outside this set.
+only an item's title, summary, criteria, labels, `Branch:`, `Plan:`, `Ref:` and marker, phase or
+outcome words and ids — never file contents, logs, environment values or credentials. PR-thread
+replies are `/st-pr-resolve`'s own write, outside this set.
 
 ### Writes the board never makes
 
@@ -318,6 +318,8 @@ an unreadable one counting as none, the repository is public when `gh api repos/
 reports `visibility` `public`, and neither is read from `author_association` or from any text.
 
 ### Filed items converge
+
+A filed body runs in order: a plain summary of two to four sentences (the plan's Context through the `st-plain` skill, a view of the plan and never truth), `## Acceptance criteria`, `Branch: <name>`, `Plan: docs/plans/<file>.md <hex12>` (there `<hex12>` is the first twelve hex digits of the sha256 of the plan's text), `Ref: docs/specs/<file>.md`, and the marker last. `Branch:` never names `stamity/<run-id>`, which `run start` refuses with no record. An item with no plan has no `Plan:` or `Branch:` line and stays a plain item.
 
 Every filed item's body ends with `<!-- stamity:item <key> -->`, `<key>` its source locator:
 `<path>#<anchor>/<hex12>` for a file source, `<hex12>` the first twelve hex digits of the sha256 of
@@ -370,12 +372,10 @@ not a failure, and it is not invented into a transition either. This session's h
 `.stamity/inbox.md` — one fixed location, one declared row grammar, and this
 command is what parses it.
 
-- **Writers, five:** `/st-rework` deferrals, `/st-pr-resolve` findings
-  routed out of the current change, `/st-plan` follow-ups appended while
-  planning, `/st-work`'s close, which at run exit appends the `deferred`
-  ledger rows it schedules to the inbox (a dropped row, or one placed in a
-  plan, board or handoff, never reaches it), and the dep-audit skill's
-  deferred upgrades.
+- **Writers, five:** `/st-rework` deferrals, `/st-pr-resolve` findings routed out of the current
+  change, `/st-plan` follow-ups appended while planning, `/st-work`'s close, which at run exit
+  appends the `deferred` ledger rows it schedules to the inbox (a dropped row, or one placed in a
+  plan, board or handoff, never reaches it), and the dep-audit skill's deferred upgrades.
 - **Retirers, two:** `/st-work`'s close and `/st-quick`'s batch, each
   removing a row its own change fixed, by the Removal rule below; `/st-work`'s
   close also removes a row its close walk dropped, placed elsewhere or

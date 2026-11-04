@@ -453,10 +453,53 @@ describe("st-board — write-back contract", () => {
     const preview = flat(section(writeBack, "The preview", "###"));
 
     // review/23: no file contents, logs or credentials reach a public item unread.
+    // TEST CHANGE, justified (2026-11-04, REQ-BOARD-001, REQ-FLOW-155): this bound
+    // listed title, criteria, labels, `Ref:` and marker. A ready item now also carries
+    // its plain summary and its `Branch:` and `Plan:` lines, which `stamity run contract`
+    // reads, so the bound names them; the "never" half of the sentence did not move.
     expect(flat(writeBack)).toMatch(
-      /A write carries only an item's title, criteria, labels, `Ref:` and marker, phase or outcome words and ids — never file contents, logs, environment values or credentials/,
+      /A write carries only an item's title, summary, criteria, labels, `Branch:`, `Plan:`, `Ref:` and marker, phase or outcome words and ids — never file contents, logs, environment values or credentials/,
     );
     expect(preview).toMatch(/\(item, action, change — for a New item or Item edit, the text it writes\)/);
+  });
+
+  it("names a filed body's parts in order, the marker last (REQ-BOARD-006, REQ-FLOW-155)", async () => {
+    const converge = flat(section(section((await board()).parsed.body, "Write-back contract"), "Filed items converge", "###"));
+    const parts = [
+      "a plain summary of two to four sentences",
+      "`## Acceptance criteria`",
+      "`Branch: <name>`",
+      "`Plan: docs/plans/<file>.md <hex12>`",
+      "`Ref: docs/specs/<file>.md`",
+      "the marker last",
+    ];
+    const order = parts.map((part) => converge.indexOf(part));
+
+    // Every part is present, and each sits after the one before it: `run contract` reads this order.
+    expect(order.filter((at) => at === -1)).toEqual([]);
+    expect(order).toEqual(order.toSorted((left, right) => left - right));
+  });
+
+  it("states what a filed body's summary and links are, and what a plain item leaves out (REQ-BOARD-006, REQ-FLOW-155)", async () => {
+    const converge = flat(section(section((await board()).parsed.body, "Write-back contract"), "Filed items converge", "###"));
+
+    // The summary comes from the plan and answers to it: repo is truth for content.
+    expect(converge).toMatch(/the plan's Context through the `st-plain` skill, a view of the plan and never truth/);
+    // `stamity run contract` compares this hash, and it is not the marker's `<hex12>`.
+    expect(converge).toMatch(/there `<hex12>` is the first twelve hex digits of the sha256 of the plan's text/);
+    // `run start` refuses that branch name when it carries no run record.
+    expect(converge).toMatch(/`Branch:` never names `stamity\/<run-id>`/);
+    expect(converge).toMatch(/An item with no plan has no `Plan:` or `Branch:` line and stays a plain item/);
+  });
+
+  it("points the writes that file an item at the filed body (REQ-BOARD-001, REQ-FLOW-155)", async () => {
+    const body = (await board()).parsed.body;
+    const writeBack = section(body, "Write-back contract");
+    const newItem = flat(/^1\. \*\*New item\*\*.*(?:\n {3}.*)*/m.exec(writeBack)?.[0] ?? "");
+    const fill = flat(section(section(body, "Modes"), "fill — intake to items", "###"));
+
+    expect(newItem).toMatch(/carrying its summary, acceptance criteria, links and the filed-item marker below/);
+    expect(fill).toMatch(/and the filed-item marker, per `### Filed items converge`/);
   });
 
   it("matches a replay's event id only in a comment the account wrote (REQ-BOARD-006)", async () => {
