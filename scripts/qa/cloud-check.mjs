@@ -113,10 +113,12 @@ export const PREFLIGHT_PREREQUISITE = [
   'allowances; or an active ORGANIZATION ruleset with such a rule that pins main of this repository (ref ~ALL or',
   'refs/heads/main, no exclude matching it; the repository by id or by name ~ALL, no property condition) with no',
   'direct-push bypass for the account, which is a plain member of the organization, not an owner. An account that',
-  'administers the repository passes only the organization-ruleset way. So a scratch repository under a personal',
-  'account cannot pass the pre-flight when that same account runs it (there is no organization ruleset to bind its',
-  'administrator): create the repositories under an organization whose ruleset on the default branch binds',
-  'administrators with no bypass (setup --owner <organization>), or run as an account without admin.',
+  'administers the repository passes only the organization-ruleset way, unless a person turned on',
+  'autonomy.adminRuleProof, when a ruleset that binds it now counts, with the warning admin-can-lift. So without that',
+  'setting a scratch repository under a personal account cannot pass the pre-flight when that same account runs it',
+  '(there is no organization ruleset to bind its administrator): create the repositories under an organization whose',
+  'ruleset on the default branch binds administrators with no bypass (setup --owner <organization>), or run as an',
+  'account without admin.',
 ].join(' ')
 
 export const USAGE =
