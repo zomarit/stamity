@@ -10,6 +10,7 @@ import {
   checkClaudeHookShell,
   checkCloudInstall,
   checkCommand,
+  checkLandJobWorkflows,
   checkModelPins,
   checkNodeVersion,
   checkPackCatalog,
@@ -5643,6 +5644,50 @@ describe("check — provenance", () => {
     expect(doc.provenance?.perAdapter).toEqual([{ adapter: "claude", files, stampedVersion: "1.16.0" }]);
     expect(human.stdout).toContain(`  claude: ${files} file(s)\n`);
     expect(human.stdout).not.toContain("stamped");
+  });
+});
+
+/**
+ * `land-job-workflows` (REQ-FLOW-157): GitHub starts nothing for a name no workflow carries, so a renamed workflow stops the
+ * land job with no sign. A row of its own, present only with `autonomy.landJob` on, so no other setup's report moves.
+ */
+describe("check — land-job-workflows", () => {
+  const LAND_ON = { mode: "autonomous", deployingBranches: [], deployingActs: [], landJob: { workflows: ["CI", "Build"] } } as const;
+  const manifestOf = (autonomy?: unknown): SetupManifest =>
+    ({ ...createManifest({ tools: ["claude"], selection: { items: { agent: [], skill: [], rule: [], command: [] } }, generatorVersion: createApp().version, now: T0 }), ...(autonomy === undefined ? {} : { autonomy }) }) as SetupManifest;
+
+  it("is no row with the setting off, or with no manifest", async () => {
+    await expect(checkLandJobWorkflows(getRepo().dir, manifestOf())).resolves.toBeNull();
+    await expect(checkLandJobWorkflows(getRepo().dir, null)).resolves.toBeNull();
+  });
+
+  it("warns, naming each watched workflow no file carries, and passes once every name is carried", async () => {
+    const handle = getRepo();
+    await handle.seedFiles({ ".github/workflows/ci.yml": "name: CI\non: push\n" });
+
+    await expect(checkLandJobWorkflows(handle.dir, manifestOf(LAND_ON))).resolves.toEqual({
+      id: "land-job-workflows",
+      status: "warn",
+      detail: 'autonomy.landJob.workflows names "Build", which no file in .github/workflows carries, so the land job never starts on it',
+    });
+
+    await handle.seedFiles({ ".github/workflows/build.yml": "name: Build\non: push\n" });
+    await expect(checkLandJobWorkflows(handle.dir, manifestOf(LAND_ON))).resolves.toMatchObject({ id: "land-job-workflows", status: "pass" });
+  });
+
+  it("is a row of check's own run with the setting on, after autonomy-deploying, and absent without it", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["claude"] });
+    expect((await runJson(root)).doc.doctor.map((entry) => entry.id)).not.toContain("land-job-workflows");
+
+    const manifest = await readManifest(root);
+    if (manifest === null) throw new Error("no manifest");
+    await writeManifest(root, { ...manifest, autonomy: { ...manifest.autonomy, landJob: { workflows: ["CI"] } } } as SetupManifest);
+
+    const { doc } = await runJson(root);
+
+    expect(row(doc, "land-job-workflows").status).toBe("warn");
+    const ids = doc.doctor.map((entry) => entry.id);
+    expect(ids.indexOf("land-job-workflows")).toBe(ids.indexOf("autonomy-deploying") + 1);
   });
 });
 

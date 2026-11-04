@@ -2322,8 +2322,8 @@ describe("stamity run land", () => {
      * A fresh checkout of a run that ended: its record closed at the head, with the lines `run end` commits, and nothing
      * under the git directory, neither the pull-request record nor a pre-flight's surface record.
      */
-    async function seedJob(opts: { status?: string; lines?: string; extra?: string; morning?: string; manifest?: string } = {}): Promise<Seeded> {
-      const seeded = await seed({ mode: "unattended", prRecord: false, manifest: opts.manifest ?? LAND_ON });
+    async function seedJob(opts: { status?: string; lines?: string; extra?: string; morning?: string; manifest?: string; mode?: "attended" | "unattended" } = {}): Promise<Seeded> {
+      const seeded = await seed({ mode: opts.mode ?? "unattended", prRecord: false, manifest: opts.manifest ?? LAND_ON });
       const { repo, remote } = seeded;
       const closed = (await record(repo)).replace("Status: in progress", `Status: ${opts.status ?? "closed 2026-11-04"}`);
       await put(repo, `${RUN_DIR}/record.md`, `${closed}${opts.extra ?? ""}${opts.lines ?? END_LINES}`);
@@ -2440,17 +2440,123 @@ describe("stamity run land", () => {
       expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "landed" });
     });
 
-    it("exits 0 and posts no request while the review tool is awaited", async () => {
-      const tool = { login: "chatgpt-codex-connector[bot]", request: "@codex review", clean: "reaction", waitMinutes: 40, rounds: 2 };
-      const { repo } = await seedJob({ manifest: `${JSON.stringify({ version: 1, autonomy: { reviewTool: tool, landJob: { workflows: ["CI"] } } })}\n` });
-      route("GET repos/o/r/issues/7/comments", []);
-      route("GET repos/o/r/pulls/7/reviews", []);
-      route("GET repos/o/r/issues/7/reactions", []);
+    describe("the review tool, which a cloud run cannot ask (W-2)", () => {
+      const LOGIN = "chatgpt-codex-connector[bot]";
+      const TOOL = { login: LOGIN, request: "@codex review", clean: "state-comment", stateMarker: "codex-review-state:v1", stateSection: "code_review", waitMinutes: 40, rounds: 2 };
+      const JOB_TOOL = `${JSON.stringify({ version: 1, autonomy: { reviewTool: TOOL, landJob: { workflows: ["CI"] } } })}\n`;
+      /** The clock {@link fakeClock} starts from, so a comment reads as made when the job started. */
+      const STARTED = new Date(1_000_000).toISOString();
+      const comment = (id: number, login: string, type: string, body: string): unknown => ({ id, user: { login, type }, body, created_at: STARTED });
+      const asked = (id: number, head: string, login = "github-actions[bot]"): unknown => comment(id, login, "Bot", `@codex review\n\n${requestMarker(head)}`);
+      const clean = (id: number, head: string): unknown =>
+        comment(id, LOGIN, "Bot", `<!-- codex-review-state:v1 ${JSON.stringify({ code_review: { commit_sha: head, has_any_findings: false, has_unresolved_findings: false, status: "completed" } })} -->`);
+      const never = (id: number): unknown => ({ databaseId: id, lastEditedAt: null, editor: null });
+      const posted = (): string[] => gh.calls.filter((call) => call.method === "POST").map((call) => (call.body as { body: string }).body);
+
+      function answers(reads: unknown[][], reactions: unknown[] = []): void {
+        route("POST repos/o/r/issues/7/comments", { id: 900 }, 201);
+        route("GET repos/o/r/pulls/7/reviews", []);
+        route("GET repos/o/r/issues/7/reactions", reactions);
+        gh.routes.set("GET repos/o/r/issues/7/comments", reads.map((json) => ({ status: 200, json })));
+        gh.editors = [editorsPage([never(1), never(2), never(3)])];
+      }
+
+      it("posts the request itself, once, its own marker counts, and the wait runs out to a hold the status line shows", async () => {
+        const { slept } = fakeClock();
+        const { repo, head } = await seedJob({ manifest: JOB_TOOL });
+        answers([[], [asked(1, head)]]);
+
+        const result = await run(repo, LANDS);
+
+        expect(posted()).toEqual([`@codex review\n\n${requestMarker(head)}`]);
+        expect(slept.length).toBeGreaterThan(0);
+        expect(result.code).toBe(1);
+        expect(result.doc).toMatchObject({ outcome: "refused", evidence: { review: { state: "silent" } }, notDone: [expect.stringContaining("within 40 minutes")] });
+        const body = (gh.calls.find((call) => call.method === "PATCH")?.body as { body: string } | undefined)?.body;
+        expect(body).toMatch(new RegExp(`merge waits on: ${LOGIN.replace(/[[\]]/g, "\\$&")} gave .* within 40 minutes\\n\\n${MARKER}$`));
+        expect(kinds()).not.toContain("merge");
+      });
+
+      it("lands on the tool's clean word while it waits, a viewer spelled with [bot] reading the same", async () => {
+        fakeClock();
+        const { repo, head } = await seedJob({ manifest: JOB_TOOL });
+        gh.threads = [threadsPage([], "github-actions[bot]")];
+        answers([[], [asked(1, head)], [asked(1, head)], [asked(1, head), clean(2, head)]], [{ user: { login: LOGIN, type: "User" }, content: "+1" }]);
+
+        const result = await run(repo, LANDS);
+
+        expect(result.doc).toMatchObject({ outcome: "landed", evidence: { review: { state: "clean" } } });
+        expect(posted()).toHaveLength(1);
+      });
+
+      it("counts a marker from the run's login, and asks nothing more", async () => {
+        fakeClock();
+        const { repo, head } = await seedJob({ manifest: JOB_TOOL });
+        answers([[asked(1, head, "runner")]]);
+
+        await run(repo, LANDS);
+
+        expect(posted()).toEqual([]);
+      });
+
+      it("counts a marker from whatever login the job's token proves to be", async () => {
+        fakeClock();
+        const { repo, head } = await seedJob({ manifest: JOB_TOOL });
+        gh.threads = [threadsPage([], "stamity-land-app")];
+        answers([[asked(1, head, "stamity-land-app[bot]")]]);
+
+        await run(repo, LANDS);
+
+        expect(posted()).toEqual([]);
+      });
+
+      it("stops waiting on a draft whose head moved, so the job for the new head does not queue behind a dead wait", async () => {
+        const { slept } = fakeClock();
+        const { repo, head } = await seedJob({ manifest: JOB_TOOL });
+        answers([[asked(1, head)]]);
+        const draft = pull(head, { draft: true, mergeable_state: "draft" });
+        gh.routes.set("GET repos/o/r/pulls/7", [draft, draft, pull("c".repeat(40), { draft: true, mergeable_state: "draft" })].map((json) => ({ status: 200, json })));
+
+        const result = await run(repo, LANDS);
+
+        expect(result.doc).toMatchObject({ outcome: "refused", notDone: [`pull request #7's head ${"c".repeat(40)} is not HEAD ${head}`] });
+        expect(slept).toHaveLength(1);
+        expect(writes()).toEqual([]);
+      });
+
+      it("counts no one else's marker: a stranger's neither stands for a request nor spends a round", async () => {
+        fakeClock();
+        const { repo, head } = await seedJob({ manifest: JOB_TOOL });
+        const stranger = comment(1, "mallory", "User", requestMarker(head));
+        answers([[stranger], [stranger, asked(2, head)]]);
+
+        const result = await run(repo, LANDS);
+
+        expect(posted()).toHaveLength(1);
+        expect(result.doc).toMatchObject({ evidence: { review: { state: "silent" } } });
+      });
+
+      it("reads the job's marker at a session's land where landJob is on, and not where it is off", async () => {
+        const on = await seed({ manifest: JOB_TOOL });
+        answers([[asked(1, on.head)]]);
+        await run(on.repo, ["land", "--run", RUN]);
+        expect(posted()).toEqual([]);
+
+        gh.calls.length = 0;
+        const off = await seed({ manifest: `${JSON.stringify({ version: 1, autonomy: { reviewTool: TOOL } })}\n` });
+        answers([[asked(1, off.head)]]);
+        await run(off.repo, ["land", "--run", RUN]);
+        expect(posted()).toHaveLength(1);
+      });
+    });
+
+    it("leaves an attended run's pull request alone, which no end stamped: a person lands it, and a red job would say nothing new", async () => {
+      const { repo } = await seedJob({ mode: "attended", lines: "" });
 
       const result = await run(repo, LANDS);
 
       expect(result.code).toBe(0);
-      expect(result.doc).toMatchObject({ outcome: "pending", evidence: {} });
+      expect(result.doc).toMatchObject({ outcome: "not-a-run" });
       expect(writes()).toEqual([]);
     });
 

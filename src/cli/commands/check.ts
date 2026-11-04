@@ -12,6 +12,7 @@ import { readCharterTemplate } from "../../content/charter.ts";
 import { slugOf } from "../../content/catalog.ts";
 import { discoverUserContent } from "../../content/userContent.ts";
 import { pinnedCliInstall } from "../../adapters/copilot.ts";
+import { unwatchedWorkflows } from "../../adapters/landWorkflow.ts";
 import { AGENTS_MD_FILE, CURSOR_CLOUD_BLOCK_HEADING } from "../../emit/agentsMd.ts";
 import { SKILLS_PROJECTION_DIR, TOUCHPOINT_POLICY_FILE } from "../../emit/skillsProjection.ts";
 import { renderInvariantsVersion, type CliCallContext } from "../../emit/substitution.ts";
@@ -2017,6 +2018,19 @@ export function checkCloudInstall(
   };
 }
 
+// ── The land job's watched workflows ───────────────────────────────────────
+/**
+ * The `land-job-workflows` row (REQ-FLOW-157): GitHub starts nothing for a name no workflow carries, so a renamed workflow
+ * stops the land job with no sign. Warns naming each such name; `null`, no row, with the setting off.
+ */
+export async function checkLandJobWorkflows(rootDir: string, manifest: SetupManifest | null): Promise<DoctorCheck | null> {
+  const landJob = manifest === null ? undefined : resolveAutonomy(manifest).landJob;
+  if (landJob === undefined) return null;
+  const id = "land-job-workflows";
+  const missing = await unwatchedWorkflows(rootDir, landJob.workflows);
+  return missing.length > 0 ? { id, status: "warn", detail: missing.join("\n") } : { id, status: "pass", detail: "a workflow file carries every name in autonomy.landJob.workflows" };
+}
+
 // ── The autonomy setting's deploying workflows ─────────────────────────────
 
 /** Where GitHub Actions reads workflows, repo-relative and displayed POSIX. */
@@ -2549,6 +2563,7 @@ export async function runDoctor(
     legacyFiles,
     modelPins,
     autonomyDeploying,
+    landJobWorkflows,
     changeClasses,
     invariants,
   ] = await Promise.all([
@@ -2573,6 +2588,7 @@ export async function runDoctor(
         (root) => engine.workspace.git.detectRepoGitIdentity(root, gitCheckRunner()).defaultBranch,
       ),
     ),
+    guarded("land-job-workflows", () => checkLandJobWorkflows(rootDir, manifest)),
     checkChangeClasses(rootDir),
     guarded("invariants", checkInvariants),
   ]);
@@ -2616,6 +2632,8 @@ export async function runDoctor(
     // lets the land verb merge into unasked. It answers about this repository,
     // and sits before `model-pins`, which `cloud-install` follows.
     autonomyDeploying,
+    // Present only with `autonomy.landJob` on: whether the job's watched workflows exist.
+    ...(landJobWorkflows === null ? [] : [landJobWorkflows]),
     // Whether each client's pinned and emitted models are on the account's own
     // list; it answers about this repository's pins, so it sits with the
     // repository rows.
@@ -3348,7 +3366,7 @@ async function readProvenance(
  * A sealed directory or an unreadable file is worth saying out loud; it is not
  * worth losing the other thirteen verdicts over.
  */
-async function guarded(id: string, run: () => Promise<DoctorCheck>): Promise<DoctorCheck> {
+async function guarded<T extends DoctorCheck | null>(id: string, run: () => Promise<T>): Promise<T | DoctorCheck> {
   try {
     return await run();
   } catch (cause) {

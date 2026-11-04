@@ -27,6 +27,9 @@ export const LAND_WORKFLOW_ARTIFACT_ID = "land-workflow";
 /** The folder Actions reads workflows from. */
 const WORKFLOWS_DIR = ".github/workflows";
 
+/** The job's limit before any wait on a review tool: the land verb's own budget, the install and the checkout. */
+const JOB_MINUTES = 15;
+
 /** Past this many bytes a workflow's `name:` is not read. */
 const WORKFLOW_READ_MAX_BYTES = 1024 * 1024;
 
@@ -45,10 +48,13 @@ function installLine(cli: CliCallContext): string | null {
 
 /**
  * The workflow's text, or `null` for a package with no npm channel, which leaves the job nothing to install by version.
- * `workflows` are quoted as JSON, which YAML reads as a double-quoted scalar; `reviewLogin` passed the login check, so it holds
- * no quote. The pull request number reaches the shell through the environment only: `inputs.pr` is never spliced into a line.
+ * `workflows` are quoted as JSON, which YAML reads as a double-quoted scalar; the tool's login passed the login check, so it
+ * holds no quote. The pull request number reaches the shell through the environment only: `inputs.pr` is never spliced into a
+ * line. The queue sits on the job, not the workflow, so an event its `if:` skips takes no place from a real start, and is per
+ * pull request, so one pull request's events never cancel another's. A silent tool sends no event to wake the job, so the job
+ * waits the tool out itself, and the limit leaves room for that wait.
  */
-export function buildLandWorkflow(workflows: readonly string[], reviewLogin: string | undefined, cli: CliCallContext): string | null {
+export function buildLandWorkflow(workflows: readonly string[], review: { login: string; waitMinutes: number } | undefined, cli: CliCallContext): string | null {
   const install = installLine(cli);
   if (install === null) return null;
   return [
@@ -64,7 +70,7 @@ export function buildLandWorkflow(workflows: readonly string[], reviewLogin: str
     "  workflow_run:",
     `    workflows: [${workflows.map((name) => JSON.stringify(name)).join(", ")}]`,
     "    types: [completed]",
-    ...(reviewLogin === undefined ? [] : ["  issue_comment:", "    types: [created, edited]"]),
+    ...(review === undefined ? [] : ["  issue_comment:", "    types: [created, edited]"]),
     "  workflow_dispatch:",
     "    inputs:",
     "      pr:",
@@ -77,18 +83,17 @@ export function buildLandWorkflow(workflows: readonly string[], reviewLogin: str
     "  pull-requests: write",
     "  checks: read",
     "",
-    "concurrency:",
-    "  group: stamity-land",
-    "  cancel-in-progress: false",
-    "",
     "jobs:",
     "  land:",
     "    if: >-",
     "      github.event_name == 'workflow_dispatch'",
     "      || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.pull_requests[0].number)",
-    ...(reviewLogin === undefined ? [] : [`      || (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.comment.user.login == '${reviewLogin}')`]),
+    ...(review === undefined ? [] : [`      || (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.comment.user.login == '${review.login}')`]),
+    "    concurrency:",
+    "      group: stamity-land-${{ github.event.workflow_run.pull_requests[0].number || github.event.issue.number || inputs.pr || github.event.workflow_run.head_branch }}",
+    "      cancel-in-progress: false",
     "    runs-on: ubuntu-latest",
-    "    timeout-minutes: 15",
+    `    timeout-minutes: ${JOB_MINUTES + (review?.waitMinutes ?? 0)}`,
     "    env:",
     "      PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number || github.event.issue.number || inputs.pr }}",
     "    steps:",
@@ -138,6 +143,12 @@ async function workflowNames(rootDir: string): Promise<Set<string>> {
   return new Set(names.filter((name) => name !== null));
 }
 
+/** One line for each of `watched` no workflow file carries, the words `sync` and `check` both print. */
+export async function unwatchedWorkflows(rootDir: string, watched: readonly string[]): Promise<string[]> {
+  const names = await workflowNames(rootDir);
+  return watched.filter((name) => !names.has(name)).map((name) => `autonomy.landJob.workflows names ${JSON.stringify(name)}, which no file in ${WORKFLOWS_DIR} carries, so the land job never starts on it`);
+}
+
 /** What the plan adds for the land job: the workflow's text, `null` while none is written, and what a sync should say. */
 export interface LandWorkflowPlan {
   readonly content: string | null;
@@ -151,12 +162,7 @@ export interface LandWorkflowPlan {
 export async function planLandWorkflow(rootDir: string, manifest: SetupManifest, cli: CliCallContext): Promise<LandWorkflowPlan> {
   const { landJob, reviewTool } = resolveAutonomy(manifest);
   if (landJob === undefined) return { content: null, warnings: [] };
-  const content = buildLandWorkflow(landJob.workflows, reviewTool?.login, cli);
+  const content = buildLandWorkflow(landJob.workflows, reviewTool, cli);
   if (content === null) return { content, warnings: ["autonomy.landJob is on, but this package has no npm channel, so no land workflow is written: the job installs the CLI by version"] };
-  const names = await workflowNames(rootDir);
-  const missing = landJob.workflows.filter((name) => !names.has(name));
-  return {
-    content,
-    warnings: missing.map((name) => `autonomy.landJob.workflows names ${JSON.stringify(name)}, which no file in ${WORKFLOWS_DIR} carries, so the land job never starts on it`),
-  };
+  return { content, warnings: await unwatchedWorkflows(rootDir, landJob.workflows) };
 }

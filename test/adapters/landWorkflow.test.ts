@@ -20,6 +20,7 @@ import { useTempDir } from "../support/tempDir.ts";
 
 const CLI = { packageName: "@zomarit/stamity", version: "1.18.0" };
 const LOGIN = "chatgpt-codex-connector[bot]";
+const REVIEW = { login: LOGIN, waitMinutes: 40 };
 
 interface Step {
   uses?: string;
@@ -30,11 +31,11 @@ interface Step {
 interface Workflow {
   on: Record<string, { workflows?: string[]; types?: string[]; inputs?: unknown } | null>;
   permissions: Record<string, string>;
-  concurrency: Record<string, unknown>;
-  jobs: { land: { if: string; env: Record<string, string>; steps: Step[] } };
+  concurrency?: unknown;
+  jobs: { land: { if: string; "timeout-minutes": number; concurrency: Record<string, unknown>; env: Record<string, string>; steps: Step[] } };
 }
 
-function workflowOf(names: readonly string[] = ["CI"], review?: string): { text: string; yaml: Workflow } {
+function workflowOf(names: readonly string[] = ["CI"], review?: { login: string; waitMinutes: number }): { text: string; yaml: Workflow } {
   const text = buildLandWorkflow(names, review, CLI);
   if (text === null) throw new Error("no workflow was built");
   return { text, yaml: parseYamlStrict(text, LAND_WORKFLOW_PATH) as Workflow };
@@ -54,7 +55,7 @@ describe("the land job's workflow (REQ-FLOW-157)", () => {
   });
 
   it("names no head code: no install from the head, no head registry, no local bin, and no event text in a shell line", () => {
-    const { text, yaml } = workflowOf(["CI"], LOGIN);
+    const { text, yaml } = workflowOf(["CI"], REVIEW);
     for (const banned of ["npm ci", ".npmrc", "npx --no", "npm test", "node-version-file", "cache:"]) expect(text).not.toContain(banned);
     for (const step of yaml.jobs.land.steps) expect(step.run ?? "").not.toContain("${{");
   });
@@ -64,14 +65,26 @@ describe("the land job's workflow (REQ-FLOW-157)", () => {
     expect(Object.keys(yaml.on)).toEqual(["workflow_run", "workflow_dispatch"]);
     expect(yaml.on["workflow_run"]).toEqual({ workflows: ["CI", "Build"], types: ["completed"] });
     expect(yaml.permissions).toEqual({ contents: "write", "pull-requests": "write", checks: "read" });
-    expect(yaml.concurrency).toEqual({ group: "stamity-land", "cancel-in-progress": false });
     expect(yaml.jobs.land.if).not.toContain("issue_comment");
+    expect(yaml.jobs.land["timeout-minutes"]).toBe(15);
+  });
+
+  it("queues per pull request, never cancelling a job in progress, and takes no slot for an event the job skips", () => {
+    const { yaml } = workflowOf();
+    // On the job, so a comment its `if:` skips cannot replace a real start waiting in the same group.
+    expect(yaml.concurrency).toBeUndefined();
+    expect(yaml.jobs.land.concurrency).toEqual({
+      group: "stamity-land-${{ github.event.workflow_run.pull_requests[0].number || github.event.issue.number || inputs.pr || github.event.workflow_run.head_branch }}",
+      "cancel-in-progress": false,
+    });
   });
 
   it("wakes on the review tool's comment, and only that login's, where one is named", () => {
-    const { yaml } = workflowOf(["CI"], LOGIN);
+    const { yaml } = workflowOf(["CI"], REVIEW);
     expect(yaml.on["issue_comment"]).toEqual({ types: ["created", "edited"] });
     expect(yaml.jobs.land.if).toContain(`github.event.comment.user.login == '${LOGIN}'`);
+    // The job waits the tool out, since a silent tool sends no event to wake it.
+    expect(yaml.jobs.land["timeout-minutes"]).toBe(55);
   });
 
   it("keeps a workflow name a single YAML value, whatever it holds", () => {

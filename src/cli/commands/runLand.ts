@@ -115,7 +115,10 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * since `gh` is the job's token there and a person's thread the run closed must stay unresolved whichever account reads it. The
  * record at the head must read `Status: closed` with no `(blocked:`, and neither it nor the morning list may hold a `## Refused`
  * row, the rule step 4 of the unattended ending states. The git surface is not read, since no pre-flight ran here. The job writes
- * no `land:` line, the body's evidence line standing, and while evidence is pending or a land is refused it writes nothing.
+ * no `land:` line, the body's evidence line standing, and while evidence is pending or a land is refused it writes nothing, with
+ * two exceptions the cloud leaves it. A cloud run cannot ask the review tool, so the job does, through the same request, and a
+ * silent tool sends no event, so the job waits it out in this one call; a `silent` or `spent` tool then writes the status line,
+ * the hold a person can see. Its markers count as the run's, in every land of a setup with the job on, and no one else's do.
  *
  * Exit 0 `landed` or `already-landed`, and in job mode `pending` and `not-a-run`; 1 `asks` or `refused` (the JSON's `outcome` is
  * how a flow branches); 2 usage.
@@ -146,6 +149,10 @@ export const LAND_CLOCK: PollClock = {
 const MAX_PAGES = 10;
 /** GitHub lists at most 3,000 changed files, 30 pages of 100. */
 const MAX_FILE_PAGES = 30;
+/** What a job's `GITHUB_TOKEN` posts as: a login no person holds, which the token's own workflow alone writes under. */
+const JOB_BOT = "github-actions[bot]";
+/** A login as `viewer` names it: REST spells an app `app[bot]` where viewer names it `app` (review/94). */
+const bareLogin = (login: string): string => login.replace(/\[bot\]$/, "").toLowerCase();
 /** A branch name as it goes into a path unencoded, as the push check reads it. */
 const PATH_BRANCH = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/-]+$/;
 /** The manifest below the project root: a pull request whose file list leaves it out cannot loosen a key. */
@@ -158,8 +165,8 @@ interface TipRead {
 }
 /** What the verb's JSON carries. */
 interface LandResult {
-  /** `pending`: job mode only, evidence still to come, so the job did nothing. */
-  outcome: "landed" | "already-landed" | "asks" | "refused" | "would-land" | "pending";
+  /** Job mode only. `pending`: evidence still to come, so the job did nothing. `not-a-run`: not the job's to land. */
+  outcome: "landed" | "already-landed" | "asks" | "refused" | "would-land" | "pending" | "not-a-run";
   pr: { number: number; url: string; head: string } | null;
   evidence: {
     checks: { name: string; state: "green" | "pending" | "failing" | "missing" }[];
@@ -358,7 +365,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
   const ready = opts["ready"] === true;
   const method = (typeof opts["method"] === "string" ? opts["method"] : "merge") as MergeMethod;
   const waitMinutes = typeof opts["wait"] === "number" ? opts["wait"] : 0;
-  const budgetEnd = LAND_CLOCK.now() + LAND_BUDGET_MS - ACT_RESERVE_MS;
+  let budgetEnd = LAND_CLOCK.now() + LAND_BUDGET_MS - ACT_RESERVE_MS;
 
   const result: LandResult = {
     outcome: "refused",
@@ -383,9 +390,15 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     lines.push(`outcome: ${result.outcome}`);
     const notDone = result.notDone;
     ctx.io.out(`${[...lines, ...(notDone.length === 0 ? [] : ["Not done:", ...notDone.map((entry) => `  - ${entry}`)])].join("\n")}\n`);
-    const landed = result.outcome === "landed" || result.outcome === "already-landed" || result.outcome === "would-land" || result.outcome === "pending";
+    const landed = ["landed", "already-landed", "would-land", "pending", "not-a-run"].includes(result.outcome);
     return { exitCode: landed ? 0 : 1, json: { subcommand: "land", run, ...result, ...(ctx.dryRun ? { dryRun: true } : {}) } };
   };
+  // An attended close opens its pull request with `checkpoint --pr`, so no `end` stamped it: a person lands it, and it is no failure.
+  if (job !== null && head.mode === "attended" && !/^PR: /m.test(record.text)) {
+    result.outcome = "not-a-run";
+    result.notDone.push("an attended run's pull request, which no run end stamped, so the job leaves it as it is");
+    return finish();
+  }
 
   const { git, gitLine } = landGit(cwd, unattended);
   /** review/97 (REQ-FLOW-131): unattended, git's surface must be the one the pre-flight recorded, a passing one; no pre-flight ran for a job. */
@@ -404,6 +417,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
   let noteWaits = async (reasons: readonly string[]): Promise<void> => {
     void reasons;
   };
+  /** A job leaves the pull request as it was, but for a review tool's hold, which only this line shows a person. */
+  let bodyTakesWaits = job === null;
   try {
     // review/103: --approved is the person's answer; an unattended run has no person to give it, so it refuses first.
     if (approved && unattended) throw new Refused("--approved is the person's answer to an asks outcome, and this run is unattended, so no person gave it");
@@ -486,10 +501,10 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     result.evidence.mergeableState = pr.mergeableState;
     const own = { repo: `${repo.owner}/${repo.repo}`, runBranch, head: sha, originTip, marker, defaultBranch, viewer };
     // build/6: from here the pull request is known; on asks or refused, why its merge waits goes into its own body,
-    // while it still reads as the run's own, open and unmerged. A dry run writes nothing, and a job leaves the pull request as it was.
+    // while it still reads as the run's own, open and unmerged. A dry run writes nothing.
     noteWaits = async (reasons: readonly string[]): Promise<void> => {
       const check = ownPr(pr, own);
-      if (job !== null || ctx.dryRun || reasons.length === 0 || check.already || check.refusals.length > 0) return;
+      if (!bodyTakesWaits || ctx.dryRun || reasons.length === 0 || check.already || check.refusals.length > 0) return;
       const wanted = waitsLine(reasons.map((reason) => sanitizeLabel(reason)));
       const line = screenOutbound(wanted, "pr-body").ok ? wanted : `${waitsLine(["reasons not posted, since the outbound screen matched them; read the run's record"])}`;
       try {
@@ -506,6 +521,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     if (job !== null && setting.landJob === undefined) throw new Refused("autonomy.landJob is not on in every leg of the setting, so the job does not land here");
     // Legs that disagree on the review tool go to a person: `setting.reviewTool` is then only the first leg's, and it judges nothing.
     const tool = setting.reviewToolConflict.length === 0 ? setting.reviewTool : undefined;
+    // A job has no client's shell limit and no next call to leave a wait to: its budget takes in the tool's whole wait.
+    if (job !== null) budgetEnd += (tool?.waitMinutes ?? 0) * 60_000;
 
     // (5) The changed files, every page, a rename's old name included.
     const files: string[] = [];
@@ -590,9 +607,10 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     }
 
     // (9b) The review tool's three reads, the editors last, so an edit landing between the reads shows as a foreign editor.
-    // Only the run's own request markers go in: a stranger's cannot spend a round or stand for a request. REST spells an
-    // app `app[bot]` where viewer names it `app` (review/94).
-    const fromRun = (login: string): boolean => login.replace(/\[bot\]$/, "").toLowerCase() === viewer.toLowerCase();
+    // Only the run's own request markers go in: a stranger's cannot spend a round or stand for a request. With the land job on
+    // the job's token asks too, so its markers count in every land, and in a job whatever login that token proves to be.
+    const requesters = new Set([viewer, ...(setting.landJob === undefined ? [] : [JOB_BOT]), ...(job === null ? [] : [actor])].map(bareLogin));
+    const fromRun = (login: string): boolean => requesters.has(bareLogin(login));
     const readFacts = async (): Promise<ReviewToolFacts> => {
       const comments = await everyPage(json, `${repoPath}/issues/${number}/comments`, "the pull request's comments read", parseIssueComments);
       const reviews = await everyPage(json, `${repoPath}/pulls/${number}/reviews`, "the pull request's reviews read", parseReviews);
@@ -665,12 +683,12 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       ];
     };
     let checks: CheckEvidence = await readChecks();
-    const deadline = Math.min(LAND_CLOCK.now() + waitMinutes * 60_000, budgetEnd);
-    /** One fresh read of everything that moves: the check runs, the threads, the tip, the tool and (after any ready mark) the pull request. */
+    const deadline = job === null ? Math.min(LAND_CLOCK.now() + waitMinutes * 60_000, budgetEnd) : budgetEnd;
+    /** One fresh read of everything that moves: the check runs, the threads, the tip, the tool and (after any ready mark, and always in a job) the pull request. */
     const reread = async (beforeReady: boolean): Promise<LandDecision> => {
       checks = await readChecks();
       threads = await readThreads();
-      if (!beforeReady) pr = await readPr();
+      if (!beforeReady || job !== null) pr = await readPr();
       tip = await readTip();
       await readReview();
       return decideLand(inputFor(pr, checks, beforeReady));
@@ -679,10 +697,10 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     /**
      * REQ-FLOW-154: asks the tool on a head whose only stops are waits, so no round goes on a head that cannot land, and
      * only where the run has not asked on it yet. A run the tool started itself gets the marker alone (build/11): the clock
-     * starts and no second run does. A dry run and a job write nothing, and a request that fails leaves the land waiting.
+     * starts and no second run does. A dry run writes nothing, and a request that fails leaves the land waiting.
      */
     const askTool = async (now: LandDecision, beforeReady: boolean): Promise<LandDecision> => {
-      if (job !== null || tool === undefined || facts === undefined || ctx.dryRun || !pending(now) || review?.state !== "waiting") return now;
+      if (tool === undefined || facts === undefined || ctx.dryRun || !pending(now) || review?.state !== "waiting") return now;
       const asked = requestMarker(sha);
       if (facts.comments.some((comment) => comment.body.includes(asked))) return now;
       const body = ranOnHead(facts, tool) ? asked : `${tool.request}\n\n${asked}`;
@@ -691,11 +709,13 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       result.notDone.push(`the review request was not posted to #${number} (${written === null ? "gh failed before GitHub answered" : `HTTP ${written.status}`})`);
       return now;
     };
+    /** A job waits on the tool alone: the tool's silence sends no event, while every other pending thing ends in one. */
+    const worthWaiting = (now: LandDecision): boolean => pending(now) && (job === null || review?.state === "waiting");
     /** `--wait`: while only pending checks or an uncomputed merge state stop it, sleep a poll's interval, then read again. */
     const waitOut = async (decision: LandDecision, beforeReady: boolean): Promise<LandDecision> => {
       let now = decision;
-      if (waitMinutes === 0) return now;
-      while (pending(now) && LAND_CLOCK.now() + POLL_MS <= deadline) {
+      if (waitMinutes === 0 && job === null) return now;
+      while (worthWaiting(now) && LAND_CLOCK.now() + POLL_MS <= deadline) {
         // oxlint-disable-next-line no-await-in-loop -- a poll: each read waits out the interval after the last one
         await LAND_CLOCK.sleep(POLL_MS);
         // oxlint-disable-next-line no-await-in-loop -- the next read decides whether the wait goes on
@@ -746,6 +766,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       return finish();
     }
     if (decision.outcome === "refused") {
+      bodyTakesWaits ||= review?.state === "silent" || review?.state === "spent";
       // A tool wait runs up to `waitMinutes`, past the verb's budget, so what is left of it goes to the next call.
       if (decision.pending && review?.state === "waiting") {
         const [reason = ""] = decision.reasons;
