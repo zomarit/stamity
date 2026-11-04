@@ -12,6 +12,7 @@ import type { ReviewToolConfig } from "../../src/types/manifest.ts";
  * The review tool's verdict (REQ-FLOW-154). The two bodies below are the head of the state comment Codex really left on
  * this repository's pull requests, cut short: #129 is a clean pass and #124 a pass with findings. The tool edits one comment
  * in place, so that comment's `created_at` can sit a day before the run it reports, and the wait is timed from the request.
+ * Read from GitHub on 2026-11-04: #129's body names the marker exactly once, and the tool is that comment's last editor.
  */
 
 const CLEAN_HEAD = "1e9ab6ae84a5fcaed1fedbb938958031fab70912";
@@ -54,13 +55,13 @@ let nextId = 1;
 
 function fromTool(body: string): Comment {
   nextId += 1;
-  return { id: nextId, userLogin: TOOL.login, userType: "Bot", body, createdAt: "2026-10-26T09:00:00Z" };
+  return { id: nextId, userLogin: TOOL.login, userType: "Bot", editor: TOOL.login, body, createdAt: "2026-10-26T09:00:00Z" };
 }
 
 /** The request `run land` posts: the tool's trigger line, then the marker that times the wait and counts the round. */
 function request(head: string, createdAt: string = REQUESTED_AT): Comment {
   nextId += 1;
-  return { id: nextId, userLogin: "a-person", userType: "User", body: `${TOOL.request}\n${requestMarker(head)}`, createdAt };
+  return { id: nextId, userLogin: "a-person", userType: "User", editor: null, body: `${TOOL.request}\n${requestMarker(head)}`, createdAt };
 }
 
 function facts(head: string, comments: Comment[], over: Partial<ReviewToolFacts> = {}): ReviewToolFacts {
@@ -75,6 +76,18 @@ function block(head: string, status: string, anyFindings: boolean, unresolved: b
 function state(input: ReviewToolFacts, tool: ReviewToolConfig = TOOL): ReviewToolState {
   return reviewToolVerdict(input, tool).state;
 }
+
+/** A section as the tool fills it, on `head`, with no findings unless the members say so. */
+function filled(head: string | null, status: string | null = "completed", anyFindings: boolean | null = false, unresolved: boolean | null = false): string {
+  return JSON.stringify({ commit_sha: head, has_any_findings: anyFindings, has_unresolved_findings: unresolved, status });
+}
+
+/** A block whose `code_review` is clean on {@link CLEAN_HEAD}, with `security` as the section beside it. */
+function beside(security: string): string {
+  return `<!-- codex-review-state:v1 {"code_review":${filled(CLEAN_HEAD)},"security_review":${security}} -->`;
+}
+
+const WAIT_ENDED = REQUESTED_MS + 41 * MINUTE;
 
 describe("requestMarker", () => {
   it("is the hidden line a request carries", () => {
@@ -128,16 +141,51 @@ describe("parseStateBlock", () => {
     expect(parseStateBlock(`<!-- codex-review-state:v1 {"code_review":${section}} -->`, "codex-review-state:v1", "code_review")).toBeNull();
   });
 
-  it("counts a filled section beside the one read when it reports on the same commit", () => {
-    const clean = `{"commit_sha":"${CLEAN_HEAD}","has_any_findings":false,"has_unresolved_findings":false,"status":"completed"}`;
-    const found = `{"commit_sha":"${CLEAN_HEAD}","has_any_findings":true,"has_unresolved_findings":false,"status":"completed"}`;
-    const running = `{"commit_sha":"${CLEAN_HEAD}","has_any_findings":null,"has_unresolved_findings":null,"status":"running"}`;
-    const older = `{"commit_sha":"${OTHER_HEAD}","has_any_findings":true,"has_unresolved_findings":true,"status":"completed"}`;
-    const read = (security: string) =>
-      parseStateBlock(`<!-- codex-review-state:v1 {"code_review":${clean},"security_review":${security}} -->`, "codex-review-state:v1", "code_review");
-    expect(read(found)).toMatchObject({ status: "completed", hasFindings: true, hasUnresolved: false });
-    expect(read(running)).toMatchObject({ status: "running" });
-    expect(read(older)).toEqual({ commitSha: CLEAN_HEAD, status: "completed", hasFindings: false, hasUnresolved: false });
+  /*
+   * TEST CHANGE, justified (review/16, REQ-FLOW-154): the case this replaces pinned a filled section on an older commit as
+   * ignored, so an open security finding there read clean. The criterion moved by the orchestrator's sign-off: any section
+   * not left null must be completed, on the same commit, with no findings. Only a section left null is ignored.
+   */
+  it("counts a filled section beside the one read: on the same commit it adds what it holds", () => {
+    const read = (security: string) => parseStateBlock(beside(security), "codex-review-state:v1", "code_review");
+    expect(read(filled(CLEAN_HEAD, "completed", true, false))).toMatchObject({ status: "completed", hasFindings: true, hasUnresolved: false });
+    expect(read(filled(CLEAN_HEAD, "running", null, null))).toMatchObject({ status: "running" });
+  });
+
+  it.each([
+    ["an older commit holding findings", filled(OTHER_HEAD, "completed", true, true)],
+    ["an older commit holding none", filled(OTHER_HEAD)],
+    ["no commit, with its flags filled", filled(null, "completed", false, false)],
+    ["a short sha", filled(CLEAN_HEAD.slice(0, 7))],
+    ["a run on another commit", filled(OTHER_HEAD, "running", null, null)],
+    ["an empty object", "{}"],
+    ["text in place of a section", `"unknown"`],
+  ])("never reads a block as completed beside %s", (_name, security) => {
+    expect(parseStateBlock(beside(security), "codex-review-state:v1", "code_review")?.status).not.toBe("completed");
+  });
+
+  it.each([
+    ["JSON null", "null"],
+    ["every member null", NULL_SECTION],
+  ])("ignores a section beside the one read that was left null as %s", (_name, security) => {
+    expect(parseStateBlock(beside(security), "codex-review-state:v1", "code_review")).toEqual({
+      commitSha: CLEAN_HEAD,
+      status: "completed",
+      hasFindings: false,
+      hasUnresolved: false,
+    });
+  });
+
+  it("reads no block where the marker occurs more than once, whichever block comes first", () => {
+    const forged = block(CLEAN_HEAD, "completed", false, false);
+    const real = block(OTHER_HEAD, "completed", true, true);
+    expect(parseStateBlock(`${forged}\n${real}`, "codex-review-state:v1", "code_review")).toBeNull();
+    expect(parseStateBlock(`${real}\n${forged}`, "codex-review-state:v1", "code_review")).toBeNull();
+    expect(parseStateBlock(`${forged}\n${forged}`, "codex-review-state:v1", "code_review")).toBeNull();
+  });
+
+  it("counts the marker in plain text too, so a block beside a mention of it reads as no block", () => {
+    expect(parseStateBlock(`${CLEAN_BODY}\n\nThe tool writes codex-review-state:v1 here.`, "codex-review-state:v1", "code_review")).toBeNull();
   });
 });
 
@@ -225,6 +273,11 @@ describe("reviewToolVerdict, state comment", () => {
     expect(state(facts(CLEAN_HEAD, [request(CLEAN_HEAD), otherBot]))).toBe("waiting");
   });
 
+  it("reads a clean state comment as clean beside another bot comment holding the marker twice", () => {
+    const echo = fromTool(`${block(CLEAN_HEAD, "completed", true, true)}\n${block(CLEAN_HEAD, "completed", true, true)}`);
+    expect(state(facts(CLEAN_HEAD, [request(CLEAN_HEAD), fromTool(CLEAN_BODY), echo]))).toBe("clean");
+  });
+
   it("reads a malformed block as waiting, then silent", () => {
     const comments = [request(CLEAN_HEAD), fromTool(`<!-- codex-review-state:v1 {"code_review": -->`)];
     expect(state(facts(CLEAN_HEAD, comments))).toBe("waiting");
@@ -244,6 +297,19 @@ describe("reviewToolVerdict, state comment", () => {
     expect(state(facts(CLEAN_HEAD, [request(CLEAN_HEAD), fromTool(body)]))).toBe("findings");
   });
 
+  it("holds on open findings in a filled section on another commit, and names the section", () => {
+    const comments = [request(CLEAN_HEAD), fromTool(beside(filled(OTHER_HEAD, "completed", true, true)))];
+    expect(state(facts(CLEAN_HEAD, comments))).toBe("waiting");
+    const verdict = reviewToolVerdict(facts(CLEAN_HEAD, comments, { now: WAIT_ENDED }), TOOL);
+    expect(verdict.state).toBe("silent");
+    expect(verdict.reason).toContain("security_review");
+  });
+
+  it("ends in rounds spent, a person's call, where a filled section never comes back to the head", () => {
+    const comments = [request(OTHER_HEAD), request(CLEAN_HEAD), fromTool(beside(filled(OTHER_HEAD)))];
+    expect(state(facts(CLEAN_HEAD, comments, { now: WAIT_ENDED }))).toBe("spent");
+  });
+
   it("never reads clean with the marker or the section unset, and says so", () => {
     const { stateMarker: _marker, ...noMarker } = TOOL;
     const { stateSection: _section, ...noSection } = TOOL;
@@ -251,6 +317,114 @@ describe("reviewToolVerdict, state comment", () => {
     expect(reviewToolVerdict(input, noMarker)).toMatchObject({ state: "waiting", reason: expect.stringContaining("stateMarker") });
     expect(state(input, noSection)).toBe("waiting");
     expect(state({ ...input, now: REQUESTED_MS + 41 * MINUTE }, noMarker)).toBe("silent");
+  });
+});
+
+describe("reviewToolVerdict, the state comment's last editor", () => {
+  const edited = (editor: string | null): Comment => ({ ...fromTool(CLEAN_BODY), editor });
+
+  it("trusts a block never edited, or last edited by the tool", () => {
+    expect(state(facts(CLEAN_HEAD, [request(CLEAN_HEAD), edited(null)]))).toBe("clean");
+    expect(state(facts(CLEAN_HEAD, [request(CLEAN_HEAD), edited(TOOL.login)]))).toBe("clean");
+  });
+
+  it("gives a block last edited by anyone else nothing, and names who", () => {
+    const comments = [request(CLEAN_HEAD), edited("a-person")];
+    expect(state(facts(CLEAN_HEAD, comments))).toBe("waiting");
+    const verdict = reviewToolVerdict(facts(CLEAN_HEAD, comments, { now: WAIT_ENDED }), TOOL);
+    expect(verdict.state).toBe("silent");
+    expect(verdict.reason).toContain("a-person");
+    expect(verdict.reason).not.toContain("gave no result");
+  });
+
+  it.each([
+    ["the placeholder for an editor that could not be read", "unknown"],
+    ["the tool's name in GraphQL's bare form, which a person's account could hold", "chatgpt-codex-connector"],
+    ["a value the caller never filled", undefined as unknown as null],
+  ])("does not trust %s", (_name, editor) => {
+    expect(state(facts(CLEAN_HEAD, [request(CLEAN_HEAD), edited(editor)]))).toBe("waiting");
+  });
+
+  it("gives findings from an edited block nothing either, since only the tool's own word counts", () => {
+    const comment: Comment = { ...fromTool(FINDINGS_BODY), editor: "a-person" };
+    expect(state(facts(FINDINGS_HEAD, [request(FINDINGS_HEAD), comment]))).toBe("waiting");
+  });
+
+  it("says nothing about an edit to a comment holding no block", () => {
+    const comment: Comment = { ...fromTool("a plain comment"), editor: "a-person" };
+    const verdict = reviewToolVerdict(facts(CLEAN_HEAD, [request(CLEAN_HEAD), comment], { now: WAIT_ENDED }), TOOL);
+    expect(verdict.reason).toContain("gave no result");
+  });
+});
+
+describe("reviewToolVerdict, a block the reader cannot use", () => {
+  const SHAPELESS = `{"commit_sha":"${CLEAN_HEAD}","has_any_findings":false,"has_unresolved_findings":false}`;
+
+  it.each([
+    ["a failed status", block(CLEAN_HEAD, "failed", false, false), "failed"],
+    ["a new version", CLEAN_BODY.replace("review-state:v1", "review-state:v2"), "codex-review-state:v2"],
+    ["a block that does not parse", `<!-- codex-review-state:v1 {"code_review": -->`, "does not parse"],
+    ["a block that never closes", `<!-- codex-review-state:v1 {"code_review":{}}`, "does not parse"],
+    ["a section missing a member", `<!-- codex-review-state:v1 {"code_review":${SHAPELESS}} -->`, "code_review"],
+    ["a section that is not an object", `<!-- codex-review-state:v1 {"code_review":"done"} -->`, "code_review"],
+    ["no configured section at all", `<!-- codex-review-state:v1 {"other_review":${filled(CLEAN_HEAD)}} -->`, "code_review"],
+    ["the marker twice", `${block(CLEAN_HEAD, "completed", false, false)}\n${block(CLEAN_HEAD, "completed", false, false)}`, "more than once"],
+  ])("names %s when the wait ends, says it is no silence, and does not pass", (_name, body, named) => {
+    const comments = [request(CLEAN_HEAD), fromTool(body)];
+    expect(state(facts(CLEAN_HEAD, comments))).toBe("waiting");
+    const verdict = reviewToolVerdict(facts(CLEAN_HEAD, comments, { now: WAIT_ENDED }), TOOL);
+    expect(verdict.state).toBe("silent");
+    expect(verdict.reason).toContain(named);
+    expect(verdict.reason).not.toContain("gave no result");
+  });
+
+  const failed = () => fromTool(block(CLEAN_HEAD, "failed", false, false));
+
+  it("names it on every line that holds: during the wait, with no request, and with the rounds spent", () => {
+    const during = reviewToolVerdict(facts(CLEAN_HEAD, [request(CLEAN_HEAD), failed()]), TOOL);
+    expect(during).toMatchObject({ state: "waiting", reason: expect.stringContaining("failed") });
+    const unasked = reviewToolVerdict(facts(CLEAN_HEAD, [failed()]), TOOL);
+    expect(unasked).toMatchObject({ state: "waiting", reason: expect.stringContaining("failed") });
+    expect(unasked.reason).not.toContain("no result from");
+    const spent = reviewToolVerdict(facts(CLEAN_HEAD, [request(OTHER_HEAD), request(FINDINGS_HEAD), failed()]), TOOL);
+    expect(spent).toMatchObject({ state: "spent", reason: expect.stringContaining("failed") });
+  });
+
+  it("keeps the plain line for a run still going, a stale block, and no block", () => {
+    const reason = (comments: Comment[]) => reviewToolVerdict(facts(CLEAN_HEAD, [request(CLEAN_HEAD), ...comments], { now: WAIT_ENDED }), TOOL).reason;
+    expect(reason([fromTool(block(CLEAN_HEAD, "running", false, false))])).toContain("gave no result");
+    expect(reason([fromTool(block(OTHER_HEAD, "failed", false, false))])).toContain("gave no result");
+    expect(reason([fromTool(FINDINGS_BODY)])).toContain("gave no result");
+    expect(reason([fromTool("a plain comment")])).toContain("gave no result");
+    expect(reason([fromTool(`<!-- codex-review-state:v1 {"code_review":${NULL_SECTION}} -->`)])).toContain("gave no result");
+  });
+
+  it("does not take a marker of another name, or one that is not a whole block, for a new version", () => {
+    const reason = (body: string, tool: ReviewToolConfig = TOOL) =>
+      reviewToolVerdict(facts(CLEAN_HEAD, [request(CLEAN_HEAD), fromTool(body)], { now: WAIT_ENDED }), tool).reason;
+    expect(reason("<!-- codex-review-state:v2-->")).toContain("gave no result");
+    expect(reason("<!-- codex-review-state:vnext {} -->")).toContain("gave no result");
+    expect(reason("<!-- other-state:v1 {} -->", { ...TOOL, stateMarker: "plain-state" })).toContain("gave no result");
+  });
+
+  it("shows a status or a section name only where it is plain text, so a block cannot write a person's line", () => {
+    const hostile = JSON.stringify("one line\n\u001b[2Jnext");
+    const odd = reviewToolVerdict(facts(CLEAN_HEAD, [request(CLEAN_HEAD), fromTool(block(CLEAN_HEAD, hostile.slice(1, -1), false, false))]), TOOL);
+    expect(odd.state).toBe("waiting");
+    expect(odd.reason).toContain("an unreadable value");
+    expect(odd.reason).not.toContain("one line");
+    const body = `<!-- codex-review-state:v1 {"code_review":${filled(CLEAN_HEAD)},${hostile}:${filled(OTHER_HEAD)}} -->`;
+    const off = reviewToolVerdict(facts(CLEAN_HEAD, [request(CLEAN_HEAD), fromTool(body)]), TOOL);
+    expect(off.state).toBe("waiting");
+    expect(off.reason).toContain("an unreadable value");
+    expect(off.reason).not.toContain("one line");
+  });
+
+  it("shows a last editor only where it is plain text", () => {
+    const comment: Comment = { ...fromTool(CLEAN_BODY), editor: "a person\nnext" };
+    const verdict = reviewToolVerdict(facts(CLEAN_HEAD, [request(CLEAN_HEAD), comment]), TOOL);
+    expect(verdict.reason).toContain("an unreadable value");
+    expect(verdict.reason).not.toContain("a person");
   });
 });
 

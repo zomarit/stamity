@@ -3,13 +3,16 @@
  * from GitHub: no network, no file, no process.
  *
  * Silence never passes. A head is `clean` only on the tool's own word about that head; anything unread, unknown or
- * malformed reads `waiting` until the wait runs out, then `silent`, and each of those holds the merge.
+ * malformed reads `waiting` until the wait runs out, then `silent`, and each of those holds the merge. A block the tool
+ * gave that this reader cannot use holds the same way, and its reason says so rather than calling the tool silent.
  *
- * **The state comment** is the proven signal. Only a comment whose author is a `Bot` of the configured login counts, so a
- * person pasting the same text proves nothing. The tool edits one comment in place, so that comment's `createdAt` can sit
- * long before the run it reports: the wait is timed from the request marker, never from the comment. A flag stays true
- * after every thread is resolved, so only a new run clears findings. `review-state` needs `APPROVED` on the head.
- * `reaction` needs `+1` and is the weakest: a reaction cannot be tied to a commit, so one left on an earlier head still reads.
+ * **The state comment** is the proven signal. Only a comment whose author is a `Bot` of the configured login, and whose
+ * last editor is that login or nobody, counts: a person pasting the same text proves nothing, and neither does a write
+ * token rewriting the tool's own comment, which keeps the bot as author. The tool edits one comment in place, so that
+ * comment's `createdAt` can sit long before the run it reports: the wait is timed from the request marker, never from the
+ * comment. A flag stays true after every thread is resolved, so only a new run clears findings. `review-state` needs
+ * `APPROVED` on the head. `reaction` needs `+1` and is the weakest: a reaction cannot be tied to a commit, so one left on an
+ * earlier head still reads.
  *
  * **Rounds** are the distinct heads carrying a request marker. Anyone who can comment can write a marker, and it can only
  * use a round up or start a wait early, which holds the merge: nothing about a marker reads clean.
@@ -29,17 +32,35 @@ export interface ReviewToolVerdict {
   head: string;
 }
 
-/** What {@link reviewToolVerdict} decides on: the pull request's head, the time in milliseconds, and the three reads. */
+/**
+ * What {@link reviewToolVerdict} decides on: the pull request's head, the time in milliseconds, and the three reads.
+ * A comment's `editor` is the login of its last editor in the form `userLogin` uses, a bot's with its `[bot]` ending, and
+ * `null` only where the comment was read as never edited. Any other value is not trusted, so an editor that could not be
+ * read is passed as a string that is no login, never as `null`.
+ */
 export interface ReviewToolFacts {
   head: string;
   now: number;
-  comments: { id: number; userLogin: string; userType: string; body: string; createdAt: string }[];
+  comments: { id: number; userLogin: string; userType: string; editor: string | null; body: string; createdAt: string }[];
   reviews: { userLogin: string; commitId: string; state: string }[];
   reactions: { userLogin: string; content: string }[];
 }
 
+/** A state block as read: the configured section, with what the sections beside it add. */
+interface StateBlock {
+  commitSha: string;
+  status: string;
+  hasFindings: boolean;
+  hasUnresolved: boolean;
+}
+
+/** A block the tool gave that this reader cannot use, with the words naming why. */
+interface Unusable {
+  why: string;
+}
+
 /** What the tool's own signal says about the head, before the wait and the rounds are weighed. */
-type Reading = "clean" | "findings" | "none";
+type Reading = "clean" | "findings" | "none" | Unusable;
 
 const MINUTE_MS = 60_000;
 
@@ -66,49 +87,88 @@ export function requestMarker(head: string): string {
   return `<!-- stamity:review-request ${head} -->`;
 }
 
-/**
- * Reads `section` of the `<!-- <marker> {...} -->` block in `body`, or `null` where there is no block, the block does not
- * parse, or the section was left null or lacks a member, so an absent flag never reads as false. A filled section beside it
- * that reports on the same commit counts too, so a security finding on the head cannot read clean through `code_review`;
- * a section left null reports on no commit and is ignored.
- */
-export function parseStateBlock(
-  body: string,
-  marker: string,
-  section: string,
-): { commitSha: string; status: string; hasFindings: boolean; hasUnresolved: boolean } | null {
+/** Text from a comment, for a line a person reads: it can hold anything, so only plain text is shown. */
+function shown(text: string): string {
+  return /^[\w.:\-[\]]{1,64}$/.test(text) ? text : "an unreadable value";
+}
+
+/** The real comment leaves a section with every member null; JSON null says the same. */
+function leftNull(section: unknown): boolean {
+  if (!isRecord(section)) return section === null;
+  const members = Object.values(section);
+  return members.length > 0 && members.every((member) => member === null);
+}
+
+/** A block of the marker's own name under another version number, in a body with no block of the configured one. */
+function otherVersion(body: string, marker: string): Unusable | null {
+  const name = marker.replace(/\d+$/, "");
+  if (name === marker) return null;
+  const tail = body
+    .split(`<!-- ${name}`)
+    .slice(1)
+    .find((text) => /^\d+ /.test(text));
+  return tail === undefined ? null : { why: `its block is ${name}${tail.slice(0, tail.indexOf(" "))}, a version this reader does not know` };
+}
+
+/** The block in `body`, the reason it cannot be used, or `null` where it holds no block or the tool left the section null. */
+function readBlock(body: string, marker: string, section: string): StateBlock | Unusable | null {
+  if (body.split(marker).length > 2) return { why: "its comment names the marker more than once" };
   const open = `<!-- ${marker} `;
   const start = body.indexOf(open);
-  const end = start < 0 ? -1 : body.indexOf(" -->", start);
+  if (start < 0) return otherVersion(body, marker);
+  const end = body.indexOf(" -->", start);
   const sections = end < 0 ? null : jsonRecord(body.slice(start + open.length, end));
-  if (sections === null) return null;
+  if (sections === null) return { why: "its block does not parse" };
   const read = sections[section];
-  if (!isRecord(read)) return null;
+  if (leftNull(read)) return null;
+  const shapeless = { why: `its ${section} section is in a shape this reader does not know` };
+  if (!isRecord(read)) return shapeless;
   const { commit_sha: commitSha, status, has_any_findings: anyFindings, has_unresolved_findings: unresolved } = read;
-  if (typeof commitSha !== "string" || !FULL_SHA.test(commitSha)) return null;
-  if (typeof status !== "string" || typeof anyFindings !== "boolean" || typeof unresolved !== "boolean") return null;
-  const sameCommit = Object.values(sections)
-    .filter(isRecord)
-    .filter((entry) => entry["commit_sha"] === commitSha);
+  if (typeof commitSha !== "string" || !FULL_SHA.test(commitSha)) return shapeless;
+  if (typeof status !== "string" || typeof anyFindings !== "boolean" || typeof unresolved !== "boolean") return shapeless;
+  const filled = Object.entries(sections).filter(([, entry]) => !leftNull(entry));
+  const elsewhere = filled.find(([, entry]) => !isRecord(entry) || entry["commit_sha"] !== commitSha);
+  const sameCommit = filled.map(([, entry]) => entry).filter(isRecord).filter((entry) => entry["commit_sha"] === commitSha);
   const unfinished = sameCommit.find((entry) => entry["status"] !== "completed");
+  const held = elsewhere === undefined ? null : `${shown(elsewhere[0])} not on this commit`;
   return {
     commitSha,
-    status: unfinished === undefined ? "completed" : String(unfinished["status"]),
+    status: held ?? (unfinished === undefined ? "completed" : shown(String(unfinished["status"]))),
     hasFindings: sameCommit.some((entry) => entry["has_any_findings"] !== false),
     hasUnresolved: sameCommit.some((entry) => entry["has_unresolved_findings"] !== false),
   };
 }
 
+/**
+ * Reads `section` of the `<!-- <marker> {...} -->` block in `body`, or `null` where there is no block, the marker occurs more
+ * than once, the block does not parse, or the section was left null or lacks a member, so an absent flag never reads as
+ * false. Every other section counts too: unless left null, it must be completed on the same commit with no findings, or the
+ * result is not `completed` with both flags false, so a security finding cannot read clean through `code_review`. `status`
+ * then names what held it.
+ */
+export function parseStateBlock(body: string, marker: string, section: string): StateBlock | null {
+  const read = readBlock(body, marker, section);
+  return read === null || "why" in read ? null : read;
+}
+
 function stateCommentReading(facts: ReviewToolFacts, tool: ReviewToolConfig): Reading {
   const { stateMarker: marker, stateSection: section } = tool;
   if (marker === undefined || section === undefined) return "none";
-  const blocks = facts.comments
+  const reads = facts.comments
     .filter((comment) => comment.userType === "Bot" && comment.userLogin === tool.login)
-    .flatMap((comment) => parseStateBlock(comment.body, marker, section) ?? [])
-    .filter((block) => block.commitSha === facts.head);
+    .flatMap((comment): (StateBlock | Unusable)[] => {
+      const read = readBlock(comment.body, marker, section);
+      if (read === null) return [];
+      const trusted = comment.editor === null || comment.editor === tool.login;
+      return [trusted ? read : { why: `its comment was last edited by ${shown(String(comment.editor))}, not by the tool` }];
+    });
+  const blocks = reads.filter((read): read is StateBlock => !("why" in read)).filter((block) => block.commitSha === facts.head);
   const completed = blocks.filter((block) => block.status === "completed");
   if (completed.some((block) => block.hasFindings || block.hasUnresolved)) return "findings";
-  return blocks.length > 0 && completed.length === blocks.length ? "clean" : "none";
+  if (blocks.length > 0 && completed.length === blocks.length) return "clean";
+  const stopped = blocks.find((block) => block.status !== "completed" && block.status !== "running");
+  if (stopped !== undefined) return { why: `its block reads ${stopped.status}` };
+  return reads.find((read): read is Unusable => "why" in read) ?? "none";
 }
 
 function reviewStateReading(facts: ReviewToolFacts, tool: ReviewToolConfig): Reading {
@@ -117,6 +177,11 @@ function reviewStateReading(facts: ReviewToolFacts, tool: ReviewToolConfig): Rea
   return states.has("APPROVED") ? "clean" : "none";
 }
 
+/**
+ * The limit of this mode: `+1` names no commit, so one left on an earlier head reads clean on every later head with no run,
+ * and it can never read `findings`. The plan accepts that for this weakest signal. Only a hand-set manifest reaches it,
+ * since `config set` offers `none` or `codex`.
+ */
 function reactionReading(facts: ReviewToolFacts, tool: ReviewToolConfig): Reading {
   return facts.reactions.some((reaction) => reaction.userLogin === tool.login && reaction.content === "+1") ? "clean" : "none";
 }
@@ -160,13 +225,15 @@ export function reviewToolVerdict(facts: ReviewToolFacts, tool: ReviewToolConfig
   const requested = requests.get(head);
   const waitEnded = requested !== undefined && now >= requested + waitMinutes * MINUTE_MS;
   const unset = tool.clean === "state-comment" && (tool.stateMarker === undefined || tool.stateSection === undefined);
-  const unread = unset ? "; autonomy.reviewTool needs both stateMarker and stateSection to read a state comment" : "";
+  const unusable = typeof reading === "object" ? `; the tool answered, but ${reading.why}` : "";
+  const unread = unset ? "; autonomy.reviewTool needs both stateMarker and stateSection to read a state comment" : unusable;
+  const nothing = unusable === "" ? "no result" : "no usable result";
 
-  if (reading === "none" && requested !== undefined && !waitEnded) {
+  if (reading !== "findings" && requested !== undefined && !waitEnded) {
     return verdict("waiting", `waiting for ${login} on ${short}, up to ${waitMinutes} minutes from the request${unread}`);
   }
   if (requests.size >= rounds) return verdict("spent", `${requests.size} of ${rounds} review rounds spent with no clean head, so a person decides${unread}`);
   if (reading === "findings") return verdict("findings", `${login} reports findings on ${short}, and only a new run clears them`);
-  if (waitEnded) return verdict("silent", `${login} gave no result on ${short} within ${waitMinutes} minutes${unread}`);
-  return verdict("waiting", `no result from ${login} on ${short}, and no request on this head yet${unread}`);
+  if (waitEnded) return verdict("silent", `${login} gave ${nothing} on ${short} within ${waitMinutes} minutes${unread}`);
+  return verdict("waiting", `${nothing} from ${login} on ${short}, and no request on this head yet${unread}`);
 }
