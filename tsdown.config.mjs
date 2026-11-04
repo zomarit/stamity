@@ -122,8 +122,16 @@ import { defineConfig } from "tsdown";
  * 2,759,026 after it. That code is the feature, not something bundled in by
  * accident; the pre-strip figure above stays under this ceiling too, so the
  * JSDoc test is still the strip's guard.
+ *
+ * Raised 2026-11-04 from 2.75 MiB to 2.875 MiB (3,014,656 bytes), with its own
+ * reason: the bridge package's settings, land checks, a merge job and a new
+ * verb. The build before this change printed 2,878,546 bytes (the `[size]` line
+ * of a fresh `npm run build` on `48fc7d2d`), 5,038 bytes under the old ceiling
+ * with more of that work still to land. That code is the feature, not something
+ * bundled in by accident; the pre-strip figure above stays under this ceiling
+ * too, so the JSDoc test is still the strip's guard.
  */
-export const LOGIC_BUDGET_BYTES = 2.75 * 1024 * 1024;
+export const LOGIC_BUDGET_BYTES = 2.875 * 1024 * 1024;
 
 /**
  * The staged corpus half — `dist/content` plus `dist/packs`, plus `dist/fork` in
