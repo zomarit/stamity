@@ -377,6 +377,28 @@ export async function readBaseline(rootDir: string, copyPaths: readonly string[]
 }
 
 /**
+ * The setting the baked guard stands for: the fourth leg of what `run land` reads
+ * (REQ-FLOW-138, `./landSetting.ts`), so a key merged to the default branch binds
+ * only once a person has baked it with `--loosen`. The strictest of every copy at
+ * a known guard path on disk ({@link guardCopySetting}) and every one `HEAD` holds,
+ * so an edit of a copy on disk alone loosens nothing. Where none is at either, and
+ * the manifest at `HEAD` records one among the files it owns, it reads `ask`, so
+ * deleting them drops no leg; a git that fails inside a checkout reads as the
+ * strictest setting. `null` when the setup has no guard to read: there is no leg.
+ */
+export async function readGuardSetting(rootDir: string): Promise<ResolvedAutonomy | null> {
+  const read = (path: string): Promise<string | null | undefined> => readRegularFile(join(rootDir, ...path.split("/")), GUARD_COPY_MAX_BYTES);
+  const [onDisk, head] = await Promise.all([Promise.all(KNOWN_GUARD_PATHS.map(read)), readHead(rootDir, [MANIFEST_REL, ...KNOWN_GUARD_PATHS])]);
+  const copies = [...onDisk.filter((text) => text !== null), ...KNOWN_GUARD_PATHS.filter((path) => head?.has(path) === true).map((path) => head?.get(path))];
+  const settings = copies.map((text) => (text === undefined ? UNREADABLE : guardCopySetting(text)));
+  if (head === null && insideCheckout(rootDir)) settings.push(UNREADABLE);
+  const committed = head?.get(MANIFEST_REL);
+  if (settings.length === 0 && committed !== undefined && recordsGuardCopy(committed) === true) settings.push(ASK);
+  const [first, ...rest] = settings;
+  return first === undefined ? null : strictestAutonomy(first, ...rest);
+}
+
+/**
  * One line per way `next` is looser than `baseline`: for the refusal's
  * message ("would"), or for the notice a `--loosen` write prints (`done`).
  * Names are JSON-quoted: they may come from an unchecked file.
@@ -398,7 +420,7 @@ function looserParts(next: ResolvedAutonomy, baseline: ResolvedAutonomy, done = 
     adminRuleProof: done ? "`adminRuleProof` is now on" : "`adminRuleProof` would turn on",
     autoShip: done ? "`autoShip` is now on or wider" : "`autoShip` would turn on or widen",
     "reviewTool-dropped": `\`reviewTool\` ${dropped}`,
-    "reviewTool-shorter": done ? "`reviewTool` is now shorter or changed" : "`reviewTool` would shorten or change",
+    "reviewTool-changed": done ? "`reviewTool` has raised its rounds or wait, or changed" : "`reviewTool` would raise its rounds or wait, or change",
     landJob: done ? "`landJob` is now on or moved" : "`landJob` would turn on or move",
   };
   for (const name of looserKeys(next, baseline)) parts.push(keys[name]);
@@ -408,7 +430,9 @@ function looserParts(next: ResolvedAutonomy, baseline: ResolvedAutonomy, done = 
 /**
  * Refuses a write that would bake `next` into the guard copies `opts.copies`
  * names when it is looser than {@link readBaseline}'s answer over the planned
- * copies (`loosens`, `../../config/autonomy.ts`), unless `opts.loosen`: an
+ * copies, or than any one leg of it (`loosens`, `../../config/autonomy.ts`: the
+ * strictest keeps one leg's review tool, so a copy edited to another tool would
+ * otherwise hide the tool `HEAD` names), unless `opts.loosen`: an
  * `EngineError` coded `AUTONOMY_LOOSENED` (exit 1), whose `why` names each leg
  * that is stricter. `remedy` is the command line its `next` names (the
  * caller's own, with `--loosen`). Under `opts.loosen` the loosening goes
@@ -422,14 +446,15 @@ export async function assertNotLoosened(
 ): Promise<void> {
   const legs = await baselineLegs(rootDir, opts.copies.planned);
   const baseline = strictestOf(legs);
-  if (!loosens(next, baseline)) return;
+  const deciding = legs.filter((leg) => loosens(next, leg.setting)).map((leg) => leg.source);
+  if (deciding.length === 0 && !loosens(next, baseline)) return;
+  const partsOf = (done: boolean): string[] => [...new Set([baseline, ...legs.map((leg) => leg.setting)].flatMap((setting) => looserParts(next, setting, done)))];
   if (opts.loosen) {
-    const parts = looserParts(next, baseline, true).join("; ");
+    const parts = partsOf(true).join("; ");
     for (const path of opts.copies.baking) opts.notice?.(`loosened \`${path}\` with --loosen: ${parts === "" ? "the autonomy setting" : parts}`);
     return;
   }
-  const parts = looserParts(next, baseline);
-  const deciding = legs.filter((leg) => loosens(next, leg.setting)).map((leg) => leg.source);
+  const parts = partsOf(false);
   throw new EngineError(
     `This write would bake a looser autonomy setting into the guard than the one in force${parts.length === 0 ? "" : `: ${parts.join("; ")}`}. Nothing was written.`,
     {

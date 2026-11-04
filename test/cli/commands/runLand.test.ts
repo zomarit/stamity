@@ -11,7 +11,10 @@ import { LAND_CLOCK } from "../../../src/cli/commands/runLand.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
 import type * as GhRunnerModule from "../../../src/cli/engine/ghRunner.ts";
 import type * as FsModule from "node:fs";
+import { resolveAutonomy } from "../../../src/config/autonomy.ts";
+import { CLAUDE_HOOKS_DIR } from "../../../src/hooks/model.ts";
 import type * as PersonOnlyModule from "../../../src/hooks/personOnly.ts";
+import { buildPersonOnlyGuardScript, PERSON_ONLY_GUARD_FILE } from "../../../src/hooks/scripts.ts";
 import { surfaceRecord } from "../../../src/runs/gitSurface.ts";
 import { insideAny } from "../../../src/runs/landEvidence.ts";
 import { prRecordText } from "../../../src/runs/pullRequest.ts";
@@ -472,6 +475,15 @@ describe("stamity run land", () => {
     const result = await run(repo, ["land", "--run", RUN]);
 
     expect(result.doc).toMatchObject({ outcome: "asks", asks: { reason: "autonomy.mode is ask", act: "pr-merge" }, evidence: { checks: [{ name: "test", state: "green" }] } });
+    expect(kinds()).not.toContain("merge");
+  });
+
+  it("asks when the baked guard reads `ask` though all three manifests read autonomous (review/15)", async () => {
+    const guard = buildPersonOnlyGuardScript({ tool: "claude", layout: "claude", autonomy: resolveAutonomy({ autonomy: { mode: "ask" } }) });
+    const { repo } = await seed({ files: { [`${CLAUDE_HOOKS_DIR}/${PERSON_ONLY_GUARD_FILE}`]: guard } });
+    route("GET repos/o/r/contents/.stamity/manifest.json", { content: Buffer.from('{"version":1}').toString("base64"), encoding: "base64" });
+
+    expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reason: "autonomy.mode is ask", act: "pr-merge" } });
     expect(kinds()).not.toContain("merge");
   });
 

@@ -8,6 +8,7 @@ import {
   gateGuardCopies,
   guardCopySetting,
   readBaseline,
+  readGuardSetting,
   strictGuardGate,
   type GuardCopies,
   type GuardGate,
@@ -41,6 +42,7 @@ const CLAUDE_COPY = GUARD_COPY_PATHS[0] ?? "";
 /** A write that plans, and bakes, Claude Code's copy alone. */
 const CLAUDE_ONLY: GuardCopies = { planned: [CLAUDE_COPY], baking: [CLAUDE_COPY] };
 const MARKER = "// stamity-autonomy ";
+const AUTO_SHIP_ON = { maxFiles: 10, maxLines: 200, classes: ["records", "docs", "tests"] };
 
 function setting(autonomy?: AutonomyConfig): ResolvedAutonomy {
   return resolveAutonomy(autonomy === undefined ? {} : { autonomy });
@@ -609,14 +611,119 @@ describe("the factory keys in a guard copy", () => {
     expect(lines.join("\n")).toContain(notice);
   });
 
-  it("refuses a write that drops or shortens the review tool, naming which", async () => {
+  it("refuses a write that drops the review tool or raises its wait or rounds, naming which", async () => {
     const root = tempDir().path("repo");
     await put(root, CLAUDE_COPY, guardText({ reviewTool: REVIEW_TOOL }));
 
     await expect(assertNotLoosened(root, setting(), { loosen: false, copies: CLAUDE_ONLY })).rejects.toThrowError("`reviewTool` would no longer be named");
     await expect(
-      assertNotLoosened(root, setting({ reviewTool: { ...REVIEW_TOOL, waitMinutes: 5 } }), { loosen: false, copies: CLAUDE_ONLY }),
-    ).rejects.toThrowError("`reviewTool` would shorten or change");
+      assertNotLoosened(root, setting({ reviewTool: { ...REVIEW_TOOL, waitMinutes: 60 } }), { loosen: false, copies: CLAUDE_ONLY }),
+    ).rejects.toThrowError("`reviewTool` would raise its rounds or wait, or change");
+    await expect(
+      assertNotLoosened(root, setting({ reviewTool: { ...REVIEW_TOOL, rounds: 3 } }), { loosen: false, copies: CLAUDE_ONLY }),
+    ).rejects.toThrowError("`reviewTool` would raise its rounds or wait, or change");
+    await assertNotLoosened(root, setting({ reviewTool: { ...REVIEW_TOOL, rounds: 1, waitMinutes: 5 } }), { loosen: false, copies: CLAUDE_ONLY });
+  });
+
+  it("refuses a tool swapped in one guard copy and the work tree when the setting at HEAD names another (review/11)", async ({ skip }) => {
+    const swapped: AutonomyConfig = { reviewTool: { ...REVIEW_TOOL, clean: "reaction" } };
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText({ reviewTool: REVIEW_TOOL }));
+    await put(root, ".stamity/manifest.json", manifestText({ reviewTool: REVIEW_TOOL }));
+    await commitAll(root, skip);
+    await put(root, CLAUDE_COPY, guardText(swapped));
+    await put(root, ".stamity/manifest.json", manifestText(swapped));
+
+    await expect(assertNotLoosened(root, setting(swapped), { loosen: false, copies: CLAUDE_ONLY })).rejects.toMatchObject({
+      code: "AUTONOMY_LOOSENED",
+      message: expect.stringContaining("`reviewTool` would raise its rounds or wait, or change") as unknown,
+      why: expect.stringContaining("the setting committed at `HEAD`") as unknown,
+    });
+
+    const lines: string[] = [];
+    await assertNotLoosened(root, setting(swapped), { loosen: true, copies: CLAUDE_ONLY, notice: (line) => lines.push(line) });
+    expect(lines.join("\n")).toContain("`reviewTool` has raised its rounds or wait, or changed");
+  });
+});
+
+/** The leg `run land` adds for the baked guard (REQ-FLOW-138, review/15). */
+describe("readGuardSetting", () => {
+  const OTHER_COPY = GUARD_COPY_PATHS[1] ?? "";
+
+  it("reads nothing where no copy is there and the setup owns none", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, ".stamity/manifest.json", manifestText(undefined, []));
+    await commitAll(root, skip);
+
+    expect(await readGuardSetting(root)).toBeNull();
+  });
+
+  it("reads nothing from a manifest with no ledger at all, so a three-leg read stands", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, ".stamity/manifest.json", '{"version":1}\n');
+    await commitAll(root, skip);
+
+    expect(await readGuardSetting(root)).toBeNull();
+  });
+
+  it("reads the setting a copy on disk has baked, outside a checkout too", async () => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText({ deployingBranches: ["release/*"] }));
+
+    expect(await readGuardSetting(root)).toEqual(setting({ deployingBranches: ["release/*"] }));
+  });
+
+  it("takes the strictest of every client's copy", async () => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText());
+    await put(root, OTHER_COPY, guardText({ mode: "ask" }));
+
+    expect((await readGuardSetting(root))?.mode).toBe("ask");
+  });
+
+  it("keeps HEAD's copy as a leg, so an edit of the copy on disk alone does not loosen it", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText());
+    await put(root, ".stamity/manifest.json", manifestText());
+    await commitAll(root, skip);
+    await put(root, CLAUDE_COPY, guardText({ autoShip: AUTO_SHIP_ON }));
+
+    expect((await readGuardSetting(root))?.autoShip).toBeUndefined();
+  });
+
+  it("reads a deleted copy through HEAD's", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText({ mode: "ask" }));
+    await put(root, ".stamity/manifest.json", manifestText({ mode: "ask" }));
+    await commitAll(root, skip);
+    await rm(join(root, CLAUDE_COPY));
+
+    expect((await readGuardSetting(root))?.mode).toBe("ask");
+  });
+
+  it("reads `ask` where the setup at HEAD records a copy nobody can find, so deleting them drops no leg", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, ".stamity/manifest.json", manifestText());
+    await commitAll(root, skip);
+
+    expect((await readGuardSetting(root))?.mode).toBe("ask");
+  });
+
+  it("reads text at a guard path that is no guard it knows as the strictest setting", async () => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, "export {};\n");
+
+    expect(await readGuardSetting(root)).toEqual(setting({ mode: "ask", deployingActs: [...DEPLOYING_ACTS] }));
+  });
+
+  it("reads the strictest setting when git refuses the repository, even with a copy on disk", async ({ skip }) => {
+    const root = tempDir().path("repo");
+    await put(root, CLAUDE_COPY, guardText());
+    await put(root, ".stamity/manifest.json", manifestText());
+    await commitAll(root, skip);
+    await breakGitConfig(root);
+
+    expect((await readGuardSetting(root))?.deploying).toEqual([...DEPLOYING_ACTS]);
   });
 });
 

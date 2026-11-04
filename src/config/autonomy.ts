@@ -274,56 +274,75 @@ function autoShipWider(next: AutoShipConfig | undefined, baseline: AutoShipConfi
   return paths !== undefined && (next.paths === undefined || next.paths.some((path) => !paths.includes(path)));
 }
 
-/** Whether `next` holds less than `baseline`: a shorter wait, fewer rounds, or another tool or proof of clean, which no order ranks. */
-function reviewToolShorter(next: ReviewToolConfig, baseline: ReviewToolConfig): boolean {
-  if (next.waitMinutes < baseline.waitMinutes || next.rounds < baseline.rounds) return true;
+/**
+ * Whether `next` puts off or weakens what `baseline` holds for a person (REQ-FLOW-154): a longer wait or more rounds,
+ * each of which delays the hold, or another tool or proof of clean, which reads as changed whichever way it goes.
+ */
+function reviewToolLooser(next: ReviewToolConfig, baseline: ReviewToolConfig): boolean {
+  if (next.waitMinutes > baseline.waitMinutes || next.rounds > baseline.rounds) return true;
   const identity = ({ login, request, clean, stateMarker, stateSection }: ReviewToolConfig): string =>
     JSON.stringify([login, request, clean, stateMarker, stateSection]);
   return identity(next) !== identity(baseline);
 }
 
 /** How a factory key of one setting can be looser than another's. */
-export type LooserKey = "adminRuleProof" | "autoShip" | "reviewTool-dropped" | "reviewTool-shorter" | "landJob";
+export type LooserKey = "adminRuleProof" | "autoShip" | "reviewTool-dropped" | "reviewTool-changed" | "landJob";
 
 /**
  * Each way `next`'s factory keys are looser than `baseline`'s (REQ-FLOW-138):
  * `adminRuleProof` turned on, `autoShip` turned on or widened, `reviewTool`
- * dropped or shortened, `landJob` turned on or moved to other workflows.
+ * dropped, changed or given a higher `rounds` or `waitMinutes`, `landJob` turned
+ * on or moved to other workflows.
  */
 export function looserKeys(next: ResolvedAutonomy, baseline: ResolvedAutonomy): LooserKey[] {
   const keys: LooserKey[] = [];
   if (next.adminRuleProof === true && baseline.adminRuleProof !== true) keys.push("adminRuleProof");
   if (autoShipWider(next.autoShip, baseline.autoShip)) keys.push("autoShip");
   if (baseline.reviewTool !== undefined && next.reviewTool === undefined) keys.push("reviewTool-dropped");
-  if (baseline.reviewTool !== undefined && next.reviewTool !== undefined && reviewToolShorter(next.reviewTool, baseline.reviewTool)) keys.push("reviewTool-shorter");
+  if (baseline.reviewTool !== undefined && next.reviewTool !== undefined && reviewToolLooser(next.reviewTool, baseline.reviewTool)) keys.push("reviewTool-changed");
   if (next.landJob !== undefined && JSON.stringify(next.landJob) !== JSON.stringify(baseline.landJob)) keys.push("landJob");
   return keys;
 }
 
 /**
- * True when `next` lets an agent do something `baseline` does not: its mode is
- * `autonomous` over a baseline `ask`, an act runs that did not, an act or a
+ * The `autonomy` keys in which `next` lets an agent do something `baseline` does
+ * not, in the block's order, each once and spelled as `config` spells it: its mode
+ * is `autonomous` over a baseline `ask`, an act runs that did not, an act or a
  * branch the baseline names as deploying is no longer named (so removing
  * `workflow-dispatch` from the acts loosens), or a factory key is looser
  * ({@link looserKeys}). Branches compare by {@link branchKey}, and a pattern
- * counts only as itself: narrowing `release/*` to `release/1.17` loosens.
+ * counts only as itself: narrowing `release/*` to `release/1.17` loosens. What a
+ * land ask names, since the manifest's path alone also moves on every sync.
  */
-export function loosens(next: ResolvedAutonomy, baseline: ResolvedAutonomy): boolean {
-  if (next.mode === "autonomous" && baseline.mode === "ask") return true;
-  if (looserKeys(next, baseline).length > 0) return true;
-  if (next.runs.some((act) => !baseline.runs.includes(act))) return true;
-  if (baseline.deploying.some((act) => !next.deploying.includes(act))) return true;
+export function looserAutonomyKeys(next: ResolvedAutonomy, baseline: ResolvedAutonomy): string[] {
+  const modeLooser = next.mode === "autonomous" && baseline.mode === "ask";
   const nextBranches = new Set(next.deployingBranches.map(branchKey));
-  return baseline.deployingBranches.some((name) => !nextBranches.has(branchKey(name)));
+  const keys = [
+    ...(modeLooser ? ["mode"] : []),
+    // Under a loosened mode every act runs that did not, which is the mode's doing, not the acts'.
+    ...((!modeLooser && next.runs.some((act) => !baseline.runs.includes(act))) || baseline.deploying.some((act) => !next.deploying.includes(act)) ? ["deployingActs"] : []),
+    ...(baseline.deployingBranches.some((name) => !nextBranches.has(branchKey(name))) ? ["deployingBranches"] : []),
+    ...looserKeys(next, baseline).map((key) => key.replace(/-.*$/, "")),
+  ];
+  return keys.map((key) => `autonomy.${key}`);
+}
+
+/** True when `next` is looser than `baseline` in any key ({@link looserAutonomyKeys}). */
+export function loosens(next: ResolvedAutonomy, baseline: ResolvedAutonomy): boolean {
+  return looserAutonomyKeys(next, baseline).length > 0;
 }
 
 /**
  * The strictest of several settings: mode `ask` when any is, every act and
  * every branch any of them names. `adminRuleProof`, `autoShip` and `landJob`
  * survive only if every leg holds them equal; `reviewTool` survives if any leg
- * names it, the first leg's tool with the highest rounds and the longest wait.
- * Nothing any one of them asks for runs, so a candidate that loosens one of them
- * loosens it, and past two legs with unequal factory keys it may loosen it alone.
+ * names it, the first leg's tool with the lowest rounds and the shortest wait,
+ * since a higher value delays the hold for a person. Nothing any one of them
+ * asks for runs, so a candidate that loosens one of them loosens it too, with one
+ * exception: legs naming different tools keep only the first's, so a candidate
+ * naming that one reads as no change here though it swaps the others' tool, and a
+ * reader that must catch a swap compares each leg as well. The other way round, a
+ * candidate may loosen this alone where the legs hold factory keys unequal.
  */
 export function strictestAutonomy(first: ResolvedAutonomy, ...rest: readonly ResolvedAutonomy[]): ResolvedAutonomy {
   const all = [first, ...rest];
@@ -344,8 +363,8 @@ export function strictestAutonomy(first: ResolvedAutonomy, ...rest: readonly Res
             ? undefined
             : {
                 ...tool,
-                rounds: Math.max(...tools.map((entry) => entry.rounds)),
-                waitMinutes: Math.max(...tools.map((entry) => entry.waitMinutes)),
+                rounds: Math.min(...tools.map((entry) => entry.rounds)),
+                waitMinutes: Math.min(...tools.map((entry) => entry.waitMinutes)),
               },
         landJob: equalInAll("landJob"),
       }),

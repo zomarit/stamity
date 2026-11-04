@@ -1095,7 +1095,7 @@ export const KEY_SPECS: readonly ConfigKeySpec[] = [
     "reviewTool",
     REVIEW_TOOL_PRESETS,
     "codex makes `run land` ask Codex for a review of the head and wait up to 40 minutes, for at most 2 rounds; silence holds " +
-      "the land. Dropping or shortening it loosens the setting. A hand-written `clean: reaction` is the weakest proof, since a " +
+      "the land. Dropping it, changing it or raising its rounds or wait loosens the setting. A hand-written `clean: reaction` is the weakest proof, since a " +
       "reaction cannot be tied to a commit",
   ),
   presetSpec(

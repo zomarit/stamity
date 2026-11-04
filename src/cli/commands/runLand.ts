@@ -49,6 +49,7 @@ import {
   type GhResponse,
   type MergeMethod,
 } from "../engine/ghRunner.ts";
+import { readGuardSetting } from "../engine/autonomyGate.ts";
 import { gitWrite, gitWriteEnv, type GitWriteResult } from "../engine/gitWrite.ts";
 import { encodeQuery, READ_MAX_BYTES, readCapped, readSetting, Refused } from "../engine/landSetting.ts";
 import { CliFailure } from "../kit/output.ts";
@@ -68,7 +69,7 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * **The evidence** (`../../runs/landEvidence.ts`): the required check runs on the head (a ruleset's and the
  * branch protection's, else every check run there), the review threads, the ledger as the head commit holds it (the
  * work tree's copy must equal it), `mergeable_state`. The setting is the strictest of the default branch's, `HEAD`'s
- * and the work tree's manifest. `gh` must resolve outside the work tree and the temp folders. Unattended, git's
+ * and the work tree's manifest and the baked guard. `gh` must resolve outside the work tree and the temp folders. Unattended, git's
  * surface must still be the pre-flight's (REQ-FLOW-131), at the start and again just before the act.
  *
  * **The act.** `--ready` marks a draft ready only once the rest holds, then merges. Before the merge the body gains
@@ -367,8 +368,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       }
     };
 
-    // (4) The setting: the strictest of the default branch's, HEAD's and the work tree's manifest.
-    const setting = await readSetting(cwd, prefix, repoPath, defaultBranch, gitLine, call);
+    // (4) The setting: the strictest of the default branch's, HEAD's and the work tree's manifest and the baked guard.
+    const setting = await readSetting(cwd, prefix, repoPath, defaultBranch, gitLine, call, readGuardSetting);
 
     // (5) The changed files, every page, a rename's old name included.
     const files: string[] = [];

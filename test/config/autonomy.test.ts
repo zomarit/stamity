@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   AUTONOMOUS_ACTS,
   autonomyMarkerLine,
+  looserAutonomyKeys,
   loosens,
   matchesDeployingBranch,
   parseAutonomyMarker,
@@ -410,8 +411,9 @@ describe("the factory keys", () => {
       ["dropping autoShip's paths", wider({}), wider({ paths: ["site-notes/**"] })],
       ["adding an autoShip path", wider({ paths: ["site-notes/**", "site-code/**"] }), wider({ paths: ["site-notes/**"] })],
       ["dropping the review tool", {}, { reviewTool: REVIEW_TOOL }],
-      ["shortening the review wait", tool({ waitMinutes: 10 }), { reviewTool: REVIEW_TOOL }],
-      ["lowering the review rounds", tool({ rounds: 1 }), { reviewTool: REVIEW_TOOL }],
+      // A higher value delays the hold for a person (REQ-FLOW-154, review/13, review/14), so raising it is the loosening.
+      ["raising the review wait", tool({ waitMinutes: 60 }), { reviewTool: REVIEW_TOOL }],
+      ["raising the review rounds", tool({ rounds: 3 }), { reviewTool: REVIEW_TOOL }],
     ];
     for (const [label, looser, stricter] of pairs) {
       it(`reads ${label} as looser, and the reverse as not`, () => {
@@ -431,6 +433,45 @@ describe("the factory keys", () => {
     });
   });
 
+  describe("looserAutonomyKeys", () => {
+    const tool = (change: object): AutonomyConfig => ({ reviewTool: { ...REVIEW_TOOL, ...change } });
+    const named: readonly [string, AutonomyConfig, AutonomyConfig][] = [
+      ["autonomy.mode", {}, { mode: "ask" }],
+      ["autonomy.deployingActs", {}, { deployingActs: ["tag"] }],
+      ["autonomy.deployingBranches", {}, { deployingBranches: ["release/*"] }],
+      ["autonomy.adminRuleProof", { adminRuleProof: true }, {}],
+      ["autonomy.autoShip", { autoShip: AUTO_SHIP }, {}],
+      ["autonomy.reviewTool", {}, { reviewTool: REVIEW_TOOL }],
+      ["autonomy.reviewTool", tool({ rounds: 3 }), { reviewTool: REVIEW_TOOL }],
+      ["autonomy.landJob", { landJob: LAND_JOB }, {}],
+    ];
+    for (const [key, looser, stricter] of named) {
+      it(`names ${key} for ${JSON.stringify(looser)} over ${JSON.stringify(stricter)}, and nothing the other way`, () => {
+        expect(looserAutonomyKeys(resolved(looser), resolved(stricter))).toEqual([key]);
+        expect(looserAutonomyKeys(resolved(stricter), resolved(looser))).toEqual([]);
+      });
+    }
+
+    it("names another tool against the leg that holds the person's", () => {
+      expect(looserAutonomyKeys(resolved(tool({ login: "another-reviewer[bot]" })), resolved({ reviewTool: REVIEW_TOOL }))).toEqual(["autonomy.reviewTool"]);
+    });
+
+    it("names every key that loosens, once each, in the block's order", () => {
+      const baseline = resolved({ mode: "ask", deployingActs: ["tag"], deployingBranches: ["main"], reviewTool: REVIEW_TOOL });
+
+      expect(looserAutonomyKeys(resolved({ ...ALL_ON, reviewTool: { ...REVIEW_TOOL, rounds: 3 } }), baseline)).toEqual([
+        "autonomy.mode",
+        "autonomy.deployingActs",
+        "autonomy.deployingBranches",
+        "autonomy.adminRuleProof",
+        "autonomy.autoShip",
+        "autonomy.reviewTool",
+        "autonomy.landJob",
+      ]);
+      expect(looserAutonomyKeys(resolved(ALL_ON), resolved(ALL_ON))).toEqual([]);
+    });
+  });
+
   describe("strictestAutonomy", () => {
     it("keeps adminRuleProof, autoShip and landJob only when every leg holds them equal", () => {
       const on = resolved({ adminRuleProof: true, autoShip: AUTO_SHIP, landJob: LAND_JOB });
@@ -442,11 +483,11 @@ describe("the factory keys", () => {
       );
     });
 
-    it("keeps the review tool if any leg names it, with the highest rounds and the longest wait", () => {
+    it("keeps the review tool if any leg names it, with the lowest rounds and the shortest wait", () => {
       const one = resolved({ reviewTool: { ...REVIEW_TOOL, rounds: 1, waitMinutes: 60 } });
       const three = resolved({ reviewTool: { ...REVIEW_TOOL, rounds: 3, waitMinutes: 20 } });
       expect(strictestAutonomy(resolved(), one).reviewTool).toEqual({ ...REVIEW_TOOL, rounds: 1, waitMinutes: 60 });
-      expect(strictestAutonomy(one, resolved(), three).reviewTool).toEqual({ ...REVIEW_TOOL, rounds: 3, waitMinutes: 60 });
+      expect(strictestAutonomy(one, resolved(), three).reviewTool).toEqual({ ...REVIEW_TOOL, rounds: 1, waitMinutes: 20 });
     });
 
     it("is looser than a candidate when one of its legs is, the review tool included", () => {
@@ -456,7 +497,15 @@ describe("the factory keys", () => {
       for (const candidate of candidates) {
         expect(loosens(candidate, baseline)).toBe(legs.some((leg) => loosens(candidate, leg)));
       }
-      expect(candidates.map((candidate) => loosens(candidate, baseline))).toEqual([true, true, false]);
+      expect(candidates.map((candidate) => loosens(candidate, baseline))).toEqual([true, false, true]);
+    });
+
+    it("keeps one leg's tool, so a candidate naming it reads no looser than two legs that differ: the gate reads each leg", () => {
+      const person = resolved({ reviewTool: REVIEW_TOOL });
+      const swapped = resolved({ reviewTool: { ...REVIEW_TOOL, clean: "reaction" } });
+
+      expect(loosens(swapped, strictestAutonomy(swapped, person))).toBe(false);
+      expect(loosens(swapped, person)).toBe(true);
     });
   });
 
