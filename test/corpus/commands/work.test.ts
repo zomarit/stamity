@@ -1564,6 +1564,14 @@ describe("/st-work — Prove", () => {
     expect(qa).toContain(
       "That call's `landed` outcome writes its `## Decisions` row; its `asks` or `refused` keeps the held row, and a `refused` hold is retried by the next walk with the land step's own line, `stamity run land --run <run-id> --ready --wait 8 --json`, and where another run's checkpoint has since replaced the pull-request record in this checkout (the land refuses: `the pull-request record names` that other run), this run's `stamity run checkpoint --run <run-id> --pr --title <conventional title>` runs again first; a `refused` whose reason is a moved head means a commit landed after the question, so the close runs `stamity run land --run <run-id> --ready --wait 8 --json` again, its outcomes handled as the land step's (`landed` writes the `## Decisions` row, `refused` stays a held row with its reasons, `asks` takes this question anew), never with the old `<sha>`.",
     );
+    // Added (plan 023 file 1, unit skills-prose; REQ-FLOW-144, REQ-FLOW-154): an `asks` that carries `asks.pending` awaits
+    // the review tool, which `--approved` cannot pass, so putting it to the person would hand them a yes that does nothing.
+    // Eval cases quote the close paragraph whole and cite the lines below it, so the rule takes the blank line after it,
+    // which moves no `source:` range and spends no line of the budget above.
+    const pendingAsks =
+      "An `asks` outcome whose JSON carries `asks.pending` is neither that question nor a `held` row: the review tool is still awaited, so the close asks no one and runs `stamity run land --run <run-id> --ready --wait 8 --json` again, alone on its line, whose `--wait` does the waiting; `--approved` passes no wait.";
+    expect(qa).toContain(pendingAsks);
+    expect(qa.indexOf(pendingAsks)).toBeGreaterThan(qa.indexOf(approved));
     // TEST CHANGE, justified (fix round 5, review/111; REQ-FLOW-144): the approved line carries `--ready`, the walk's retry
     // is the land step's own line, and a moved head is re-asked from a fresh `--ready --json` read.
     expect(qa).not.toContain("`stamity run land --run <run-id> --approved --json`");

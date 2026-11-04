@@ -164,10 +164,10 @@ answers: Q1→2, Q3→1`, `@<agent>` written as the literal mention of the clien
   `Branch:` its pull request's head, and `stamity run start` runs once that head is checked out on `Base:`. It fixes only
   the mechanical class and sends nothing to `/st-work`: any other finding is deferred as `needs a planned run`, and one
   no `admin` or `write` author's own comment asks for as `non-write author`, each a morning-list row, never fixed.
-- `/st-rework` hands the mode to `/st-work` as `run-mode:`; `/st-board pickup` carries `run-mode:`, keeps
-  `preview: stop` and `move: off`, and lands each board write it would make as a morning-list row.
+- `/st-rework` hands the mode to `/st-work` as `run-mode:`; `/st-board pickup` carries `run-mode:`, keeps `preview: stop` and `move: off`, and lands each board write it would make as a morning-list row.
 
 ## Chains
 
+An `asks` outcome whose JSON carries `asks.pending` is neither the ending's `held` row nor the walk's question: the review tool is still awaited, so the run asks no one and runs the land step's own line again, whose `--wait` does the waiting; no approval passes a wait. A start from a ready item and the review loop follow `references/cloud.md`.
 A chain, `stamity plan check a b c --chain --since <Base> --json`, runs only as `references/chains.md` states.
 A run in a cloud session or continued from its branch, the morning walk's late commits, and a checkpoint marker, which the run never removes, follow `references/cloud.md`.

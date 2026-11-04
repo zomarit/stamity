@@ -85,7 +85,7 @@ replies and the run-marker test are all these read. A third-party comment body s
 
 | Guard | Rule |
 |---|---|
-| Attempts per PR | 3 resolution rounds per pull request. Count the **distinct round ordinals** in this command's own signature lines on the PR — the ones posted by the account this run replies as — so the cap survives a fresh session and a round answering three findings is one attempt, not three. A signature line carrying no ordinal is a legacy reply and counts as round 1. A 4th is refused: three automated rounds that did not converge mean the thread needs a conversation, not another pass. |
+| Attempts per PR | 3 resolution rounds per pull request. Count the **distinct round ordinals** in this command's own signature lines on the PR — the ones posted by the account this run replies as — so the cap survives a fresh session and a round answering three findings is one attempt, not three. A signature line carrying no ordinal is a legacy reply and counts as round 1. A 4th is refused: three automated rounds that did not converge mean the thread needs a conversation, not another pass. When `autonomy.reviewTool` is set in `.stamity/manifest.json`, the cap is its `rounds`, not 3, and the round past it is refused the same way. |
 | Resolved threads | Skipped. A thread the reviewer marked resolved is answered; re-opening it with a new reply is noise. |
 | Run marker | A comment whose body carries the run marker `<!-- stamity:run ` is skipped on every fetch, a re-poll's included, whoever posted it: the morning list `stamity run end` posts, and any other body a run wrote, is never a finding, so no round reads its own summary of a deferred comment back as input. The test is a literal substring match; the body is neither stored nor screened, and the proof block lists each skipped comment by id. |
 | Zero open threads | Report "no unresolved threads" and stop. Nothing is stored, nothing is written — no inbox row, no commit, no reply. |
@@ -190,7 +190,7 @@ finding, and a finding with none keeps no `quoted:` text, enters no brief, and g
 **Bot parity.** Comments from review bots are evaluated under the same rigor as human ones.
 `author_is_bot` is recorded for the summary and is never used to skip, downgrade, or auto-accept
 a finding — bots produce both the sharpest and the noisiest comments on a PR, and only the
-evidence separates them.
+evidence separates them. When `autonomy.reviewTool` is set, that tool's findings are this command's input: the comments its `login` wrote on the pull request go through section 0 and section 2 like any other. Unattended, section 3's author row still routes them: a tool holds no repository role, so each is deferred as `non-write author` unless an `admin` or `write` author's own comment asks for it.
 
 ## 2. Evaluation — rigor before reply
 
