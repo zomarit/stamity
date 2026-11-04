@@ -94,43 +94,94 @@ describe("the eval run of record on the hand pages", () => {
     );
   };
 
+  /**
+   * What a page gets wrong about the runs behind `ofRecord`, read through `readRun`: each FAIL run it
+   * hides, and each passing run it calls FAIL, over the whole chain back to the full measure. Each
+   * link is read against the run composed with it, the pair the page's own sentence names.
+   */
+  const disclosureGaps = (
+    page: string,
+    ofRecord: string,
+    readRun: (path: string) => string = read,
+  ): readonly string[] => {
+    const gaps: string[] = [];
+    const seen = new Set<string>();
+    let later = ofRecord;
+    let results = readRun(later);
+    let baseline = priorCompleteRun(results);
+    while (baseline !== null && !seen.has(baseline)) {
+      seen.add(baseline);
+      const path = `evals/runs/${baseline}/RESULTS.md`;
+      const baselineResults = readRun(path);
+      const failed = runStatus(baselineResults) === "FAIL";
+      expect(
+        !failed || failingCases(baselineResults).length > 0 || unmetMetrics(baselineResults).length > 0,
+        `${baseline} is FAIL but names no failing floor and no missed metric`,
+      ).toBe(true);
+      const run = /-run-(\d+)/.exec(later)?.[1] ?? "";
+      const remeasured = compositionOf(results)?.remeasured.length ?? 0;
+      const number = /-run-(\d+)/.exec(baseline)?.[1] ?? "";
+      if (failed && !failBaselineDisclosure(baseline, baselineResults, run, remeasured).test(page)) {
+        gaps.push(`hides that ${baseline} alone was FAIL`);
+      }
+      if (!failed && new RegExp(`\\[?Run ${number}\\]?(?:\\([^)]*\\))? alone was FAIL`).test(page)) {
+        gaps.push(`calls the passing ${baseline} FAIL`);
+      }
+      later = path;
+      results = baselineResults;
+      baseline = priorCompleteRun(results);
+    }
+    return gaps;
+  };
+
   // ADDED for review/200; every TEST CHANGE it carried in `test/docsPages.test.ts` (2026-10-01, the
   // 1.11.0 cut: the full-run branch, the pattern read off both results files, the missed-metric
   // clause) is in its body as it was. The run of record and its prior run are records, so the case
   // runs here (unit r3-hand-page-links, above).
+  //
+  // TEST CHANGE, justified (2026-11-04, plan 023 file 1, unit release-speed; REQ-PROVE-020): a run of
+  // record may chain, so the check moved into `disclosureGaps`, which the case below drives on a chain.
   it.each([README, DOCTRINE, "docs/measurements.md"])(
     "%s discloses a FAIL baseline behind the composed run of record",
     (page) => {
-      const baseline = priorCompleteRun(read(RUN_OF_RECORD_PATH));
-      if (baseline === null) {
+      if (priorCompleteRun(read(RUN_OF_RECORD_PATH)) === null) {
         expect(
           collapsed(read(page)),
           `${page} keeps a composition disclosure, but ${RUN_OF_RECORD_PATH} is a full run`,
         ).not.toMatch(/alone was FAIL/);
         return;
       }
-      const baselineResults = read(`evals/runs/${baseline}/RESULTS.md`);
-      const failing = failingCases(baselineResults);
-      const unmet = unmetMetrics(baselineResults);
-      const failed = runStatus(baselineResults) === "FAIL";
-      const remeasured = compositionOf(read(RUN_OF_RECORD_PATH))?.remeasured.length ?? 0;
-      const run = /-run-(\d+)/.exec(RUN_OF_RECORD_PATH)?.[1] ?? "";
-      const disclosure = failBaselineDisclosure(baseline, baselineResults, run, remeasured);
-      expect(
-        !failed || failing.length > 0 || unmet.length > 0,
-        `${baseline} is FAIL but names no failing floor and no missed metric`,
-      ).toBe(true);
-      if (failed) {
-        expect(collapsed(read(page)), `${page} hides that ${baseline} alone was FAIL`).toMatch(
-          disclosure,
-        );
-      } else {
-        expect(collapsed(read(page)), `${page} calls a passing baseline FAIL`).not.toMatch(
-          /alone was FAIL/,
-        );
-      }
+      expect(disclosureGaps(collapsed(read(page)), RUN_OF_RECORD_PATH), page).toEqual([]);
     },
   );
+
+  // ADDED 2026-11-04 (plan 023 file 1, unit release-speed; REQ-PROVE-020): the real shape 58 -> 57 ->
+  // 56. Run 57 passed and run 56, the full measure, failed, so a page that speaks only of the nearest
+  // link hides the FAIL. Run 58 is a stand-in composed with the real run 57.
+  it("finds a FAIL full measure a page hides at the end of a chain", () => {
+    const ofRecord = "evals/runs/2026-11-05-run-58/RESULTS.md";
+    const prior = "2026-10-27-run-57";
+    const composed = [
+      `# Eval 2026-11-05-run-58`,
+      "",
+      "## 0. Composition",
+      "",
+      `Incremental run under SET-v7's incremental rule (declared 2026-09-15): the prior complete run is \`${prior}\` ` +
+        `(candidate \`${"0".repeat(40)}\`, status PASS). 1 case(s) re-measured in this run; 170 case(s) carried.`,
+      "",
+      "| Re-measured case | Why |",
+      "|---|---|",
+      "| `a-moved-case` | case file bytes moved |",
+      "",
+      "## 1. Set version and sha",
+      "",
+    ].join("\n");
+    const readRun = (path: string): string => (path === ofRecord ? composed : read(path));
+    const nearest = "Run 57 alone was PASS; run 58 re-measured one case, composed with run 57.";
+    expect(disclosureGaps(nearest, ofRecord, readRun)).toEqual(["hides that 2026-10-27-run-56 alone was FAIL"]);
+    const whole = `${nearest} ${collapsed(read("docs/measurements.md"))}`;
+    expect(disclosureGaps(whole, ofRecord, readRun)).toEqual([]);
+  });
 
   // ADDED 2026-10-01, the 1.11.0 cut (review W-4): a prior whose § 5 has a "NOT met" row with no
   // case listed must have that metric named, so the pattern built from such a § 5 refuses a

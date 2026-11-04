@@ -260,8 +260,9 @@ in hard trigger 2, and where `evals/README.md` or the eval skill still says othe
 holds. A run belongs to a release by dates: `CHANGELOG.md` dates each release, the run id dates each
 run, and a run is in a release only when it is dated after the previous release's date, so a run dated
 the day a release shipped reads as that release's. No results file's own text places a run. A run of
-record, one composition link from a full measure or more, must show every safety case measured in a
-run of its release, or the measurements page refuses it, naming the case. One link from a full measure
+record, full or composed, must itself be in its release, or the measurements page refuses it, naming
+it. A run of record one composition link from a full measure or more must also show every safety
+case measured in a run of its release, or the page refuses it, naming the case. One link from a full measure
 of its own release shows that by the two run ids. One link from an earlier release's full measure shows
 it by its re-measured table, which then names every safety case. The run of record may chain back to a
 full measure through more than one link when its results file also carries the safety measure, item 12

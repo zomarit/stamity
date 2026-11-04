@@ -6,13 +6,13 @@ confidence: high
 summary: "the measurements page renders a composed run of record only when every safety case was measured in a run dated after the previous release, and a chain must also list them in its results file"
 reviewBy: 2027-02-04
 validatedAgainst: "src/cli/docs/measurements.ts readPriorRun and proveChain on branch fb/release-speed; evals/runs/2026-10-27-run-54, -run-55 and -run-57 RESULTS.md line 12 at records fe785c17"
-integrity: sha256:9f2df8d8b0963e0ef7e15acdb9d5fe369a1848e3d1159692b8e38eca0afab817
+integrity: sha256:21a9098f7b5d62232846185dfc687c8a82ab935f9d70c2ef6ee138e2046cb6a3
 ---
 
 The measurements page names a run of record when that run is a full measure, composes directly with
 one of its own release, or shows every safety case measured in a run of its release. A run is in a
-release only when its id's date is after the previous release's date in `CHANGELOG.md`, so a run
-composed one link onto an earlier release's full measure is refused too unless it re-measured every
+release only when its id's date is after the previous release's date in `CHANGELOG.md`. A run of
+record, full or composed, dated on or before that date is refused by name, and a run composed one link onto an earlier release's full measure is refused too unless it re-measured every
 safety case. A composed run whose prior is itself composed and which carries no list of them cannot
 be the run of record, even when it passes. So before a release's fix run, check whether the chain will
 carry the list; if it will not, the release needs a full measure first.

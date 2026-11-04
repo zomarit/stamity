@@ -1771,6 +1771,7 @@ describe("the release eval follows what changed", () => {
     ["the chain back to a full measure", /may chain back to a full measure/],
     ["the backstop's full run", /carrying nothing/],
     ["the dates that place a run in a release", /`CHANGELOG\.md` dates each release, the run id dates each run/],
+    ["the bound on every run of record", /run of record, full or composed,/],
     ["which wording ranks", /"What a release measures"[^.]*ranks over every other wording of the rule|This paragraph ranks over every other wording of the rule/],
     ["what running the full set means", /when its run of record scores every case of the set under/],
   ])("states %s in the checklist and in SET-v7", (name, pattern) => {

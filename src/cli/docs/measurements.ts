@@ -1429,6 +1429,29 @@ function releaseBound(root: string, release: string): ReleaseBound {
   return { previous: previous.version, date: previous.date, earlier: earlier.map(({ date }) => date) };
 }
 
+/**
+ * The run of record's directory id, its release and that release's bound, with the bound held to the
+ * run itself: a run of record, full or composed, dated on or before the previous release's date
+ * cannot be this release's. The id comes from `evals/run-of-record.json`, never from the run's text.
+ * Throws what {@link releaseBound} throws, and `EngineError` (`VALIDATION_ERROR`) when that file
+ * names another run, or when the date falls short, naming the run.
+ */
+function runOfRecordInRelease(
+  root: string,
+  runOfRecord: string,
+): { readonly self: string; readonly release: string; readonly bound: ReleaseBound } {
+  const { path, release } = readRunOfRecord(root);
+  const self = path.split("/").at(-2) ?? "";
+  if (EVAL_RUN_ID.exec(self)?.[1] !== runOfRecord) {
+    fail(`${RUN_OF_RECORD_FILE} names ${path}, not run ${runOfRecord}; the page cannot place that run in a release.`);
+  }
+  const bound = releaseBound(root, release);
+  if (runDate(self) <= bound.date) {
+    fail(`\`${self}\` is dated on or before ${bound.previous}'s ${bound.date}, so it cannot be release ${release}'s run of record.`);
+  }
+  return { self, release, bound };
+}
+
 /** A run behind the run of record: its number on the page, its results path and its results file. */
 interface ChainLink {
   readonly number: string;
@@ -1516,11 +1539,7 @@ function proveRows(
  * none), and one link from an earlier release's full measure through its re-measured table.
  */
 function proveChain(root: string, runOfRecord: string, results: string, measure: SafetyMeasure | null): ProvenChain {
-  const { path: ownPath, release } = readRunOfRecord(root);
-  const self = ownPath.split("/").at(-2) ?? "";
-  if (EVAL_RUN_ID.exec(self)?.[1] !== runOfRecord) {
-    fail(`${RUN_OF_RECORD_FILE} names ${ownPath}, not run ${runOfRecord}; the page cannot place that run on its chain.`);
-  }
+  const { self, release, bound } = runOfRecordInRelease(root, runOfRecord);
   const ids = chainIds(root, runOfRecord, results);
   const links = ids.map((id) => {
     const path = evalResultsPath(id);
@@ -1535,7 +1554,6 @@ function proveChain(root: string, runOfRecord: string, results: string, measure:
     fail(`The composition chain from run ${runOfRecord} walks back into itself and reaches no full measure.`);
   }
 
-  const bound = releaseBound(root, release);
   const releases = bound.earlier.filter((date) => date >= runDate(endId)).length;
   if (releases >= 3) {
     fail(`Release ${release} is the third release since the full measure \`${endId}\` or later, so a full run is due and no composed run renders.`);
@@ -1747,6 +1765,7 @@ export function measurementMethod(
 ): readonly string[] {
   const composition = compositionOf(results);
   if (composition === null) {
+    runOfRecordInRelease(root, runOfRecord);
     return [
       "That run is a full baseline: its results file names no prior complete run, so no case is",
       "carried from an earlier run.",

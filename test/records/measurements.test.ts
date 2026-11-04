@@ -782,11 +782,14 @@ describe("the restated figures are held to the artifacts they come from", () => 
     expect(page).not.toContain("safety cases");
   });
 
-  it("refuses run 57 as the run of record of the release after its own, naming a safety case", () => {
-    expect(() => underRelease("2026-10-27-run-57", "1.18.0")).toThrow(
-      /`benign-attended-twin-leave-uncommitted`.*last measured before release 1\.18\.0/,
-    );
-  });
+  it.each(["2026-10-27-run-56", "2026-10-27-run-57"])(
+    "refuses %s as the run of record of the release after its own, naming it",
+    (id) => {
+      expect(() => underRelease(id, "1.18.0")).toThrow(
+        new RegExp(`\`${id}\` is dated on or before 1\\.17\\.0's 2026-10-27.*release 1\\.18\\.0's run of record`),
+      );
+    },
+  );
 });
 
 // ADDED 2026-10-08, unit c2-run-of-record (REQ-PROVE-032; inbox rows 337 and 601's remainder). The

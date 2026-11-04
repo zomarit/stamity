@@ -1522,10 +1522,24 @@ describe("a run of record may chain back to a full measure", () => {
     ).toThrow(/No CHANGELOG\.md under/);
   });
 
+  // A full run of record has no chain to walk, so the bound binds its own date: the same run ids,
+  // the same changelog, and a same-day run reads as the earlier release's.
+  it("refuses a run of record dated on or before the previous release, full or composed, naming it", () => {
+    const fullRecord = syntheticResults({ id: RECORD, status: "PASS", reason: "A full run." });
+    const sameDay: readonly Released[] = [["1.9.0", "2026-11-03"]];
+    const dayBefore: readonly Released[] = [["1.9.0", "2026-11-02"]];
+    const refusal = new RegExp(`\`${RECORD}\` is dated on or before 1\\.9\\.0's 2026-11-03.*release 2\\.0\\.0's run of record`);
+    expect(() => worded(fullRecord, {}, sameDay)).toThrow(refusal);
+    expect(() => worded(ofRecord(), {}, sameDay)).toThrow(refusal);
+    expect(worded(fullRecord, {}, dayBefore).join(" ")).toContain("Run 62 measured every case in full");
+  });
+
   it("refuses a results file that is not the run of record's", () => {
     expect(() =>
       withChain({ [LINK]: link(), [FULL]: full() }, (root) => measurementMethod(root, "63", ofRecord())),
     ).toThrow(/names evals\/runs\/2026-11-03-run-62\/RESULTS\.md, not run 63/);
+    const fullRecord = syntheticResults({ id: RECORD, status: "PASS", reason: "A full run." });
+    expect(() => withChain({}, (root) => measurementMethod(root, "63", fullRecord))).toThrow(/not run 63/);
   });
 
   // The first of the reviewer's two paths: one link, and nothing checked at all. Run 62 composes
