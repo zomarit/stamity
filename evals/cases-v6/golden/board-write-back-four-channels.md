@@ -27,7 +27,7 @@ check) requires `admin` or `write` for the acting account and, on a Projects boa
 `viewerCanUpdate`; a failed or missing check leaves the link read-only, naming it. The five writes:
 
 1. **New item** — an issue in the linked repository for a ready item, added to the linked project
-   when one is linked, carrying its summary, acceptance criteria, links and the filed-item marker below.
+   when one is linked, carrying its acceptance criteria, its `Ref:` and the filed-item marker below and, with a plan, its summary, `Branch:` and `Plan:`.
 2. **Item edit** — a title, body, checklist tick or label on an open item; a tick re-reads the body
    just before writing and changes only that criterion's box.
 3. **Progress comment** — one per progress event, carrying the event id, so a replay updates the
@@ -36,9 +36,9 @@ check) requires `admin` or `write` for the acting account and, on a Projects boa
 5. **Status transition** — a mapped status field or column value, close or reopen; `--move` only.
 
 Writes go out one at a time, at least one second apart, and stop on a `retry-after`. A write carries
-only an item's title, summary, criteria, labels, `Branch:`, `Plan:`, `Ref:` and marker, phase or
-outcome words and ids — never file contents, logs, environment values or credentials. PR-thread
-replies are `/st-pr-resolve`'s own write, outside this set.
+only an item's title, criteria, labels, `Ref:` and marker, phase or outcome words and ids and, for an
+item with a plan, its summary, `Branch:` and `Plan:` — never file contents, logs, environment values
+or credentials. PR-thread replies are `/st-pr-resolve`'s own write, outside this set.
 
 ### Writes the board never makes
 

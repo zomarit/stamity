@@ -68,8 +68,8 @@ and stays a proposal in the report; with no taxonomy, `type:*`, `priority:*` and
 at `0b3f8bd3`). `groom` applies evidence comments and edits to open items on `apply` (`:148-149`). Progress
 comments, checklist ticks and PR links from `/st-work` events are written without `--move`, and a tick re-reads the body just before writing and changes only that criterion's box
 (`:261-265`, `:338-343`). Writes go out one at a time, at least one second apart, and stop on a `retry-after`; a write
-carries only an item's title, summary, criteria, labels, `Branch:`, `Plan:`, `Ref:` and marker, phase or outcome words
-and ids — never file contents, logs, environment values or credentials (`:268-270`).
+carries only an item's title, criteria, labels, `Ref:` and marker, phase or outcome words and ids and, for an item with
+a plan, its summary, `Branch:` and `Plan:` — never file contents, logs, environment values or credentials (`:268-271`).
 
 - **As built:** the bound on what a write carries is beyond plan 015's text (`review/23`). The write check is stated
   once, in the Write-back contract's opening, and setup step 2 and `fill` step 1 point at it (`:52-54`, `:175-176`,
@@ -83,11 +83,12 @@ and ids — never file contents, logs, environment values or credentials (`:268-
   repository's labels and passes only those on the list, since an issue write sent an unknown label can create it
   (`content/commands/st-board.md:96-98`; pinned at `test/corpus/commands/board.test.ts:394-405`).
 - **Amended 2026-11-04** (plan 023 file 1, run `2026-11-04_factory-bridge`, unit `board-item`; read at the amending
-  commit): the bound on what a write carries gains the summary, `Branch:` and `Plan:`, and the New item write and `fill`
-  step 6 point at the filed body of REQ-BOARD-006 (`content/commands/st-board.md:90-94`, `:259-260`, `:268-270`). The
-  "never" half of the bound did not move, and the board still creates no label. The summary is a rewrite of the plan's
-  Context, never a copy of the file. Pinned at `test/corpus/commands/board.test.ts`, the cases named for this bound and
-  for the writes that file an item.
+  commit): for an item with a plan, the bound on what a write carries gains the summary, `Branch:` and `Plan:`, and the
+  New item write and `fill` step 6 point at the filed body of REQ-BOARD-006 (`content/commands/st-board.md:90-94`,
+  `:259-260`, `:268-271`). An item with no plan keeps the old list word for word (`review/2`). The "never" half of the
+  bound did not move, and the board still creates no label. What a summary may say is REQ-BOARD-006's rule, which the
+  command states itself. Pinned at `test/corpus/commands/board.test.ts`, the cases named for this bound and for the
+  writes that file an item.
 - **Proof:** `test/corpus/commands/board.test.ts`; the eval case `board-write-back-four-channels`; QA row R2.
 
 1. GIVEN `### setup — wiring` WHEN read THEN it has no step that chooses or enables write channels, the body nowhere
@@ -284,11 +285,15 @@ text (`:313-318`).
 
 ### REQ-BOARD-006 — Filed items converge on retry
 
-A filed body runs in order: a plain summary of two to four sentences (the plan's Context through the `st-plain` skill,
-a view of the plan and never truth), `## Acceptance criteria`, `Branch: <name>`, `Plan: docs/plans/<file>.md <hex12>`
-(there `<hex12>` is the first twelve hex digits of the sha256 of the plan's text), `Ref: docs/specs/<file>.md`, and the
-marker last. `Branch:` never names `stamity/<run-id>`, which `run start` refuses with no record. An item with no plan
-has no `Plan:` or `Branch:` line and stays a plain item (`content/commands/st-board.md:322`, read at the amending commit).
+A filed body runs in order: a plain summary of two to four sentences, `## Acceptance criteria`, `Branch: <name>`,
+`Plan: docs/plans/<file>.md <hex12>` (there `<hex12>` is the first twelve hex digits of the sha256 of the plan's text),
+`Ref: docs/specs/<file>.md`, and the marker last. `Branch:` never names `stamity/<run-id>`, which `run start` refuses
+with no record. The summary is written for the board, not restated from a file, a view of the plan and never truth: it
+says in plain words what the work is for and what changes for the person. It carries no file path, no command, no
+security finding, no unfixed flaw, and nothing from the plan beyond that purpose. A security item's summary is one
+neutral line. In doubt, the line stays out. Only an item with a plan carries a summary, `Branch:` and `Plan:`; an item
+with no plan has none of the three and stays a plain item (`content/commands/st-board.md:322`, read at the amending
+commit).
 
 Every filed item's body ends with `<!-- stamity:item <key> -->`, `<key>` its source locator: `<path>#<anchor>/<hex12>`
 for a file source, `<hex12>` the first twelve hex digits of the sha256 of the item's first line as written;
@@ -308,9 +313,9 @@ comment, only a comment the account wrote matches, and a comment is edited by it
   `2026-10-11_release-1-14-0/close/1`). A marker matches only on a body's final line (`review/24`), and a progress
   comment matches only when the account wrote it (`review/26`).
 - **Amended 2026-11-04** (plan 023 file 1, run `2026-11-04_factory-bridge`, unit `board-item`): the filed body's order
-  above is new; `stamity run contract` reads it (REQ-FLOW-155). The command text names the summary's source as the
-  `st-plain` skill, where the plan wrote `/st-plain`: the skill is not one of the nine touchpoints, and the command's
-  suite refuses a `/st-*` name outside them.
+  above is new; `stamity run contract` reads it (REQ-FLOW-155). The plan had the summary made from its Context through
+  `/st-plain`. The orchestrator's sign-off on `review/1` dropped that: a board can be more public than the plan, and
+  `st-plain` keeps every path and security finding word for word, so the summary is written for the board instead.
 - **Proof:** `test/corpus/commands/board.test.ts`; QA row R2.
 
 1. GIVEN `### Filed items converge` WHEN read THEN it contains `<!-- stamity:item <key> -->`, `<path>#<anchor>/<hex12>`
@@ -327,8 +332,9 @@ comment, only a comment the account wrote matches, and a comment is edited by it
    no second issue exists for any key and the report names the matched issues, updated or unchanged. *(QA R2;
    amended 2026-10-15, ledger row `close/3`, QA note N1; it read "the report names the updated issues")*
 5. GIVEN `### Filed items converge` WHEN read THEN it names the summary, `## Acceptance criteria`, `Branch:`, `Plan:` and
-   `Ref:` in that order with the marker last, says the summary is a view of the plan and never truth, and says an item
-   with no plan has no `Plan:` or `Branch:` line. *(corpus; added 2026-11-04)*
+   `Ref:` in that order with the marker last, says the summary is a view of the plan and never truth, says what the
+   summary is for and what it never carries, and says an item with no plan has no summary, `Plan:` or `Branch:`.
+   *(corpus; added 2026-11-04)*
 
 ### REQ-BOARD-007 — The GitHub row names every write it allows
 

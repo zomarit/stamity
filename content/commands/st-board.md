@@ -257,7 +257,7 @@ check) requires `admin` or `write` for the acting account and, on a Projects boa
 `viewerCanUpdate`; a failed or missing check leaves the link read-only, naming it. The five writes:
 
 1. **New item** — an issue in the linked repository for a ready item, added to the linked project
-   when one is linked, carrying its summary, acceptance criteria, links and the filed-item marker below.
+   when one is linked, carrying its acceptance criteria, its `Ref:` and the filed-item marker below and, with a plan, its summary, `Branch:` and `Plan:`.
 2. **Item edit** — a title, body, checklist tick or label on an open item; a tick re-reads the body
    just before writing and changes only that criterion's box.
 3. **Progress comment** — one per progress event, carrying the event id, so a replay updates the
@@ -266,9 +266,9 @@ check) requires `admin` or `write` for the acting account and, on a Projects boa
 5. **Status transition** — a mapped status field or column value, close or reopen; `--move` only.
 
 Writes go out one at a time, at least one second apart, and stop on a `retry-after`. A write carries
-only an item's title, summary, criteria, labels, `Branch:`, `Plan:`, `Ref:` and marker, phase or
-outcome words and ids — never file contents, logs, environment values or credentials. PR-thread
-replies are `/st-pr-resolve`'s own write, outside this set.
+only an item's title, criteria, labels, `Ref:` and marker, phase or outcome words and ids and, for an
+item with a plan, its summary, `Branch:` and `Plan:` — never file contents, logs, environment values
+or credentials. PR-thread replies are `/st-pr-resolve`'s own write, outside this set.
 
 ### Writes the board never makes
 
@@ -319,7 +319,7 @@ reports `visibility` `public`, and neither is read from `author_association` or 
 
 ### Filed items converge
 
-A filed body runs in order: a plain summary of two to four sentences (the plan's Context through the `st-plain` skill, a view of the plan and never truth), `## Acceptance criteria`, `Branch: <name>`, `Plan: docs/plans/<file>.md <hex12>` (there `<hex12>` is the first twelve hex digits of the sha256 of the plan's text), `Ref: docs/specs/<file>.md`, and the marker last. `Branch:` never names `stamity/<run-id>`, which `run start` refuses with no record. An item with no plan has no `Plan:` or `Branch:` line and stays a plain item.
+A filed body runs in order: a plain summary of two to four sentences, `## Acceptance criteria`, `Branch: <name>`, `Plan: docs/plans/<file>.md <hex12>` (there `<hex12>` is the first twelve hex digits of the sha256 of the plan's text), `Ref: docs/specs/<file>.md`, and the marker last. `Branch:` never names `stamity/<run-id>`, which `run start` refuses with no record. The summary is written for the board, not restated from a file, a view of the plan and never truth: it says in plain words what the work is for and what changes for the person. It carries no file path, no command, no security finding, no unfixed flaw, and nothing from the plan beyond that purpose. A security item's summary is one neutral line. In doubt, the line stays out. Only an item with a plan carries a summary, `Branch:` and `Plan:`; an item with no plan has none of the three and stays a plain item.
 
 Every filed item's body ends with `<!-- stamity:item <key> -->`, `<key>` its source locator:
 `<path>#<anchor>/<hex12>` for a file source, `<hex12>` the first twelve hex digits of the sha256 of

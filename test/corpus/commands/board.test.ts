@@ -454,11 +454,12 @@ describe("st-board — write-back contract", () => {
 
     // review/23: no file contents, logs or credentials reach a public item unread.
     // TEST CHANGE, justified (2026-11-04, REQ-BOARD-001, REQ-FLOW-155): this bound
-    // listed title, criteria, labels, `Ref:` and marker. A ready item now also carries
+    // listed title, criteria, labels, `Ref:` and marker. An item with a plan now also carries
     // its plain summary and its `Branch:` and `Plan:` lines, which `stamity run contract`
-    // reads, so the bound names them; the "never" half of the sentence did not move.
+    // reads, so the bound names them for that item alone. An item with no plan keeps the old
+    // list word for word, and the "never" half of the sentence did not move.
     expect(flat(writeBack)).toMatch(
-      /A write carries only an item's title, summary, criteria, labels, `Branch:`, `Plan:`, `Ref:` and marker, phase or outcome words and ids — never file contents, logs, environment values or credentials/,
+      /A write carries only an item's title, criteria, labels, `Ref:` and marker, phase or outcome words and ids and, for an item with a plan, its summary, `Branch:` and `Plan:` — never file contents, logs, environment values or credentials/,
     );
     expect(preview).toMatch(/\(item, action, change — for a New item or Item edit, the text it writes\)/);
   });
@@ -483,13 +484,32 @@ describe("st-board — write-back contract", () => {
   it("states what a filed body's summary and links are, and what a plain item leaves out (REQ-BOARD-006, REQ-FLOW-155)", async () => {
     const converge = flat(section(section((await board()).parsed.body, "Write-back contract"), "Filed items converge", "###"));
 
-    // The summary comes from the plan and answers to it: repo is truth for content.
-    expect(converge).toMatch(/the plan's Context through the `st-plain` skill, a view of the plan and never truth/);
+    // The summary answers to the plan: repo is truth for content.
+    expect(converge).toMatch(/a view of the plan and never truth/);
     // `stamity run contract` compares this hash, and it is not the marker's `<hex12>`.
     expect(converge).toMatch(/there `<hex12>` is the first twelve hex digits of the sha256 of the plan's text/);
     // `run start` refuses that branch name when it carries no run record.
     expect(converge).toMatch(/`Branch:` never names `stamity\/<run-id>`/);
-    expect(converge).toMatch(/An item with no plan has no `Plan:` or `Branch:` line and stays a plain item/);
+    // review/2: an item with no plan has no source for a summary, so all three stay off it.
+    expect(converge).toMatch(
+      /Only an item with a plan carries a summary, `Branch:` and `Plan:`; an item with no plan has none of the three and stays a plain item/,
+    );
+  });
+
+  it("keeps a plan's detail off the board: the summary is written for the board (REQ-BOARD-006, REQ-FLOW-155)", async () => {
+    const converge = flat(section(section((await board()).parsed.body, "Write-back contract"), "Filed items converge", "###"));
+
+    // review/1: a board can be more public than the plan, so this rule sits where the model reads it.
+    expect(converge).toMatch(
+      /The summary is written for the board, not restated from a file, .*: it says in plain words what the work is for and what changes for the person/,
+    );
+    expect(converge).toMatch(
+      /It carries no file path, no command, no security finding, no unfixed flaw, and nothing from the plan beyond that purpose/,
+    );
+    expect(converge).toMatch(/A security item's summary is one neutral line/);
+    expect(converge).toMatch(/In doubt, the line stays out/);
+    // `st-plain` keeps every path and finding word for word, the opposite of this rule.
+    expect(converge).not.toMatch(/st-plain/);
   });
 
   it("points the writes that file an item at the filed body (REQ-BOARD-001, REQ-FLOW-155)", async () => {
@@ -498,7 +518,9 @@ describe("st-board — write-back contract", () => {
     const newItem = flat(/^1\. \*\*New item\*\*.*(?:\n {3}.*)*/m.exec(writeBack)?.[0] ?? "");
     const fill = flat(section(section(body, "Modes"), "fill — intake to items", "###"));
 
-    expect(newItem).toMatch(/carrying its summary, acceptance criteria, links and the filed-item marker below/);
+    expect(newItem).toMatch(
+      /carrying its acceptance criteria, its `Ref:` and the filed-item marker below and, with a plan, its summary, `Branch:` and `Plan:`/,
+    );
     expect(fill).toMatch(/and the filed-item marker, per `### Filed items converge`/);
   });
 
