@@ -39,7 +39,9 @@ import { HOST_NAME } from "../../runs/pullRequest.ts";
  * (`PUT …/pulls/<n>/merge` with the head `sha`), {@link ghReviewThreads},
  * {@link ghMarkReady} and {@link ghResolveReviewThread} (`POST graphql`, each with
  * its one constant document, {@link ghGraphqlArgs} refusing any other). {@link ghApi} itself still
- * refuses `PUT`, every merge path and `graphql`.
+ * refuses `PUT`, every merge path and `graphql`. `stamity run end`'s notice (REQ-FLOW-156) is one more:
+ * {@link ghRequestReview} (`POST …/pulls/<n>/requested_reviewers`), since a reviewer's name reaches a person and the
+ * door takes any body.
  */
 
 /** The closed method set. */
@@ -371,6 +373,37 @@ export function ghMergeArgs(request: PullRef & { sha: string; method: MergeMetho
  */
 export function ghMergePull(request: PullRef & { sha: string; method: MergeMethod }, opts: GhApiOptions = {}): Promise<GhResponse> {
   return startGh(() => ghMergeArgs(request), { sha: request.sha, merge_method: request.method }, opts);
+}
+
+/** A person's GitHub login, and an organization's: an app's `[bot]` form is no one a review request tells. */
+export const REVIEWER_LOGIN = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
+
+/** A team's slug, the one word of `@org/team` GitHub's request takes: the organization is the repository's own. */
+export const TEAM_SLUG = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+
+/** One review request: the pull request, and whom it asks. */
+type ReviewRequest = PullRef & { reviewers: string[]; teamReviewers: string[] };
+
+/**
+ * The argument vector of {@link ghRequestReview}: `POST repos/<owner>/<repo>/pulls/<n>/requested_reviewers`, the body on
+ * stdin. Throws a {@link GhRefusal} for a part that fails validation, a name outside its shape, or a request naming nobody.
+ */
+export function ghRequestReviewArgs(request: ReviewRequest): string[] {
+  const refused = pullRefRefusal(request);
+  if (refused !== null) throw refusal(`gh review request: ${refused}`);
+  if (request.reviewers.length + request.teamReviewers.length === 0) throw refusal("gh review request: it names nobody");
+  if (!request.reviewers.every((login) => REVIEWER_LOGIN.test(login))) throw refusal("gh review request: a reviewer is not a GitHub login");
+  if (!request.teamReviewers.every((slug) => TEAM_SLUG.test(slug))) throw refusal("gh review request: a team is not a team slug");
+  const path = `repos/${request.owner}/${request.repo}/pulls/${request.number}/requested_reviewers`;
+  return ["api", "--hostname", request.hostname, "--include", "--method", "POST", "--input", "-", path];
+}
+
+/**
+ * Ask these people and teams to review one pull request, with the two lists as the whole body, so no text of any
+ * caller's goes with it. Out of `WRITE_PATHS` by design: this function is the one way a reviewer's name leaves the engine.
+ */
+export function ghRequestReview(request: ReviewRequest, opts: GhApiOptions = {}): Promise<GhResponse> {
+  return startGh(() => ghRequestReviewArgs(request), { reviewers: request.reviewers, team_reviewers: request.teamReviewers }, opts);
 }
 
 /**

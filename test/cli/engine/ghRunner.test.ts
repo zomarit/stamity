@@ -11,6 +11,8 @@ import {
   ghResolveReviewThread,
   ghMergeArgs,
   ghMergePull,
+  ghRequestReview,
+  ghRequestReviewArgs,
   ghReviewThreads,
   MARK_READY_MUTATION,
   parseGhInclude,
@@ -146,6 +148,44 @@ describe("the land verb's calls", () => {
   });
 });
 
+// run-end-notice (REQ-FLOW-156): the one review request, beside the door that still refuses its path.
+describe("the run end notice's call", () => {
+  const PULL = { hostname: HOST, owner: "acme", repo: "app", number: 7 };
+
+  it("builds the request as POST repos/<owner>/<repo>/pulls/<n>/requested_reviewers with the body on stdin", () => {
+    expect(ghRequestReviewArgs({ ...PULL, reviewers: ["a-person"], teamReviewers: [] })).toEqual(["api", "--hostname", "github.com", "--include", "--method", "POST", "--input", "-", "repos/acme/app/pulls/7/requested_reviewers"]);
+    expect(() => ghRequestReviewArgs({ ...PULL, reviewers: [], teamReviewers: ["core_team.v2"] })).not.toThrow();
+  });
+
+  it("refuses a bad part, a reviewer outside GitHub's shape, and a request naming nobody, before gh starts", async () => {
+    const bad = [
+      { ...PULL, owner: "acme/x", reviewers: ["a"] },
+      { ...PULL, repo: "..", reviewers: ["a"] },
+      { ...PULL, number: 0, reviewers: ["a"] },
+      { ...PULL, hostname: "https://github.com", reviewers: ["a"] },
+      { ...PULL, reviewers: ["@a"] },
+      { ...PULL, reviewers: ["a b"] },
+      { ...PULL, reviewers: ["org/team"] },
+      { ...PULL, reviewers: ["-a"] },
+      { ...PULL, reviewers: ["a".repeat(40)] },
+      { ...PULL, reviewers: ["a[bot]"] },
+      { ...PULL, reviewers: ["a\n"] },
+      { ...PULL, teamReviewers: ["org/team"] },
+      { ...PULL, teamReviewers: ["@team"] },
+      { ...PULL, reviewers: ["a"], teamReviewers: ["two words"] },
+      { ...PULL },
+    ];
+    for (const request of bad) {
+      expect(() => ghRequestReviewArgs({ reviewers: [], teamReviewers: [], ...request }), JSON.stringify(request)).toThrow(/gh review request:/);
+    }
+    await expect(ghRequestReview({ ...PULL, reviewers: ["a b"], teamReviewers: [] }, { env: { PATH: "" } })).rejects.toMatchObject({ code: "GH_REFUSED" });
+  });
+
+  it("stays out of the door: ghApi still refuses the path, so nothing but this function reaches it", () => {
+    expect(() => ghApiArgs({ method: "POST", path: "repos/acme/app/pulls/7/requested_reviewers", body: { reviewers: ["a"] }, hostname: HOST })).toThrow(/gh api:/);
+  });
+});
+
 describe("parseGhInclude", () => {
   it("reads the status from the head's first line and the JSON after the blank line", () => {
     const stdout = 'HTTP/2.0 422 Unprocessable Entity\r\nContent-Type: application/json\r\n\r\n{"message":"Validation Failed"}';
@@ -254,6 +294,17 @@ describe("ghApi", () => {
 
     await ghResolveReviewThread({ hostname: HOST, id: "PRRT_kwDOabc" }, { cwd: work, env: { PATH: bin } });
     expect(JSON.parse(await readFile(input, "utf8"))).toEqual({ query: RESOLVE_THREAD_MUTATION, variables: { id: "PRRT_kwDOabc" } });
+  });
+
+  it.skipIf(process.platform === "win32")("starts the review request with reviewers and team_reviewers alone on stdin (run-end-notice)", async () => {
+    const { bin, work, log, input } = await standIn('HTTP/2.0 201 Created\r\nContent-Type: application/json\r\n\r\n{"number":7}', 0);
+
+    await expect(ghRequestReview({ hostname: HOST, owner: "acme", repo: "app", number: 7, reviewers: ["a-person"], teamReviewers: ["core"] }, { cwd: work, env: { PATH: bin } })).resolves.toEqual({
+      status: 201,
+      json: { number: 7 },
+    });
+    expect(await readFile(log, "utf8")).toBe("api\n--hostname\ngithub.com\n--include\n--method\nPOST\n--input\n-\nrepos/acme/app/pulls/7/requested_reviewers\nprompt=1\n");
+    expect(JSON.parse(await readFile(input, "utf8"))).toEqual({ reviewers: ["a-person"], team_reviewers: ["core"] });
   });
 
   it.skipIf(process.platform === "win32")("starts the program it is given, not one PATH names, and refuses a relative one (review/75)", async () => {

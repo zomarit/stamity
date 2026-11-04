@@ -11,8 +11,9 @@ import { hookPathsAt, setupRootOf, setupRootsAt, type HookScratch } from "../../
 import { blastRadiusSection, MORNING_FILE, prBodyFrom, screenOutbound, withBlastRadius } from "../../runs/morning.ts";
 import { inferPrerequisites, type PrereqRow } from "../../runs/prerequisites.ts";
 import { ensureDraftPr, HOST_NAME, PR_RECORD_FILE, prRecordText, resolveRepo, type PrOutcome } from "../../runs/pullRequest.ts";
+import { parseRunContract } from "../../runs/runContract.ts";
 import { parseGitDefaultBranch } from "../../workspace/git.ts";
-import { ghApi } from "../engine/ghRunner.ts";
+import { ghApi, ghRequestReview, REVIEWER_LOGIN, TEAM_SLUG } from "../engine/ghRunner.ts";
 import { gitCheckRunner, revisionLines } from "../engine/gitStatus.ts";
 import { GitWriteGroupStopped, gitProgramVariablesIn, gitWrite, type GitWriteResult } from "../engine/gitWrite.ts";
 import { CliFailure } from "../kit/output.ts";
@@ -155,6 +156,10 @@ import { runLand } from "./runLand.ts";
  * question passes between two chain files; one it cannot remove makes the exit 1,
  * its `notDone` line naming it.
  *
+ * **The notice** (REQ-FLOW-156): `end --final-round`, once it has a pull request, reads the run folder's `contract.yml`
+ * and asks its `answerer` for a review through `ghRequestReview`, with no text and no mention. A failure never moves
+ * the exit code: it is a `notDone` line. No contract sends nothing and says nothing.
+ *
  * **`land`** (REQ-FLOW-132, REQ-FLOW-133) merges the run's own pull request, or fast-forwards the default branch to
  * its head, when the evidence holds, else asks or refuses; its body is `./runLand.ts`, registered here only.
  *
@@ -215,8 +220,14 @@ function parseWait(value: string): number {
 /** The origin pin `start` writes in the run folder (review/209). */
 const ORIGIN_PIN = "origin.json";
 
+/** The run contract `run contract` writes in the run folder, which the notice reads (REQ-FLOW-156). */
+const CONTRACT_FILE = "contract.yml";
+
+/** The most of a run contract read, as the plan check reads one. */
+const CONTRACT_READ_MAX_BYTES = 4 * 1024 * 1024;
+
 /** The run folder's files a checkpoint stages where they exist. */
-const RUN_FILES: readonly string[] = ["record.md", "ledger.jsonl", "plan.md", "morning.md", "contract.yml", ORIGIN_PIN];
+const RUN_FILES: readonly string[] = ["record.md", "ledger.jsonl", "plan.md", "morning.md", CONTRACT_FILE, ORIGIN_PIN];
 
 /** The most of an origin pin read; a pin is one short JSON object. */
 const ORIGIN_PIN_MAX_BYTES = 4096;
@@ -937,6 +948,8 @@ interface PrStep {
   pr: Checkpoint["pr"];
   inferred: PrereqRow[];
   notDone: string[];
+  /** The repository `pr` is on, where one is. */
+  repo?: OriginRepo;
 }
 
 async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, verb: typeof CHECKPOINT | typeof END): Promise<CommandResult> {
@@ -1506,7 +1519,57 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     result.notDone.push(`title not changed: pull request #${step.pr.number} was already open, so it keeps its own title, not the Refused: one`);
   }
   lines.push(`pr: ${step.pr === null ? "not opened" : `#${step.pr.number} ${step.pr.url} (${step.pr.how})`}`);
+  if (verb === END && opts["finalRound"] === true && step.pr !== null && step.repo !== undefined) {
+    await runEndNotice({ cwd, top, runDir, env: { ...ctx.app.runtime.env }, repo: step.repo, number: step.pr.number }, lines, result.notDone);
+  }
   return finish(step.pr !== null, { inferred: step.inferred });
+}
+
+/** Whom an `answerer` asks: `@login` or `@org/team`, anything else `null`, so no free text reaches a request. */
+function reviewerOf(answerer: string): { login: string } | { org: string; team: string } | null {
+  const [name = "", team, stray] = answerer.slice(1).split("/");
+  if (!answerer.startsWith("@") || stray !== undefined || !REVIEWER_LOGIN.test(name)) return null;
+  if (team === undefined) return { login: name };
+  return TEAM_SLUG.test(team) ? { org: name, team } : null;
+}
+
+/**
+ * REQ-FLOW-156: one review request to the run contract's `answerer`, on the pull request the run ended with. The
+ * contract is a file the run can edit, so nothing it says goes past the shape check, and no line here echoes it: the
+ * text names a login that passed, and a `notDone` line names the file, a status or a class, never GitHub's or `gh`'s
+ * words. A team is asked by its slug, which GitHub reads in the repository's own organization, so another's team
+ * sends nothing rather than reach a team of that name here. The author's read is what drops them: unread, nothing goes.
+ */
+async function runEndNotice(at: { cwd: string; top: string; runDir: string; env: NodeJS.ProcessEnv; repo: OriginRepo; number: number }, lines: string[], notDone: string[]): Promise<void> {
+  const rel = `${at.runDir}/${CONTRACT_FILE}`;
+  if (!exists(join(at.cwd, rel))) return;
+  const unsent = (why: string): void => {
+    notDone.push(`notice not sent: ${why}`);
+  };
+  const read = readCapped(join(at.cwd, rel), CONTRACT_READ_MAX_BYTES);
+  if (read === null || read.truncated) return unsent(`${rel} could not be read`);
+  const parsed = parseRunContract(read.text, rel);
+  if (!parsed.ok) return unsent(`${rel} did not parse`);
+  const reviewer = reviewerOf(parsed.contract.answerer);
+  if (reviewer === null) return unsent("the contract's answerer is neither a GitHub login nor a team, so it reached nobody");
+  const { host: hostname, owner, repo } = at.repo;
+  if ("org" in reviewer && reviewer.org.toLowerCase() !== owner.toLowerCase()) return unsent("the contract's answerer is a team outside this repository's owner, so it reached nobody");
+  const opts = { cwd: at.top, env: at.env };
+  try {
+    if ("login" in reviewer) {
+      const pull = await ghApi({ method: "GET", path: `repos/${owner}/${repo}/pulls/${at.number}`, hostname }, opts);
+      const author = (pull.json as { user?: { login?: unknown } } | null)?.user?.login;
+      if (pull.status !== 200 || typeof author !== "string") return unsent(`the author of pull request #${at.number} could not be read (GitHub answered HTTP ${pull.status})`);
+      if (author.toLowerCase() === reviewer.login.toLowerCase()) return unsent(`the answerer opened pull request #${at.number}, so a review request cannot reach them`);
+    }
+    const asked = "login" in reviewer ? { reviewers: [reviewer.login], teamReviewers: [] } : { reviewers: [], teamReviewers: [reviewer.team] };
+    const answer = await ghRequestReview({ hostname, owner, repo, number: at.number, ...asked }, opts);
+    if (answer.status < 200 || answer.status >= 300) return unsent(`the review request answered HTTP ${answer.status}, so it reached nobody`);
+    lines.push(`notice: review requested of ${"login" in reviewer ? reviewer.login : reviewer.team}`);
+  } catch (cause) {
+    const code = (cause as { code?: unknown } | null)?.code;
+    unsent(`the call failed before GitHub answered (${typeof code === "string" ? code : "no code"})`);
+  }
 }
 
 /** The pins every diff here takes against config: no external diff, colour, textconv or rename pairing, top-level names. */
@@ -2493,7 +2556,7 @@ async function draftPr(ctx: CliContext, at: PrInputs): Promise<PrStep> {
     const unrecorded = await recordPullRequest(ctx, at.top, { run: marked, host: repo.host, owner: repo.owner, repo: repo.repo, number: outcome.number });
     if (unrecorded !== null) notDone.push(unrecorded);
   }
-  return { pr: { number: outcome.number, url: outcome.url, how: outcome.how }, inferred, notDone };
+  return { pr: { number: outcome.number, url: outcome.url, how: outcome.how }, inferred, notDone, repo };
 }
 
 /**

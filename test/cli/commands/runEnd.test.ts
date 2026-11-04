@@ -6,6 +6,7 @@ import { dirname, join, relative } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { gitSurfaceRecordPath, readRunGitSurface } from "../../../src/cli/commands/gate.ts";
 import { runCommand } from "../../../src/cli/commands/run.ts";
+import type * as GhRunnerModule from "../../../src/cli/engine/ghRunner.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
 import { buildUnattendedAskGate, UNATTENDED_ASK_GATE_FILE } from "../../../src/hooks/scripts.ts";
 import { RUN_ENDED_MARKER_FILE } from "../../../src/mcp/env.ts";
@@ -30,19 +31,34 @@ const rest = vi.hoisted(() => ({
   routes: new Map<string, { status: number; json: unknown }>(),
   /** Answers given once each, in order, before `routes` answers the same `METHOD path`. */
   queued: new Map<string, { status: number; json: unknown }[]>(),
+  /** The `METHOD path` calls that reject as `gh` does when it never reached GitHub, with this code. */
+  rejected: new Map<string, string>(),
 }));
 
 // Mocked: the real `ghApi` starts `gh`, which calls GitHub over the network
 // under the machine's login; a unit test can reach neither. What the verb asks
 // for (path, method, body) is recorded and answered from `rest.routes`.
-vi.mock("../../../src/cli/engine/ghRunner.ts", () => ({
-  ghApi: (request: { method: string; path: string; body?: unknown }) => {
-    const path = request.path.replace(/^\//, "").replace(/\?.*$/, "");
-    rest.calls.push({ method: request.method, path, body: request.body });
-    const key = `${request.method} ${path}`;
+// TEST CHANGE, justified (run-end-notice, REQ-FLOW-156): the module's shapes stay real, since `run end` reads the
+// answerer against them, and `ghRequestReview` joins `ghApi` for the same reason: it starts `gh` too. Its path comes
+// from the real argument builder, so a refusal there still refuses here. `ghApi`'s own answers are unchanged.
+vi.mock("../../../src/cli/engine/ghRunner.ts", async (importOriginal) => {
+  const real = await importOriginal<typeof GhRunnerModule>();
+  const answer = (method: string, path: string, body: unknown): Promise<{ status: number; json: unknown }> => {
+    rest.calls.push({ method, path, body });
+    const key = `${method} ${path}`;
+    const code = rest.rejected.get(key);
+    if (code !== undefined) return Promise.reject(Object.assign(new Error("gh api answered no HTTP status: a stderr line"), { code }));
     return Promise.resolve(rest.queued.get(key)?.shift() ?? rest.routes.get(key) ?? { status: 404, json: { message: "Not Found" } });
-  },
-}));
+  };
+  return {
+    ...real,
+    ghApi: (request: { method: string; path: string; body?: unknown }) => answer(request.method, request.path.replace(/^\//, "").replace(/\?.*$/, ""), request.body),
+    ghRequestReview: (request: Parameters<typeof real.ghRequestReview>[0]) => {
+      const path = real.ghRequestReviewArgs(request).at(-1) ?? "";
+      return answer("POST", path, { reviewers: request.reviewers, team_reviewers: request.teamReviewers });
+    },
+  };
+});
 
 /**
  * Every argument vector the verb gave the write runner, and a case's choice of the calls that answer as a failed git.
@@ -131,6 +147,7 @@ describe("stamity run end", () => {
     rest.calls.length = 0;
     rest.routes.clear();
     rest.queued.clear();
+    rest.rejected.clear();
     writes.argv.length = 0;
     writes.failing = null;
     rest.routes.set("GET repos/o/r", { status: 200, json: { default_branch: "main" } });
@@ -1248,5 +1265,216 @@ describe("stamity run end", () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  // run-end-notice (REQ-FLOW-156): the run's last end asks the contract's answerer for a review, and nothing else.
+  describe("the notice", () => {
+    const CONTRACT = `${RUN_DIR}/contract.yml`;
+    const REVIEWERS = "repos/o/r/pulls/7/requested_reviewers";
+    const FINAL = [...END("feat: the change"), "--final-round"];
+
+    /** A contract `parseRunContract` accepts, naming `answerer` as the YAML text given. */
+    const contract = (answerer: string): string =>
+      ["run-contract: 1", "plan: docs/plans/x.md", "base: 02e040eb", "acceptance: done", "scope: { in: [src] }", `answerer: ${answerer}`, ""].join("\n");
+
+    const requests = () => rest.calls.filter((call) => call.path === REVIEWERS);
+
+    beforeEach(() => {
+      rest.routes.set("GET repos/o/r/pulls/7", { status: 200, json: { number: 7, user: { login: "the-run" } } });
+      rest.routes.set(`POST ${REVIEWERS}`, { status: 201, json: { number: 7 } });
+    });
+
+    it("asks the login the contract names, once, carrying the two lists and nothing else, after the pull request", async () => {
+      const { repo, remote } = await seed("attended");
+      await put(repo, CONTRACT, contract('"@a-person"'));
+
+      const { code, doc } = await run(repo, FINAL);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ subcommand: "end", pr: { number: 7 }, notDone: [] });
+      expect(requests()).toEqual([{ method: "POST", path: REVIEWERS, body: { reviewers: ["a-person"], team_reviewers: [] } }]);
+      expect(writesToGitHub().map((call) => call.path)).toEqual(["repos/o/r/pulls", REVIEWERS]);
+      expect(git(remote, ["ls-tree", "-r", "--name-only", `refs/heads/${RUN_BRANCH}`]).split("\n")).toContain(CONTRACT);
+    });
+
+    it("says in the text whom it asked, with no @ on the name", async () => {
+      const { repo } = await seed("attended");
+      await put(repo, CONTRACT, contract('"@a-person"'));
+
+      const { code, stdout } = await run(repo, ["end", "--run", RUN, "--title", "feat: x", "--final-round"]);
+
+      expect(code).toBe(0);
+      expect(stdout).toContain("notice: review requested of a-person");
+      expect(stdout).not.toContain("@a-person");
+    });
+
+    it("sends @org/team to team_reviewers by its slug, as GitHub takes it, and reads no author", async () => {
+      const { repo } = await seed("attended");
+      await put(repo, CONTRACT, contract('"@O/core-team"'));
+
+      const { code, doc } = await run(repo, FINAL);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ notDone: [] });
+      expect(requests()).toEqual([{ method: "POST", path: REVIEWERS, body: { reviewers: [], team_reviewers: ["core-team"] } }]);
+      expect(rest.calls.filter((call) => call.path === "repos/o/r/pulls/7")).toEqual([]);
+    });
+
+    it("sends nothing for a team of another owner, whose slug GitHub would read in this repository's", async () => {
+      const { repo } = await seed("attended");
+      await put(repo, CONTRACT, contract('"@elsewhere/core"'));
+
+      const { code, doc } = await run(repo, FINAL);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ notDone: ["notice not sent: the contract's answerer is a team outside this repository's owner, so it reached nobody"] });
+      expect(requests()).toEqual([]);
+    });
+
+    it("sends nothing to the pull request's author, ignoring case, and says it could not reach them (the solo repository)", async () => {
+      const { repo } = await seed("attended");
+      await put(repo, CONTRACT, contract('"@The-Run"'));
+
+      const { code, doc } = await run(repo, FINAL);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pr: { number: 7 }, notDone: ["notice not sent: the answerer opened pull request #7, so a review request cannot reach them"] });
+      expect(requests()).toEqual([]);
+    });
+
+    it("sends nothing where the author cannot be read, naming the status", async () => {
+      const { repo } = await seed("attended");
+      await put(repo, CONTRACT, contract('"@a-person"'));
+      rest.routes.set("GET repos/o/r/pulls/7", { status: 503, json: null });
+
+      const { code, doc } = await run(repo, FINAL);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ notDone: ["notice not sent: the author of pull request #7 could not be read (GitHub answered HTTP 503)"] });
+      expect(requests()).toEqual([]);
+    });
+
+    it("ends 0 on a 422, the run-ended marker written, the line naming the status and none of GitHub's text", async () => {
+      const { repo } = await seed("attended");
+      await put(repo, CONTRACT, contract('"@a-person"'));
+      rest.routes.set(`POST ${REVIEWERS}`, { status: 422, json: { message: "Reviews may only be requested from collaborators" } });
+
+      const { code, doc } = await run(repo, FINAL);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pr: { number: 7 }, notDone: ["notice not sent: the review request answered HTTP 422, so it reached nobody"] });
+      expect(requests()).toHaveLength(1);
+      expect(existsSync(join(repo, RUN_ENDED_MARKER_FILE))).toBe(true);
+    });
+
+    it("ends 0 where gh never reached GitHub, the line naming the class and never gh's stderr", async () => {
+      const { repo } = await seed("attended");
+      await put(repo, CONTRACT, contract('"@a-person"'));
+      rest.rejected.set(`POST ${REVIEWERS}`, "GH_NOT_LOGGED_IN");
+
+      const { code, doc } = await run(repo, FINAL);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ notDone: ["notice not sent: the call failed before GitHub answered (GH_NOT_LOGGED_IN)"] });
+    });
+
+    it("treats a failed read of the author as the same class of failure, and still ends 0", async () => {
+      const { repo } = await seed("attended");
+      await put(repo, CONTRACT, contract('"@a-person"'));
+      rest.rejected.set("GET repos/o/r/pulls/7", "ENOENT");
+
+      const { code, doc } = await run(repo, FINAL);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ notDone: ["notice not sent: the call failed before GitHub answered (ENOENT)"] });
+      expect(requests()).toEqual([]);
+    });
+
+    it.each([
+      ["free text", '"the person on call"'],
+      ["a login with no @", "a-person"],
+      ["a path deeper than a team", '"@org/team/extra"'],
+      ["a second mention after the first", '"@a-person @another"'],
+      ["a line break after the login", '"@a-person\\n"'],
+      ["an app's login", '"@some-app[bot]"'],
+    ])("sends nothing for %s and never echoes the value", async (_name, answerer) => {
+      const { repo } = await seed("attended");
+      await put(repo, CONTRACT, contract(answerer));
+
+      const { code, doc } = await run(repo, FINAL);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pr: { number: 7 }, notDone: ["notice not sent: the contract's answerer is neither a GitHub login nor a team, so it reached nobody"] });
+      expect(requests()).toEqual([]);
+    });
+
+    it("sends nothing and writes no line with no contract, and reads no author", async () => {
+      const { repo } = await seed("attended");
+
+      const { code, doc } = await run(repo, FINAL);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ pr: { number: 7 }, notDone: [] });
+      expect(requests()).toEqual([]);
+      expect(rest.calls.filter((call) => call.path === "repos/o/r/pulls/7")).toEqual([]);
+    });
+
+    it("sends nothing and adds a line for a contract that fails to parse, naming the file and none of its text", async () => {
+      const { repo } = await seed("attended");
+      await put(repo, CONTRACT, 'run-contract: 2\nanswerer: "@a-person"\nsome-key: x\n');
+
+      const { code, doc } = await run(repo, FINAL);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ notDone: [`notice not sent: ${CONTRACT} did not parse`] });
+      expect(requests()).toEqual([]);
+    });
+
+    it("sends nothing and adds a line where the contract's path holds no readable file", async () => {
+      const { repo } = await seed("attended");
+      await mkdir(join(repo, CONTRACT), { recursive: true });
+
+      const { code, doc } = await run(repo, FINAL);
+
+      expect(code).toBe(0);
+      expect(doc).toMatchObject({ notDone: [`notice not sent: ${CONTRACT} could not be read`] });
+      expect(requests()).toEqual([]);
+    });
+
+    it("sends nothing on a plain end or a dry run: only the run's last end speaks", async () => {
+      const plain = await seed("attended");
+      const dry = await seed("attended");
+      await Promise.all([plain, dry].map(({ repo }) => put(repo, CONTRACT, contract('"@a-person"'))));
+
+      const middle = await run(plain.repo, END("feat: x"));
+      const planned = await run(dry.repo, [...FINAL, "--dry-run"]);
+
+      expect(middle.code).toBe(0);
+      expect(middle.doc).toMatchObject({ pr: { number: 7 }, notDone: [] });
+      expect(planned.code).toBe(0);
+      expect(requests()).toEqual([]);
+    });
+
+    it("sends nothing where no pull request opened, and the line says only that", async () => {
+      const { repo } = await seed("attended");
+      await put(repo, CONTRACT, contract('"@a-person"'));
+      rest.routes.set("POST repos/o/r/pulls", { status: 500, json: null });
+
+      const { code, doc } = await run(repo, FINAL);
+
+      expect(code).toBe(1);
+      expect(doc).toMatchObject({ pr: null, notDone: [`draft PR not opened (${RUN_BRANCH}): opening it answered HTTP 500`] });
+      expect(requests()).toEqual([]);
+    });
+
+    it("asks on a refused run's last end too, since its pull request is what the person reads", async () => {
+      const { repo } = await seed("attended");
+      await put(repo, CONTRACT, contract('"@a-person"'));
+
+      const { code } = await run(repo, [...FINAL, "--refused"]);
+
+      expect(code).toBe(0);
+      expect(requests()).toHaveLength(1);
+    });
   });
 });
