@@ -291,6 +291,12 @@ interface SyntheticExport {
   readonly reason: string;
   readonly golden?: MetricCells;
   readonly guardrail?: MetricCells;
+  /** The carried-case table's rows, in place of its one default row. */
+  readonly carriedRows?: readonly (readonly [id: string, hash: string])[];
+  /** The body of `## 0a. Safety measure`, which only a chained run of record carries. */
+  readonly safety?: readonly string[];
+  /** The `## 6.` table's rows as id and class cell, in place of its one-line stand-in. */
+  readonly verdicts?: readonly (readonly [id: string, cell: string])[];
 }
 
 /**
@@ -326,9 +332,12 @@ function syntheticResults(run: SyntheticExport): string {
           "",
           "| Carried case | Case file sha256 | Sources compared |",
           "|---|---|---|",
-          "| `a-carried-case` | `0000aaaa` | `content/commands/st-ask.md:1-2` |",
+          ...(run.carriedRows ?? [["a-carried-case", "0000aaaa"]]).map(
+            ([id, hash]) => `| \`${id}\` | \`${hash}\` | \`content/commands/st-ask.md:1-2\` |`,
+          ),
           "",
         ]),
+    ...(run.safety === undefined ? [] : ["## 0a. Safety measure", "", ...run.safety, ""]),
     "## 1. Set version and sha",
     "",
     "SET-v7.",
@@ -352,7 +361,13 @@ function syntheticResults(run: SyntheticExport): string {
     "",
     "## 6. Per-case verdicts",
     "",
-    "Not reproduced in a synthetic export.",
+    ...(run.verdicts === undefined
+      ? ["Not reproduced in a synthetic export."]
+      : [
+          "| Case | Class | Samples passing | Decided by (per sample) |",
+          "|---|---|---|---|",
+          ...run.verdicts.map(([id, cell]) => `| \`${id}\` | ${cell} | 3/3 | pass · pass · pass |`),
+        ]),
     "",
   ].join("\n");
 }
@@ -1049,10 +1064,13 @@ describe("evals/run-of-record.json names the run of record", () => {
 describe("the composed paragraph is derived from the two results files", () => {
   const FULL_RUN = "2026-09-27-run-34";
   const COMPOSED_RUN = "2026-09-27-run-35";
+  // TEST CHANGE, justified (2026-11-04, plan 023 file 1, unit release-speed; REQ-PROVE-033): SET-v7
+  // no longer asks one full baseline run of every release, so the page drops that clause from the
+  // rule it states. What a later run re-measures and carries is worded as before.
   const RULE_LINES = [
-    "That run is composed rather than measured end to end, under SET-v7's incremental rule: one",
-    "full baseline run per release, and a later run on another candidate re-measures only the cases",
-    "whose inputs moved and carries the rest with provenance.",
+    "That run is composed rather than measured end to end, under SET-v7's incremental rule: a later",
+    "run on another candidate re-measures only the cases whose inputs moved and carries the rest with",
+    "provenance.",
   ];
   const CARRIED_LINES = [
     "Each carried case is named in the composed artifact with its case-file hash and the source",
@@ -1250,6 +1268,257 @@ describe("the composed paragraph is derived from the two results files", () => {
     const escaping = run35.replace("prior complete run is `2026-09-27-run-34`", "prior complete run is `..`");
     expect(escaping, "the fixture edit did not land").not.toBe(run35);
     expect(() => method("35", escaping, priors)).toThrow(/not an eval run id/);
+  });
+});
+
+// ADDED 2026-11-04 (plan 023 file 1, unit release-speed; REQ-PROVE-020, REQ-PROVE-033). A run of
+// record may chain back to a full measure when its results file lists every safety case as measured
+// in this release. The refusal this loosens cost 1.17.0 a full run and a repeat, so each way the list
+// can fall short is its own case: the chain renders only when the safety set was really measured.
+// Fixtures, not mocks: the page reads results files, and a temporary directory holding them is that
+// dependency.
+describe("a run of record may chain back to a full measure", () => {
+  const FULL = "2026-11-01-run-60";
+  const LINK = "2026-11-02-run-61";
+  const RECORD = "2026-11-03-run-62";
+  const FLOOR = "a-floor-case";
+  const HOLD = "a-guardrail-case";
+  const TWIN = "benign-a-twin";
+  const GOLDEN = "a-golden-case";
+  const RELEASE = "2.0.0";
+  const FLOOR_HASH = "a".repeat(64);
+  const HOLD_HASH = "b".repeat(64);
+  const TWIN_HASH = "c".repeat(64);
+  const OPENING = `Release \`${RELEASE}\` begins at \`${LINK}\`, 1 release(s) after the full measure.`;
+  const OWN_RELEASE = `Release \`${RELEASE}\` begins at \`${FULL}\`, 0 release(s) after the full measure.`;
+
+  type SafetyRow = readonly [id: string, hash: string, source: string];
+  const FLOOR_ROW: SafetyRow = [FLOOR, FLOOR_HASH, LINK];
+  const HOLD_ROW: SafetyRow = [HOLD, HOLD_HASH, LINK];
+  const TWIN_ROW: SafetyRow = [TWIN, TWIN_HASH, RECORD];
+  const ROWS: readonly SafetyRow[] = [FLOOR_ROW, HOLD_ROW, TWIN_ROW];
+  /** The section's body, shaped as SET-v7's run-artifact contract states it. */
+  const safety = (rows: readonly SafetyRow[], opening: string = OPENING): readonly string[] => [
+    opening,
+    "",
+    "| Safety case | Case file sha256 | Source run |",
+    "|---|---|---|",
+    ...rows.map(([id, hash, source]) => `| \`${id}\` | \`${hash}\` | \`${source}\` |`),
+  ];
+  const VERDICTS: readonly (readonly [string, string])[] = [
+    [FLOOR, `golden · **floor** · carried from \`${LINK}\``],
+    [HOLD, `adversarial · carried from \`${LINK}\``],
+    [TWIN, "adversarial · twin"],
+    [GOLDEN, `golden · carried from \`${LINK}\``],
+  ];
+  /** Run 62, a PASS composed with run 61: one twin re-measured, three cases carried. */
+  const ofRecord = (edit: Partial<SyntheticExport> = {}): string =>
+    syntheticResults({
+      id: RECORD,
+      status: "PASS",
+      composition: { prior: LINK, remeasured: [[TWIN, "case file bytes moved"]], carried: 3 },
+      carriedRows: [
+        [FLOOR, FLOOR_HASH],
+        [HOLD, HOLD_HASH],
+        [GOLDEN, "d".repeat(64)],
+      ],
+      reason: "The release check after one twin's case file moved.",
+      verdicts: VERDICTS,
+      safety: safety(ROWS),
+      ...edit,
+    });
+  /** Run 61, composed with the full run 60: the operator named the two other safety cases. */
+  const link = (prior: string = FULL): string =>
+    syntheticResults({
+      id: LINK,
+      status: "FAIL",
+      composition: {
+        prior,
+        remeasured: [
+          [FLOOR, "named by the operator"],
+          [HOLD, "named by the operator"],
+        ],
+        carried: 2,
+      },
+      reason: "The release's safety measure.",
+      golden: ["**0.962** (50/52)", `rate met; floors 22/23 — failing: \`${FLOOR}\``],
+    });
+  const full = (): string => syntheticResults({ id: FULL, status: "PASS", reason: "The full measure." });
+
+  /** Run `use` over a root holding `evals/run-of-record.json` and the given results files by id. */
+  const withChain = <T>(results: Record<string, string>, use: (root: string) => T): T => {
+    const root = mkdtempSync(join(tmpdir(), "stamity-chain-"));
+    try {
+      placeRunOfRecord(root, {
+        path: `evals/runs/${RECORD}/RESULTS.md`,
+        release: RELEASE,
+        exception: null,
+      });
+      for (const [id, text] of Object.entries(results)) placeResults(root, id, text);
+      return use(root);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+  /** The composed paragraph for `results`, over the two runs behind it unless a case replaces them. */
+  const worded = (results: string, behind: Record<string, string> = {}): readonly string[] =>
+    withChain({ [LINK]: link(), [FULL]: full(), ...behind }, (root) =>
+      measurementMethod(root, "62", results),
+    );
+
+  it("renders a chain of two composed runs whose artifact lists every safety case", () => {
+    expect(worded(ofRecord())).toEqual([
+      "That run is composed rather than measured end to end, under SET-v7's incremental rule: a later",
+      "run on another candidate re-measures only the cases whose inputs moved and carries the rest with",
+      "provenance.",
+      "Run 60 measured every case in full; run 62 reaches it through run 61.",
+      `[Run 61](${RECORDS_BLOB_URL}evals/runs/${LINK}/RESULTS.md) alone was FAIL on one ` +
+        `floor case, \`${FLOOR}\`; run 62 re-measured one case, composed with run 61, and carried the ` +
+        "other 3 from it.",
+      `The re-measured case is \`${TWIN}\` (case file bytes moved).`,
+      `All three safety cases were measured on candidates of release ${RELEASE}, each named in run 62's ` +
+        "results file with its case-file hash and source run; the rest of the set carries back to " +
+        "run 60, one release earlier.",
+      "Each carried case is named in the composed artifact with its case-file hash and the source",
+      "ranges found identical at both candidates. The set is SET-v7.",
+    ]);
+  });
+
+  it("counts a case the full measure took when the full measure is in this release", () => {
+    const rows: readonly SafetyRow[] = [[FLOOR, FLOOR_HASH, FULL], HOLD_ROW, TWIN_ROW];
+    const carriedThrough = link()
+      .replace(`| \`${FLOOR}\` | named by the operator |\n`, "")
+      .replace("2 case(s) re-measured", "1 case(s) re-measured");
+    const page = worded(ofRecord({ safety: safety(rows, OWN_RELEASE) }), { [LINK]: carriedThrough }).join(" ");
+    expect(page).toContain("All three safety cases");
+    expect(page).toContain("the rest of the set carries back to run 60, in the same release.");
+  });
+
+  it("refuses a chain with no safety section, and one whose § 6 names no safety case", () => {
+    const bare = syntheticResults({
+      id: RECORD,
+      status: "PASS",
+      composition: { prior: LINK, remeasured: [[TWIN, "case file bytes moved"]], carried: 3 },
+      reason: "No section.",
+    });
+    expect(() => worded(bare)).toThrow(/two or more links \(run 62 -> run 61 -> run 60\)/);
+    expect(() => worded(ofRecord({ verdicts: [[GOLDEN, "golden"]] }))).toThrow(/§ 6 names no safety case/);
+  });
+
+  it("refuses a list missing a safety case, naming the case", () => {
+    const short = ofRecord({ safety: safety([HOLD_ROW, TWIN_ROW]) });
+    expect(() => worded(short)).toThrow(EngineError);
+    expect(() => worded(short)).toThrow(new RegExp(`lists no measure for \`${FLOOR}\``));
+  });
+
+  it("counts a safety case added after the chain's measure as unmeasured", () => {
+    const added = "a-new-floor-case";
+    const grown = (rows: readonly SafetyRow[]): string =>
+      ofRecord({
+        composition: {
+          prior: LINK,
+          remeasured: [
+            [TWIN, "case file bytes moved"],
+            [added, "case absent at the prior candidate"],
+          ],
+          carried: 3,
+        },
+        verdicts: [...VERDICTS, [added, "golden · **floor**"]],
+        safety: safety(rows),
+      });
+    expect(() => worded(grown(ROWS))).toThrow(new RegExp(`lists no measure for \`${added}\``));
+    // Listed against the older measure, it is still refused: run 62 is the run that first saw it.
+    expect(() => worded(grown([...ROWS, [added, "e".repeat(64), LINK]]))).toThrow(
+      new RegExp(`\`${added}\` to \`${LINK}\`, and run 62 re-measured it`),
+    );
+    expect(worded(grown([...ROWS, [added, "e".repeat(64), RECORD]])).join(" ")).toContain(
+      "All four safety cases",
+    );
+  });
+
+  it("refuses a chain that reaches no full measure", () => {
+    expect(() =>
+      withChain({ [LINK]: link() }, (root) => measurementMethod(root, "62", ofRecord())),
+    ).toThrow(/No results file at evals\/runs\/2026-11-01-run-60\/RESULTS\.md.*reaches no full measure/);
+    // A pointer that walks back into the chain never ends at a run that measured every case.
+    expect(() => worded(ofRecord(), { [LINK]: link(RECORD), [RECORD]: ofRecord() })).toThrow(
+      /reaches no full measure/,
+    );
+  });
+
+  it("refuses a source run that did not measure the case in this release", () => {
+    const row = (source: string): readonly SafetyRow[] => [[FLOOR, FLOOR_HASH, source], HOLD_ROW, TWIN_ROW];
+    // Off the chain: an older release's run, or any other id.
+    expect(() => worded(ofRecord({ safety: safety(row("2026-10-27-run-57")) }))).toThrow(
+      new RegExp(`\`${FLOOR}\` to \`2026-10-27-run-57\`, which is not on the chain`),
+    );
+    // On the chain, but older than the run the release began at.
+    expect(() => worded(ofRecord({ safety: safety(row(FULL)) }))).toThrow(
+      new RegExp(`\`${FLOOR}\` to \`${FULL}\`, measured before release 2\\.0\\.0 began`),
+    );
+    // Re-measured by the run of record, so an older source is stale: the case moved after it.
+    expect(() =>
+      worded(ofRecord({ safety: safety([FLOOR_ROW, HOLD_ROW, [TWIN, TWIN_HASH, LINK]]) })),
+    ).toThrow(new RegExp(`\`${TWIN}\` to \`${LINK}\`, and run 62 re-measured it`));
+    // Re-measured by a link newer than the source: the full measure is no longer the case's latest.
+    const own = safety([[FLOOR, FLOOR_HASH, FULL], HOLD_ROW, TWIN_ROW], OWN_RELEASE);
+    expect(() => worded(ofRecord({ safety: own }), { [LINK]: link() })).toThrow(
+      new RegExp(`\`${FLOOR}\` to \`${FULL}\`, and run 61 re-measured it`),
+    );
+    // In the release, but the run carried the case rather than measuring it.
+    const carriedThere = link()
+      .replace(`| \`${HOLD}\` | named by the operator |\n`, "")
+      .replace("2 case(s) re-measured", "1 case(s) re-measured");
+    expect(() => worded(ofRecord(), { [LINK]: carriedThere })).toThrow(
+      new RegExp(`\`${HOLD}\` to \`${LINK}\`, which did not measure it`),
+    );
+  });
+
+  it("refuses a hash that differs from the carried case's own", () => {
+    const moved: readonly SafetyRow[] = [[FLOOR, "f".repeat(64), LINK], HOLD_ROW, TWIN_ROW];
+    expect(() => worded(ofRecord({ safety: safety(moved) }))).toThrow(
+      new RegExp(`\`${FLOOR}\` under a hash its carried-case row does not state`),
+    );
+  });
+
+  it("refuses a list stated for another release, or a table it cannot read", () => {
+    const stale = OPENING.replace(RELEASE, "1.9.9");
+    expect(() => worded(ofRecord({ safety: safety(ROWS, stale) }))).toThrow(
+      /states release 1\.9\.9, and the run of record is release 2\.0\.0/,
+    );
+    expect(() => worded(ofRecord({ safety: ["No opening line."] }))).toThrow(/states no release/);
+    const unreadable = safety(ROWS).map((line) => line.replace(FLOOR_HASH, "not-a-hash"));
+    expect(() => worded(ofRecord({ safety: unreadable }))).toThrow(/a row it cannot read/);
+  });
+
+  it("keeps the backstop: the third release, or 30 days, since the full measure is a full run", () => {
+    const third = OPENING.replace("1 release(s)", "3 release(s)");
+    expect(() => worded(ofRecord({ safety: safety(ROWS, third) }))).toThrow(/a full run is due/);
+    const second = OPENING.replace("1 release(s)", "2 release(s)");
+    expect(worded(ofRecord({ safety: safety(ROWS, second) })).join(" ")).toContain("two releases earlier");
+
+    // 30 days between the full measure's date and the run of record's, read off their two ids.
+    const late = "2026-10-04-run-60";
+    expect(() => worded(ofRecord(), { [LINK]: link(late), [late]: full() })).toThrow(
+      /30 days .*a full run is due/,
+    );
+    const inTime = "2026-10-05-run-60";
+    expect(worded(ofRecord(), { [LINK]: link(inTime), [inTime]: full() }).join(" ")).toContain(
+      "All three safety cases",
+    );
+  });
+
+  it("lists every run on the chain as an input, missing until it is on disk", () => {
+    withChain({ [RECORD]: ofRecord(), [LINK]: link() }, (root) => {
+      const path = (id: string): string => `evals/runs/${id}/RESULTS.md`;
+      expect(measurementInputs(root).missing).toContain(path(FULL));
+      expect(measurementInputs(root).present).toEqual([path(RECORD), path(LINK)]);
+      placeResults(root, FULL, full());
+      expect(measurementInputs(root).present).toEqual([path(RECORD), path(LINK), path(FULL)]);
+      // A pointer that walks back into the chain ends the list rather than the process.
+      placeResults(root, LINK, link(RECORD));
+      expect(measurementInputs(root).present).toEqual([path(RECORD), path(LINK)]);
+    });
   });
 });
 

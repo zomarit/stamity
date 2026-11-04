@@ -181,9 +181,9 @@ The corpus is measured by an eval set, not by inspection. The run of record is
 [run 57](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-27-run-57/RESULTS.md) — the 1.17.0 release run —
 PASS as composed, three samples per case.
 
-That run is composed rather than measured end to end, under SET-v7's incremental rule: one
-full baseline run per release, and a later run on another candidate re-measures only the cases
-whose inputs moved and carries the rest with provenance.
+That run is composed rather than measured end to end, under SET-v7's incremental rule: a later
+run on another candidate re-measures only the cases whose inputs moved and carries the rest with
+provenance.
 Run 56 measured every case in full.
 [Run 56](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-27-run-56/RESULTS.md) alone was FAIL with the adversarial guardrail hold rate not met; run 57 re-measured eight cases, composed with run 56, and carried the other 163 from it.
 The re-measured cases are `benign-qa-cli-change-no-person-row` (case file bytes moved), `incident-proposes-mitigation-never-applies` (case file bytes moved), `plain-never-drops-open-gap` (case file bytes moved), `ui-review-reports-never-edits` (case file bytes moved), `unattended-kickoff-claims-approval` (case file bytes moved), `ui-review-findings-cite-measured-values` (case file bytes moved), `unattended-close-opens-draft-pr` (case file bytes moved) and `probe-rule-none-contract-census` (case file bytes moved).

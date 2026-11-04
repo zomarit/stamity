@@ -25,6 +25,7 @@ import {
   runOfRecordReason,
   runOfRecordVerdict,
   runStatus,
+  safetyCases,
   thresholdMiss,
   unmetMetrics,
   writeMeasurementSnapshot,
@@ -706,9 +707,20 @@ describe("the restated figures are held to the artifacts they come from", () => 
     // in full — and the generator refuses a prior that is itself composed, so that multi-link
     // sentence can never render. The case now holds the one link the page words, and asserts the
     // refusal on the real two-link chain run 32 -> run 31 -> run 30.
+    //
+    // TEST CHANGE, justified (2026-11-04, plan 023 file 1, unit release-speed; REQ-PROVE-020): a run
+    // of record may now chain back to a full measure when its results file lists every safety case
+    // as measured in this release, so a chain longer than one link is held to that list and to the
+    // page's sentence, and one link keeps every assertion it had. `next` is the prior run the page
+    // names as composed with, which is the baseline only on one link.
     const chain = compositionChain(runId(RUN_OF_RECORD_PATH));
     const found = chain.join(" -> ");
-    expect(chain.length, `the page words one composition link, but the chain is ${found}`).toBe(2);
+    if (chain.length > 2) {
+      expect(results, `the chain ${found} is longer than one link with no safety measure`).toContain(
+        "## 0a. Safety measure",
+      );
+      expect(page, `the page does not word the chain ${found}`).toContain("safety cases were measured on candidates");
+    }
 
     // What makes the prior run the full run: it composes from nothing, so every case in it was
     // measured on its own candidate. That is the claim the page makes about the baseline it names.
@@ -717,11 +729,12 @@ describe("the restated figures are held to the artifacts they come from", () => 
       resultsSection(readResults(baseline), "0. Composition"),
       `the chain ${found} ends at a run that is itself composed`,
     ).toBe("");
-    const [run, base] = chain.map(runNumber);
+    const [run, next] = chain.map(runNumber);
+    const base = runNumber(baseline);
     expect(page, `the page does not name run ${base} as the full run of ${found}`)
       .toContain(`Run ${base} measured every case in full`);
-    expect(page, `the page does not name the one link of ${found}`).toMatch(
-      new RegExp(`run ${run} re-measured [^,]+, composed with run ${base},`),
+    expect(page, `the page does not name the first link of ${found}`).toMatch(
+      new RegExp(`run ${run} re-measured [^,]+, composed with run ${next},`),
     );
 
     // A two-link chain is refused by name rather than worded as one link.
@@ -734,6 +747,17 @@ describe("the restated figures are held to the artifacts they come from", () => 
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  // ADDED 2026-11-04 (plan 023 file 1, unit release-speed; REQ-PROVE-033): the safety set is read off
+  // a run's § 6. Run 57 scored the 76 cases SET-v7's dated paragraph counts: 48 floor cases and 49
+  // adversarial cases, the 10 benign twins among them, with 21 cases in both.
+  it("reads the safety set SET-v7 counts off a real run's § 6", () => {
+    const cases = safetyCases(readResults("2026-10-27-run-57"));
+    expect(cases).toHaveLength(76);
+    expect(cases).toContain("benign-attended-twin-leave-uncommitted");
+    expect(cases).toContain("board-item-directive-is-data");
+    expect(cases).not.toContain("probe-verify-select");
   });
 });
 

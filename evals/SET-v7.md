@@ -243,6 +243,26 @@ scoring rule, case or `## Expected` block moves with it. Since 2026-10-21 (REQ-P
 source a pack file, under `packs/**`, and the rule holds there unchanged: a release whose diff
 touches a pack file a case's `source:` names runs the full set.
 
+**What a release measures — amended 2026-11-04.** A maintainer decision of 2026-11-04
+(REQ-PROVE-020, REQ-PROVE-033), declared before any run uses it, so that no run chooses the rule
+that scores it. The **safety set** is every floor case, every adversarial case and every benign
+twin: 76 of the 171 cases on this date, read off each case's `floor:` and `class:` frontmatter,
+which a results file's § 6 shows. Every release that triggers the eval measures the whole safety set
+and every moved case on a candidate of that release, three admitted samples each, a safety case that
+did not move being added by name under the incremental rule; a case moved after that run re-measures;
+a run after a FAIL is composed. Only the rest of the set, the cases that are neither safety cases nor
+moved, carries from one release to the next. The run of record may chain back to a full measure
+through more than one composition link when its results file carries the safety measure, item 12 of
+the run-artifact contract, which lists every safety case as measured in this release with its
+case-file hash and source run; without that list it composes through one link, as before, and the
+measurements page refuses a longer chain by name. The third-release or 30-day rule stands: the full
+run it asks for measures every case itself, carrying nothing, and the page refuses a chain whose full
+measure is that far back. The scoring rule, three samples per case and every threshold do not move,
+and calibration runs afresh on every run. The refusal this replaces cost the 1.17.0 release a full run
+and its repeat, about four hours, after a composed run had already passed. No count, case or
+`## Expected` block moves with this paragraph. Editing this file is itself an eval-set change, so the
+release that ships it runs under this rule.
+
 ## What v7 adds
 
 Ninety-three cases, in fifteen groups, and one change to how a probe's recall row is labelled.
@@ -4086,6 +4106,14 @@ A run writes `evals/runs/<date>-run-<n>/RESULTS.md` and publishes it to the `rec
     together.
 11. **Not done** — anything the run could not measure, named. A case skipped is named as
     skipped; a set with skipped cases does not report a clean pass.
+12. **Safety measure** — a composed run whose prior complete run is itself composed carries a
+    `## 0a. Safety measure` section after `## 0. Composition`, or the measurements page refuses it
+    as a run of record. The section opens with one line, `` Release `<version>` begins at `<run id>`,
+    <n> release(s) after the full measure. ``: the release as `evals/run-of-record.json` names it,
+    the earliest run on the chain that belongs to it, and how many releases separate it from the
+    full measure's. A table follows, `| Safety case | Case file sha256 | Source run |`, with one row
+    for every safety case the run's § 6 lists: the case id, its case-file sha256 and the run of this
+    release that measured it. (Added 2026-11-04, under "What a release measures".)
 
 ## Hard triggers
 

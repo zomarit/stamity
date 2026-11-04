@@ -169,6 +169,13 @@ last release, and its release record names each line it skipped with the trigger
 minor or a major release runs every line. The eval line is change-aware on every release, a minor
 or a major included, because its trigger list is `evals/SET-v7.md`'s (REQ-PROVE-033).
 
+**When each line starts** (REQ-PROVE-034, added 2026-11-04). A line that does not read the final tree
+does not wait for it. The admin roster and metadata review, the image digest, the vendor pages and the
+hand pages' re-attestation on the candidate tree start when the cut starts and run beside the eval;
+each such read is redone if the tag lands more than 24 hours after it. Hook latency, the two ask
+checks and the label re-date read the final tree, so they stay on it: after every other line has
+landed, before the tag. Each line below says which it is.
+
 One line of upkeep rides every version cut: after the tag is published and verified, re-sync the
 private layer's record in its side-by-side checkout — append the release to its continuity log and
 regenerate its kickoff prompt — so the record never trails the registry. (Added 2026-09-01, the
@@ -190,8 +197,14 @@ FAIL; or the release is the third release since the last full run, or is cut 30 
 last full run or later, whichever comes first. The file list is derived, not chosen: it is every
 file the run of record's `inputs.json` hashes as an input, every file the public runner hashes and
 every file a case's `source:` names, and the docs tests read those and refuse a list that misses
-one. When it runs, the full set is measured — by the release's baseline run, or
-by an incremental run composed with it under that file's incremental rule — and the release
+one. The safety set is every floor case, every adversarial case and every benign twin, and a release
+that runs this line measures the whole safety set and every moved case on a candidate of that release:
+a case moved after that run re-measures, a run after a FAIL is composed, and the run of record may
+chain back to a full measure when its results file lists every safety case as measured in this release
+(that file's "What a release measures", amended 2026-11-04). The third-release or 30-day full run
+stays, and it measures every case itself, carrying nothing; three samples, every threshold and
+calibration on every run do not move. When it runs, the full set is measured — by the release's
+baseline run, or by an incremental run composed with it under that file's incremental rule — and the release
 carries the composed artifact under `evals/runs/` on the `records` branch, published with
 `node scripts/records.mjs commit -m <message>` before the tag. The `main` commit that moves
 `evals/run-of-record.json` to that run follows the publish: before it, the merge-blocking `records`
@@ -249,7 +262,7 @@ invalid judge attempts, each redone once, and run 57 one, redone; no admitted gr
 Run 56's results file names itself "the run of record" in its § 3, the purpose it was launched
 with; its `NOTE.md`, published beside it with run 57, says it is the full measure and run 57 the
 run of record. Runs 53, 54 and 55 were earlier increments toward 1.17.0, composed back through run 51 to
-run 50, and are published; the measurements page words one composition link, a prior run that
+run 50, and are published; the measurements page then worded one composition link, a prior run that
 measured every case in full, so none of them is the run of record. No exception is recorded for
 1.17.0.
 At 1.16.0 the full measure was run 50 (`evals/runs/2026-10-19-run-50/`), all 155 cases, on client
@@ -323,7 +336,7 @@ trigger of this line. Run 46 (`evals/runs/2026-10-12-run-46/`) was the increment
 candidate `04bfbde9`: it re-measured no case, carried all 141 from run 45, and matched calibration
 5 of 5, fixture C4 on its second attempt. Its status was PASS and its scores were run 45's. Run 45
 stayed the run of record, the run `evals/run-of-record.json` and the measurements page named,
-because the page words one composition link and run 46's prior run is itself composed; run 44's
+because the page then worded one composition link and run 46's prior run is itself composed; run 44's
 FAIL and run 45's account stay as recorded. Run 46's results file ends with the same exporter
 constant, and the note beside it (`evals/runs/2026-10-12-run-46/NOTE.md`) corrects it the same way.
 No exception was recorded for 1.14.0; the one 1.12.0 shipped under
@@ -368,13 +381,14 @@ this checklist beside the three platform controls rather than in a test. (Added 
 Runs when: every release, a patch included, for the admin roster review — no trigger and no
 window, because who holds admin or publish rights is console state no diff shows; the metadata
 half, on a patch, when `package.json`'s `description` or `keywords` moved since the last release.
+Starts when the cut starts: both halves read console state, not the final tree.
 
 A fourth line rides the same cut, before the tag: every hand page — the whole hand bucket
 `test/docsPages.test.ts` declares, plus `GOVERNANCE.md` — is re-attested claim by claim against
 the candidate tree and restamped `verified against the tree at the X.Y.Z release cut (DATE)`,
 and `RELEASE_CUT_DATE` in that suite moves with it; a stale stamp is a currency defect the
 suite catches, a stale claim under a fresh stamp is the one a person catches. (Added
-2026-09-15, when the sweep found stamps from 1.5.0 under 1.7.0.) The same pass re-dates every
+2026-09-15, when the sweep found stamps from 1.5.0 under 1.7.0.) A last pass on the final tree re-dates every
 "known residual" or "known residuals" label on `SECURITY.md` and `docs/security-mapping.md` that
 still names the previous version and whose residual still holds at the candidate tree, each checked
 against the code or tracking row it names, to the version being cut; history lines (what a version
@@ -384,7 +398,9 @@ raised it, ledger row `2026-10-14_cli-native/build/72`, and the 1.16.0 cut found
 naming 1.15.0 after its push, ledger row `2026-10-18_cloud-runs-2/prove/8`, re-dated in
 `b9b39755`.) Runs when: a minor or a major
 release; on a patch, when the diff since the last release touches a hand page or a surface one
-states — a CLI verb, flag or config key, or an emitted file.
+states — a CLI verb, flag or config key, or an emitted file. Starts when the cut starts, for the
+re-attestation on the candidate tree. Stays on the final tree, for the label re-date: a residual
+closed by a later commit must not be re-dated.
 
 A fifth line rides the cut with the fourth: the measurements page's input is refreshed, in the
 three steps that page names, all before the tag. First, `node scripts/merge-ready-rate.mjs --write`
@@ -401,9 +417,9 @@ own contract. (Added 2026-09-15, with the page; the records publish added 2026-1
 records left `main`, and the cut's `records` commit named the same day.) Runs when: a run record under `.stamity/runs/` or
 `evals/run-of-record.json` changed since the last snapshot.
 
-A sixth line rides the cut, before the tag: `node scripts/hook-latency.mjs` exits 0 on a quiet machine, and its table goes into the release record (REQ-CTX-016; local only, never in CI; added 2026-09-26). Runs when: the guard the script times (`.claude/hooks/stamity/stamity-pre-tool-use-guard.mjs`, the copy Claude Code's hook entries run, built from `src/hooks/scripts.ts` and every module it imports; it took the place of the generated Claude guard, which `sync` no longer writes) or `scripts/hook-latency.mjs` moved since the last release, or the Node version the release is cut on moved.
+A sixth line rides the cut, before the tag: `node scripts/hook-latency.mjs` exits 0 on a quiet machine, and its table goes into the release record (REQ-CTX-016; local only, never in CI; added 2026-09-26). Runs when: the guard the script times (`.claude/hooks/stamity/stamity-pre-tool-use-guard.mjs`, the copy Claude Code's hook entries run, built from `src/hooks/scripts.ts` and every module it imports; it took the place of the generated Claude guard, which `sync` no longer writes) or `scripts/hook-latency.mjs` moved since the last release, or the Node version the release is cut on moved. Stays on the final tree: it times the guard that ships.
 
-A further line rides the cut, before the tag, and takes no ordinal so the tag stays the seventh: re-read the digest of the `cloud-container` job's image (`node:24-bookworm`, pinned as `IMAGE` in `scripts/ci/cloud-leg.mjs`, the image every cloud profile of the leg runs) through the registry's HTTP API, with the command that constant's comment prints (no Docker needed), and when the tag now resolves to a newer build than the pinned digest, bump the digest and rewrite the comment's read date in a `main` commit before the tag; the release record states the digest read and whether it moved (added 2026-10-15, ledger row `2026-10-14_cli-native/review/115`, when the pin was found to have no update route; re-pointed 2026-10-18, when the pin left the job's `container:` key for the script). Runs when: every release, a patch included — a newer build of the same tag is registry state no diff shows.
+A further line rides the cut, before the tag, and takes no ordinal so the tag stays the seventh: re-read the digest of the `cloud-container` job's image (`node:24-bookworm`, pinned as `IMAGE` in `scripts/ci/cloud-leg.mjs`, the image every cloud profile of the leg runs) through the registry's HTTP API, with the command that constant's comment prints (no Docker needed), and when the tag now resolves to a newer build than the pinned digest, bump the digest and rewrite the comment's read date in a `main` commit before the tag; the release record states the digest read and whether it moved (added 2026-10-15, ledger row `2026-10-14_cli-native/review/115`, when the pin was found to have no update route; re-pointed 2026-10-18, when the pin left the job's `container:` key for the script). Runs when: every release, a patch included — a newer build of the same tag is registry state no diff shows. Starts when the cut starts: it reads the registry, not the final tree.
 
 A further line rides the cut, before the tag, and takes no ordinal: re-read the vendor pages the
 capability matrix's cloud table cites (`CLIENT_CLOUD_FACTS` in `src/hooks/model.ts`, each row's
@@ -412,6 +428,7 @@ capability matrix's cloud table cites (`CLIENT_CLOUD_FACTS` in `src/hooks/model.
 `scripts/qa/cloud-check.mjs`) at the next release; the release record names each page read and
 whether it moved (added 2026-10-18, REQ-PROVE-042, with `docs/cloud.md`). Runs when: every
 release, a patch included — a vendor page moves on the vendor's schedule, which no diff here shows.
+Starts when the cut starts: it reads the vendor's page, not the final tree.
 
 A further line rides the cut, before the tag, and takes no ordinal: under the machine lock, and
 never while an eval run is running, run `node scripts/qa/hook-runs.mjs --ask --require-observation`,
@@ -441,7 +458,7 @@ and `sessionStart` fires once, for the main session alone. Each fact reads `held
 (added 2026-10-18, REQ-PROVE-042; Copilot CLI added 2026-10-19, when the guard began asking on it;
 its three facts the same day, ledger row `2026-10-18_cloud-runs-2/review/151`).
 Runs when: every release, a patch included — a client's own update changes its answer, and no diff
-here shows it.
+here shows it. Stays on the final tree: it measures the guard that ships.
 
 A further line rides the cut, before the tag, and takes no ordinal: a person's one-minute check, for
 each ask-class client, of the interactive ask the headless run above cannot see. For Claude Code, in
@@ -461,7 +478,8 @@ each client's version checked and whether the prompt appeared (added 2026-10-19,
 ledger row `2026-10-18_cloud-runs-2/review/125`, when the headless run was found to measure only
 that the asked command did not run; Copilot CLI added the same day, when the guard began asking on
 it). Runs when: every release, a patch included — a client's own update can change how an
-interactive session answers a hook's ask, and no diff here shows it.
+interactive session answers a hook's ask, and no diff here shows it. Stays on the final tree: the
+scratch checkout is the cut's commit.
 
 A seventh line is the tag itself, cut last, after every line above has landed: an annotated tag
 whose message names the records commit the release is gated on, as one line `records: <sha>`,

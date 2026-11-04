@@ -130,6 +130,10 @@ The amendment dated 2026-10-27 to REQ-PROVE-020 was written at the 1.17.0 cut in
 `f44ab12bd60006f45180a11c2966781f7bb98af34933626bce2d5143bf3d2b0f`), records on the `records` branch, and ships
 with 1.17.0.
 
+The text dated 2026-11-04 under REQ-PROVE-020, REQ-PROVE-033 and REQ-PROVE-034 comes from plan 023 file 1
+(`docs/plans/023-factory-bridge-01.md`, run `2026-11-04_factory-bridge`), unit `release-speed`, and reads on its lane
+`fb/release-speed`, branched from `2ce31e5a`. It has not shipped.
+
 ## Intent
 
 Stop shipping claims this repository cannot show. Three were open at 1.7.0: an always-on context
@@ -1306,6 +1310,30 @@ link, a prior run that measured every case in full. The merge-ready snapshot mov
   "byte-matches the committed page" (red the same way) and the `null` branch of "holds the tree's recorded exception
   to the run of record and to every miss it excuses".
 
+Amended 2026-11-04 (plan 023 file 1, unit `release-speed`). A run of record may chain back to a full measure when
+every safety case was measured on a candidate of its release. `readPriorRun` (`src/cli/docs/measurements.ts`) still
+renders one composition link as it did, and still refuses a prior run that is itself composed when the run of record's
+results file carries no `## 0a. Safety measure` section, naming the chain. With the section, `proveChain` renders the
+chain only when the walk ends at a run that measured every case; when the section's release equals
+`evals/run-of-record.json`'s; when the backstop has not come due; and when every safety case the run's § 6 lists
+(`safetyCases`) has a row whose source run is on the chain, in this release and a run that measured the case, under the
+hash its carried-case row states. A case the run of record re-measured has that run as its source. The safety set is
+read off the run's own § 6 and never off the tree, so a case added on `main` between releases leaves the page as it is.
+The page says which runs it passes through and that the rest of the set carries further back, and its rule sentence no
+longer says one full baseline run per release, which `evals/SET-v7.md` stopped asking. `measurementInputs` lists every
+run on the chain, so the inputs are no longer four at most. This supersedes the 2026-10-14 bullet "One composition
+link" and the sentence "The page words one composition link" above for a run that carries the section; the accounts of
+runs 45, 46 and 53 to 55 stay as they were written, each true of its release.
+
+- GIVEN a chain of two composed runs whose run of record lists every safety case THEN the page renders it, naming the
+  full measure and the run between. GIVEN one safety case missing from the list THEN the render throws naming the case.
+  GIVEN a safety case added after the chain's measure THEN it counts as unmeasured until the run of record measures it.
+  GIVEN a chain that reaches no full measure THEN the render throws. GIVEN the third release since the full measure, or
+  30 days since it, THEN the render throws saying a full run is due. GIVEN one composition link and no list THEN the
+  page renders as before. Test evidence: `test/cli/docs/measurements.test.ts`, its describe "a run of record may chain
+  back to a full measure", and `test/records/measurements.test.ts`, "says how the run of record was measured: composed
+  from the runs it names, or in full".
+
 ### REQ-PROVE-021 — QA automation and binding
 
 A harness under `scripts/qa/` runs keyboard journeys at 375 and 1440 in both themes with
@@ -1950,6 +1978,21 @@ coverage gate's block on sources outside the surface now measures against both r
   (`test/evals/coverage.test.ts`, "a pack is part of the surface"; `test/records/docsPages.test.ts`, "names every file
   a case's `source:` names"; added 2026-10-21).
 
+Amended 2026-11-04 (plan 023 file 1, unit `release-speed`; the rule is dated in `evals/SET-v7.md`, "What a release
+measures"). Every release that triggers the eval measures the whole safety set, every floor case, every adversarial
+case and every benign twin, and every moved case on a candidate of that release; a case moved after that run
+re-measures; a run after a FAIL is composed. Only the rest of the set carries from one release to the next. The third
+release or 30-day full run stays, and that run measures every case itself, carrying nothing. Three samples per case,
+every threshold and calibration on every run do not move. The trigger list above does not move: this says what a
+triggered release measures, not which release triggers.
+
+- GIVEN the checklist's eval line and SET-v7's incremental section THEN each states the safety set, what a triggered
+  release measures, the re-measure of a case moved after that run, the composed run after a FAIL, the chain back to a
+  full measure and the backstop's full run; GIVEN SET-v7 THEN it keeps three samples, every threshold and calibration on
+  every run, and its run-artifact contract names the section the chain needs. Test evidence: `test/docsPages.test.ts`,
+  its describe "the release eval follows what changed", "states %s in the checklist and in SET-v7" and "keeps three
+  samples, every threshold and calibration on every run beside the chain rule".
+
 ### REQ-PROVE-034 — A patch takes the patch lane
 
 GIVEN a patch release THEN each per-release line of `.github/release-controls-checklist.md` runs only when its named
@@ -1961,6 +2004,15 @@ window.
 - GIVEN the checklist THEN every per-release line carries `Runs when:`, and the admin roster review runs on every
   release with no day window. Test evidence: `test/docsPages.test.ts` ("gives every per-release line of the checklist
   its trigger, and states the patch lane"; "reviews the admin roster on every release, a patch included").
+
+Amended 2026-11-04 (plan 023 file 1, unit `release-speed`). Lines that do not read the final tree start when the cut
+starts and run beside the eval: the admin roster and metadata review, the image digest, the vendor pages and the
+re-attestation on the candidate tree. Each such read is redone if the tag lands more than 24 hours after it. Hook latency,
+the two ask checks and the label re-date stay on the final tree. The ordinals do not move; the tag stays the seventh line.
+
+- GIVEN the checklist THEN each of those lines says when it starts, and its section says a read is redone past 24 hours.
+  Test evidence: `test/docsPages.test.ts`, "says when %s starts" and "redoes a read taken beside the eval when the tag
+  lands more than 24 hours later".
 
 ### REQ-PROVE-035 — The judge's input names its blocks
 

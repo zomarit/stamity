@@ -1760,6 +1760,59 @@ describe("the release eval follows what changed", () => {
     }
   });
 
+  // ADDED 2026-11-04 (plan 023 file 1, unit release-speed; REQ-PROVE-033): a release lightens how
+  // often the rest of the set is re-measured, never the safety set. Each clause reads both texts, so a
+  // clause dropped from either one fails by name.
+  it.each([
+    ["the safety set", /every floor case, every adversarial case and every benign twin/],
+    ["what a triggered release measures", /the whole safety set and every moved case on a candidate of that release/],
+    ["a case moved after that run", /a case moved after that run re-measures/],
+    ["the composed run after a FAIL", /a run after a FAIL is composed/],
+    ["the chain back to a full measure", /may chain back to a full measure/],
+    ["the backstop's full run", /carrying nothing/],
+  ])("states %s in the checklist and in SET-v7", (name, pattern) => {
+    for (const [where, text] of releaseRuleTexts()) {
+      expect(text, `${where} does not state ${name} (${String(pattern)})`).toMatch(pattern);
+    }
+  });
+
+  it("keeps three samples, every threshold and calibration on every run beside the chain rule", () => {
+    const set = collapsed(fileSection(EVAL_SET, "## Incremental runs — declared 2026-09-15"));
+    const rule = set.slice(set.indexOf("**What a release measures — amended 2026-11-04.**"));
+    expect(rule, `${EVAL_SET} has no dated paragraph for the chain rule`).toContain("What a release measures");
+    for (const clause of ["three admitted samples", "every threshold", "calibration runs afresh on every run"]) {
+      expect(rule, `the chain rule does not keep ${clause}`).toContain(clause);
+    }
+    const contract = collapsed(fileSection(EVAL_SET, "## Run-artifact contract"));
+    expect(contract, "the run-artifact contract does not name the safety measure").toContain("## 0a. Safety measure");
+  });
+
+  // ADDED 2026-11-04 (plan 023 file 1, unit release-speed; REQ-PROVE-034): the lines that do not read
+  // the final tree start with the cut, beside the eval, and the ones that do stay on it. Each line
+  // says which it is, so a line moved to the wrong end fails by name.
+  it.each([
+    ["the roster and metadata line", "A third line", "Starts when the cut starts"],
+    ["the re-attestation line", "A fourth line", "Starts when the cut starts"],
+    ["the image digest line", "A further line rides the cut, before the tag, and takes no ordinal so the tag", "Starts when the cut starts"],
+    ["the vendor pages line", "A further line rides the cut, before the tag, and takes no ordinal: re-read", "Starts when the cut starts"],
+    ["the label re-date", "A fourth line", "Stays on the final tree"],
+    ["the hook latency line", "A sixth line", "Stays on the final tree"],
+    ["the headless ask line", "A further line rides the cut, before the tag, and takes no ordinal: under the machine lock", "Stays on the final tree"],
+    ["the interactive ask line", "A further line rides the cut, before the tag, and takes no ordinal: a person's", "Stays on the final tree"],
+  ])("says when %s starts", (name, lead, when) => {
+    const line = perReleaseLines()
+      .map(collapsed)
+      .find((text) => text.startsWith(lead));
+    expect(line, `${RELEASE_CHECKLIST} has no line opening "${lead}" (${name})`).toBeDefined();
+    expect(line, `${name} does not say "${when}"`).toContain(when);
+  });
+
+  it("redoes a read taken beside the eval when the tag lands more than 24 hours later", () => {
+    const section = collapsed(fileSection(RELEASE_CHECKLIST, "## Per-release record currency"));
+    expect(section).toContain("**When each line starts**");
+    expect(section).toMatch(/redone if the tag lands more than 24 hours after it/);
+  });
+
   it("gives every per-release line of the checklist its trigger, and states the patch lane", () => {
     const releaseLines = perReleaseLines();
     // Six lines at 2026-10-08 (`grep -cE '^(One|A [a-z]+) line' .github/release-controls-checklist.md`);
