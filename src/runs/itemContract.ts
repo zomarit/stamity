@@ -12,10 +12,11 @@ import { RUN_CONTRACT_VERSION } from "./runContract.ts";
  * with no plan, which the verb refuses. Links count only in the block closing the body, and a
  * repeated or malformed one reads as absent, so a body cannot point past its own last lines.
  *
- * The text above the links is read as a person sees it on the page: control and invisible
- * characters stripped, then HTML comments dropped, in that order, since a stripped character can
- * complete an opener and a comment can hide a heading. The criteria stop at the next heading.
- * Pure, erasable syntax only.
+ * The text above the links has control and invisible characters stripped, then HTML comments
+ * dropped, in that order, since a stripped character can complete an opener and a comment can hide
+ * a heading. This is close to what the page shows, not the same: a comment quoted as code is
+ * dropped too, which is why {@link ItemBody.comments} says what the drop did, for the verb to report
+ * or refuse. The criteria stop at the next heading. Pure, erasable syntax only.
  */
 
 /** GitHub's bound on a body, 65,536 characters of at most four bytes each. */
@@ -29,6 +30,8 @@ export interface ItemBody {
   branch: string | null;
   plan: { path: string; hash: string } | null;
   ref: string | null;
+  /** The comments dropped from the text above the links, and whether an opener there has no closer. */
+  comments: { dropped: number; unclosed: boolean };
 }
 
 const HEADING = /^## Acceptance criteria$/i;
@@ -48,19 +51,23 @@ const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 const verbatim = (lines: readonly string[]): string => lines.slice(Math.max(lines.findIndex((line) => line.trim() !== ""), 0)).join("\n").trimEnd();
 
 /**
- * `text` with each HTML comment replaced by a space; one with no end runs to the end, as the page hides it. The space
- * keeps two halves of an opener from closing up where a comment sat. No regex: a lazy match is quadratic on a body of openers.
+ * `text` with each HTML comment replaced by a space, and what that did. It knows no code span and no fence, so it stays
+ * simple and fails closed: a comment quoted as code is dropped and counted, and an opener with no closer ends the text
+ * and is said, for the verb to refuse. The space keeps two halves of an opener from closing up where a comment sat.
+ * No regex: a lazy match is quadratic on a body of openers.
  */
-function withoutComments(text: string): string {
+function withoutComments(text: string): { text: string; comments: ItemBody["comments"] } {
   let kept = "";
   let from = 0;
+  let dropped = 0;
   for (let open = text.indexOf("<!--"); open >= 0; open = text.indexOf("<!--", from)) {
     kept += `${text.slice(from, open)} `;
     const close = text.indexOf("-->", open + 2);
-    if (close < 0) return kept;
+    if (close < 0) return { text: kept, comments: { dropped, unclosed: true } };
+    dropped += 1;
     from = close + 3;
   }
-  return kept + text.slice(from);
+  return { text: kept + text.slice(from), comments: { dropped, unclosed: false } };
 }
 
 /** `lines` up to the next heading, `#` or underlined, outside a fence. A rule under a list item is no underline. */
@@ -90,7 +97,8 @@ export function parseItemBody(body: string): ItemBody {
   };
   const plan = PLAN_LINK.exec(link("Plan") ?? "");
   const branch = link("Branch");
-  const shown = withoutComments(printableText(lines.slice(0, end).join("\n"), "\t\n")).split("\n");
+  const { text, comments } = withoutComments(printableText(lines.slice(0, end).join("\n"), "\t\n"));
+  const shown = text.split("\n");
   const heading = shown.findIndex((line) => HEADING.test(line.trim()));
   const acceptance = heading >= 0 ? shown.slice(heading + 1) : plan === null ? shown : [];
   return {
@@ -99,6 +107,7 @@ export function parseItemBody(body: string): ItemBody {
     branch: branch !== null && BRANCH_LINK.test(branch) ? branch : null,
     plan: plan === null ? null : { path: plan[1] ?? "", hash: plan[2] ?? "" },
     ref: link("Ref"),
+    comments,
   };
 }
 

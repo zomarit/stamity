@@ -34,6 +34,10 @@ const CRITERIA = "- [ ] an expired value is refused\n- [ ] a retry keeps its sta
 
 const FACTS = { base: "0a1b2c3d4e5f60718293a4b5c6d7e8f901234567", files: ["src/b.ts", "src/c.ts"], itemRef: "o/r#7", author: "a-person" };
 
+// TEST CHANGE, justified: round 2's W-1 (signed off) has `ItemBody` say what the comment drop did, so the four cases
+// pinning the whole shape carry the new field. The closing marker is past the text, so a filed body counts none.
+const NO_COMMENTS = { dropped: 0, unclosed: false };
+
 describe("parseItemBody", () => {
   it("reads every part of an item with a plan", () => {
     expect(parseItemBody(PLANNED)).toEqual({
@@ -42,16 +46,17 @@ describe("parseItemBody", () => {
       branch: "feat/expiry",
       plan: { path: "docs/plans/001-demo.md", hash: HASH },
       ref: "docs/specs/demo.md",
+      comments: NO_COMMENTS,
     });
   });
 
   it("reads the old body of an item with no plan: no summary, no branch, no plan", () => {
-    expect(parseItemBody(PLAIN)).toEqual({ summary: "", acceptance: CRITERIA, branch: null, plan: null, ref: "docs/specs/demo.md" });
+    expect(parseItemBody(PLAIN)).toEqual({ summary: "", acceptance: CRITERIA, branch: null, plan: null, ref: "docs/specs/demo.md", comments: NO_COMMENTS });
   });
 
   it("reads an old body under the heading the same way, and one with no `Ref:`", () => {
     const body = ["## Acceptance criteria", "", "- [ ] one", "", MARKER].join("\n");
-    expect(parseItemBody(body)).toEqual({ summary: "", acceptance: "- [ ] one", branch: null, plan: null, ref: null });
+    expect(parseItemBody(body)).toEqual({ summary: "", acceptance: "- [ ] one", branch: null, plan: null, ref: null, comments: NO_COMMENTS });
   });
 
   it("reads a body a person saved in GitHub's web form, whose lines end in CRLF", () => {
@@ -59,7 +64,7 @@ describe("parseItemBody", () => {
   });
 
   it("reads an empty body as an item with nothing in it", () => {
-    expect(parseItemBody("")).toEqual({ summary: "", acceptance: "", branch: null, plan: null, ref: null });
+    expect(parseItemBody("")).toEqual({ summary: "", acceptance: "", branch: null, plan: null, ref: null, comments: NO_COMMENTS });
   });
 
   it("keeps the first criterion's indent and every inner line as written", () => {
@@ -157,6 +162,37 @@ describe("parseItemBody's criteria", () => {
     ["wrapped round a heading", ["- [ ] one", "<!--", "## Notes", "-->", "- [ ] two"], "- [ ] one\n \n- [ ] two"],
   ])("drop an HTML comment %s", (_label, lines, expected) => {
     expect(criteriaOf(...lines)).toBe(expected);
+  });
+
+  const commentsOf = (...lines: string[]): ItemBody["comments"] => parseItemBody(["A summary.", "", "## Acceptance criteria", "", ...lines, ...LINKS].join("\n")).comments;
+
+  it.each([
+    ["none", ["- [ ] one"], { dropped: 0, unclosed: false }],
+    ["one", ["- [ ] one<!-- hidden -->"], { dropped: 1, unclosed: false }],
+    ["each of two", ["<!-- a -->", "- [ ] one", "<!-- b -->"], { dropped: 2, unclosed: false }],
+    ["one quoted in a code span: the drop knows no code, so it is counted", ["- [ ] keeps `<!-- x -->` as written"], { dropped: 1, unclosed: false }],
+    ["one quoted in a fence", ["```html", "<!-- x -->", "```"], { dropped: 1, unclosed: false }],
+    ["the text between an opener and a closer in two code spans", ["- [ ] `<!--` opens", "- [ ] two", "- [ ] `-->` closes"], { dropped: 1, unclosed: false }],
+  ])("count %s", (_label, lines, expected) => {
+    expect(commentsOf(...lines)).toEqual(expected);
+  });
+
+  it.each([
+    ["in plain text", ["- [ ] one", "<!-- hidden", "- [ ] two"]],
+    ["in a code span", ["- [ ] keeps `<!--` as written", "- [ ] two"]],
+    ["in a fence", ["```html", "<!-- a marker", "```", "- [ ] two"]],
+    ["after a comment that closed", ["<!-- a -->", "- [ ] one", "<!-- hidden"]],
+  ])("say an opener %s has no closer", (_label, lines) => {
+    expect(commentsOf(...lines).unclosed).toBe(true);
+  });
+
+  it("say so of an opener in the summary too, which would otherwise hide the criteria's heading", () => {
+    const body = ["A summary <!-- with an opener.", "", "## Acceptance criteria", "", "- [ ] one", ...LINKS].join("\n");
+    expect(parseItemBody(body)).toMatchObject({ acceptance: "", comments: { unclosed: true } });
+  });
+
+  it("count nothing in the closing block: the item's marker is no comment dropped", () => {
+    expect(parseItemBody(PLANNED).comments).toEqual(NO_COMMENTS);
   });
 
   it("leave no comment behind where removing one would close up another", () => {

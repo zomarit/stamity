@@ -31,14 +31,25 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * A refusal's reason carries a class, never `String(cause)`, gh's stderr or a machine path: reasons
  * reach the record and the morning list, whose text becomes a pull request's body.
  *
- * Exit 0 `written` or `would-write` (`--dry-run`), with `stripped` where the strip took anything, so the
- * issue can be rewritten at its source; 1 `refused`, `notDone` naming what refused it; 2 usage.
+ * The comment drop knows no code, so it fails closed. A comment quoted as code is dropped, and every
+ * drop is counted in the strip report, so a person can see text was left out. An opener with no
+ * closer refuses, since what it would drop has no end a person could check.
+ *
+ * Exit 0 `written` or `would-write` (`--dry-run`), with `stripped` and `strippedComments` where the
+ * strip took anything, so the issue can be rewritten at its source; 1 `refused`, `notDone` naming
+ * what refused it; 2 usage.
  */
 
 interface ItemRef {
   owner: string;
   repo: string;
   number: number;
+}
+
+/** What left the item's text on its way to the contract. */
+interface Strip {
+  comments: number;
+  characters: boolean;
 }
 
 type RestRead = (path: string) => Promise<GhResponse>;
@@ -149,10 +160,10 @@ function criteriaGap(acceptance: string, label: string): string | null {
 }
 
 /**
- * The contract's text and whether the body held characters the strip took, or a {@link Refused} naming why the item
- * cannot have one here. The plan is read as a raw blob: the text the hash ties the item to.
+ * The contract's text and what the strip took, or a {@link Refused} naming why the item cannot have one here. The
+ * plan is read as a raw blob: the text the hash ties the item to.
  */
-async function contractText(ctx: CliContext, ref: ItemRef, label: string): Promise<{ text: string; stripped: boolean }> {
+async function contractText(ctx: CliContext, ref: ItemRef, label: string): Promise<{ text: string; strip: Strip }> {
   const { cwd } = ctx.app.runtime;
   const base = (await gitRead(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"]))?.trim();
   if (base === undefined) throw new Refused("no commit at HEAD");
@@ -173,10 +184,17 @@ async function contractText(ctx: CliContext, ref: ItemRef, label: string): Promi
   // A checkout with `core.autocrlf` on holds the blob's text with CRLF line ends, and an item filed from it hashes that.
   else if (planHash(plan) !== hash && planHash(plan.replaceAll("\n", "\r\n")) !== hash) reasons.push(`the plan ${path} hashes to ${planHash(plan)}, and ${label} names ${hash}`);
   else if (files.length === 0) reasons.push(`the plan ${path} names no files for scope.in`);
+  if (item.comments.unclosed) reasons.push(`${label}: a comment opener with no closer`);
   const gap = criteriaGap(item.acceptance, label);
   if (gap !== null) reasons.push(gap);
   if (reasons.length > 0) throw new Refused(...reasons);
-  return { text: contractFromItem(item, { base, files, itemRef: label, author }), stripped: printableText(body, "\t\n\r") !== body };
+  const strip = { comments: item.comments.dropped, characters: printableText(body, "\t\n\r") !== body };
+  return { text: contractFromItem(item, { base, files, itemRef: label, author }), strip };
+}
+
+/** The strip report's words, empty where nothing left the text. Counts and kinds alone, never the text. */
+function stripWords({ comments, characters }: Strip): string[] {
+  return [...(comments > 0 ? [`${comments} HTML comment${comments === 1 ? "" : "s"}`] : []), ...(characters ? ["control or invisible characters"] : [])];
 }
 
 export async function runContract(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {
@@ -184,19 +202,21 @@ export async function runContract(ctx: CliContext, opts: Record<string, unknown>
   const ref = opts["item"] as ItemRef;
   const item = `${ref.owner}/${ref.repo}#${ref.number}`;
   const path = `${ctx.engine.runs.layout.runRelPath(run)}/contract.yml`;
-  const finish = (outcome: string, reasons: readonly string[] = [], stripped = false): CommandResult => {
+  const finish = (outcome: string, reasons: readonly string[] = [], strip: Strip = { comments: 0, characters: false }): CommandResult => {
     const notDone = reasons.map((reason) => sanitizeLabel(reason));
-    const note = stripped ? [`stripped: control or invisible characters left the item's text; rewrite ${item} without them`] : [];
+    const words = stripWords(strip);
+    const stripped = words.length > 0;
+    const note = stripped ? [`stripped: ${words.join(" and ")} left out of the contract; rewrite ${item} without them`] : [];
     ctx.io.out([`run: ${run}`, `item: ${item}`, `contract: ${path}`, `outcome: ${outcome}`, ...note, ...notDone.map((entry) => `Not done: ${entry}`), ""].join("\n"));
-    return { exitCode: outcome === "refused" ? 1 : 0, json: { subcommand: "contract", run, item, outcome, path, notDone, ...(stripped ? { stripped } : {}), ...(ctx.dryRun ? { dryRun: true } : {}) } };
+    return { exitCode: outcome === "refused" ? 1 : 0, json: { subcommand: "contract", run, item, outcome, path, notDone, ...(stripped ? { stripped, strippedComments: strip.comments } : {}), ...(ctx.dryRun ? { dryRun: true } : {}) } };
   };
   try {
-    const { text, stripped } = await contractText(ctx, ref, item);
-    if (ctx.dryRun) return finish("would-write", [], stripped);
+    const { text, strip } = await contractText(ctx, ref, item);
+    if (ctx.dryRun) return finish("would-write", [], strip);
     await ctx.engine.merge.atomicWrite.atomicWriteFile(join(ctx.app.runtime.cwd, path), text, { boundaryDir: ctx.app.runtime.cwd }).catch((cause: unknown) => {
       throw new Refused(`${path} could not be written (${failureClass(cause)})`);
     });
-    return finish("written", [], stripped);
+    return finish("written", [], strip);
   } catch (cause) {
     if (cause instanceof Refused) return finish("refused", cause.reasons);
     throw cause;

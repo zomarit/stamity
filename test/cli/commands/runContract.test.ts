@@ -170,7 +170,7 @@ interface Verb {
   code: number;
   stdout: string;
   stderr: string;
-  doc: { subcommand: string; outcome: string; run: string; item: string; path: string; notDone: string[]; dryRun?: boolean; stripped?: boolean };
+  doc: { subcommand: string; outcome: string; run: string; item: string; path: string; notDone: string[]; dryRun?: boolean; stripped?: boolean; strippedComments?: number };
 }
 
 async function contract(cwd: string, extra: readonly string[] = [], item: string = ITEM): Promise<Verb> {
@@ -333,6 +333,33 @@ describe("stamity run contract", () => {
     expect(text).not.toContain("Notes");
   });
 
+  it.each([
+    ["in plain text", "- [ ] one<!-- hidden -->"],
+    ["quoted in a code span, so a person can see text was left out", "- [ ] keeps `<!-- x -->` as written"],
+    ["quoted in a fence", "- [ ] one\n```html\n<!-- x -->\n```"],
+  ])("counts a dropped comment %s in the strip report", async (_label, criteria) => {
+    const { cwd, hash } = await seeded();
+    rest.routes.set(ISSUE, issue(plannedBody(hash).replace(CRITERIA, criteria)));
+
+    const { code, doc } = await contract(cwd);
+
+    expect(doc).toMatchObject({ outcome: "written", stripped: true, strippedComments: 1 });
+    expect(code).toBe(0);
+    const text = await runInProcess([runCommand], ["run", "contract", "--run", RUN, "--item", ITEM], { cwd, env: { PATH: process.env["PATH"] } });
+    expect(text.stdout).toContain("stripped: 1 HTML comment left out of the contract");
+  });
+
+  it("names both kinds in one line and counts every comment, under --dry-run too", async () => {
+    const { cwd, hash } = await seeded();
+    rest.routes.set(ISSUE, issue(plannedBody(hash).replace(CRITERIA, `<!-- a -->\n- [ ] on${String.fromCodePoint(0x200b)}e\n<!-- b -->`)));
+
+    const { doc } = await contract(cwd, ["--dry-run"]);
+    expect(doc).toMatchObject({ outcome: "would-write", stripped: true, strippedComments: 2 });
+
+    const { stdout } = await runInProcess([runCommand], ["run", "contract", "--run", RUN, "--item", ITEM, "--dry-run"], { cwd, env: { PATH: process.env["PATH"] } });
+    expect(stdout).toContain("stripped: 2 HTML comments and control or invisible characters left out of the contract");
+  });
+
   it("says what it stripped, so the issue can be rewritten at its source, and says nothing of a clean one", async () => {
     const { cwd, hash } = await seeded();
     rest.routes.set(ISSUE, issue(plannedBody(hash).replace(CRITERIA, `- [ ] on${String.fromCodePoint(0x200b)}e`)));
@@ -346,6 +373,7 @@ describe("stamity run contract", () => {
     rest.routes.set(ISSUE, issue(plannedBody(hash)));
     const clean = await contract(cwd);
     expect(clean.doc.stripped).toBeUndefined();
+    expect(clean.doc.strippedComments).toBeUndefined();
   });
 
   it.each([
@@ -518,6 +546,23 @@ describe("stamity run contract", () => {
       const { doc } = await refused(cwd, "not open", READY, AUTHOR);
       expect(doc.notDone).toHaveLength(3);
       expect(doc.notDone.join("\n")).not.toContain("feat/an-unproven-word");
+    });
+
+    it.each([
+      ["in plain text", "- [ ] one\n<!-- a secret word\n- [ ] two"],
+      ["in a code span", "- [ ] the page keeps `<!-- a secret word` as written\n- [ ] two"],
+      ["in a fence", "- [ ] one\n```html\n<!-- a secret word\n```\n- [ ] two"],
+    ])("a comment opener with no closer %s, by class and never the text", async (_label, criteria) => {
+      const { cwd, hash } = await seeded();
+      rest.routes.set(ISSUE, issue(plannedBody(hash).replace(CRITERIA, criteria)));
+      const { doc } = await refused(cwd, ITEM, "comment opener with no closer");
+      expect(doc.notDone.join("\n")).not.toContain("a secret word");
+    });
+
+    it("a comment opener with no closer in the summary, named beside the criteria it hid", async () => {
+      const { cwd, hash } = await seeded();
+      rest.routes.set(ISSUE, issue(plannedBody(hash).replace(SUMMARY, `${SUMMARY} <!-- an opener`)));
+      await refused(cwd, "comment opener with no closer", "acceptance criteria");
     });
 
     it("criteria the deny-scan blocks, naming the pattern id and never the text", async () => {
