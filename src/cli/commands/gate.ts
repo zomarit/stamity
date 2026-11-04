@@ -51,7 +51,7 @@ import { fileSystemProbe, gitProgramFor, isNodeModulesBin, programNotFound, reso
 import { TOOLS } from "../../types/core.ts";
 import type { SetupManifest } from "../../types/manifest.ts";
 import { HOOKS_GENERATED_DIR, REVIEW_GATE_STATE_FILE } from "../../types/markers.ts";
-import { guardCopySetting, readGuardSetting, readRegularFile } from "../engine/autonomyGate.ts";
+import { guardCopySetting, readGuardLegs, readRegularFile } from "../engine/autonomyGate.ts";
 import { ghApi } from "../engine/ghRunner.ts";
 import { gitCheckRunner, keptFromGit, revisionLines, type GitInputRunner } from "../engine/gitStatus.ts";
 import { gitWrite, gitWriteEnv } from "../engine/gitWrite.ts";
@@ -2115,7 +2115,7 @@ async function adminRuleProofInForce(root: string, repoPath: string, rest: RestR
         onDefaultBranch = reply.status === 200;
         return reply;
       },
-      readGuardSetting,
+      readGuardLegs,
     );
     const strictest = strictestAutonomy(setting, ...copies.map((text) => guardCopySetting(text)));
     return onDefaultBranch && atHead && strictest.adminRuleProof === true;

@@ -392,6 +392,7 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/change/scan.ts": { unit: "p5e-secret-scan", wave: 2 },
   // The run contract: strict YAML over the wave-1 config parser.
   "src/runs/runContract.ts": { unit: "u3-freshness-contract", wave: 2 },
+  "src/runs/reviewTool.ts": { unit: "review-tool-reader", wave: 2 },
   // wave 3
   // Test selection (plan 019 file 2, unit p2b): reads the wave-2 classifier's
   // globs and code extensions, under the wave-14 verb that calls it.
