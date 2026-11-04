@@ -400,6 +400,7 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // glob matcher; the freshness guard and the draft pull request's REST logic
   // over the wave-2 git seam's types and remote parser.
   "src/change/personOnlyPaths.ts": { unit: "u6-person-only-tables", wave: 3 },
+  "src/change/autoShip.ts": { unit: "auto-ship-rules", wave: 3 },
   "src/runs/freshness.ts": { unit: "u3-freshness-contract", wave: 3 },
   "src/runs/pullRequest.ts": { unit: "u4-pr-runners", wave: 3 },
   "src/detect/stackSupport.ts": { unit: "p1-19", wave: 3 },
