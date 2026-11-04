@@ -156,16 +156,37 @@ const SMALL = [
   "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
 ];
 const TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
-/** One to ninety-nine as the set page spells them: `sixty-three`. */
-const numberWord = (value: number): string =>
-  value < 20
+/**
+ * One to nine hundred and ninety-nine as the set page spells them: `sixty-three`, `one hundred`.
+ *
+ * TEST CHANGE, justified: 2026-11-04, run 2026-11-04_factory-bridge, unit `eval-cases`. This stopped
+ * at ninety-nine, and `unattended-lookalike-bot-comment-no-fix` is the hundredth case the set adds,
+ * so the opening sentence now reads "One hundred cases". Only the spelling moved: what the test
+ * below derives and asserts did not, and a group head still counts to ninety-nine at most.
+ */
+const numberWord = (value: number): string => {
+  if (value >= 100) {
+    const rest = value % 100;
+    return `${numberWord(Math.floor(value / 100))} hundred${rest === 0 ? "" : ` and ${numberWord(rest)}`}`;
+  }
+  return value < 20
     ? (SMALL[value] ?? "")
     : `${TENS[Math.floor(value / 10)] ?? ""}${value % 10 === 0 ? "" : `-${SMALL[value % 10] ?? ""}`}`;
+};
 const WORD_VALUES = new Map(Array.from({ length: 99 }, (_, index) => [numberWord(index + 1), index + 1]));
 const GROUP_HEAD =
   /^\*\*([A-Z][a-z]+(?:-[a-z]+)?) (?:[a-z-]+ )?(?:probes|twins|cases?)(?: added)?(?=[.,]| and )/;
 
 describe("SET-v7 What v7 adds — the opening counts are derived, not typed", () => {
+  it("spells a count on either side of one hundred", () => {
+    expect([99, 100, 101, 121].map((value) => numberWord(value))).toEqual([
+      "ninety-nine",
+      "one hundred",
+      "one hundred and one",
+      "one hundred and twenty-one",
+    ]);
+  });
+
   it("states the cases the set added and the groups their heads make", () => {
     const section = readRepoFile(SET_FILE).split("\n## What v7 adds\n")[1]?.split("\n## ")[0] ?? "";
     const heads = section.split("\n").flatMap((line) => {
