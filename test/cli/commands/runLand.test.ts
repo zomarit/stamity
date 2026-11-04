@@ -58,6 +58,8 @@ const gh = vi.hoisted(() => ({
   /** The comment editors' GraphQL answers (`ghCommentEditors`), in order; a rejection stands for a cloud whose proxy refuses GraphQL. */
   editors: [] as unknown[],
   editorsRefused: false,
+  /** The answer every thread resolve gets (`ghResolveReviewThread`); `null` stands for `gh` failing before GitHub answers. */
+  resolve: { status: 200, json: { data: { resolveReviewThread: { thread: { isResolved: true } } } } as unknown } as Answer | null,
   /** The merge states the pull request reads with after the ready mark, in order. */
   afterReady: ["clean"] as (string | null)[],
   /** review/110: fields the pull request reads with after the ready mark, beside its merge state (a head that moved). */
@@ -98,6 +100,10 @@ vi.mock("../../../src/cli/engine/ghRunner.ts", async (importOriginal) => ({
   ghCommentEditors: (_request: unknown, opts?: { program?: string }) => {
     gh.calls.push({ kind: "editors", program: opts?.program });
     return gh.editorsRefused ? Promise.reject(new Error("gh failed")) : Promise.resolve({ status: 200, json: next(gh.editors) });
+  },
+  ghResolveReviewThread: (request: { id: string }, opts?: { program?: string }) => {
+    gh.calls.push({ kind: "resolve", body: request.id, program: opts?.program });
+    return gh.resolve === null ? Promise.reject(new Error("gh failed")) : Promise.resolve(gh.resolve);
   },
   ghMarkReady: (request: { id: string }, opts?: { program?: string }) => {
     gh.calls.push({ kind: "ready", body: request, program: opts?.program });
@@ -238,6 +244,7 @@ describe("stamity run land", () => {
     gh.threads = [threadsPage([])];
     gh.editors = [editorsPage([])];
     gh.editorsRefused = false;
+    gh.resolve = { status: 200, json: { data: { resolveReviewThread: { thread: { isResolved: true } } } } };
     range.refusal = null;
     gh.afterReady = ["clean"];
     gh.afterReadyPr = {};
@@ -1821,6 +1828,203 @@ describe("stamity run land", () => {
       await writeFile(join(repo, ".stamity/manifest.json"), `${JSON.stringify({ version: 1, autonomy: { reviewTool: { ...TOOL, request: "@codex look away" } } })}\n`);
 
       expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reasons: [expect.stringContaining("the legs disagree on autonomy.reviewTool")] } });
+    });
+  });
+
+  describe("the tool's own threads (build/29)", () => {
+    const LOGIN = "chatgpt-codex-connector[bot]";
+    const BARE = "chatgpt-codex-connector";
+    const TOOL = { login: LOGIN, request: "@codex review", clean: "state-comment", stateMarker: "codex-review-state:v1", stateSection: "code_review", waitMinutes: 40, rounds: 2 };
+    const block = (sha: string, status = "completed", findings = false): string =>
+      `<!-- codex-review-state:v1 ${JSON.stringify({ code_review: { commit_sha: sha, has_any_findings: findings, has_unresolved_findings: findings, status } })} -->`;
+    const minutesAgo = (minutes: number): string => new Date(Date.now() - minutes * 60_000).toISOString();
+    const comment = (id: number, login: string, type: string, body: string, createdAt = minutesAgo(5)): unknown => ({ id, user: { login, type }, body, created_at: createdAt });
+    const never = (id: number): unknown => ({ databaseId: id, lastEditedAt: null, editor: null });
+    const plusOne = { user: { login: LOGIN, type: "User" }, content: "+1" };
+    /** A thread with GitHub's id on it; the first comment is the tool's, unless `authors` name others after it. */
+    const named = (id: string, ...authors: [string, string][]): object => ({ ...(thread(false, null, ...authors) as object), id });
+    const fromTool = (id: string, ...replies: [string, string][]): object => named(id, ["Bot", BARE], ...replies);
+    const closed = (id: string): object => ({ ...(thread(true, "runner", ["Bot", BARE]) as object), id });
+
+    /** A pull request the tool reads clean on, the run's request and the tool's block both on the head. */
+    const seedClean = async (tool: Record<string, unknown> = TOOL): Promise<Seeded> => {
+      const manifest = `${JSON.stringify({ version: 1, autonomy: { reviewTool: tool } })}\n`;
+      const seeded = await seed({ manifest });
+      route("GET repos/o/r/contents/.stamity/manifest.json", { content: Buffer.from(manifest).toString("base64"), encoding: "base64" });
+      route("POST repos/o/r/issues/7/comments", { id: 900 }, 201);
+      route("GET repos/o/r/issues/7/comments", [comment(1, "runner", "User", `@codex review\n\n${requestMarker(seeded.head)}`), comment(2, LOGIN, "Bot", block(seeded.head))]);
+      route("GET repos/o/r/issues/7/reactions", [plusOne]);
+      route("GET repos/o/r/pulls/7/reviews", []);
+      gh.editors = [editorsPage([never(1), never(2)])];
+      return seeded;
+    };
+    const resolved = (): unknown[] => gh.calls.filter((call) => call.kind === "resolve").map((call) => call.body);
+
+    it("resolves the tool's own thread on its clean word, just before the act, re-reads the threads, and merges", async () => {
+      const { repo } = await seedClean();
+      gh.threads = [threadsPage([fromTool("T1")]), threadsPage([fromTool("T1")]), threadsPage([closed("T1")])];
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "landed", evidence: { review: { state: "clean" }, threads: { unresolved: 0 } } });
+      expect(resolved()).toEqual(["T1"]);
+      const order = kinds();
+      const at = order.indexOf("resolve");
+      expect(order.slice(at).indexOf("threads")).toBeGreaterThan(0);
+      expect(order.indexOf("merge")).toBeGreaterThan(at);
+      expect(order.lastIndexOf("threads")).toBeLessThan(order.indexOf("PATCH repos/o/r/pulls/7"));
+      const patched = gh.calls.find((call) => call.method === "PATCH")?.body as { body: string };
+      expect(patched.body).toContain("0 open threads");
+      expect(patched.body).toContain("1 of the tool's review threads resolved on its clean word");
+    });
+
+    it("leaves a person's thread and a thread a person replied to, and the land stays refused", async () => {
+      const { repo } = await seedClean();
+      const page = threadsPage([fromTool("T1"), named("T2", ["User", "alice"]), fromTool("T3", ["User", "alice"]), named("T4", ["User", BARE])]);
+      gh.threads = [page];
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: ["3 review threads are unresolved"] });
+      expect(resolved()).toEqual([]);
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("resolves the tool's thread the run replied to, since the run's own reply is no person's objection", async () => {
+      const { repo } = await seedClean();
+      gh.threads = [threadsPage([fromTool("T1", ["User", "runner"])]), threadsPage([fromTool("T1", ["User", "runner"])]), threadsPage([closed("T1")])];
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed" });
+      expect(resolved()).toEqual(["T1"]);
+    });
+
+    /** What a fix round leaves: the run's request and the tool's block both on the earlier head, and nothing yet on this one. */
+    const afterAFixRound = (): unknown[] => [comment(1, "runner", "User", `@codex review\n\n${requestMarker("e".repeat(40))}`, minutesAgo(90)), comment(2, LOGIN, "Bot", block("e".repeat(40)))];
+
+    it("counts the tool's thread as a pending gap on a new head, so the request posts, and resolves nothing (skills-prose W-4)", async () => {
+      const { repo, head } = await seedClean();
+      route("GET repos/o/r/issues/7/comments", afterAFixRound());
+      gh.threads = [threadsPage([fromTool("T1")])];
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(gh.calls.filter((call) => call.method === "POST").map((call) => (call.body as { body: string }).body)).toEqual([`@codex review\n\n${requestMarker(head)}`]);
+      expect(result.doc).toMatchObject({ outcome: "asks", asks: { pending: true }, evidence: { review: { state: "waiting" } } });
+      expect(resolved()).toEqual([]);
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("keeps polling on --wait over the tool's thread, then resolves it and lands on the clean word (skills-prose W-4)", async () => {
+      fakeClock();
+      const { repo, head } = await seedClean();
+      const asked = comment(1, "runner", "User", requestMarker(head));
+      gh.routes.set("GET repos/o/r/issues/7/comments", [
+        { status: 200, json: [asked, comment(2, LOGIN, "Bot", block(head, "running"))] },
+        { status: 200, json: [asked, comment(2, LOGIN, "Bot", block(head))] },
+      ]);
+      gh.threads = [threadsPage([fromTool("T1")]), threadsPage([fromTool("T1")]), threadsPage([fromTool("T1")]), threadsPage([closed("T1")])];
+
+      expect((await run(repo, ["land", "--run", RUN, "--wait", "2"])).doc).toMatchObject({ outcome: "landed" });
+      expect(resolved()).toEqual(["T1"]);
+    });
+
+    it.each([
+      ["a person's thread beside it", () => [fromTool("T1"), named("T2", ["User", "alice"])]],
+      ["a person's reply in the tool's thread", () => [fromTool("T1", ["User", "alice"])]],
+    ])("keeps %s a plain gap while waiting, so no request goes on a head that cannot land", async (_name, nodes) => {
+      const { repo } = await seedClean();
+      route("GET repos/o/r/issues/7/comments", afterAFixRound());
+      gh.threads = [threadsPage(nodes())];
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: expect.arrayContaining(["1 review thread is unresolved"]), evidence: { review: { state: "waiting" } } });
+      expect(gh.calls.filter((call) => call.method === "POST")).toEqual([]);
+      expect(resolved()).toEqual([]);
+    });
+
+    it.each([
+      ["findings", (head: string) => [comment(1, "runner", "User", requestMarker(head)), comment(2, LOGIN, "Bot", block(head, "completed", true))], "findings"],
+      ["silence past the wait", (head: string) => [comment(1, "runner", "User", requestMarker(head), minutesAgo(90))], "silent"],
+      ["rounds spent", () => [comment(1, "runner", "User", requestMarker("e".repeat(40)), minutesAgo(200)), comment(2, "runner", "User", requestMarker("f".repeat(40)), minutesAgo(100))], "spent"],
+    ])("keeps the tool's thread a plain gap and resolves nothing on %s", async (_name, comments, state) => {
+      const { repo, head } = await seedClean();
+      route("GET repos/o/r/issues/7/comments", comments(head));
+      gh.threads = [threadsPage([fromTool("T1")])];
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: expect.arrayContaining(["1 review thread is unresolved"]), evidence: { review: { state } } });
+      expect(gh.calls.filter((call) => call.method === "POST")).toEqual([]);
+      expect(resolved()).toEqual([]);
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("resolves nothing on a clean read that names no commit: a reaction proves no exact head", async () => {
+      const { repo } = await seedClean({ login: LOGIN, request: "@codex review", clean: "reaction", waitMinutes: 40, rounds: 2 });
+      gh.threads = [threadsPage([fromTool("T1")])];
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"], evidence: { review: { state: "clean" } } });
+      expect(resolved()).toEqual([]);
+    });
+
+    it("resolves nothing with no review tool set, the thread a gap as ever", async () => {
+      const { repo } = await seed();
+      gh.threads = [threadsPage([fromTool("T1")])];
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
+      expect(resolved()).toEqual([]);
+    });
+
+    it("resolves nothing on a dry run, and nothing while a person still has to answer an ask", async () => {
+      const { repo } = await seedClean();
+      gh.threads = [threadsPage([fromTool("T1")])];
+      expect((await run(repo, ["land", "--run", RUN, "--dry-run"])).doc).toMatchObject({ outcome: "would-land" });
+
+      route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: ".github/workflows/ci.yml" }, { filename: "b" }]);
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks" });
+
+      expect(resolved()).toEqual([]);
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it.each<[string, () => void, string]>([
+      ["gh failing", () => (gh.resolve = null), "gh failed before GitHub answered"],
+      ["a refusal", () => (gh.resolve = { status: 403, json: { message: "Forbidden" } }), "HTTP 403"],
+      ["GraphQL errors", () => (gh.resolve = { status: 200, json: { errors: [{ message: "denied" }] } }), "GitHub did not say it closed"],
+      ["a thread left open", () => (gh.resolve = { status: 200, json: { data: { resolveReviewThread: { thread: { isResolved: false } } } } }), "GitHub did not say it closed"],
+    ])("reads a failed resolve as a gap, on %s, so the land does not merge", async (_name, arrange, words) => {
+      const { repo } = await seedClean();
+      gh.threads = [threadsPage([fromTool("T1")])];
+      arrange();
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.code).toBe(1);
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: [`the tool's review thread T1 was not resolved (${words})`, "1 review thread is unresolved"] });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("trusts the re-read over the resolve's answer: a thread still open there holds the merge", async () => {
+      const { repo } = await seedClean();
+      gh.threads = [threadsPage([fromTool("T1")])];
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
+      expect(resolved()).toEqual(["T1"]);
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("holds a thread a person replied to between the last read and the resolve", async () => {
+      const { repo } = await seedClean();
+      const replied = { ...(thread(true, "runner", ["Bot", BARE], ["User", "alice"]) as object), id: "T1" };
+      gh.threads = [threadsPage([fromTool("T1")]), threadsPage([fromTool("T1")]), threadsPage([replied])];
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
+      expect(kinds()).not.toContain("merge");
     });
   });
 

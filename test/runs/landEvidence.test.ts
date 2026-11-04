@@ -25,6 +25,8 @@ import {
   parseReviews,
   placeOf,
   parseThreadsPage,
+  threadResolved,
+  toolThreadIds,
   pollWhilePending,
   unresolvedThreads,
   waitsLine,
@@ -33,6 +35,7 @@ import {
   type LandInput,
   type LandPr,
   type PlaceReads,
+  type ThreadRead,
 } from "../../src/runs/landEvidence.ts";
 import type { ReviewToolState, ReviewToolVerdict } from "../../src/runs/reviewTool.ts";
 
@@ -78,6 +81,7 @@ function input(over: Partial<LandInput> = {}, pr: Partial<LandPr> = {}): LandInp
     checks: GREEN,
     threads: 0,
     ledger: { open: [] },
+    pendingThreads: 0,
     looserKeys: [],
     reviewToolConflict: [],
     ...over,
@@ -229,7 +233,51 @@ describe("unresolvedThreads", () => {
   });
 });
 
+describe("toolThreadIds (build/29)", () => {
+  const TOOL_LOGIN = "chatgpt-codex-connector[bot]";
+  const tool = { login: "chatgpt-codex-connector", person: false };
+  const open = (authors: ThreadRead["authors"], over: Partial<ThreadRead> = {}): ThreadRead => ({ id: "T", isResolved: false, resolvedBy: null, authors, complete: true, ...over });
+
+  it.each<[string, ThreadRead]>([
+    ["the tool's own, alone", open([tool])],
+    ["the tool's, with the run's own reply, whose login is no person's objection", open([tool, { login: "runner", person: true }])],
+    ["the tool's, the run's login spelled in another case", open([tool, { login: "Runner", person: true }])],
+    ["the tool's, with another app's reply", open([tool, { login: "other", person: false }])],
+  ])("takes %s", (_name, thread) => {
+    expect(toolThreadIds([thread], TOOL_LOGIN, "runner")).toEqual(["T"]);
+  });
+
+  it.each<[string, ThreadRead]>([
+    ["a thread a person opened", open([{ login: "alice", person: true }, tool])],
+    ["one a person replied to after the tool", open([tool, { login: "alice", person: true }])],
+    ["one a deleted account replied to", open([tool, { login: null, person: true }])],
+    ["one a deleted account opened", open([{ login: null, person: true }])],
+    ["one a person holding the tool's bare name opened", open([{ login: "chatgpt-codex-connector", person: true }])],
+    ["one another app opened", open([{ login: "other", person: false }])],
+    ["one the run opened", open([{ login: "runner", person: true }, tool])],
+    ["one already resolved", open([tool], { isResolved: true, resolvedBy: "alice" })],
+    ["one whose comments did not read whole", open([tool], { complete: false })],
+    ["one with no comment read", open([])],
+    ["one GitHub named no id for", { isResolved: false, resolvedBy: null, authors: [tool], complete: true }],
+  ])("leaves %s", (_name, thread) => {
+    expect(toolThreadIds([thread], TOOL_LOGIN, "runner")).toEqual([]);
+  });
+});
+
 describe("the answers' parsers", () => {
+  it("reads a thread's id where GitHub names one, and whether a resolve closed the thread", () => {
+    const page = (node: unknown): unknown => ({ data: { viewer: { login: "runner" }, repository: { pullRequest: { reviewThreads: { nodes: [node], pageInfo: { hasNextPage: false } } } } } });
+    const node = { isResolved: false, resolvedBy: null, comments: { totalCount: 0, nodes: [] } };
+    expect(parseThreadsPage(page({ ...node, id: "PRRT_1" }))?.threads[0]?.id).toBe("PRRT_1");
+    expect(parseThreadsPage(page(node))?.threads[0]).not.toHaveProperty("id");
+
+    const answer = (isResolved: unknown): unknown => ({ data: { resolveReviewThread: { thread: { isResolved } } } });
+    expect(threadResolved(answer(true))).toBe(true);
+    expect(threadResolved(answer(false))).toBe(false);
+    expect(threadResolved({ ...(answer(true) as object), errors: [{ message: "x" }] })).toBe(false);
+    expect(threadResolved(null)).toBe(false);
+  });
+
   it("reads a threads page, its viewer and its next cursor, and refuses GraphQL errors", () => {
     const page = {
       data: {
@@ -458,6 +506,12 @@ describe("decideLand, the factory's evidence (REQ-FLOW-152 to REQ-FLOW-154)", ()
 
   it("asks on a red tip for a fast-forward too, as the push", () => {
     expect(decideLand(input({ defaultBranchRed: { failing: ["test"], unread: null }, forward: { requiresPr: null, compare: "ahead" } }))).toMatchObject({ outcome: "asks", act: "push-default" });
+  });
+
+  it("waits on the threads named pending, and any other open thread keeps the gap plain (skills-prose W-4)", () => {
+    const waiting = "the tool's open review threads (2) wait on its word on this head";
+    expect(decideLand(input({ threads: 2, pendingThreads: 2 }))).toEqual({ outcome: "refused", reasons: [waiting], pending: true });
+    expect(decideLand(input({ threads: 3, pendingThreads: 2 }))).toEqual({ outcome: "refused", reasons: ["1 review thread is unresolved", waiting], pending: false });
   });
 
   it("keeps a refusal first: a red tip never turns a gap into an ask", () => {

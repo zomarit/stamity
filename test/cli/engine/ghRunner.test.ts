@@ -8,11 +8,13 @@ import {
   ghCommentEditors,
   ghGraphqlArgs,
   ghMarkReady,
+  ghResolveReviewThread,
   ghMergeArgs,
   ghMergePull,
   ghReviewThreads,
   MARK_READY_MUTATION,
   parseGhInclude,
+  RESOLVE_THREAD_MUTATION,
   REVIEW_THREADS_QUERY,
   type GhRequest,
 } from "../../../src/cli/engine/ghRunner.ts";
@@ -119,16 +121,24 @@ describe("the land verb's calls", () => {
   });
 
   // TEST CHANGE, justified (land-wiring, REQ-FLOW-154): a third constant document joins the two, the comment editors' read.
-  it("sends graphql only with its three constant documents, any other refused before gh starts", async () => {
+  // TEST CHANGE, justified (build/29, signed off): a fourth joins them, the fixed-purpose thread resolve.
+  it("sends graphql only with its four constant documents, any other refused before gh starts", async () => {
     expect(ghGraphqlArgs({ hostname: HOST, query: REVIEW_THREADS_QUERY })).toEqual(["api", "--hostname", "github.com", "--include", "--method", "POST", "--input", "-", "graphql"]);
     expect(() => ghGraphqlArgs({ hostname: HOST, query: MARK_READY_MUTATION })).not.toThrow();
     expect(() => ghGraphqlArgs({ hostname: HOST, query: COMMENT_EDITORS_QUERY })).not.toThrow();
+    expect(() => ghGraphqlArgs({ hostname: HOST, query: RESOLVE_THREAD_MUTATION })).not.toThrow();
     for (const query of [`${REVIEW_THREADS_QUERY} `, "mutation { mergePullRequest(input:{}) { clientMutationId } }", ""]) {
       expect(() => ghGraphqlArgs({ hostname: HOST, query }), query).toThrow(/gh graphql: the document/);
     }
     await expect(ghMarkReady({ hostname: HOST, id: "x y" }, { env: { PATH: "" } })).rejects.toMatchObject({ code: "GH_REFUSED" });
     await expect(ghReviewThreads({ ...PULL, owner: "a b" }, { env: { PATH: "" } })).rejects.toMatchObject({ code: "GH_REFUSED" });
     await expect(ghCommentEditors({ ...PULL, number: 0 }, { env: { PATH: "" } })).rejects.toMatchObject({ code: "GH_REFUSED" });
+    await expect(ghResolveReviewThread({ hostname: HOST, id: "x y" }, { env: { PATH: "" } })).rejects.toMatchObject({ code: "GH_REFUSED" });
+  });
+
+  it("names each thread's id in the threads' document, which the resolve needs, and resolves one thread by a variable", () => {
+    expect(REVIEW_THREADS_QUERY).toContain("reviewThreads(first:100,after:$after){nodes{id isResolved ");
+    expect(RESOLVE_THREAD_MUTATION).toBe("mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}");
   });
 
   it("names a comment's editor and its edit time, and pages, in the editors' document", () => {
@@ -241,6 +251,9 @@ describe("ghApi", () => {
 
     await ghCommentEditors({ hostname: HOST, owner: "acme", repo: "app", number: 7, after: "Y3Vyc29y" }, { cwd: work, env: { PATH: bin } });
     expect(JSON.parse(await readFile(input, "utf8"))).toEqual({ query: COMMENT_EDITORS_QUERY, variables: { owner: "acme", repo: "app", number: 7, after: "Y3Vyc29y" } });
+
+    await ghResolveReviewThread({ hostname: HOST, id: "PRRT_kwDOabc" }, { cwd: work, env: { PATH: bin } });
+    expect(JSON.parse(await readFile(input, "utf8"))).toEqual({ query: RESOLVE_THREAD_MUTATION, variables: { id: "PRRT_kwDOabc" } });
   });
 
   it.skipIf(process.platform === "win32")("starts the program it is given, not one PATH names, and refuses a relative one (review/75)", async () => {

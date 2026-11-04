@@ -27,6 +27,8 @@ import {
   parseThreadsPage,
   ownPr,
   pollWhilePending,
+  threadResolved,
+  toolThreadIds,
   withinAny,
   unresolvedThreads,
   waitsLine,
@@ -55,6 +57,7 @@ import {
   ghMarkReady,
   ghMergePull,
   ghProgramPath,
+  ghResolveReviewThread,
   ghReviewThreads,
   withoutVersionChoice,
   type GhApiOptions,
@@ -90,6 +93,9 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * agreeing with the range (REQ-FLOW-152). A named review tool is read on the head, asked once where it has no run there, and
  * waited for: only its clean word passes (REQ-FLOW-154). The tip and the tool are read again before the act. A wait that
  * outlasts the verb ends as `asks` with `asks.pending`, which no `--approved` passes: the next call reads the tool's word.
+ * On that clean word on the exact head, the tool's own open threads stop counting; just before the act they are resolved
+ * and the threads read again, so a resolve that fails, or a thread still open, holds the merge (build/29). While the tool is
+ * awaited they are a pending gap, so a head a fix round left them on still gets its request; on any other verdict, a plain one.
  *
  * **The act.** `--ready` marks a draft ready only once the rest holds, then merges. Before the merge the body gains
  * one "evidence checked at" line, never "landed"; only after the merge call succeeds does `record.md` gain
@@ -467,9 +473,14 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
         : undefined;
 
     // (7) The review threads, every page, read again on every later read (review/72).
+    const toolOwn = (read: readonly ThreadRead[]): string[] => (tool === undefined ? [] : toolThreadIds(read, tool.login, viewer));
+    /** build/29: the open threads only the tool holds, as last read; `run land` alone closes these. */
+    let toolOpen = toolOwn(firstThreads.threads);
     const readThreads = async (): Promise<number | null> => {
       const read = await reviewThreads(repo.host, repo.owner, repo.repo, number, ghOpts);
-      return read === null || read.viewer.toLowerCase() !== viewer.toLowerCase() ? null : read.count;
+      const usable = read !== null && read.viewer.toLowerCase() === viewer.toLowerCase();
+      toolOpen = usable ? toolOwn(read.threads) : [];
+      return usable ? read.count : null;
     };
     let threads: number | null = firstThreads.count;
 
@@ -526,6 +537,12 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     };
     await readReview();
     let tip = await readTip();
+    /**
+     * build/29: the threads set aside, those of the tool's own while it reads clean on this exact head. A reaction's clean names
+     * no commit, so it sets nothing aside; once the resolve has run, nothing is set aside and the re-read count stands alone.
+     */
+    let resolving = true;
+    const setAside = (now: LandPr): string[] => (resolving && tool !== undefined && tool.clean !== "reaction" && review?.state === "clean" && review.head === now.headSha ? toolOpen : []);
 
     const inputFor = (now: LandPr, checks: CheckEvidence, beforeReady: boolean): LandInput => ({
       pr: now,
@@ -537,7 +554,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       prefix: setups,
       hookPaths,
       checks,
-      threads,
+      threads: threads === null ? null : threads - setAside(now).length,
+      pendingThreads: threads !== null && review?.state === "waiting" ? toolOpen.length : 0,
       ledger,
       looserKeys,
       reviewToolConflict: setting.reviewToolConflict,
@@ -687,9 +705,23 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       const asked = verdict.deny && verdict.ask ? verdict.rule : null;
       if (verdict.deny && asked !== "push-default" && !(asked === "push-deploying" && approval !== null)) throw new Refused(`push refused: ${verdict.reason}`);
     }
+    // build/29: the tool's own threads, last of all before the evidence is written, then the threads once more: only what
+    // that read says stands, so a failed resolve or a thread a person joined meanwhile stops the land here.
+    const ownThreads = setAside(pr);
+    if (ownThreads.length > 0) {
+      const failed = await resolveThreads(ownThreads, repo.host, ghOpts);
+      resolving = false;
+      threads = await readThreads();
+      show(checks, pr);
+      const after = decideLand(inputFor(pr, checks, false));
+      const stops = [...failed, ...(after.outcome === "refused" ? after.reasons : [])];
+      if (stops.length > 0) throw new Refused(...stops);
+      lines.push(`threads: resolved ${ownThreads.length} of the tool's own`);
+    }
     const at = new Date().toISOString();
     const notes = [
       ...(review === undefined ? [] : [review.reason]),
+      ...(ownThreads.length === 0 ? [] : [`${ownThreads.length} of the tool's review threads resolved on its clean word`]),
       ...(tip.notRed.length === 0 ? [] : [`${defaultBranch}'s tip reads not red with ${tip.notRed.join(", ")} missing or pending`]),
       ...(autoShip?.eligible === true && !fastForward ? [autoShip.evidence] : []),
     ];
@@ -911,8 +943,19 @@ async function autoShipRead(
   }
 }
 
+/** Resolves each thread by its node id (build/29); what comes back names every one that did not close, and why. */
+async function resolveThreads(ids: readonly string[], hostname: string, opts: GhApiOptions): Promise<string[]> {
+  const replies = await Promise.all(ids.map((id) => ghResolveReviewThread({ hostname, id }, opts).catch(() => null)));
+  return ids.flatMap((id, index) => {
+    const reply = replies[index] ?? null;
+    if (reply?.status === 200 && threadResolved(reply.json)) return [];
+    const why = reply === null ? "gh failed before GitHub answered" : reply.status === 200 ? "GitHub did not say it closed" : `HTTP ${reply.status}`;
+    return [`the tool's review thread ${id} was not resolved (${why})`];
+  });
+}
+
 /** The unresolved review threads ({@link unresolvedThreads}) and the login they were read as, every page; `null` where a page does not read. */
-async function reviewThreads(hostname: string, owner: string, repo: string, number: number, opts: GhApiOptions): Promise<{ count: number; viewer: string; author: string | null } | null> {
+async function reviewThreads(hostname: string, owner: string, repo: string, number: number, opts: GhApiOptions): Promise<{ count: number; viewer: string; author: string | null; threads: ThreadRead[] } | null> {
   const threads: ThreadRead[] = [];
   let after: string | undefined;
   let viewer = "";
@@ -930,7 +973,7 @@ async function reviewThreads(hostname: string, owner: string, repo: string, numb
     viewer = read.viewer;
     author = read.author;
     threads.push(...read.threads);
-    if (read.next === null) return { count: unresolvedThreads(threads, viewer), viewer, author };
+    if (read.next === null) return { count: unresolvedThreads(threads, viewer), viewer, author, threads };
     after = read.next;
   }
   return null;

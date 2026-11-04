@@ -179,6 +179,8 @@ export function checkEvidence(required: readonly RequiredCheck[] | null, runs: r
 
 /** One review thread: resolved or not, by whom, and every comment's author (`login` null where GitHub names none). */
 export interface ThreadRead {
+  /** Its GraphQL node id, what a resolve names; absent where GitHub named none, so no resolve can reach it. */
+  id?: string;
   isResolved: boolean;
   resolvedBy: string | null;
   authors: { login: string | null; person: boolean }[];
@@ -193,12 +195,36 @@ export interface ThreadRead {
  * app's comments do not hold a thread open. On a single-account repository the person is the run's login: a residual.
  */
 export function unresolvedThreads(threads: readonly ThreadRead[], viewer: string): number {
-  const same = (a: string | null, b: string): boolean => a !== null && a.toLowerCase() === b.toLowerCase();
   return threads.filter((thread) => {
     if (!thread.isResolved) return true;
-    if (!same(thread.resolvedBy, viewer)) return false;
-    return !thread.complete || thread.authors.some((author) => author.login === null || (author.person && !same(author.login, viewer)));
+    if (!sameLogin(thread.resolvedBy, viewer)) return false;
+    return !thread.complete || holdsAPerson(thread, viewer);
   }).length;
+}
+
+function sameLogin(a: string | null, b: string): boolean {
+  return a !== null && a.toLowerCase() === b.toLowerCase();
+}
+
+/** Whether a comment in the thread is a person's other than `viewer`'s; an author GitHub no longer names counts as one. */
+function holdsAPerson(thread: ThreadRead, viewer: string): boolean {
+  return thread.authors.some((author) => author.login === null || (author.person && !sameLogin(author.login, viewer)));
+}
+
+/**
+ * The open threads the review tool opened and no person joined, by node id (build/29): what `run land` may set aside and
+ * resolve on the tool's clean word. The first comment must be an app's of `toolLogin`, in REST's spelling, so a person holding
+ * the bare name opens nothing here. The run's own reply is no person's objection, as {@link unresolvedThreads} reads it, and
+ * the same residual follows: on a single-account repository the person is the run's login. A thread not read whole, or
+ * with no id, is left as it stands.
+ */
+export function toolThreadIds(threads: readonly ThreadRead[], toolLogin: string, viewer: string): string[] {
+  return threads.flatMap((thread) => {
+    const [first] = thread.authors;
+    if (thread.isResolved || !thread.complete || thread.id === undefined || first === undefined) return [];
+    if (first.person || first.login === null || `${first.login}[bot]` !== toolLogin) return [];
+    return holdsAPerson(thread, viewer) ? [] : [thread.id];
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -230,13 +256,19 @@ export function parseThreadsPage(json: unknown): { viewer: string; author: strin
       const login = field(comment, "author", "login");
       return { login: typeof login === "string" ? login : null, person: field(comment, "author", "__typename") !== "Bot" };
     });
-    threads.push({ isResolved: resolved, resolvedBy: typeof by === "string" ? by : null, authors, complete: count <= authors.length });
+    const id = field(node, "id");
+    threads.push({ ...(typeof id === "string" ? { id } : {}), isResolved: resolved, resolvedBy: typeof by === "string" ? by : null, authors, complete: count <= authors.length });
   }
   const more = field(page, "pageInfo", "hasNextPage") === true;
   const cursor = field(page, "pageInfo", "endCursor");
   if (more && typeof cursor !== "string") return null;
   const author = field(json, "data", "repository", "pullRequest", "author", "login");
   return { viewer, author: typeof author === "string" && author !== "" ? author : null, threads, next: more ? (cursor as string) : null };
+}
+
+/** Whether a thread resolve's answer says the thread closed; anything else, errors beside it included, did not. */
+export function threadResolved(json: unknown): boolean {
+  return field(json, "errors") === undefined && field(json, "data", "resolveReviewThread", "thread", "isResolved") === true;
 }
 
 /** One page of check runs with GitHub's `total_count`, or `null` for an answer that does not read. */
@@ -522,6 +554,11 @@ export interface LandInput {
   checks: CheckEvidence;
   /** Unresolved review threads, or `null` where they could not be read. */
   threads: number | null;
+  /**
+   * How many of `threads` wait on the review tool's word: its own, while the verdict reads `waiting`. A pending gap, not a
+   * plain one, or a head a fix round left them on would never get its request, and the clean word could never come.
+   */
+  pendingThreads: number;
   ledger: { open: string[] } | { refused: string };
   /** Present for `--fast-forward`. */
   forward?: ForwardFacts;
@@ -586,7 +623,11 @@ export function decideLand(input: LandInput): LandDecision {
   for (const name of checks.failing) gap(`required check ${name} did not pass on ${pr.headSha}`);
   for (const name of checks.pending) gap(`required check ${name} is still running on ${pr.headSha}`, true);
   if (input.threads === null) gap("the review threads could not be read");
-  else if (input.threads > 0) gap(`${input.threads} review thread${input.threads === 1 ? " is" : "s are"} unresolved`);
+  else {
+    const plain = input.threads - input.pendingThreads;
+    if (plain > 0) gap(`${plain} review thread${plain === 1 ? " is" : "s are"} unresolved`);
+    if (input.pendingThreads > 0) gap(`the tool's open review threads (${input.pendingThreads}) wait on its word on this head`, true);
+  }
   if ("refused" in input.ledger) gap(`the ledger at ${pr.headSha} does not read: ${input.ledger.refused}`);
   else if (input.ledger.open.length > 0) gap(`the ledger at ${pr.headSha} holds open Critical or Warning rows: ${input.ledger.open.join(", ")}`);
   const review = input.reviewTool;

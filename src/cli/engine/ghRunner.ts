@@ -33,12 +33,12 @@ import { HOST_NAME } from "../../runs/pullRequest.ts";
  * `node_modules/.bin` folder, never by its bare name. The status is read from
  * the head `--include` prints, so a 4xx answer is a status, not a throw.
  *
- * `stamity run land` (REQ-FLOW-132) needs three calls this door refuses, so
+ * `stamity run land` (REQ-FLOW-132) needs calls this door refuses, so
  * each is a fixed-purpose function of its own beside it, its path built here
  * from validated parts and never from a caller's text: {@link ghMergePull}
- * (`PUT …/pulls/<n>/merge` with the head `sha`), {@link ghReviewThreads} and
- * {@link ghMarkReady} (`POST graphql`, each with its one constant document,
- * {@link ghGraphqlArgs} refusing any other). {@link ghApi} itself still
+ * (`PUT …/pulls/<n>/merge` with the head `sha`), {@link ghReviewThreads},
+ * {@link ghMarkReady} and {@link ghResolveReviewThread} (`POST graphql`, each with
+ * its one constant document, {@link ghGraphqlArgs} refusing any other). {@link ghApi} itself still
  * refuses `PUT`, every merge path and `graphql`.
  */
 
@@ -375,16 +375,20 @@ export function ghMergePull(request: PullRef & { sha: string; method: MergeMetho
 
 /**
  * The one review-thread read (a constant document): the authenticated login, the pull request's author in the same
- * spelling (review/94: GraphQL names an app `app` where REST names it `app[bot]`), then per thread whether it is resolved,
- * who resolved it, and every comment's author (review/71), each a person (`User`) or an app (`Bot`), with the
- * thread's comment count, so a thread holding more comments than one page reads as not read whole.
+ * spelling (review/94: GraphQL names an app `app` where REST names it `app[bot]`), then per thread its node id, whether it is
+ * resolved, who resolved it, and every comment's author (review/71), oldest first, each a person (`User`) or an app (`Bot`),
+ * with the thread's comment count, so a thread holding more comments than one page reads as not read whole.
  */
 export const REVIEW_THREADS_QUERY =
-  "query($owner:String!,$repo:String!,$number:Int!,$after:String){viewer{login}repository(owner:$owner,name:$repo){pullRequest(number:$number){author{login}reviewThreads(first:100,after:$after){nodes{isResolved resolvedBy{login}comments(first:100){totalCount nodes{author{__typename login}}}}pageInfo{hasNextPage endCursor}}}}}";
+  "query($owner:String!,$repo:String!,$number:Int!,$after:String){viewer{login}repository(owner:$owner,name:$repo){pullRequest(number:$number){author{login}reviewThreads(first:100,after:$after){nodes{id isResolved resolvedBy{login}comments(first:100){totalCount nodes{author{__typename login}}}}pageInfo{hasNextPage endCursor}}}}}";
 
-/** The one mutation: mark the pull request with this node id ready for review (a constant document). */
+/** Mark the pull request with this node id ready for review (a constant document). */
 export const MARK_READY_MUTATION =
   "mutation($id:ID!){markPullRequestReadyForReview(input:{pullRequestId:$id}){pullRequest{isDraft}}}";
+
+/** Resolve the review thread with this node id (a constant document); the answer says whether it closed. */
+export const RESOLVE_THREAD_MUTATION =
+  "mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}";
 
 /**
  * The one comment-editor read (a constant document): who last edited each of a pull request's comments, which REST does
@@ -393,12 +397,12 @@ export const MARK_READY_MUTATION =
 export const COMMENT_EDITORS_QUERY =
   "query($owner:String!,$repo:String!,$number:Int!,$after:String){repository(owner:$owner,name:$repo){pullRequest(number:$number){comments(first:100,after:$after){nodes{databaseId lastEditedAt editor{__typename login}}pageInfo{hasNextPage endCursor}}}}}";
 
-const GRAPHQL_DOCUMENTS: ReadonlySet<string> = new Set([REVIEW_THREADS_QUERY, MARK_READY_MUTATION, COMMENT_EDITORS_QUERY]);
+const GRAPHQL_DOCUMENTS: ReadonlySet<string> = new Set([REVIEW_THREADS_QUERY, MARK_READY_MUTATION, COMMENT_EDITORS_QUERY, RESOLVE_THREAD_MUTATION]);
 
 /**
  * The argument vector of a GraphQL call: `POST graphql`, the document and its variables on stdin. Throws a
- * {@link GhRefusal} for any document but {@link REVIEW_THREADS_QUERY}, {@link MARK_READY_MUTATION} and
- * {@link COMMENT_EDITORS_QUERY}, so no caller reaches GitHub's GraphQL with text of its own.
+ * {@link GhRefusal} for any document but {@link REVIEW_THREADS_QUERY}, {@link MARK_READY_MUTATION},
+ * {@link COMMENT_EDITORS_QUERY} and {@link RESOLVE_THREAD_MUTATION}, so no caller reaches GitHub's GraphQL with text of its own.
  */
 export function ghGraphqlArgs(request: { hostname: string; query: string }): string[] {
   if (typeof request.hostname !== "string" || !HOST_NAME.test(request.hostname)) throw refusal("gh graphql: the host is not a host name this runner sends to");
@@ -430,4 +434,10 @@ export function ghCommentEditors(request: PullRef & { after?: string }, opts: Gh
 export function ghMarkReady(request: { hostname: string; id: string }, opts: GhApiOptions = {}): Promise<GhResponse> {
   if (typeof request.id !== "string" || !/^[A-Za-z0-9_=-]{1,128}$/.test(request.id)) return Promise.reject(refusal("gh graphql: the node id is not one this runner sends"));
   return graphql(request.hostname, MARK_READY_MUTATION, { id: request.id }, opts);
+}
+
+/** Resolve the review thread whose GraphQL node id is `id`. */
+export function ghResolveReviewThread(request: { hostname: string; id: string }, opts: GhApiOptions = {}): Promise<GhResponse> {
+  if (typeof request.id !== "string" || !/^[A-Za-z0-9_=-]{1,128}$/.test(request.id)) return Promise.reject(refusal("gh graphql: the node id is not one this runner sends"));
+  return graphql(request.hostname, RESOLVE_THREAD_MUTATION, { id: request.id }, opts);
 }
