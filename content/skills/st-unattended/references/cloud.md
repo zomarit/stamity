@@ -82,10 +82,11 @@ only letters, digits, `.`, `_`, `/` and `-`, and passes `git check-ref-format --
 
 On that branch the run runs `stamity run contract --run <id> --item <owner/repo#n> --json`, `<id>` the run folder's
 name. The verb proves who stands behind the issue and writes `.stamity/runs/<id>/contract.yml`. Any exit but 0 is a
-refusal: its `notDone[]` lines go first on the morning list under `## Refused`. When its JSON reports
-`strippedComments` above zero, the run refuses to start, before Frame, since a visible criterion may have gone with the
-comment: a `## Refused` row names that count and the fix, a person edits the issue and closes the `Refused:` draft before
-the label goes on again. The ready check then names that file:
+refusal: its `notDone[]` lines go first on the morning list under `## Refused`, and there, as on the stripped-comment
+refusal below, a row tells the person to close the `Refused:` draft before the label goes on again. When its JSON
+reports `strippedComments` above zero, the run refuses to start, before Frame, since a visible criterion may have gone
+with the comment: a `## Refused` row names that count and the fix, a person edits the issue. The ready check then names
+that file:
 `stamity plan check <plan> --contract .stamity/runs/<id>/contract.yml --json`, `<plan>` the path in the contract's
 `plan` key.
 

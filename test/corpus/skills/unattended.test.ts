@@ -1222,7 +1222,12 @@ describe("st-unattended — the factory bridge's prose (plan 023 file 1, skills-
     expect(start).toContain("holds only letters, digits, `.`, `_`, `/` and `-`");
     expect(start).toContain('`git check-ref-format --branch "<ref>"`');
     // A refused contract is the run's refusal: an author or a labeler without write access stops it here.
-    expect(start).toContain("Any exit but 0 is a refusal: its `notDone[]` lines go first on the morning list under `## Refused`.");
+    // A retry on that branch finds the open draft under another run's marker, only comments on it, and `run land` finds no
+    // pull request of its own, so the whole build would end held. The words name the stripped-comment refusal too: that
+    // one exits 0, so "any exit but 0" alone would not reach it.
+    expect(start).toContain(
+      "Any exit but 0 is a refusal: its `notDone[]` lines go first on the morning list under `## Refused`, and there, as on the stripped-comment refusal below, a row tells the person to close the `Refused:` draft before the label goes on again.",
+    );
     expect(actsTold(start)).toEqual([]);
   });
 
@@ -1235,10 +1240,8 @@ describe("st-unattended — the factory bridge's prose (plan 023 file 1, skills-
   it("refuses to start when the contract dropped a comment, naming the count and the fix (REQ-FLOW-155)", async () => {
     const start = await cloudSection("Starting from a ready item");
     expect(start).toContain(
-      "When its JSON reports `strippedComments` above zero, the run refuses to start, before Frame, since a visible criterion may have gone with the comment: a `## Refused` row names that count and the fix, a person edits the issue and closes the `Refused:` draft before the label goes on again.",
+      "When its JSON reports `strippedComments` above zero, the run refuses to start, before Frame, since a visible criterion may have gone with the comment: a `## Refused` row names that count and the fix, a person edits the issue.",
     );
-    // A retry on that branch finds the open draft under another run's marker, only comments on it, and `run land` finds no
-    // pull request of its own, so the whole build would end held if the row named the edit alone.
     // A held row would let the build and the land go on against a shortened contract.
     expect(start).not.toContain("kind `held`");
   });
