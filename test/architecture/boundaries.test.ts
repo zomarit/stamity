@@ -624,6 +624,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // below the wave-14 write loops (`init/apply.ts`, `sync/engine.ts`) that run it.
   "src/cli/engine/autonomyGate.ts": { unit: "a3b-loosen-gate", wave: 13 },
   "src/cli/engine/landSetting.ts": { unit: "settings", wave: 13 },
+  // Plan 023 (change-range): what a committed range classifies as, with the git reads `gate` and `run land` share.
+  // Half a wave is a requirement: it starts git through the wave-13 runner and reads the wave-13 kit, and its two
+  // callers sit at wave 14 in different units, so it has to sit strictly between them. The rows either side stay put.
+  "src/cli/engine/changeRange.ts": { unit: "change-range", wave: 13.5 },
   // Plan 021 file 1 (u4): the engine's one git runner that writes and its one
   // door onto GitHub's REST API, over the wave-1 PATH walk and the wave-4 bare
   // look, below the wave-14 `gate` and run verbs that start them.

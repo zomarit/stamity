@@ -6,24 +6,14 @@ import { fileURLToPath } from "node:url";
 import { Argument, InvalidArgumentError, Option, type Command } from "commander";
 import {
   BUILT_IN_RULES,
-  CLASS_CHECKS,
-  CLASS_FILE,
-  CLASS_ORDER,
   classifyChange,
   hasCodeExtension,
-  keepSecurityLens,
   lineRulesCover,
-  mergeRules,
-  outsideSecurityRule,
-  parseClassFile,
   type BaseState,
-  type ChangeClass,
   type ClassifyResult,
-  type ClassRule,
   type Hunk,
   type Lockfile,
   type PathSource,
-  type TestInput,
 } from "../../change/classify.ts";
 import {
   extractReadPaths,
@@ -52,8 +42,44 @@ import { TOOLS } from "../../types/core.ts";
 import type { SetupManifest } from "../../types/manifest.ts";
 import { HOOKS_GENERATED_DIR, REVIEW_GATE_STATE_FILE } from "../../types/markers.ts";
 import { guardCopySetting, readGuardLegs, readRegularFile } from "../engine/autonomyGate.ts";
+import {
+  applyNameFloor,
+  applyReadFloors,
+  awayFrom,
+  baseEntry,
+  describeGitFailure,
+  DIFF_PINS,
+  failClosed,
+  findProjectRoot,
+  GATE_GIT_MAX_BUFFER,
+  GATE_GIT_TIMEOUT_MS,
+  gitSaidNo,
+  GitReadError,
+  HEAD_BYTES,
+  holdsNul,
+  insideOf,
+  namePaths,
+  NPM_LOCKFILE,
+  parseNameStatus,
+  parseNumstat,
+  parsePatch,
+  PatchError,
+  placeChange,
+  raiseTo,
+  readBaseClassFile,
+  readCwdPrefix,
+  resolveBase,
+  rulesFrom,
+  runGit,
+  SHEBANG_BYTES,
+  SNIFF_BYTES,
+  withReasons,
+  type PlacedChange,
+  type ProjectRoot,
+  type Section,
+} from "../engine/changeRange.ts";
 import { ghApi } from "../engine/ghRunner.ts";
-import { gitCheckRunner, keptFromGit, revisionLines, type GitInputRunner } from "../engine/gitStatus.ts";
+import { gitCheckRunner, revisionLines, type GitInputRunner } from "../engine/gitStatus.ts";
 import { gitWrite, gitWriteEnv } from "../engine/gitWrite.ts";
 import { readSetting } from "../engine/landSetting.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
@@ -69,7 +95,8 @@ import type { GitRunner } from "../../workspace/git.ts";
  * **It decides nothing about a class.** The classes, their order, the rules,
  * the code-path floor and the checks each class names live in
  * `../../change/classify.ts`; this file owns where the changed paths come from
- * and how the verdict reads on a terminal and in the JSON document.
+ * and how the verdict reads on a terminal and in the JSON document. The git reads
+ * and floors it shares with `run land` live in `../engine/changeRange.ts`.
  *
  * **Where the paths come from.** `--paths` classifies the listed paths by path
  * rules alone, each read both ways (a backslash as a separator and as a
@@ -199,9 +226,7 @@ const CLASSIFY = "classify";
 const SCAN = "scan";
 const PREFLIGHT = "preflight";
 
-/** A change's diff can outgrow a status probe, so `gate` widens the runner's bounds. */
-const GATE_GIT_TIMEOUT_MS = 60_000;
-const GATE_GIT_MAX_BUFFER = 64 * 1024 * 1024;
+export { toProjectPath } from "../engine/changeRange.ts";
 
 /**
  * A ref git would read as an option is refused before git runs, exit 2. This is
@@ -213,191 +238,6 @@ function parseBaseRef(value: string): string {
   return value;
 }
 
-/**
- * A top-level-relative path (as `git diff --no-relative` and `ls-files
- * --full-name` print it) in the project's own layout: the project's prefix
- * (`git rev-parse --show-prefix`, empty at the top-level) stripped, or `null`
- * for a path outside the project.
- */
-export function toProjectPath(prefix: string, topLevelPath: string): string | null {
-  const root = prefix === "" || prefix.endsWith("/") ? prefix : `${prefix}/`;
-  if (!topLevelPath.startsWith(root)) return null;
-  const inside = topLevelPath.slice(root.length);
-  return inside === "" ? null : inside;
-}
-
-interface Rename {
-  from: string;
-  to: string;
-}
-
-/** A git call that failed, carrying the step that failed and the directory it ran in, for the reason. */
-class GitReadError extends Error {
-  // Plain fields, not parameter properties: Node's type stripping runs this file as-is.
-  readonly step: string;
-  readonly failure: unknown;
-  readonly cwd: string;
-
-  constructor(step: string, failure: unknown, cwd: string) {
-    super(`git ${step} failed`);
-    this.step = step;
-    this.failure = failure;
-    this.cwd = cwd;
-  }
-}
-
-function runGit(runner: GitInputRunner, cwd: string, step: string, args: readonly string[], input?: string): string {
-  try {
-    return runner(args, cwd, input);
-  } catch (err) {
-    throw new GitReadError(step, err, cwd);
-  }
-}
-
-/**
- * Why a git read failed, in words: the step and the cause the error carries.
- * Two failures name no git call, since the reader is a session that may re-run
- * a named call by hand. One no git gave: the look before git kept the folder
- * from git (`keptFromGit`), so no call failed, git gave no status, and plain
- * git run there opens it (review/60). The other is the first read, which fails
- * wherever git does not answer here: a typed git is found by the shell's rules.
- */
-function describeGitFailure(err: GitReadError): string {
-  if (keptFromGit(err.failure)) {
-    return (
-      "git was not started here: this folder, or a folder above it, has the layout of a bare repository, so the " +
-      "engine did not hand it to git, and plain git run here or in any folder under that one would open it"
-    );
-  }
-  const failure = err.failure as { code?: unknown; status?: unknown };
-  // A spawn in a missing directory fails ENOENT as a missing binary does (review/18).
-  if (failure.code === "ENOENT" && !existsSync(err.cwd)) return `the directory git runs in, ${err.cwd}, does not exist`;
-  if (failure.code === "ENOENT") return "git could not run (no git binary was found)";
-  const firstRead = err.step === "rev-parse --show-prefix";
-  const what = firstRead ? "git's search for a work tree here" : `git ${err.step}`;
-  if (failure.code === "ETIMEDOUT") return `${what} did not finish within ${GATE_GIT_TIMEOUT_MS / 1000} seconds`;
-  if (failure.code === "ENOBUFS") return `${what} printed more than ${GATE_GIT_MAX_BUFFER / 1024 / 1024} MiB`;
-  const status = typeof failure.status === "number" ? `, exit ${failure.status}` : "";
-  if (firstRead) {
-    return `no git work tree was found here (the engine found a git binary, and git's search for one failed${status})`;
-  }
-  return `git ${err.step} failed${status}`;
-}
-
-/** One file section the patch holds, in the name list's order: its old and new names. */
-type Section = Rename;
-
-/**
- * `git diff --name-status -z` rows: a status, then one path, or two for a
- * rename or a copy; and the patch's sections in the same order, where a type
- * change (`T`) is two sections, the old type removed and the new one added.
- */
-function parseNameStatus(output: string): { paths: string[]; renames: Rename[]; sections: Section[] } {
-  const fields = output.split("\0");
-  const paths: string[] = [];
-  const renames: Rename[] = [];
-  const sections: Section[] = [];
-  let index = 0;
-  while (index < fields.length) {
-    const status = fields[index] ?? "";
-    if (status === "") {
-      index += 1;
-      continue;
-    }
-    if (status.startsWith("R") || status.startsWith("C")) {
-      const from = fields[index + 1];
-      const to = fields[index + 2];
-      if (from === undefined || to === undefined) throw new GitReadError("diff --name-status", new Error("truncated row"), "");
-      renames.push({ from, to });
-      sections.push({ from, to });
-      index += 3;
-    } else {
-      const path = fields[index + 1];
-      if (path === undefined) throw new GitReadError("diff --name-status", new Error("truncated row"), "");
-      paths.push(path);
-      sections.push(...Array.from({ length: status.startsWith("T") ? 2 : 1 }, () => ({ from: path, to: path })));
-      index += 2;
-    }
-  }
-  return { paths, renames, sections };
-}
-
-/** A patch that does not read as the name list says: the line read fails closed. */
-class PatchError extends Error {}
-
-/** One file section of the patch: its hunks, whether it deletes the file, and whether git printed no lines for it. */
-interface PatchSection {
-  hunks: Omit<Hunk, "path">[];
-  deleted: boolean;
-  unshown: boolean;
-}
-
-/**
- * The patch, one ordered walk: section `n` is the name list's entry `n`, so no
- * header is parsed for a name and a C-quoted name is read by its real one. An
- * unquoted header must name that entry exactly; a count that differs, a hunk
- * header that does not parse or a hunk line its header does not allow is a
- * {@link PatchError}. Each hunk's lines are counted from its header, so a
- * binary file's raw bytes, NULs and `diff --git` text included, stay data.
- */
-function parsePatch(output: string, sections: readonly Section[]): PatchSection[] {
-  const lines = output.split("\n");
-  if (lines.at(-1) === "") lines.pop();
-  const parsed: PatchSection[] = [];
-  let at = 0;
-  const next = (): string => lines[at] ?? "";
-  while (at < lines.length) {
-    const expected = sections[parsed.length];
-    const header = next();
-    if (expected === undefined || !header.startsWith("diff --git ")) throw new PatchError("the patch holds more sections than the name list");
-    if (!header.includes('"') && header !== `diff --git a/${expected.from} b/${expected.to}`) {
-      throw new PatchError("a patch section's header does not name the file the name list gives in its place");
-    }
-    const section: PatchSection = { hunks: [], deleted: false, unshown: false };
-    for (at += 1; at < lines.length && !next().startsWith("@@ ") && !next().startsWith("diff --git "); at += 1) {
-      if (next().startsWith("deleted file mode ")) section.deleted = true;
-      if (next().startsWith("Binary files ")) section.unshown = true;
-    }
-    while (at < lines.length && next().startsWith("@@ ")) {
-      const counts = /^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(next());
-      if (counts === null) throw new PatchError("a hunk header did not parse");
-      let oldLeft = Number(counts[1] ?? 1);
-      let newLine = Number(counts[2]);
-      let newLeft = Number(counts[3] ?? 1);
-      const hunk = { added: [] as { line: number; text: string }[], removed: [] as string[], context: [] as string[] };
-      for (at += 1; oldLeft > 0 || newLeft > 0; at += 1) {
-        if (at >= lines.length) throw new PatchError("a hunk ended before its header's line counts");
-        const line = next();
-        const text = line.slice(1);
-        if (line.startsWith("\\")) continue;
-        // `diff.suppressBlankEmpty` prints an empty context line with no leading space.
-        if ((line === "" || line.startsWith(" ")) && oldLeft > 0 && newLeft > 0) {
-          hunk.context.push(text);
-          oldLeft -= 1;
-          newLeft -= 1;
-          newLine += 1;
-        } else if (line.startsWith("-") && oldLeft > 0) {
-          hunk.removed.push(text);
-          oldLeft -= 1;
-        } else if (line.startsWith("+") && newLeft > 0) {
-          hunk.added.push({ line: newLine, text });
-          newLeft -= 1;
-          newLine += 1;
-        } else throw new PatchError("a hunk line does not fit its header's line counts");
-      }
-      while (at < lines.length && next().startsWith("\\")) at += 1;
-      section.hunks.push(hunk);
-    }
-    parsed.push(section);
-  }
-  if (parsed.length !== sections.length) throw new PatchError("the patch holds fewer sections than the name list");
-  return parsed;
-}
-
-/** The binary sniff reads this many bytes from a file's start (plan/62). */
-const SNIFF_BYTES = 8_000;
-/** A changed file's head is read this far: the sniff, and the classifier's shebang and import reads. */
-const HEAD_BYTES = 64 * 1024;
 /** An untracked file larger than this is not read (plan/19). */
 const UNTRACKED_MAX_BYTES = 1024 * 1024;
 /**
@@ -409,8 +249,6 @@ const UNTRACKED_MAX_BYTES = 1024 * 1024;
  */
 const UNTRACKED_TOTAL_BYTES = 16 * 1024 * 1024;
 const UNTRACKED_COVERED_TOTAL_BYTES = 16 * 1024 * 1024;
-/** A file's first line is looked for a shebang this far. */
-const SHEBANG_BYTES = 1024;
 
 /**
  * Up to `limit` bytes of a regular file, or `undefined` for anything else (a
@@ -478,11 +316,6 @@ function wholeFile(path: string, text: string): Hunk {
   return { path, added: lines.map((line, at) => ({ line: at + 1, text: line })), removed: [], context: [] };
 }
 
-/** Whether lines, joined, hold a NUL in their first {@link SNIFF_BYTES} characters. */
-function holdsNul(lines: readonly string[]): boolean {
-  return lines.join("\n").slice(0, SNIFF_BYTES).includes("\0");
-}
-
 /**
  * What only the scan reads, under the paths it names (review/96, review/98):
  * the lines of files outside the project, named from the project root (`../`
@@ -512,40 +345,6 @@ interface ChangeLines {
   scan: ScanLines;
 }
 
-/** One `diff --numstat -z` row: its old and new names, and whether git printed `-` counts (a binary to git). */
-interface NumstatRow extends Rename {
-  binary: boolean;
-}
-
-/** `git diff --numstat -z` rows: `<added>\t<deleted>\t<path>`, or for a rename the two names in the next fields. */
-function parseNumstat(output: string): NumstatRow[] {
-  const fields = output.split("\0");
-  const rows: NumstatRow[] = [];
-  let index = 0;
-  while (index < fields.length) {
-    const field = fields[index] ?? "";
-    if (field === "") {
-      index += 1;
-      continue;
-    }
-    const row = /^(-|\d+)\t(-|\d+)\t([\s\S]*)$/.exec(field);
-    if (row === null) throw new GitReadError("diff --numstat", new Error("a row did not parse"), "");
-    const binary = row[1] === "-";
-    const path = row[3] ?? "";
-    if (path !== "") {
-      rows.push({ from: path, to: path, binary });
-      index += 1;
-      continue;
-    }
-    const from = fields[index + 1];
-    const to = fields[index + 2];
-    if (from === undefined || to === undefined) throw new GitReadError("diff --numstat", new Error("truncated row"), "");
-    rows.push({ from, to, binary });
-    index += 3;
-  }
-  return rows;
-}
-
 /** Which copy the patch reads against the base: the work tree's, or the index's (review/89). */
 type Side = "work tree" | "index";
 
@@ -561,9 +360,6 @@ interface SideRead {
   /** The scan's view, by the paths it names: lines outside the project and decoded, and what stayed unread. */
   scan: { hunks: Hunk[]; skipped: Set<string>; unscanned: Set<string> };
 }
-
-/** The flags every diff of the line read pins against config: no external diff, colour or textconv, every submodule. */
-const DIFF_PINS: readonly string[] = ["--no-relative", "--no-ext-diff", "--no-color", "--no-textconv", "--ignore-submodules=none"];
 
 /**
  * One side's patch against `commit`, as hunks under project-relative names.
@@ -827,23 +623,8 @@ function readLines(
   };
 }
 
-/** A top-level-relative name in the project's layout, or `null` outside it; on win32 a `\\` read as a separator too. */
-function insideOf(prefix: string, windows: boolean): (name: string) => string | null {
-  return (name) => toProjectPath(prefix, name) ?? (windows ? toProjectPath(prefix, name.replaceAll("\\", "/")) : null);
-}
-
-/** A top-level-relative name as the scan names a file outside the project: from the project root, `../` first. */
-function awayFrom(prefix: string): (name: string) => string {
-  const up = "../".repeat(prefix.split("/").filter((part) => part !== "").length);
-  return (name) => `${up}${name}`;
-}
-
 /** What the git read hands the classifier, in project-relative paths. */
-interface ChangeRead {
-  paths: string[];
-  renames: Rename[];
-  /** Top-level-relative paths left out because they sit outside the project. */
-  outside: string[];
+interface ChangeRead extends PlacedChange {
   /** The changed lines, or why they could not be read. */
   lines: ChangeLines | { failed: string };
 }
@@ -887,27 +668,7 @@ function readChange(runner: GitRunner, root: ProjectRoot, commit: string, window
     .split("\0")
     .filter((path) => path !== "");
 
-  const outside = new Set<string>();
-  const project = (path: string): string | null => {
-    const inside = toProjectPath(prefix, path);
-    if (inside !== null) return inside;
-    outside.add(path);
-    return windows ? toProjectPath(prefix, path.replaceAll("\\", "/")) : null;
-  };
-  const paths: string[] = [];
-  const renames: Rename[] = [];
-  for (const path of [...diff.paths, ...untracked]) {
-    const inside = project(path);
-    if (inside !== null) paths.push(inside);
-  }
-  for (const rename of diff.renames) {
-    const from = project(rename.from);
-    const to = project(rename.to);
-    // A rename with one side outside keeps its inside side as a changed path.
-    if (from !== null && to !== null) renames.push({ from, to });
-    else if (from !== null) paths.push(from);
-    else if (to !== null) paths.push(to);
-  }
+  const placed = placeChange([...diff.paths, ...untracked], diff.renames, prefix, windows);
   // The lines serve the line rules: their failure keeps the paths read above and says at least product.
   let lines: ChangeRead["lines"];
   try {
@@ -917,46 +678,7 @@ function readChange(runner: GitRunner, root: ProjectRoot, commit: string, window
     else if (err instanceof PatchError) lines = { failed: err.message };
     else throw err;
   }
-  return { paths, renames, outside: [...outside], lines };
-}
-
-/** The project a run reads: its directory, its prefix below the git top-level, and the top-level's directory. */
-interface ProjectRoot {
-  dir: string;
-  prefix: string;
-  topLevel: string;
-}
-
-/** A git error carrying an exit status and no spawn code: git ran and answered no. */
-function gitSaidNo(err: unknown, status?: number): boolean {
-  const { code, status: exit } = err as { code?: unknown; status?: unknown };
-  return code === undefined && typeof exit === "number" && (status === undefined || exit === status);
-}
-
-/**
- * The type of the entry `treeish` holds at the top-level-relative `path`
- * (`blob`, `tree`, `commit` for a submodule), or `null` when git answers
- * cleanly that nothing is there: `ls-tree` exits 0 printing no entry for an
- * absent path. That is the one "no". A missing or corrupt object, a failed lazy
- * fetch, a timeout or no binary fails the call, and a failed read fails closed
- * (p2a M-2): `cat-file -t` exits 128 for an absent path and a corrupt store
- * alike, so it could not tell them apart. `--literal-pathspecs` reads the path
- * as a name, never as pathspec magic; `--full-tree` ignores the cwd.
- */
-function baseEntryType(runner: GitRunner, cwd: string, treeish: string, path: string): string | null {
-  return baseEntry(runner, cwd, treeish, path)?.type ?? null;
-}
-
-/** The type and object id of the entry `treeish` holds at `path`, read as {@link baseEntryType} reads it. */
-function baseEntry(runner: GitRunner, cwd: string, treeish: string, path: string): { type: string; id: string } | null {
-  const output = runGit(runner, cwd, "ls-tree", ["--literal-pathspecs", "ls-tree", "-z", "--full-tree", treeish, "--", path]);
-  for (const record of output.split("\0")) {
-    const tab = record.indexOf("\t");
-    if (tab === -1 || record.slice(tab + 1) !== path) continue;
-    const [, type, id] = record.slice(0, tab).split(" ");
-    return type === undefined ? null : { type, id: id ?? "" };
-  }
-  return null;
+  return { ...placed, lines };
 }
 
 /**
@@ -978,105 +700,6 @@ function blobUtf16(runner: GitRunner, root: ProjectRoot, treeish: string, name: 
   if (!(size <= UNTRACKED_MAX_BYTES)) return undefined;
   const text = runGit(runner, root.dir, "cat-file blob", ["cat-file", "blob", entry.id]);
   return text.startsWith("\uFFFD\uFFFD") ? text.slice(2).replaceAll("\0", "") : undefined;
-}
-
-/** Whether `<treeish>:<prefix>.stamity` is a folder in that commit's tree; any failed read throws (p2a M-2). */
-function baseHoldsStateFolder(runner: GitRunner, cwd: string, treeish: string, prefix: string): boolean {
-  return baseEntryType(runner, cwd, treeish, `${prefix}.stamity`) === "tree";
-}
-
-/** The cwd's path below the git top-level (`git rev-parse --show-prefix`); outside a work tree this call fails. */
-function readCwdPrefix(runner: GitRunner, cwd: string): string {
-  return runGit(runner, cwd, "rev-parse --show-prefix", ["rev-parse", "--show-prefix"]).replace(/\r?\n$/, "");
-}
-
-/**
- * The project root: the nearest ancestor of `cwd`, up to the git top-level,
- * whose `.stamity/` folder is in `treeish`'s tree, or the top-level when none
- * is (re-review r3, `plan/63`; review/13). A run started in a subfolder, a run
- * folder under `.stamity/runs/` included, so still reads every changed path of
- * its project, and a `.stamity/` the change plants, untracked or staged, is not
- * a root. The walk follows `git rev-parse --show-prefix` up from the real cwd,
- * so it never leaves the work tree git answered for.
- */
-function findProjectRoot(runner: GitRunner, cwd: string, cwdPrefix: string, treeish: string): ProjectRoot {
-  const segments = cwdPrefix.split("/").filter((segment) => segment !== "");
-  let start = cwd;
-  try {
-    start = realpathSync(cwd);
-  } catch {
-    // git answered from this cwd, so it exists; the lexical form walks the same steps.
-  }
-  const topLevel = resolve(start, ...Array.from({ length: segments.length }, () => ".."));
-  for (let depth = segments.length; depth > 0; depth -= 1) {
-    const prefix = `${segments.slice(0, depth).join("/")}/`;
-    if (baseHoldsStateFolder(runner, cwd, treeish, prefix)) {
-      return { dir: resolve(start, ...Array.from({ length: segments.length - depth }, () => "..")), prefix, topLevel };
-    }
-  }
-  return { dir: topLevel, prefix: "", topLevel };
-}
-
-/** A full object id, SHA-1 or SHA-256. */
-const OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
-
-/**
- * `<ref>` as a commit id, or `null` when it does not resolve to a commit:
- * `--verify --quiet` exits 1, printing nothing, for a name that is no commit.
- * Any other failure (a timeout, the output bound, no binary, another exit) is
- * a failed read, named as such (review/17). No `--end-of-options`: the parser's
- * refusal of a `-`-led ref is the guard ({@link parseBaseRef}).
- */
-function resolveBase(runner: GitRunner, cwd: string, ref: string): string | null {
-  let output: string;
-  try {
-    output = runner(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], cwd);
-  } catch (err) {
-    if (gitSaidNo(err, 1)) return null;
-    throw new GitReadError("rev-parse --verify", err, cwd);
-  }
-  const id = output.trim();
-  return OBJECT_ID.test(id) ? id : null;
-}
-
-/** The base commit's class file: absent, read and valid, or refused with its first error. */
-type BaseClassFile =
-  | { state: "absent" }
-  | { state: "valid"; rules: ClassRule[]; testInputs: TestInput[]; testGlobs: string[] }
-  | { state: "invalid"; error: string; raising: ClassRule[] };
-
-/**
- * `<commit>:<prefix>.stamity/change-classes.json`, read as a raw blob (`cat-file
- * blob`, so no textconv or filter rewrites it) after {@link baseEntryType} says
- * what the base holds there. Only git's clean "nothing there" is an absent
- * file; any other failure is a failed read and fails closed. An entry that is
- * not a blob (a folder, a submodule) is refused, never read as absent.
- */
-function readBaseClassFile(runner: GitRunner, root: ProjectRoot, commit: string): BaseClassFile {
-  const path = `${root.prefix}${CLASS_FILE}`;
-  const type = baseEntryType(runner, root.dir, commit, path);
-  if (type === null) return { state: "absent" };
-  const spec = `${commit}:${path}`;
-  if (type !== "blob") return { state: "invalid", error: `the base holds a ${type} there, not a file`, raising: [] };
-  const parsed = parseClassFile(runGit(runner, root.dir, "cat-file blob", ["cat-file", "blob", spec]));
-  if (parsed.ok) return { state: "valid", rules: parsed.rules, testInputs: parsed.testInputs, testGlobs: parsed.testGlobs };
-  return { state: "invalid", error: parsed.errors[0] ?? "refused", raising: parsed.raising };
-}
-
-/** The rules a base's class file gives, and the reason clause it adds, if any. */
-function rulesFrom(classFile: BaseClassFile): { rules: readonly ClassRule[]; reason?: string } {
-  if (classFile.state === "valid") return { rules: mergeRules(BUILT_IN_RULES, classFile.rules) };
-  if (classFile.state === "absent") {
-    return { rules: BUILT_IN_RULES, reason: `the base holds no ${CLASS_FILE}, so only the built-in rules apply` };
-  }
-  const invalid = `the base copy of ${CLASS_FILE} is invalid (${classFile.error})`;
-  if (classFile.raising.length === 0) {
-    return { rules: BUILT_IN_RULES, reason: `${invalid}: no map was read from it, so the class is at least product` };
-  }
-  return {
-    rules: mergeRules(BUILT_IN_RULES, classFile.raising),
-    reason: `${invalid}: only its product, public-contract and security-sensitive entries were read, so the class is at least product`,
-  };
 }
 
 /**
@@ -1144,100 +767,6 @@ function selectFor(plan: TestPlan, result: ClassifyResult): TestSelection {
   if (missing.length === 0) return selection;
   return { full: true, files: [], reason: `the selected ${namePaths(missing)} is not in the work tree, so every test runs` };
 }
-
-/** The verdict for a change git could not read: `product`, the failure named. */
-function failClosed(reason: string): ClassifyResult {
-  return { class: "product", byPath: [], checks: [...CLASS_CHECKS.product], lenses: [], reason };
-}
-
-function withReasons(result: ClassifyResult, reasons: readonly string[]): ClassifyResult {
-  if (reasons.length === 0) return result;
-  return { ...result, reason: [...reasons, result.reason].filter((part) => part !== "").join("; ") };
-}
-
-/** The security lens, as the classifier names it for a `security-sensitive` change. */
-const SECURITY_LENS = "stamity-security";
-
-/**
- * `result` raised to at least `floor`; a lens it already had stays, and `security-sensitive` adds its lens first,
- * also to a result the audit-first rule left without it, since that rule held over the paths alone (p5g).
- */
-function raiseTo(result: ClassifyResult, floor: ChangeClass): ClassifyResult {
-  if (floor === "security-sensitive" && result.class === floor) return keepSecurityLens(result);
-  if (CLASS_ORDER.indexOf(result.class) <= CLASS_ORDER.indexOf(floor)) return result;
-  const lenses =
-    floor === "security-sensitive" ? [SECURITY_LENS, ...result.lenses.filter((lens) => lens !== SECURITY_LENS)] : result.lenses;
-  return { ...result, class: floor, checks: [...CLASS_CHECKS[floor]], lenses };
-}
-
-/** At most this many paths are named in one reason clause; the rest are counted. */
-const PATHS_NAMED = 5;
-
-function namePaths(paths: readonly string[]): string {
-  const named = paths.slice(0, PATHS_NAMED).join(", ");
-  return paths.length > PATHS_NAMED ? `${named} and ${paths.length - PATHS_NAMED} more` : named;
-}
-
-/**
- * The floors the git read adds over the path rules: a path outside the project
- * raises the class to at least `product` (review/13), or to `security-sensitive`
- * when the security floor or row matches it (review/21), one clause per rule
- * naming its paths through {@link namePaths} (review/42); a name that is not
- * valid UTF-8, decoded to U+FFFD, raises it to at least `product` (review/19).
- */
-function applyReadFloors(result: ClassifyResult, change: ChangeRead, source: PathSource): ClassifyResult {
-  let raised = result;
-  const reasons: string[] = [];
-  if (change.outside.length > 0) {
-    const count = change.outside.length;
-    reasons.push(`${count} changed path${count === 1 ? "" : "s"} outside the project left out, so the class is at least product`);
-    raised = raiseTo(raised, "product");
-    const byRule = new Map<string, string[]>();
-    for (const path of change.outside) {
-      const rule = outsideSecurityRule(path, source);
-      if (rule !== undefined) byRule.set(rule, [...(byRule.get(rule) ?? []), path]);
-    }
-    for (const [rule, paths] of byRule) {
-      const verb = paths.length === 1 ? "matches" : "match";
-      reasons.push(`${namePaths(paths)} outside the project ${verb} ${rule}, so the class is security-sensitive`);
-      raised = raiseTo(raised, "security-sensitive");
-    }
-  }
-  const unreadable = [...change.paths, ...change.renames.flatMap((rename) => [rename.from, rename.to])].filter((path) =>
-    path.includes("\uFFFD"),
-  );
-  if (unreadable.length > 0) {
-    reasons.push(`not valid UTF-8, so unreadable by name and the class is at least product: ${namePaths(unreadable)}`);
-    raised = raiseTo(raised, "product");
-  }
-  if ("failed" in change.lines) {
-    // review/87: no line rule could read the lines, so the lens reads them instead.
-    reasons.push(`the changed lines could not be read (${change.lines.failed}), so the class is security-sensitive and its lens reads them`);
-    raised = raiseTo(raised, "security-sensitive");
-  } else if (change.lines.skipped > 0) {
-    const { skipped } = change.lines;
-    reasons.push(`${skipped} changed file${skipped === 1 ? "" : "s"} not read line by line (binary, over 1 MiB, or not a regular file)`);
-  }
-  return withReasons(raised, reasons);
-}
-
-/**
- * A changed path whose name holds a code point the report strips (a control,
- * bidi, tag or other invisible character, by {@link sanitizeLabel}) is printed
- * under a name that is not the file's own, so nothing can open it by the name
- * read back: the class is at least `product` and the reason names it, whatever
- * the paths' source (review/36). The path keeps its own class in `byPath`.
- */
-function applyNameFloor(result: ClassifyResult): ClassifyResult {
-  const altered = result.byPath.map((entry) => entry.path).filter((path) => sanitizeLabel(path) !== path);
-  if (altered.length === 0) return result;
-  return withReasons(raiseTo(result, "product"), [
-    `names the report cannot show as they are, so the class is at least product: ${namePaths(altered)}`,
-  ]);
-}
-
-/** The one lockfile whose two copies the audit-first rule reads (p5g). */
-const NPM_LOCKFILE = "package-lock.json";
 
 /**
  * Each changed `package-lock.json`'s copies, for the audit-first rule
