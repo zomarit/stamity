@@ -579,9 +579,12 @@ describe("quick — a refused folder stops the lane (REQ-PLUGIN-046)", () => {
     // The lane recognises the reason by its words, so a reworded producer would disarm the stop
     // with every corpus case still green. Read as text: the wording is the contract, not a value
     // any export carries.
-    const gateSource = await readFile(join(CORPUS_ROOT, "..", "src", "cli", "commands", "gate.ts"), "utf8");
+    // TEST CHANGE, justified (plan 023 file 1, unit skills-prose; REQ-PLUGIN-046): this read `src/cli/commands/gate.ts`. What
+    // moved: unit `change-range` took `describeGitFailure` to `src/cli/engine/changeRange.ts`, which `gate.ts` imports. The
+    // pinned words are unchanged; only the file that carries them moved.
+    const rangeSource = await readFile(join(CORPUS_ROOT, "..", "src", "cli", "engine", "changeRange.ts"), "utf8");
 
-    expect(gateSource).toContain('"git was not started here: this folder, or a folder above it, has the layout of a bare repository');
+    expect(rangeSource).toContain('"git was not started here: this folder, or a folder above it, has the layout of a bare repository');
   });
 });
 

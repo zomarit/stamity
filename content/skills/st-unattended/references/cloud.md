@@ -97,8 +97,9 @@ stands on the head. `clean` lets the land go on, and `waiting` comes back as `as
 
 On `findings`, the run runs `/st-pr-resolve` on its pull request, lets that round push through its own run verbs, then
 runs the land step's own line again, `<id>` still this run's, which lets the tool run on the new head, at most `rounds`
-times in all. A round that pushes nothing leaves `findings` standing, so that too is a `held` row. A `silent` or `spent`
-tool is a `held` row naming the tool (`merge waits on: <reasons>`), never a workaround: the run writes no clean block,
+times in all. A round that pushes nothing leaves `findings` standing, so that too is a `held` row. A thread the tool
+opened holds no row: once the tool reads `clean` on the exact head, `run land` resolves the tool's own threads itself,
+never a person's. A `silent` or `spent` tool is a `held` row naming the tool (`merge waits on: <reasons>`), never a workaround: the run writes no clean block,
 adds no reaction, edits no comment of the tool's, posts no request of its own and changes no setting.
 
 ## Commits after the last checkpoint
