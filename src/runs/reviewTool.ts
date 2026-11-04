@@ -151,17 +151,23 @@ export function parseStateBlock(body: string, marker: string, section: string): 
   return read === null || "why" in read ? null : read;
 }
 
+/**
+ * The tool keeps one state comment per pull request, so two trusted comments carrying the marker cannot both be it, and
+ * neither is read, whichever commit each names. A reply echoing a block would otherwise stand in for a run that never
+ * happened. Text naming the marker counts too: at worst that holds a merge for a person.
+ */
 function stateCommentReading(facts: ReviewToolFacts, tool: ReviewToolConfig): Reading {
   const { stateMarker: marker, stateSection: section } = tool;
   if (marker === undefined || section === undefined) return "none";
-  const reads = facts.comments
-    .filter((comment) => comment.userType === "Bot" && comment.userLogin === tool.login)
-    .flatMap((comment): (StateBlock | Unusable)[] => {
-      const read = readBlock(comment.body, marker, section);
-      if (read === null) return [];
-      const trusted = comment.editor === null || comment.editor === tool.login;
-      return [trusted ? read : { why: `its comment was last edited by ${shown(String(comment.editor))}, not by the tool` }];
-    });
+  const fromTool = facts.comments.filter((comment) => comment.userType === "Bot" && comment.userLogin === tool.login);
+  const trusted = (comment: ReviewToolFacts["comments"][number]): boolean => comment.editor === null || comment.editor === tool.login;
+  const carrying = fromTool.filter((comment) => trusted(comment) && comment.body.includes(marker)).length;
+  if (carrying > 1) return { why: `${carrying} of its comments carry the marker, and it keeps one state comment` };
+  const reads = fromTool.flatMap((comment): (StateBlock | Unusable)[] => {
+    const read = readBlock(comment.body, marker, section);
+    if (read === null) return [];
+    return [trusted(comment) ? read : { why: `its comment was last edited by ${shown(String(comment.editor))}, not by the tool` }];
+  });
   const blocks = reads.filter((read): read is StateBlock => !("why" in read)).filter((block) => block.commitSha === facts.head);
   const completed = blocks.filter((block) => block.status === "completed");
   if (completed.some((block) => block.hasFindings || block.hasUnresolved)) return "findings";

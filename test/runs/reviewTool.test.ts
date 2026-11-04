@@ -220,10 +220,17 @@ describe("reviewToolVerdict, state comment", () => {
     expect(state(facts(CLEAN_HEAD, rerun))).toBe("clean");
   });
 
-  it("holds findings when one of two blocks on the head reports them, whichever came first", () => {
+  /*
+   * TEST CHANGE, justified (review/18's follow-up sign-off, REQ-FLOW-154): this case read two blocks on the head as `findings`.
+   * The tool keeps one state comment per pull request, so two comments carrying the marker hold on their own named reason,
+   * and neither is read. The merge still holds, whichever came first.
+   */
+  it("holds two blocks on the head, one reporting findings, on the two comments and not on either's word", () => {
     const found = fromTool(block(CLEAN_HEAD, "completed", true, false));
-    expect(state(facts(CLEAN_HEAD, [request(CLEAN_HEAD), fromTool(CLEAN_BODY), found]))).toBe("findings");
-    expect(state(facts(CLEAN_HEAD, [request(CLEAN_HEAD), found, fromTool(CLEAN_BODY)]))).toBe("findings");
+    for (const comments of [[fromTool(CLEAN_BODY), found], [found, fromTool(CLEAN_BODY)]]) {
+      const verdict = reviewToolVerdict(facts(CLEAN_HEAD, [request(CLEAN_HEAD), ...comments]), TOOL);
+      expect(verdict).toMatchObject({ state: "waiting", reason: expect.stringContaining("2 of its comments") });
+    }
   });
 
   it("reads a clean block beside a running one on the head as waiting", () => {
@@ -273,11 +280,6 @@ describe("reviewToolVerdict, state comment", () => {
     expect(state(facts(CLEAN_HEAD, [request(CLEAN_HEAD), otherBot]))).toBe("waiting");
   });
 
-  it("reads a clean state comment as clean beside another bot comment holding the marker twice", () => {
-    const echo = fromTool(`${block(CLEAN_HEAD, "completed", true, true)}\n${block(CLEAN_HEAD, "completed", true, true)}`);
-    expect(state(facts(CLEAN_HEAD, [request(CLEAN_HEAD), fromTool(CLEAN_BODY), echo]))).toBe("clean");
-  });
-
   it("reads a malformed block as waiting, then silent", () => {
     const comments = [request(CLEAN_HEAD), fromTool(`<!-- codex-review-state:v1 {"code_review": -->`)];
     expect(state(facts(CLEAN_HEAD, comments))).toBe("waiting");
@@ -317,6 +319,55 @@ describe("reviewToolVerdict, state comment", () => {
     expect(reviewToolVerdict(input, noMarker)).toMatchObject({ state: "waiting", reason: expect.stringContaining("stateMarker") });
     expect(state(input, noSection)).toBe("waiting");
     expect(state({ ...input, now: REQUESTED_MS + 41 * MINUTE }, noMarker)).toBe("silent");
+  });
+});
+
+describe("reviewToolVerdict, more than one comment carrying the marker", () => {
+  const echoed = (head: string) => `Here is what you sent:\n${block(head, "completed", false, false)}`;
+
+  /*
+   * TEST CHANGE, justified (review/18's follow-up sign-off, REQ-FLOW-154): a case in round 1 read a clean state comment as clean
+   * beside a bot comment holding the marker twice. That second comment now carries the marker like any other, so the pair holds.
+   */
+  it.each([
+    ["a reply naming the head beside a state comment on an older sha", () => [fromTool(block(OTHER_HEAD, "completed", false, false)), fromTool(echoed(CLEAN_HEAD))]],
+    ["the same pair the other way round", () => [fromTool(echoed(CLEAN_HEAD)), fromTool(block(OTHER_HEAD, "completed", false, false))]],
+    ["two clean blocks on the head", () => [fromTool(CLEAN_BODY), fromTool(echoed(CLEAN_HEAD))]],
+    ["two blocks on other commits", () => [fromTool(block(OTHER_HEAD, "completed", false, false)), fromTool(block(FINDINGS_HEAD, "completed", false, false))]],
+    ["a clean block beside a reply naming the marker in plain text", () => [fromTool(CLEAN_BODY), fromTool("That is codex-review-state:v1, the state block.")]],
+    ["a clean block beside a comment holding the marker twice", () => [fromTool(CLEAN_BODY), fromTool(`${echoed(CLEAN_HEAD)}\n${echoed(CLEAN_HEAD)}`)]],
+    ["a clean block beside one that does not parse", () => [fromTool(CLEAN_BODY), fromTool(`<!-- codex-review-state:v1 {"code_review": -->`)]],
+    ["a clean block beside one never edited", () => [fromTool(CLEAN_BODY), { ...fromTool(echoed(CLEAN_HEAD)), editor: null }]],
+  ])("does not pass %s, and names the count", (_name, tooMany) => {
+    const comments = [request(CLEAN_HEAD), ...tooMany()];
+    expect(state(facts(CLEAN_HEAD, comments))).toBe("waiting");
+    const verdict = reviewToolVerdict(facts(CLEAN_HEAD, comments, { now: WAIT_ENDED }), TOOL);
+    expect(verdict.state).toBe("silent");
+    expect(verdict.reason).toContain("2 of its comments");
+    expect(verdict.reason).not.toContain("gave no result");
+  });
+
+  it("names it when the rounds are spent too", () => {
+    const comments = [request(OTHER_HEAD), request(CLEAN_HEAD), fromTool(CLEAN_BODY), fromTool(echoed(CLEAN_HEAD))];
+    expect(reviewToolVerdict(facts(CLEAN_HEAD, comments, { now: WAIT_ENDED }), TOOL)).toMatchObject({ state: "spent", reason: expect.stringContaining("2 of its comments") });
+  });
+
+  it.each([
+    ["the tool's reply with no marker", () => fromTool("Here is a reply with nothing in it.")],
+    ["a person's pasted block", () => ({ ...fromTool(echoed(CLEAN_HEAD)), userType: "User", userLogin: "a-person" })],
+    ["another bot's block", () => ({ ...fromTool(echoed(CLEAN_HEAD)), userLogin: "another-tool[bot]" })],
+    ["a comment of the tool's last edited by someone else", () => ({ ...fromTool(echoed(CLEAN_HEAD)), editor: "a-person" })],
+    ["a block of another version", () => fromTool(CLEAN_BODY.replace("review-state:v1", "review-state:v2"))],
+  ])("still reads one state comment as clean beside %s, which carries no trusted marker", (_name, other) => {
+    expect(state(facts(CLEAN_HEAD, [request(CLEAN_HEAD), fromTool(CLEAN_BODY), other()]))).toBe("clean");
+  });
+
+  it("applies to the state comment only: a review or a reaction reads as before", () => {
+    const comments = [fromTool(CLEAN_BODY), fromTool(echoed(CLEAN_HEAD))];
+    const reviews = [{ userLogin: TOOL.login, commitId: CLEAN_HEAD, state: "APPROVED" }];
+    expect(state(facts(CLEAN_HEAD, comments, { reviews }), { ...TOOL, clean: "review-state" })).toBe("clean");
+    const reactions = [{ userLogin: TOOL.login, content: "+1" }];
+    expect(state(facts(CLEAN_HEAD, comments, { reactions }), { ...TOOL, clean: "reaction" })).toBe("clean");
   });
 });
 
