@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.17.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-10-27T12:13:17.942Z",
+  "updatedAt": "2026-11-04T22:31:17.334Z",
   "tools": [
     "claude"
   ],
@@ -141,7 +141,7 @@
       "adapter": "claude",
       "artifactId": "cmd-board",
       "artifactType": "command",
-      "contentHash": "12d09613b69b6ec2ebd8c86f7b56f6035e990d82019abc441bf6324fe422cae2",
+      "contentHash": "53e449352253bbe87008b9cb05de9ee1373d4e81deadeebc011c95a94c4754a1",
       "path": ".claude/commands/st-board.md"
     },
     {
@@ -162,7 +162,7 @@
       "adapter": "claude",
       "artifactId": "cmd-pr-resolve",
       "artifactType": "command",
-      "contentHash": "7b1cd9ed8408c69a31bb199ad27bd90bbdfdb449e57b0c855db3064d52e0c5d4",
+      "contentHash": "41636f0cb1c52755626de6517982531d400f2adb0a2ca47b402b552a0d0a7dcf",
       "path": ".claude/commands/st-pr-resolve.md"
     },
     {
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "e3356a6c51a650aa4451766b64c639e8fa7befeaf4fa2b3c40276094d9cac034",
+      "contentHash": "50698df3a748677847075c64a4fa7c19e04a04075936d65b7658d5be2d2ba92d",
       "path": ".claude/commands/st-work.md"
     },
     {
@@ -455,7 +455,7 @@
       "adapter": "claude",
       "artifactId": "st-eval-run",
       "artifactType": "skill",
-      "contentHash": "4921f02e0d6d9eac2d3e3aad879df38d0b2ad9004427e4314cfbb6c6e7507f24",
+      "contentHash": "de4e0daa55b8c13819015302760d61cf912f0827c9055405b49e58781626ee5f",
       "path": ".claude/skills/st-eval-run/SKILL.md"
     },
     {
@@ -532,7 +532,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "febba2b0217966d1d42e056dd3c11be9569f69edc63b4be265a5c309901a798b",
+      "contentHash": "6c0a0a78da3732121cea7636ae7fcb496ed05a31f9ac31acc02b385c4f88a15d",
       "path": ".claude/skills/st-unattended/SKILL.md"
     },
     {
@@ -553,7 +553,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "4b521fac8b9491f4a7459145bd243d56c00f1ddb0c2476a03e9ae98bc35d1bf2",
+      "contentHash": "a527e77353b26a15cf16d20a7a6b9f1dd60aee61e86cbfc92df33dc1cf252378",
       "path": ".claude/skills/st-unattended/references/cloud.md"
     },
     {
