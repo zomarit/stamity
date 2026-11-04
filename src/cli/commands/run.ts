@@ -216,7 +216,7 @@ function parseWait(value: string): number {
 const ORIGIN_PIN = "origin.json";
 
 /** The run folder's files a checkpoint stages where they exist. */
-const RUN_FILES: readonly string[] = ["record.md", "ledger.jsonl", "plan.md", "morning.md", ORIGIN_PIN];
+const RUN_FILES: readonly string[] = ["record.md", "ledger.jsonl", "plan.md", "morning.md", "contract.yml", ORIGIN_PIN];
 
 /** The most of an origin pin read; a pin is one short JSON object. */
 const ORIGIN_PIN_MAX_BYTES = 4096;
