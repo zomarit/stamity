@@ -46,7 +46,7 @@ import {
   type RequiredCheck,
   type ThreadRead,
 } from "../../runs/landEvidence.ts";
-import { screenOutbound } from "../../runs/morning.ts";
+import { MORNING_EMPTY, MORNING_FILE, MORNING_REFUSED, screenOutbound } from "../../runs/morning.ts";
 import { PR_RECORD_FILE, prRecordRefusal, resolveRepo, runMarker } from "../../runs/pullRequest.ts";
 import { parseStateBlock, requestMarker, reviewToolVerdict, UNREAD_EDITOR, withoutRequestMarkers, type ReviewToolFacts, type ReviewToolVerdict } from "../../runs/reviewTool.ts";
 import { gitProgramFor } from "../../shared/programPath.ts";
@@ -107,7 +107,18 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * saying what was checked; its own state is what the next call reads. `--fast-forward` pushes `<sha>` to the default
  * branch with no force, through the shell guard's own table first, where no rule requires a pull request.
  *
- * Exit 0 `landed` or `already-landed`; 1 `asks` or `refused` (the JSON's `outcome` is how a flow branches); 2 usage.
+ * **Job mode** (`--job --pr <n>`, REQ-FLOW-157): the land workflow's own call, on a fresh checkout of the head, which holds
+ * nothing a session wrote under the git directory. It adds no trust: the evidence above is re-proved, and each of the three
+ * reads that lived there has a stand-in the head or GitHub holds. The run comes from the marker ending the body, a pull request
+ * with none being no run's; the number and the run's login from the record's `PR:` and `Login:` lines at the head; origin's tip
+ * from REST. The login stands where `viewer` does above, in the author check, the thread rule and whose request markers count,
+ * since `gh` is the job's token there and a person's thread the run closed must stay unresolved whichever account reads it. The
+ * record at the head must read `Status: closed` with no `(blocked:`, and neither it nor the morning list may hold a `## Refused`
+ * row, the rule step 4 of the unattended ending states. The git surface is not read, since no pre-flight ran here. The job writes
+ * no `land:` line, the body's evidence line standing, and while evidence is pending or a land is refused it writes nothing.
+ *
+ * Exit 0 `landed` or `already-landed`, and in job mode `pending` and `not-a-run`; 1 `asks` or `refused` (the JSON's `outcome` is
+ * how a flow branches); 2 usage.
  */
 
 /** `--wait` polls every this many milliseconds. */
@@ -147,7 +158,8 @@ interface TipRead {
 }
 /** What the verb's JSON carries. */
 interface LandResult {
-  outcome: "landed" | "already-landed" | "asks" | "refused" | "would-land";
+  /** `pending`: job mode only, evidence still to come, so the job did nothing. */
+  outcome: "landed" | "already-landed" | "asks" | "refused" | "would-land" | "pending";
   pr: { number: number; url: string; head: string } | null;
   evidence: {
     checks: { name: string; state: "green" | "pending" | "failing" | "missing" }[];
@@ -215,8 +227,103 @@ function tempRoots(env: NodeJS.ProcessEnv): string[] {
   return [tmpdir(), join(homedir(), "AppData", "Local", "Temp"), ...named.filter((root): root is string => typeof root === "string" && root !== "")];
 }
 
+/** The run's git calls: `git`, whose failure to start is the verb's failure, and `gitLine`, one line of output or `null`. */
+function landGit(cwd: string, unattended: boolean): { git: (args: readonly string[]) => Promise<GitWriteResult>; gitLine: (args: readonly string[]) => Promise<string | null> } {
+  const git = async (args: readonly string[]): Promise<GitWriteResult> => {
+    try {
+      return await gitWrite(cwd, args, unattended ? { unattended: true } : {});
+    } catch (cause) {
+      throw new CliFailure({
+        code: "FAILURE",
+        message: `run land could not run git ${args[0] ?? ""}`.trimEnd(),
+        why: cause instanceof Error ? sanitizeLabel(cause.message) : "git did not start or did not finish",
+        next: "put git on PATH, then run it again",
+      });
+    }
+  };
+  const gitLine = async (args: readonly string[]): Promise<string | null> => {
+    const read = await git(args);
+    return read.code === 0 ? read.stdout.replace(/\r?\n$/, "") : null;
+  };
+  return { git, gitLine };
+}
+
+/** (1) gh, before any of its answers is trusted: outside the work tree and the temp folders. What every later call starts. */
+function trustedGh(cwd: string, env: NodeJS.ProcessEnv, top: string, lines: string[]): GhApiOptions {
+  const gh = ghProgramPath({ cwd, env });
+  if (gh === null) throw new Refused("gh not found on PATH");
+  if (!isAbsolute(gh)) throw new Refused("gh resolves to a PATH entry that is not an absolute path");
+  // review/91: the PATH entry (its folder's links resolved) and the program it finally names are each checked; a
+  // version manager's shim is a link whose target picks the tool by the name it was started under. build/18: each
+  // place and each root read as one real, normalised form (Windows' short and long names, either separator, any
+  // letter case), compared by a separator boundary; a place that does not resolve counts as inside.
+  const placeReads: PlaceReads = { platform: process.platform, realpath: (path) => realpathSync.native(path) };
+  const ghPlaces = [entryPlaceOf(gh, placeReads), placeOf(gh, placeReads)];
+  const where = (roots: readonly string[]): boolean => ghPlaces.some((place) => withinAny(place, roots, placeReads));
+  if (where([top])) throw new Refused("gh resolves to a program inside the work tree, whose answers the run could write");
+  if (where(tempRoots(env))) throw new Refused("gh resolves to a program inside a temp folder, whose answers the run could write");
+  // review/75, review/91: every later call starts this same absolute PATH entry, never one resolved again from PATH,
+  // and never its link target, so a shim still sees its own name. review/95, review/96: from the filesystem's root
+  // (every call names its host and its full API path, so gh needs no repository folder), which has no parent a
+  // version manager's shim reads a version file from and which no one but an administrator writes, and without the
+  // version managers' version-choosing variables, so the run cannot steer a shim to another program.
+  const shimNeutral = withoutVersionChoice(env);
+  if (shimNeutral.dropped.length > 0) lines.push(`gh environment: dropped ${shimNeutral.dropped.join(", ")}`);
+  return { cwd: filesystemRoot(), env: shimNeutral.env, program: gh };
+}
+
+/** (2) Origin's repository, every push URL naming the same one. */
+async function originRepoOf(gitLine: (args: readonly string[]) => Promise<string | null>, env: NodeJS.ProcessEnv): Promise<{ host: string; owner: string; repo: string }> {
+  const fetchUrl = await gitLine(["remote", "get-url", "origin"]);
+  const repo = fetchUrl === null ? null : resolveRepo(env, fetchUrl);
+  if (repo === null) throw new Refused("origin names no GitHub repository gh reaches");
+  const pushUrls = ((await gitLine(["remote", "get-url", "--push", "--all", "origin"])) ?? "").split(/\r?\n/).filter((url) => url.trim() !== "");
+  for (const url of pushUrls) {
+    const target = resolveRepo(env, url.trim());
+    if (target === null || target.host !== repo.host || target.owner.toLowerCase() !== repo.owner.toLowerCase() || target.repo.toLowerCase() !== repo.repo.toLowerCase()) {
+      throw new Refused("a push URL of origin names another repository than its fetch URL");
+    }
+  }
+  return repo;
+}
+
+/** The run a pull request's body ends by naming, as job mode reads it (REQ-FLOW-157). */
+const BODY_MARKER = /<!-- stamity:run (\S+) -->$/;
+
+/**
+ * Job mode's first read (REQ-FLOW-157): the run `number`'s body names, or the result that ends the call. The workflow starts
+ * on every pull request a watched workflow passes on, so one no run opened is no failure: it exits 0 as `not-a-run`.
+ */
+async function jobTarget(ctx: CliContext, number: number): Promise<{ run: string; number: number } | { stop: CommandResult }> {
+  const { cwd, env: given } = ctx.app.runtime;
+  const env: NodeJS.ProcessEnv = { ...given };
+  const stop = (outcome: "refused" | "not-a-run", notDone: string[]): { stop: CommandResult } => {
+    const reasons = notDone.map((entry) => sanitizeLabel(entry));
+    ctx.io.out(`${[`pr: #${number}`, `outcome: ${outcome}`, ...reasons.map((entry) => `  - ${entry}`)].join("\n")}\n`);
+    return { stop: { exitCode: outcome === "refused" ? 1 : 0, json: { subcommand: "land", run: null, outcome, pr: { number }, notDone: reasons } } };
+  };
+  try {
+    const { gitLine } = landGit(cwd, true);
+    const top = await gitLine(["rev-parse", "--show-toplevel"]);
+    if (top === null) throw new Refused("the work tree's top could not be read");
+    const ghOpts = trustedGh(cwd, env, top, []);
+    const repo = await originRepoOf(gitLine, env);
+    const reply = await answered(ghApi({ method: "GET", path: `repos/${repo.owner}/${repo.repo}/pulls/${number}`, hostname: repo.host }, ghOpts), "a read");
+    const pr = reply.status === 200 ? parsePr(reply.json) : null;
+    if (pr === null) throw new Refused(`the read of #${number} answered HTTP ${reply.status}`);
+    const run = BODY_MARKER.exec(pr.body.trimEnd())?.[1] ?? "";
+    if (!ctx.engine.runs.layout.isRunId(run)) return stop("not-a-run", [`#${number}'s body names no run, so the job leaves it as it is`]);
+    return { run, number };
+  } catch (error) {
+    if (!(error instanceof Refused)) throw error;
+    return stop("refused", error.reasons);
+  }
+}
+
 export async function runLand(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {
-  const run = String(opts["run"]);
+  const job = opts["job"] === true ? await jobTarget(ctx, Number(opts["pr"])) : null;
+  if (job !== null && "stop" in job) return job.stop;
+  const run = job?.run ?? String(opts["run"]);
   const { layout, resumeCard } = ctx.engine.runs;
   if (!layout.isRunId(run)) {
     throw new CliFailure({
@@ -240,7 +347,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     });
   }
   const head = resumeCard.readRecordHead(record.text);
-  const unattended = resumeCard.readsUnattended(head.mode, env["STAMITY_UNATTENDED"]);
+  const unattended = job !== null || resumeCard.readsUnattended(head.mode, env["STAMITY_UNATTENDED"]);
   const fastForward = opts["fastForward"] === true;
   /**
    * review/103, review/110: the person's answer to an `asks` outcome, given on the line the guard asks them about
@@ -259,7 +366,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     evidence: { checks: [], threads: { unresolved: null }, ledger: { open: [] }, held: [], mergeableState: null, defaultBranch: { failing: [], unread: null, notRed: [] }, review: null, autoShip: null },
     notDone: [],
   };
-  const lines: string[] = [`run: ${run} (${unattended ? "unattended" : "attended"})`];
+  const lines: string[] = [`run: ${run} (${job !== null ? "job" : unattended ? "unattended" : "attended"})`];
   const finish = (): CommandResult => {
     result.notDone = result.notDone.map((entry) => sanitizeLabel(entry));
     if (result.pr !== null) lines.push(`pr: #${result.pr.number} ${result.pr.url} at ${result.pr.head}`);
@@ -276,29 +383,14 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     lines.push(`outcome: ${result.outcome}`);
     const notDone = result.notDone;
     ctx.io.out(`${[...lines, ...(notDone.length === 0 ? [] : ["Not done:", ...notDone.map((entry) => `  - ${entry}`)])].join("\n")}\n`);
-    const landed = result.outcome === "landed" || result.outcome === "already-landed" || result.outcome === "would-land";
+    const landed = result.outcome === "landed" || result.outcome === "already-landed" || result.outcome === "would-land" || result.outcome === "pending";
     return { exitCode: landed ? 0 : 1, json: { subcommand: "land", run, ...result, ...(ctx.dryRun ? { dryRun: true } : {}) } };
   };
 
-  const git = async (args: readonly string[]): Promise<GitWriteResult> => {
-    try {
-      return await gitWrite(cwd, args, unattended ? { unattended: true } : {});
-    } catch (cause) {
-      throw new CliFailure({
-        code: "FAILURE",
-        message: `run land could not run git ${args[0] ?? ""}`.trimEnd(),
-        why: cause instanceof Error ? sanitizeLabel(cause.message) : "git did not start or did not finish",
-        next: "put git on PATH, then run it again",
-      });
-    }
-  };
-  const gitLine = async (args: readonly string[]): Promise<string | null> => {
-    const read = await git(args);
-    return read.code === 0 ? read.stdout.replace(/\r?\n$/, "") : null;
-  };
-  /** review/97 (REQ-FLOW-131): unattended, git's surface must be the one the pre-flight recorded, a passing one. */
+  const { git, gitLine } = landGit(cwd, unattended);
+  /** review/97 (REQ-FLOW-131): unattended, git's surface must be the one the pre-flight recorded, a passing one; no pre-flight ran for a job. */
   const surfaceMoved = async (): Promise<string | null> => {
-    if (!unattended) return null;
+    if (!unattended || job !== null) return null;
     const dir = await gitLine(["rev-parse", "--git-dir"]);
     const place = dir === null || dir === "" ? { unreadable: "git rev-parse --git-dir answered no folder" } : { path: join(resolve(cwd, dir), ...SURFACE_RECORD_FILE.split("/")) };
     const readNow = () => {
@@ -315,44 +407,15 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
   try {
     // review/103: --approved is the person's answer; an unattended run has no person to give it, so it refuses first.
     if (approved && unattended) throw new Refused("--approved is the person's answer to an asks outcome, and this run is unattended, so no person gave it");
-    // (1) gh, before any of its answers is trusted: outside the work tree and the temp folders.
     const top = await gitLine(["rev-parse", "--show-toplevel"]);
     if (top === null) throw new Refused("the work tree's top could not be read");
     const prefix = (await gitLine(["rev-parse", "--show-prefix"])) ?? "";
-    const gh = ghProgramPath({ cwd, env });
-    if (gh === null) throw new Refused("gh not found on PATH");
-    if (!isAbsolute(gh)) throw new Refused("gh resolves to a PATH entry that is not an absolute path");
-    // review/91: the PATH entry (its folder's links resolved) and the program it finally names are each checked; a
-    // version manager's shim is a link whose target picks the tool by the name it was started under. build/18: each
-    // place and each root read as one real, normalised form (Windows' short and long names, either separator, any
-    // letter case), compared by a separator boundary; a place that does not resolve counts as inside.
-    const placeReads: PlaceReads = { platform: process.platform, realpath: (path) => realpathSync.native(path) };
-    const ghPlaces = [entryPlaceOf(gh, placeReads), placeOf(gh, placeReads)];
-    const where = (roots: readonly string[]): boolean => ghPlaces.some((place) => withinAny(place, roots, placeReads));
-    if (where([top])) throw new Refused("gh resolves to a program inside the work tree, whose answers the run could write");
-    if (where(tempRoots(env))) throw new Refused("gh resolves to a program inside a temp folder, whose answers the run could write");
-    // review/75, review/91: every later call starts this same absolute PATH entry, never one resolved again from PATH,
-    // and never its link target, so a shim still sees its own name. review/95, review/96: from the filesystem's root
-    // (every call names its host and its full API path, so gh needs no repository folder), which has no parent a
-    // version manager's shim reads a version file from and which no one but an administrator writes, and without the
-    // version managers' version-choosing variables, so the run cannot steer a shim to another program.
-    const shimNeutral = withoutVersionChoice(env);
-    if (shimNeutral.dropped.length > 0) lines.push(`gh environment: dropped ${shimNeutral.dropped.join(", ")}`);
-    const ghOpts = { cwd: filesystemRoot(), env: shimNeutral.env, program: gh };
+    const ghOpts = trustedGh(cwd, env, top, lines);
     const moved = await surfaceMoved();
     if (moved !== null) throw new Refused(moved);
 
     // (2) Origin's repository, the default branch, and the run's branch.
-    const fetchUrl = await gitLine(["remote", "get-url", "origin"]);
-    const repo = fetchUrl === null ? null : resolveRepo(env, fetchUrl);
-    if (repo === null) throw new Refused("origin names no GitHub repository gh reaches");
-    const pushUrls = ((await gitLine(["remote", "get-url", "--push", "--all", "origin"])) ?? "").split(/\r?\n/).filter((url) => url.trim() !== "");
-    for (const url of pushUrls) {
-      const target = resolveRepo(env, url.trim());
-      if (target === null || target.host !== repo.host || target.owner.toLowerCase() !== repo.owner.toLowerCase() || target.repo.toLowerCase() !== repo.repo.toLowerCase()) {
-        throw new Refused("a push URL of origin names another repository than its fetch URL");
-      }
-    }
+    const repo = await originRepoOf(gitLine, env);
     const repoPath = `repos/${repo.owner}/${repo.repo}`;
     const call = (path: string): Promise<GhResponse> => answered(ghApi({ method: "GET", path, hostname: repo.host }, ghOpts), "a read");
     const json = async (path: string, what: string): Promise<unknown> => {
@@ -372,29 +435,43 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     // review/110: the approval holds for the commit the person approved, and no other.
     const headMoved = (now: string): Refused => new Refused(`the head moved since the approval: ${approvedSha ?? ""} → ${now}`);
     if (approvedSha !== null && sha !== approvedSha) throw headMoved(sha);
-    const remote = await git(["ls-remote", "origin", `refs/heads/${runBranch}`]);
-    if (remote.code !== 0) throw new Refused(`git ls-remote origin answered ${remote.code}`);
-    const originTip = /^([0-9a-f]{40,64})\t/.exec(remote.stdout)?.[1] ?? null;
+    // REQ-FLOW-157: a job has no pre-flight, no session and no credential in its clone, so it reads the run's end from the
+    // head, and origin's tip from REST: `git ls-remote` would need the token the checkout was told not to keep.
+    const ended = job === null ? null : await endedAtHead({ sha, recordRel, morningRel: `${runDir}/${MORNING_FILE}`, number: job.number }, git, (text) => resumeCard.readRecordHead(text).status);
+    const readOriginTip = async (): Promise<string | null> => {
+      if (job !== null) return parseBranch(await json(`${repoPath}/branches/${runBranch}`, "the run's branch read"))?.tip ?? null;
+      const remote = await git(["ls-remote", "origin", `refs/heads/${runBranch}`]);
+      if (remote.code !== 0) throw new Refused(`git ls-remote origin answered ${remote.code}`);
+      return /^([0-9a-f]{40,64})\t/.exec(remote.stdout)?.[1] ?? null;
+    };
+    const originTip = await readOriginTip();
 
     // (3) The run's own pull request: from the run's branch, into the default branch, its body ending with the marker,
-    // and the number the run verb recorded when it opened the draft (review/73).
+    // and the number the run verb recorded when it opened the draft (review/73). A job has its number from `--pr`, held
+    // against the head's `PR:` line above; `ownPr` reads the rest of this below.
     const marker = runMarker(run);
-    const listed = await json(`${repoPath}/pulls?head=${encodeQuery(`${repo.owner}:${runBranch}`)}&base=${encodeQuery(defaultBranch)}&state=all&per_page=100`, "the pull request lookup");
-    const numbers = (Array.isArray(listed) ? listed : [])
-      .map((entry) => parsePrSummary(entry))
-      .filter((entry) => entry !== null && entry.headRef === runBranch && entry.body.trimEnd().endsWith(marker))
-      .map((entry) => (entry as { number: number }).number);
-    if (numbers.length === 0) throw new Refused(`no pull request from ${runBranch} into ${defaultBranch} ends with the run's marker`);
-    const number = Math.max(...numbers);
-    const gitDir = await gitLine(["rev-parse", "--git-dir"]);
-    const recordPlace = gitDir === null || gitDir === "" ? { unreadable: "git rev-parse --git-dir answered no folder" } : { path: join(resolve(cwd, gitDir), ...PR_RECORD_FILE.split("/")) };
-    const unrecorded = prRecordRefusal(recordPlace, RECORD_READS, { run, host: repo.host, owner: repo.owner, repo: repo.repo, number });
-    if (unrecorded !== null) throw new Refused(unrecorded);
+    const recordedNumber = async (): Promise<number> => {
+      const listed = await json(`${repoPath}/pulls?head=${encodeQuery(`${repo.owner}:${runBranch}`)}&base=${encodeQuery(defaultBranch)}&state=all&per_page=100`, "the pull request lookup");
+      const numbers = (Array.isArray(listed) ? listed : [])
+        .map((entry) => parsePrSummary(entry))
+        .filter((entry) => entry !== null && entry.headRef === runBranch && entry.body.trimEnd().endsWith(marker))
+        .map((entry) => (entry as { number: number }).number);
+      if (numbers.length === 0) throw new Refused(`no pull request from ${runBranch} into ${defaultBranch} ends with the run's marker`);
+      const newest = Math.max(...numbers);
+      const gitDir = await gitLine(["rev-parse", "--git-dir"]);
+      const recordPlace = gitDir === null || gitDir === "" ? { unreadable: "git rev-parse --git-dir answered no folder" } : { path: join(resolve(cwd, gitDir), ...PR_RECORD_FILE.split("/")) };
+      const unrecorded = prRecordRefusal(recordPlace, RECORD_READS, { run, host: repo.host, owner: repo.owner, repo: repo.repo, number: newest });
+      if (unrecorded !== null) throw new Refused(unrecorded);
+      return newest;
+    };
+    const number = job?.number ?? (await recordedNumber());
     // review/73 and the login source: the login gh is authenticated as comes from the thread query's viewer, one source
-    // for the author check and the thread rule; an app installation token answers it where it refuses `GET user`.
-    const firstThreads = await reviewThreads(repo.host, repo.owner, repo.repo, number, ghOpts);
+    // for the author check and the thread rule; an app installation token answers it where it refuses `GET user`. In a job
+    // that login is the job's token, so `viewer`, the run's own login, is the head's `Login:` and `actor` alone is gh's.
+    const firstThreads = await reviewThreads(repo.host, repo.owner, repo.repo, number, ghOpts, ended?.login);
     if (firstThreads === null) throw new Refused("the review threads could not be read, nor with them the login gh is authenticated as");
-    const viewer = firstThreads.viewer;
+    const actor = firstThreads.viewer;
+    const viewer = ended?.login ?? actor;
     // review/94: the pull request's author from the same query, in the spelling viewer has, never REST's user.login.
     const prAuthor = firstThreads.author;
     const readPr = async (): Promise<LandPr> => {
@@ -402,15 +479,17 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       if (pr === null) throw new Refused(`GitHub's answer for #${number} names no pull request this verb reads`);
       return { ...pr, author: prAuthor };
     };
-    let pr = await readPr();
+    const computing = (now: LandPr): boolean => now.mergeableState === null || now.mergeableState === "unknown";
+    // A job gets one start per event, so an answer GitHub has not computed yet is waited out here, not left to a next call.
+    let pr = job === null ? await readPr() : await pollWhilePending(readPr, computing, Math.min(LAND_CLOCK.now() + READY_MERGEABLE_MS, budgetEnd), READY_POLL_MS, LAND_CLOCK);
     result.pr = { number: pr.number, url: pr.url, head: pr.headSha };
     result.evidence.mergeableState = pr.mergeableState;
     const own = { repo: `${repo.owner}/${repo.repo}`, runBranch, head: sha, originTip, marker, defaultBranch, viewer };
     // build/6: from here the pull request is known; on asks or refused, why its merge waits goes into its own body,
-    // while it still reads as the run's own, open and unmerged. A dry run writes nothing.
+    // while it still reads as the run's own, open and unmerged. A dry run writes nothing, and a job leaves the pull request as it was.
     noteWaits = async (reasons: readonly string[]): Promise<void> => {
       const check = ownPr(pr, own);
-      if (ctx.dryRun || reasons.length === 0 || check.already || check.refusals.length > 0) return;
+      if (job !== null || ctx.dryRun || reasons.length === 0 || check.already || check.refusals.length > 0) return;
       const wanted = waitsLine(reasons.map((reason) => sanitizeLabel(reason)));
       const line = screenOutbound(wanted, "pr-body").ok ? wanted : `${waitsLine(["reasons not posted, since the outbound screen matched them; read the run's record"])}`;
       try {
@@ -423,6 +502,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
 
     // (4) The setting: the strictest of the default branch's, HEAD's and the work tree's manifest and the baked guard.
     const setting = await readSetting(cwd, prefix, repoPath, defaultBranch, gitLine, call, readGuardLegs);
+    // REQ-FLOW-157: the strictest read keeps `landJob` only where every leg holds it equal, so no head turns the job on for itself.
+    if (job !== null && setting.landJob === undefined) throw new Refused("autonomy.landJob is not on in every leg of the setting, so the job does not land here");
     // Legs that disagree on the review tool go to a person: `setting.reviewTool` is then only the first leg's, and it judges nothing.
     const tool = setting.reviewToolConflict.length === 0 ? setting.reviewTool : undefined;
 
@@ -481,8 +562,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     /** build/29: the open threads only the tool holds, as last read; `run land` alone closes these. */
     let toolOpen = toolOwn(firstThreads.threads);
     const readThreads = async (): Promise<number | null> => {
-      const read = await reviewThreads(repo.host, repo.owner, repo.repo, number, ghOpts);
-      const usable = read !== null && read.viewer.toLowerCase() === viewer.toLowerCase();
+      const read = await reviewThreads(repo.host, repo.owner, repo.repo, number, ghOpts, ended?.login);
+      const usable = read !== null && read.viewer.toLowerCase() === actor.toLowerCase();
       toolOpen = usable ? toolOwn(read.threads) : [];
       return usable ? read.count : null;
     };
@@ -598,10 +679,10 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     /**
      * REQ-FLOW-154: asks the tool on a head whose only stops are waits, so no round goes on a head that cannot land, and
      * only where the run has not asked on it yet. A run the tool started itself gets the marker alone (build/11): the clock
-     * starts and no second run does. A dry run writes nothing, and a request that fails leaves the land waiting.
+     * starts and no second run does. A dry run and a job write nothing, and a request that fails leaves the land waiting.
      */
     const askTool = async (now: LandDecision, beforeReady: boolean): Promise<LandDecision> => {
-      if (tool === undefined || facts === undefined || ctx.dryRun || !pending(now) || review?.state !== "waiting") return now;
+      if (job !== null || tool === undefined || facts === undefined || ctx.dryRun || !pending(now) || review?.state !== "waiting") return now;
       const asked = requestMarker(sha);
       if (facts.comments.some((comment) => comment.body.includes(asked))) return now;
       const body = ranOnHead(facts, tool) ? asked : `${tool.request}\n\n${asked}`;
@@ -627,7 +708,6 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     // --approved an asks outcome goes on to the act as a land does; every refused condition still refuses.
     const proceeds = (now: LandDecision): boolean => now.outcome === "land" || (approved && now.outcome === "asks");
     const draftReady = pr.draft && ready;
-    const computing = (now: LandPr): boolean => now.mergeableState === null || now.mergeableState === "unknown";
     let decision = await waitOut(await askTool(decideLand(inputFor(pr, checks, draftReady)), draftReady), draftReady);
     if (proceeds(decision) && draftReady && !ctx.dryRun) {
       const marked = await answered(ghMarkReady({ hostname: repo.host, id: pr.nodeId }, ghOpts), "the ready mark");
@@ -657,7 +737,12 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     show(checks, pr);
     if (decision.outcome === "already-landed") {
       result.outcome = "already-landed";
-      if (!ctx.dryRun) await noteLanded(ctx, cwd, recordRel, number, sha, fastForward && !pr.merged ? "fast-forwarded" : "merged", result);
+      if (!ctx.dryRun && job === null) await noteLanded(ctx, cwd, recordRel, number, sha, fastForward && !pr.merged ? "fast-forwarded" : "merged", result);
+      return finish();
+    }
+    if (decision.outcome === "refused" && decision.pending && job !== null) {
+      result.outcome = "pending";
+      result.notDone.push(...decision.reasons);
       return finish();
     }
     if (decision.outcome === "refused") {
@@ -770,7 +855,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     }
     result.outcome = "landed";
     const how = fastForward ? "fast-forwarded" : "merged";
-    await noteLanded(ctx, cwd, recordRel, number, sha, approval === null ? how : `${how} (approved by the person for ${approval.sha})`, result);
+    if (job === null) await noteLanded(ctx, cwd, recordRel, number, sha, approval === null ? how : `${how} (approved by the person for ${approval.sha})`, result);
     if (approval !== null) result.approved = approval;
     return finish();
   } catch (error) {
@@ -984,8 +1069,11 @@ async function resolveThreads(ids: readonly string[], hostname: string, opts: Gh
   });
 }
 
-/** The unresolved review threads ({@link unresolvedThreads}) and the login they were read as, every page; `null` where a page does not read. */
-async function reviewThreads(hostname: string, owner: string, repo: string, number: number, opts: GhApiOptions): Promise<{ count: number; viewer: string; author: string | null; threads: ThreadRead[] } | null> {
+/**
+ * The unresolved review threads ({@link unresolvedThreads}) and the login they were read as, every page; `null` where a page
+ * does not read. `runLogin` is whose closing of a person's thread does not count: the run's. Absent, that is gh's own login.
+ */
+async function reviewThreads(hostname: string, owner: string, repo: string, number: number, opts: GhApiOptions, runLogin?: string): Promise<{ count: number; viewer: string; author: string | null; threads: ThreadRead[] } | null> {
   const threads: ThreadRead[] = [];
   let after: string | undefined;
   let viewer = "";
@@ -1003,10 +1091,63 @@ async function reviewThreads(hostname: string, owner: string, repo: string, numb
     viewer = read.viewer;
     author = read.author;
     threads.push(...read.threads);
-    if (read.next === null) return { count: unresolvedThreads(threads, viewer), viewer, author, threads };
+    if (read.next === null) return { count: unresolvedThreads(threads, runLogin ?? viewer), viewer, author, threads };
     after = read.next;
   }
   return null;
+}
+
+/** A regular file's text in the commit `sha`, or why not, `missing` where the commit holds nothing at `path`. */
+async function regularFileAt(sha: string, path: string, git: (args: readonly string[]) => Promise<GitWriteResult>): Promise<{ text: string } | { refused: string; missing: boolean }> {
+  const listed = await git(["ls-tree", "-z", sha, "--", path]);
+  if (listed.code !== 0 || listed.stdout === "") return { refused: `${path} is missing from the commit`, missing: true };
+  if (!/^100(?:644|755) blob /.test(listed.stdout)) return { refused: `${path} is not a regular file in the commit`, missing: false };
+  const shown = await git(["show", `${sha}:./${path}`]);
+  if (shown.code !== 0 || shown.stdout.length > READ_MAX_BYTES) return { refused: `${path} could not be read from the commit`, missing: false };
+  return { text: shown.stdout };
+}
+
+/** Whether `text` holds a row under a `## Refused` heading: any line there, up to the next heading, but the empty section's word. */
+function holdsRefusedRow(text: string): boolean {
+  const lines = text.split(/\r?\n/).map((line) => line.trim());
+  const start = lines.indexOf(`## ${MORNING_REFUSED}`);
+  if (start === -1) return false;
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => line.startsWith("## "));
+  return (end === -1 ? rest : rest.slice(0, end)).some((line) => line !== "" && line.toLowerCase() !== MORNING_EMPTY);
+}
+
+/** The last value `line` captures in `text`, line by line: a later `run end` wrote the line that stands. */
+function lastLine(text: string, line: RegExp): string | null {
+  return text.split(/\r?\n/).flatMap((entry) => line.exec(entry)?.[1] ?? []).at(-1) ?? null;
+}
+
+/**
+ * Job mode's proof that the run ended unblocked, all of it at the head, and the run's login (REQ-FLOW-157): `Status: closed`
+ * with no `(blocked:`, no `## Refused` row in the record or the morning list, and `PR:` naming this pull request. The run wrote
+ * these, so they hold it to its own word and no further: the login still has to be the author GitHub names. Every reason
+ * refuses at once, and none echoes the head's text.
+ */
+async function endedAtHead(
+  at: { sha: string; recordRel: string; morningRel: string; number: number },
+  git: (args: readonly string[]) => Promise<GitWriteResult>,
+  statusOf: (text: string) => string | null,
+): Promise<{ login: string }> {
+  const record = await regularFileAt(at.sha, at.recordRel, git);
+  if ("refused" in record) throw new Refused(record.refused);
+  const morning = await regularFileAt(at.sha, at.morningRel, git);
+  const status = statusOf(record.text) ?? "";
+  const reasons: string[] = [];
+  if (!/^closed\b/i.test(status.trim())) reasons.push(`the record at ${at.sha} does not read Status: closed, so the run has not ended`);
+  if (/\(blocked:/i.test(status)) reasons.push(`the record at ${at.sha} reads (blocked:, so a person decides`);
+  if (holdsRefusedRow(record.text)) reasons.push(`the record at ${at.sha} holds a ## Refused row, so a person decides`);
+  if ("text" in morning && holdsRefusedRow(morning.text)) reasons.push(`the morning list at ${at.sha} holds a ## Refused row, so a person decides`);
+  if ("refused" in morning && !morning.missing) reasons.push(morning.refused);
+  if (lastLine(record.text, /^PR: ([0-9]+)$/) !== String(at.number)) reasons.push(`the record at ${at.sha} does not name #${at.number} on a PR: line`);
+  const login = lastLine(record.text, /^Login: (\S+)$/);
+  if (login === null) reasons.push(`the record at ${at.sha} names no Login:`);
+  if (reasons.length > 0 || login === null) throw new Refused(...reasons);
+  return { login };
 }
 
 /** The ledger's evidence at `sha`, refusing a missing one, one that is no regular file, or a work-tree copy that differs. */
@@ -1016,16 +1157,13 @@ async function ledgerAt(
   ledgerRel: string,
   git: (args: readonly string[]) => Promise<GitWriteResult>,
 ): Promise<{ open: string[] } | { refused: string }> {
-  const listed = await git(["ls-tree", "-z", sha, "--", ledgerRel]);
-  if (listed.code !== 0 || listed.stdout === "") return { refused: `${ledgerRel} is missing from the commit` };
-  if (!/^100(?:644|755) blob /.test(listed.stdout)) return { refused: `${ledgerRel} is not a regular file in the commit` };
-  const shown = await git(["show", `${sha}:./${ledgerRel}`]);
-  if (shown.code !== 0 || shown.stdout.length > READ_MAX_BYTES) return { refused: `${ledgerRel} could not be read from the commit` };
+  const shown = await regularFileAt(sha, ledgerRel, git);
+  if ("refused" in shown) return { refused: shown.refused };
   const local = readCapped(join(cwd, ledgerRel), READ_MAX_BYTES);
-  if (local === null || local.truncated || local.text.replaceAll("\r\n", "\n") !== shown.stdout.replaceAll("\r\n", "\n")) {
+  if (local === null || local.truncated || local.text.replaceAll("\r\n", "\n") !== shown.text.replaceAll("\r\n", "\n")) {
     return { refused: `the work tree's ${ledgerRel} differs from the commit's: checkpoint first` };
   }
-  return ledgerEvidence(shown.stdout);
+  return ledgerEvidence(shown.text);
 }
 
 /**

@@ -2053,6 +2053,32 @@ describe("the guard's reading of the engine's bin under a filled-in folder (a4, 
   });
 });
 
+describe("the guard's reading of the land verb's job mode (REQ-FLOW-157)", () => {
+  const lines = [
+    "stamity run land --job --pr 7 --ready --json",
+    "npx --no stamity run land --job --pr 7",
+    "npx -y @zomarit/stamity@1.17.0 run land --pr 7 --job",
+    'stamity run land "--job" --pr 7',
+    "stamity run land --run 2026-10-23_x --ready --job=1",
+  ];
+
+  // Not an ask: job mode skips what only a session holds, so no agent's line carries it, and no click passes one.
+  it.each(TOOLS)("%s: refuses it attended, for a sub-agent and unattended, and leaves the plain land line alone", async (tool) => {
+    const guard = await placeGuard(tool);
+    const refused = { deny: true, reason: expect.stringContaining("`--job`, which only the land workflow runs") };
+    for (const command of lines) {
+      expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual(refused);
+      const helper = JSON.stringify({ ...JSON.parse(payload(tool, command)), agent_id: "a1" });
+      expect(clientDecision(tool, run(guard, helper), `${tool} helper: ${command}`).deny, `${tool} helper: ${command}`).toBe(true);
+    }
+    expect(decide(tool, guard, "stamity run land --run 2026-10-23_x --ready --json")).toEqual({ deny: false });
+    // A word the shell fills in may spell it: the stand-alone rule's shape refuses that line first.
+    expect(decide(tool, guard, 'stamity run land "$MODE" --pr 7').deny).toBe(true);
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") });
+    for (const command of lines) expect(decide(tool, guard, command), `${tool} unattended: ${command}`).toEqual(refused);
+  });
+});
+
 describe("the guard's reading of the land verb's approved line (a4, review/103)", () => {
   const APPROVED = "npx --no stamity run land --run 2026-10-23_x --approved --json";
   const helper = (tool: Tool, guard: string, command: string): Decision =>

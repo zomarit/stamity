@@ -4699,6 +4699,8 @@ export function unattendedPushVerdict(
     }
     if (words[at] !== "run") return "words between the program and `run <verb>`";
     if (!RUN_VERBS.has(words[at + 1] ?? "")) return "words between `run` and its verb";
+    // Job mode is the land workflow's alone (REQ-FLOW-157): it skips what only a session holds, so no agent's line carries it.
+    if (words.slice(at + 2).some((option) => /^--job(?:=|$)/.test(option))) return "`--job`, which only the land workflow runs";
     // The program, the npx flag, the registry and the package are pinned above, so only the option words can splat.
     if (powershell && ats.some((index) => index > at)) return "an unquoted `@` in a word after `run`, which PowerShell reads as a splat";
     return null;

@@ -4,6 +4,7 @@ import { dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
 import { Argument, InvalidArgumentError, Option, type Command } from "commander";
 import { matchGlob } from "../../change/classify.ts";
 import { fromProjectRoot, heldPaths, PERSON_ONLY_PATHS } from "../../change/personOnlyPaths.ts";
+import { readAutonomy } from "../../config/autonomy.ts";
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
 import { RUN_ENDED_MARKER_FILE } from "../../mcp/env.ts";
 import { checkSurfaceRecord, type RecordFileReads, type RecordUse, type SurfaceCheck } from "../../runs/gitSurface.ts";
@@ -162,6 +163,10 @@ import { runLand } from "./runLand.ts";
  * does not read `--final-round`, which most runs never pass, and a `--refused` end sends nothing. A failure never moves
  * the exit code: it is a `notDone` line, leaves no record line, and the next `end` tries again. No contract says nothing.
  *
+ * **The land job's lines** (REQ-FLOW-157): with `autonomy.landJob` on, an `end` with its own pull request appends `PR: <n>`
+ * and `Login: <login>` to the record and runs itself once more, so they reach the head through every check above. A failure
+ * is a `notDone` line and never moves the exit code: the job then refuses for want of the lines.
+ *
  * **`land`** (REQ-FLOW-132, REQ-FLOW-133) merges the run's own pull request, or fast-forwards the default branch to
  * its head, when the evidence holds, else asks or refuses; its body is `./runLand.ts`, registered here only.
  *
@@ -189,6 +194,7 @@ const OPTION_FLAGS: Readonly<Record<string, string>> = {
   ready: "--ready",
   wait: "--wait",
   approved: "--approved",
+  job: "--job",
   item: "--item",
 };
 
@@ -199,7 +205,7 @@ const SUBCOMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> = {
   // No --pr: the pull request is not optional at the end.
   [END]: ["paths", "title", "refused", "signoff", "finalRound", "dropHeld"],
   // No --paths and no --title: land stages and titles nothing.
-  [LAND]: ["fastForward", "method", "ready", "wait", "approved"],
+  [LAND]: ["fastForward", "method", "ready", "wait", "approved", "job", "pr"],
   [CONTRACT]: ["item"],
 };
 
@@ -211,6 +217,9 @@ function parseApproved(value: string): string {
   if (!/^[0-9a-fA-F]{40}$/.test(value)) throw new InvalidArgumentError("--approved takes the full 40-character commit the person approved.");
   return value.toLowerCase();
 }
+
+/** `--pr` names a pull request only for `land --job`; a bare `--pr` is `checkpoint`'s. */
+const PR_NUMBER = /^[1-9][0-9]*$/;
 
 /** `--wait <minutes>`: a whole number from 0 to {@link LAND_WAIT_MAX}. */
 function parseWait(value: string): number {
@@ -296,7 +305,7 @@ export const runCommand: CommandModule = {
       .addArgument(new Argument("<subcommand>", "which run action to run").choices([START, CHECKPOINT, END, LAND, CONTRACT]))
       .option("--run <run-id>", "the run folder's name under .stamity/runs/", parseRun)
       .option("--paths <path...>", "checkpoint and end: also stage these paths, relative to the project root")
-      .option("--pr", "checkpoint: open or update the run's draft pull request after the push (with --title)")
+      .option("--pr [number]", "checkpoint: open or update the run's draft pull request after the push (with --title); land --job: the pull request to land")
       .option("--title <title>", "checkpoint and end: the draft pull request's title (end needs it)")
       .option("--signoff", "checkpoint and end: add the Signed-off-by line to the commit")
       .option("--refused", "end: title the draft pull request Refused: <title>, for a run that refused to start")
@@ -307,17 +316,25 @@ export const runCommand: CommandModule = {
       .option("--ready", "land: mark the run's draft ready for review once the evidence holds, then land it")
       .option("--wait <minutes>", `land: wait up to this many minutes (at most ${LAND_WAIT_MAX}) for pending check runs`, parseWait)
       .option("--approved <sha>", "land: the head commit the person approved over an asks outcome; land it if the head is still that commit and nothing refuses (never in an unattended run)", parseApproved)
+      .option("--job", "land: run as the land workflow's job, which alone may use it: the run comes from the pull request's marker, and pending evidence exits 0")
       .addOption(new Option("--item <owner/repo#n>", "contract: the GitHub issue the run takes as its input").argParser(parseItemRef))
       // Usage errors, so exit 2 before the action and before git runs.
       .hook("preAction", (command) => {
         const subcommand = String(command.processedArgs[0]);
         const given = command.opts();
-        if (given["run"] === undefined) command.error(`error: run ${subcommand} needs --run <run-id>`, { exitCode: 2 });
+        const job = subcommand === LAND && given["job"] === true;
+        if (given["run"] === undefined && !job) command.error(`error: run ${subcommand} needs --run <run-id>`, { exitCode: 2 });
         const allowed = SUBCOMMAND_OPTIONS[subcommand] ?? [];
         const stray = Object.keys(OPTION_FLAGS).find((key) => given[key] !== undefined && !allowed.includes(key));
         if (stray !== undefined) command.error(`error: ${OPTION_FLAGS[stray] ?? stray} does not apply to ${subcommand}`, { exitCode: 2 });
         if (subcommand === END && given["title"] === undefined) command.error("error: run end needs --title <title>", { exitCode: 2 });
         if (subcommand === CONTRACT && given["item"] === undefined) command.error("error: run contract needs --item <owner/repo#n>", { exitCode: 2 });
+        if (subcommand === LAND && given["pr"] !== undefined && !job) command.error("error: --pr applies to land only with --job", { exitCode: 2 });
+        if (job && !PR_NUMBER.test(String(given["pr"]))) command.error("error: --job needs --pr <number>", { exitCode: 2 });
+        // Job mode reads no person's answer and pushes nothing: the run, the approval, a wait and a fast-forward are all a session's.
+        const notInJob = ["run", "approved", "fastForward", "wait"].find((key) => given[key] !== undefined);
+        if (job && notInJob !== undefined) command.error(`error: --job refuses ${OPTION_FLAGS[notInJob] ?? "--run"}`, { exitCode: 2 });
+        if (subcommand === CHECKPOINT && typeof given["pr"] === "string") command.error("error: checkpoint's --pr takes no value", { exitCode: 2 });
         if (subcommand === CHECKPOINT && (given["pr"] === true) !== (given["title"] !== undefined)) {
           command.error("error: --pr and --title <title> go together", { exitCode: 2 });
         }
@@ -1525,7 +1542,68 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     verb === END && opts["refused"] !== true && step.pr !== null && step.repo !== undefined
       ? await runEndNotice(ctx, { cwd, top, runDir, recordRel, repo: step.repo, number: step.pr.number }, lines, result.notDone)
       : null;
+  // REQ-FLOW-157: the land job has only what the head holds, so an `end` that wrote its lines commits them through this same
+  // door; the pull request's number exists only after the first push, so that takes a second pass, whose lines already stand.
+  const stamped = verb === END && opts["refused"] !== true && step.pr !== null && step.pr.how !== "commented" && step.repo !== undefined
+    ? await stampLandJobLines(ctx, { cwd, recordRel, repo: step.repo, top, number: step.pr.number }, result.notDone)
+    : false;
+  if (stamped) {
+    const again = await runCheckpoint(ctx, { ...opts, paths: [], dropHeld: [] }, END);
+    return noticed === null ? again : { ...again, json: { ...(again.json as Record<string, unknown>), notice: noticed } };
+  }
   return finish(step.pr !== null, { inferred: step.inferred, ...(noticed === null ? {} : { notice: noticed }) });
+}
+
+/** The manifest, from the project root, whose `autonomy.landJob` asks for the land job's record lines. */
+const MANIFEST_FILE = ".stamity/manifest.json";
+
+/** Whether the work tree's manifest turns the land job on; one that does not read does not. */
+function landJobOn(cwd: string): boolean {
+  const read = readCapped(join(cwd, MANIFEST_FILE), RECORD_READ_MAX_BYTES);
+  try {
+    return read !== null && !read.truncated && readAutonomy(JSON.parse(read.text) as { autonomy?: unknown }).landJob !== undefined;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * REQ-FLOW-157: with `autonomy.landJob` on, the record's `PR: <n>` and `Login: <login>` lines, which the job reads at the head
+ * in place of the pull-request record a fresh checkout does not hold. The login is the pull request's author in the spelling
+ * the review-thread query names it: REST alone, since a cloud's proxy refuses GraphQL, with REST's `[bot]` ending dropped. The
+ * job holds it against GitHub's own author, so the line can name no one else. `true` once a line was written; failure is a
+ * `notDone` line, and the job then refuses for want of the lines.
+ */
+async function stampLandJobLines(ctx: CliContext, at: { cwd: string; recordRel: string; repo: OriginRepo; top: string; number: number }, notDone: string[]): Promise<boolean> {
+  if (!landJobOn(at.cwd)) return false;
+  const unwritten = (why: string): boolean => {
+    notDone.push(`land job lines not written: ${why}, so the land job refuses this run`);
+    return false;
+  };
+  const record = readCapped(join(at.cwd, at.recordRel), RECORD_READ_MAX_BYTES);
+  if (record === null || record.truncated) return unwritten(`${at.recordRel} could not be read whole`);
+  const { host: hostname, owner, repo } = at.repo;
+  let login: unknown;
+  try {
+    const pull = await ghApi({ method: "GET", path: `repos/${owner}/${repo}/pulls/${at.number}`, hostname }, { cwd: at.top, env: { ...ctx.app.runtime.env } });
+    if (pull.status !== 200) return unwritten(`the author of pull request #${at.number} did not read (HTTP ${pull.status})`);
+    login = (pull.json as { user?: { login?: unknown } } | null)?.user?.login;
+  } catch (cause) {
+    const code = (cause as { code?: unknown } | null)?.code;
+    return unwritten(`the author of pull request #${at.number} did not read (${typeof code === "string" ? code : "no code"})`);
+  }
+  if (typeof login !== "string" || login === "") return unwritten(`GitHub names no author of pull request #${at.number}`);
+  const wanted = [`PR: ${at.number}`, `Login: ${login.replace(/\[bot\]$/, "")}`];
+  const held = record.text.split(/\r?\n/);
+  const missing = wanted.filter((line) => !held.includes(line));
+  if (missing.length === 0) return false;
+  const text = `${record.text}${record.text === "" || record.text.endsWith("\n") ? "" : "\n"}${missing.join("\n")}\n`;
+  try {
+    await ctx.engine.merge.atomicWrite.atomicWriteFile(join(at.cwd, at.recordRel), text, { boundaryDir: at.cwd });
+  } catch (cause) {
+    return unwritten(`${at.recordRel} (${cause instanceof Error ? cause.message : "the write failed"})`);
+  }
+  return true;
 }
 
 /** The record line a sent notice leaves, as {@link runEndNotice} writes it: prose that merely says "notice" is not one. */

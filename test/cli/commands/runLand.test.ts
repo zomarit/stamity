@@ -2310,4 +2310,301 @@ describe("stamity run land", () => {
     }
     expect(gh.calls).toEqual([]);
   });
+
+  describe("job mode (REQ-FLOW-157)", () => {
+    const LAND_ON = '{"version":1,"autonomy":{"landJob":{"workflows":["CI"]}}}\n';
+    const LANDS = ["land", "--job", "--pr", "7", "--ready"];
+    /** GitHub's own account for a job's token: what the thread query's `viewer` names there. */
+    const BOT = "github-actions";
+    const END_LINES = "PR: 7\nLogin: runner\n";
+
+    /**
+     * A fresh checkout of a run that ended: its record closed at the head, with the lines `run end` commits, and nothing
+     * under the git directory, neither the pull-request record nor a pre-flight's surface record.
+     */
+    async function seedJob(opts: { status?: string; lines?: string; extra?: string; morning?: string; manifest?: string } = {}): Promise<Seeded> {
+      const seeded = await seed({ mode: "unattended", prRecord: false, manifest: opts.manifest ?? LAND_ON });
+      const { repo, remote } = seeded;
+      const closed = (await record(repo)).replace("Status: in progress", `Status: ${opts.status ?? "closed 2026-11-04"}`);
+      await put(repo, `${RUN_DIR}/record.md`, `${closed}${opts.extra ?? ""}${opts.lines ?? END_LINES}`);
+      if (opts.morning !== undefined) await put(repo, `${RUN_DIR}/morning.md`, opts.morning);
+      git(repo, ["add", "-A"]);
+      git(repo, ["commit", "-q", "-m", "end"]);
+      git(repo, ["push", "-q", remote, `HEAD:refs/heads/${RUN_BRANCH}`]);
+      const head = git(repo, ["rev-parse", "HEAD"]);
+      route("GET repos/o/r/pulls/7", pull(head));
+      route(`GET repos/o/r/commits/${head}/check-runs`, { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] });
+      route(`GET repos/o/r/branches/${RUN_BRANCH}`, { commit: { sha: head } });
+      gh.threads = [threadsPage([], BOT)];
+      return { ...seeded, head };
+    }
+
+    const writes = (): string[] => gh.calls.filter((call) => call.kind !== "api" ? !["threads", "editors"].includes(call.kind) : call.method !== "GET").map((call) => (call.kind === "api" ? `${call.method ?? ""} ${call.path ?? ""}` : call.kind));
+
+    it("merges on the evidence with the job's token as viewer, reading nothing a session left under the git directory", async () => {
+      const { repo, head } = await seedJob();
+      const before = await record(repo);
+
+      const result = await run(repo, LANDS);
+
+      expect(result.code).toBe(0);
+      expect(result.doc).toMatchObject({ subcommand: "land", run: RUN, outcome: "landed", pr: { number: 7, head }, notDone: [] });
+      expect(gh.calls.find((call) => call.kind === "merge")?.body).toMatchObject({ number: 7, sha: head });
+      expect(writes()).toEqual(["PATCH repos/o/r/pulls/7", "merge"]);
+      expect(gh.calls.find((call) => call.method === "PATCH")?.body).toMatchObject({ body: expect.stringContaining("evidence checked at") });
+      // No `land:` line: the body's evidence line stands, and a job's work tree is gone when it ends.
+      expect(await record(repo)).toBe(before);
+    });
+
+    it("reads origin's tip from REST, and refuses a branch that moved past the head", async () => {
+      const { repo, head } = await seedJob();
+      route(`GET repos/o/r/branches/${RUN_BRANCH}`, { commit: { sha: "f".repeat(40) } });
+      const result = await run(repo, LANDS);
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: [`origin's ${RUN_BRANCH} is at ${"f".repeat(40)}, not HEAD ${head}`] });
+      expect(writes()).toEqual([]);
+    });
+
+    it("keeps a thread a person opened and the run closed unresolved under a bot viewer, and leaves the pull request as it was", async () => {
+      const { repo } = await seedJob();
+      gh.threads = [threadsPage([thread(true, "runner", ["User", "alice"])], BOT)];
+
+      const result = await run(repo, LANDS);
+
+      expect(result.code).toBe(1);
+      expect(result.doc).toMatchObject({ outcome: "refused", evidence: { threads: { unresolved: 1 } }, notDone: ["1 review thread is unresolved"] });
+      expect(writes()).toEqual([]);
+    });
+
+    it("counts a thread the same whichever account the job's token is", async () => {
+      const { repo } = await seedJob();
+      gh.threads = [threadsPage([thread(true, "runner", ["User", "alice"])], "stamity-land-app")];
+      expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
+
+      // A thread a person closed is theirs to close, in the job as at the run's own land.
+      gh.threads = [threadsPage([thread(true, "alice", ["User", "alice"])], BOT)];
+      expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "landed" });
+    });
+
+    it("holds the author against the run's login, not the job's viewer", async () => {
+      const { repo } = await seedJob();
+      gh.threads = [threadsPage([], BOT, BOT)];
+      expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "refused", notDone: [`pull request #7 was opened by ${BOT}, not by the run's login runner`] });
+
+      gh.threads = [threadsPage([], BOT, "mallory")];
+      expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "refused", notDone: ["pull request #7 was opened by mallory, not by the run's login runner"] });
+      expect(writes()).toEqual([]);
+    });
+
+    it.each([
+      ["open", { status: "in progress" }, "does not read Status: closed"],
+      ["empty", { status: "" }, "does not read Status: closed"],
+      ["another word", { status: "merged 2026-11-04" }, "does not read Status: closed"],
+      ["blocked", { status: "closed 2026-11-04 (blocked: the plan is unclear)" }, "reads (blocked:"],
+      ["refused in the record", { extra: "\n## Refused\n\n- the pre-flight refused\n\n## Log\n\n" }, "the record at"],
+      ["refused in the morning list", { morning: "# Morning list\n\n## Refused\n\n- pre-flight exited 1\n\n## Decisions\n\nnone\n" }, "the morning list at"],
+      ["no PR line", { lines: "Login: runner\n" }, "on a PR: line"],
+      ["another pull request's line", { lines: "PR: 8\nLogin: runner\n" }, "on a PR: line"],
+      ["no Login line", { lines: "PR: 7\n" }, "names no Login:"],
+    ])("refuses a run whose record reads %s, merging nothing and writing nothing", async (_name, opts, reason) => {
+      const { repo } = await seedJob(opts);
+
+      const result = await run(repo, LANDS);
+
+      expect(result.code).toBe(1);
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: [expect.stringContaining(reason)] });
+      expect(writes()).toEqual([]);
+    });
+
+    it("reads an empty ## Refused section as no row, and the line a later end wrote as the one that stands", async () => {
+      const { repo } = await seedJob({ morning: "# Morning list\n\n## Refused\n\nnone\n\n## Decisions\n\n- a row\n", lines: "PR: 6\nLogin: gone\nPR: 7\nLogin: runner\n" });
+      expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "landed" });
+    });
+
+    it("reads the record at the head, not the work tree's copy", async () => {
+      const { repo } = await seedJob({ status: "in progress" });
+      await writeFile(join(repo, RUN_DIR, "record.md"), (await record(repo)).replace("Status: in progress", "Status: closed 2026-11-04"));
+      expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "refused", notDone: [expect.stringContaining("does not read Status: closed")] });
+    });
+
+    it("exits 0 and writes nothing while a check still runs, and lands on the next start", async () => {
+      const { repo, head } = await seedJob();
+      route(`GET repos/o/r/commits/${head}/check-runs`, { total_count: 1, check_runs: [{ id: 1, name: "test", status: "in_progress", conclusion: null, app: { id: 15368 } }] });
+
+      const waiting = await run(repo, LANDS);
+
+      expect(waiting.code).toBe(0);
+      expect(waiting.doc).toMatchObject({ outcome: "pending", notDone: [`required check test is still running on ${head}`] });
+      expect(writes()).toEqual([]);
+
+      route(`GET repos/o/r/commits/${head}/check-runs`, { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] });
+      expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "landed" });
+    });
+
+    it("exits 0 and posts no request while the review tool is awaited", async () => {
+      const tool = { login: "chatgpt-codex-connector[bot]", request: "@codex review", clean: "reaction", waitMinutes: 40, rounds: 2 };
+      const { repo } = await seedJob({ manifest: `${JSON.stringify({ version: 1, autonomy: { reviewTool: tool, landJob: { workflows: ["CI"] } } })}\n` });
+      route("GET repos/o/r/issues/7/comments", []);
+      route("GET repos/o/r/pulls/7/reviews", []);
+      route("GET repos/o/r/issues/7/reactions", []);
+
+      const result = await run(repo, LANDS);
+
+      expect(result.code).toBe(0);
+      expect(result.doc).toMatchObject({ outcome: "pending", evidence: {} });
+      expect(writes()).toEqual([]);
+    });
+
+    it("waits out a merge state GitHub has not computed, the one start an event gives", async () => {
+      fakeClock();
+      const { repo, head } = await seedJob();
+      gh.routes.set("GET repos/o/r/pulls/7", [{ status: 200, json: pull(head, { mergeable_state: "unknown" }) }, { status: 200, json: pull(head) }]);
+      expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "landed" });
+    });
+
+    it("marks a draft ready once the rest holds, then merges", async () => {
+      const { repo, head } = await seedJob();
+      route("GET repos/o/r/pulls/7", pull(head, { draft: true, mergeable_state: "draft" }));
+      expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "landed" });
+      expect(writes()).toEqual(["ready", "PATCH repos/o/r/pulls/7", "merge"]);
+    });
+
+    it("exits 0 and touches nothing on a pull request no run opened", async () => {
+      const { repo, head } = await seedJob();
+      route("GET repos/o/r/pulls/7", pull(head, { body: "A person's change." }));
+
+      const result = await run(repo, LANDS);
+
+      expect(result.code).toBe(0);
+      expect(result.doc).toMatchObject({ outcome: "not-a-run", pr: { number: 7 } });
+      expect(gh.calls.map((call) => call.path)).toEqual(["repos/o/r/pulls/7"]);
+    });
+
+    it("refuses a fork's pull request by the same check the run's own land reads", async () => {
+      const { repo, head } = await seedJob();
+      route("GET repos/o/r/pulls/7", pull(head, { head: { ref: RUN_BRANCH, sha: head, repo: { full_name: "someone/r" } } }));
+      expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "refused", notDone: ["pull request #7 comes from a fork, not o/r"] });
+      expect(writes()).toEqual([]);
+    });
+
+    it("refuses where a leg of the setting is off, so a head cannot turn the job on for itself", async () => {
+      const { repo } = await seedJob();
+      route("GET repos/o/r/contents/.stamity/manifest.json", { content: Buffer.from('{"version":1}\n').toString("base64") });
+
+      const result = await run(repo, LANDS);
+
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: [expect.stringContaining("autonomy.landJob is not on in every leg")] });
+      expect(writes()).toEqual([]);
+    });
+
+    it("stops at an ask: no approval reaches a job, so the person's act stays the person's", async () => {
+      const { repo } = await seedJob();
+      route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: ".github/workflows/ci.yml" }, { filename: "b" }]);
+
+      const result = await run(repo, LANDS);
+
+      expect(result.code).toBe(1);
+      expect(result.doc).toMatchObject({ outcome: "asks" });
+      expect(writes()).toEqual([]);
+    });
+
+    it("leaves the pull request open when a head pushed meanwhile fails the merge on its sha (409)", async () => {
+      const { repo } = await seedJob();
+      const before = await record(repo);
+      gh.merge = { status: 409, json: { message: "Head branch was modified" } };
+
+      const result = await run(repo, LANDS);
+
+      expect(result.code).toBe(1);
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: [expect.stringContaining("HTTP 409")] });
+      expect(await record(repo)).toBe(before);
+    });
+
+    it("refuses at the command line: an approval, a run, a wait and a fast-forward are a session's", async () => {
+      const { repo } = await seedJob();
+      const sha = "a".repeat(40);
+      for (const argv of [
+        ["land", "--job", "--pr", "7", "--approved", sha],
+        ["land", "--job", "--pr", "7", "--run", RUN],
+        ["land", "--job", "--pr", "7", "--wait", "1"],
+        ["land", "--job", "--pr", "7", "--fast-forward"],
+        ["land", "--job"],
+        ["land", "--job", "--pr"],
+        ["land", "--job", "--pr", "seven"],
+        ["land", "--run", RUN, "--pr", "7"],
+        ["checkpoint", "--run", RUN, "--pr", "7", "--title", "t"],
+      ]) {
+        // oxlint-disable-next-line no-await-in-loop -- the cases share one repository and the process environment the runner stubs
+        expect((await run(repo, argv)).code, argv.join(" ")).toBe(2);
+      }
+      expect(gh.calls).toEqual([]);
+    });
+
+    describe("the lines run end commits at the head", () => {
+      async function ending(manifest: string): Promise<Seeded> {
+        const seeded = await seed({ manifest, prRecord: false });
+        const { repo } = seeded;
+        await put(repo, `${RUN_DIR}/record.md`, (await record(repo)).replace("Status: in progress", "Status: closed 2026-11-04"));
+        return seeded;
+      }
+
+      it("commits PR: and Login: at the head with landJob on, the job's read of them landing from a clean clone", async () => {
+        const { repo, head: before, remote } = await ending(LAND_ON);
+
+        const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+        expect(result.code, JSON.stringify(result.doc)).toBe(0);
+        expect(result.doc).toMatchObject({ pushed: true, pr: { number: 7 }, notDone: [] });
+        const head = git(repo, ["rev-parse", "HEAD"]);
+        expect(git(repo, ["rev-list", "--count", `${before}..${head}`])).toBe("2");
+        expect(git(repo, ["show", `${head}:${RUN_DIR}/record.md`])).toMatch(/\nPR: 7\nLogin: runner$/);
+        expect(git(remote, ["rev-parse", `refs/heads/${RUN_BRANCH}`])).toBe(head);
+
+        // A second end has nothing to add, and makes no commit for it.
+        expect((await run(repo, ["end", "--run", RUN, "--title", "t"])).code).toBe(0);
+        expect(git(repo, ["rev-parse", "HEAD"])).toBe(head);
+
+        const clone = join(dirname(repo), "job");
+        git(dirname(repo), ["clone", "-q", "-b", RUN_BRANCH, remote, clone]);
+        git(clone, ["remote", "set-url", "origin", "https://github.com/o/r.git"]);
+        route("GET repos/o/r/pulls/7", pull(head));
+        route(`GET repos/o/r/commits/${head}/check-runs`, { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] });
+        route(`GET repos/o/r/branches/${RUN_BRANCH}`, { commit: { sha: head } });
+        route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: `${RUN_DIR}/record.md` }, { filename: `${RUN_DIR}/ledger.jsonl` }]);
+        gh.threads = [threadsPage([], BOT)];
+        expect((await run(clone, LANDS)).doc).toMatchObject({ outcome: "landed", pr: { number: 7, head } });
+      });
+
+      it("spells an app's login as the thread query does, with no [bot]", async () => {
+        const { repo, head } = await ending(LAND_ON);
+        route("GET repos/o/r/pulls/7", pull(head, { user: { login: "claude[bot]" } }));
+        expect((await run(repo, ["end", "--run", RUN, "--title", "t"])).code).toBe(0);
+        expect(await record(repo)).toMatch(/\nLogin: claude\n$/);
+      });
+
+      it("adds neither line nor commit with landJob off", async () => {
+        const { repo } = await ending('{"version":1}\n');
+        const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+        expect(result.code, JSON.stringify(result.doc)).toBe(0);
+        expect(await record(repo)).not.toMatch(/^(?:PR|Login): /m);
+        expect(git(repo, ["log", "-1", "--format=%s"])).toBe(`chore(run): checkpoint ${RUN}`);
+        expect(git(repo, ["rev-list", "--count", `${git(repo, ["rev-parse", "HEAD~1"])}..HEAD`])).toBe("1");
+      });
+
+      it("ends with a Not done: line where the author does not read, and the job then refuses for want of the lines", async () => {
+        const { repo } = await ending(LAND_ON);
+        route("GET repos/o/r/pulls/7", { message: "Bad gateway" }, 502);
+
+        const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+        expect(result.doc).toMatchObject({ notDone: [expect.stringContaining("land job lines not written")] });
+        expect(await record(repo)).not.toMatch(/^PR: /m);
+      });
+
+      it("writes nothing for a refused end", async () => {
+        const { repo } = await ending(LAND_ON);
+        await run(repo, ["end", "--run", RUN, "--title", "t", "--refused"]);
+        expect(await record(repo)).not.toMatch(/^PR: /m);
+      });
+    });
+  });
 });
