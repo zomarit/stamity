@@ -151,10 +151,19 @@ export function parseStateBlock(body: string, marker: string, section: string): 
   return read === null || "why" in read ? null : read;
 }
 
+/** Whether the tool's own login left a `+1` on the pull request. */
+function reacted(facts: ReviewToolFacts, tool: ReviewToolConfig): boolean {
+  return facts.reactions.some((reaction) => reaction.userLogin === tool.login && reaction.content === "+1");
+}
+
 /**
  * The tool keeps one state comment per pull request, so two trusted comments carrying the marker cannot both be it, and
  * neither is read, whichever commit each names. A reply echoing a block would otherwise stand in for a run that never
  * happened. Text naming the marker counts too: at worst that holds a merge for a person.
+ *
+ * `clean` also needs the tool's `+1` on the pull request. Text can be echoed or edited, and nobody else can react under the
+ * tool's login; the tool leaves it seconds after a clean run. The limit: a reaction names no commit, so this proves the tool
+ * passed the pull request once, and only the block ties that to the head.
  */
 function stateCommentReading(facts: ReviewToolFacts, tool: ReviewToolConfig): Reading {
   const { stateMarker: marker, stateSection: section } = tool;
@@ -171,7 +180,9 @@ function stateCommentReading(facts: ReviewToolFacts, tool: ReviewToolConfig): Re
   const blocks = reads.filter((read): read is StateBlock => !("why" in read)).filter((block) => block.commitSha === facts.head);
   const completed = blocks.filter((block) => block.status === "completed");
   if (completed.some((block) => block.hasFindings || block.hasUnresolved)) return "findings";
-  if (blocks.length > 0 && completed.length === blocks.length) return "clean";
+  if (blocks.length > 0 && completed.length === blocks.length) {
+    return reacted(facts, tool) ? "clean" : { why: "its block reads clean and its +1 on the pull request has not come" };
+  }
   const stopped = blocks.find((block) => block.status !== "completed" && block.status !== "running");
   if (stopped !== undefined) return { why: `its block reads ${stopped.status}` };
   return reads.find((read): read is Unusable => "why" in read) ?? "none";
@@ -189,7 +200,7 @@ function reviewStateReading(facts: ReviewToolFacts, tool: ReviewToolConfig): Rea
  * since `config set` offers `none` or `codex`.
  */
 function reactionReading(facts: ReviewToolFacts, tool: ReviewToolConfig): Reading {
-  return facts.reactions.some((reaction) => reaction.userLogin === tool.login && reaction.content === "+1") ? "clean" : "none";
+  return reacted(facts, tool) ? "clean" : "none";
 }
 
 function readingOf(facts: ReviewToolFacts, tool: ReviewToolConfig): Reading {

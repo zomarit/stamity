@@ -64,8 +64,13 @@ function request(head: string, createdAt: string = REQUESTED_AT): Comment {
   return { id: nextId, userLogin: "a-person", userType: "User", editor: null, body: `${TOOL.request}\n${requestMarker(head)}`, createdAt };
 }
 
+/*
+ * TEST CHANGE, justified (W-3's sign-off, REQ-FLOW-154): `reactions` defaulted to none. A clean head in `state-comment` mode now
+ * also needs the tool's `+1`, so the default holds it, as a real clean pass does, and every case pinning `clean` keeps its
+ * meaning. The block "the tool's +1 on a clean state comment" sets `reactions` itself for the cases without it.
+ */
 function facts(head: string, comments: Comment[], over: Partial<ReviewToolFacts> = {}): ReviewToolFacts {
-  return { head, now: REQUESTED_MS + 5 * MINUTE, comments, reviews: [], reactions: [], ...over };
+  return { head, now: REQUESTED_MS + 5 * MINUTE, comments, reviews: [], reactions: [{ userLogin: TOOL.login, content: "+1" }], ...over };
 }
 
 /** A block in the real shape with the given `code_review` members, for the shapes no real pull request is holding. */
@@ -368,6 +373,53 @@ describe("reviewToolVerdict, more than one comment carrying the marker", () => {
     expect(state(facts(CLEAN_HEAD, comments, { reviews }), { ...TOOL, clean: "review-state" })).toBe("clean");
     const reactions = [{ userLogin: TOOL.login, content: "+1" }];
     expect(state(facts(CLEAN_HEAD, comments, { reactions }), { ...TOOL, clean: "reaction" })).toBe("clean");
+  });
+});
+
+describe("reviewToolVerdict, the tool's +1 on a clean state comment", () => {
+  const none = { reactions: [] };
+
+  it("reads a clean block with no +1 as waiting, then silent, on its own reason", () => {
+    const comments = [request(CLEAN_HEAD), fromTool(CLEAN_BODY)];
+    expect(state(facts(CLEAN_HEAD, comments, none))).toBe("waiting");
+    const verdict = reviewToolVerdict(facts(CLEAN_HEAD, comments, { ...none, now: WAIT_ENDED }), TOOL);
+    expect(verdict.state).toBe("silent");
+    expect(verdict.reason).toContain("+1");
+    expect(verdict.reason).not.toContain("gave no result");
+  });
+
+  it("does not pass a lone reply holding one block on the head, with no state comment yet", () => {
+    const reply = fromTool(`Here is what you sent:\n${block(CLEAN_HEAD, "completed", false, false)}`);
+    expect(state(facts(CLEAN_HEAD, [request(CLEAN_HEAD), reply], none))).toBe("waiting");
+  });
+
+  it.each([
+    ["anyone else", { userLogin: "a-person", content: "+1" }],
+    ["a bot of another name", { userLogin: "another-tool[bot]", content: "+1" }],
+    ["the bare form of the tool's name", { userLogin: "chatgpt-codex-connector", content: "+1" }],
+    ["the tool, with another reaction", { userLogin: TOOL.login, content: "eyes" }],
+  ])("does not take a reaction from %s", (_name, reaction) => {
+    expect(state(facts(CLEAN_HEAD, [request(CLEAN_HEAD), fromTool(CLEAN_BODY)], { reactions: [reaction] }))).toBe("waiting");
+  });
+
+  it("names the missing +1 when the rounds are spent too", () => {
+    const comments = [request(OTHER_HEAD), request(CLEAN_HEAD), fromTool(CLEAN_BODY)];
+    expect(reviewToolVerdict(facts(CLEAN_HEAD, comments, { ...none, now: WAIT_ENDED }), TOOL)).toMatchObject({ state: "spent", reason: expect.stringContaining("+1") });
+  });
+
+  it("needs no +1 to report findings", () => {
+    expect(state(facts(FINDINGS_HEAD, [request(FINDINGS_HEAD), fromTool(FINDINGS_BODY)], none))).toBe("findings");
+  });
+
+  it("gives a +1 alone nothing: with no block, or a block on another commit, the tool gave no result", () => {
+    const reason = (comments: Comment[]) => reviewToolVerdict(facts(CLEAN_HEAD, [request(CLEAN_HEAD), ...comments], { now: WAIT_ENDED }), TOOL);
+    expect(reason([])).toMatchObject({ state: "silent", reason: expect.stringContaining("gave no result") });
+    expect(reason([fromTool(block(OTHER_HEAD, "completed", false, false))])).toMatchObject({ state: "silent", reason: expect.stringContaining("gave no result") });
+  });
+
+  it("reads a clean block with the tool's +1 as clean, beside any other reaction", () => {
+    const reactions = [{ userLogin: "a-person", content: "heart" }, { userLogin: TOOL.login, content: "+1" }];
+    expect(state(facts(CLEAN_HEAD, [request(CLEAN_HEAD), fromTool(CLEAN_BODY)], { reactions }))).toBe("clean");
   });
 });
 
