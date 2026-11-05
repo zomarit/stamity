@@ -50,7 +50,7 @@ import { planUserMcpJson, predictMcpMergeRefusal } from "../../manifest/mcpFilte
 import type { PackSuppliedServer } from "../../mcp/catalog.ts";
 import { engineOwnedServerIds, mcpReclaimReducers } from "../../mcp/emit.ts";
 import { GITIGNORE_FILE } from "../../mcp/env.ts";
-import { withOwnServers } from "../../mcp/ownServers.ts";
+import { provableOwnSetup, withOwnServers } from "../../mcp/ownServers.ts";
 import type { HookScriptReader, ReclaimActionEntry, ReclaimReport } from "../../merge/reclaim.ts";
 import { displayPath, type SafeWriteFileOptions } from "../../merge/safeWrite.ts";
 import { movedCoreSkill, movedRenderingAt } from "../../pack/moved.ts";
@@ -395,6 +395,16 @@ export async function installedPackServers(
   manifest: SetupManifest,
 ): Promise<PackSuppliedServer[]> {
   return withOwnServers(await packMcpServers(await discoverInstalledPacks(rootDir, manifest), rootDir), manifest);
+}
+
+/**
+ * `manifest` as a rendering proof plans it (`provableOwnSetup`), read inside the
+ * proof's own policy scope so the packs it weighs a row against are the ones the
+ * plan renders. A setup with no own rows reads nothing.
+ */
+async function provableSetup(rootDir: string, manifest: SetupManifest): Promise<SetupManifest> {
+  if ((manifest.mcp?.ownServers ?? []).length === 0) return manifest;
+  return provableOwnSetup(await packMcpServers(await discoverInstalledPacks(rootDir, manifest), rootDir), manifest);
 }
 
 /**
@@ -1068,7 +1078,9 @@ export async function engineRenderingsFor(
     setupClients.detected = summarizeDetection(repoInfo);
     const plan = (planned: SetupManifest): Promise<readonly AdapterOutput[]> =>
       withoutPolicyWarningPrint(() =>
-        ignoringPolicyDenialForProof(() => planFor(planned, { monorepoPackages: repoInfo.monorepoPackages })),
+        ignoringPolicyDenialForProof(async () =>
+          planFor(await provableSetup(rootDir, planned), { monorepoPackages: repoInfo.monorepoPackages }),
+        ),
       );
     outputs = await plan(setupClients);
     charter = outputs.find((output) => output.path === OWNED_PATHS.charterFileName);
@@ -1199,7 +1211,9 @@ export async function syncRenderingsFor(
     const setup = structuredClone(manifest);
     setup.selection = fullCorpusSelection(index);
     setup.detected = summarizeDetection(repoInfo);
-    outputs = await withoutPolicyWarningPrint(() => planFor(setup, { monorepoPackages: repoInfo.monorepoPackages }));
+    outputs = await withoutPolicyWarningPrint(async () =>
+      planFor(await provableSetup(rootDir, setup), { monorepoPackages: repoInfo.monorepoPackages }),
+    );
     // reason: not silent — with no rendering nothing is refused, and the sweep's
     // own proof still keeps and names each file it cannot prove.
   } catch {

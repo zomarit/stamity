@@ -368,7 +368,7 @@ function widenProximityWindows(row: DenyPattern): DenyPattern {
  * without normalising there is what let `ig<ZWSP>nore all previous
  * instructions` install verbatim.
  */
-const PACK_BODY_DENY_PATTERNS: readonly DenyPattern[] = [
+export const PACK_BODY_DENY_PATTERNS: readonly DenyPattern[] = [
   ...CONTENT_DENY_PATTERNS,
   ...INJECTION_PATTERNS,
   ...MCP_POISONING_PATTERNS,
