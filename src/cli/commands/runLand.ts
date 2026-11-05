@@ -121,9 +121,10 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * land of a setup with the job on, and no one else's do.
  *
  * **A job's exit.** 0 on every normal end, pending or held; 1 for a true failure alone, a read or a write GitHub did not answer
- * as it should. A hold shows as the pull request's status line, never as a red job, since GitHub may put a failing job's run on
- * the default branch's tip. Only a run still in progress and a head a newer job speaks for leave no line. The method comes from
- * the ruleset's `allowed_merge_methods`, else the repository's flags, merge before squash before rebase; none is a hold.
+ * as it should, the status line's own among them, since a green job and no line would hide the hold. A hold shows as the pull
+ * request's status line, never as a red job, since GitHub may put a failing job's run on the default branch's tip. Only a run still
+ * in progress and a head a newer job speaks for leave no line. The method must pass every ruleset's `allowed_merge_methods`, any
+ * linear-history rule and the repository's flags, merge before squash before rebase; none is a hold.
  *
  * Exit 0 `landed` or `already-landed`; 1 `asks` or `refused` (the JSON's `outcome` is how a flow branches); 2 usage. A job's
  * exit is above.
@@ -160,6 +161,9 @@ const MAX_FILE_PAGES = 30;
 const JOB_BOT = "github-actions[bot]";
 /** A login as `viewer` names it: REST spells an app `app[bot]` where viewer names it `app` (review/94). */
 const bareLogin = (login: string): string => login.replace(/\[bot\]$/, "").toLowerCase();
+/** Why a thread someone wrote in stops the land, and the way out: GitHub may show it resolved, so this line is all a person has to go on (review/120). */
+const closedOverReason = (id: string | undefined): string =>
+  `someone else wrote in review thread ${id ?? "with no id"}, which GitHub may show as resolved: a person reopens it and closes it themselves, so the land reads it as theirs`;
 /** A branch name as it goes into a path unencoded, as the push check reads it. */
 const PATH_BRANCH = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/-]+$/;
 /** The manifest below the project root: a pull request whose file list leaves it out cannot loosen a key. */
@@ -538,10 +542,13 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       const line = screenOutbound(wanted, "pr-body").ok ? wanted : `${waitsLine(["reasons not posted, since the outbound screen matched them; read the run's record"])}`;
       try {
         const written = await ghApi({ method: "PATCH", path: `${repoPath}/pulls/${number}`, body: { body: withStatusLine(pr.body, marker, line) }, hostname: repo.host }, ghOpts);
-        if (written.status !== 200) result.notDone.push(`why the merge waits was not written into #${number}'s body (HTTP ${written.status})`);
+        if (written.status === 200) return;
+        result.notDone.push(`why the merge waits was not written into #${number}'s body (HTTP ${written.status})`);
       } catch {
         result.notDone.push(`why the merge waits was not written into #${number}'s body (gh failed before GitHub answered)`);
       }
+      // review/121: in a job this line is the hold's only sign, so a green run with no line would hide it.
+      jobFailed = job !== null;
     };
 
     if (ended !== null && ended.holds.length > 0) throw new Held(!ended.inProgress, ...ended.holds);
@@ -621,18 +628,24 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     const jobLogins = [...(setting.landJob === undefined ? [] : [JOB_BOT]), ...(job === null ? [] : [actor])].map(bareLogin);
     /**
      * Threads a job closed over someone's comment, which `unresolvedThreads` does not count, since it reads the run's login alone.
-     * Counted so a later job, or a session, does not land past a person the race let the job close over.
+     * Counted so a later job, or a session, does not land past a person the race let the job close over. A resolver that reads null
+     * may be the job's own account, so it counts over a person's comment; over bots' comments alone it does not, or a review bot
+     * closing its own thread would stop every land (review/119).
      */
-    const closedOver = (read: readonly ThreadRead[]): number =>
-      read.filter((entry) => entry.isResolved && entry.resolvedBy !== null && bareLogin(entry.resolvedBy) !== bareLogin(viewer) && jobLogins.includes(bareLogin(entry.resolvedBy)) && joinedBySomeone(entry, tool?.login, viewer)).length;
+    const closedOver = (read: readonly ThreadRead[]): ThreadRead[] =>
+      read.filter((entry) => {
+        if (!entry.isResolved) return false;
+        if (entry.resolvedBy === null) return joinedBySomeone({ ...entry, authors: entry.authors.filter(({ person }) => person) }, tool?.login, viewer);
+        return bareLogin(entry.resolvedBy) !== bareLogin(viewer) && jobLogins.includes(bareLogin(entry.resolvedBy)) && joinedBySomeone(entry, tool?.login, viewer);
+      });
     const readThreads = async (): Promise<number | null> => {
       const read = await reviewThreads(repo.host, repo.owner, repo.repo, number, ghOpts, runLogin);
       const usable = read !== null && read.viewer.toLowerCase() === actor.toLowerCase();
       toolOpen = usable ? toolOwn(read.threads) : [];
       lastThreads = usable ? read.threads : [];
-      return usable ? read.count + closedOver(read.threads) : null;
+      return usable ? read.count + closedOver(read.threads).length : null;
     };
-    let threads: number | null = firstThreads.count + closedOver(firstThreads.threads);
+    let threads: number | null = firstThreads.count + closedOver(firstThreads.threads).length;
 
     // (8) The ledger as the head commit holds it, and the work tree's copy, which must equal it.
     const ledger = await ledgerAt(cwd, sha, `${runDir}/${layout.LEDGER_FILE}`, git);
@@ -716,6 +729,11 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       ...(review === undefined ? {} : { reviewTool: review }),
       ...(autoShip === undefined ? {} : { autoShip }),
     });
+    /** The decision, each thread {@link closedOver} named beside the count: GitHub shows those resolved, so the count alone gives a person nothing to act on (review/120). */
+    const decide = (input: LandInput): LandDecision => {
+      const decision = decideLand(input);
+      return decision.outcome === "refused" ? { ...decision, reasons: [...decision.reasons, ...closedOver(lastThreads).map((entry) => closedOverReason(entry.id))] } : decision;
+    };
     const show = (checks: CheckEvidence, now: LandPr): void => {
       result.pr = { number: now.number, url: now.url, head: now.headSha };
       result.evidence.mergeableState = now.mergeableState;
@@ -739,7 +757,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       if (!beforeReady || job !== null) pr = await readPr();
       tip = await readTip();
       await readReview();
-      return decideLand(inputFor(pr, checks, beforeReady));
+      return decide(inputFor(pr, checks, beforeReady));
     };
     const pending = (decision: LandDecision): boolean => decision.outcome === "refused" && decision.pending;
     /** Whether the review request failed to post, leaving no marker for the tool's wait to run from. */
@@ -783,7 +801,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     // --approved an asks outcome goes on to the act as a land does; every refused condition still refuses.
     const proceeds = (now: LandDecision): boolean => now.outcome === "land" || (approved && now.outcome === "asks");
     const draftReady = pr.draft && ready;
-    let decision = await waitOut(await askTool(decideLand(inputFor(pr, checks, draftReady)), draftReady), draftReady);
+    let decision = await waitOut(await askTool(decide(inputFor(pr, checks, draftReady)), draftReady), draftReady);
     if (proceeds(decision) && draftReady && !ctx.dryRun) {
       const marked = await answered(ghMarkReady({ hostname: repo.host, id: pr.nodeId }, ghOpts), "the ready mark");
       if (marked.status !== 200 || typeof marked.json !== "object" || marked.json === null || "errors" in marked.json) {
@@ -807,7 +825,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       tip = await readTip();
       if (tool !== undefined) pr = await readPr();
       await readReview();
-      decision = decideLand(inputFor(ctx.dryRun && draftReady ? { ...pr, draft: false } : pr, checks, false));
+      decision = decide(inputFor(ctx.dryRun && draftReady ? { ...pr, draft: false } : pr, checks, false));
     }
     show(checks, pr);
     if (decision.outcome === "already-landed") {
@@ -888,14 +906,14 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       const lifting = (now: LandPr): boolean => failed.length === 0 && threads === 0 && (computing(now) || now.mergeableState === "blocked");
       pr = await pollWhilePending(readPr, lifting, Math.min(LAND_CLOCK.now() + READY_MERGEABLE_MS, budgetEnd), READY_POLL_MS, LAND_CLOCK);
       show(checks, pr);
-      const after = decideLand(inputFor(pr, checks, false));
-      const stops = [...failed, ...(after.outcome === "refused" ? after.reasons : [])];
+      const after = decide(inputFor(pr, checks, false));
       // Whoever closed it: a comment by anyone but the tool or the run's login is theirs to weigh, and only this read shows it.
       const joined = ownThreads.filter((id) => {
         const entry = lastThreads.find((read) => read.id === id);
         return entry === undefined || joinedBySomeone(entry, tool?.login, viewer);
       });
-      if (stops.length === 0) stops.push(...joined.map((id) => `someone else wrote in the tool's review thread ${id} before it closed, so a person decides`));
+      // review/120: named whatever else stops it. A set, since `decide` has already named the threads it counts.
+      const stops = [...new Set([...failed, ...(after.outcome === "refused" ? after.reasons : []), ...joined.map((id) => closedOverReason(id))])];
       if (stops.length > 0) throw new Held(true, ...stops);
       lines.push(`threads: resolved ${ownThreads.length} of the tool's own`);
     }
@@ -953,18 +971,21 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
 }
 
 /**
- * The method a job merges by (REQ-FLOW-157): the first of {@link MERGE_METHODS} every ruleset's `allowed_merge_methods` allows,
- * else, where no ruleset lists any, the first the repository's flags leave on; `null` where none is. A flag GitHub does not show
- * this token reads as on: the merge call's own answer then decides.
+ * The method a job merges by (REQ-FLOW-157): the first of {@link MERGE_METHODS} that the rules and the repository both allow, since
+ * GitHub refuses a method either side turns off. The rules are every ruleset's `allowed_merge_methods`, and a linear-history rule
+ * takes `merge` out; the repository is its flags. `null` where none is left. A flag GitHub does not show this token reads as on:
+ * the merge call's own answer then decides.
  */
 function allowedMethod(rules: unknown, about: unknown): MergeMethod | null {
-  const lists = (Array.isArray(rules) ? rules : []).flatMap((rule: { type?: unknown; parameters?: { allowed_merge_methods?: unknown } } | null) => {
+  const read = (Array.isArray(rules) ? rules : []) as ({ type?: unknown; parameters?: { allowed_merge_methods?: unknown } } | null)[];
+  const lists = read.flatMap((rule) => {
     const list = rule?.type === "pull_request" ? rule.parameters?.allowed_merge_methods : undefined;
     return Array.isArray(list) ? [list as unknown[]] : [];
   });
+  const linear = read.some((rule) => rule?.type === "required_linear_history");
   const flags = (typeof about === "object" && about !== null ? about : {}) as Record<string, unknown>;
   const flagged: Readonly<Record<MergeMethod, unknown>> = { merge: flags["allow_merge_commit"], squash: flags["allow_squash_merge"], rebase: flags["allow_rebase_merge"] };
-  return MERGE_METHODS.find((method) => (lists.length > 0 ? lists.every((list) => list.includes(method)) : flagged[method] !== false)) ?? null;
+  return MERGE_METHODS.find((method) => flagged[method] !== false && !(linear && method === "merge") && lists.every((list) => list.includes(method))) ?? null;
 }
 
 /** Whether `thread` holds a comment by anyone but the review tool and the run's login, or did not read whole. */

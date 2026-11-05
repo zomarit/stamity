@@ -2111,7 +2111,8 @@ describe("stamity run land", () => {
       const replied = { ...(thread(true, "runner", ["Bot", BARE], ["User", "alice"]) as object), id: "T1" };
       gh.threads = [threadsPage([fromTool("T1")]), threadsPage([fromTool("T1")]), threadsPage([replied])];
 
-      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
+      // TEST CHANGE, justified: review/120, the reason naming the thread now stands beside the count, whatever other stops there are.
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved", expect.stringContaining("review thread T1")] });
       expect(kinds()).not.toContain("merge");
     });
 
@@ -2390,6 +2391,28 @@ describe("stamity run land", () => {
       expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "landed" });
     });
 
+    it("counts a resolver GitHub names as null over a person's comment, in a job and in a session with the job off (review/119)", async () => {
+      const { repo } = await seedJob();
+      gh.threads = [threadsPage([thread(true, null, ["User", "alice"])], BOT)];
+      expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "refused", evidence: { threads: { unresolved: 1 } } });
+      expect(kinds()).not.toContain("merge");
+
+      const session = await seed();
+      gh.threads = [threadsPage([thread(true, null, ["User", "alice"])])];
+      expect((await run(session.repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", evidence: { threads: { unresolved: 1 } } });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("leaves a thread only bots wrote in, whoever closed it: a null resolver holds a person's comment, and no bot closing its own", async () => {
+      const session = await seed();
+      gh.threads = [threadsPage([thread(true, null, ["Bot", "review-bot"])])];
+      expect((await run(session.repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed" });
+
+      const { repo } = await seedJob();
+      gh.threads = [threadsPage([thread(true, null, ["Bot", "review-bot"])], BOT)];
+      expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "landed" });
+    });
+
     it("holds the author against the run's login, not the job's viewer", async () => {
       const { repo } = await seedJob();
       gh.threads = [threadsPage([], BOT, BOT)];
@@ -2525,7 +2548,9 @@ describe("stamity run land", () => {
       describe("a person who joins a tool's thread (W-1 of the security lens)", () => {
         const BARE = "chatgpt-codex-connector";
         const open = (...authors: [string, string][]): object => ({ ...(thread(false, null, ["Bot", BARE], ...authors) as object), id: "T1" });
-        const closedBy = (who: string, ...authors: [string, string][]): object => ({ ...(thread(true, who, ["Bot", BARE], ...authors) as object), id: "T1" });
+        const closedBy = (who: string | null, ...authors: [string, string][]): object => ({ ...(thread(true, who, ["Bot", BARE], ...authors) as object), id: "T1" });
+        /** What the status line tells a person to do about a thread GitHub shows as resolved (review/120). */
+        const REMEDY = "a person reopens it and closes it";
 
         async function cleanJob(): Promise<Seeded> {
           const seeded = await seedJob({ manifest: JOB_TOOL });
@@ -2543,6 +2568,19 @@ describe("stamity run land", () => {
           expect(result.doc).toMatchObject({ outcome: "refused" });
           expect(kinds()).not.toContain("merge");
           expect(lastBody()).toContain("merge waits on: 1 review thread is unresolved");
+          expect(lastBody()).toContain("review thread T1");
+          expect(lastBody()).toContain(REMEDY);
+        });
+
+        it("names the thread and the remedy beside any other stop (review/120)", async () => {
+          const { repo } = await cleanJob();
+          gh.resolve = { status: 403, json: { message: "Forbidden" } };
+          gh.threads = [threadsPage([open()], BOT), threadsPage([open()], BOT), threadsPage([closedBy(BOT, ["User", "alice"])], BOT)];
+
+          await run(repo, LANDS);
+
+          expect(lastBody()).toContain("was not resolved (HTTP 403)");
+          expect(lastBody()).toContain(REMEDY);
         });
 
         it("stops it whoever closed the thread", async () => {
@@ -2566,12 +2604,44 @@ describe("stamity run land", () => {
         it("does not forget it: a later job, and a session's land, count the thread the job closed over a person", async () => {
           const { repo } = await cleanJob();
           gh.threads = [threadsPage([closedBy(BOT, ["User", "alice"])], BOT)];
-          expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
+          // TEST CHANGE, justified: review/120, GitHub shows this thread resolved, so the count alone left a person nothing to act on.
+          const stops = ["1 review thread is unresolved", expect.stringContaining("review thread T1")];
+          expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "refused", notDone: stops });
+          expect(lastBody()).toContain(REMEDY);
 
           const session = await seed({ manifest: JOB_TOOL });
           answers([[asked(1, session.head, "runner"), clean(2, session.head)]], [{ user: { login: LOGIN, type: "User" }, content: "+1" }]);
           gh.threads = [threadsPage([closedBy("github-actions", ["User", "alice"])])];
-          expect((await run(session.repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
+          expect((await run(session.repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: stops });
+          expect(lastBody()).toContain(REMEDY);
+        });
+
+        it("holds the next start where the job's own close reads null, and names the thread (review/119)", async () => {
+          const { repo } = await cleanJob();
+          gh.threads = [threadsPage([closedBy(null, ["User", "alice"])], BOT)];
+
+          const result = await run(repo, LANDS);
+
+          expect(result.code).toBe(0);
+          expect(result.doc).toMatchObject({ outcome: "refused", evidence: { threads: { unresolved: 1 } } });
+          expect(kinds()).not.toContain("merge");
+          expect(lastBody()).toContain("review thread T1");
+          expect(lastBody()).toContain(REMEDY);
+        });
+
+        it("reads a null resolver over a thread not read whole as a person's comment", async () => {
+          const { repo } = await cleanJob();
+          gh.threads = [threadsPage([{ ...closedBy(null), comments: { totalCount: 101, nodes: [{ author: { __typename: "Bot", login: BARE } }] } }], BOT)];
+
+          expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "refused", evidence: { threads: { unresolved: 1 } } });
+          expect(kinds()).not.toContain("merge");
+        });
+
+        it("goes on past a null resolver where only the tool and the run's own login wrote there", async () => {
+          const { repo } = await cleanJob();
+          gh.threads = [threadsPage([closedBy(null, ["User", "runner"])], BOT)];
+
+          expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "landed" });
         });
       });
 
@@ -2694,16 +2764,23 @@ describe("stamity run land", () => {
       const merged = (): unknown => (gh.calls.find((call) => call.kind === "merge")?.body as { method?: string } | undefined)?.method;
       const rule = (...methods: string[]): unknown => ({ type: "pull_request", parameters: { allowed_merge_methods: methods } });
       const REQUIRED = { type: "required_status_checks", parameters: { required_status_checks: [{ context: "test" }] } };
+      const LINEAR = { type: "required_linear_history" };
 
       it.each([
         ["a ruleset's one method", [rule("squash")], {}, "squash"],
         ["squash before rebase in a ruleset, in the preferred order", [rule("rebase", "squash")], {}, "squash"],
         ["merge first", [rule("rebase", "squash", "merge")], {}, "merge"],
-        ["the ruleset over the repository's flags", [rule("rebase")], { allow_rebase_merge: false, allow_merge_commit: true }, "rebase"],
+        // TEST CHANGE, justified: review/82, a method must pass both sides, so this row's old pair (a ruleset's one method, the flag
+        // off for it) moved to the holds below, and what stands here is the case it hid: a ruleset listing all three over a squash-only repository.
+        ["what both allow, a ruleset's three methods over a squash-only repository", [rule("merge", "squash", "rebase")], { allow_merge_commit: false, allow_squash_merge: true, allow_rebase_merge: false }, "squash"],
+        ["what both allow, the flags narrowing a ruleset's list to rebase", [rule("merge", "rebase")], { allow_merge_commit: false, allow_squash_merge: true, allow_rebase_merge: true }, "rebase"],
         ["what every ruleset allows, where two apply", [rule("merge", "squash"), rule("squash", "rebase")], {}, "squash"],
         ["the repository's flags with no ruleset's list", [], { allow_merge_commit: false, allow_squash_merge: false, allow_rebase_merge: true }, "rebase"],
         ["squash from the flags before rebase", [], { allow_merge_commit: false, allow_squash_merge: true, allow_rebase_merge: true }, "squash"],
         ["merge where nothing says otherwise", [], {}, "merge"],
+        ["squash where a linear-history rule takes merge out, with no flag shown", [LINEAR], {}, "squash"],
+        ["squash where a linear-history rule takes merge out, its flag still on", [LINEAR], { allow_merge_commit: true, allow_squash_merge: true, allow_rebase_merge: true }, "squash"],
+        ["rebase where a linear-history rule and a ruleset's list leave it alone", [LINEAR, rule("merge", "rebase")], {}, "rebase"],
       ])("takes %s", async (_name, rules, flags, method) => {
         const { repo } = await seedJob();
         route("GET repos/o/r/rules/branches/main", [REQUIRED, ...rules]);
@@ -2717,6 +2794,10 @@ describe("stamity run land", () => {
         ["an empty list in a ruleset", [rule()], {}],
         ["two rulesets with nothing in common", [rule("merge"), rule("rebase")], {}],
         ["every flag off", [], { allow_merge_commit: false, allow_squash_merge: false, allow_rebase_merge: false }],
+        ["a ruleset's one method, its flag off", [rule("rebase")], { allow_rebase_merge: false, allow_merge_commit: true }],
+        ["a ruleset's list and the flags with nothing in common", [rule("merge", "rebase")], { allow_merge_commit: false, allow_squash_merge: true, allow_rebase_merge: false }],
+        ["a linear-history rule over a repository allowing merge commits alone", [LINEAR], { allow_merge_commit: true, allow_squash_merge: false, allow_rebase_merge: false }],
+        ["a linear-history rule over a ruleset's list of merge alone", [LINEAR, rule("merge")], {}],
       ])("reads %s as a hold, not a failure", async (_name, rules, flags) => {
         const { repo } = await seedJob();
         route("GET repos/o/r/rules/branches/main", [REQUIRED, ...rules]);
@@ -2806,6 +2887,46 @@ describe("stamity run land", () => {
 
       gh.merge = { status: 503, json: { message: "Unavailable" } };
       expect((await run(repo, LANDS)).code).toBe(1);
+    });
+
+    describe("a hold whose status line does not write (review/121)", () => {
+      const WRITES = [
+        ["answers a refusal", () => route(PATCHED, { message: "Forbidden" }, 403), "HTTP 403"],
+        ["answers a failure", () => route(PATCHED, { message: "Bad gateway" }, 502), "HTTP 502"],
+        ["fails before GitHub answers", () => gh.failing.add(PATCHED), "gh failed before GitHub answered"],
+      ] as [string, () => void, string][];
+
+      it.each(WRITES)("exits 1 where the write %s, since a green job and no line would hide the hold", async (_name, arrange, words) => {
+        const { repo } = await seedJob();
+        gh.threads = [threadsPage([thread(true, "runner", ["User", "alice"])], BOT)];
+        arrange();
+
+        const result = await run(repo, LANDS);
+
+        expect(result.code).toBe(1);
+        expect(result.doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved", `why the merge waits was not written into #7's body (${words})`] });
+        expect(kinds()).not.toContain("merge");
+      });
+
+      it("exits 1 on a hold the run's own record makes", async () => {
+        const { repo } = await seedJob({ status: "closed 2026-11-04 (blocked: the plan is unclear)" });
+        gh.failing.add(PATCHED);
+        expect((await run(repo, LANDS)).code).toBe(1);
+      });
+
+      it("exits 1 on a pending job, which no later event may follow", async () => {
+        const { repo, head } = await seedJob();
+        route(`GET repos/o/r/commits/${head}/check-runs`, { total_count: 1, check_runs: [{ id: 1, name: "test", status: "in_progress", conclusion: null, app: { id: 15368 } }] });
+        gh.failing.add(PATCHED);
+        expect(await run(repo, LANDS)).toMatchObject({ code: 1, doc: { outcome: "pending" } });
+      });
+
+      it("exits 1 on an ask, which no approval reaches in a job", async () => {
+        const { repo } = await seedJob();
+        route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: ".github/workflows/ci.yml" }, { filename: "b" }]);
+        gh.failing.add(PATCHED);
+        expect(await run(repo, LANDS)).toMatchObject({ code: 1, doc: { outcome: "asks" } });
+      });
     });
 
     it("refuses at the command line: an approval, a run, a wait and a fast-forward are a session's", async () => {
