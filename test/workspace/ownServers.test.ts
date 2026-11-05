@@ -494,6 +494,24 @@ describe("workspace sync — two members, one own id, different rows", () => {
     expect(doc.error?.message).toContain(other);
   });
 
+  it("escapes a C1 control in an id, which no reader has held to a shape by then", async () => {
+    const temp = getTemp();
+    await seedCorpus(temp);
+    const root = await seedWorkspace(temp, ["apps/api", "apps/web"], undefined);
+    const control = String.fromCodePoint(0x9b);
+    const id = `acme${control}31mwiki`;
+    await seedMember(root, "apps/api", { servers: [], ownServers: [ownRow({ id, description: "One." })] });
+    await seedMember(root, "apps/web", { servers: [], ownServers: [ownRow({ id, description: "Two." })] });
+
+    const result = await runSync(root);
+    const doc = await syncDocument(root);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain(String.raw`acme\u009b31mwiki`);
+    expect(result.stderr).not.toContain(control);
+    expect(doc.error?.message).not.toContain(control);
+  });
+
   it("passes two members holding the same row", async () => {
     const temp = getTemp();
     await seedCorpus(temp);

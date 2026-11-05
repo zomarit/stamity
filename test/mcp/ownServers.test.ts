@@ -540,6 +540,13 @@ describe("withOwnServers", () => {
       ["a `key` in the query", argRow(`https://wiki.invalid/sse?key=${PLAIN_TOKEN}`), "`args[2]`"],
       ["an `auth` after another parameter", argRow(`https://wiki.invalid/sse?a=1&auth=${PLAIN_TOKEN}`), "`args[2]`"],
       ["a `token` in the fragment", lockRow(`https://registry.invalid/pkg#token=${PLAIN_TOKEN}`), "`packageNameLock`"],
+      // A URL parser reads each of these as `https://`, so the credential is as live as in the two-slash link.
+      ["a password after one slash", argRow(`https:/acme:${PLAIN_TOKEN}@wiki.invalid/`), "`args[2]`"],
+      ["a password after no slash", argRow(`--endpoint=https:acme:${PLAIN_TOKEN}@wiki.invalid/`), "`args[2]`"],
+      ["a password after three slashes", argRow(`https:///acme:${PLAIN_TOKEN}@wiki.invalid/`), "`args[2]`"],
+      ["a `key` after one slash", argRow(`https:/wiki.invalid/sse?key=${PLAIN_TOKEN}`), "`args[2]`"],
+      ["a password in the docs link", ownRow({ docsUrl: `https://acme:${PLAIN_TOKEN}@wiki.invalid/` }), "`docsUrl`"],
+      ["a `key` in the docs link", ownRow({ docsUrl: `https://wiki.invalid/start?key=${PLAIN_TOKEN}` }), "`docsUrl`"],
     ])("refuses %s, by field name alone", (_shape, row, fields) => {
       const refusal = (): unknown => withOwnServers([], setupWith([row]));
 
@@ -553,6 +560,14 @@ describe("withOwnServers", () => {
       expect(() => withOwnServers([], setupWith([argRow("https://wiki.invalid/sse?token=abc123")]))).toThrow(
         "`args[2]` holds a credential in a link",
       );
+    });
+
+    it("offers no reference for a docs link, which no launch fills in", () => {
+      const refusal = (): unknown =>
+        withOwnServers([], setupWith([ownRow({ docsUrl: `https://acme:${PLAIN_TOKEN}@wiki.invalid/` })]));
+
+      expect(refusal).toThrow("The manifest is committed");
+      expect(refusal).not.toThrow("requiresEnv");
     });
 
     it.each([
@@ -578,6 +593,7 @@ describe("withOwnServers", () => {
       ["an address outside a link", "--contact=ops@acme.invalid"],
       ["a scoped package", "@acme/other-mcp"],
       ["a credential word outside a link", "--mode?key=plain"],
+      ["one slash on a scheme no parser repairs", "npm:/other-mcp@1.2.3"],
     ])("passes %s", (_shape, arg) => {
       const [server] = withOwnServers([], setupWith([argRow(arg)]));
 

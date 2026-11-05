@@ -1399,11 +1399,13 @@ async function refuseOwnRowClashes(
   if (clashes.length === 0) return;
   throw new CliFailure({
     code: "VALIDATION_ERROR",
-    message: clashes
-      .map(({ id, repoPaths: [first, second] }) =>
-        `repos[] entries ${JSON.stringify(first)} and ${JSON.stringify(second)} hold different rows for own server ${JSON.stringify(id)}`,
-      )
-      .join("; "),
+    message: ctx.engine.mcp.ownServers.escapeC1Controls(
+      clashes
+        .map(({ id, repoPaths: [first, second] }) =>
+          `repos[] entries ${JSON.stringify(first)} and ${JSON.stringify(second)} hold different rows for own server ${JSON.stringify(id)}`,
+        )
+        .join("; "),
+    ),
     why: "one id across a workspace reads as one server, and these rows launch different programs or say different things under it",
     next:
       `make the rows the same in each member's ${STATE_DIR}/${MANIFEST_FILE}, or give one member another id: ` +

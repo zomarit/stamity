@@ -143,6 +143,11 @@ function maskFields(message: string, row: unknown): string {
   return masked;
 }
 
+/** `message` with each C1 control written as its escape, for any refusal that prints a row's unvalidated id. */
+export function escapeC1Controls(message: string): string {
+  return message.replaceAll(C1_CONTROLS, (control) => `\\u${control.charCodeAt(0).toString(16).padStart(4, "0")}`);
+}
+
 /**
  * A refusal as it may print: no typed value, and no C1 control. The row's id
  * reaches a message through the label and again through the validator's own line,
@@ -151,10 +156,7 @@ function maskFields(message: string, row: unknown): string {
  * values as `JSON.stringify` prints them.
  */
 function printableRefusal(message: string, row: unknown): string {
-  return maskFields(maskArgs(maskPin(message, row), row), row).replaceAll(
-    C1_CONTROLS,
-    (control) => `\\u${control.charCodeAt(0).toString(16).padStart(4, "0")}`,
-  );
+  return escapeC1Controls(maskFields(maskArgs(maskPin(message, row), row), row));
 }
 
 /**
@@ -198,6 +200,13 @@ const LINK_USERINFO = /([a-z][a-z0-9+.-]*):[/\\]{2}([^/\\?#\s]*)@/gi;
 /** A whole link, up to the next space. */
 const LINK = /[a-z][a-z0-9+.-]*:[/\\]{2}\S*/gi;
 
+/**
+ * A scheme a URL parser reads the same with any count of slashes after it, none
+ * included, so a credential in `https:/` is as live as in `https://`. Another
+ * scheme gets no such repair: `npm:/` holds no authority.
+ */
+const REPAIRED_SCHEME = /\b(https?|wss?|ftp):[/\\]*/gi;
+
 /** A name and a value in a link's query or fragment. */
 const LINK_PARAMETER = /[?&#;]([^=&#;\s]+)=([^&#;\s]*)/g;
 
@@ -229,9 +238,12 @@ function userinfoHoldsCredential(scheme: string, userinfo: string): boolean {
   return holdsLiteral(name) && !(rest.length === 0 && SSH_SCHEME.test(scheme));
 }
 
-/** `text` as the link reads take it: nothing invisible, and each reference marked. */
+/** `text` as the link reads take it: nothing invisible, each reference marked, and a repaired scheme's slashes as two. */
 function linkText(text: string): string {
-  return text.replace(INVISIBLE_SMUGGLING_CHARS, "").replaceAll(INTERPOLATION, LINK_REFERENCE);
+  return text
+    .replace(INVISIBLE_SMUGGLING_CHARS, "")
+    .replaceAll(INTERPOLATION, LINK_REFERENCE)
+    .replaceAll(REPAIRED_SCHEME, "$1://");
 }
 
 /** Whether a link in `text` holds a typed credential before its `@`. */
@@ -260,6 +272,9 @@ function linkParameterHoldsCredential(text: string): boolean {
  * that catches a link the `@version` completes. Its parameters stay unread there: the
  * lock's read has them, and on the pin the `@version` would count as typed text
  * beside a reference.
+ *
+ * `docsUrl` reaches no client document, but the manifest holding it is committed, so
+ * it is read too. Its refusal offers no reference, since nothing fills one in there.
  */
 function assertLinksHoldNoCredential(definition: PackMcpServerDefinition, label: string): void {
   const pin = pinnedPackageSpec(definition);
@@ -270,11 +285,18 @@ function assertLinksHoldNoCredential(definition: PackMcpServerDefinition, label:
     ...definition.args.map((arg, index): [string, string] => [`args[${index}]`, arg]),
   ];
   const fields = texts.filter(([, text]) => holdsCredential(text)).map(([field]) => `\`${field}\``);
-  if (fields.length === 0) return;
+  if (fields.length > 0) {
+    throw new EngineError(
+      `${label}: ${fields.join(", ")} holds a credential in a link. The client documents are committed, ` +
+        `so it would be written there. Declare the variable in \`requiresEnv\` and write it in that place ` +
+        `as \${env:NAME}.`,
+      { code: "VALIDATION_ERROR" },
+    );
+  }
+  if (!holdsCredential(definition.docsUrl)) return;
   throw new EngineError(
-    `${label}: ${fields.join(", ")} holds a credential in a link. The client documents are committed, ` +
-      `so it would be written there. Declare the variable in \`requiresEnv\` and write it in that place ` +
-      `as \${env:NAME}.`,
+    `${label}: \`docsUrl\` holds a credential in a link. The manifest is committed, so it would be kept ` +
+      `there. Take the credential out of the link.`,
     { code: "VALIDATION_ERROR" },
   );
 }
