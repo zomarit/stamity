@@ -2,7 +2,7 @@
 id: everyday-flows
 # A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended at the 1.17.0 release cut on 2026-10-27, amended from docs/plans/023-factory-bridge-01.md in run 2026-11-04_factory-bridge on 2026-11-05, amended from docs/plans/023-factory-bridge-02.md in run 2026-11-05_factory-bridge-02 on 2026-11-05, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
-status: shipped-with-1.17.0
+status: shipped-with-1.18.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
 ---
 # Everyday flows
@@ -207,7 +207,7 @@ from the spec delta of `docs/plans/023-factory-bridge-01.md` (plan 023 file 1, r
 entry read with the as-built deltas the units' reports declared, merged once by that run's unit `docs-truth`. Where a
 delta entry and the code differ, the text states the code, and a line headed "As built" says what moved. It cites the
 code by file and symbol. Job mode and the land workflow are cited from their own lane, `land-job`, which was still
-closing when this merge ran, so that text states that unit's settled behaviour. None of this text has shipped yet.
+closing when this merge ran, so that text states that unit's settled behaviour. It shipped with 1.18.0, which set `status: shipped-with-1.18.0`.
 
 REQ-FLOW-160 to REQ-FLOW-164, and the text dated 2026-11-05 under REQ-FLOW-069, REQ-FLOW-081, REQ-FLOW-092, REQ-FLOW-094,
 REQ-FLOW-102, REQ-FLOW-133, REQ-FLOW-154 and REQ-FLOW-156, come from the spec delta of
@@ -218,7 +218,7 @@ code differ, the text states the code, and a line headed "As built" says what mo
 symbol, and a content file by its lines. A ledger id in that text (`review/10`, `build/17`) is that run's own unless a
 run is named beside it. Each amendment is a dated bullet, so the older text it reads over stands as the record. The
 delta's REQ-FLOW-165 and its REQ-FLOW-132 entry belong to the unit `clone-land`, which is held until a real run meets
-it, so neither is merged. None of this text has shipped yet.
+it, so neither is merged. The rest shipped with 1.18.0.
 
 ## Intent
 

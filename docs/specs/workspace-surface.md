@@ -2,7 +2,7 @@
 id: workspace-surface
 # A design document, authored outside the spec command, amended from docs/plans/023-factory-bridge-02.md in run 2026-11-05_factory-bridge-02 on 2026-11-05, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
-status: shipped-with-1.1.0
+status: shipped-with-1.18.0
 obsolete_when: the workspace door ships and the CLI reference plus the workspace guide carry its behaviour, or a decision cuts the surface
 ---
 # The workspace surface
@@ -748,7 +748,8 @@ read "`mcp` from `resolved.mcp` when the workspace declares one", step 3 read
 before persisting", and the sentence above read "`writeManifest`'s own
 validation is what keeps a bad patch from persisting at all." A workspace
 replaces what it can supply, and a member's own server is not that, so the merge
-keeps one launching. A workspace selects ids and supplies no rows.
+keeps one launching. A workspace selects ids and supplies no rows. This shipped
+with 1.18.0, which set `status: shipped-with-1.18.0`.
 
 **Dropped.** In-memory overrides through a widened `planSync` signature. It is
 smaller in the diff and wrong in the outcome: every member drifts back the moment

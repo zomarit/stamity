@@ -2,7 +2,7 @@
 id: board-writes
 # A design document, authored from docs/plans/015-board-writes.md on 2026-10-01; its requirement text merged on 2026-10-12 at the Prove phase of run 2026-10-12_board-writes, by its unit s1-spec-merge against the integration head 3415e721, amended in run 2026-10-14_cli-native on 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, one proof pointer amended in run 2026-10-20_packs-rebuilt on 2026-10-21, REQ-BOARD-010 retired in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended in run 2026-11-04_factory-bridge on 2026-11-04, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
-status: shipped-with-1.17.0
+status: shipped-with-1.18.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
 ---
 # Board writes
@@ -21,7 +21,7 @@ amended one proof pointer on 2026-10-21, and its second, `docs/plans/018-packs-r
 with the pack it bound; both shipped with 1.17.0, which set `status: shipped-with-1.17.0`. Plan 023's first file,
 `docs/plans/023-factory-bridge-01.md` (run `2026-11-04_factory-bridge`, unit `board-item`), amended REQ-BOARD-001 and
 REQ-BOARD-006 on 2026-11-04, so that a ready item carries what `stamity run contract` reads (REQ-FLOW-155 in
-`docs/specs/everyday-flows.md`).
+`docs/specs/everyday-flows.md`); that amendment shipped with 1.18.0, which set `status: shipped-with-1.18.0`.
 
 The requirement text comes from the `## Spec delta` of `docs/plans/015-board-writes.md` (`:101-347`), as the run's
 in-flow re-plan, `.stamity/runs/2026-10-12_board-writes/plan.md` (pass r2), amended it, and from the run's sign-offs

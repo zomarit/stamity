@@ -2,7 +2,7 @@
 id: packs
 # A design document, authored from docs/plans/018-packs-rebuilt-01.md on 2026-10-21 at the Prove phase of run 2026-10-20_packs-rebuilt, by its unit u18-spec-docs against the integration head 936350cb, amended from docs/plans/018-packs-rebuilt-02.md on 2026-10-22 in run 2026-10-21_packs-rebuilt-02, by its unit u18-spec against the integration head 67c36a63, amended from docs/plans/022-autonomy-distribution-01.md on 2026-10-25 in run 2026-10-25_autonomy-distribution-02, read at 864d0111, amended on 2026-10-27 in the same run after eval run 54, read at 1033a43e, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
-status: shipped-with-1.17.0
+status: shipped-with-1.18.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the packs reference carries it, or a decision row cuts the surface
 ---
 # Packs
@@ -43,7 +43,7 @@ which fixed the two findings the review bot left open on pull request #124 and r
 `main` as pull request #125 without this merge; pass `spec1` of run `2026-10-25_autonomy-distribution-02` made it
 afterwards. A bullet headed "Amended 2026-10-25" says what moved and what it read; every citation in it reads at
 `864d0111`, `main` after #125, and a ledger id there (`review/2`) is that run's own. That merge reached `main` through
-pull request #128 and shipped with 1.17.0.
+pull request #128 and shipped with 1.17.0. A bullet headed "Amended 2026-11-04" shipped with 1.18.0, which set `status: shipped-with-1.18.0`.
 
 ## Intent
 
