@@ -3110,15 +3110,15 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * as written. test/hooks/personOnly.test.ts holds the two lists to the options `learn` declares.
    */
   function learnVerbWords(args: string[]): string[] {
-    const valued = ["--title", "--summary", "--confidence", "--body-file", "--body", "--run", "--proposal", "--digest"];
-    const bare = ["--propose", "--json", "--yes", "-y", "--dry-run", "--no-color"];
+    const valued = new Set(["--title", "--summary", "--confidence", "--body-file", "--body", "--run", "--proposal", "--digest"]);
+    const bare = new Set(["--propose", "--json", "--yes", "-y", "--dry-run", "--no-color"]);
     const words: string[] = [];
     for (let at = 0; at < args.length; at += 1) {
       const word = args[at] ?? "";
       const name = word.split("=", 1)[0] ?? "";
       if (!word.startsWith("-")) words.push(word);
-      else if (valued.includes(name) && words.includes("learn")) at += name === word ? 1 : 0;
-      else if (!bare.includes(word)) return [...words, ...args.slice(at + 1)];
+      else if (valued.has(name) && words.includes("learn")) at += name === word ? 1 : 0;
+      else if (!bare.has(word)) return [...words, ...args.slice(at + 1)];
     }
     return words;
   }

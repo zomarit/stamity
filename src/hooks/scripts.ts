@@ -353,7 +353,7 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // size plus a small margin: 300,246 bytes / 6,307 lines (copilot, generated; about 299,003 bytes before the round), past
   // the bytes row, because the accept reading now reads a word the shell completes as a verb word. 300,246 + 2,858 =
   // 303,104 bytes; the lines row (6,341) holds.
-  // Moved again 2026-11-05 on plan 023's pull-request review, by the measured size plus a small margin: 301,562 bytes /
+  // Moved again 2026-11-05 on plan 023's pull-request review, by the measured size plus a small margin: 301,570 bytes /
   // 6,344 lines (copilot, generated), past the lines row, because the accept reading now leaves out what an option of
   // `learn` plainly takes. 6,344 + 96 = 6,440 lines; the bytes row (303,104) holds.
   [PERSON_ONLY_GUARD_FILE]: { bytes: 303_104, lines: 6_440 },

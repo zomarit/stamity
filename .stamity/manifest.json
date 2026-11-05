@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.17.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-11-05T16:47:38.082Z",
+  "updatedAt": "2026-11-05T16:55:20.153Z",
   "tools": [
     "claude"
   ],
@@ -218,7 +218,7 @@
       "adapter": "claude",
       "artifactId": "stamity-person-only-guard",
       "artifactType": "infra",
-      "contentHash": "db193596773234e7f4ccf2236a4e8e3a165dc6c4c67b7fc07403ef448e395dbb",
+      "contentHash": "4075fa7108ba4142257e06e67d42fb3f6ad9b295eb4137df6adf6d2d25359c24",
       "path": ".claude/hooks/stamity/stamity-person-only-guard.mjs"
     },
     {
