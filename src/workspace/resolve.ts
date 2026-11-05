@@ -1,11 +1,12 @@
+import { canonicalJson } from "../manifest/jsonMembers.ts";
 import { CONTENT_CLASSES, type ContentClass, type ContentSelection } from "../types/content.ts";
 import type { MaturityTier, Tool } from "../types/core.ts";
 import { EngineError } from "../types/errors.ts";
-import type { McpConfig } from "../types/manifest.ts";
 import {
   WORKSPACE_MANIFEST_FILE,
   type WorkspaceGroupDelta,
   type WorkspaceManifest,
+  type WorkspaceMcpConfig,
   type WorkspaceRepoEntry,
 } from "./model.ts";
 
@@ -36,7 +37,7 @@ export interface ResolvedRepoConfig {
   /** Effective content selection, deduplicated, in first-appearance order. */
   selection: ContentSelection;
   maturityTier?: MaturityTier;
-  mcp?: McpConfig;
+  mcp?: WorkspaceMcpConfig;
   /**
    * Locked ids whose removal this member actually attempted and the lock
    * refused — the report a workspace lead reads to see where policy is being
@@ -212,12 +213,52 @@ function normalizeRepoPath(path: string): string {
     .join("/");
 }
 
-/** A detached copy: a caller mutating the resolved MCP block must not reach the manifest. */
-function cloneMcp(mcp: McpConfig): McpConfig {
+/**
+ * A detached copy: a caller mutating the resolved MCP block must not reach the
+ * manifest. Named field by field, so a row typed into `workspace.json`, which the
+ * reader lets through as an unknown key, stops here and launches nothing.
+ */
+function cloneMcp(mcp: WorkspaceMcpConfig): WorkspaceMcpConfig {
   return {
     servers: [...mcp.servers],
     ...(mcp.protocolVersion === undefined ? {} : { protocolVersion: mcp.protocolVersion }),
   };
+}
+
+/** Two members holding different rows under one own id. */
+export interface OwnRowClash {
+  id: string;
+  /** The first member to hold the id, then the member that differs from it. */
+  repoPaths: [string, string];
+}
+
+/**
+ * Every own id two members hold with different rows (REQ-FLOW-160), in member
+ * order. Each member is compared with the first that held the id. Rows compare as
+ * canonical JSON, so a key-sorting formatter makes no clash, and a row counts
+ * whether or not its member selects it.
+ *
+ * The rows are as read from disk, unvalidated. One with no string id is left to
+ * the seam (`../mcp/ownServers.ts`), which refuses it in its own member, as it
+ * refuses two rows in one member sharing an id.
+ */
+export function findOwnRowClashes(
+  members: readonly { repoPath: string; rows: readonly { readonly id?: unknown }[] }[],
+): OwnRowClash[] {
+  const holders = new Map<string, { repoPath: string; text: string }>();
+  const clashes: OwnRowClash[] = [];
+  for (const { repoPath, rows } of members) {
+    for (const row of rows) {
+      if (typeof row.id !== "string") continue;
+      const text = canonicalJson(row);
+      const holder = holders.get(row.id);
+      if (holder === undefined) holders.set(row.id, { repoPath, text });
+      else if (holder.repoPath !== repoPath && holder.text !== text) {
+        clashes.push({ id: row.id, repoPaths: [holder.repoPath, repoPath] });
+      }
+    }
+  }
+  return clashes;
 }
 
 /**

@@ -22,6 +22,7 @@ import { STATE_DIR } from "../../types/markers.ts";
 import { DEFAULT_MAX_DEPTH, type DetectedRepo } from "../../workspace/detect.ts";
 import type {
   WorkspaceManifest,
+  WorkspaceMcpConfig,
   WorkspaceRepoEntry,
   WorkspaceSyncCounts,
   WorkspaceSyncOutcome,
@@ -946,12 +947,45 @@ function sameList(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
-/** Equal MCP blocks. An absent block on the member is never equal to a declared one. */
-function sameMcp(mine: McpConfig | undefined, theirs: McpConfig): boolean {
+/**
+ * The block a member ends up with under a workspace's (REQ-FLOW-160): the
+ * workspace's selection and protocol, then the member's own part of its selection
+ * and every one of its rows. The workspace replaces what it can supply, and an own
+ * server is not that, so the merge is what keeps one launching.
+ *
+ * An id stays only while the member holds its row, so a kept id always resolves. A
+ * row nothing selects stays too, and stays unselected: it is the member's, and the
+ * workspace has no say over it.
+ *
+ * Copied, not aliased: the resolved config is already detached from the workspace
+ * manifest, and copying again keeps the member's document from sharing an array
+ * with the next member's resolution.
+ */
+function mergedMcp(mine: McpConfig | undefined, theirs: WorkspaceMcpConfig): McpConfig {
+  const rows = mine?.ownServers;
+  const ownIds = new Set(rows?.map((row) => row.id));
+  const named = new Set(theirs.servers);
+  return {
+    servers: [
+      ...theirs.servers,
+      ...(mine?.servers ?? []).filter((id) => ownIds.has(id) && !named.has(id)),
+    ],
+    ...(theirs.protocolVersion === undefined ? {} : { protocolVersion: theirs.protocolVersion }),
+    ...(rows === undefined ? {} : { ownServers: [...rows] }),
+  };
+}
+
+/**
+ * Whether the member already holds the block {@link mergedMcp} built for it. An
+ * absent block on the member is never equal to a declared one. Rows are not
+ * compared: the merged block's rows are the member's own, so only the selection
+ * and the protocol can differ.
+ */
+function sameMcp(mine: McpConfig | undefined, merged: McpConfig): boolean {
   return (
     mine !== undefined &&
-    mine.protocolVersion === theirs.protocolVersion &&
-    sameList(mine.servers, theirs.servers)
+    mine.protocolVersion === merged.protocolVersion &&
+    sameList(mine.servers, merged.servers)
   );
 }
 
@@ -981,17 +1015,12 @@ export function propagationPatch(
     patch.maturityTier = resolved.maturityTier;
     fields.push("maturityTier");
   }
-  if (resolved.mcp !== undefined && !sameMcp(manifest.mcp, resolved.mcp)) {
-    // Copied, not aliased: the resolved config is already detached from the
-    // workspace manifest, and copying again keeps the member's document from
-    // sharing an array with the next member's resolution.
-    patch.mcp = {
-      servers: [...resolved.mcp.servers],
-      ...(resolved.mcp.protocolVersion === undefined
-        ? {}
-        : { protocolVersion: resolved.mcp.protocolVersion }),
-    };
-    fields.push("mcp");
+  if (resolved.mcp !== undefined) {
+    const merged = mergedMcp(manifest.mcp, resolved.mcp);
+    if (!sameMcp(manifest.mcp, merged)) {
+      patch.mcp = merged;
+      fields.push("mcp");
+    }
   }
   return { patch, fields };
 }
@@ -1299,6 +1328,50 @@ async function refuseRealpathAliases(
 }
 
 /**
+ * Refuses two members holding different rows under one own id (REQ-FLOW-160)
+ * before the cascade touches either. One name across a workspace reads as one
+ * server, so two programs behind it are a defect a person settles, and a per-member
+ * row could not name the other member.
+ *
+ * A member this check cannot read has no row to compare. It is passed over, as
+ * {@link refuseRealpathAliases} passes over an absent entry, and the cascade reports
+ * it on its own row. {@link classifyMemberDir} goes first, so no manifest is read
+ * through a link out of the root or from a path that is not a file.
+ */
+async function refuseOwnRowClashes(
+  ctx: CliContext,
+  rootDir: string,
+  repos: readonly WorkspaceRepoEntry[],
+): Promise<void> {
+  const rootReal = await resolveRootReal(rootDir);
+  const members = await Promise.all(
+    repos.map(async (entry) => {
+      if ((await classifyMemberDir(rootDir, rootReal, entry.path)) !== "ok") return null;
+      try {
+        const manifest = await ctx.engine.manifest.manifest.readManifest(join(rootDir, entry.path));
+        return { repoPath: entry.path, rows: manifest?.mcp?.ownServers ?? [] };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const clashes = ctx.engine.workspace.resolve.findOwnRowClashes(members.filter((member) => member !== null));
+  if (clashes.length === 0) return;
+  throw new CliFailure({
+    code: "VALIDATION_ERROR",
+    message: clashes
+      .map(({ id, repoPaths: [first, second] }) =>
+        `repos[] entries ${JSON.stringify(first)} and ${JSON.stringify(second)} hold different rows for own server ${JSON.stringify(id)}`,
+      )
+      .join("; "),
+    why: "one id across a workspace reads as one server, and these rows launch different programs or say different things under it",
+    next:
+      `make the rows the same in each member's ${STATE_DIR}/${MANIFEST_FILE}, or rename the id in one of them ` +
+      "along with its entry in mcp.servers",
+  });
+}
+
+/**
  * `workspace sync` end to end: resolve the root, read the manifest, drive the
  * cascade, map its verdict onto the exit contract.
  *
@@ -1319,6 +1392,7 @@ async function runSync(
   const rootDir = await requireWorkspaceRoot(ctx, cwd);
   const manifest = await requireWorkspaceManifest(ctx, rootDir);
   await refuseRealpathAliases(rootDir, manifest.repos);
+  await refuseOwnRowClashes(ctx, rootDir, manifest.repos);
   const now = ctx.app.runtime.clock.now();
   const outcomes = new Map<string, MemberOutcome>();
 

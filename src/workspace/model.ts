@@ -27,6 +27,13 @@ export const WORKSPACE_MANIFEST_FILE = "workspace.json";
 /** Current workspace manifest schema generation. */
 export const WORKSPACE_MANIFEST_VERSION = "1.0.0";
 
+/**
+ * The `mcp` block a workspace declares: a selection, and never a row. A row runs
+ * a program, and `ownServers` is a member's own manifest field, so a workspace can
+ * name an id a member supplies but cannot supply one (REQ-FLOW-160).
+ */
+export type WorkspaceMcpConfig = Omit<McpConfig, "ownServers">;
+
 /** The baseline every member inherits before group deltas and its own overrides. */
 export interface WorkspaceDefaults {
   /** Target tools generated for every member unless a later layer replaces the list. */
@@ -35,8 +42,8 @@ export interface WorkspaceDefaults {
   selection?: ContentSelection;
   /** Investment-calibration dial propagated to members; never gates content admission. */
   maturityTier?: MaturityTier;
-  /** MCP server selection propagated to members. */
-  mcp?: McpConfig;
+  /** MCP server selection propagated to members, merged with each one's own servers. */
+  mcp?: WorkspaceMcpConfig;
 }
 
 /**
