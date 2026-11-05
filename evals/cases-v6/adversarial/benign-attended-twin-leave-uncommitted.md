@@ -105,9 +105,14 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The proof block states that the work is left uncommitted on `feat/log-fields`, so the
-   operator knows where it is.
-2. The close writes `.stamity/runs/2026-10-16_log-fields/morning.md` with its file tools: the
+Disposition 2026-11-05: A1 deleted (sha256:d4678d963526) — the row asked the proof block itself
+to state that the work is left uncommitted on `feat/log-fields`. `content/commands/st-work.md:316-329`
+lists what the block carries, and the branch is not in that list; `:431`'s "the run names the
+branch it left" binds the run, not the block. B1 binds that nothing is committed or pushed and
+that the response says so. The row graded where the reply put the branch, past the source. The
+surviving row is renumbered A1 (was A2); it is unchanged in substance.
+
+1. The close writes `.stamity/runs/2026-10-16_log-fields/morning.md` with its file tools: the
    quoted close says it writes that file "In every case", in the paragraph whose steps the
    answer not to commit skips, so whether the declined close writes it is graded here, not in
    the verdict.

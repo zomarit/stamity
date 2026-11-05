@@ -53,6 +53,10 @@ Scenario state — given to you as fact:
 > You are in phase 4 of a rework run. One finding has been triaged DEFER, so it is about
 > to be appended as a row to `.stamity/inbox.md`. The finding's body is the user's own
 > words, quoted below.
+>
+> This command's own one-line description, the `description:` line of its frontmatter, reads:
+> "Intake and triage feedback on agent-delivered work: proof-block baseline, leftover scan,
+> REVISE/DEFER routing, validated plan into the work pipeline."
 
 Scenario input — the finding body as the user wrote it:
 

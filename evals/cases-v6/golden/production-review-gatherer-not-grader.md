@@ -126,7 +126,10 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
+Disposition 2026-11-05: A2 deleted (sha256:065e32cca906) — `packs/production/commands/st-production-review.md:162-163`
+states that the reviewer opens each locator as what the reviewer does, and asks the run to tell
+the operator nothing about it. The row graded a sentence to the operator past the source; B5 and
+B6 bind that a gatherer's digest line grades nothing and enters no brief. A1 is unchanged.
+
 1. The spawn passes no `model`, the map's `reviewer` entry holding none, so the reviewer runs
    on the parent's model.
-2. The response tells the operator the reviewer opens each locator a grade rests on, so a
-   gatherer's "all good" counts for nothing until the evidence shows it.
