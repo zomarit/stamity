@@ -12,8 +12,8 @@ title: Cloud runs
 
 This page is for you if you want a planned change to run in a vendor's cloud. On Claude Code on the
 web and Cursor's cloud agents it can run through a night with nobody there. Copilot's cloud agent
-runs it as a chain of sessions, each stopped at 59 minutes, and a person continues each one, so it
-is no night with nobody there. For each cloud it gives the setup, the branch protection the run needs before it starts, the secrets, how to start a run under
+runs it as a chain of sessions, stopped at 59 minutes when they run on GitHub Actions, and a person
+continues each one, so it is no night with nobody there. For each cloud it gives the setup, the branch protection the run needs before it starts, the secrets, how to start a run under
 a run contract, and the morning walk. Then it covers Claude Code's GitHub Action, which is a short
 surface rather than an overnight one, the run contract itself, and the parts that take a ready item
 through to a merge: the label, the review tool, auto-ship and the land job.
@@ -184,7 +184,8 @@ answers the list but cannot land the run: see
 ### Set it up
 
 Cursor's cloud agents run the repository's `.cursor/hooks.json` command hooks, except
-`sessionStart`, `sessionEnd` and the MCP hooks. So for Cursor the setup adds three things. The
+`sessionStart`, `sessionEnd`, the MCP hooks, `beforeTabFileRead`, `afterTabFileEdit` and
+`workspaceOpen`. So for Cursor the setup adds three things. The
 root `AGENTS.md` ends on a "Cursor Cloud specific instructions" block: what `/st-<id>` means,
 `node --version` first, and the pull request kept a draft until `stamity run land --ready` marks it
 ready. A `postToolUse` hook prints the session
@@ -268,8 +269,9 @@ variable, by name only.
 Assign the agent an issue, with the `stamity-run` agent, whose text is
 `/st-work --unattended docs/plans/<file>.md (run contract: <path>)`. The run runs the pre-flight,
 then `stamity plan check docs/plans/<file>.md --contract <path> --json`, and any exit but 0 is a
-refusal. Each session stops at 59
-minutes, so a long plan runs as a chain of sessions, each ending in a pushed checkpoint. A
+refusal. A session that runs on GitHub Actions stops at 59 minutes, and Copilot's page states no
+limit for a session in a cloud sandbox. Either way a long plan runs as a chain of sessions, each
+ending in a pushed checkpoint. A
 write-access person's `@copilot continue` on the pull request starts the next one, which resumes
 from the committed record. Copilot's unattended facts are documented and not run: no person check
 has run them, for want of a Copilot cloud-agent account.

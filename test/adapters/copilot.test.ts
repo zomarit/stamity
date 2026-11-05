@@ -849,7 +849,11 @@ describe("Copilot's entry agent (REQ-FLOW-117, REQ-FLOW-118)", () => {
   it("states the chain of sessions and the roles run in line where no sub-agent tool exists", () => {
     const prompt = promptOf(buildRunAgentFile().content);
 
-    expect(prompt).toContain("59 minutes");
+    // TEST CHANGE, justified: re-read 2026-11-05 — the vendor page now states the 59 minutes for a session that runs
+    // on GitHub Actions and no limit for a cloud sandbox session, and the chain stays the safe default in either.
+    expect(prompt).toContain("a session that runs on GitHub Actions stops at 59 minutes");
+    expect(prompt).toContain("a cloud sandbox session's limit is not stated");
+    expect(prompt).toContain("In either, size each unit to one session");
     expect(prompt).toContain("before about minute 45");
     expect(prompt).toContain("`stamity run checkpoint`");
     expect(prompt).toContain("`@copilot continue`");
@@ -865,7 +869,7 @@ describe("Copilot's entry agent (REQ-FLOW-117, REQ-FLOW-118)", () => {
 
     // A CLI or editor user who picks this agent reads the cloud-only rules as the cloud's.
     expect(prompt).toContain("On Copilot's cloud agent, a prompt file is not run by name");
-    expect(prompt).toContain("4. On Copilot's cloud agent, a session stops at 59 minutes.");
+    expect(prompt).toContain("4. On Copilot's cloud agent, a session that runs on GitHub Actions stops at 59 minutes");
     expect(prompt.indexOf("On Copilot's cloud agent")).toBeLessThan(prompt.indexOf("59 minutes"));
     expect(prompt).not.toContain("on this agent");
     expect(prompt).not.toContain("A session here");

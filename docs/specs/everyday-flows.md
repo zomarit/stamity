@@ -5726,13 +5726,18 @@ Added 2026-10-18 (plan 021 file 2, units `v3-cloud-skill`, `v9-copilot-entry` an
 Given an unattended run on Copilot's cloud agent, Then each session commits and pushes a checkpoint before about minute
 45 to 50, plan units are sized to one session, and the next session starts on a write-access person's
 `@copilot continue` and resumes from the committed record on the same PR; `docs/cloud.md` promises a night with nobody
-there on Claude Code and Cursor only. The 59-minute cap and the continuation are vendor-documented and not run, with no
-Copilot cloud-agent account.
+there on Claude Code and Cursor only. The 59-minute cap on a session that runs on GitHub Actions and the continuation
+are vendor-documented and not run, with no Copilot cloud-agent account; the vendor page states no limit for a session
+in a cloud sandbox, and the chain stays the safe default there.
 
 - **As built:** the skill names the agent by what it does, "a cloud agent whose session ends near an hour"
   (`content/skills/st-unattended/references/cloud.md:77-83`), and the entry agent states the chain (REQ-FLOW-118). The
   setup job is bounded at `timeout-minutes: 30` (`SETUP_STEPS_TIMEOUT_MINUTES`, `src/adapters/copilot.ts`). The cloud
   page's opening says Copilot's cloud agent runs as a chain a person continues, so it is no night with nobody there.
+- **Amended 2026-11-05** (the 1.18.0 cut's vendor-page re-read; read at `582bcc6d`). The vendor page now states the 59
+  minutes for a session that runs on GitHub Actions and no limit for a session in a cloud sandbox, so the capability
+  matrix's row, the entry's step 4 and `docs/cloud.md` say so. The chain, its checkpoint and its unit size are unchanged
+  in either environment.
 - **Proof:** `test/adapters/copilot.test.ts` ("bounds the job with timeout-minutes, under the platform's 59 on every
   lane (REQ-FLOW-117)"), `test/corpus/skills/unattended.test.ts`, `test/docsPages.test.ts` ("states the cloud facts the
   capability matrix's table holds").

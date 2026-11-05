@@ -715,9 +715,16 @@ describe("the cloud column and the Cloud sessions section", () => {
     expect(claudeHooks.glance).toContain("project thread");
     expect(cloudFact("copilot", "Default branch").fact).toContain("present on the repository's default branch");
     expect(cloudFact("copilot", "Project hooks").fact).toContain("in the cloned repository");
-    expect(cloudFact("cursor", "Project hooks").fact).toContain(
-      "except `sessionStart`, `sessionEnd` and the MCP hooks",
+    // TEST CHANGE, justified: re-read 2026-11-05 — the page's list of hooks not available in cloud agents also holds
+    // the two Tab hooks and `workspaceOpen`, so the row and its glance name them.
+    const cursorHooks = cloudFact("cursor", "Project hooks");
+    expect(cursorHooks.fact).toContain(
+      "except `sessionStart`, `sessionEnd`, the MCP hooks, `beforeTabFileRead`, `afterTabFileEdit` and `workspaceOpen`",
     );
+    expect(cursorHooks.glance).toContain(
+      "without `sessionStart`, `sessionEnd`, the MCP hooks, `beforeTabFileRead`, `afterTabFileEdit` or `workspaceOpen`",
+    );
+    expect(cursorHooks.citation.accessDate).toBe("2026-11-05");
   });
 
   it("says a lost review-gate counter is rebuilt, never that it resets or opens the gate (REQ-FLOW-085, REQ-FLOW-106)", () => {
@@ -874,7 +881,13 @@ describe("the cloud column and the Cloud sessions section", () => {
       const row = rows.find((line) => cells(line)[0] === "`copilot`" && cells(line)[1] === subject) ?? "";
       expect([cells(row)[4], cells(row)[6]], subject).toEqual(["documented", "not run"]);
     }
-    expect(cloudFact("copilot", "Session limit").fact).toContain("59 minutes");
+    // TEST CHANGE, justified: re-read 2026-11-05 — the page now states the 59 minutes for a session that runs on GitHub
+    // Actions and no limit for a cloud sandbox session, so the row claims the cap for the first alone.
+    const sessionLimit = cloudFact("copilot", "Session limit");
+    expect(sessionLimit.fact).toContain("A session that runs on GitHub Actions stops at 59 minutes");
+    expect(sessionLimit.fact).toContain("The page states no limit for a session in a cloud sandbox");
+    expect(sessionLimit.fact).toContain("Treat a long run as a chain of sessions");
+    expect(sessionLimit.citation.accessDate).toBe("2026-11-05");
     expect(cloudFact("copilot", "Next session").fact).toContain("`@copilot`");
     expect(cloudFact("copilot", "Draft pull request").fact).toContain("cannot mark it ready for review");
     expect(cloudFact("claude", "Draft pull request").fact).toContain("refuses a tag push");

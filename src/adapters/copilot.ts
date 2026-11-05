@@ -807,8 +807,8 @@ export function runAgentRows(rows: readonly AdapterOutput[]): AdapterOutput[] {
  * and no roster grant exists for it (Copilot's guards are identity-free).
  * `model:` is unset: the cloud agent picks its model when the task starts.
  *
- * The 59-minute session cap, `@copilot continue`, and the prompt-file rule are
- * vendor-documented and not run here, with no cloud-agent account. Each opens
+ * The GitHub Actions session's 59-minute cap, `@copilot continue`, and the prompt-file
+ * rule are vendor-documented and not run here, with no cloud-agent account. Each opens
  * with "On Copilot's cloud agent" (review/50), so a CLI or editor user who
  * picks this agent is not handed cloud-only rules as their own.
  */
@@ -821,8 +821,8 @@ export function buildRunAgentFile(): AdapterOutput {
     `1. Read \`${WORK_PROMPT_PATH}\` whole and follow it as your instructions.`,
     "2. Read the plan file the issue names, and work it through that flow. An issue that names no plan is itself the request.",
     "3. When the run record reads `Mode: unattended`, follow the `st-unattended` skill as well.",
-    "4. On Copilot's cloud agent, a session stops at 59 minutes. Size each unit to one session, and commit and push a checkpoint " +
-      "before about minute 45 (in an unattended run, through `stamity run checkpoint`). The next session starts " +
+    "4. On Copilot's cloud agent, a session that runs on GitHub Actions stops at 59 minutes, and a cloud sandbox session's limit " +
+      "is not stated. In either, size each unit to one session, and commit and push a checkpoint before about minute 45 (in an unattended run, through `stamity run checkpoint`). The next session starts " +
       "on a person's `@copilot continue` on the same pull request and resumes from the committed record.",
     "5. Where no sub-agent tool is available, run the flow's roles in line, one at a time in their order, " +
       "and the proof block says so.",

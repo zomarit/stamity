@@ -396,12 +396,13 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     tool: "copilot",
     subject: "Session limit",
     fact:
-      "Each cloud agent session stops at 59 minutes, a limit that cannot be extended, so a long run is " +
-      "a chain of sessions, each ending in a pushed checkpoint.",
+      "A session that runs on GitHub Actions stops at 59 minutes, a limit that cannot be extended. The " +
+      "page states no limit for a session in a cloud sandbox. Treat a long run as a chain of sessions in " +
+      "either, each ending in a pushed checkpoint.",
     status: "documented",
     citation: {
       url: "https://docs.github.com/en/copilot/concepts/copilot-surfaces/copilot-on-github",
-      accessDate: "2026-10-18",
+      accessDate: "2026-11-05",
     },
   },
   {
@@ -422,10 +423,13 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     subject: "Project hooks",
     fact:
       "Cursor's cloud agents run the command hooks in the repository's `.cursor/hooks.json`, except " +
-      "`sessionStart`, `sessionEnd` and the MCP hooks; user-level hooks are not available there.",
+      "`sessionStart`, `sessionEnd`, the MCP hooks, `beforeTabFileRead`, `afterTabFileEdit` and " +
+      "`workspaceOpen`; user-level hooks are not available there.",
     status: "documented",
-    citation: { url: "https://cursor.com/docs/hooks", accessDate: "2026-10-15" },
-    glance: "repository hooks run, without `sessionStart`, `sessionEnd` or the MCP hooks",
+    citation: { url: "https://cursor.com/docs/hooks", accessDate: "2026-11-05" },
+    glance:
+      "repository hooks run, without `sessionStart`, `sessionEnd`, the MCP hooks, `beforeTabFileRead`, " +
+      "`afterTabFileEdit` or `workspaceOpen`",
   },
   {
     tool: "cursor",

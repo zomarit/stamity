@@ -2391,8 +2391,8 @@ or board item, base, acceptance, scope, prerequisites, budget and who answers, t
 Added 2026-10-18 (plan 021 file 2, unit `v11-cloud-facts-matrix` and its fix round).
 
 Given the capability matrix's cloud column, Then each client gains facts for an unattended run (the draft-PR ending,
-question handling, and Copilot's chain of 59-minute sessions), and a fact may carry an optional `run` field naming the
-person check and its date, rendered "not run" when absent; Copilot's unattended rows read documented, not run, and a
+question handling, and Copilot's chain of sessions, each 59 minutes at most on GitHub Actions), and a fact may carry an
+optional `run` field naming the person check and its date, rendered "not run" when absent; Copilot's unattended rows read documented, not run, and a
 fact carrying a session-start line stays `documented` (`test/emit/capabilityMatrix.test.ts`).
 
 - **As built, beyond the delta:**
@@ -2406,6 +2406,9 @@ fact carrying a session-start line stays `documented` (`test/emit/capabilityMatr
     draft pull request, session limit and next session, `documented`, its question fact being the existing "Ask
     decisions" row; Cursor's draft pull request and questions, `not documented`, the draft row adding that the
     platform's own push meets no shell guard, so branch protection is needed.
+- **Amended 2026-11-05** (the 1.18.0 cut's vendor-page re-read; read at `582bcc6d`). The Copilot session limit row now
+  states the 59 minutes for a session that runs on GitHub Actions and says the page names no limit for a session in a
+  cloud sandbox; a long run stays a chain of sessions in either (`CLIENT_CLOUD_FACTS`, `src/hooks/model.ts`).
 - **Proof:** `test/emit/capabilityMatrix.test.ts` ("names each fact's person check, reading "not run" where a fact
   carries none (REQ-PROVE-044)", "refuses a person check with no record or an undated one, naming the fact", "gives
   each cloud its unattended rows …"), and the matrix page byte-equal to its regeneration (`docs/capability-matrix.md`).
