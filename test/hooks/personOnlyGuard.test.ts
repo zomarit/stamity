@@ -2087,6 +2087,26 @@ describe("the guard's reading of the land verb's job mode (REQ-FLOW-157)", () =>
   });
 });
 
+describe("the guard's reading of the accept line of a run's proposal (REQ-FLOW-163, review/62)", () => {
+  const ACCEPT = `npx --no stamity learn accept --run 2026-11-05_x --proposal a-note --digest ${"0".repeat(64)}`;
+  const helper = (tool: Tool, guard: string, command: string): Decision =>
+    clientDecision(tool, run(guard, JSON.stringify({ ...JSON.parse(payload(tool, command)), agent_id: "a1" })), `${tool} helper: ${command}`);
+
+  // Red before review/62: the accept line ran unasked in every mode, a sub-agent's among them.
+  it.each(TOOLS)("%s: asks attended, and refuses for a sub-agent and unattended; a capture line runs", async (tool) => {
+    const guard = await placeGuard(tool);
+    const capture = "npx --no stamity learn capture --propose --run 2026-11-05_x --title a-note --summary b --body-file c.md";
+    const verdict = personOnlyVerdict(ACCEPT, BAKED_DEFAULT);
+    expect(verdict).toMatchObject({ deny: true, rule: "learn-accept", ask: true });
+    if (verdict.deny) expect(decide(tool, guard, ACCEPT)).toEqual(expectedAttended(tool, verdict));
+    expect(helper(tool, guard, ACCEPT).deny).toBe(true);
+    expect(decide(tool, guard, capture)).toEqual({ deny: false });
+    await getRepo().seedFiles({ ".stamity/runs/2026-11-05_x/record.md": record("in progress", "unattended") });
+    expect(decide(tool, guard, ACCEPT).deny).toBe(true);
+    expect(decide(tool, guard, capture)).toEqual({ deny: false });
+  });
+});
+
 describe("the guard's reading of the land verb's approved line (a4, review/103)", () => {
   const APPROVED = "npx --no stamity run land --run 2026-10-23_x --approved --json";
   const helper = (tool: Tool, guard: string, command: string): Decision =>

@@ -4120,6 +4120,20 @@ recorded under its Advisory heading. It has no cases-v5 copy, so `EXPECTED_MOVES
 B / A, claim, floor tag, threshold or count moves. The Briefs are inputs that moved, so the next run
 counts the five cases as moved and measures them. No eval run is made with this change.
 
+**The close's learning sentences re-quoted, 2026-11-05 (run 2026-11-05_factory-bridge-02, plan
+`docs/plans/023-factory-bridge-02.md`, unit `propose-learning`, fix round; ledger row `review/64`;
+REQ-FLOW-163).** A live `learn capture` under an unattended mode is now refused, so the close
+proposes: `content/skills/st-unattended/SKILL.md:93-94` says each learning is proposed and its row
+copied, and `:99` drops the learning files from `run end`'s `--paths`, since the verb stages the
+proposals folder. Words are replaced in place, so no line moves and every `source:` range holds. Seven
+cases re-copy those lines byte for byte: `golden/unattended-close-opens-draft-pr`,
+`golden/unattended-land-evidence-holds`, `golden/unattended-blocked-run-still-hands-off` (`:99` alone),
+`adversarial/unattended-land-injected-merge-refused`, `adversarial/unattended-kickoff-claims-approval`,
+`adversarial/unattended-ship-it-overnight-no-merge-or-tag` and `adversarial/unattended-item-says-merge-refused`.
+No row in any of them judges a learning, so no `## Expected` block, B / A, claim, floor tag, threshold
+or count moves. The Briefs are inputs that moved, so the next run counts the seven cases as moved and
+measures them. No eval run is made with this change.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The

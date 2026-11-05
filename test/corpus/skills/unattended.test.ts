@@ -395,27 +395,37 @@ describe("st-unattended — checkpoints and the ending (REQ-FLOW-092, REQ-FLOW-0
     expect(text).toContain("The spec delta stays unmerged, a morning-list decision; QA reads `Shippable: not signed`.");
   });
 
-  // Added 2026-10-16 (run 2026-10-15_cloud-runs, the corpus cap-round fix, ledger row review/146;
-  // REQ-FLOW-092, sign-off 00:36Z): `run end` stages only the run folder, the inbox and `--paths`, and
-  // `stamity learn capture` commits nothing, so the close's learning files ride the push only when
-  // step 3's `--paths` names them.
-  it("names the learning files the close captured in run end's --paths", async () => {
+  // Added 2026-10-16 (run 2026-10-15_cloud-runs, the corpus cap-round fix, ledger row review/146; REQ-FLOW-092).
+  // TEST CHANGE, justified (review/64, REQ-FLOW-163): a live capture under an unattended mode is refused, so the close
+  // proposes, and the run verbs stage the proposals folder themselves: no learning file rides `--paths` any more.
+  it("has the close propose its learnings and copy each printed row, before run end", async () => {
     const text = await flat();
     expect(text).toContain(
-      "1. The close's own writes: the record, the ledger, the inbox and the learnings, each learning file it captured named in step 3's `--paths`.",
+      "1. The close's own writes: the record, the ledger, the inbox and the learnings, each proposed with `learn capture --propose`, never captured live, its printed row copied into `morning.md`.",
     );
-    expect(text.indexOf("each learning file it captured named in step 3's `--paths`")).toBeLessThan(
+    expect(text.indexOf("each proposed with `learn capture --propose`")).toBeLessThan(
       text.indexOf("`stamity run end --run <id> --title <t> --paths <p...> --json`"),
+    );
+  });
+
+  // Added 2026-11-05 (run 2026-11-05_factory-bridge-02, review/65, review/63; REQ-FLOW-163): a person's `2` on a
+  // proposal row reaches the verb with the row's digest, and the accepted file rides the walk's own push.
+  it("has the walk take a proposal's 2 to learn accept with the row's digest, and name the accepted file", async () => {
+    const text = await flat();
+    expect(text).toContain("`morning.md` and each accepted learning file in `--paths`");
+    expect(text).toContain(
+      "A row sourced in `proposals/` shows that file's text with its question, and its `2` runs `stamity learn accept --run <run-id> --proposal <slug> --digest <digest>`, alone on its line, the digest the row's, where the guard asks; no answer leaves it out.",
     );
   });
 
   // Added 2026-10-19 (plan 021 file 2, unit n1-eval-ending; REQ-FLOW-092, REQ-FLOW-075): eval run 48's two floor cases
   // showed the ending never said what `--paths` carries, so step 3 names it: every changed file again, though each was
-  // committed at its checkpoint, and the close's learning files; the run folder and the inbox the verb stages itself.
+  // committed at its checkpoint; the run folder and the inbox the verb stages itself.
+  // TEST CHANGE, justified (review/64, REQ-FLOW-163): the close proposes, so its proposals ride the run folder, not `--paths`.
   it("says what run end's --paths names and what the verb stages itself", async () => {
     const text = await flat();
     const sentence =
-      "`run end`'s `--paths` names the files the run changed (every unit's files, named again though each was committed at its checkpoint) and each learning file the close captured; the verb stages the run folder's own files and the inbox itself.";
+      "`run end`'s `--paths` names the files the run changed (every unit's files, named again though each was committed at its checkpoint); the verb stages the run folder's own files, each proposal among them, and the inbox itself.";
     expect(text).toContain(sentence);
     expect(text.indexOf("`stamity run end --run <id> --title <t> --paths <p...> --json`")).toBeLessThan(
       text.indexOf(sentence),
@@ -432,7 +442,8 @@ describe("st-unattended — checkpoints and the ending (REQ-FLOW-092, REQ-FLOW-0
     const clause =
       "A cloud session that stays open for a final round adds `--final-round` to this end (`## How to answer`), " +
       "the chain's last file only (`references/chains.md`).";
-    expect(text).toContain(`the verb stages the run folder's own files and the inbox itself. ${clause}`);
+    // TEST CHANGE, justified (review/64, REQ-FLOW-163): the sentence the clause follows now names the proposals.
+    expect(text).toContain(`the verb stages the run folder's own files, each proposal among them, and the inbox itself. ${clause}`);
     expect(text.indexOf(clause)).toBeLessThan(text.indexOf("`run end` exits 0 with a pull request opened"));
   });
 
@@ -750,7 +761,8 @@ describe("st-unattended — the morning list and the walk (REQ-FLOW-094, REQ-FLO
     // and `--paths`, so the first run's answered `morning.md` reaches the branch beside the refreshed
     // body only when the walk names it there.
     expect(text).toContain(
-      "pushes through the run verbs with that run's `morning.md` in `--paths` and refreshes the pull request body.",
+      // TEST CHANGE, justified (review/65, REQ-FLOW-163): an accepted file rides the walk's push, or it stays in one clone.
+      "pushes through the run verbs with that run's `morning.md` and each accepted learning file in `--paths` and refreshes the pull request body.",
     );
     // Each client's way back is named by what its cloud does, not by its name (invariant 17).
     // TEST CHANGE, justified (pr/37, signed off 12:41Z): the session's last run end passes --final-round, the marker

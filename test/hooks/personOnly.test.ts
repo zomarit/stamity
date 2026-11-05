@@ -1006,8 +1006,9 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
 // TEST CHANGE, justified (REQ-FLOW-121, review/103): the land verb's approved line joins the ask class.
 // TEST CHANGE, justified (REQ-FLOW-134, a4c): a write that reaches an outside party joins the ask class.
 // TEST CHANGE, justified (REQ-FLOW-134, review/129): a remote or URL rewrite written joins it, run on the main thread.
+// TEST CHANGE, justified (REQ-FLOW-163, review/62): a person's accept of a run's proposal joins the ask class.
 const ASK_CLASS = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection",
-  "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "outside-write", "remote-write"]);
+  "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "learn-accept", "outside-write", "remote-write"]);
 
 const ZERO = "0".repeat(40);
 /** A GraphQL `updateRefs` call with one entry: its ref name and its `afterOid`. */
@@ -1168,6 +1169,8 @@ const CLASSES: readonly (readonly [command: string, rule: string, ask: boolean, 
   ["stamity sync --loosen", "autonomy-loosen", true],
   // TEST CHANGE, justified (REQ-FLOW-121, review/103): the land verb's approved line, ask-class.
   ["stamity run land --run x --approved", "land-approved", true],
+  // TEST CHANGE, justified (REQ-FLOW-163, review/62): the accept line, ask-class.
+  ["stamity learn accept --run x --proposal y --digest z", "learn-accept", true],
   // review/117: a line past 65,536 characters is refused in every mode before any reading.
   [`echo ${"a".repeat(70_000)}`, "line-too-long", false],
   ["gh repo edit", "repo-irreversible", false],
@@ -1297,6 +1300,8 @@ describe("personOnlyVerdict — the deny matrix", () => {
       "autonomy-loosen",
       // TEST CHANGE, justified (REQ-FLOW-121, review/103): one more rule joins the table.
       "land-approved",
+      // TEST CHANGE, justified (REQ-FLOW-163, review/62): one more rule joins the table.
+      "learn-accept",
       // TEST CHANGE, justified (review/117): the refuse-class cap on a line too long for the guard to read joins it.
       "line-too-long",
       // TEST CHANGE, justified (REQ-FLOW-134, a4c): the ask-class write that reaches an outside party joins it.
@@ -2432,7 +2437,8 @@ describe("CLAUDE_DENY_ROWS and CLAUDE_ASK_ROWS", () => {
         // TEST CHANGE, justified (REQ-FLOW-134, a4c): another repository's target and a mention sit mid-line, past
         // the command's prefix, and are read against the origin, which no settings row can know.
         // TEST CHANGE, justified (REQ-FLOW-134, review/129): a remote write runs on the main thread, so no row holds it.
-        .filter((id) => !["push-default", "protection-delete", "status-write", "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "line-too-long", "outside-write", "remote-write"].includes(id))
+        // TEST CHANGE, justified (REQ-FLOW-163, review/62): the accept line is the guard's alone, as the loosening is.
+        .filter((id) => !["push-default", "protection-delete", "status-write", "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "learn-accept", "line-too-long", "outside-write", "remote-write"].includes(id))
         .toSorted(),
     );
   });
@@ -3472,6 +3478,43 @@ describe("a program word's glob matched with no regular expression (a4, review/1
 
   it("runs a few wildcards whose tail no package word holds", () => {
     expect(personOnlyVerdict("/usr/bin/***q \"$F\"", DEFAULT)).toEqual({ deny: false });
+  });
+});
+
+describe("the accept line of a run's proposal (REQ-FLOW-163, review/62)", () => {
+  const LINE = `learn accept --run 2026-11-05_x --proposal a-note --digest ${"0".repeat(64)}`;
+
+  // Red before review/62: the verb had no row, so an agent's line took a proposal live with no click.
+  it.each([
+    ["the verb", `stamity ${LINE}`],
+    ["the verb through the pinned runner", `npx --no stamity ${LINE} --json`],
+    ["the verb through the package's own CLI file", `node node_modules/@zomarit/stamity/dist/cli.js ${LINE}`],
+    ["the verb after a program option", `stamity --json ${LINE}`],
+    ["a flag before the verb", "stamity learn --run 2026-11-05_x accept"],
+    ["a learn line through a program the guard cannot settle", `"$CLI" ${LINE}`],
+    ["the verb behind another command", `npm test && stamity ${LINE}`],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule: "learn-accept", ask: true });
+  });
+
+  // A word the guard cannot read may be the verb. Those lines already ask on any line running this package, so the
+  // accept reading adds no second rule for them; this pins that they do ask.
+  it.each([
+    ["a learn line with a filled-in word", "stamity learn \"$VERB\" --run x"],
+    ["a learn line under xargs", "echo accept | xargs stamity learn"],
+  ])("asks for %s, which may be the verb", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, ask: true });
+  });
+
+  it.each([
+    ["a capture", "stamity learn capture --title a-note --summary b --body-file c.md"],
+    ["a proposal", "npx --no stamity learn capture --propose --run 2026-11-05_x --title a-note --summary b --body-file c.md"],
+    ["a read", "stamity learn read --body a-note"],
+    ["a line that only names the verb", "echo 'stamity learn accept --run x'"],
+    ["a commit message naming it", "git commit -m 'stamity learn accept takes a digest'"],
+    ["another program's learn accept", "./tools/learn accept"],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
   });
 });
 

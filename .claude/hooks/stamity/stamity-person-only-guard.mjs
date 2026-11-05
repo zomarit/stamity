@@ -1360,6 +1360,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		"workflow-dispatch",
 		"autonomy-loosen",
 		"land-approved",
+		"learn-accept",
 		"outside-write",
 		"remote-write"
 	]);
@@ -2422,6 +2423,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const unsure = unread.get(cmd) ?? [];
 		const args = unsure[0] === true ? cmd.slice(1) : packageArgs(cmd);
 		if (args === null) return;
+		if (args.includes("learn") && args.includes("accept")) deny("learn-accept", "A `learn accept` line");
 		const at = unsure[0] === true ? args.indexOf("run") : args.findIndex((word) => !word.startsWith("-"));
 		if (at === -1 || args[at] !== "run" || !args.slice(at + 1).includes("land")) return;
 		if (args.some((word) => word === "--approved" || word.startsWith("--approved="))) {

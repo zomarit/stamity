@@ -1115,7 +1115,14 @@ describe("learn — the thin capture lane", () => {
     expect(text).toContain("`.stamity/runs/<run-id>/proposals/<slug>.md`");
     expect(text).toContain("`1 leave it out · 2 accept`, default `1`");
     expect(text).toContain("so no answer leaves it out");
-    expect(text).toContain("`stamity learn accept --run <run-id> --proposal <slug>`");
+    // TEST CHANGE, justified (review/63, review/61, review/64): the verb takes the digest the row printed, the override
+    // route goes, and a live capture under an unattended mode is refused.
+    expect(text).toContain("`stamity learn accept --run <run-id> --proposal <slug> --digest <digest>`");
+    expect(text).toContain("The row names `learn accept` and the proposal's digest");
+    expect(text).toContain("a default of accept among them");
+    expect(text).toContain("A run proposes learnings only in this release");
+    expect(text).not.toContain("`.stamity/overrides/` by that class's own gates");
+    expect(text).toContain("A live `learn capture` in such a run is refused, naming `--propose`");
     expect(text).toContain("The verb refuses while the session is unattended");
     expect(text).toContain("a held patch makes `run land` ask");
   });

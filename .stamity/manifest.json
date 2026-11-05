@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.17.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-11-05T11:21:25.754Z",
+  "updatedAt": "2026-11-05T13:45:00.028Z",
   "tools": [
     "claude"
   ],
@@ -218,7 +218,7 @@
       "adapter": "claude",
       "artifactId": "stamity-person-only-guard",
       "artifactType": "infra",
-      "contentHash": "c23b0caedcaf969dc4403460fd66921654343c72d21485d7a03487bc0e4c13dc",
+      "contentHash": "c66aaac59c717846a0c2b7f87c2973df7368db085f5103468d33104b531b1575",
       "path": ".claude/hooks/stamity/stamity-person-only-guard.mjs"
     },
     {
@@ -476,7 +476,7 @@
       "adapter": "claude",
       "artifactId": "learn",
       "artifactType": "skill",
-      "contentHash": "d0dfa525e5740b2f935efce676796cabafa8d21f0ee92ac77b25714e852fa7c2",
+      "contentHash": "874d8cd1031d2e157c24b40fd1fe21a7a7082f34965959f5ea10f2ea7287e78c",
       "path": ".claude/skills/st-learn/SKILL.md"
     },
     {
@@ -532,7 +532,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "38fd1e03f4a265b90ac2574286ed2758431e03f83dd1620d406981ba4329322e",
+      "contentHash": "1c412e31dba2da8066a4f30533fecbe6183e74e6952a32fe1796e1b7ba6774c3",
       "path": ".claude/skills/st-unattended/SKILL.md"
     },
     {
@@ -553,7 +553,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "6352b7861161b93b9881cd1919652c01b1ef1625d5d8e9735067a67211634761",
+      "contentHash": "63f44ff0661456b7c2cd939be8664bafec1a0aeb38474daad064a142e1802274",
       "path": ".claude/skills/st-unattended/references/cloud.md"
     },
     {

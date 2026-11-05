@@ -1,6 +1,7 @@
+import { createHash } from "node:crypto";
 import { lstat, open, readdir, readFile, stat } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
-import { Argument, Option, type Command } from "commander";
+import { Argument, InvalidArgumentError, Option, type Command } from "commander";
 // Registration-time import: `configure()` runs while the program is being built,
 // before any CliContext exists, so the confidence choices cannot come off
 // `ctx.engine` the way every runtime call below does. Nothing else in this file
@@ -72,16 +73,24 @@ import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts
  * `.stamity/overrides/` are what later runs read, so both are held paths
  * (REQ-FLOW-133) and an unattended run writes neither. `capture --propose --run
  * <id>` runs the dry run's gates and writes the note into the run's own folder;
- * `accept --run <id> --proposal <slug>` hands those bytes to the store, or to
- * the override path, whose gates all run again. Nothing here trusts the
- * proposal: the run wrote that file, and it may have changed since its capture.
+ * `accept --run <id> --proposal <slug> --digest <sha256>` hands those bytes to
+ * the store, whose gates all run again. Nothing here trusts the proposal: the
+ * run wrote that file, and it may have changed since its capture. So the
+ * person's yes binds to the row they read: the digest they were shown must be
+ * the file's, and the run's morning row must still be the row capture printed,
+ * so a default of accept never passes. A run proposes learnings only: a head
+ * naming a class is refused, since one yes to a learning must not replace a
+ * shipped rule. The guard asks on the verb (`learn-accept`,
+ * `../../hooks/personOnly.ts`); the refusal here is the second layer, and a run
+ * can write what it reads. A live capture under an unattended mode is refused
+ * too, since the hold restores the index and the work tree keeps the file.
  */
 
 /** The write verb. */
 const CAPTURE = "capture";
 /** The screened read verb. */
 const READ = "read";
-/** The verb that takes a run's proposal live: a person's, refused under an unattended mode. */
+/** The verb that takes a run's proposal live: a person's, asked by the guard and refused under an unattended mode. */
 const ACCEPT = "accept";
 
 /** A run's proposals, inside its run folder; `run checkpoint` and `run end` stage this folder's `.md` files by name. */
@@ -513,11 +522,19 @@ async function proposingFolder(ctx: CliContext, rootDir: string, run: string): P
   return folder;
 }
 
-/** The row a proposal asks for on the morning list, less its `Q<n>`, which the run numbers: no answer leaves it out. */
-function proposalRow(fileName: string, summary: string): Record<string, unknown> {
+/** The digest a person's yes binds to: the proposal's whole text, its head with it, as `--approved` binds a yes to a commit. */
+function proposalDigest(document: string): string {
+  return createHash("sha256").update(document).digest("hex");
+}
+
+/**
+ * The row a proposal asks for on the morning list, less its `Q<n>`, which the run numbers: no answer leaves it out. The
+ * question names the verb and the digest a `2` passes to it, and `accept` reads the row back against this shape.
+ */
+function proposalRow(fileName: string, summary: string, digest: string): { kind: string; question: string; options: string[]; default: number; source: string } {
   return {
     kind: "decision",
-    question: `Accept the proposed learning ${fileName.slice(0, -".md".length)}? ${summary.replaceAll(/\s+/g, " ")}`,
+    question: `Accept the proposed learning ${fileName.slice(0, -".md".length)}? ${summary.replaceAll(/\s+/g, " ")} (learn accept --digest ${digest})`,
     options: ["leave it out", "accept"],
     default: 1,
     source: `${PROPOSALS_DIR}/${fileName}`,
@@ -538,8 +555,9 @@ async function proposeCapture(ctx: CliContext, rootDir: string, folder: string, 
   if ((await lstat(join(rootDir, path)).catch(() => null)) !== null) {
     return refuse(ctx, fileName, [`${path} is already proposed. Proposals are append-only: capture this note under a different title.`]);
   }
-  const morning = proposalRow(fileName, text(draft.frontmatter, "summary"));
-  const shared = { fileName, path, morning, gatesRun: [...WRITE_GATES], warnings: gated.warnings };
+  const digest = proposalDigest(document);
+  const morning = proposalRow(fileName, text(draft.frontmatter, "summary"), digest);
+  const shared = { fileName, path, digest, morning, gatesRun: [...WRITE_GATES], warnings: gated.warnings };
   if (ctx.dryRun) {
     ctx.io.out(`Dry run: ${JSON.stringify(fileName)} would be proposed at ${path}. Nothing was written.\n`);
     return { exitCode: 0, json: { dryRun: true, ...shared } };
@@ -601,18 +619,38 @@ async function unattendedSession(ctx: CliContext, rootDir: string): Promise<stri
   }
 }
 
-/** A content class, typed off the engine function as `dryRunCapture` types its parse. */
-type ProposalClass = Parameters<CliContext["engine"]["content"]["userContent"]["saveUserContent"]>[1];
-
-/** The content class a proposal's head names, or `null` for a learning; a head that does not parse is the store's to refuse. */
-function proposalClass(ctx: CliContext, document: string, fileName: string): ProposalClass | null {
-  const { frontmatter, userContent } = ctx.engine.content;
+/** The head of a proposal, or an empty one where it does not parse: that head then matches no row, and is refused there. */
+function proposalHead(ctx: CliContext, document: string, fileName: string): Record<string, unknown> {
   try {
-    const type = frontmatter.parseFrontmatter(document, `Proposal "${fileName}"`).frontmatter["type"];
-    return typeof type === "string" && Object.hasOwn(userContent.CLASS_LAYOUT, type) ? (type as ProposalClass) : null;
+    return ctx.engine.content.frontmatter.parseFrontmatter(document, `Proposal "${fileName}"`).frontmatter;
   } catch {
-    return null;
+    return {};
   }
+}
+
+/**
+ * Why the run's morning list does not carry `expected` as this proposal's row, or `null` where it does. A run writes
+ * that file, so a row reading other than the one capture printed (a default of accept, the options swapped, a question
+ * saying something the proposal does not) refuses, and a list with no such row asked nobody. Every row naming the
+ * proposal is read: one faithful row beside a second is no faithful list.
+ */
+async function proposalRowProblem(ctx: CliContext, rootDir: string, run: string, expected: ReturnType<typeof proposalRow>): Promise<string | null> {
+  const { layout, morning } = ctx.engine.runs;
+  const path = `${layout.runRelPath(run)}/${morning.MORNING_FILE}`;
+  const list = await headOf(join(rootDir, path), ctx.engine.guard.promptGuard.MAX_USER_CONTENT_LENGTH);
+  const parsed = list === null ? null : morning.parseMorning(list);
+  if (parsed === null || !parsed.ok || parsed.runId !== run) return `${path} is no morning list of this run, so nobody was asked`;
+  const rows = parsed.questions.filter((row) => row.source === expected.source);
+  if (rows.length === 0) return `${path} holds no row for ${expected.source}, so nobody was asked`;
+  const faithful = rows.every(
+    (row) =>
+      row.kind === expected.kind &&
+      row.question === expected.question &&
+      row.default === expected.default &&
+      row.options.length === expected.options.length &&
+      row.options.every((option, at) => option === expected.options[at]),
+  );
+  return faithful ? null : `${path} does not carry the row capture printed for ${expected.source}, and no answer leaves a proposal out`;
 }
 
 /** The proposal's text, refused where it is no regular file of the run's proposals folder. */
@@ -631,12 +669,12 @@ async function readProposal(ctx: CliContext, rootDir: string, path: string): Pro
 }
 
 /**
- * `accept`: a person's yes to one proposal. Refused under an unattended mode, before any file is read. The proposal's
- * bytes then go through the store's whole write path, or the override path's for a head naming a content class, so
- * every gate runs again on the file as it stands now. The proposal stays in the run folder as the record of what was
- * asked; a second accept of a learning is the store's append-only refusal.
+ * `accept`: a person's yes to one proposal. Refused under an unattended mode, before any file is read. Then the yes is
+ * held to what was shown: the file must still read `digest`, its head must name no class, and the run's morning row
+ * must be the one capture printed. The bytes go through the store's whole write path, so every gate runs again. The
+ * proposal stays in the run folder as the record of what was asked; a second accept is the store's append-only refusal.
  */
-async function runAccept(ctx: CliContext, run: string, slug: string): Promise<CommandResult> {
+async function runAccept(ctx: CliContext, run: string, slug: string, digest: string): Promise<CommandResult> {
   const rootDir = ctx.app.runtime.cwd;
   const unattended = await unattendedSession(ctx, rootDir);
   if (unattended !== null) {
@@ -653,24 +691,26 @@ async function runAccept(ctx: CliContext, run: string, slug: string): Promise<Co
   if (nameErrors.length > 0) return refuse(ctx, fileName, nameErrors, undefined, ACCEPT);
   const document = await readProposal(ctx, rootDir, `${folder}/${fileName}`);
 
-  const type = proposalClass(ctx, document, fileName);
-  if (type !== null) {
-    const { discoverUserContent, saveUserContent } = ctx.engine.content.userContent;
-    // A save re-saves an id as an edit, so the append-only rule a learning gets from the store is checked here.
-    if ((await discoverUserContent(rootDir)).some((artifact) => artifact.type === type && artifact.id === slug)) {
-      return refuse(ctx, fileName, [`The ${type} override ${JSON.stringify(slug)} is already live, and a proposal does not replace it: retire that file first.`], undefined, ACCEPT);
-    }
-    const saved = await saveUserContent(rootDir, type, slug, document);
-    if (!saved.saved) return refuse(ctx, fileName, saved.errors, undefined, ACCEPT);
-    ctx.io.out(`Accepted ${JSON.stringify(fileName)} as a ${type} override -> ${saved.path ?? ""}\n`);
-    ctx.io.out(`Run ${packageCommand("sync")} to emit it.\n`);
-    return { exitCode: 0, json: { run, proposal: slug, fileName, class: type, path: saved.path, warnings: saved.warnings } };
+  const left = (why: string): CliFailure =>
+    new CliFailure({
+      code: "VALIDATION_ERROR",
+      message: `learn accept refused ${JSON.stringify(fileName)}`,
+      why,
+      next: "leave the proposal out; a note still worth keeping is proposed again by a later run",
+    });
+  const found = proposalDigest(document);
+  if (found !== digest) throw left(`${folder}/${fileName} reads digest ${found}, not the ${digest} the person was shown: the yes holds for that text and no other`);
+  const head = proposalHead(ctx, document, fileName);
+  if (Object.hasOwn(head, "type")) {
+    throw left(`its head reads \`type: ${ctx.engine.runs.blocks.quoteReportText(head["type"])}\`, and a run proposes learnings only in this release: an override changes what every later run follows, and a yes to a learning does not reach it`);
   }
+  const problem = await proposalRowProblem(ctx, rootDir, run, proposalRow(fileName, text(head, "summary"), digest));
+  if (problem !== null) throw left(problem);
 
   const result = await ctx.engine.learnings.store.persistLearning({ rootDir, fileName, content: document, now: ctx.app.runtime.clock.now() });
   if (!result.written) return refuse(ctx, fileName, result.errors, undefined, ACCEPT);
   ctx.io.out(`Accepted ${JSON.stringify(fileName)} -> ${result.path ?? ""}\n`);
-  return { exitCode: 0, json: { run, proposal: slug, fileName, path: result.path, sanitized: result.sanitized } };
+  return { exitCode: 0, json: { run, proposal: slug, fileName, digest, path: result.path, sanitized: result.sanitized } };
 }
 
 /** The loader's result, typed off the engine function as `dryRunCapture` types its parse. */
@@ -684,6 +724,12 @@ const CAPTURE_ONLY_FLAGS: readonly (readonly [string, string])[] = [
   ["bodyFile", "--body-file"],
   ["propose", "--propose"],
 ];
+
+/** `--digest <sha256>`: the full digest the morning row printed, as `run land --approved` takes the full commit. */
+function parseDigest(value: string): string {
+  if (!/^[0-9a-fA-F]{64}$/.test(value)) throw new InvalidArgumentError("--digest takes the full 64-character digest the morning row printed.");
+  return value.toLowerCase();
+}
 
 /**
  * The per-verb flag check, before the action and before any file is read: a
@@ -707,6 +753,7 @@ function checkVerbFlags(command: Command): void {
       });
     }
     if (opts["proposal"] !== undefined) command.error("error: --proposal applies to accept only", { exitCode: 2 });
+    if (opts["digest"] !== undefined) command.error("error: --digest applies to accept only", { exitCode: 2 });
     if ((opts["propose"] === true) !== (opts["run"] !== undefined)) {
       command.error("error: --propose and --run go together: --propose names the run whose folder takes the note", { exitCode: 2 });
     }
@@ -724,10 +771,11 @@ function checkVerbFlags(command: Command): void {
     if (opts["body"] !== undefined) command.error("error: --body applies to read only", { exitCode: 2 });
     if (opts["run"] === undefined) command.error("error: required option '--run <id>' not specified", { exitCode: 2 });
     if (opts["proposal"] === undefined) command.error("error: required option '--proposal <slug>' not specified", { exitCode: 2 });
+    if (opts["digest"] === undefined) command.error("error: required option '--digest <sha256>' not specified", { exitCode: 2 });
     return;
   }
-  if (opts["run"] !== undefined || opts["proposal"] !== undefined) {
-    command.error("error: --run and --proposal apply to capture --propose and accept, not to read", { exitCode: 2 });
+  if (opts["run"] !== undefined || opts["proposal"] !== undefined || opts["digest"] !== undefined) {
+    command.error("error: --run, --proposal and --digest apply to capture --propose and accept, not to read", { exitCode: 2 });
   }
 }
 
@@ -859,6 +907,7 @@ export const learnCommand: CommandModule = {
       .option("--propose", "capture: run the gates and write the note to the run's folder, not to the live learnings")
       .option("--run <id>", "capture --propose, accept (required): the run whose folder holds the proposal")
       .option("--proposal <slug>", "accept (required): the proposal to take live")
+      .option("--digest <sha256>", "accept (required): the digest the morning row printed; a proposal reading any other is refused", parseDigest)
       .hook("preAction", checkVerbFlags);
   },
 
@@ -866,13 +915,23 @@ export const learnCommand: CommandModule = {
     // Commander's `choices()` refused every other verb at parse time, and the
     // preAction hook refused every flag on the wrong verb.
     if (args[0] === READ) return await runRead(ctx, optionalText(opts, "body"));
-    if (args[0] === ACCEPT) return await runAccept(ctx, text(opts, "run"), text(opts, "proposal"));
+    if (args[0] === ACCEPT) return await runAccept(ctx, text(opts, "run"), text(opts, "proposal"), text(opts, "digest"));
 
     const rootDir = ctx.app.runtime.cwd;
     // Before the body is read: a capture pointed at the wrong directory should
     // not first consume the caller's pipe.
     await requireStateDir(rootDir);
     const folder = opts["propose"] === true ? await proposingFolder(ctx, rootDir, text(opts, "run")) : null;
+    // A dry run writes nothing, so it stays open to a run checking a note before it proposes it.
+    const unattended = folder === null && !ctx.dryRun ? await unattendedSession(ctx, rootDir) : null;
+    if (unattended !== null) {
+      throw new CliFailure({
+        code: "VALIDATION_ERROR",
+        message: "learn capture refused: this session is unattended",
+        why: `${unattended}, and a live learning is read by the next session here before any person has answered`,
+        next: "capture it with --propose --run <run-id>, which a person accepts at the morning walk",
+      });
+    }
 
     const now = ctx.app.runtime.clock.now();
     const draft = draftLearning({

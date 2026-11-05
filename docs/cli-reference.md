@@ -260,7 +260,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
-| `<subcommand>` | capture a learning, or read the screened index — one of `capture`, `read` |
+| `<subcommand>` | capture a learning, accept a run's proposal, or read the screened index — one of `capture`, `read`, `accept` |
 
 | Flag | What it does | Default |
 |---|---|---|
@@ -269,6 +269,10 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--confidence <level>` | capture: how much evidence backs the finding — one of `low`, `medium`, `high` | `medium` |
 | `--body-file <path>` | capture: read the body from a file instead of stdin | — |
 | `--body <id>` | read: print one loaded learning's body instead of the index | — |
+| `--propose` | capture: run the gates and write the note to the run's folder, not to the live learnings | — |
+| `--run <id>` | capture --propose, accept (required): the run whose folder holds the proposal | — |
+| `--proposal <slug>` | accept (required): the proposal to take live | — |
+| `--digest <sha256>` | accept (required): the digest the morning row printed; a proposal reading any other is refused | — |
 
 ## `stamity handoff`
 

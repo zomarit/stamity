@@ -112,8 +112,8 @@ Where a cloud's GitHub proxy refuses GraphQL, the review tool holds and no fix r
 `findings` step above never starts, and that refusal is a `held` row. The land job, where it is on, asks the tool after
 the run has ended and writes a finding as a hold, fixing nothing, so a person takes it from the pull request with
 `/st-pr-resolve` on their own machine. The fix rounds belong to a session whose `run land` reads the tool: a local run, or
-a cloud with no such proxy. `rounds` counts the heads the tool was asked on, the first among them, so the fix rounds are
-one fewer, and `rounds: 1` gives none: a finding on its one head reads `spent`.
+a cloud with no such proxy. `rounds` counts the heads that carry the run's review marker, the first among them, so at
+most one fewer get a fix, and `rounds: 1` gives none: a finding on its one head reads `spent`.
 
 ## Commits after the last checkpoint
 

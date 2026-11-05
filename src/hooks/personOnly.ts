@@ -92,6 +92,7 @@ export type PersonOnlyRuleId =
   | "workflow-dispatch"
   | "autonomy-loosen"
   | "land-approved"
+  | "learn-accept"
   | "line-too-long"
   | "outside-write"
   | "remote-write";
@@ -183,6 +184,15 @@ export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
   {
     id: "land-approved",
     act: "landing a run's pull request on the person's approval of an `asks` outcome (`stamity run land --approved`, or a land line whose words the guard cannot read, which may carry it)",
+    ask: true,
+  },
+  // review/62, REQ-FLOW-163: the person's yes to a run's proposal asks in every mode, so it is refused unattended and for
+  // a sub-agent. It is read in `landApprovedVerdict`, on that reading's words, since the guard's bytes sit at their
+  // ceiling. A `learn` line whose words the guard cannot read asks too, as any such line of this package does
+  // (`autonomy-loosen`), so a filled-in verb fails closed under that rule's name.
+  {
+    id: "learn-accept",
+    act: "taking a run's proposed learning live (`stamity learn accept`)",
     ask: true,
   },
   {
@@ -1729,7 +1739,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     (values.length === 0 ? [...defaults].some(deploys) : values.some((value) => (value === "" ? [...defaults].some(deploys) : deploys(value === null ? null : branch(value)))));
   // The ask-class rules (REQ-FLOW-102): any other rule refuses (REQ-FLOW-124), so a rule missing here never asks.
   const ASK_RULES = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection",
-    "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "outside-write",
+    "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "learn-accept", "outside-write",
     "remote-write"]);
   // Every act the line holds (v0a): each segment, each call `--next` joins, each path, flag, body field and GraphQL
   // entry; a refuse-class one decides the verdict, so a deletion never rides an approval.
@@ -3077,6 +3087,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const unsure = unread.get(cmd) ?? [];
     const args = unsure[0] === true ? cmd.slice(1) : packageArgs(cmd);
     if (args === null) return;
+    if (args.includes("learn") && args.includes("accept")) deny("learn-accept", "A `learn accept` line");
     const at = unsure[0] === true ? args.indexOf("run") : args.findIndex((word) => !word.startsWith("-"));
     if (at === -1 || args[at] !== "run" || !args.slice(at + 1).includes("land")) return;
     // The flag in any spelling, alone, followed by its value (the approved commit) or joined to it with `=` (review/110).

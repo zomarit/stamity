@@ -14,7 +14,8 @@ obsolete_when: clients carry durable, repo-scoped, cross-vendor memory that a la
 The standalone lane for recording something this repository taught someone.
 Work and plan runs capture their own learnings as a side effect; this skill is
 for the finding that arrives outside a run — while reading code, after an
-incident, at the end of a debugging session that never became a change.
+incident, at the end of a debugging session that never became a change. An
+unattended run proposes instead, as `## An unattended run proposes` says.
 
 Shape, caps, screening and the integrity stamp live in the engine and the
 learnings-schema rule. What lives here is the judgment: whether a finding earns
@@ -24,7 +25,7 @@ a file, and whether its wording will still mean something in six months.
 
 1. Test the finding against the bar below. Most findings do not clear it.
 2. Write the body — what was observed, why it holds, how to apply it.
-3. Capture it through `stamity learn capture`.
+3. Capture it through `stamity learn capture`, with `--propose` in an unattended run.
 4. Report the path the command printed, and nothing else.
 
 ## What qualifies
@@ -110,8 +111,9 @@ file carries a digest that verifies, which is the whole reason the stamp exists.
 
 An unattended run captures with `--propose`, and a person decides what goes live:
 `.stamity/learnings/` and `.stamity/overrides/` are what every later run reads, so
-both are held paths. A learning captured live in such a run moves to the run's held
-patch, and a held patch makes `run land` ask.
+both are held paths. A live `learn capture` in such a run is refused, naming `--propose`.
+A file a run writes there by hand moves to the run's held patch, restored in the index
+only, so the work tree keeps it, and a held patch makes `run land` ask.
 
 ```bash
 ${STAMITY:CLI} learn capture --propose --run <run-id> \
@@ -126,13 +128,16 @@ A slug already live, or already proposed in this run, is refused. The run verbs 
 that folder themselves, so a proposal needs no `--paths`.
 
 The command prints one `decision` row for the morning list, `1 leave it out · 2 accept`, default `1`,
-so no answer leaves it out. The run gives the row the list's next `Q<n>`.
+so no answer leaves it out. The row names `learn accept` and the proposal's digest. The run
+copies it word for word and gives it the list's next `Q<n>`.
 
-When a person answers `2`, `stamity learn accept --run <run-id> --proposal <slug>` takes
-the proposal live. Every gate runs again on the file as it stands, through the same
-write path, and a proposal whose head names a content class (`type: rule`) goes to
-`.stamity/overrides/` by that class's own gates. The verb refuses while the session is
-unattended: accepting is a person's call.
+When a person answers `2`, `stamity learn accept --run <run-id> --proposal <slug> --digest <digest>`
+takes the proposal live, `<digest>` the one the row printed. The guard asks on that line and
+refuses it for a sub-agent. A file that no longer reads that digest is refused, and so is a
+morning row other than the one printed, a default of accept among them. Every gate runs
+again on the file as it stands, through the same write path. A run proposes learnings only
+in this release: a proposal whose head names any other class (`type: rule`) is refused,
+naming the head. The verb refuses while the session is unattended: accepting is a person's call.
 
 ## Quality bar
 
