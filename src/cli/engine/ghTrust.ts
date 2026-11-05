@@ -22,11 +22,14 @@ function filesystemRoot(): string {
 }
 
 /**
- * build/18: the temp folders a planted `gh` must not lie in: `os.tmpdir()`; `/tmp` on POSIX; on win32 also `%TEMP%`,
- * `%TMP%` and the user's local `Temp` folder under `AppData`, from the verb's environment and the process's, as found.
+ * build/18: the temp folders a planted `gh` must not lie in: `os.tmpdir()`; `/tmp` and `/var/tmp` on POSIX; on macOS
+ * also `/var/folders`; on win32 also `%TEMP%`, `%TMP%` and the user's local `Temp` folder under `AppData`, from the
+ * verb's environment and the process's, as found. `os.tmpdir()` follows `TMPDIR`, and macOS gives each user's temp
+ * folder to a process only through that variable, so with it unset or moved `os.tmpdir()` says nothing of that folder:
+ * `/var/folders`, which holds every user's, is named here.
  */
-function tempRoots(env: NodeJS.ProcessEnv): string[] {
-  if (process.platform !== "win32") return [tmpdir(), "/tmp"];
+export function tempRoots(env: NodeJS.ProcessEnv, platform: NodeJS.Platform = process.platform): string[] {
+  if (platform !== "win32") return [tmpdir(), "/tmp", "/var/tmp", ...(platform === "darwin" ? ["/var/folders"] : [])];
   const named = [env, process.env].flatMap((from) => [from["TEMP"], from["TMP"], from["LOCALAPPDATA"] === undefined ? undefined : join(from["LOCALAPPDATA"], "Temp")]);
   return [tmpdir(), join(homedir(), "AppData", "Local", "Temp"), ...named.filter((root): root is string => typeof root === "string" && root !== "")];
 }
