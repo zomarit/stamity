@@ -1096,7 +1096,7 @@ export const KEY_SPECS: readonly ConfigKeySpec[] = [
     "reviewTool",
     REVIEW_TOOL_PRESETS,
     "codex makes `run land` ask Codex for a review of the head and wait up to 40 minutes, for at most 2 rounds. `rounds` counts the heads " +
-      "the tool was asked on, so the fix rounds are one fewer, and `rounds: 1` gives none. Silence holds the land. Dropping it, changing it or raising its rounds or wait loosens the setting. A hand-written `clean: reaction` is the weakest proof, since a " +
+      "that carry the run's review marker, the first among them, so at most one fewer get a fix, and `rounds: 1` gives none. Silence holds the land. Dropping it, changing it or raising its rounds or wait loosens the setting. A hand-written `clean: reaction` is the weakest proof, since a " +
       "reaction cannot be tied to a commit",
   ),
   presetSpec(

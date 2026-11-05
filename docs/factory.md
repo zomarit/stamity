@@ -105,11 +105,11 @@ the pull request holds for you.
 On Claude's cloud the tool holds and no fix round runs. Only the land job asks the tool there. It
 writes the reason after `merge waits on:` in the pull request's body, and the pull request waits for
 you. There, run `/st-pr-resolve` on it from your own machine. A fix it pushes goes to the run's
-branch, and once your CI finishes well on that head the job asks the tool again, if a round is left.
+branch, and once your CI finishes well on that head the job can ask the tool again, if a round is left.
 
-The `codex` word sets `rounds` to 2, and `rounds` counts the heads the tool was asked on, so that
-gives one fix round. `rounds: 1` would give none. [Cloud runs](cloud.md) has the rest, under The
-review tool.
+The `codex` word sets `rounds` to 2. `rounds` counts the heads that carry the run's review marker, the
+first among them, so at most one fewer get a fix, and `rounds: 1` gives none. [Cloud runs](cloud.md)
+has the rest, under The review tool.
 
 ## Step 4: Choose what to loosen
 

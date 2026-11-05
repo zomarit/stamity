@@ -5923,10 +5923,33 @@ describe("the security pages say one thing about the brake, the lift and the job
     for (const page of [CLOUD, FACTORY]) {
       expect(flowed(read(page)), `${page} does not say what a reader does with a held finding`).toContain("from your own machine");
     }
-    for (const page of [CLOUD, TROUBLESHOOTING, SPEC, "docs/configuration.md"]) {
+    // TEST CHANGE, justified (land-wording, REQ-FLOW-154): a head the tool finished with findings spends a round with no
+    // ask, so "the heads the tool was asked on" was wrong. The pin moves to the sentence the code bears out, and
+    // `docs/factory.md`, which carried the old one unpinned, joins the list.
+    for (const page of [CLOUD, TROUBLESHOOTING, FACTORY, SPEC, "docs/configuration.md"]) {
       const flat = flowed(read(page));
-      expect(flat, `${page} does not say what \`rounds\` counts`).toContain("`rounds` counts the heads the tool was asked on");
+      expect(flat, `${page} does not say what \`rounds\` counts`).toContain(
+        "`rounds` counts the heads that carry the run's review marker, the first among them, so at most one fewer get a fix, and `rounds: 1` gives none",
+      );
+      expect(flat, `${page} still says \`rounds\` counts asks`).not.toContain("the tool was asked on");
       expect(flat, `${page} still reads \`rounds\` as fix rounds`).not.toContain("at most `rounds` times");
+    }
+    // A plain stop on a new head means no ask, and a head with no marker still reads as findings, so neither promise holds.
+    for (const page of [CLOUD, TROUBLESHOOTING, FACTORY]) {
+      const flat = flowed(read(page));
+      expect(flat, `${page} promises an ask on every new head`).not.toMatch(/asks the tool on any new head|head asks the tool again|job asks the tool again/);
+      expect(flat, `${page} says a finding never reads as findings`).not.toContain("never as findings");
+    }
+    expect(flowed(read(CLOUD)), "the page still says only waits gate the marker").not.toContain("only when nothing but a wait stops");
+    expect(flowed(read(CLOUD))).toContain("asks the named tool to review the head, at most once per head, and waits for it");
+    expect(flowed(read(SPEC)), "the spec still says no round goes on such a head").toContain("so no request goes on a head that cannot land");
+  });
+
+  // land-wording: the threads read again after a resolve fail into a decision, which holds and exits 0, so "a read GitHub did
+  // not answer" alone reads wider than the exit is (`test/cli/commands/runLand.test.ts` pins that exit).
+  it("says a read that fails into a decision holds a job, and exits 0", () => {
+    for (const page of [TROUBLESHOOTING, SPEC]) {
+      expect(flowed(read(page)), `${page} reads every failed read as a red job`).toContain("a read that fails into a decision holds, with its line, and exits 0");
     }
   });
 

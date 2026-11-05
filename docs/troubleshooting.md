@@ -447,10 +447,10 @@ flag holds only while the head is still that commit, and an unattended run refus
   with something this reader cannot use, and the reason says what.
 - `<n> of <m> review rounds spent with no clean head, so a person decides`: the run stops here.
 
-  Both of these last two are refusals, so `--approved` does not pass them. While rounds remain, a new
-  head asks the tool again. `rounds` counts the heads the tool was asked on, the first among them, so
-  the fix rounds are one fewer: `rounds: 2` gives one, and `rounds: 1` gives none, since a finding on
-  its one head reads as spent here and never as findings. Past that a person raises `rounds` or drops
+  Both of these last two are refusals, so `--approved` does not pass them. While rounds remain, the
+  land can ask the tool again on a new head. `rounds` counts the heads that carry the run's review
+  marker, the first among them, so at most one fewer get a fix, and `rounds: 1` gives none, since a
+  finding on its one head reads as spent here. Past that a person raises `rounds` or drops
   the tool, each through `sync --loosen`, or merges by hand. A raise counts only once the run's branch
   holds it too, since the land reads the lowest `rounds` of every copy of the setting.
 - `the ledger at <sha> holds open Critical or Warning rows`, `does not read`, or `the work tree's
@@ -491,7 +491,8 @@ A job exits 0 on every normal end, and a hold shows as the pull request's status
 still in progress, a head a newer job speaks for, and a pull request that does not read as the run's own,
 such as one whose base someone changed. That last one is no wait: nothing lands it until a person puts it
 right, and its reason is only in the job's log. It exits 1 only for a true failure,
-a read or a write GitHub did not answer as it should. It exits 0 as `not-a-run` where the pull
+a read or a write GitHub did not answer as it should, but a read that fails into a decision holds,
+with its line, and exits 0. It exits 0 as `not-a-run` where the pull
 request's body names no run, where it is closed, and where an attended run closed through `run
 checkpoint --pr` alone left no `PR:` line. It waits out a review tool's silence in one call, holding a
 runner up to `waitMinutes` per head, since a silent tool sends no event to wake it. A job that merges

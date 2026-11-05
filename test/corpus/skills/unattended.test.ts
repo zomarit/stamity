@@ -1369,7 +1369,10 @@ describe("st-unattended — the factory bridge's prose (plan 023 file 1, skills-
     const loop = await cloudSection("The review loop");
     expect(loop).toContain("Where a cloud's GitHub proxy refuses GraphQL, the review tool holds and no fix round runs:");
     expect(loop).toContain("The fix rounds belong to a session whose `run land` reads the tool: a local run, or a cloud with no such proxy.");
-    expect(loop).toContain("`rounds` counts the heads the tool was asked on, the first among them, so the fix rounds are one fewer, and `rounds: 1` gives none");
+    // TEST CHANGE, justified (land-wording, REQ-FLOW-154): a head the tool finished with findings spends a round with no ask,
+    // so the sentence now names what the code counts, the heads carrying the run's review marker.
+    expect(loop).toContain("`rounds` counts the heads that carry the run's review marker, the first among them, so at most one fewer get a fix, and `rounds: 1` gives none");
+    expect(loop).not.toContain("the tool was asked on");
     expect(actsTold(loop)).toEqual([]);
   });
 

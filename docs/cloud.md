@@ -456,8 +456,8 @@ so both read `not run` in the [capability matrix](capability-matrix.md)'s cloud 
 
 ### The review tool
 
-With `autonomy.reviewTool` set, `run land` asks the named tool to review the head, once per head and
-only when nothing but a wait stops that head, and waits for it. Only that bot's own word on the exact head passes. Under a hand-written `clean: reaction` that does not hold: a `+1` names no commit, so one left on an earlier head reads clean on every later head, and no request is sent. Findings, no result within
+With `autonomy.reviewTool` set, `run land` asks the named tool to review the head, at most once per
+head, and waits for it. Only that bot's own word on the exact head passes. Under a hand-written `clean: reaction` that does not hold: a `+1` names no commit, so one left on an earlier head reads clean on every later head, and no request is sent. Findings, no result within
 `waitMinutes`, spent `rounds` or a block it does not know each hold the merge and say why, and
 silence never passes. A wait longer than one `run land` call comes back as a pending
 outcome, and the run calls the land line again, since no approval passes a wait. Once the tool reads
@@ -466,20 +466,19 @@ person's, and a `clean: reaction` tool resolves none.
 
 The fix rounds are Cursor's cloud's and a local run's. There the session's `run land` is meant to read
 the tool, so on findings the run takes them through `/st-pr-resolve` and calls the land line again,
-which asks the tool on any new head. Neither has been proven by a real run. Unattended,
+which can ask the tool on the new head. Neither has been proven by a real run. Unattended,
 `/st-pr-resolve` fixes only the mechanical class: a fix in one file with no change in behaviour, such
 as a typo, an unused import or a comment's wording. It defers any other finding as
 `needs a planned run`, so while the tool still reports one the pull request holds for you. `rounds`
-counts the heads the tool was asked on, the first among them, so the fix rounds are one fewer: the
-preset's `rounds: 2` gives one, and `rounds: 1` gives none, since a finding on its one head reads as
-spent.
+counts the heads that carry the run's review marker, the first among them, so at most one fewer get a
+fix, and `rounds: 1` gives none, since a finding on its one head reads as spent.
 
 On Claude's cloud the review tool holds and no fix round runs. The session's `run land` refuses on the
 review threads before it reads the tool, so with no land job stamity never asks the tool. The land job
 does ask it and fixes nothing: it writes the reason on the pull request's `merge waits on:` line and
 exits 0, so the pull request waits for you. To clear a finding there, run `/st-pr-resolve` on the pull
 request from your own machine. A fix it pushes goes to the run's branch, and once your CI finishes
-well on that head the land job asks the tool again, if a round is left. With no round left the reason
+well on that head the land job can ask the tool again, if a round is left. With no round left the reason
 reads `review rounds spent`, and [Troubleshooting](troubleshooting.md) says what a person does. On
 either cloud, [A held pull request from a cloud run](#a-held-pull-request-from-a-cloud-run) says what
 else you can do.

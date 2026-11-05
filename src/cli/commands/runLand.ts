@@ -121,8 +121,9 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * land of a setup with the job on, and no one else's do.
  *
  * **A job's exit.** 0 on every normal end, pending or held; 1 for a true failure alone, a read or a write GitHub did not answer
- * as it should, the status line's own among them, since a green job and no line would hide the hold. A hold shows as the pull
- * request's status line, never as a red job, since GitHub may put a failing job's run on the default branch's tip. Three ends
+ * as it should, the status line's own among them, since a green job and no line would hide the hold. A read that fails into a
+ * decision is no such failure: it holds, with its line, and exits 0, as the threads read again after the resolve do. A hold
+ * shows as the pull request's status line, never as a red job, since GitHub may put a failing job's run on the default branch's tip. Three ends
  * leave no line: a run still in progress, a head a newer job speaks for, and a pull request {@link ownPr} refuses, whose body is
  * not the run's to write, so its reason is only in the job's log. The method must pass every ruleset's `allowed_merge_methods`,
  * any linear-history rule and the repository's flags, merge before squash before rebase; none is a hold.

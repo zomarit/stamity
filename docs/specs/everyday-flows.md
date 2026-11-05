@@ -6950,7 +6950,7 @@ carry the marker.
 
 - **As built, beyond the delta:**
   - The land posts `request` and a `<!-- stamity:review-request <head> -->` marker once per head, and only where the head's
-    only stops are waits, so no round goes on a head that cannot land. A run the tool started itself gets the marker
+    only stops are waits, so no request goes on a head that cannot land. A run the tool started itself gets the marker
     alone. A head the tool already finished with `findings` gets the marker alone too, whatever else stops it, so a tool
     reviewing every push still spends `rounds`. A request that does not post ends the wait, since with no marker no wait
     can end: a job leaves its status line, and a session refuses, with no `asks.pending`. A round is a distinct head
@@ -6972,8 +6972,8 @@ carry the marker.
     refuses, naming it, and one the job closed over someone's comment counts as unresolved.
   - **The loop.** On `findings` the run runs `/st-pr-resolve --unattended`, which pushes through its own run verbs, and runs
     the land line again under its own run id, so the tool runs on at most `rounds` heads; `/st-pr-resolve`'s cap is the
-    setting's `rounds`. `rounds` counts the heads the tool was asked on, the first among them, so the fix rounds are one
-    fewer, and `rounds: 1` gives none, a finding on its one head reading `spent`. The fix rounds are Cursor's cloud's and a
+    setting's `rounds`. `rounds` counts the heads that carry the run's review marker, the first among them, so at most one
+    fewer get a fix, and `rounds: 1` gives none, a finding on its one head reading `spent`. The fix rounds are Cursor's cloud's and a
     local run's. On Claude's cloud the review tool holds and no fix round runs: the session's `run land` refuses on the
     review threads before it reads the tool, and the land job holds on `findings` and fixes nothing, so a person takes them.
     `silent`, `spent` and a round that pushes nothing are each a `held` row. A `held` row ends the loop, and the run takes
@@ -7072,7 +7072,8 @@ agent's command line, Then the guard refuses it (REQ-FLOW-121).
     `waitMinutes` per head. A request that did not post is not waited on.
   - A job exits 0 on every normal end, and a hold shows as the pull request's status line, never as a red job. That covers `pending`, `asks` and `refused`, since GitHub may put a failing job's run on the
     default branch's tip. Three ends leave no line: a run still in progress, a head a newer job speaks for, and a pull request that does not read as the run's own, such as one whose base someone changed. That last one is no wait: nothing lands it until a person puts it right, and its reason is only in the job's log. It exits 1 only for
-    a true failure, a read or a write GitHub did not answer as it should. It writes no `land:` line: the body's evidence
+    a true failure, a read or a write GitHub did not answer as it should, but a read that fails into a decision holds, with
+    its line, and exits 0. It writes no `land:` line: the body's evidence
     line stands. A head pushed while the job runs fails the merge on its `sha`, and that head's own job speaks for it.
   - The merge method comes from the ruleset or the repository at run time, and nothing allowed reads as a hold. It reads the ruleset's `allowed_merge_methods`, else the repository's flags, merge before squash
     before rebase.
