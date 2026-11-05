@@ -381,7 +381,8 @@ it holds for on its `approve with:` line. The reasons, and what each needs:
 - `<branch> is named in autonomy.deployingBranches`, or `autonomy.deployingActs names <act>`: the
   repository says this merge or this ready mark deploys, so it asks in every mode, unless the change
   fits `autonomy.autoShip`. A fast-forward always asks here.
-- `auto-ship: <rule>`, beside that branch line: the change did not fit, and the land names each rule.
+- `auto-ship: <rule>`, beside that branch line: the change did not fit, and the land names each rule,
+  or only the file limit where GitHub's count is over it, since nothing else is then read.
   They read `<n> files are over autonomy.autoShip.maxFiles`, `<n> lines are over
   autonomy.autoShip.maxLines`, `<class> is outside autonomy.autoShip.classes`, `<path> is outside
   autonomy.autoShip.paths`, `docs-class but not plain text`, `a specialist lens is asked for`, `the

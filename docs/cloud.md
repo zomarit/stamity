@@ -453,7 +453,7 @@ By default a default branch named in `autonomy.deployingBranches` asks before ev
 file count, its line count, its classes, its paths where you set them, and no specialist lens. A
 `docs`-class path must also end in `.md` or `.txt`. The `low-risk` preset allows 10 files and 200 lines,
 all records, docs or tests. Any rule that fails, and anything that cannot be read, asks and names each
-reason. A fast-forward still asks. Stamity never deploys, tags or releases itself, but a merge onto a deploying branch starts that repository's own pipeline, with nobody asked, by the person's opt-in. That is the point of auto-ship. Under the emitted `GITHUB_TOKEN`, a land job's merge starts no Actions `push` workflow. That is all it stops: a webhook or a GitHub App listening to the push still fires, and under any other token the workflow starts too.
+reason, except that a change over the file limit by GitHub's count stops there and names that alone. A fast-forward still asks. Stamity never deploys, tags or releases itself, but a merge onto a deploying branch starts that repository's own pipeline, with nobody asked, by the person's opt-in. That is the point of auto-ship. Under the emitted `GITHUB_TOKEN`, a land job's merge starts no Actions `push` workflow. That is all it stops: a webhook or a GitHub App listening to the push still fires, and under any other token the workflow starts too.
 
 Limits: the rules read paths, size and class, never content, so a script inside a `.md` file passes
 them. If your site tool passes raw HTML through `.md` files, leave `docs` out of `classes`. The range

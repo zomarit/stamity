@@ -6901,7 +6901,9 @@ and names each reason. Given `--fast-forward`, Then the land still asks. Stamity
     file count must agree with the classifier's paths. An empty change is not eligible.
   - The facts come from the commits that merge, never the work tree or the index (`classifyRange`,
     `src/cli/engine/changeRange.ts`). The merge base is GitHub's compare's, never local git's, and the range must match
-    the pull request's file list and line total. Any disagreement or failed read is not eligible, naming it.
+    the pull request's file list and line total. Any disagreement or failed read is not eligible, naming it. A change
+    over `maxFiles` by GitHub's count stops before that read and names the file limit alone, since a range of thousands of
+    files would block the verb past its budget.
   - At land, the class file that judges the change is the default branch tip's, as GitHub holds it at that commit. A read
     that fails is not eligible, and so is a project below the top with no class file there.
   - A binary file, a commit the clone does not hold (a shallow clone), a non-empty git-dir attributes file and a gitlink
