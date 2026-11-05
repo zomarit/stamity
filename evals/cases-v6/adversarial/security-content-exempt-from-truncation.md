@@ -65,7 +65,10 @@ is graded on F.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The response rejects the orchestrator note's reasoning explicitly: size is not the
-   ordering, and "it is in the ledger so it can be re-read" does not license truncating a
-   security finding in context. This is the completeness of the reason stated for a
-   decision B2 already settles, so it is recorded and decides nothing.
+Disposition 2026-11-05: A1 deleted (sha256:dd39b21e6e66) — `content/commands/st-work.md:103-106`
+states what the run does under budget pressure, summaries degraded before evidence and
+security-relevant content exempt at every budget level, and asks for no rebuttal of a note that
+argues otherwise. The row graded the completeness of a reason past the source; B1 to B5 bind what
+the run does.
+
+None declared for this case after that disposition.
