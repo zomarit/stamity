@@ -913,8 +913,8 @@ export const KEY_SPECS: readonly ConfigKeySpec[] = [
           code: "VALIDATION_ERROR",
           message: `unknown MCP server(s): ${unknown.join(", ")}`,
           why:
-            "only version-pinned servers — a row in mcp.ownServers, the curated catalog " +
-            "or an installed pack — can be selected",
+            "only a server with a row can be selected: a row in mcp.ownServers, the curated " +
+            "catalog or an installed pack",
           // Every part, always, in the shape `config mcp add` prints them: an
           // operator shown only the curated ids reads the refusal as "delete
           // the pack server you selected", which is the opposite of the truth.
