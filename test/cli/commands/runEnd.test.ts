@@ -1297,7 +1297,7 @@ describe("stamity run end", () => {
     describe("said on the pull request when it fails (review/73)", () => {
       const UNSENT = "notice not sent: the review request answered HTTP 422, so it reached nobody";
 
-      it("leaves one comment holding the notDone line alone, and exits 0", async () => {
+      it("leaves one comment holding the notDone line and the run's marker, and exits 0", async () => {
         const { repo } = await seed("attended");
         await put(repo, CONTRACT, contract('"@a-person"'));
         rest.routes.set(`POST ${REVIEWERS}`, { status: 422, json: { message: "Reviews may only be requested from collaborators" } });
@@ -1306,7 +1306,7 @@ describe("stamity run end", () => {
 
         expect(code).toBe(0);
         expect(doc).toMatchObject({ pr: { number: 7 }, notDone: [UNSENT] });
-        expect(comments()).toEqual([{ method: "POST", path: COMMENTS, body: { body: UNSENT } }]);
+        expect(comments()).toEqual([{ method: "POST", path: COMMENTS, body: { body: `${UNSENT}\n\n${MARKER}` } }]);
         expect(rest.calls.findIndex((call) => call.path === "repos/o/r/pulls" && call.method === "POST")).toBeLessThan(rest.calls.findIndex((call) => call.path === COMMENTS));
       });
 
@@ -1317,7 +1317,7 @@ describe("stamity run end", () => {
         const { code } = await run(repo, ENDED);
 
         expect(code).toBe(0);
-        expect(comments().map((call) => call.body)).toEqual([{ body: `notice not sent: ${CONTRACT} did not parse` }]);
+        expect(comments().map((call) => call.body)).toEqual([{ body: `notice not sent: ${CONTRACT} did not parse\n\n${MARKER}` }]);
       });
 
       it("leaves none on a sent notice", async () => {
@@ -1382,10 +1382,23 @@ describe("stamity run end", () => {
         const { code, doc } = await run(repo, ENDED);
 
         expect(code).toBe(0);
-        // Two requests prove the second pass ran, and failed, so the one comment is the guard's and not a lone pass.
+        // Two requests prove the second pass ran, and failed, so the one comment is the last pass's and not a lone pass.
         expect(requests()).toHaveLength(2);
         expect(comments()).toHaveLength(1);
         expect(doc).toMatchObject({ notDone: [UNSENT] });
+      });
+
+      it("leaves none where the first pass fails and the land job's second pass sends the notice", async () => {
+        const { repo } = await seed("attended", { files: { ".stamity/manifest.json": '{"version":1,"autonomy":{"landJob":{"workflows":["CI"]}}}\n' } });
+        await put(repo, CONTRACT, contract('"@a-person"'));
+        rest.queued.set(`POST ${REVIEWERS}`, [{ status: 422, json: null }]);
+
+        const { code, doc } = await run(repo, ENDED);
+
+        expect(code).toBe(0);
+        expect(requests()).toHaveLength(2);
+        expect(doc).toMatchObject({ notice: "a-person" });
+        expect(comments()).toEqual([]);
       });
 
       it("adds one notDone line and moves no exit code where the comment fails with a status", async () => {

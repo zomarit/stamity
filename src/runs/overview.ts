@@ -1,6 +1,6 @@
-import { reportNameRole } from "./layout.ts";
+import { CARD_LEDGER_STATES, reportNameRole } from "./layout.ts";
 import type { LedgerRow } from "./ledgerStore.ts";
-import { blastRadiusSection, MORNING_EMPTY, MORNING_FILE, MORNING_SECTIONS, parseMorning } from "./morning.ts";
+import { blastRadiusSection, MORNING_EMPTY, MORNING_FILE, MORNING_REFUSED, MORNING_SECTIONS, parseMorning } from "./morning.ts";
 import { readRecordHead } from "./resumeCard.ts";
 
 /**
@@ -8,8 +8,9 @@ import { readRecordHead } from "./resumeCard.ts";
  * what only the person can do. A verb and not a file `run end` writes, since the land's rows reach `morning.md` after it.
  *
  * Pure: text in, text out. The verb reads the run folder, parses the ledger and cleans each line for the terminal, so
- * every value here is a run's own text, printed as a fact the record states and never followed. The human-only rows are
- * printed as written: this page reads no row grammar.
+ * every value here is a run's own text, printed as what the record says and never followed. Each sits behind a label, a
+ * list mark or {@link quoted}, so none prints as this page's own heading or row. The verb reads neither git nor GitHub, so
+ * the page cannot know a land the folder does not record. The human-only rows keep their words: it reads no row grammar.
  */
 
 export interface OverviewInput {
@@ -27,13 +28,19 @@ const LIST_MAX = 12;
 /** Report passes that are the whole run's and no unit's, as `/st-work`'s report path names them. */
 const WHOLE_RUN_PASSES: ReadonlySet<string> = new Set(["branch", "plan"]);
 
-/** The states a ledger row moves through, in the order the page counts them. */
-const STATES: readonly string[] = ["open", "fixed", "rejected", "deferred"];
+/** The most characters of a ledger failure the page prints: it can name every bad line, and it prints on three rows. */
+const FAILURE_MAX = 200;
+
+/** The states a ledger row moves through, in the order the page counts them: the run card's list, so the two agree. */
+const STATES: readonly string[] = CARD_LEDGER_STATES;
 
 const HELD: string = MORNING_SECTIONS[3];
 
-/** `run land`'s own record line, `- <UTC> land: #<n> <sha> <how>`. */
-const LAND_LINE = /^- \S+ land: (#[0-9]+ \S+ \S+)[ \t]*$/;
+/**
+ * `run land`'s own record line, as `noteLanded` writes it: `- <UTC> land: #<n> <sha> <how>`, `<how>` being `merged` or
+ * `fast-forwarded`, then ` (approved by the person for <sha>)` on a land a person approved. Nothing else in land form is one.
+ */
+const LAND_LINE = /^- \S+ land: (#[0-9]+ [0-9a-f]{40,64} (?:merged|fast-forwarded)(?: \(approved by the person for [0-9a-f]{40,64}\))?)[ \t]*$/;
 /** A usage line, `- <UTC> usage: <phase> minutes=<n> tokens=<n | unreported> (<client>)`. */
 const USAGE_LINE = /^- \S+ usage: .*\bminutes=(\S+) tokens=(\S+)/;
 /** A choice line, `- <UTC> choice: <unit> tried | dropped | reverted <approach> — <pointer>`. */
@@ -43,6 +50,9 @@ const DEFAULT_LINE = /Default applied:\*{0,2} (.+)$/;
 /** The gate results' label line, which records spell as a line, a bullet, a heading or in bold. */
 const GATES_LABEL = /^\s*(?:[-#*]+\s*)*Gate results\b/;
 const LIST_ROW = /^\s*[-*] +/;
+
+/** A line the run wrote, set apart so it reads as the run's and never as this page's own heading or row. */
+const quoted = (line: string): string => `> ${line}`;
 
 /** The first capture of `pattern` on each line that matches. */
 function captured(lines: readonly string[], pattern: RegExp): string[] {
@@ -56,17 +66,31 @@ function listed(label: string, rows: readonly string[]): string[] {
   return [`${label}:`, ...rows.slice(0, LIST_MAX).map((row) => `- ${row}`), ...(left > 0 ? [`- and ${left} more in the record`] : [])];
 }
 
-/** The last gate results label as written, then the list under it. */
+/**
+ * The last gate results label as written, then the rows under it, as far as the list goes: a blank line, an indented
+ * wrapped line and the label's own wrapped lines end nothing, and other prose, a heading or a row beside a label that is
+ * a row itself does.
+ */
 function gatesLines(lines: readonly string[]): string[] {
   const at = lines.findLastIndex((line) => GATES_LABEL.test(line));
   if (at === -1) return ["gates: no gate results in the record yet"];
+  const label = lines[at] ?? "";
+  const labelIndent = LIST_ROW.test(label) ? label.search(/\S/) : -1;
   const rows: string[] = [];
+  let inLabel = true;
   for (const line of lines.slice(at + 1)) {
-    if (line.trim() === "" && rows.length === 0) continue;
-    if (!LIST_ROW.test(line)) break;
-    rows.push(line.replace(LIST_ROW, ""));
+    if (line.trim() === "") {
+      inLabel = false;
+      continue;
+    }
+    const row = LIST_ROW.test(line);
+    if (row ? line.search(/\S/) <= labelIndent : !inLabel && !/^\s/.test(line)) break;
+    if (row) {
+      inLabel = false;
+      rows.push(line.replace(LIST_ROW, ""));
+    }
   }
-  return [`gates: ${(lines[at] ?? "").trim()}`, ...listed("", rows).slice(1)];
+  return [`gates: ${label.trim()}`, ...listed("", rows).slice(1)];
 }
 
 /** Each report's pass and round, by the name of the report a row carries; only `id` of a row is verified, so `report` is read as text. */
@@ -117,20 +141,31 @@ function usageLine(lines: readonly string[]): string {
   return `usage: minutes=${summed(rows.map((row) => row.minutes))} tokens=${summed(rows.map((row) => row.tokens))} (usage lines: ${rows.length})`;
 }
 
-/** The person's list as `morning.md` holds it, or a line saying why there is none to show. */
+/** What the record says of the land, as the record's word; with no line, what the page cannot say. */
+function landLine(lines: readonly string[]): string {
+  const land = captured(lines, LAND_LINE).at(-1);
+  return land === undefined ? "land: none recorded in this folder, so check the pull request" : `land: the record says "${land}"`;
+}
+
+/** The refused and held rows `morning.md` holds, or a line saying why there are none to show. */
 function humanOnly(morning: string | null): string[] {
-  if (morning === null) return [`no ${MORNING_FILE} in the run folder, so there is no list yet`];
+  if (morning === null) return [`no readable ${MORNING_FILE} in the run folder, so there is no list to show`];
   const parsed = parseMorning(morning);
   if (!parsed.ok) return [`${MORNING_FILE} does not parse, so its list is not shown: ${parsed.problems[0] ?? "no problem named"}`];
-  return (parsed.sections[HELD] ?? MORNING_EMPTY).split("\n");
+  const rows = [MORNING_REFUSED, HELD].flatMap((name) => {
+    const body = parsed.sections[name] ?? MORNING_EMPTY;
+    return body === MORNING_EMPTY ? [] : body.split("\n");
+  });
+  return rows.length === 0 ? [MORNING_EMPTY] : rows.map(quoted);
 }
 
 /** The page: `## What happened`, `## How`, `## Why` and `## Only you can do`, in that order. */
 export function overviewFrom(input: OverviewInput): string {
   const lines = input.record.split(/\r?\n/);
   const { ledgerFailure } = input;
+  const failure = ledgerFailure !== undefined && ledgerFailure.length > FAILURE_MAX ? `${ledgerFailure.slice(0, FAILURE_MAX)}… and more` : ledgerFailure;
   const fromLedger = (label: string, line: (ledger: readonly LedgerRow[]) => string): string =>
-    ledgerFailure === undefined ? line(input.ledger) : `${label}: not counted, since ${ledgerFailure}`;
+    failure === undefined ? line(input.ledger) : `${label}: not counted, since ${failure}`;
   const blast = blastRadiusSection(input.record)?.split("\n").slice(1).filter((line) => line.trim() !== "") ?? [];
   const sections: readonly (readonly [string, readonly string[]])[] = [
     [
@@ -138,8 +173,8 @@ export function overviewFrom(input: OverviewInput): string {
       [
         `status: ${readRecordHead(input.record).status ?? "the record names none"}`,
         fromLedger("units", unitsLine),
-        `land: ${captured(lines, LAND_LINE).at(-1) ?? "no land yet"}`,
-        ...(blast.length === 0 ? [] : ["blast radius:", ...blast]),
+        landLine(lines),
+        ...(blast.length === 0 ? [] : ["blast radius:", ...blast.map(quoted)]),
       ],
     ],
     ["How", [...gatesLines(lines), fromLedger("rounds", roundsLine), fromLedger("findings", findingsLine), usageLine(lines)]],

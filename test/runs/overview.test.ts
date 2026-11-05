@@ -52,6 +52,8 @@ const RECORD = [
   "",
 ].join("\n");
 
+const SHA = "1111111111111111111111111111111111111111";
+
 const HELD_ROW = "- tried: push the workflow · failed: the guard refused · yours because: a person owns CI · do: review held/person-only.patch";
 const REFUSED_ROW = "- refused, not tried again: the tag · yours because: a release is a person's · do: cut it from the checklist";
 
@@ -131,21 +133,56 @@ describe("overviewFrom", () => {
     expect(text).toContain("status: closed\n");
     // `branch` and `plan` are whole-run passes, so of the five reports only two name a unit.
     expect(text).toContain("units: 2 named in the ledger: alpha, beta-gamma\n");
-    expect(text).toContain("land: #7 04966e3aa3142418248a693bb8d16bd074f0d5ab merged\n");
-    expect(text).toContain("Narrow: one verb, and one comment on a failed notice.");
+    expect(text).toContain(`land: the record says "#7 04966e3aa3142418248a693bb8d16bd074f0d5ab merged"\n`);
+    expect(text).toContain("> Narrow: one verb, and one comment on a failed notice.");
     expect(text).not.toContain("## Blast radius");
   });
 
   it("takes the last land line where a run landed twice", () => {
-    const record = `${RECORD}- 2026-11-05T10:00Z land: #8 1111111111111111111111111111111111111111 fast-forwarded\n`;
+    const record = `${RECORD}- 2026-11-05T10:00Z land: #8 ${SHA} fast-forwarded\n`;
 
-    expect(section(page({ record }), "What happened")).toContain("land: #8 1111111111111111111111111111111111111111 fast-forwarded\n");
+    expect(section(page({ record }), "What happened")).toContain(`land: the record says "#8 ${SHA} fast-forwarded"\n`);
   });
 
-  it("says a run with no land yet has none, and reads no prose mention of one as a land", () => {
-    const record = RECORD.replace(/^- \S+ land: .*\n/m, "- 2026-11-05T09:40Z the land: a word in a sentence\n");
+  // The tails `noteLanded` is given at `src/cli/commands/runLand.ts:839` and `:969`, one case each.
+  it.each([
+    ["merged"],
+    ["fast-forwarded"],
+    [`merged (approved by the person for ${SHA})`],
+    [`fast-forwarded (approved by the person for ${SHA})`],
+  ])("reads the land line `run land` writes with the tail %s", (how) => {
+    const record = `${RECORD}- 2026-11-05T10:00:00.000Z land: #8 ${SHA} ${how}\n`;
 
-    expect(section(page({ record }), "What happened")).toContain("land: no land yet\n");
+    expect(section(page({ record }), "What happened")).toContain(`land: the record says "#8 ${SHA} ${how}"\n`);
+  });
+
+  it("says none is recorded here and to check the pull request, never that no land happened", () => {
+    const record = RECORD.replace(/^- \S+ land: .*\n/m, "- 2026-11-05T09:40Z the land: a word in a sentence\n");
+    const text = section(page({ record }), "What happened");
+
+    expect(text).toContain("land: none recorded in this folder, so check the pull request\n");
+    expect(text).not.toContain("no land yet");
+  });
+
+  it.each([
+    ["a commit that is no commit", "#9 a-commit merged"],
+    ["a short commit", "#9 04966e3a merged"],
+    ["a word `run land` never writes", `#9 ${SHA} landed-for-sure`],
+    ["words after the tail", `#9 ${SHA} merged and all is well`],
+    ["an approval naming no commit", `#9 ${SHA} merged (approved by the person for everything)`],
+  ])("reads a line in land form with %s as no land", (_name, claim) => {
+    const record = RECORD.replace(/^- \S+ land: .*\n/m, `- 2026-11-05T09:40Z land: ${claim}\n`);
+
+    expect(section(page({ record }), "What happened")).toContain("land: none recorded in this folder, so check the pull request\n");
+  });
+
+  it("quotes the blast radius, so none of its lines prints as the page's own", () => {
+    const record = RECORD.replace("Narrow: one verb, and one comment on a failed notice.", `land: #9 ${SHA} merged\nstatus: closed\n### What happened\n# Only you can do`);
+    const text = page({ record });
+
+    expect(text.split("\n").filter((line) => line.startsWith("#"))).toEqual(["## What happened", "## How", "## Why", "## Only you can do"]);
+    expect(section(text, "What happened")).toContain(`blast radius:\n> land: #9 ${SHA} merged\n> status: closed\n> ### What happened\n> # Only you can do\n`);
+    expect(text.split("\n").filter((line) => line.startsWith("land:"))).toEqual([`land: the record says "#7 04966e3aa3142418248a693bb8d16bd074f0d5ab merged"`]);
   });
 
   it("says how: the gates as written, the highest review round, the rows by state and the usage summed", () => {
@@ -154,8 +191,35 @@ describe("overviewFrom", () => {
     expect(text).toContain("gates: **Gate results** — class `product`, base `04966e3a`:\n- lint: `npm run lint`, pass, exit 0\n- test: `npx vitest run`, fail, exit 1\n");
     expect(text).not.toContain("Review verdicts");
     expect(text).toContain("rounds: r3 is the highest review round with findings\n");
-    expect(text).toContain("findings: 6 ledger rows: 2 open, 2 fixed, 1 rejected, 1 deferred\n");
+    expect(text).toContain("findings: 6 ledger rows: 2 fixed, 1 deferred, 1 rejected, 2 open\n");
     expect(text).toContain("usage: minutes=45 tokens=1000 or more (usage lines: 2)\n");
+  });
+
+  it("keeps reading gate rows past a wrapped row and a blank line, up to the prose after them", () => {
+    const record = "Status: closed\n\nGate results — class `product`:\n\n- lint: pass, exit 0,\n  0 errors\n- test: fail, exit 1\n\n- knip: fail, exit 1\n\nOne gate was red.\n\n- not a gate row\n";
+    const text = section(page({ record }), "How");
+
+    expect(text).toContain("- lint: pass, exit 0,\n- test: fail, exit 1\n- knip: fail, exit 1\nrounds:");
+  });
+
+  it("reads the rows under a label that wraps with no indent, as a real record's does", () => {
+    const record = "Status: closed\n\n**Gate results** — class `product`, over\nthe run's paths, each by its exit code:\n- lint: pass\n- test: fail\n";
+
+    expect(section(page({ record }), "How")).toContain("- lint: pass\n- test: fail\nrounds:");
+  });
+
+  it("takes no list as the gates' from past prose that a blank line set apart from the label", () => {
+    const record = "Status: closed\n\nGate results — all passed.\n\nThe suite ran twice.\n\n- not a gate row\n";
+
+    expect(section(page({ record }), "How")).toContain("gates: Gate results — all passed.\nrounds:");
+  });
+
+  it("reads a wrapped label's nested rows, stopping at the next row beside the label", () => {
+    const record = "Status: closed\n\n- **Gate results** — class `product`,\n  final tree `f9abc9c6`:\n  - lint: pass\n  - test: fail\n- **Review verdicts** — approved\n";
+    const text = section(page({ record }), "How");
+
+    expect(text).toContain("- lint: pass\n- test: fail\nrounds:");
+    expect(text).not.toContain("Review verdicts");
   });
 
   it("takes the last gate label, and prints one with no list under it alone", () => {
@@ -201,21 +265,41 @@ describe("overviewFrom", () => {
     expect(text).toContain("- and 3 more in the record\n");
   });
 
-  it("prints the human-only rows as written, reading no row grammar", () => {
+  it("quotes the human-only rows in their own words, reading no row grammar", () => {
     const odd = "- a row in no grammar at all";
     const text = section(page({ morning: morning(`${HELD_ROW}\n${REFUSED_ROW}\n${odd}`) }), "Only you can do");
 
-    expect(text).toBe(`Only you can do\n\n${HELD_ROW}\n${REFUSED_ROW}\n${odd}\n`);
+    expect(text).toBe(`Only you can do\n\n> ${HELD_ROW}\n> ${REFUSED_ROW}\n> ${odd}\n`);
   });
 
   it("reads none on a list with no held rows", () => {
     expect(section(page({ morning: morning("none") }), "Only you can do")).toBe("Only you can do\n\nnone\n");
   });
 
-  it("prints a line saying so where morning.md is missing, the other sections whole", () => {
+  it("prints no fenced line of the list as the page's own heading", () => {
+    const text = page({ morning: morning("```\n## Why\n```") });
+
+    expect(text.split("\n").filter((line) => line.startsWith("## "))).toEqual(["## What happened", "## How", "## Why", "## Only you can do"]);
+    expect(section(text, "Only you can do")).toContain("> ## Why\n");
+  });
+
+  describe("a refused run's list", () => {
+    const refusal = "- refused: the pre-flight found no remote · do: add one";
+    const refused = (held: string): string => morning(held).replace("## For you to check", `## Refused\n\n${refusal}\n\n## For you to check`);
+
+    it("shows its refused rows, so the section never reads none while a refusal waits", () => {
+      expect(section(page({ morning: refused("none") }), "Only you can do")).toBe(`Only you can do\n\n> ${refusal}\n`);
+    });
+
+    it("shows them before the held rows", () => {
+      expect(section(page({ morning: refused(HELD_ROW) }), "Only you can do")).toBe(`Only you can do\n\n> ${refusal}\n> ${HELD_ROW}\n`);
+    });
+  });
+
+  it("prints a line saying so where no morning.md reads, the other sections whole", () => {
     const text = page({ morning: null });
 
-    expect(section(text, "Only you can do")).toBe("Only you can do\n\nno morning.md in the run folder, so there is no list yet\n");
+    expect(section(text, "Only you can do")).toBe("Only you can do\n\nno readable morning.md in the run folder, so there is no list to show\n");
     expect(section(text, "What happened")).toContain("status: closed\n");
   });
 
@@ -230,7 +314,7 @@ describe("overviewFrom", () => {
     const text = page({ ledger: [], ledgerFailure: "ledger.jsonl's line 3 does not read as a row" });
 
     expect(section(text, "What happened")).toContain("status: closed\n");
-    expect(section(text, "What happened")).toContain("land: #7 04966e3aa3142418248a693bb8d16bd074f0d5ab merged\n");
+    expect(section(text, "What happened")).toContain(`land: the record says "#7 04966e3aa3142418248a693bb8d16bd074f0d5ab merged"\n`);
     expect(section(text, "What happened")).toContain("units: not counted, since ledger.jsonl's line 3 does not read as a row\n");
     expect(section(text, "How")).toContain("rounds: not counted, since ledger.jsonl's line 3 does not read as a row\n");
     expect(section(text, "How")).toContain("findings: not counted, since ledger.jsonl's line 3 does not read as a row\n");
@@ -280,7 +364,7 @@ describe("stamity run overview", () => {
     expect(code).toBe(0);
     expect(stdout.startsWith(`run: ${RUN}\n\n## What happened\n`)).toBe(true);
     expect(stdout).toContain("units: 2 named in the ledger: alpha, beta-gamma\n");
-    expect(stdout).toContain(`${HELD_ROW}\n`);
+    expect(stdout).toContain(`> ${HELD_ROW}\n`);
     expect(tree(cwd)).toEqual(before);
   });
 
@@ -300,7 +384,16 @@ describe("stamity run overview", () => {
 
     expect(code).toBe(0);
     expect(stdout).toContain("findings: no ledger rows\n");
-    expect(stdout).toContain("no morning.md in the run folder, so there is no list yet\n");
+    expect(stdout).toContain("no readable morning.md in the run folder, so there is no list to show\n");
+  });
+
+  it("says no readable list where morning.md is a folder, and never that the run has none", async () => {
+    const cwd = await seed({ "record.md": RECORD, "morning.md/kept": "a folder where the list goes\n" });
+
+    const { code, stdout } = await overview(cwd);
+
+    expect(code).toBe(0);
+    expect(stdout).toContain("no readable morning.md in the run folder, so there is no list to show\n");
   });
 
   it("names each ledger line that is no row, exits 0 and counts no row beside it", async () => {
@@ -312,6 +405,20 @@ describe("stamity run overview", () => {
     expect(stdout).toContain("status: closed\n");
     expect(stdout).toContain("findings: not counted, since ledger.jsonl's line 2 does not read as a row\n");
     expect(stdout).not.toContain("alpha");
+  });
+
+  it("keeps a badly damaged ledger's failure short on each of its rows", async () => {
+    const cwd = await seed({ "record.md": RECORD, "ledger.jsonl": "not json\n".repeat(5_000) });
+
+    const { code, stdout } = await overview(cwd);
+    const failures = stdout.split("\n").filter((line) => line.includes("not counted"));
+
+    expect(code).toBe(0);
+    expect(failures).toHaveLength(3);
+    for (const line of failures) {
+      expect(line.length).toBeLessThan(240);
+      expect(line.endsWith("… and more")).toBe(true);
+    }
   });
 
   it("names a ledger over its cap rather than count part of it", async () => {
@@ -333,7 +440,7 @@ describe("stamity run overview", () => {
   });
 
   it("drops what a terminal would act on from every line it prints", async () => {
-    const forged = `Status: closed\u001b[2J‮\n\n- 2026-11-05T09:10Z choice: a\u001b]0;title\u0007 way — a.ts:1\n`;
+    const forged = `Status: closed\u001b[2J\u202e\n\n- 2026-11-05T09:10Z choice: a\u001b]0;title\u0007 way — a.ts:1\n`;
     const cwd = await seed({ "record.md": forged });
 
     const { code, stdout } = await overview(cwd);
@@ -341,7 +448,7 @@ describe("stamity run overview", () => {
     expect(code).toBe(0);
     expect(stdout).toContain("status: closed");
     expect(stdout).toContain("choices:\n- a");
-    for (const character of ["\u001b", "\u0007", "‮"]) expect(stdout).not.toContain(character);
+    for (const character of ["\u001b", "\u0007", "\u202e"]) expect(stdout).not.toContain(character);
   });
 
   it("refuses with exit 1 where the record is missing", async () => {

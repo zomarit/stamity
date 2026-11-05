@@ -13,7 +13,7 @@ import { parseLedgerText, type LedgerRow } from "../../runs/ledgerStore.ts";
 import { blastRadiusSection, MORNING_FILE, prBodyFrom, screenOutbound, withBlastRadius } from "../../runs/morning.ts";
 import { overviewFrom } from "../../runs/overview.ts";
 import { inferPrerequisites, type PrereqRow } from "../../runs/prerequisites.ts";
-import { ensureDraftPr, HOST_NAME, PR_RECORD_FILE, prRecordText, resolveRepo, type PrOutcome } from "../../runs/pullRequest.ts";
+import { ensureDraftPr, HOST_NAME, PR_RECORD_FILE, prRecordText, resolveRepo, runMarker, type PrOutcome } from "../../runs/pullRequest.ts";
 import { parseRunContract } from "../../runs/runContract.ts";
 import { parseGitDefaultBranch } from "../../workspace/git.ts";
 import { ghApi, ghRequestReview, REVIEWER_LOGIN, TEAM_SLUG } from "../engine/ghRunner.ts";
@@ -165,7 +165,7 @@ import { runLand } from "./runLand.ts";
  * does not read `--final-round`, which most runs never pass, and a `--refused` end sends nothing. A failure never moves
  * the exit code: it is a `notDone` line, leaves no record line, and the next `end` tries again. No contract says nothing.
  * That line is also one comment on the pull request (review/73), as a status line in the body would be replaced at land:
- * its text the line alone, once per `end` call, and a comment that fails is one more `notDone` line.
+ * its text the line and the run's marker, once per `end` call, and a comment that fails is one more `notDone` line.
  *
  * **The land job's lines** (REQ-FLOW-157): with `autonomy.landJob` on, an `end` with its own pull request appends `PR: <n>`
  * and `Login: <login>` to the record and runs itself once more, so they reach the head through every check above. A failure
@@ -1598,15 +1598,15 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
     result.notDone.push(`title not changed: pull request #${step.pr.number} was already open, so it keeps its own title, not the Refused: one`);
   }
   lines.push(`pr: ${step.pr === null ? "not opened" : `#${step.pr.number} ${step.pr.url} (${step.pr.how})`}`);
-  const noticed =
-    verb === END && opts["refused"] !== true && step.pr !== null && step.repo !== undefined
-      ? await noticeOrSayIt(ctx, { cwd, top, runDir, recordRel, repo: step.repo, number: step.pr.number }, lines, result.notDone, firstPass)
-      : null;
   // REQ-FLOW-157: the land job has only what the head holds, so an `end` that wrote its lines commits them through this same
   // door; the pull request's number exists only after the first push, so that takes a second pass, whose lines already stand.
   const stamped = verb === END && opts["refused"] !== true && step.pr !== null && step.pr.how !== "commented" && step.repo !== undefined
     ? await stampLandJobLines(ctx, { cwd, recordRel, repo: step.repo, top, number: step.pr.number }, result.notDone)
     : false;
+  const noticed =
+    verb === END && opts["refused"] !== true && step.pr !== null && step.repo !== undefined
+      ? await noticeOrSayIt(ctx, { run, cwd, top, runDir, recordRel, repo: step.repo, number: step.pr.number }, lines, result.notDone, stamped)
+      : null;
   if (stamped) {
     const again = await runCheckpoint(ctx, { ...opts, paths: [], dropHeld: [], carriedNotDone: result.notDone }, END);
     return noticed === null ? again : { ...again, json: { ...(again.json as Record<string, unknown>), notice: noticed } };
@@ -1674,6 +1674,7 @@ const NOTICE_NOT_SENT = "notice not sent: ";
 
 /** The pull request a notice is about, and where its record and contract are. */
 interface NoticeTarget {
+  run: string;
   cwd: string;
   top: string;
   runDir: string;
@@ -1684,17 +1685,20 @@ interface NoticeTarget {
 
 /**
  * review/73: {@link runEndNotice}, and where it failed, that `notDone` line said on the pull request as well. `draftPr` writes
- * the body before the notice runs and a status line would be replaced at land, so the failure gets a comment, whose text is
- * the line alone, which names a class and never GitHub's words. `carried` is the first pass's lines: the land job's second pass
- * retries the notice, and one `end` call says a failure once. A failed comment is one more `notDone` line and moves no exit code.
+ * the body before the notice runs and a status line would be replaced at land, so the failure gets a comment: the line, which
+ * names a class and never GitHub's words, then the run's marker, by which `/st-pr-resolve` skips a body a run wrote, so no round
+ * reads it as review. No land evidence reads a comment's marker, only a pull request body's. `retried` is the land job's second
+ * pass still to come: it runs the notice again and says what it finds, so one `end` call says a failure once, and never one that
+ * pass cleared. A second pass that stops first says nothing here, and exits non-zero. A failed comment is one more `notDone` line
+ * and moves no exit code.
  */
-async function noticeOrSayIt(ctx: CliContext, at: NoticeTarget, lines: string[], notDone: string[], carried: readonly string[]): Promise<string | null> {
+async function noticeOrSayIt(ctx: CliContext, at: NoticeTarget, lines: string[], notDone: string[], retried: boolean): Promise<string | null> {
   const from = notDone.length;
   const noticed = await runEndNotice(ctx, at, lines, notDone);
   const failed = notDone.slice(from).find((line) => line.startsWith(NOTICE_NOT_SENT));
-  if (noticed !== null || failed === undefined || carried.some((line) => line.startsWith(NOTICE_NOT_SENT))) return noticed;
+  if (noticed !== null || failed === undefined || retried) return noticed;
   const unposted = (why: string): void => void notDone.push(`the notice's comment was not posted to #${at.number} (${why})`);
-  const body = sanitizeLabel(failed);
+  const body = `${sanitizeLabel(failed)}\n\n${runMarker(at.run)}`;
   if (!screenOutbound(body, "pr-comment").ok) {
     unposted("the outbound screen matched it");
     return noticed;
