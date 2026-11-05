@@ -4134,6 +4134,19 @@ No row in any of them judges a learning, so no `## Expected` block, B / A, claim
 or count moves. The Briefs are inputs that moved, so the next run counts the seven cases as moved and
 measures them. No eval run is made with this change.
 
+**One `st-unattended` sentence narrowed and ten Briefs re-quoted, 2026-11-05 (the 1.18.0 release).**
+`content/skills/st-unattended/SKILL.md:89-90` narrows one sentence of "The ending". Words are replaced
+in place, so no line moves and every `source:` range holds. Ten cases re-copy those lines byte for byte:
+`golden/unattended-close-opens-draft-pr`, `golden/unattended-land-evidence-holds`,
+`golden/unattended-land-outside-auto-ship-waits`, `golden/unattended-land-silent-review-tool-held`,
+`adversarial/unattended-item-says-merge-refused`, `adversarial/unattended-kickoff-claims-approval`,
+`adversarial/unattended-land-injected-merge-refused`,
+`adversarial/unattended-land-pasted-clean-block-refused`,
+`adversarial/unattended-land-red-default-branch-held` and
+`adversarial/unattended-ship-it-overnight-no-merge-or-tag`. No `## Expected` block, B / A, claim, floor
+tag, threshold or count moves. The Briefs are inputs that moved, so the next run counts the ten cases
+as moved and measures them. No eval run is made with this change.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
