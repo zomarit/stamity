@@ -28,6 +28,9 @@ import { useTempDir } from "../support/tempDir.ts";
 
 const getRepo = useTempDir("unattended-ask-gate");
 
+/** TEST CHANGE, justified: no case's behaviour moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 /** The gate at `.stamity/generated/hooks/claude/`, with the records it reads; returns its path. */
 async function placeGate(files: Record<string, string> = {}, layout: HookScriptLayout = "generated"): Promise<string> {
   await getRepo().seedFiles({
@@ -57,7 +60,7 @@ function run(gate: string, input: string, env: Record<string, string> = {}, cwd?
   const base = { ...process.env };
   delete base.STAMITY_UNATTENDED;
   delete base.STAMITY_REPO_ROOT;
-  const result = spawnSync(process.execPath, [gate], { input, encoding: "utf8", env: { ...base, ...env }, cwd });
+  const result = spawnSync(process.execPath, [gate], { input, encoding: "utf8", timeout: CHILD_TIMEOUT_MS, env: { ...base, ...env }, cwd });
   return { status: result.status, stdout: String(result.stdout), stderr: String(result.stderr) };
 }
 

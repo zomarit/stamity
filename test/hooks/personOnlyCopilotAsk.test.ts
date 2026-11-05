@@ -34,6 +34,9 @@ import { useTempDir } from "../support/tempDir.ts";
 
 const getRepo = useTempDir("copilot-ask");
 
+/** TEST CHANGE, justified: no case's behaviour moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 /** The package and version the core scripts' CLI hints pin; a literal, so a renamed fork renders the same bytes. */
 const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
 const POLICY = "../../agent-tool-policies.json";
@@ -86,7 +89,7 @@ function hookEnv(): NodeJS.ProcessEnv {
 
 /** Runs one script as a client does, the payload on stdin, the variables it reads under the test's control. */
 function run(script: string, input: unknown): ReturnType<typeof spawnSync> {
-  return spawnSync(process.execPath, [script], { input: JSON.stringify(input), encoding: "utf8", env: hookEnv() });
+  return spawnSync(process.execPath, [script], { input: JSON.stringify(input), encoding: "utf8", timeout: CHILD_TIMEOUT_MS, env: hookEnv() });
 }
 
 /** The same run without waiting for it: its exit code and the moment it closed, once it has. */

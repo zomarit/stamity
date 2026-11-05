@@ -25,6 +25,9 @@ import { useTempDir, type TempDirHandle } from "../support/tempDir.ts";
  */
 const getRepo = useTempDir("resume-card-parity");
 
+/** TEST CHANGE, justified: no case's behaviour moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 const WINDOWS = process.platform === "win32";
 const AS_ROOT = process.getuid?.() === 0;
 const SCRIPT_PATH = ".stamity/generated/hooks/claude/stamity-session-start.mjs";
@@ -919,7 +922,7 @@ function runHook(root: string): HookRun {
   delete env["STAMITY_REPO_ROOT"];
   const script = join(root, SCRIPT_PATH);
   const run = (input: string): string => {
-    const result = spawnSync(process.execPath, [script], { cwd: root, input, env, encoding: "utf8" });
+    const result = spawnSync(process.execPath, [script], { cwd: root, input, env, encoding: "utf8", timeout: CHILD_TIMEOUT_MS });
     expect(result.status, result.stderr).toBe(0);
     return result.stdout;
   };

@@ -25,6 +25,9 @@ import { useTempDir } from "../support/tempDir.ts";
 
 const getTemp = useTempDir("cursor-model-hook");
 
+/** TEST CHANGE, justified: no case's behaviour moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 const ENGINE_VERSION = "0.0.0-test";
 const FIXED_NOW = new Date("2026-10-14T00:00:00.000Z");
 
@@ -99,7 +102,7 @@ function run(command: string, cwd: string, input: string): SpawnSyncReturns<stri
   const env: NodeJS.ProcessEnv = { ...process.env };
   // The walk from the working folder is under test; a root the host session reports would bypass it.
   delete env["CURSOR_PROJECT_DIR"];
-  return spawnSync(command, { cwd, env, shell: true, input, encoding: "utf8" });
+  return spawnSync(command, { cwd, env, shell: true, input, encoding: "utf8", timeout: CHILD_TIMEOUT_MS });
 }
 
 const taskPayload = (toolInput: unknown, toolName: unknown = "Task"): string =>

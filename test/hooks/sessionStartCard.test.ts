@@ -29,6 +29,9 @@ import { useTempDir } from "../support/tempDir.ts";
  */
 const getRepo = useTempDir("session-start-card");
 
+/** TEST CHANGE, justified: no case's behaviour moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 const WINDOWS = process.platform === "win32";
 const SCRIPT_PATH = ".stamity/generated/hooks/claude/stamity-session-start.mjs";
 const RUN = "2026-09-23_demo";
@@ -58,7 +61,7 @@ function start(file: string, input: string, markers: Record<string, string> = {}
   // Cleared so each case controls the markers it runs under; `markers` adds them.
   for (const name of SESSION_MARKERS) delete env[name];
   Object.assign(env, markers);
-  const result = spawnSync(process.execPath, [file], { cwd: getRepo().dir, input, env, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [file], { cwd: getRepo().dir, input, env, encoding: "utf8", timeout: CHILD_TIMEOUT_MS });
   return { code: result.status ?? -1, stdout: result.stdout, stderr: result.stderr };
 }
 
@@ -579,7 +582,7 @@ describe("the session-start resume card", () => {
 
     const env: NodeJS.ProcessEnv = { ...process.env };
     delete env["STAMITY_REPO_ROOT"];
-    const result = spawnSync(process.execPath, [script], { cwd: repo.path("checkout"), input: COMPACT, env, encoding: "utf8" });
+    const result = spawnSync(process.execPath, [script], { cwd: repo.path("checkout"), input: COMPACT, env, encoding: "utf8", timeout: CHILD_TIMEOUT_MS });
 
     const base = repo.dir.replaceAll("\\", "/");
     expect(cardOf(result.stdout)[4]).toBe(
@@ -633,7 +636,7 @@ describe("the session-start resume card", () => {
     const result = spawnSync(
       process.execPath,
       [repo.path(".stamity", "generated", "hooks", "codex", PORTABLE_RUNNER_FILE), Buffer.from(JSON.stringify(hook)).toString("base64url")],
-      { cwd: repo.dir, input: COMPACT, encoding: "utf8" },
+      { cwd: repo.dir, input: COMPACT, encoding: "utf8", timeout: CHILD_TIMEOUT_MS },
     );
 
     expect(result.status).toBe(0);
@@ -829,7 +832,7 @@ describe("the startup card for the run on this branch (REQ-CTX-013, REQ-FLOW-105
     for (const name of SESSION_MARKERS) delete env[name];
     const script = repo.path("checkout", SCRIPT_PATH);
     const run = (input: string): string =>
-      spawnSync(process.execPath, [script], { cwd: repo.path("checkout"), input, env, encoding: "utf8" }).stdout;
+      spawnSync(process.execPath, [script], { cwd: repo.path("checkout"), input, env, encoding: "utf8", timeout: CHILD_TIMEOUT_MS }).stdout;
 
     expect(cardOf(run(STARTUP))[0]).toMatch(FRESH_CARD);
     // The main checkout's own HEAD is not the lane's: on a lane named otherwise, none.
@@ -971,6 +974,7 @@ describe("the resume card's read guards", () => {
       input: COMPACT,
       env,
       encoding: "utf8",
+      timeout: CHILD_TIMEOUT_MS,
     });
     expect(cardOf(result.stdout)[4]).toBe("lanes: 0");
   });

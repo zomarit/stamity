@@ -60,6 +60,9 @@ const T1 = new Date("2026-10-19T10:00:00.000Z");
 
 const getTemp = useTempDir("claude-hook-copies");
 
+/** TEST CHANGE, justified: no case's behaviour moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 const CHARTER_FIXTURE = [
   "---",
   "id: charter",
@@ -264,6 +267,7 @@ describe("init writes the copies Claude Code's hooks run, and no generated Claud
       input: "",
       env,
       encoding: "utf8",
+      timeout: CHILD_TIMEOUT_MS,
     });
 
     expect(result.status, result.stderr).toBe(0);
@@ -368,6 +372,7 @@ describe("check and clean over the copies", () => {
       // The read path is built at run time, so the test-input census does not count it as a read of a tracked page.
       input: JSON.stringify({ agent_type: agent, tool_name: "Read", tool_input: { file_path: ["notes", "todo.txt"].join("/") } }),
       encoding: "utf8",
+      timeout: CHILD_TIMEOUT_MS,
     });
     expect(guard.status, guard.stderr).toBe(0);
     expect(guard.stderr).not.toContain("POLICY_UNREADABLE");

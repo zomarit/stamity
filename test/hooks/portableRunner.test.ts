@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { chmod, copyFile, mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -20,6 +20,9 @@ import type { Tool } from "../../src/types/core.ts";
  * (sw26-engine-cli-call-form, REQ-FLOW-002): Codex's rendering requires one.
  */
 const SYNC = { syncCall: "npx -y @zomarit/stamity@1.0.0-golden sync" };
+
+/** TEST CHANGE, justified: no case's behaviour moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
@@ -46,9 +49,21 @@ async function fixture(tool: Tool, body: string, row: Partial<HookInterchange> =
   return { root, script, hook };
 }
 function execute(f: Awaited<ReturnType<typeof fixture>>, payload: unknown = { toolName: "bash", toolArgs: { command: "pwd" } }) {
-  return spawnSync(process.execPath, [f.script, Buffer.from(JSON.stringify(f.hook)).toString("base64url")], { cwd: tmpdir(), input: JSON.stringify(payload), encoding: "utf8" });
+  return spawnSync(process.execPath, [f.script, Buffer.from(JSON.stringify(f.hook)).toString("base64url")], { cwd: tmpdir(), input: JSON.stringify(payload), encoding: "utf8", timeout: CHILD_TIMEOUT_MS });
 }
 const output = (value: unknown) => `process.stdout.write(${JSON.stringify(JSON.stringify(value))});`;
+
+/** How long the hung hook stays up: far past the call's limit, and finite, so a lost limit fails its case instead of hanging the worker. */
+const HUNG_HOOK_MS = 60_000;
+const HUNG_HOOK_PID_FILE = "hung.pid";
+/** Names its process for the kill that ends it, and leaves the fixture folder, which Windows will not remove under a running process. */
+const HUNG_HOOK_BODY = [
+  'import { writeFileSync } from "node:fs";',
+  'import { tmpdir } from "node:os";',
+  `writeFileSync(${JSON.stringify(HUNG_HOOK_PID_FILE)}, String(process.pid));`,
+  "process.chdir(tmpdir());",
+  `setTimeout(() => {}, ${HUNG_HOOK_MS});`,
+].join("\n");
 
 describe("portable native hook boundary", () => {
   it.each(["cursor", "copilot"] as const)("%s translates canonical deny without exposing unsupported output values", async (tool) => {
@@ -308,7 +323,7 @@ describe("portable native hook boundary", () => {
   it.each(["cursor", "copilot", "codex"] as const)("%s rejects malformed output and input without echoing payload fragments", async (tool) => {
     const f = await fixture(tool, output({ hookSpecificOutput: { hookEventName: "Stop", permissionDecision: "allow" } }));
     expect(execute(f).status).toBe(tool === "codex" ? 2 : 1);
-    const bad = spawnSync(process.execPath, [f.script, Buffer.from(JSON.stringify(f.hook)).toString("base64url")], { input: '{"private":"must-not-appear"', encoding: "utf8" });
+    const bad = spawnSync(process.execPath, [f.script, Buffer.from(JSON.stringify(f.hook)).toString("base64url")], { input: '{"private":"must-not-appear"', encoding: "utf8", timeout: CHILD_TIMEOUT_MS });
     expect(bad.status).toBe(tool === "codex" ? 2 : 1);
     expect(bad.stderr).toContain("Invalid hook input JSON");
     expect(bad.stderr).not.toContain("must-not-appear");
@@ -318,7 +333,7 @@ describe("portable native hook boundary", () => {
     const f = await fixture("codex", output({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny" } }));
     const nested = join(f.root, "packages", "deep directory");
     await mkdir(nested, { recursive: true });
-    const result = spawnSync(portableHookCommand("codex", f.hook, SYNC), { cwd: nested, shell: true, input: "{}", encoding: "utf8" });
+    const result = spawnSync(portableHookCommand("codex", f.hook, SYNC), { cwd: nested, shell: true, input: "{}", encoding: "utf8", timeout: CHILD_TIMEOUT_MS });
     expect(result.stderr).toBe("");
     expect(result.status).toBe(0);
     expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe("deny");
@@ -353,7 +368,7 @@ describe("portable native hook boundary", () => {
     const nested = join(project, "packages", "deep directory");
     await mkdir(nested, { recursive: true });
     const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!, program![3]!], {
-      cwd: nested, shell: false, input: "{}", encoding: "utf8",
+      cwd: nested, shell: false, input: "{}", encoding: "utf8", timeout: CHILD_TIMEOUT_MS,
     });
 
     expect(result.stderr).toBe("");
@@ -369,7 +384,7 @@ describe("portable native hook boundary", () => {
     // TEST CHANGE, justified (REQ-FLOW-142): the starter now ends with the row's script as a plain word after the row.
     const program = /^node -e "(.*)" ([A-Za-z0-9_-]+) ([A-Za-z0-9._/-]+)$/s.exec(starter);
     const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!, program![3]!], {
-      cwd: orphan, shell: false, input: "{}", encoding: "utf8",
+      cwd: orphan, shell: false, input: "{}", encoding: "utf8", timeout: CHILD_TIMEOUT_MS,
     });
     // TEST CHANGE, justified: this row is an authored Codex pre-tool-use row, where a fault inside
     // the runner exits 2; the starter's own failure now takes the same exit, since Codex lets a
@@ -392,7 +407,7 @@ describe("portable native hook boundary", () => {
     const program = /^node -e "(.*)" ([A-Za-z0-9_-]+) ([A-Za-z0-9._/-]+)$/s.exec(starter);
     expect(program, starter).not.toBeNull();
     const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!, program![3]!], {
-      cwd: project, shell: false, input: "{}", encoding: "utf8",
+      cwd: project, shell: false, input: "{}", encoding: "utf8", timeout: CHILD_TIMEOUT_MS,
     });
     // TEST CHANGE, justified: an authored Codex pre-tool-use row; a missing runner now exits 2, the
     // runner's own fault exit on that row, rather than the 1 Codex lets the call through on. The
@@ -415,7 +430,7 @@ describe("portable native hook boundary", () => {
     const program = /^node -e "(.*)" ([A-Za-z0-9_-]+) ([A-Za-z0-9._/-]+)$/s.exec(starter);
     expect(program, starter).not.toBeNull();
     const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!, program![3]!], {
-      cwd: project, shell: false, input: "{}", encoding: "utf8",
+      cwd: project, shell: false, input: "{}", encoding: "utf8", timeout: CHILD_TIMEOUT_MS,
     });
     // TEST CHANGE, justified: the same authored Codex pre-tool-use row as above, so the same exit 2.
     expect(result.status).toBe(2);
@@ -442,7 +457,7 @@ describe("portable native hook boundary", () => {
       expect(program).not.toBeNull();
       for (const cwd of [project, orphan]) {
         const result = spawnSync(process.execPath, ["-e", program![1]!, program![2]!, program![3]!], {
-          cwd, shell: false, input: "{}", encoding: "utf8",
+          cwd, shell: false, input: "{}", encoding: "utf8", timeout: CHILD_TIMEOUT_MS,
         });
         expect(result.status, `${hook.event} ${hook.command[1]} in ${cwd === project ? "the project" : "no project"}`).toBe(exit);
       }
@@ -489,6 +504,19 @@ describe("portable native hook boundary", () => {
     await Promise.all((["cursor", "copilot"] as const).map(async (tool) => {
       expect(execute(await fixture(tool, "process.exit(3);")).status, tool).toBe(3);
     }));
+  });
+
+  it("ends the call at its own limit when a hook never exits, though the hook outlives the kill", async () => {
+    const f = await fixture("cursor", HUNG_HOOK_BODY);
+    const started = Date.now();
+    const result = execute(f);
+    const elapsed = Date.now() - started;
+    expect((result.error as NodeJS.ErrnoException | undefined)?.code).toBe("ETIMEDOUT");
+    expect(elapsed).toBeLessThan(HUNG_HOOK_MS);
+    // The limit kills the runner alone: its own child is still alive here, and the call has returned all the same.
+    const hook = Number(await readFile(join(f.root, HUNG_HOOK_PID_FILE), "utf8"));
+    expect(process.kill(hook, 0)).toBe(true);
+    process.kill(hook);
   });
 
   it("keeps Copilot timeouts fail-open and Cursor timeouts visible to failClosed", async () => {
@@ -733,7 +761,7 @@ describe("the walk-up starter on Cursor and Copilot", () => {
   }
 
   function runShell(command: string, cwd: string, env: NodeJS.ProcessEnv = envWith()) {
-    return spawnSync(command, { cwd, env, shell: true, input: JSON.stringify({ toolName: "bash", toolArgs: { command: "pwd" } }), encoding: "utf8" });
+    return spawnSync(command, { cwd, env, shell: true, input: JSON.stringify({ toolName: "bash", toolArgs: { command: "pwd" } }), encoding: "utf8", timeout: CHILD_TIMEOUT_MS });
   }
 
   it.each(["cursor", "copilot"] as const)("%s runs the hook from repo/sub/deeper exactly as from the root", async (tool) => {
@@ -1019,7 +1047,7 @@ describe("plugin-rooted rows", () => {
     return spawnSync(
       process.execPath,
       [f.script, Buffer.from(JSON.stringify(f.hook)).toString("base64url")],
-      { cwd: opts.cwd, env, input: JSON.stringify({ toolName: "bash" }), encoding: "utf8" },
+      { cwd: opts.cwd, env, input: JSON.stringify({ toolName: "bash" }), encoding: "utf8", timeout: CHILD_TIMEOUT_MS },
     );
   }
 
@@ -1121,7 +1149,7 @@ describe("which program a row's launcher starts", () => {
 
   function run(script: string, hook: HookInterchange, opts: { cwd: string; env: NodeJS.ProcessEnv }) {
     return spawnSync(process.execPath, [script, Buffer.from(JSON.stringify(hook)).toString("base64url")], {
-      cwd: opts.cwd, env: opts.env, input: JSON.stringify({ toolName: "bash" }), encoding: "utf8",
+      cwd: opts.cwd, env: opts.env, input: JSON.stringify({ toolName: "bash" }), encoding: "utf8", timeout: CHILD_TIMEOUT_MS,
     });
   }
 
