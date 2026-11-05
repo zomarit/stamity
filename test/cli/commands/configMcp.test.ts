@@ -528,6 +528,12 @@ describe("config mcp own <file> — adding a row (REQ-FLOW-160)", () => {
     const hostRow = (args: readonly string[]): Record<string, unknown> =>
       ownRow({ command: "acme-mcp", packageNameLock: "acme-mcp", args, requiresEnv: [] });
     const fetchRow = (args: readonly string[]): Record<string, unknown> => ownRow({ args, requiresEnv: [] });
+    // The pin refusals quote the lock and the version joined, which no one field holds whole.
+    const LINK = `https://acme:${PLAIN}@registry.invalid/pkg`;
+    const LINK_PIN = `${LINK}@${OWN_VERSION}`;
+    const linkRow = (args: readonly string[], lock: string = LINK): Record<string, unknown> =>
+      ownRow({ packageNameLock: lock, args, requiresEnv: [] });
+    const PIN_SHOWN = "<packageNameLock@pinnedVersion>";
 
     it.each<[string, Record<string, unknown>, string]>([
       ["a whole argument on a host launcher", hostRow(["serve", `--token=${PLAIN}`]), "<args[1]>"],
@@ -544,6 +550,10 @@ describe("config mcp own <file> — adding a row (REQ-FLOW-160)", () => {
       ],
       ["a value in `transport`", ownRow({ transport: PLAIN }), "got string <value withheld>"],
       ["a long value in `transport`", ownRow({ transport: PLAIN.repeat(4) }), "got string <value withheld>"],
+      ["a link in a lock the arguments do not carry", linkRow(["-y", PIN]), `exact package token ${PIN_SHOWN}`],
+      ["a link in a lock an argument names bare", linkRow(["-y", LINK]), `rather than the pin ${PIN_SHOWN}`],
+      ["a link in a lock, with an argument before the token", linkRow(["-y", "--flag", LINK_PIN]), `before the package token ${PIN_SHOWN}`],
+      ["a lock with a C1 control, which the seam escapes", linkRow(["-y", PIN], `${LINK}\u0085`), `exact package token ${PIN_SHOWN}`],
     ])("%s", async (_shape, row, shown) => {
       const handle = tempDir();
       await seedManifest(handle);
@@ -574,6 +584,19 @@ describe("config mcp own <file> — adding a row (REQ-FLOW-160)", () => {
 
       expect(result.code).toBe(1);
       expect(result.stderr).toContain(`("acme-old")`);
+      expect(result.stderr).not.toContain(PLAIN);
+    });
+
+    it("withholds the pin of a row already in the manifest too", async () => {
+      const handle = tempDir();
+      await seedManifest(handle, { mcp: { servers: [], ownServers: asRows({ ...linkRow(["-y", PIN]), id: "acme-old" }) } });
+      await seedRowFile(handle);
+
+      const result = await run(handle, ["mcp", "own", OWN_FILE]);
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain(`("acme-old")`);
+      expect(result.stderr).toContain(PIN_SHOWN);
       expect(result.stderr).not.toContain(PLAIN);
     });
   });
@@ -971,6 +994,63 @@ describe("config mcp own --remove — no client entry left launching (REQ-FLOW-1
     expect(await readDoc(root, CODEX_DOC)).toContain(`${OWN_PACKAGE}@9.9.9`);
     expect(await idsIn(root, CLAUDE_DOC)).toEqual(["github"]);
     expect(result.stderr).toContain(`still launches from ${CODEX_DOC}`);
+  });
+
+  describe("reads a Codex server a person defined with no table header of its own", () => {
+    const SERVER = `{ command = "npx", args = ["-y", "${OWN_PACKAGE}@${OWN_VERSION}"] }`;
+
+    /** The repo with its Codex table gone, so the shape under test is all that defines the server. */
+    async function repoWithCodexText(handle: TempDirHandle, shape: (codex: string) => string): Promise<string> {
+      const root = await repoWithOwnServer(handle);
+      await cliOk(root, ["config", "mcp", "remove", OWN_ID]);
+      await cliOk(root, ["sync"]);
+      await writeFile(join(root, CODEX_DOC), shape(await readDoc(root, CODEX_DOC)), "utf8");
+      return root;
+    }
+
+    it.each<[string, (codex: string) => string]>([
+      ["an inline table in an owner's [mcp_servers]", (codex) => `${codex}\n[mcp_servers]\n${OWN_ID} = ${SERVER}\n`],
+      ["a quoted key in an owner's [mcp_servers]", (codex) => `${codex}\n[mcp_servers]\n"${OWN_ID}" = ${SERVER}\n`],
+      ["a dotted key in an owner's [mcp_servers]", (codex) => `${codex}\n[mcp_servers]\n${OWN_ID}.command = "npx"\n`],
+      ["an inline table on a dotted key at the root", (codex) => `mcp_servers.${OWN_ID} = ${SERVER}\n\n${codex}`],
+      ["a dotted key at the root, down to a field", (codex) => `mcp_servers.${OWN_ID}.command = "npx"\n\n${codex}`],
+      ["every server in one inline table at the root", () => `mcp_servers = { ${OWN_ID} = ${SERVER} }\n`],
+    ])("%s stays, and neither the preview nor the removal reads as gone", async (_shape, shape) => {
+      const root = await repoWithCodexText(tempDir(), shape);
+      const before = await readDoc(root, CODEX_DOC);
+
+      const preview = await cliOk(root, ["config", "mcp", "own", "--remove", OWN_ID, "--dry-run"]);
+      const result = await cliOk(root, ["config", "mcp", "own", "--remove", OWN_ID, "--json"]);
+
+      expect(preview.stdout).toContain(`would keep your own entry in ${CODEX_DOC}, which goes on launching`);
+      expect(result.stderr).toContain(`still launches from ${CODEX_DOC}`);
+      expect((JSON.parse(result.stdout) as { kept: string[] }).kept).toEqual([CODEX_DOC]);
+      expect(await readDoc(root, CODEX_DOC)).toBe(before);
+      expect((await readSetup(root)).mcp?.ownServers).toEqual([]);
+    });
+
+    it("keeps naming a key the removal leaves when the engine's table of that id goes", async () => {
+      const root = await repoWithOwnServer(tempDir());
+      const codex = await readDoc(root, CODEX_DOC);
+      await writeFile(join(root, CODEX_DOC), `${codex}\n[mcp_servers]\n${OWN_ID}.command = "npx"\n`, "utf8");
+
+      const result = await cliOk(root, ["config", "mcp", "own", "--remove", OWN_ID]);
+
+      expect(await readDoc(root, CODEX_DOC)).not.toContain(`[mcp_servers.${OWN_ID}]`);
+      expect(result.stderr).toContain(`still launches from ${CODEX_DOC}`);
+    });
+
+    it.each<[string, (codex: string) => string]>([
+      ["a key naming another server", (codex) => `${codex}\n[mcp_servers]\nother-server = ${SERVER}\n`],
+      ["an inline table of other servers", () => `mcp_servers = { other-server = { command = "uvx" } }\n`],
+    ])("claims nothing of %s", async (_shape, shape) => {
+      const root = await repoWithCodexText(tempDir(), shape);
+
+      const result = await cliOk(root, ["config", "mcp", "own", "--remove", OWN_ID, "--json"]);
+
+      expect(result.stderr).not.toContain("still launches");
+      expect((JSON.parse(result.stdout) as { kept: string[] }).kept).toEqual([]);
+    });
   });
 
   it("stops on a document it cannot read, keeping the row so a re-run can still prove the rest", async () => {

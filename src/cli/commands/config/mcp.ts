@@ -669,26 +669,21 @@ async function readOwnRow(rootDir: string, file: string): Promise<McpOwnServer> 
   return parsed as McpOwnServer;
 }
 
-/** Every string under `value`, however deep, with the 40-character form a type refusal cuts a string to. */
-function stringsUnder(value: unknown): string[] {
-  if (typeof value === "string") return [value, `${value.slice(0, 40)}…`];
-  return typeof value === "object" && value !== null ? Object.values(value).flatMap(stringsUnder) : [];
-}
-
 /**
- * `message` with no quoted field value of `rows` left in it. The seam names each
- * argument by its place, and the validator also quotes a `command`, a `docsUrl`,
- * a variable `name` or a `transport` it refuses. Those are where a pasted shell
- * line, or a link with its password in it, lands, and this text reaches logs and
- * transcripts. The field stays named beside the gap, and `id` stays because it
- * is how the person finds the row.
+ * `message` with no composed pin of `rows` left in it. The seam withholds every
+ * field a refusal quotes, and keeps the pin so a refusal can say which token it
+ * wants. But `packageNameLock` is held to no shape, so a link with its password
+ * lands in that token, and the pin refusals print it. Each is quoted as the seam
+ * leaves it, C1 controls escaped, and the two field names stand in its place.
  */
-function withoutRowValues(message: string, rows: readonly McpOwnServer[]): string {
-  const fields = rows.flatMap((row) => Object.entries(row).filter(([key]) => key !== "id" && key !== "args"));
-  return stringsUnder(fields.map(([, value]) => value as unknown)).reduce(
-    (text, value) => text.replaceAll(JSON.stringify(value), "<value withheld>"),
-    message,
-  );
+function withoutComposedPins(message: string, rows: readonly McpOwnServer[]): string {
+  return rows.reduce((text, { packageNameLock, pinnedVersion }) => {
+    const quoted = JSON.stringify(`${packageNameLock}@${pinnedVersion}`).replaceAll(
+      /[\u0080-\u009f]/g,
+      (control) => `\\u${control.charCodeAt(0).toString(16).padStart(4, "0")}`,
+    );
+    return text.replaceAll(quoted, "<packageNameLock@pinnedVersion>");
+  }, message);
 }
 
 /**
@@ -721,7 +716,7 @@ export async function runMcpOwnAdd(
     throw new CliFailure({
       code: "VALIDATION_ERROR",
       message: `the row in ${file} was not added, and nothing was written`,
-      why: withoutRowValues(cause.message, mcp.ownServers),
+      why: withoutComposedPins(cause.message, mcp.ownServers),
       next: "fix what the refusal names and run the command again",
     });
   }
@@ -813,6 +808,11 @@ async function takeOutOfJsonDocument(
  * The rendering names only the tables the document already holds, since the lane
  * writes each one it does not find: a server selected and not yet synced is
  * `sync`'s to write, and a person can still change their mind about it.
+ *
+ * A person can also define the server with no header of its own: `id = { … }` in
+ * their `[mcp_servers]`, a dotted key, or all of `mcp_servers` as one inline table,
+ * whose value this reader does not cut, so naming the id there counts. No table of
+ * the engine's sits there for the lane to take, so that entry is simply `kept`.
  */
 async function takeOutOfCodexConfig(
   ctx: CliContext,
@@ -831,8 +831,18 @@ async function takeOutOfCodexConfig(
     const cut = segmentTomlTables(text);
     return cut.ok && cut.segments.some((segment) => segment.key !== null && tomlTableName(segment.key) === serverTable(server));
   };
+  // A key inside the id's own table goes with that table, so only a shorter table counts.
+  const holdsKey = (text: string): boolean => {
+    const cut = segmentTomlTables(text);
+    return cut.ok && cut.keys.some(({ table, key }) => {
+      const [root, server] = [...table, ...key];
+      return table.length < 2 && root === "mcp_servers" && (server === undefined ? text.includes(id) : server === id);
+    });
+  };
+  const launches = (text: string): boolean => holdsTable(text) || holdsKey(text);
   try {
     const raw = await readIfExists(absPath);
+    if (raw !== null && !holdsTable(raw) && holdsKey(raw)) return { path, result: "kept" };
     // A text the segmenter cannot read goes on to the lane, which names the line.
     if (raw === null || (segmentTomlTables(raw).ok && !holdsTable(raw))) return null;
     const ownership = coOwnedOwnershipOf(manifest.ledger, path, {
@@ -860,7 +870,7 @@ async function takeOutOfCodexConfig(
     if (!apply) {
       const prediction = await lane.predict(absPath, emitted, ownership);
       if (prediction.collision !== null) return { path, result: "refused", note: prediction.collision.detail };
-      return { path, result: holdsTable(prediction.after ?? "") ? "kept" : "removed" };
+      return { path, result: launches(prediction.after ?? "") ? "kept" : "removed" };
     }
     const { writtenContent, writtenRecord, ...merge } = await lane.materialize(absPath, emitted, ownership);
     if (merge.action === "skipped" || writtenContent === null) {
@@ -868,7 +878,7 @@ async function takeOutOfCodexConfig(
     }
     return {
       path,
-      result: holdsTable(writtenContent) ? "kept" : "removed",
+      result: launches(writtenContent) ? "kept" : "removed",
       written: { content: writtenContent, ...(writtenRecord === null ? {} : { record: writtenRecord }) },
       ...(merge.warning === undefined ? {} : { note: merge.warning }),
     };
