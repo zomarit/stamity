@@ -23,6 +23,9 @@ import { tsRepoFiles } from "../support/repoFixtures.ts";
 /** Per-case budget: one cold dist `init` over a one-client tree, plus two guard spawns. */
 const CASE_TIMEOUT_MS = 120_000;
 
+/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 /**
  * Where emission writes Claude Code's guard, relative to the repository.
  * TEST CHANGE, justified (u5-hook-copies, plan 018 file 2, REQ-FLOW-088): the copy under `.claude/hooks/stamity/`,
@@ -47,6 +50,7 @@ function runGuard(guard: string, command: string, attended = false): ReturnType<
     input: payload(command),
     encoding: "utf8",
     env: attended ? env : { ...env, STAMITY_UNATTENDED: "1" },
+    timeout: CHILD_TIMEOUT_MS, // TEST CHANGE, justified: a time limit only, no expected value moved.
   });
 }
 

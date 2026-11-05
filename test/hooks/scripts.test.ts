@@ -76,6 +76,12 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  */
 const getRepo = useTempDir("hook-scripts");
 
+/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
+/** TEST CHANGE, justified: a time limit only, no expected value moved. The dead-holder case allows its child 16,000 ms on win32 inside a 30 s case, so CHILD_TIMEOUT_MS would cut in under that bound; this limit sits between the two. */
+const IDLE_WINDOW_CHILD_TIMEOUT_MS = 25_000;
+
 const POLICY_FILE = "agent-tool-policies.json";
 const GUARD_PATH = "hooks/guard.mjs";
 
@@ -121,7 +127,7 @@ const SESSION_MARKERS = ["CLAUDE_CODE_REMOTE", "COPILOT_AGENT_PROMPT", "CURSOR_A
 /** Runs a generated script the way a client does: fresh process, piped stdio. */
 function run(
   file: string,
-  opts: { cwd?: string; input?: string; env?: Record<string, string> } = {},
+  opts: { cwd?: string; input?: string; env?: Record<string, string>; timeoutMs?: number } = {}, // TEST CHANGE, justified: a time limit only, no expected value moved.
 ): RunResult {
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env["STAMITY_REPO_ROOT"];
@@ -135,6 +141,7 @@ function run(
     input: opts.input ?? "",
     env: { ...env, ...opts.env },
     encoding: "utf8",
+    timeout: opts.timeoutMs ?? CHILD_TIMEOUT_MS, // TEST CHANGE, justified: a time limit only, no expected value moved.
   });
   return { code: result.status ?? -1, stdout: result.stdout, stderr: result.stderr };
 }
@@ -3590,7 +3597,7 @@ describe("buildReviewGateScript", () => {
     await writeFile(getRepo().path(REVIEW_GATE_STATE_FILE) + ".lock", "");
 
     const started = Date.now();
-    const result = run(gate, { cwd: getRepo().dir, input: reviewerStop("run-h", "approve") });
+    const result = run(gate, { cwd: getRepo().dir, input: reviewerStop("run-h", "approve"), timeoutMs: IDLE_WINDOW_CHILD_TIMEOUT_MS }); // TEST CHANGE, justified: a time limit only, no expected value moved.
     const elapsed = Date.now() - started;
 
     // Timed, because the other half of this change bought the live holder its

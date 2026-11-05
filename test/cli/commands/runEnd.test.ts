@@ -101,6 +101,9 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
   };
 });
 
+/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 const IDENTITY = {
   GIT_AUTHOR_NAME: "Alice Example",
   GIT_AUTHOR_EMAIL: "alice@example.com",
@@ -703,7 +706,7 @@ describe("stamity run end", () => {
       const input = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "AskUserQuestion", tool_input: { questions: [] } });
       const env: NodeJS.ProcessEnv = { ...process.env, STAMITY_UNATTENDED: "1" };
       delete env["STAMITY_REPO_ROOT"];
-      return spawnSync(process.execPath, [gate], { input, encoding: "utf8", env, cwd: repo }).status;
+      return spawnSync(process.execPath, [gate], { input, encoding: "utf8", env, cwd: repo, timeout: CHILD_TIMEOUT_MS }).status; // TEST CHANGE, justified: a time limit only, no expected value moved.
     };
 
     // A chain's middle file: the marker an earlier final round left is removed, and the gate refuses.

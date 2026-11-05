@@ -34,6 +34,9 @@ const SPAWN_BUDGET = 120_000;
 // A budget no runner's spread reaches, so the exit-0 case asserts the path, not a speed.
 const GENEROUS_BUDGET = "100000";
 
+/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. It bounds a hang, not a speed: each call is one start of the real guard. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 const work = mkdtempSync(join(tmpdir(), "stamity-hook-latency-"));
 afterAll(() => rmSync(work, { recursive: true, force: true }));
 
@@ -184,7 +187,7 @@ describe("hook-latency: the payloads", () => {
       tool_input: { file_path: join(REPO_ROOT, "package.json") },
     });
     for (const entry of cases) {
-      const result = spawnSync(process.execPath, [REAL_GUARD], { input: entry.input, encoding: "utf8", windowsHide: true });
+      const result = spawnSync(process.execPath, [REAL_GUARD], { input: entry.input, encoding: "utf8", windowsHide: true, timeout: CHILD_TIMEOUT_MS }); // TEST CHANGE, justified: a time limit only, no expected value moved.
       expect({ name: entry.name, status: result.status, stderr: result.stderr }).toEqual({
         name: entry.name,
         status: 0,
@@ -199,7 +202,7 @@ describe("hook-latency: the payloads", () => {
     const read = JSON.parse((payloads(REAL_GUARD) as { input: string }[])[0]?.input ?? "");
     read.tool_name = "Bash";
     read.tool_input = { command: "ls" };
-    const result = spawnSync(process.execPath, [REAL_GUARD], { input: JSON.stringify(read), encoding: "utf8", windowsHide: true });
+    const result = spawnSync(process.execPath, [REAL_GUARD], { input: JSON.stringify(read), encoding: "utf8", windowsHide: true, timeout: CHILD_TIMEOUT_MS }); // TEST CHANGE, justified: a time limit only, no expected value moved.
     expect(result.status).toBe(2);
     // TEST CHANGE 2026-09-30, justified — sw05-read-only-git-grants: a verdict
     // role's Bash now reaches the read-only git check, which refuses `ls` as
@@ -213,7 +216,7 @@ describe("hook-latency: the payloads", () => {
     const write = JSON.parse((payloads(REAL_GUARD) as { input: string }[])[1]?.input ?? "");
     expect(write.agent_type).toBe(VERDICT_AGENT);
     write.tool_input.file_path = join(REPO_ROOT, "src", "cli.ts");
-    const result = spawnSync(process.execPath, [REAL_GUARD], { input: JSON.stringify(write), encoding: "utf8", windowsHide: true });
+    const result = spawnSync(process.execPath, [REAL_GUARD], { input: JSON.stringify(write), encoding: "utf8", windowsHide: true, timeout: CHILD_TIMEOUT_MS }); // TEST CHANGE, justified: a time limit only, no expected value moved.
     expect(result.status).toBe(2);
     expect(result.stderr).toContain("WRITE_PATH_DENIED");
   });

@@ -55,6 +55,9 @@ const MD_GLOBS_LINE = `globs: ["${["**/*", "md"].join(".")}"]`;
 
 const getRepo = useTempDir("planner-overlay");
 
+/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 const FIXED_NOW = new Date("2026-08-17T00:00:00.000Z");
 const ENGINE_VERSION = "0.0.0-test";
 
@@ -243,6 +246,7 @@ async function placeAndRunGuard(
     input: JSON.stringify({ agent_type: agentId, agent_id: `${agentId}-01`, tool_name: tool }),
     env,
     encoding: "utf8",
+    timeout: CHILD_TIMEOUT_MS, // TEST CHANGE, justified: a time limit only, no expected value moved.
   });
   return { code: result.status ?? -1, stdout: result.stdout, stderr: result.stderr };
 }

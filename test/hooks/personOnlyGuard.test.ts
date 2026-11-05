@@ -33,6 +33,9 @@ const POLICY = "../../agent-tool-policies.json";
 
 const getRepo = useTempDir("person-only-guard");
 
+/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 /**
  * A client's decision: allowed, or stopped, `ask: true` where the client asks the person for one click (v0a2,
  * REQ-FLOW-123). An ask stops the agent as a refusal does, so a check reading `deny` holds for both, as the verdict's
@@ -83,7 +86,7 @@ function run(guard: string, input: string, env: Record<string, string> = {}): Re
   for (const name of ["GH_REPO", "GH_HOST", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_SYSTEM", "XDG_CONFIG_HOME"]) delete base[name];
   base.GIT_CONFIG_GLOBAL = "/dev/null";
   base.GIT_CONFIG_NOSYSTEM = "1";
-  return spawnSync(process.execPath, [guard], { input, encoding: "utf8", env: { ...base, ...env } });
+  return spawnSync(process.execPath, [guard], { input, encoding: "utf8", env: { ...base, ...env }, timeout: CHILD_TIMEOUT_MS }); // TEST CHANGE, justified: a time limit only, no expected value moved.
 }
 
 /**
@@ -647,7 +650,7 @@ describe("the local tags read only for a push (review/218)", () => {
       const base = { ...process.env };
       delete base.STAMITY_UNATTENDED;
       delete base.STAMITY_REPO_ROOT;
-      const result = spawnSync(process.execPath, ["--require", probe, guard], { input: payload("claude", command), encoding: "utf8", env: base });
+      const result = spawnSync(process.execPath, ["--require", probe, guard], { input: payload("claude", command), encoding: "utf8", env: base, timeout: CHILD_TIMEOUT_MS }); // TEST CHANGE, justified: a time limit only, no expected value moved.
       return { status: result.status, stderr: String(result.stderr), stdout: String(result.stdout) };
     };
     for (const command of ["ls -la", "git status", "git fetch origin", "git push"]) {
@@ -2553,6 +2556,7 @@ describe("the guard's merged git configuration and the push's repository (a4c, r
         input: payload("claude", COMMENT),
         encoding: "utf8",
         env: { ...base, GIT_CONFIG_NOSYSTEM: "1", HOME: getRepo().path("home"), XDG_CONFIG_HOME: xdg },
+        timeout: CHILD_TIMEOUT_MS, // TEST CHANGE, justified: a time limit only, no expected value moved.
       }), xdg);
     expect(read(getRepo().path("xdg"))).toMatchObject({ deny: true, ask: true });
     expect(read(getRepo().path("none"))).toEqual({ deny: false });

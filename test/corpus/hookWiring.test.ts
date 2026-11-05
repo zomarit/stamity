@@ -60,6 +60,9 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
 
 const getRepo = useTempDir("hook-wiring");
 
+/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 /** Emission layout: scripts in a directory, the policy document one level above them. */
 const SCRIPT_DIR = "hooks";
 const POLICY_PATH_FROM_SCRIPT = `../${AGENT_TOOL_POLICIES_FILE}`;
@@ -140,7 +143,7 @@ interface RunResult {
 
 /** Runs a generated script the way a client does: fresh process, piped stdio. */
 function run(file: string, input: string): RunResult {
-  const result = spawnSync(process.execPath, [file], { input, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [file], { input, encoding: "utf8", timeout: CHILD_TIMEOUT_MS }); // TEST CHANGE, justified: a time limit only, no expected value moved.
   return { code: result.status ?? -1, stdout: result.stdout, stderr: result.stderr };
 }
 

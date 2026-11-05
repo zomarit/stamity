@@ -78,6 +78,9 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
 
 const getTemp = useTempDir("adapter-codex");
 
+/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 /**
  * The interchange row a Codex entry's starter carries: the base64url word after
  * the program, ahead of the plain word naming the row's script (REQ-FLOW-142).
@@ -549,6 +552,7 @@ describe("hooks.json — native command strings and trust controls", () => {
         shell: true,
         input: JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: shellCommand } }),
         encoding: "utf8",
+        timeout: CHILD_TIMEOUT_MS, // TEST CHANGE, justified: a time limit only, no expected value moved.
       });
 
     const denied = run("git push --force origin feature");

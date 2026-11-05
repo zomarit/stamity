@@ -69,6 +69,9 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
   };
 });
 
+/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 const SEED_ENV = {
   GIT_CONFIG_NOSYSTEM: "1",
   GIT_CONFIG_GLOBAL: NO_GIT_CONFIG,
@@ -876,7 +879,7 @@ describe("stamity run start", () => {
       delete env.STAMITY_UNATTENDED;
       delete env.STAMITY_REPO_ROOT;
       const input = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command }, cwd: "." });
-      const result = spawnSync(process.execPath, [join(dir, guard.fileName)], { input, encoding: "utf8", env });
+      const result = spawnSync(process.execPath, [join(dir, guard.fileName)], { input, encoding: "utf8", env, timeout: CHILD_TIMEOUT_MS }); // TEST CHANGE, justified: a time limit only, no expected value moved.
       // TEST CHANGE (v0a2, REQ-FLOW-123, REQ-FLOW-124): attended, Claude Code's guard now asks for an act that can be
       // undone (a push of the default branch among them) through its `hookSpecificOutput` ask on stdout with exit 0, and
       // refuses only a deletion, a force push or an act that cannot be undone, on exit 2. Either one stops the call.

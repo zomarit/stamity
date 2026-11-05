@@ -31,6 +31,9 @@ afterEach(() => {
 
 const WINDOWS = process.platform === "win32";
 
+/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 /**
  * A directory on `PATH`, for the run's own process only, restored in `afterEach`.
  *
@@ -771,7 +774,7 @@ describe("ASK_CLASS_CLIENTS — the clients the guard asks on (review/43)", () =
     }
     env["GIT_CONFIG_GLOBAL"] = "/dev/null";
     env["GIT_CONFIG_NOSYSTEM"] = "1";
-    return spawnSync(process.execPath, [guard], { input, encoding: "utf8", env });
+    return spawnSync(process.execPath, [guard], { input, encoding: "utf8", env, timeout: CHILD_TIMEOUT_MS }); // TEST CHANGE, justified: a time limit only, no expected value moved.
   }
 
   /** Whether the output asks (`permissionDecision: "ask"`, top level or Claude Code's `hookSpecificOutput`), refuses, or neither. */

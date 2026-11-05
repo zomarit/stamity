@@ -89,6 +89,9 @@ import { useTempDir } from "../support/tempDir.ts";
 
 const getTemp = useTempDir("adapter-claude");
 
+/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 const CONTENT_ROOT = fileURLToPath(new URL("../../content", import.meta.url));
 const ADAPTER_SOURCE = fileURLToPath(new URL("../../src/adapters/claude.ts", import.meta.url));
 const ENGINE_VERSION = "0.0.0-test";
@@ -1778,6 +1781,7 @@ describe("the project-directory anchor", () => {
       input,
       encoding: "utf8",
       env: projectDir === undefined ? env : { ...env, CLAUDE_PROJECT_DIR: projectDir },
+      timeout: CHILD_TIMEOUT_MS, // TEST CHANGE, justified: a time limit only, no expected value moved.
     });
     return { code: result.status ?? -1, stdout: result.stdout, stderr: result.stderr };
   }

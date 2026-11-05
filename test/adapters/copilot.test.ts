@@ -81,6 +81,9 @@ import { useTempDir } from "../support/tempDir.ts";
 
 const getTemp = useTempDir("adapter-copilot");
 
+/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 const ENGINE_VERSION = "0.0.0-test";
 const FIXED_NOW = new Date("2026-08-14T00:00:00.000Z");
 
@@ -2098,6 +2101,7 @@ describe("hooks", () => {
         shell: true,
         input: JSON.stringify({ toolName: "bash", toolArgs: JSON.stringify({ command: shellCommand }) }),
         encoding: "utf8",
+        timeout: CHILD_TIMEOUT_MS, // TEST CHANGE, justified: a time limit only, no expected value moved.
       });
 
     const denied = run("git push --force origin feature");

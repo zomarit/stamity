@@ -23,6 +23,9 @@ import * as hookRuns from "../../scripts/qa/hook-runs.mjs";
 const REPO_ROOT = resolve(import.meta.dirname, "../..");
 const temps: string[] = [];
 
+/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 afterEach(() => {
   for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
@@ -135,7 +138,7 @@ function fakeClient(client: string, behaviour: Behaviour, runs: FakeRun[], copil
         expect(entries?.[0]?.bash, `Copilot's ${event ?? "preToolUse"} entry`).toMatch(new RegExp(` ${event ?? "preToolUse"}$`));
       }
       const argv = [join(options.cwd, hookRuns.ASK_HOOK_FILE as string), ...(client === "copilot" ? [event ?? "preToolUse"] : [])];
-      const hook = spawnSync(process.execPath, argv, { cwd: options.cwd, input, encoding: "utf8" });
+      const hook = spawnSync(process.execPath, argv, { cwd: options.cwd, input, encoding: "utf8", timeout: CHILD_TIMEOUT_MS }); // TEST CHANGE, justified: a time limit only, no expected value moved.
       expect(hook.status, hook.stderr).toBe(0);
       return decisionOf(client, hook.stdout);
     };

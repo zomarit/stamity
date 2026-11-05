@@ -64,6 +64,9 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
 
 const getTemp = useTempDir("adapter-cursor");
 
+/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 const FIXED_NOW = new Date("2026-08-14T00:00:00.000Z");
 const ENGINE_VERSION = "0.0.0-test";
 
@@ -375,6 +378,7 @@ function runGuard(
   const result = spawnSync(process.execPath, [scriptPath], {
     input: JSON.stringify(payload),
     encoding: "utf8",
+    timeout: CHILD_TIMEOUT_MS, // TEST CHANGE, justified: a time limit only, no expected value moved.
     ...(home === undefined ? {} : { env: { ...process.env, HOME: home, USERPROFILE: home } }),
   });
   return { stdout: result.stdout, stderr: result.stderr, status: result.status };
@@ -1453,7 +1457,7 @@ describe("`.cursor/hooks.json`", () => {
     delete env["CURSOR_AGENT_SOCKET"];
     delete env["STAMITY_REPO_ROOT"];
     const stop = (extra: NodeJS.ProcessEnv) =>
-      spawnSync(command, { cwd: temp.path("repo", "sub"), env: { ...env, ...extra }, shell: true, input: JSON.stringify({ status: "completed", loop_count: 0 }), encoding: "utf8" });
+      spawnSync(command, { cwd: temp.path("repo", "sub"), env: { ...env, ...extra }, shell: true, input: JSON.stringify({ status: "completed", loop_count: 0 }), encoding: "utf8", timeout: CHILD_TIMEOUT_MS }); // TEST CHANGE, justified: a time limit only, no expected value moved.
 
     const machine = stop({ CURSOR_AGENT_SOCKET: "/tmp/cursor-agent.sock" });
     expect(machine.status, machine.stderr).toBe(0);
@@ -1510,6 +1514,7 @@ describe("`.cursor/hooks.json`", () => {
         shell: true,
         input: JSON.stringify({ hook_event_name: "postToolUse", conversation_id: "conv-1", tool_name: "Shell" }),
         encoding: "utf8",
+        timeout: CHILD_TIMEOUT_MS, // TEST CHANGE, justified: a time limit only, no expected value moved.
       });
 
     // No socket listens at this path, so the metadata read fails and no cloud line is added.
@@ -1561,7 +1566,7 @@ describe("`.cursor/hooks.json`", () => {
     const payload = JSON.stringify({ server: "stamity-unknown-server", tool_name: "x", tool_input: {} });
     const env: NodeJS.ProcessEnv = { ...process.env };
     delete env["CURSOR_PROJECT_DIR"];
-    const runFrom = (cwd: string) => spawnSync(command, { cwd, env, shell: true, input: payload, encoding: "utf8" });
+    const runFrom = (cwd: string) => spawnSync(command, { cwd, env, shell: true, input: payload, encoding: "utf8", timeout: CHILD_TIMEOUT_MS }); // TEST CHANGE, justified: a time limit only, no expected value moved.
 
     const atRoot = runFrom(temp.path("repo"));
     const below = runFrom(temp.path("repo", "sub", "deeper"));
@@ -1615,7 +1620,7 @@ describe("`.cursor/hooks.json`", () => {
     delete env["STAMITY_UNATTENDED"];
     // Cursor's beforeShellExecution payload names the command at the top level.
     const run = (shellCommand: string) =>
-      spawnSync(command, { cwd: temp.path("repo", "sub"), env, shell: true, input: JSON.stringify({ command: shellCommand, cwd: "." }), encoding: "utf8" });
+      spawnSync(command, { cwd: temp.path("repo", "sub"), env, shell: true, input: JSON.stringify({ command: shellCommand, cwd: "." }), encoding: "utf8", timeout: CHILD_TIMEOUT_MS }); // TEST CHANGE, justified: a time limit only, no expected value moved.
 
     const denied = run("git push --force origin feature");
     expect(denied.status).toBe(0);
@@ -1725,7 +1730,7 @@ describe("subagent guard", () => {
     // rather than being folded into the empty-payload case. Spawned directly
     // because the helper JSON-encodes its input, and the point is bytes that do
     // not encode.
-    const broken = spawnSync(process.execPath, [script], { input: "{ not json", encoding: "utf8" });
+    const broken = spawnSync(process.execPath, [script], { input: "{ not json", encoding: "utf8", timeout: CHILD_TIMEOUT_MS }); // TEST CHANGE, justified: a time limit only, no expected value moved.
     expectAllow(broken);
     const brokenEvent = JSON.parse(broken.stderr.trim()) as { reasonCode: string; detail: string };
     expect(brokenEvent.reasonCode).toBe("SPAWN_PAYLOAD_UNUSABLE");

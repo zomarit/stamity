@@ -26,6 +26,9 @@ import { useTempDir } from "../support/tempDir.ts";
 
 const getRepo = useTempDir("cursor-continue");
 
+/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
+const CHILD_TIMEOUT_MS = 15_000;
+
 /** Cursor's `stop` payload (cursor.com/docs/hooks): the hook reads its `status` alone. */
 const STOP_PAYLOAD = JSON.stringify({ hook_event_name: "stop", status: "completed", loop_count: 0 });
 
@@ -52,7 +55,7 @@ function run(hook: string, env: Record<string, string> = {}, cwd?: string, input
   const base = { ...process.env };
   delete base.CURSOR_AGENT_SOCKET;
   delete base.STAMITY_REPO_ROOT;
-  const result = spawnSync(process.execPath, [hook], { input, encoding: "utf8", env: { ...base, ...env }, cwd });
+  const result = spawnSync(process.execPath, [hook], { input, encoding: "utf8", env: { ...base, ...env }, cwd, timeout: CHILD_TIMEOUT_MS }); // TEST CHANGE, justified: a time limit only, no expected value moved.
   return { status: result.status, stdout: String(result.stdout), stderr: String(result.stderr) };
 }
 
