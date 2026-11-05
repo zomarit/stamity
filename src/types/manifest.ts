@@ -144,12 +144,37 @@ export interface CoOwnership {
   terminatorAdded?: true;
 }
 
+/**
+ * One server a repository names itself (REQ-FLOW-160): the shape of a pack's
+ * `mcp_servers/*.json` document, `PackMcpServerDefinition` in
+ * `../pack/manifest.ts`. Declared apart because this file sits below that one,
+ * and `test/mcp/ownServers.test.ts` holds the two shapes equal.
+ *
+ * What the manifest reader hands over is unvalidated: `../mcp/ownServers.ts`
+ * runs the pack bar over each row before anything reads it as a server.
+ */
+export interface McpOwnServer {
+  readonly id: string;
+  readonly description: string;
+  readonly command: string;
+  readonly args: readonly string[];
+  readonly transport: "stdio" | "http";
+  /** Variables that must be set before the server starts. Absent when none are. */
+  readonly requiresEnv?: readonly { readonly name: string; readonly description: string }[];
+  readonly pinnedVersion: string;
+  readonly packageNameLock: string;
+  readonly blastRadius: string;
+  readonly docsUrl: string;
+}
+
 /** MCP server selection persisted for regeneration. */
 export interface McpConfig {
   /** Selected server ids. */
   servers: string[];
   /** MCP protocol revision the emitted config targets; engine default when absent. */
   protocolVersion?: string;
+  /** Servers this repository supplies itself. A row resolves; only {@link servers} selects. */
+  ownServers?: McpOwnServer[];
 }
 
 /** Learnings-capacity configuration; defaults apply when absent. */

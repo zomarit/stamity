@@ -50,6 +50,7 @@ import { planUserMcpJson, predictMcpMergeRefusal } from "../../manifest/mcpFilte
 import type { PackSuppliedServer } from "../../mcp/catalog.ts";
 import { engineOwnedServerIds, mcpReclaimReducers } from "../../mcp/emit.ts";
 import { GITIGNORE_FILE } from "../../mcp/env.ts";
+import { withOwnServers } from "../../mcp/ownServers.ts";
 import type { HookScriptReader, ReclaimActionEntry, ReclaimReport } from "../../merge/reclaim.ts";
 import { displayPath, type SafeWriteFileOptions } from "../../merge/safeWrite.ts";
 import { movedCoreSkill, movedRenderingAt } from "../../pack/moved.ts";
@@ -358,10 +359,10 @@ export async function predictMcpDocumentMerge(
 }
 
 /**
- * Every MCP server this repo's installed packs supply, read through the seam
- * emission resolves ids from (`../commands/config/mcp.ts` asks the identical
- * question of the identical pair, and asking it a second way would be a second
- * answer waiting to disagree).
+ * Every MCP server this repo's installed packs supply, with the repo's own rows
+ * (`../../mcp/ownServers.ts`), read through the seam emission resolves ids from
+ * (`../commands/config/mcp.ts` asks the identical question of the identical
+ * pair, and asking it a second way would be a second answer waiting to disagree).
  *
  * EVERY lane calls this — sync's plan, sync's apply, and init's write — off the
  * same ledger, because ownership is what the answer decides.
@@ -393,7 +394,7 @@ export async function installedPackServers(
   rootDir: string,
   manifest: SetupManifest,
 ): Promise<PackSuppliedServer[]> {
-  return packMcpServers(await discoverInstalledPacks(rootDir, manifest), rootDir);
+  return withOwnServers(await packMcpServers(await discoverInstalledPacks(rootDir, manifest), rootDir), manifest);
 }
 
 /**

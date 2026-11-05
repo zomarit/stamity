@@ -13,6 +13,7 @@ import {
 } from "../../manifest/mcpFilter.ts";
 import type { PackSuppliedServer } from "../../mcp/catalog.ts";
 import { MERGED_MCP_JSON_PATHS, engineOwnedServerIds } from "../../mcp/emit.ts";
+import { provableOwnServers } from "../../mcp/ownServers.ts";
 import {
   CLIENT_MODELS_CACHE_FILE,
   CONTEXT_ONCE_DIR,
@@ -1035,19 +1036,24 @@ async function removeSetupManifest(rootDir: string, removal: StateRemoval): Prom
  * whose pack files were deleted by hand. The cost of the fallback is bounded and
  * in the safe direction: a pack-supplied entry the engine can then no longer
  * prove it wrote is judged the operator's and kept, never deleted unproven.
+ *
+ * The repo's own rows join after that fallback, because they read no pack file:
+ * a lost pack must not strand them, and a row past the bar contributes nothing
+ * rather than stopping the verb that clears it (`../../mcp/ownServers.ts`).
  */
 async function installedPackMcpSupply(
   rootDir: string,
   manifest: SetupManifest,
 ): Promise<PackSuppliedServer[]> {
+  let packRows: PackSuppliedServer[] = [];
   try {
-    return await packMcpServers(await discoverInstalledPacks(rootDir, manifest), rootDir);
+    packRows = await packMcpServers(await discoverInstalledPacks(rootDir, manifest), rootDir);
   } catch {
     // reason: not silent — the sweep still runs, still reports one entry per
     // candidate, and a kept entry says in its own detail that the engine could
     // not prove it wrote it.
-    return [];
   }
+  return provableOwnServers(packRows, manifest);
 }
 
 /** Bytes at `absPath`, or `null` when it is not there. Absence is a fact here. */

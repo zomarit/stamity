@@ -18,7 +18,8 @@
  * curated row takes, because a supply chain that emits under laxer rules is a
  * supply chain worth attacking. What pack supply cannot do is REDIRECT a
  * curated id — the resolution order settles that in the catalog, and the
- * collision is refused before it reaches here.
+ * collision is refused before it reaches here. A repository's own rows
+ * (`./ownServers.ts`) arrive on the same option, past the same bar.
  *
  * ## Credentials never leave the environment
  *
@@ -456,12 +457,12 @@ function resolveServers(
 
   if (unknown.length > 0) {
     throw new EngineError(
-      `Unknown MCP server id(s): ${unknown.join(", ")}. Nothing resolves them — neither the ` +
-        `curated catalog nor any installed pack — so no client document can be written. Run ` +
-        `${unknown.map((id) => `\`config mcp remove ${id}\``).join(" ")} to drop ` +
+      `Unknown MCP server id(s): ${unknown.join(", ")}. Nothing resolves them — not the curated ` +
+        `catalog, an installed pack or the manifest's \`mcp.ownServers\` — so no client document ` +
+        `can be written. Run ${unknown.map((id) => `\`config mcp remove ${id}\``).join(" ")} to drop ` +
         `${unknown.length === 1 ? "it" : "them"} from the selection, re-install the pack that ` +
-        `supplied ${unknown.length === 1 ? "it" : "them"}, or add a reviewed, version-pinned row ` +
-        `to the curated catalog.`,
+        `supplied ${unknown.length === 1 ? "it" : "them"}, restore the row in \`mcp.ownServers\`, ` +
+        `or add a reviewed, version-pinned row to the curated catalog.`,
       { code: "VALIDATION_ERROR" },
     );
   }

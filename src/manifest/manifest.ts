@@ -555,6 +555,14 @@ function collectMcpErrors(value: unknown, errors: string[]): void {
   if (value.protocolVersion !== undefined && typeof value.protocolVersion !== "string") {
     errors.push("`mcp.protocolVersion` must be a string");
   }
+  // Shape only: the pack bar runs at `../mcp/ownServers.ts`, so a bad row refuses
+  // `sync` and `check` by name, and `clean` can still open the setup holding it.
+  if (
+    value.ownServers !== undefined &&
+    !(Array.isArray(value.ownServers) && value.ownServers.every(isPlainObject))
+  ) {
+    errors.push("`mcp.ownServers` must be an array of objects");
+  }
 }
 
 /**

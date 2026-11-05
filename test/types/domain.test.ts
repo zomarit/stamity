@@ -25,6 +25,7 @@ import {
   type LedgerEntry,
   type ManifestMigration,
   type McpConfig,
+  type McpOwnServer,
   type SetupManifest,
   type ToolOptions,
 } from "../../src/types/manifest.ts";
@@ -264,7 +265,12 @@ describe("SetupManifest", () => {
   });
 
   it("pins the small config bags", () => {
-    expectTypeOf<McpConfig>().toEqualTypeOf<{ servers: string[]; protocolVersion?: string }>();
+    // TEST CHANGE, justified: REQ-FLOW-160 adds `mcp.ownServers`, so the exact pin gains that one optional key.
+    expectTypeOf<McpConfig>().toEqualTypeOf<{
+      servers: string[];
+      protocolVersion?: string;
+      ownServers?: McpOwnServer[];
+    }>();
     expectTypeOf<LearningsConfig>().toEqualTypeOf<{ maxCount?: number }>();
     expectTypeOf<HooksConfig>().toEqualTypeOf<{ userHooksDir?: string }>();
   });

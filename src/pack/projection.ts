@@ -16,6 +16,7 @@ import {
 } from "../emit/skillsProjection.ts";
 import { readHookDefinitions, type ReadHooksResult } from "../hooks/userHooks.ts";
 import { assertNoCuratedCollision, type PackSuppliedServer } from "../mcp/catalog.ts";
+import { toSuppliedServer, withOwnServers } from "../mcp/ownServers.ts";
 import { grantableFootprint } from "../roster/agentGrants.ts";
 import { CONTENT_CLASSES } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
@@ -26,7 +27,6 @@ import {
   PACK_SOURCE_KINDS,
   validatePackMcpServer,
   type PackContentClass,
-  type PackMcpServerDefinition,
 } from "./manifest.ts";
 import {
   evaluatePackSource,
@@ -494,7 +494,8 @@ export function withoutPolicyWarningPrint<T>(plan: () => Promise<T>): Promise<T>
  * arrive on `mcpServers`. They are a SEPARATE lane from the catalog walk — no
  * corpus half, no id merge — so the two run concurrently rather than in
  * sequence, and a pack shipping only `mcp_servers/` still resolves even though
- * it contributes no walk root.
+ * it contributes no walk root. The repository's own rows join them there
+ * (`../mcp/ownServers.ts`), so a row the bar refuses stops the emission by name.
  *
  * `corpusRoot` pins the corpus half of the merged walk; production callers
  * leave it absent and get the bundled corpus.
@@ -531,7 +532,7 @@ export async function resolveInstalledPackContent(
   // classes, `mcp_servers/` is its own lane — so they run together rather than
   // one behind the other.
   const [mcpServers, canonical] = await Promise.all([
-    packMcpServers(packs, rootDir),
+    packMcpServers(packs, rootDir).then((rows) => withOwnServers(rows, manifest)),
     packRoots.length === 0 ? undefined : resolveCanonicalClasses(packRoots, corpusRoot),
   ]);
   if (canonical === undefined) {
@@ -851,39 +852,6 @@ async function readPackServerDir(
         return toSuppliedServer(validatePackMcpServer(parseJsonStrict(raw, relPath), relPath), pack.id);
       }),
   );
-}
-
-/**
- * A validated definition as the resolution seam's row. Two fields are added
- * rather than read: `firstParty` is fixed `false` (a pack cannot claim to be
- * the vendor of the service it fronts), and `sourcePackId` records which
- * supply chain a preview or a refusal should name.
- *
- * `requiresEnv` is re-shaped, not copied: a pack states a variable's
- * `description`, which becomes the curated row's `comment`, and supplies no
- * issuing URL — that link exists on a curated row because a maintainer checked
- * it, and an unreviewed one has no place in the credential file. The empty
- * string is the shape `../mcp/env.ts` already renders as "no link".
- */
-function toSuppliedServer(
-  definition: PackMcpServerDefinition,
-  sourcePackId: string,
-): PackSuppliedServer {
-  const { requiresEnv, ...rest } = definition;
-  return {
-    ...rest,
-    ...(requiresEnv === undefined
-      ? {}
-      : {
-          requiresEnv: requiresEnv.map((requirement) => ({
-            name: requirement.name,
-            comment: requirement.description,
-            url: "",
-          })),
-        }),
-    firstParty: false,
-    sourcePackId,
-  };
 }
 
 /**
