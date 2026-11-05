@@ -130,8 +130,18 @@ import { defineConfig } from "tsdown";
  * with more of that work still to land. That code is the feature, not something
  * bundled in by accident; the pre-strip figure above stays under this ceiling
  * too, so the JSDoc test is still the strip's guard.
+ *
+ * Raised 2026-11-05 from 2.875 MiB to 3 MiB (3,145,728 bytes), with its own
+ * reason: plan 023's bridge work (a repository's own MCP servers in
+ * `src/mcp/ownServers.ts`, the `config` verb and the workspace merge that carry
+ * them, the run overview in `src/runs/overview.ts`, and the proposed learnings
+ * in `src/cli/commands/learn.ts`). The build before this change printed
+ * 3,028,376 bytes (the `[size]` line of a fresh `npm run build` on `dbc3c893`),
+ * 13,720 bytes over the old ceiling. That code is the feature, not something
+ * bundled in by accident; the pre-strip figure above stays under this ceiling
+ * too, so the JSDoc test is still the strip's guard.
  */
-export const LOGIC_BUDGET_BYTES = 2.875 * 1024 * 1024;
+export const LOGIC_BUDGET_BYTES = 3 * 1024 * 1024;
 
 /**
  * The staged corpus half — `dist/content` plus `dist/packs`, plus `dist/fork` in

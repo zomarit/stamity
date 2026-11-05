@@ -765,7 +765,8 @@ describe("build size budgets", () => {
     // TEST CHANGE, justified: REQ-FLOW-132 — raised to 2.625 MiB for plan 022 file 1's land verb; the reason sits beside the constant.
     // TEST CHANGE, justified: REQ-FLOW-134 — raised to 2.75 MiB for plan 022 file 1's person-only guard (the outside-party readers, the Claude row rules, the heredoc reading); the reason sits beside the constant.
     // TEST CHANGE, justified (2026-11-04_factory-bridge): raised to 2.875 MiB for the bridge package's settings, land checks, merge job and new verb; the reason sits beside the constant.
-    expect(LOGIC_BUDGET_BYTES).toBe(2.875 * 1024 * 1024);
+    // TEST CHANGE, justified (2026-11-05_factory-bridge-02/review/69): raised to 3 MiB for plan 023's own MCP servers, run overview and proposed learnings; the reason sits beside the constant.
+    expect(LOGIC_BUDGET_BYTES).toBe(3 * 1024 * 1024);
     expect(CORPUS_BUDGET_BYTES).toBe(1536 * 1024);
 
     const config = await readFile(
