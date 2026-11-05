@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { Command } from "commander";
 import { describe, expect, it } from "vitest";
+import { learnCommand } from "../../src/cli/commands/learn.ts";
 import { matchesDeployingBranch } from "../../src/config/autonomy.ts";
 import {
   CLAUDE_ASK_ROWS,
@@ -3548,6 +3550,69 @@ describe("the accept line of a run's proposal (REQ-FLOW-163, review/62)", () => 
     ["a glob holding a path on a program word that may name the package", "st?mity docs/*.md"],
   ])("runs %s", (_, command) => {
     expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
+  });
+
+  // Red before the pull request's review: `accept` anywhere beside `learn` read as the verb, so a proposal titled that
+  // way stopped an unattended run.
+  it.each([
+    ["a proposal's title", "npx --no stamity learn capture --propose --run 2026-11-05_x --title accept --summary b --body-file c.md"],
+    ["a summary", "stamity learn capture --title a-note --summary accept --body-file c.md"],
+    ["a title joined by `=`", "stamity learn capture --title=accept --summary b --body-file c.md"],
+    ["a read's body id", "stamity learn read --body accept"],
+    ["a title before the verb", "stamity learn --title accept capture --summary b --body-file c.md"],
+    ["a title after the flags that take no value", "stamity learn capture --json --yes --dry-run --no-color --propose --run 2026-11-05_x --title accept --summary b"],
+    ["a title after a short flag", "stamity learn capture -y --title accept --summary b"],
+    ["a title the shell only unquotes", "stamity learn capture --title 'accept' --summary b --body-file c.md"],
+  ])("runs a line holding `accept` only as %s", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
+  });
+
+  // The other direction: a word stays the verb unless the line plainly gives it to a listed option of `learn`.
+  it.each([
+    ["the verb beside a value holding the same word", "stamity learn accept --proposal accept"],
+    ["the verb after a value holding the same word", "stamity learn --title accept accept"],
+    ["the verb after a value", "stamity learn --run x accept"],
+    ["the verb after a joined value", "stamity learn --title=x accept"],
+    ["the verb after a flag that takes no value", "stamity learn --propose accept"],
+    ["the verb after `--`", "stamity learn --title x -- accept"],
+    ["the verb after a value that reads as an option", "stamity learn --title --run accept"],
+    ["the verb after a value that reads as `--`", "stamity learn --title -- accept"],
+    ["the verb after an option the guard does not list, which may take the next word", "stamity learn --other --title accept"],
+    ["the verb after a value on a flag that takes none", "stamity learn --propose=x --title accept"],
+    ["an option of `learn` before `learn`, which the program reads, not `learn`", "stamity --title learn accept"],
+    ["a line on a program the guard cannot settle", "\"$CLI\" learn capture --title accept --summary b"],
+    ["a completed verb beside a value holding the word", "stamity learn --title accept acc*pt"],
+    ["a completed verb after a value holding the word", "stamity learn acc*pt --title accept"],
+    ["a brace-completed verb beside a value holding the word", "stamity learn --title accept ac{c,c}ept"],
+    ["`learn` completed beside a value holding the word", "stamity l*n --title accept"],
+    ["an option word a glob completes", "stamity learn --ti* accept"],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule: "learn-accept", ask: true });
+  });
+
+  it.each([
+    ["a filled-in word before the value", "stamity learn \"$OPT\" --title accept"],
+    ["a filled-in value, which may vanish and give the next word to the option", "stamity learn --title $T accept --summary b"],
+    ["a line under xargs beside a value", "echo accept | xargs stamity learn --title accept"],
+  ])("asks for %s, which may be the verb", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, ask: true });
+  });
+
+  // The guard's two lists are literals, since it carries no import: this holds them to the options `learn` declares. A
+  // value option the guard missed would ask on a title, and a list row whose option stopped taking a value would let
+  // `accept` run unasked.
+  it("clears the word after each option `learn` reads as taking a value, and after no other", () => {
+    const learn = new Command();
+    learnCommand.configure?.(learn);
+    const valued = learn.options.filter((option) => option.required).map((option) => option.long ?? "");
+    const bare = learn.options.filter((option) => !option.required).map((option) => option.long ?? "");
+    expect(valued).toContain("--title");
+    expect(bare).toEqual(["--propose"]);
+    for (const flag of valued) expect(personOnlyVerdict(`stamity learn read ${flag} accept`, ON_FEATURE), flag).toEqual({ deny: false });
+    for (const flag of [...bare, "--json", "--yes", "-y", "--dry-run", "--no-color"]) {
+      expect(personOnlyVerdict(`stamity learn read ${flag} --title accept`, ON_FEATURE), flag).toEqual({ deny: false });
+      expect(personOnlyVerdict(`stamity learn ${flag} accept`, ON_FEATURE), flag).toMatchObject({ deny: true, rule: "learn-accept", ask: true });
+    }
   });
 });
 

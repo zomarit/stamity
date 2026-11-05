@@ -187,11 +187,12 @@ export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
     ask: true,
   },
   // review/62, REQ-FLOW-163: the person's yes to a run's proposal asks in every mode, so it is refused unattended and for
-  // a sub-agent. The two literal words are read in `landApprovedVerdict`, on that reading's words. review/70: a word the
-  // shell fills in or completes, a glob or a brace form with literal text before it among them, may be either verb word,
-  // so `acceptHiddenVerdict` asks on a line of this package holding such a word beside `learn` or `accept`, or as its
-  // first word, and on one whose program the guard cannot settle. A line whose first word settles another verb cannot
-  // reach this one, so it stays out. A word `autonomy-loosen` reads asks there first, under that rule's name.
+  // a sub-agent. The two literal words are read in `landApprovedVerdict`, on that reading's words, less what an option of
+  // `learn` plainly takes (`learnVerbWords`). review/70: a word the shell fills in or completes, a glob or a brace form
+  // with literal text before it among them, may be either verb word, so `acceptHiddenVerdict` asks on a line of this
+  // package holding such a word beside `learn` or `accept`, or as its first word, and on one whose program the guard
+  // cannot settle. A line whose first word settles another verb cannot reach this one, so it stays out. A word
+  // `autonomy-loosen` reads asks there first, under that rule's name.
   {
     id: "learn-accept",
     act: "taking a run's proposed learning live (`stamity learn accept`, or a line whose words the guard cannot read, which may be it)",
@@ -3089,7 +3090,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const unsure = unread.get(cmd) ?? [];
     const args = unsure[0] === true ? cmd.slice(1) : packageArgs(cmd);
     if (args === null) return;
-    if (args.includes("learn") && args.includes("accept")) deny("learn-accept", "A `learn accept` line");
+    const verbs = unsure[0] === true ? args : learnVerbWords(args);
+    if (verbs.includes("learn") && verbs.includes("accept")) deny("learn-accept", "A `learn accept` line");
     const at = unsure[0] === true ? args.indexOf("run") : args.findIndex((word) => !word.startsWith("-"));
     if (at === -1 || args[at] !== "run" || !args.slice(at + 1).includes("land")) return;
     // The flag in any spelling, alone, followed by its value (the approved commit) or joined to it with `=` (review/110).
@@ -3098,6 +3100,27 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       return;
     }
     if (hidesWords(cmd, args)) deny("land-approved", "A `stamity run land` line whose words the guard cannot read, which may carry `--approved`");
+  }
+
+  /**
+   * The words of a package line that may be `learn`'s verb: all but what an option of `learn` plainly takes, so `--title
+   * accept` names no verb. The CLI's parser gives a value option the next word whatever it reads as. Fails closed: from
+   * an option not listed here (`--` among them), or a value option before `learn`, which the program reads and not
+   * `learn`, every later word counts. A word the line does not show whole is `acceptHiddenVerdict`'s, which reads `args`
+   * as written. test/hooks/personOnly.test.ts holds the two lists to the options `learn` declares.
+   */
+  function learnVerbWords(args: string[]): string[] {
+    const valued = ["--title", "--summary", "--confidence", "--body-file", "--body", "--run", "--proposal", "--digest"];
+    const bare = ["--propose", "--json", "--yes", "-y", "--dry-run", "--no-color"];
+    const words: string[] = [];
+    for (let at = 0; at < args.length; at += 1) {
+      const word = args[at] ?? "";
+      const name = word.split("=", 1)[0] ?? "";
+      if (!word.startsWith("-")) words.push(word);
+      else if (valued.includes(name) && words.includes("learn")) at += name === word ? 1 : 0;
+      else if (!bare.includes(word)) return [...words, ...args.slice(at + 1)];
+    }
+    return words;
   }
 
   /** Whether `args`, the end of `cmd`, hold a mark or take arguments from `xargs`: a word the line does not show whole. */

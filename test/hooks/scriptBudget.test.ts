@@ -309,7 +309,10 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     // again, from 299,008 to 303,104, the measured 300,246 bytes of the largest copy (copilot, up from about 299,003 bytes)
     // plus a small margin, since the accept reading now reads a word the shell completes as a verb word; the lines row
     // (6,341, measured 6,307) holds.
-    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 303_104, lines: 6_341 });
+    // TEST CHANGE, justified (REQ-FLOW-163, the pull request's review of 2026-11-05): the lines row moved, from 6,341 to
+    // 6,440, the measured 6,344 lines of the largest copy (copilot) plus a small margin, since the accept reading now
+    // leaves out what an option of `learn` plainly takes; the bytes row (303,104, measured 301,562) holds.
+    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 303_104, lines: 6_440 });
     const guards = renders.filter((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
     expect(guards).toHaveLength(TOOLS.length);
     for (const script of guards) expect(budgetViolation(script), script.tool).toBeUndefined();

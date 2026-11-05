@@ -7314,7 +7314,9 @@ not proposed in this release. Given a live `learn capture` under an unattended m
     `STAMITY_UNATTENDED` set with no run in progress reading `Mode: attended`, and a read that fails refuses. A closed
     run's own `Mode:` does not count, so the walk can accept on it (`unattendedSession`).
   - The guard's rule is `learn-accept`, which asks in every mode, so it is refused unattended and for a sub-agent. A line
-    that may hide the verb reads the same (`landApprovedVerdict` and `acceptHiddenVerdict`, `src/hooks/personOnly.ts`).
+    that may hide the verb reads the same (`landApprovedVerdict` and `acceptHiddenVerdict`, `src/hooks/personOnly.ts`). A
+    word one of `learn`'s options plainly takes is no verb, so a proposal titled `accept` runs (`learnVerbWords`). From an
+    option the guard does not list, and on a program it cannot settle, every word counts.
   - A `--dry-run` capture writes nothing, so it stays open under an unattended mode.
   - At the walk a row sourced in `proposals/` shows that file's text with its question, its `2` runs the verb alone on its
     line, and the accepted file rides the walk's `--paths` (`content/skills/st-unattended/SKILL.md:143-144`).
@@ -9102,7 +9104,8 @@ above.
   them, THEN it refuses and nothing goes live; GIVEN an unattended mode THEN `accept` and a live `capture` refuse, the
   capture naming `--propose`. *(test: `test/cli/commands/learn.test.ts`)*
 - GIVEN a `learn accept` line THEN the guard asks attended and refuses unattended and for a sub-agent; GIVEN a line that
-  may hide the verb THEN it reads the same. *(test: `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`)*
+  may hide the verb THEN it reads the same; GIVEN `accept` shown plainly as a value of one of `learn`'s options and nowhere
+  else THEN the line runs. *(test: `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`)*
 
 **REQ-FLOW-164** (added 2026-11-05)
 

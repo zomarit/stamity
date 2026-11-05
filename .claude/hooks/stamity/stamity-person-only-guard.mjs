@@ -2423,7 +2423,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const unsure = unread.get(cmd) ?? [];
 		const args = unsure[0] === true ? cmd.slice(1) : packageArgs(cmd);
 		if (args === null) return;
-		if (args.includes("learn") && args.includes("accept")) deny("learn-accept", "A `learn accept` line");
+		const verbs = unsure[0] === true ? args : learnVerbWords(args);
+		if (verbs.includes("learn") && verbs.includes("accept")) deny("learn-accept", "A `learn accept` line");
 		const at = unsure[0] === true ? args.indexOf("run") : args.findIndex((word) => !word.startsWith("-"));
 		if (at === -1 || args[at] !== "run" || !args.slice(at + 1).includes("land")) return;
 		if (args.some((word) => word === "--approved" || word.startsWith("--approved="))) {
@@ -2431,6 +2432,35 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			return;
 		}
 		if (hidesWords(cmd, args)) deny("land-approved", "A `stamity run land` line whose words the guard cannot read, which may carry `--approved`");
+	}
+	function learnVerbWords(args) {
+		const valued = [
+			"--title",
+			"--summary",
+			"--confidence",
+			"--body-file",
+			"--body",
+			"--run",
+			"--proposal",
+			"--digest"
+		];
+		const bare = [
+			"--propose",
+			"--json",
+			"--yes",
+			"-y",
+			"--dry-run",
+			"--no-color"
+		];
+		const words = [];
+		for (let at = 0; at < args.length; at += 1) {
+			const word = args[at] ?? "";
+			const name = word.split("=", 1)[0] ?? "";
+			if (!word.startsWith("-")) words.push(word);
+			else if (valued.includes(name) && words.includes("learn")) at += name === word ? 1 : 0;
+			else if (!bare.includes(word)) return [...words, ...args.slice(at + 1)];
+		}
+		return words;
 	}
 	function hidesWords(cmd, args) {
 		const marked = anyMark.get(cmd) ?? [];
