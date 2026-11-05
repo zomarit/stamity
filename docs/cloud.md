@@ -541,7 +541,7 @@ caller of the land evidence, and it merges through the same rules, with no bypas
   a head a newer job speaks for, and a pull request that does not read as the run's own, such as one
   whose base someone changed. That last one is no wait: nothing lands it until a person puts it right,
   and its reason is only in the job's log. It exits 1 only for a true failure, a read or a write GitHub did not
-  answer as it should.
+  answer as it should, but a read that fails into a decision holds, with its line, and exits 0.
 - **It can leave things behind.** A job that merges nothing can still leave the pull request marked
   ready, the tool's threads resolved and an evidence line in the body, since it does those before its
   last read or the merge call.

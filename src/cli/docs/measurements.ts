@@ -1389,7 +1389,8 @@ export function safetyCounts(results: string): SafetyCounts | null {
  * § 6 alone decides the safety set ({@link safetyCases}), so a mark dropped there takes a case out of
  * every check and the page's count reads whole. A case in two counts counts once in each, as run 57's
  * 48 floors and 49 adversarial cases share 21 of its 76. A results file forged in both sections stays
- * out of reach of this check.
+ * out of reach of this check, and so does a § 6 fault that keeps the three tallies equal: a mark moved
+ * to another case, or a repeated row beside a dropped mark.
  *
  * Throws `EngineError` (`VALIDATION_ERROR`) when any count differs, naming both numbers of each, and
  * when § 5 does not read: a check with one side missing would pass for the wrong reason.

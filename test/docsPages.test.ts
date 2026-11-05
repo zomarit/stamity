@@ -3592,7 +3592,9 @@ describe("the night units' pages (n2, n3, n4, n5)", () => {
     const bullet = nightBullet("REQ-FLOW-092");
     for (const claim of [
       "units `n1-eval-ending` and `n2-pending-marker`",
-      "`--paths` names the files the run changed, every unit's files named again though each was committed at its checkpoint, and each learning file the close captured",
+      // TEST CHANGE, justified (plan 023 file 2, review/72, REQ-FLOW-163): an unattended close captures nothing live, so
+      // `--paths` names no learning file. The pin moves to the cut sentence, and its full stop keeps the old clause out.
+      "`--paths` names the files the run changed, every unit's files named again though each was committed at its checkpoint.",
       "are staged by the verb itself (`RUN_FILES` and `runOwned`, `src/cli/commands/run.ts`; `content/skills/st-unattended/SKILL.md:101-102`)",
       "A `--paths` entry naming a path the run already committed is harmless",
       "a path never tracked keeps `not staged: <path> (no such file)`",
@@ -5949,7 +5951,7 @@ describe("the security pages say one thing about the brake, the lift and the job
   // land-wording: the threads read again after a resolve fail into a decision, which holds and exits 0, so "a read GitHub did
   // not answer" alone reads wider than the exit is (`test/cli/commands/runLand.test.ts` pins that exit).
   it("says a read that fails into a decision holds a job, and exits 0", () => {
-    for (const page of [TROUBLESHOOTING, SPEC]) {
+    for (const page of [CLOUD, TROUBLESHOOTING, SPEC]) {
       expect(flowed(read(page)), `${page} reads every failed read as a red job`).toContain("a read that fails into a decision holds, with its line, and exits 0");
     }
   });

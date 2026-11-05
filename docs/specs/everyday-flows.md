@@ -4523,8 +4523,8 @@ the default branch, read by REST; `run start` leaves it for a branch of the run'
   (`content/skills/st-unattended/references/cloud.md`, "A checkpoint marker"; `SKILL.md`'s last line).
 - **Amended 2026-10-19** (plan 021 file 2, units `n1-eval-ending` and `n2-pending-marker`; written by
   `n6-night-pages`). The paths `run end` commits are its `--paths` and its own: `--paths` names the files the run
-  changed, every unit's files named again though each was committed at its checkpoint, and each learning file the close
-  captured. The run folder's files (`record.md`, `ledger.jsonl`, `plan.md`, `morning.md`, the origin pin and, amended
+  changed, every unit's files named again though each was committed at its checkpoint.
+  The run folder's files (`record.md`, `ledger.jsonl`, `plan.md`, `morning.md`, the origin pin and, amended
   2026-11-05, `contract.yml`) and `.stamity/inbox.md` are staged by the verb itself (`RUN_FILES` and `runOwned`, `src/cli/commands/run.ts`;
   `content/skills/st-unattended/SKILL.md:101-102`). A `--paths` entry naming a path the run already committed is
   harmless: an unchanged file stages nothing and adds no `notDone` line, and a path neither the work tree nor the index
@@ -4566,7 +4566,7 @@ the default branch, read by REST; `run start` leaves it for a branch of the run'
     not run checkpoint, where git fails to list …").
 - **Amended 2026-11-05** (plan 023 file 2, unit `propose-learning` and its fix rounds; `review/72`; read at `14061df5`).
   An unattended close proposes and captures nothing live (REQ-FLOW-163), so the 2026-10-19 bullet's sentence on what
-  `--paths` names reads without its last clause: `run end`'s `--paths` no longer names a learning file the close
+  `--paths` names lost its last clause, cut in place: `run end`'s `--paths` no longer names a learning file the close
   captured, and names only the files the run changed. The verb stages the run's proposals itself: `run checkpoint` and
   `run end` add each regular `.md` file directly in the run's `proposals/` folder beside the run folder's own files, as
   `held/` is staged by its folder (`PROPOSALS_DIR` and `listFiles`, `src/cli/commands/run.ts`;
