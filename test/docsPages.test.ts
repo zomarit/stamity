@@ -5726,7 +5726,7 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
     expect(globs.length, "LANDS_ON_EVIDENCE could not be read").toBeGreaterThan(10);
     // TEST CHANGE, justified (plan 023 file 2, unit propose-learning, REQ-FLOW-133): `.stamity/learnings/**` and
     // `.stamity/overrides/**` joined LANDS_ON_EVIDENCE. They lie in no client's folder, so they are a kind of their own,
-    // named after the phrase on the land row. The phrase itself, and so the mapping's pin below, stays as it was.
+    // named after the phrase on the land row.
     const folders = "the learnings and overrides under `.stamity/`";
     // Each glob is one of the kinds the page names: a charter, a rule file, or an agent, command, skill, prompt or chat-mode tree.
     const kind = (glob: string): string | null =>
@@ -5743,7 +5743,9 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
     expect(land).toContain(`other than ${phrase}, and ${folders}`);
     expect(new Set(globs.map(kind)), "the two folders left LANDS_ON_EVIDENCE").toContain(folders);
     const mapping = flowed(read(SECURITY_MAPPING));
-    expect(mapping).toContain(`other than ${phrase}, which land on the evidence with the review loop their only reader`);
+    // TEST CHANGE, justified (build/18): the mapping left the two folders out of the trees that land on the evidence, so a
+    // reader expected a learning or override change to ask at land. It now names them as the land row does.
+    expect(mapping).toContain(`other than ${phrase}, and ${folders}, which land on the evidence with the review loop their only reader`);
     expect(mapping).toContain("The ledger is a file the run itself writes and commits, so an empty or rewritten one passes");
     // TEST CHANGE, justified (plan 022 file 1, unit a16-security-pages, fix round 3, a4-security-r13; REQ-FLOW-134): a
     // remote write, a URL-rewrite write and an include write are one rule (src/hooks/personOnly.ts, `remoteWriteVerdict`),
