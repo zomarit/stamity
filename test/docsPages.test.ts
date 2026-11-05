@@ -32,6 +32,7 @@ import { packReinstallSteps } from "../src/pack/verifyInstalled.ts";
 import { CONTENT_CLASSES } from "../src/types/content.ts";
 import { factoryKeyDefects } from "../src/config/autonomy.ts";
 import { CLAUDE_HOOKS_DIR, CLIENT_CLOUD_FACTS } from "../src/hooks/model.ts";
+import { contractFromItem, criteriaHits, parseItemBody } from "../src/runs/itemContract.ts";
 import { parseRunContract } from "../src/runs/runContract.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "./corpus/harness.ts";
 import { makeCliFixture } from "./support/cliHarness.ts";
@@ -6307,6 +6308,93 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     expect(checks.length).toBeGreaterThanOrEqual(6);
     expect(checks[0]).toContain("Claude GitHub App");
     expect(flowed(checks[1] ?? "")).toContain("dropped");
+  });
+
+  // Plan 023 file 2, unit guide-truth: seven findings from building a real starter by this guide.
+  describe("what a first reader finds", () => {
+    const stepSix = section("Step 6: Put a plan on a branch");
+    // Indented under its list item: at the margin, the sample's own heading would read as a section of this page.
+    const sample = (/^ {3}```markdown\n([\s\S]*?)^ {3}```$/m.exec(stepSix)?.[1] ?? "").replace(/^ {3}/gm, "");
+
+    it("gives a sample body the run's own parsers take, with no `Ref:` and no marker", () => {
+      const item = parseItemBody(sample);
+      expect(item.branch).toBe("plan/greet-default");
+      expect(item.plan).toEqual({ path: "docs/plans/001-greet-default.md", hash: "beac6d4d8dbb" });
+      expect(item.ref).toBeNull();
+      expect(item.comments).toEqual({ dropped: 0, unclosed: false });
+      expect(item.summary).toContain("greets the world");
+      expect(item.acceptance).toContain("`greet()` returns `Hello, world!`.");
+      expect(item.acceptance).not.toContain("Branch:");
+      expect(criteriaHits(item.acceptance)).toEqual([]);
+      // The start prompt's own rule for the branch, in step 3.
+      expect(item.branch).toMatch(/^[A-Za-z0-9._/-]+$/);
+      const contract = parseRunContract(contractFromItem(item, { base: "02e040eb", files: ["src/greet.js"], itemRef: "owner/repo#1", author: "person" }), FACTORY);
+      expect(contract).toMatchObject({ ok: true, contract: { plan: item.plan?.path, item: "owner/repo#1", acceptance: item.acceptance } });
+    });
+
+    it("states each rule of a hand-filed body, and the parser keeps each one", () => {
+      const step = flowed(stepSix);
+      expect(step).toContain("criteria under `## Acceptance criteria`");
+      expect(parseItemBody(sample.replace("## Acceptance criteria\n", "")).acceptance, "criteria with no heading").toBe("");
+      expect(step).toContain("`Branch:` and `Plan:`, each once, as the body's last lines");
+      const trailed = parseItemBody(`${sample}A closing note.\n`);
+      expect([trailed.branch, trailed.plan], "a line after the links").toEqual([null, null]);
+      expect(parseItemBody(sample.replace("Branch: plan/greet-default", "Branch: plan/greet-default\nBranch: other")).branch, "a repeated link").toBeNull();
+      expect(step).toContain("git cat-file blob HEAD:docs/plans/<file>.md | shasum -a 256");
+      expect(step).toContain("first twelve hex digits");
+      expect(step).toContain("Your own values go in their place");
+    });
+
+    it("says `Ref:` and a spec are optional, as the parser and plan check read them (finding 4)", () => {
+      const step = flowed(stepSix);
+      expect(step).toContain("and `Ref:` when the item names a spec");
+      expect(step, "the old sentence read as if every body held one").not.toContain("the plan's hash, and `Ref:`. Check");
+      expect(flowed(read("content/commands/st-board.md"))).toContain("a `Ref:` when the item names a spec");
+      expect(step).toContain("With no `docs/specs/` folder, `plan check` gives only an advisory");
+      expect(read("src/cli/commands/plan.ts")).toContain('code: "missing-spec-input"');
+    });
+
+    it("says to use one cloud per label, and names that as a reading (finding 1)", () => {
+      const claude = flowed(section("Step 7: Claude"));
+      expect(claude).toContain("Use one cloud per label");
+      expect(claude).toContain("one `labeled` event starts two sessions on one branch, and nothing warns you");
+      expect(claude).toContain("a reading of these steps, not something a run has shown");
+      expect(flowed(section("Step 8: Cursor"))).toContain("Use one cloud per label");
+    });
+
+    it("says a build the registry does not serve has no route to the land job (finding 2)", () => {
+      const cloud = flowed(read(CLOUD));
+      expect(cloud).toContain("So the job reaches only a version the registry serves: a tarball or a local pre-release build has no supported route to it");
+      expect(cloud).toContain("A hand edit of the install step turns `stamity check` red, and the next `sync` writes the step back");
+      const workflow = read("src/adapters/landWorkflow.ts");
+      expect(workflow).toContain("Generated — edits are overwritten on the next sync.");
+      expect(workflow.indexOf("`      - run: ${install}`"), "the install no longer comes before the checkout").toBeLessThan(workflow.indexOf("`      - uses: ${CHECKOUT}`"));
+    });
+
+    it("says the pinned fallback needs the verbs, and cli-pin cannot tell a tarball (finding 3)", () => {
+      const cloud = flowed(read(CLOUD));
+      expect(cloud).toContain("The fallback helps only where the pinned version holds the verbs the run calls");
+      expect(cloud).toContain("`cli-pin` row compares version numbers alone, so a tarball and the published copy of one version both read `pass`");
+      expect(read("src/runs/preflight.ts")).toContain("pinned === running");
+    });
+
+    it("says where the hidden verbs show (finding 6)", () => {
+      const step = flowed(section("Step 4: Choose what to loosen"));
+      expect(step).toContain("`stamity --help` does not list `gate`, `plan` or `run`");
+      expect(step).toContain("`npx @zomarit/stamity gate --help`");
+      expect(step).toContain("](cli-reference.md)");
+      for (const verb of ["gate", "plan", "run"]) expect(read(`src/cli/commands/${verb}.ts`), `${verb} is no longer hidden`).toContain("hidden: true,");
+    });
+
+    it("says `init` with no origin is harmless, and no run verb reads the key (finding 7)", () => {
+      const step = flowed(section("Step 1: Install stamity"));
+      expect(step).toContain("`platform: none detected`");
+      expect(step).toContain("no run verb reads that key");
+      expect(read("src/cli/commands/init/panel.ts")).toContain("platform: none detected");
+      const reader = /\bmanifest\.platform\b/;
+      expect(read("src/cli/commands/config.ts"), "the pattern reads the key where it is read").toMatch(reader);
+      for (const verb of ["run", "runLand", "runContract", "gate", "plan"]) expect(read(`src/cli/commands/${verb}.ts`), `${verb} reads the key`).not.toMatch(reader);
+    });
   });
 });
 

@@ -85,7 +85,10 @@ set to any value but empty, `false` or `0`. A cloud's own marker means "cloud", 
   [getting started](getting-started.md) says, so a fresh clone in the cloud carries the hooks.
 - **The CLI.** A run calls `npx --no stamity <verb>`, an installed copy, and falls back to the
   pinned version the setup was generated with. With neither, it refuses:
-  `Refused: the stamity CLI is not reachable`.
+  `Refused: the stamity CLI is not reachable`. The fallback helps only where the pinned version holds
+  the verbs the run calls, and a setup pinned to an older release may not. The pre-flight cannot show
+  that: its `cli-pin` row compares version numbers alone, so a tarball and the published copy of one
+  version both read `pass`.
 - **Protection the run's account cannot get past.** The run's first act is
   `stamity gate preflight --unattended`, and its `direct-push` check reads, over GitHub's REST API,
   whether the account the cloud's `gh` acts as can push to the default branch. It refuses unless
@@ -532,7 +535,9 @@ caller of the land evidence, and it merges through the same rules, with no bypas
   ready, the tool's threads resolved and an evidence line in the body, since it does those before its
   last read or the merge call.
 - **It treats the head as data.** The CLI installs by version before any head file exists, the checkout
-  keeps no credential, and nothing from the head runs.
+  keeps no credential, and nothing from the head runs. So the job reaches only a version the registry
+  serves: a tarball or a local pre-release build has no supported route to it. A hand edit of the
+  install step turns `stamity check` red, and the next `sync` writes the step back.
 - **It asks the review tool itself**, since a cloud that cannot run `run land` cannot post the request.
   It then waits out the tool's silence in the one call, since a silent tool sends no event to wake it,
   so it holds a runner up to `waitMinutes` per head.

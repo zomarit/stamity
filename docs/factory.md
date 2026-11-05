@@ -49,6 +49,9 @@ by what you see.
 npx @zomarit/stamity init
 ```
 
+With no `origin` remote yet, `init` prints `platform: none detected`. That is harmless here: no run
+verb reads that key.
+
 Commit what it writes and push it to the default branch. A cloud run starts from a fresh clone, so
 the setup has to be there. You also need `gh`, the GitHub command line tool, signed in.
 [Getting started](getting-started.md) covers this step in full.
@@ -171,6 +174,10 @@ The `direct-push` row must read `pass`. If it does not, the row's fix says what 
 terminal `hooks-loaded` reads `refuse`, because no client's hook ran, so the verdict reads refused.
 That is expected here, and the run's own pre-flight is the one that counts.
 
+`stamity --help` does not list `gate`, `plan` or `run`, since an agent is their usual caller. Each one
+shows under its own `--help`, such as `npx @zomarit/stamity gate --help`, and the
+[CLI reference](cli-reference.md) has all three.
+
 ## Step 5: Create the label
 
 **Who:** a person with write or admin rights. **Where:** a terminal, or the repository's Labels page
@@ -188,11 +195,39 @@ The board never creates a label, so a person makes this one, once. The spelling 
 
 1. Cut a branch from the default branch. Choose your own name: a plan branch is never
    `stamity/<run-id>`, which the run keeps for itself and refuses here.
-2. Run `/st-spec` for the spec and `/st-plan` for the plan. Commit both and push the branch.
+2. Run `/st-plan` for the plan, with `/st-spec` first if you want a spec. With no `docs/specs/`
+   folder, `plan check` gives only an advisory. Commit what you wrote and push the branch.
 3. Run `npx @zomarit/stamity plan check docs/plans/<file>.md`. It must exit 0.
 4. Run `/st-board fill --source docs/plans/<file>.md` to file the issue for that plan, with
    `/st-board setup` first if no board is linked. The body it writes holds a summary, the criteria,
-   `Branch:`, `Plan:` with the plan's hash, and `Ref:`. Check that `Branch:` and `Plan:` are there.
+   `Branch:`, `Plan:` with the plan's hash, and `Ref:` when the item names a spec. Check that
+   `Branch:` and `Plan:` are there.
+
+   To file the issue by hand instead, write a body like this one. Your own values go in their place:
+
+   ```markdown
+   A greeting with no name prints the word undefined. This change greets the world instead, so a
+   person who leaves out the name sees a sensible line.
+
+   ## Acceptance criteria
+
+   - `greet()` returns `Hello, world!`.
+   - `greet("Ada")` still returns `Hello, Ada!`.
+
+   Branch: plan/greet-default
+   Plan: docs/plans/001-greet-default.md beac6d4d8dbb
+   ```
+
+   The run needs criteria under `## Acceptance criteria`, then `Branch:` and `Plan:`, each once, as
+   the body's last lines. A line of text after them makes them read as missing. The summary and
+   `Ref:` are optional. `Plan:` takes the plan's path, then the first twelve hex digits this prints
+   on the plan's branch, from the repository's root. Where there is no `shasum`, `sha256sum` prints
+   the same:
+
+   ```sh
+   git cat-file blob HEAD:docs/plans/<file>.md | shasum -a 256
+   ```
+
 5. Leave the label off for now. Step 10 adds it, once the rest is ready.
 
 Do not change the plan after this. The run compares the plan with the hash, and refuses if they
@@ -202,6 +237,9 @@ differ. If you must change it, file the item again.
 
 **Who:** you, since the run acts as you. **Where:** Claude's web page for scheduled tasks. The task
 is made there by hand. Skip this step if you use Cursor alone.
+
+Use one cloud per label: with Step 7 and Step 8 both on, one `labeled` event starts two sessions on
+one branch, and nothing warns you. That is a reading of these steps, not something a run has shown.
 
 1. Install the Claude GitHub App on the repository. The page offers it when it is missing. Claude
    being able to clone the repository does not mean the App is there.
@@ -251,6 +289,8 @@ task and per account, so a lost event is likely when many labels land in one hou
 ## Step 8: Cursor's automation
 
 **Who:** you. **Where:** Cursor's automations page. Skip this step if you use Claude alone.
+
+Use one cloud per label, as Step 7 says. If you set up Step 7's task, turn it off first.
 
 1. Save a cloud environment as [Cloud runs](cloud.md) says, under Cursor's cloud agents. Cloud runs
    asks for a signed-in `gh` there. Cursor's pages, read on 2026-11-05, do not say how to get one, so
