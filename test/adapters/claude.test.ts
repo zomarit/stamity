@@ -72,6 +72,7 @@ import type {
   RuleDelivery,
 } from "../../src/types/manifest.ts";
 import { getMarkersForPath, stampMarkerVersion } from "../../src/types/markers.ts";
+import { CHILD_TIMEOUT_MS, throwOnChildTimeout } from "../support/childTimeout.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 /**
@@ -88,9 +89,6 @@ import { useTempDir } from "../support/tempDir.ts";
  */
 
 const getTemp = useTempDir("adapter-claude");
-
-/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
-const CHILD_TIMEOUT_MS = 15_000;
 
 const CONTENT_ROOT = fileURLToPath(new URL("../../content", import.meta.url));
 const ADAPTER_SOURCE = fileURLToPath(new URL("../../src/adapters/claude.ts", import.meta.url));
@@ -1783,6 +1781,7 @@ describe("the project-directory anchor", () => {
       env: projectDir === undefined ? env : { ...env, CLAUDE_PROJECT_DIR: projectDir },
       timeout: CHILD_TIMEOUT_MS, // TEST CHANGE, justified: a time limit only, no expected value moved.
     });
+    throwOnChildTimeout(result);
     return { code: result.status ?? -1, stdout: result.stdout, stderr: result.stderr };
   }
 

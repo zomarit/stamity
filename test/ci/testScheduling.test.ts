@@ -17,6 +17,7 @@ import config, {
   WindowsFixtureSequencer,
   workerCap,
 } from "../../vitest.config.ts";
+import { childTimeout } from "../support/childTimeout.ts";
 import { ensureDistBuilt } from "../support/distBuild.ts";
 import setup, {
   PRIVATE_TMP_PREFIX,
@@ -382,6 +383,8 @@ describe("the budgets of the cases given one of their own", () => {
     "test/cli/commands/syncMcpOwnership.test.ts": 1,
     // TEST CHANGE, justified (review/20): the loose-tags case joins the guard matrix case.
     "test/hooks/personOnlyGuard.test.ts": 2,
+    // TEST CHANGE, justified (2026-11-05_factory-bridge-02/review/21): the hung-hook case gets its own budget.
+    "test/hooks/portableRunner.test.ts": 1,
     "test/merge/reclaimMcpPreserve.test.ts": 2,
   };
 
@@ -423,6 +426,19 @@ describe("the budgets of the cases given one of their own", () => {
     for (const platform of ["win32", "linux", "darwin"] as const) {
       expect(loadedCaseTimeout(platform), `${platform}: the 60 s these cases need under load`).toBeGreaterThanOrEqual(60_000);
     }
+  });
+});
+
+// ADDED 2026-11-05 (ledger row 2026-11-05_factory-bridge-02/review/20, no spec id): a sync child's own
+// limit has to end a hang inside the case that started it, and on win32 it has to outlast the stall the
+// parallel group's budget was raised for.
+describe("the limit on a sync child", () => {
+  it("sits under the case budget on POSIX and on win32, and is the larger on win32", () => {
+    for (const platform of ["linux", "darwin"] as const) {
+      expect(childTimeout(platform), platform).toBeLessThan(config.test?.testTimeout ?? 0);
+    }
+    expect(childTimeout("win32")).toBeLessThan(loadedCaseTimeout("win32"));
+    expect(childTimeout("win32")).toBeGreaterThan(childTimeout("linux"));
   });
 });
 

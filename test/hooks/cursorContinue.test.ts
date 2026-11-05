@@ -22,12 +22,10 @@ import {
   type HookScriptLayout,
 } from "../../src/hooks/scripts.ts";
 import { RECORD_CHECKPOINT_PATTERN, REPORT_READ_MAX_BYTES } from "../../src/runs/layout.ts";
+import { CHILD_TIMEOUT_MS } from "../support/childTimeout.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 const getRepo = useTempDir("cursor-continue");
-
-/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
-const CHILD_TIMEOUT_MS = 15_000;
 
 /** Cursor's `stop` payload (cursor.com/docs/hooks): the hook reads its `status` alone. */
 const STOP_PAYLOAD = JSON.stringify({ hook_event_name: "stop", status: "completed", loop_count: 0 });

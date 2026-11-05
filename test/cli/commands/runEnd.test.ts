@@ -11,6 +11,7 @@ import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
 import { buildUnattendedAskGate, UNATTENDED_ASK_GATE_FILE } from "../../../src/hooks/scripts.ts";
 import { RUN_ENDED_MARKER_FILE } from "../../../src/mcp/env.ts";
 import { surfaceRecord } from "../../../src/runs/gitSurface.ts";
+import { CHILD_TIMEOUT_MS } from "../../support/childTimeout.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -100,9 +101,6 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
     },
   };
 });
-
-/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
-const CHILD_TIMEOUT_MS = 15_000;
 
 const IDENTITY = {
   GIT_AUTHOR_NAME: "Alice Example",

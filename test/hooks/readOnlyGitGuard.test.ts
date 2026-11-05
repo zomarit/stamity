@@ -19,15 +19,13 @@ import {
   buildAgentToolPoliciesJson,
   type AgentToolPolicy,
 } from "../../src/tools/allowlist.ts";
+import { CHILD_TIMEOUT_MS, throwOnChildTimeout } from "../support/childTimeout.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 /** The package and version the core scripts' CLI hints pin; a literal, so a renamed fork renders the same bytes. */
 const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
 
 const getRepo = useTempDir("read-only-git-guard");
-
-/** TEST CHANGE, justified: no case's behaviour moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
-const CHILD_TIMEOUT_MS = 15_000;
 
 /** The five rows that carry `readOnlyGit`: the four verdict roles and the spec-author. */
 const GIT_READERS = [
@@ -93,6 +91,7 @@ function shellCall(agentId: string, command: string | undefined, tool = "Bash"):
 /** Runs the guard the way a client does: fresh process, piped stdio. */
 function run(guard: string, input: string): RunResult {
   const result = spawnSync(process.execPath, [guard], { input, encoding: "utf8", timeout: CHILD_TIMEOUT_MS });
+  throwOnChildTimeout(result);
   return { code: result.status ?? -1, stdout: result.stdout, stderr: result.stderr };
 }
 

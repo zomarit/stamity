@@ -17,6 +17,7 @@ import { applyPackInstall, planPackInstall } from "../../src/pack/install.ts";
 import type { AdapterOutput } from "../../src/types/content.ts";
 import type { Tool } from "../../src/types/core.ts";
 import type { SetupManifest } from "../../src/types/manifest.ts";
+import { CHILD_TIMEOUT_MS, throwOnChildTimeout } from "../support/childTimeout.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 // Fixture data kept out of the test-input census: the fixture rules' glob is built at run time, as a literal it names every tracked .md.
@@ -54,9 +55,6 @@ const MD_GLOBS_LINE = `globs: ["${["**/*", "md"].join(".")}"]`;
  */
 
 const getRepo = useTempDir("planner-overlay");
-
-/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
-const CHILD_TIMEOUT_MS = 15_000;
 
 const FIXED_NOW = new Date("2026-08-17T00:00:00.000Z");
 const ENGINE_VERSION = "0.0.0-test";
@@ -248,6 +246,7 @@ async function placeAndRunGuard(
     encoding: "utf8",
     timeout: CHILD_TIMEOUT_MS, // TEST CHANGE, justified: a time limit only, no expected value moved.
   });
+  throwOnChildTimeout(result);
   return { code: result.status ?? -1, stdout: result.stdout, stderr: result.stderr };
 }
 

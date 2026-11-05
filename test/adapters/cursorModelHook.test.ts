@@ -11,6 +11,7 @@ import { modelMapPath } from "../../src/roster/modelDefaults.ts";
 import type { AdapterOutput } from "../../src/types/content.ts";
 import type { ModelConfig } from "../../src/types/manifest.ts";
 import { CORPUS_ROOT } from "../corpus/harness.ts";
+import { CHILD_TIMEOUT_MS } from "../support/childTimeout.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 /**
@@ -24,9 +25,6 @@ import { useTempDir } from "../support/tempDir.ts";
  */
 
 const getTemp = useTempDir("cursor-model-hook");
-
-/** TEST CHANGE, justified: no case's behaviour moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
-const CHILD_TIMEOUT_MS = 15_000;
 
 const ENGINE_VERSION = "0.0.0-test";
 const FIXED_NOW = new Date("2026-10-14T00:00:00.000Z");

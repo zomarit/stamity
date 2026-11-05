@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it, vi } from "vitest";
 // @ts-expect-error — the script is a native ESM source-checkout tool with no declaration file.
 import { BUDGET_MS, cli, guardRoot, median, payloads, reportWritePath, timeOnce, VERDICT_AGENT, writePayload } from "../../scripts/hook-latency.mjs";
+import { CHILD_TIMEOUT_MS } from "../support/childTimeout.ts";
 
 /**
  * `scripts/hook-latency.mjs` (REQ-CTX-016, plan 010 D2): the guard's latency over node's own start,
@@ -33,9 +34,6 @@ const SPAWN_BUDGET = 120_000;
 
 // A budget no runner's spread reaches, so the exit-0 case asserts the path, not a speed.
 const GENEROUS_BUDGET = "100000";
-
-/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. It bounds a hang, not a speed: each call is one start of the real guard. */
-const CHILD_TIMEOUT_MS = 15_000;
 
 const work = mkdtempSync(join(tmpdir(), "stamity-hook-latency-"));
 afterAll(() => rmSync(work, { recursive: true, force: true }));

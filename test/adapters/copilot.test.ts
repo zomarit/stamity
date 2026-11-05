@@ -62,6 +62,7 @@ import type { PackageEntry } from "../../src/types/detect.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { CONTENT_PREFIX } from "../../src/types/markers.ts";
 import { CORPUS_ROOT, loadCorpusIndex } from "../corpus/harness.ts";
+import { CHILD_TIMEOUT_MS } from "../support/childTimeout.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 /**
@@ -80,9 +81,6 @@ import { useTempDir } from "../support/tempDir.ts";
  */
 
 const getTemp = useTempDir("adapter-copilot");
-
-/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
-const CHILD_TIMEOUT_MS = 15_000;
 
 const ENGINE_VERSION = "0.0.0-test";
 const FIXED_NOW = new Date("2026-08-14T00:00:00.000Z");

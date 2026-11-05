@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
+import { CHILD_TIMEOUT_MS } from "../support/childTimeout.ts";
 import { makeCliFixture, type CliFixture } from "../support/cliHarness.ts";
 import { ensureDistBuilt } from "../support/distBuild.ts";
 import { tsRepoFiles } from "../support/repoFixtures.ts";
@@ -22,9 +23,6 @@ import { tsRepoFiles } from "../support/repoFixtures.ts";
 
 /** Per-case budget: one cold dist `init` over a one-client tree, plus two guard spawns. */
 const CASE_TIMEOUT_MS = 120_000;
-
-/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
-const CHILD_TIMEOUT_MS = 15_000;
 
 /**
  * Where emission writes Claude Code's guard, relative to the repository.

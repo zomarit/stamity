@@ -7,6 +7,7 @@ import { PERSON_ONLY_GUARD_FILE, planCoreHookScripts } from "../../src/hooks/scr
 import { type Tool, TOOLS } from "../../src/types/core.ts";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
 import { ASK_CLASS_CLIENTS, ASK_HELPER_FIELDS, ASK_SESSION_ID_PATTERN, CLIENT_RUNNERS, PROMPT, WINDOWS_PROBE_LIMIT, binaryVersion, copilotFacts, exitDescription, runClient, verdictFor, verdictForAsk } from "../../scripts/qa/hook-runs.mjs";
+import { CHILD_TIMEOUT_MS } from "../support/childTimeout.ts";
 
 /**
  * W6: `cursor` and `copilot` used to carry a constant, never-probed "not on PATH" reason. This
@@ -30,9 +31,6 @@ afterEach(() => {
 });
 
 const WINDOWS = process.platform === "win32";
-
-/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
-const CHILD_TIMEOUT_MS = 15_000;
 
 /**
  * A directory on `PATH`, for the run's own process only, restored in `afterEach`.

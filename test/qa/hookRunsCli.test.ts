@@ -5,6 +5,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error — native ESM contributor tool, outside the product package.
 import * as hookRuns from "../../scripts/qa/hook-runs.mjs";
+import { CHILD_TIMEOUT_MS } from "../support/childTimeout.ts";
 
 /**
  * REQ-PROVE-040, REQ-FLOW-113 and REQ-FLOW-104 (plan 021 file 2, unit v13-client-legs): the command
@@ -22,9 +23,6 @@ import * as hookRuns from "../../scripts/qa/hook-runs.mjs";
 
 const REPO_ROOT = resolve(import.meta.dirname, "../..");
 const temps: string[] = [];
-
-/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
-const CHILD_TIMEOUT_MS = 15_000;
 
 afterEach(() => {
   for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });

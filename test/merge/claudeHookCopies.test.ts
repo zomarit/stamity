@@ -36,6 +36,7 @@ import { executedScript } from "../../src/manifest/coOwnedJson.ts";
 import { readManifest, writeManifest } from "../../src/manifest/manifest.ts";
 import { DEFAULT_MAX_REVIEW_ITERATIONS } from "../../src/roster/reviewCaps.ts";
 import type { LedgerEntry } from "../../src/types/manifest.ts";
+import { CHILD_TIMEOUT_MS } from "../support/childTimeout.ts";
 import { runInProcess } from "../support/inProcess.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -59,9 +60,6 @@ const T0 = new Date("2026-10-19T09:00:00.000Z");
 const T1 = new Date("2026-10-19T10:00:00.000Z");
 
 const getTemp = useTempDir("claude-hook-copies");
-
-/** TEST CHANGE, justified: no case's behaviour moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
-const CHILD_TIMEOUT_MS = 15_000;
 
 const CHARTER_FIXTURE = [
   "---",

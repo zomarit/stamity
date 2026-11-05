@@ -30,12 +30,10 @@ import { describe, expect, it } from "vitest";
 import { personOnlyVerdict } from "../../src/hooks/personOnly.ts";
 import { PERSON_ONLY_GUARD_FILE, planCoreHookScripts } from "../../src/hooks/scripts.ts";
 import { type Tool, TOOLS } from "../../src/types/core.ts";
+import { CHILD_TIMEOUT_MS } from "../support/childTimeout.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 const getRepo = useTempDir("copilot-ask");
-
-/** TEST CHANGE, justified: no case's behaviour moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
-const CHILD_TIMEOUT_MS = 15_000;
 
 /** The package and version the core scripts' CLI hints pin; a literal, so a renamed fork renders the same bytes. */
 const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };

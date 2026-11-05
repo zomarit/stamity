@@ -10,6 +10,7 @@ import { afterAll, describe, expect, it } from "vitest";
 // test/ci/leakGate.test.ts and test/ci/workflow.test.ts; the exported
 // surface is pinned by BuildConfigModule below, so nothing downstream is `any`.
 import * as buildConfigModule from "../../tsdown.config.mjs";
+import { CHILD_TIMEOUT_MS, throwOnChildTimeout } from "./childTimeout.ts";
 import { buildChildEnv, makeCliFixture, spawnCollect, type CliFixture } from "./cliHarness.ts";
 import { treeDigest } from "./packFixtures.ts";
 import { NO_GIT_CONFIG } from "./repoFixtures.ts";
@@ -316,6 +317,17 @@ describe("support lane discipline", () => {
       "../../src/cli/kit/program.ts",
       "../../src/cli/kit/terminal.ts",
     ]);
+  });
+});
+
+describe("throwOnChildTimeout", () => {
+  it("throws for a child its limit stopped, and passes one that ran to its own status", () => {
+    const hung = spawnSync(process.execPath, ["-e", "setTimeout(() => {}, 30000);"], { encoding: "utf8", timeout: 200 });
+    expect(() => { throwOnChildTimeout(hung); }).toThrow(/ETIMEDOUT/);
+
+    const failed = spawnSync(process.execPath, ["-e", "process.exit(3);"], { encoding: "utf8", timeout: CHILD_TIMEOUT_MS });
+    expect(() => { throwOnChildTimeout(failed); }).not.toThrow();
+    expect(failed.status).toBe(3);
   });
 });
 

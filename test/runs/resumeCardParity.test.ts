@@ -8,6 +8,7 @@ import { buildSessionStartScript, SESSION_START_SCREEN_PATTERN_IDS } from "../..
 import { buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../../src/runs/cardSource.ts";
 import { CARD_MAX_CHARS } from "../../src/runs/layout.ts";
 import { collectResumeCard, findCardRun, readRecordHead, renderResumeCard, screenCard } from "../../src/runs/resumeCard.ts";
+import { CHILD_TIMEOUT_MS } from "../support/childTimeout.ts";
 import { runInProcess } from "../support/inProcess.ts";
 import { useTempDir, type TempDirHandle } from "../support/tempDir.ts";
 
@@ -24,9 +25,6 @@ import { useTempDir, type TempDirHandle } from "../support/tempDir.ts";
  * on the same disk, so both read the same disk.
  */
 const getRepo = useTempDir("resume-card-parity");
-
-/** TEST CHANGE, justified: no case's behaviour moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
-const CHILD_TIMEOUT_MS = 15_000;
 
 const WINDOWS = process.platform === "win32";
 const AS_ROOT = process.getuid?.() === 0;

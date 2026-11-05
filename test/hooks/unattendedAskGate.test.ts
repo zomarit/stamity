@@ -24,12 +24,10 @@ import {
 } from "../../src/hooks/scripts.ts";
 import { RUN_ENDED_MARKER_FILE, RUN_ENDED_MAX_AGE_MS } from "../../src/mcp/env.ts";
 import { TOOLS } from "../../src/types/core.ts";
+import { CHILD_TIMEOUT_MS } from "../support/childTimeout.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 const getRepo = useTempDir("unattended-ask-gate");
-
-/** TEST CHANGE, justified: no case's behaviour moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
-const CHILD_TIMEOUT_MS = 15_000;
 
 /** The gate at `.stamity/generated/hooks/claude/`, with the records it reads; returns its path. */
 async function placeGate(files: Record<string, string> = {}, layout: HookScriptLayout = "generated"): Promise<string> {

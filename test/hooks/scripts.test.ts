@@ -58,6 +58,7 @@ import {
 import { TOOLS } from "../../src/types/core.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { REVIEW_GATE_LOCK_SUFFIX, REVIEW_GATE_TEMP_INFIX } from "../../src/types/markers.ts";
+import { CHILD_TIMEOUT_MS, throwOnChildTimeout } from "../support/childTimeout.ts";
 import { runInProcess } from "../support/inProcess.ts";
 import { makeTempDir, useTempDir } from "../support/tempDir.ts";
 
@@ -76,10 +77,7 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
  */
 const getRepo = useTempDir("hook-scripts");
 
-/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
-const CHILD_TIMEOUT_MS = 15_000;
-
-/** TEST CHANGE, justified: a time limit only, no expected value moved. The dead-holder case allows its child 16,000 ms on win32 inside a 30 s case, so CHILD_TIMEOUT_MS would cut in under that bound; this limit sits between the two. */
+/** TEST CHANGE, justified: a time limit only, no expected value moved. The dead-holder case allows its child 16,000 ms on win32 inside a 30 s case, and CHILD_TIMEOUT_MS on win32 runs past that case; this limit sits between the two. */
 const IDLE_WINDOW_CHILD_TIMEOUT_MS = 25_000;
 
 const POLICY_FILE = "agent-tool-policies.json";
@@ -143,6 +141,7 @@ function run(
     encoding: "utf8",
     timeout: opts.timeoutMs ?? CHILD_TIMEOUT_MS, // TEST CHANGE, justified: a time limit only, no expected value moved.
   });
+  throwOnChildTimeout(result);
   return { code: result.status ?? -1, stdout: result.stdout, stderr: result.stderr };
 }
 

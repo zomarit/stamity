@@ -14,6 +14,7 @@ import {
   runRelPath,
 } from "../../src/runs/layout.ts";
 import { EngineError } from "../../src/types/errors.ts";
+import { CHILD_TIMEOUT_MS, throwOnChildTimeout } from "../support/childTimeout.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 /**
@@ -28,9 +29,6 @@ import { useTempDir } from "../support/tempDir.ts";
  * to the engine twin's parity matrix.
  */
 const getRepo = useTempDir("session-start-card");
-
-/** TEST CHANGE, justified: no case's behaviour moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
-const CHILD_TIMEOUT_MS = 15_000;
 
 const WINDOWS = process.platform === "win32";
 const SCRIPT_PATH = ".stamity/generated/hooks/claude/stamity-session-start.mjs";
@@ -62,6 +60,7 @@ function start(file: string, input: string, markers: Record<string, string> = {}
   for (const name of SESSION_MARKERS) delete env[name];
   Object.assign(env, markers);
   const result = spawnSync(process.execPath, [file], { cwd: getRepo().dir, input, env, encoding: "utf8", timeout: CHILD_TIMEOUT_MS });
+  throwOnChildTimeout(result);
   return { code: result.status ?? -1, stdout: result.stdout, stderr: result.stderr };
 }
 

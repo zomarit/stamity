@@ -24,6 +24,7 @@ import { personOnlyVerdict, unattendedPushVerdict, type PersonOnlyRuleId } from 
 import { PERSON_ONLY_GUARD_FILE, planCoreHookScripts } from "../../src/hooks/scripts.ts";
 import { type Tool, TOOLS } from "../../src/types/core.ts";
 import { assertRulesAdmissible, parseWorktreePolicy, resolveStrategy } from "../../src/worktree/policy.ts";
+import { CHILD_TIMEOUT_MS } from "../support/childTimeout.ts";
 import { useTempDir } from "../support/tempDir.ts";
 import { loadedCaseTimeout } from "../../vitest.config.ts";
 
@@ -32,9 +33,6 @@ const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
 const POLICY = "../../agent-tool-policies.json";
 
 const getRepo = useTempDir("person-only-guard");
-
-/** TEST CHANGE, justified: a time limit only, no expected value moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
-const CHILD_TIMEOUT_MS = 15_000;
 
 /**
  * A client's decision: allowed, or stopped, `ask: true` where the client asks the person for one click (v0a2,

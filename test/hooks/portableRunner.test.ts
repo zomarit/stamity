@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { chmod, copyFile, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -14,15 +14,14 @@ import type { HookInterchange } from "../../src/hooks/model.ts";
 import { AGENT_POLICY_ROSTER } from "../../src/roster/agentPolicies.ts";
 import { AGENT_TOOL_POLICIES_FILE, buildAgentToolPoliciesJson } from "../../src/tools/allowlist.ts";
 import type { Tool } from "../../src/types/core.ts";
+import { CHILD_TIMEOUT_MS } from "../support/childTimeout.ts";
+import { loadedCaseTimeout } from "../../vitest.config.ts";
 
 /**
  * The pinned sync call the Codex starter names when the hook script is missing
  * (sw26-engine-cli-call-form, REQ-FLOW-002): Codex's rendering requires one.
  */
 const SYNC = { syncCall: "npx -y @zomarit/stamity@1.0.0-golden sync" };
-
-/** TEST CHANGE, justified: no case's behaviour moved. A sync child blocks the worker, so vitest's 20 s limit cannot fire: only the call's own `timeout` ends a hung child. */
-const CHILD_TIMEOUT_MS = 15_000;
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
@@ -48,21 +47,26 @@ async function fixture(tool: Tool, body: string, row: Partial<HookInterchange> =
   const hook: HookInterchange = { event: "pre_tool_use", command: [process.execPath, "check.mjs"], ...row };
   return { root, script, hook };
 }
-function execute(f: Awaited<ReturnType<typeof fixture>>, payload: unknown = { toolName: "bash", toolArgs: { command: "pwd" } }) {
-  return spawnSync(process.execPath, [f.script, Buffer.from(JSON.stringify(f.hook)).toString("base64url")], { cwd: tmpdir(), input: JSON.stringify(payload), encoding: "utf8", timeout: CHILD_TIMEOUT_MS });
+function execute(f: Awaited<ReturnType<typeof fixture>>, payload: unknown = { toolName: "bash", toolArgs: { command: "pwd" } }, timeout: number = CHILD_TIMEOUT_MS) {
+  return spawnSync(process.execPath, [f.script, Buffer.from(JSON.stringify(f.hook)).toString("base64url")], { cwd: tmpdir(), input: JSON.stringify(payload), encoding: "utf8", timeout });
 }
 const output = (value: unknown) => `process.stdout.write(${JSON.stringify(JSON.stringify(value))});`;
 
-/** How long the hung hook stays up: far past the call's limit, and finite, so a lost limit fails its case instead of hanging the worker. */
+/** The hung case's call limit: the same `timeout` as every other call, short so the case waits little of its budget. */
+const HUNG_CALL_TIMEOUT_MS = 5_000;
+/** The longest the hung hook stays up: far past the call's limit, and finite, so a lost limit fails its case instead of hanging the worker. */
 const HUNG_HOOK_MS = 60_000;
-const HUNG_HOOK_PID_FILE = "hung.pid";
-/** Names its process for the kill that ends it, and leaves the fixture folder, which Windows will not remove under a running process. */
+/**
+ * Never exits while its runner lives, and leaves once the runner is gone, so no case has to reach it:
+ * it outlives the runner's kill on POSIX, and Windows may end it with the runner. It leaves the fixture
+ * folder first, which Windows will not remove under a running process.
+ */
 const HUNG_HOOK_BODY = [
-  'import { writeFileSync } from "node:fs";',
   'import { tmpdir } from "node:os";',
-  `writeFileSync(${JSON.stringify(HUNG_HOOK_PID_FILE)}, String(process.pid));`,
   "process.chdir(tmpdir());",
-  `setTimeout(() => {}, ${HUNG_HOOK_MS});`,
+  "const runner = process.ppid;",
+  `setTimeout(() => process.exit(), ${HUNG_HOOK_MS});`,
+  'setInterval(() => { try { process.kill(runner, 0); } catch (error) { if (error.code === "ESRCH") process.exit(); } }, 200);',
 ].join("\n");
 
 describe("portable native hook boundary", () => {
@@ -506,17 +510,13 @@ describe("portable native hook boundary", () => {
     }));
   });
 
-  it("ends the call at its own limit when a hook never exits, though the hook outlives the kill", async () => {
+  it("ends the call at its own limit when a hook never exits", { timeout: loadedCaseTimeout() }, async () => {
     const f = await fixture("cursor", HUNG_HOOK_BODY);
     const started = Date.now();
-    const result = execute(f);
+    const result = execute(f, undefined, HUNG_CALL_TIMEOUT_MS);
     const elapsed = Date.now() - started;
     expect((result.error as NodeJS.ErrnoException | undefined)?.code).toBe("ETIMEDOUT");
     expect(elapsed).toBeLessThan(HUNG_HOOK_MS);
-    // The limit kills the runner alone: its own child is still alive here, and the call has returned all the same.
-    const hook = Number(await readFile(join(f.root, HUNG_HOOK_PID_FILE), "utf8"));
-    expect(process.kill(hook, 0)).toBe(true);
-    process.kill(hook);
   });
 
   it("keeps Copilot timeouts fail-open and Cursor timeouts visible to failClosed", async () => {
