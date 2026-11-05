@@ -328,6 +328,8 @@ describe("stamity run land", () => {
     const head = git(repo, ["rev-parse", "HEAD"]);
     if (opts.prRecord !== false) await put(repo, PR_RECORD, prRecordText({ run: RUN, host: "github.com", owner: "o", repo: "r", number: 7 }));
     route("GET repos/o/r", { default_branch: "main" });
+    // TEST CHANGE, justified: a land now refuses with no manifest at the top of the default branch, so GitHub answers with the one `main` holds.
+    if (opts.manifest !== null) route("GET repos/o/r/contents/.stamity/manifest.json", { content: Buffer.from(opts.manifest ?? '{"version":1}\n').toString("base64"), encoding: "base64" });
     // TEST CHANGE, justified (the login source, review/r2): the login now comes from the thread query's viewer, so
     // `GET user` answers as an app installation token's would, refused, in every case.
     route("GET user", { message: "Resource not accessible by integration" }, 403);
@@ -432,6 +434,88 @@ describe("stamity run land", () => {
     gh.threads = [threadsPage([thread(true, "runner", ["Bot", "codex"], ["User", "alice"])])];
     expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved"] });
     expect(kinds()).not.toContain("merge");
+  });
+
+  describe("a closed thread someone beside its closer wrote in", () => {
+    const ASKS = "a person decides on closed review threads that someone beside the closer wrote in, or that did not read whole: T1";
+    const named = (entry: unknown): unknown => ({ ...(entry as object), id: "T1" });
+
+    it.each([
+      ["a closer's reply under a person's comment", thread(true, "bob", ["User", "alice"], ["User", "bob"])],
+      ["a closer who wrote first", thread(true, "bob", ["User", "bob"], ["User", "alice"])],
+      ["a closer who wrote nothing", thread(true, "bob", ["User", "alice"])],
+      ["an app closing over a person's comment", thread(true, "review-bot", ["Bot", "review-bot"], ["User", "alice"])],
+    ])("asks and merges nothing, on %s", async (_name, entry) => {
+      const { repo, head } = await seed();
+      gh.threads = [threadsPage([named(entry)])];
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.code).toBe(1);
+      expect(result.doc).toMatchObject({ outcome: "asks", asks: { reasons: [ASKS], act: "pr-merge", head }, evidence: { threads: { unresolved: 0 } } });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("asks on one that did not read whole, whoever it seems to hold", async () => {
+      const { repo } = await seed();
+      gh.threads = [threadsPage([{ ...(named(thread(true, "bob", ["User", "bob"])) as object), comments: { totalCount: 101, nodes: [{ author: { __typename: "User", login: "bob" } }] } }])];
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reasons: [ASKS] } });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("lands on a person's approval of that head, and no approval of another head carries it", async () => {
+      const { repo, head } = await seed();
+      gh.threads = [threadsPage([named(thread(true, "bob", ["User", "alice"], ["User", "bob"]))])];
+
+      expect((await run(repo, ["land", "--run", RUN, "--approved", "f".repeat(40)])).doc).toMatchObject({ outcome: "refused" });
+      expect(kinds()).not.toContain("merge");
+
+      expect((await run(repo, ["land", "--run", RUN, "--approved", head])).doc).toMatchObject({ outcome: "landed", approved: { sha: head, reasons: [ASKS] } });
+      expect(kinds()).toContain("merge");
+    });
+
+    it("stops an unattended run on the ask, which no approval there reaches", async () => {
+      const { repo, head } = await seed({ mode: "unattended" });
+      const home = getRoot().path("home");
+      await mkdir(home, { recursive: true });
+      vi.stubEnv("HOME", home);
+      vi.stubEnv("XDG_CONFIG_HOME", home);
+      vi.stubEnv("GIT_CONFIG_NOSYSTEM", "1");
+      vi.stubEnv("GH_HOST", undefined);
+      vi.stubEnv("STAMITY_UNATTENDED", undefined);
+      const place = await gitSurfaceRecordPath(repo);
+      const surface = await readRunGitSurface(repo);
+      if ("unreadable" in place || "unreadable" in surface) throw new Error("the seed's git surface could not be read");
+      await mkdir(dirname(place.path), { recursive: true });
+      await writeFile(place.path, `${JSON.stringify(surfaceRecord(surface, randomBytes(16).toString("hex"), new Date().toISOString(), false))}\n`);
+      gh.threads = [threadsPage([named(thread(true, "bob", ["User", "alice"], ["User", "bob"]))])];
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reasons: [ASKS] } });
+      expect((await run(repo, ["land", "--run", RUN, "--approved", head])).doc).toMatchObject({ outcome: "refused" });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("asks when the thread closes after the first read, on the read just before the act", async () => {
+      const { repo } = await seed();
+      gh.threads = [threadsPage([]), threadsPage([named(thread(true, "bob", ["User", "alice"], ["User", "bob"]))])];
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reasons: [ASKS] } });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it.each([
+      ["a person closing their own thread", thread(true, "alice", ["User", "alice"])],
+      ["a person closing an app's thread", thread(true, "alice", ["Bot", "codex"])],
+      ["the run's own reply beside the closer", thread(true, "alice", ["User", "alice"], ["User", "runner"])],
+      ["the run's own close, one account in the thread", thread(true, "runner", ["Bot", "codex"], ["User", "runner"])],
+      ["an app closing its own thread", thread(true, "review-bot", ["Bot", "review-bot"], ["User", "runner"])],
+    ])("still lands with no ask, on %s", async (_name, entry) => {
+      const { repo } = await seed();
+      gh.threads = [threadsPage([named(entry)])];
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed", evidence: { threads: { unresolved: 0 } } });
+    });
   });
 
   it("refuses an open Warning row in the ledger at the head, and one only the work tree's ledger holds as checkpoint first", async () => {
@@ -1532,28 +1616,50 @@ describe("stamity run land", () => {
       expect(kinds()).not.toContain("merge");
     });
 
-    it("reads a project below the top at its own path, and asks where GitHub holds no class file there (review/69)", async () => {
+    // TEST CHANGE, justified: this case pinned a project's own class file judging its change (review/69); the class file no longer follows the start folder, so it pins the ask.
+    it("does not auto-ship a land started below the top, whatever class file the project holds", async () => {
       const manifest = manifestOn({});
-      const seeded = await seed({ files: { "apps/web/.stamity/manifest.json": manifest } });
+      const seeded = await seed({ manifest, files: { "apps/web/.stamity/manifest.json": manifest } });
       const web = join(seeded.repo, "apps/web");
       route("GET repos/o/r/contents/apps/web/.stamity/manifest.json", { content: Buffer.from(manifest).toString("base64"), encoding: "base64" });
+      route(`GET ${CLASS_READ}`, fileAnswer(`${JSON.stringify({ classes: { "security-sensitive": ["apps/web/app.txt"] } })}\n`));
+      route("GET repos/o/r/contents/apps/web/.stamity/change-classes.json", fileAnswer(`${JSON.stringify({ classes: { records: ["app.txt"] } })}\n`));
       await put(web, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\nMode: attended\nBranch: ${RUN_BRANCH}\nBase: ${seeded.base}\n`);
       await put(web, `${RUN_DIR}/ledger.jsonl`, row(`${RUN}/review/1`, "Warning", "fixed"));
+      await put(web, "app.txt", "a change the top's class file raises\n");
       git(seeded.repo, ["add", "-A"]);
-      git(seeded.repo, ["commit", "-q", "-m", "the project's own record"]);
+      git(seeded.repo, ["commit", "-q", "-m", "the project's own change"]);
       git(seeded.repo, ["push", "-q", seeded.remote, `HEAD:refs/heads/${RUN_BRANCH}`]);
       const head = git(seeded.repo, ["rev-parse", "HEAD"]);
-      github(seeded.repo, seeded.base, head, seeded.base, { changed_files: 5 });
-      route("GET repos/o/r/pulls/7/files", [...seededFiles, { filename: `apps/web/${RUN_DIR}/record.md` }, { filename: `apps/web/${RUN_DIR}/ledger.jsonl` }]);
+      // The tip has moved to the run's first commit, so what merges lies in the project alone.
+      route("GET repos/o/r/branches/main", { commit: { sha: seeded.head }, protection: { enabled: false } });
+      route(`GET repos/o/r/commits/${seeded.head}/check-runs`, green);
+      github(seeded.repo, seeded.head, head, seeded.head, { changed_files: 3 });
+      route("GET repos/o/r/pulls/7/files", [{ filename: "apps/web/app.txt" }, { filename: `apps/web/${RUN_DIR}/record.md` }, { filename: `apps/web/${RUN_DIR}/ledger.jsonl` }]);
       route(`GET repos/o/r/commits/${head}/check-runs`, green);
       // The spy above finds the bare remote beside the verb's cwd.
       await symlink(seeded.remote, join(seeded.repo, "apps", "remote.git"));
 
       const result = await run(web, ["land", "--run", RUN]);
 
-      expect(result.doc).toMatchObject({ outcome: "asks", notDone: [], evidence: { autoShip: { eligible: false, reasons: [`the classification is incomplete: GitHub holds no apps/web/.stamity/change-classes.json at ${seeded.base}, so what judges a project below the top is not known`] } } });
-      expect(gh.calls.filter((call) => call.path === "repos/o/r/contents/apps/web/.stamity/change-classes.json").map((call) => call.query)).toEqual([`ref=${seeded.base}`]);
+      expect(result.doc).toMatchObject({
+        outcome: "asks",
+        notDone: [],
+        evidence: { autoShip: { eligible: false, reasons: ["auto-ship is judged only from the repository's top, and this land started in apps/web/"] } },
+      });
+      expect(gh.calls.map((call) => call.path)).not.toContain("repos/o/r/contents/apps/web/.stamity/change-classes.json");
       expect(kinds()).not.toContain("merge");
+    });
+
+    it("keeps auto-ship at the top where a project elsewhere names nothing of it", async () => {
+      const manifest = manifestOn({});
+      const seeded = await seed({ manifest, files: { "test/fixture/.stamity/manifest.json": '{"version":1}\n' } });
+      route("GET repos/o/r/contents/test/fixture/.stamity/manifest.json", { content: Buffer.from('{"version":1}\n').toString("base64"), encoding: "base64" });
+      github(seeded.repo, seeded.base, seeded.head);
+
+      const result = await run(seeded.repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "landed", notDone: [], evidence: { autoShip: { eligible: true } } });
     });
 
     it("reads the range's refusal of an absent commit as incomplete, so the land asks instead of failing", async () => {
@@ -2231,6 +2337,16 @@ describe("stamity run land", () => {
       expect(kinds()).not.toContain("merge");
     });
 
+    it("holds a thread two people wrote in that closed between the last read and the resolve, since no one was shown that ask", async () => {
+      const { repo } = await seedClean();
+      const other = { ...(thread(true, "bob", ["User", "alice"], ["User", "bob"]) as object), id: "T2" };
+      gh.threads = [threadsPage([fromTool("T1")]), threadsPage([fromTool("T1")]), threadsPage([closed("T1"), other])];
+
+      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: [expect.stringContaining("closed review threads")] });
+      expect(resolved()).toEqual(["T1"]);
+      expect(kinds()).not.toContain("merge");
+    });
+
     describe("under a rule requiring resolved conversations (review/68)", () => {
       const HOLDS = "mergeable_state is blocked: an admin merge past the branch's rules asks";
       /** Where such a rule leaves a clean head: the pull request reads `blocked` while the tool's thread stays open. */
@@ -2419,6 +2535,324 @@ describe("stamity run land", () => {
     });
   });
 
+  describe("a verb started below the top reads the repository's setting too (REQ-FLOW-132, REQ-FLOW-138)", () => {
+    const PROJECT = "apps/web";
+    const MANIFEST = ".stamity/manifest.json";
+    const TOP_READ = `GET repos/o/r/contents/${MANIFEST}`;
+    const PROJECT_READ = `GET repos/o/r/contents/${PROJECT}/${MANIFEST}`;
+    const PLAIN = '{"version":1}\n';
+    const NAMED = `${JSON.stringify({ version: 1, autonomy: { deployingBranches: ["main"] } })}\n`;
+    const DEPLOYING = "main is named in autonomy.deployingBranches";
+    const NO_TOP = `main holds no ${MANIFEST} at the repository's top, so nothing a run cannot write binds this land: a person places one there first`;
+    const GREEN = { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] };
+    const onGitHub = (text: string): Record<string, string> => ({ content: Buffer.from(text).toString("base64"), encoding: "base64" });
+
+    /** The run's record and ledger in the project, committed and pushed as the head; `disk` is a manifest there that no commit holds. */
+    async function project(seeded: Seeded, opts: { mode?: "attended" | "unattended"; disk?: string } = {}): Promise<string> {
+      const web = join(seeded.repo, PROJECT);
+      await put(web, `${RUN_DIR}/record.md`, `# Run ${RUN}\n\nStatus: in progress\nMode: ${opts.mode ?? "attended"}\nBranch: ${RUN_BRANCH}\nBase: ${seeded.base}\n`);
+      await put(web, `${RUN_DIR}/ledger.jsonl`, row(`${RUN}/review/1`, "Warning", "fixed"));
+      git(seeded.repo, ["add", "-A"]);
+      git(seeded.repo, ["commit", "-q", "-m", "the project's own record"]);
+      git(seeded.repo, ["push", "-q", seeded.remote, `HEAD:refs/heads/${RUN_BRANCH}`]);
+      const head = git(seeded.repo, ["rev-parse", "HEAD"]);
+      route("GET repos/o/r/pulls/7", pull(head, { changed_files: 5 }));
+      route("GET repos/o/r/pulls/7/files", [
+        { filename: "a.txt" },
+        { filename: `${RUN_DIR}/record.md` },
+        { filename: `${RUN_DIR}/ledger.jsonl` },
+        { filename: `${PROJECT}/${RUN_DIR}/record.md` },
+        { filename: `${PROJECT}/${RUN_DIR}/ledger.jsonl` },
+      ]);
+      route(`GET repos/o/r/commits/${head}/check-runs`, GREEN);
+      // The spy above finds the bare remote beside the verb's cwd.
+      await symlink(seeded.remote, join(seeded.repo, "apps", "remote.git"));
+      if (opts.disk !== undefined) await put(web, MANIFEST, opts.disk);
+      return web;
+    }
+
+    /** A passing pre-flight record, written where the verb reads it, under the environment the verb runs in. */
+    async function preflightPassed(repo: string): Promise<void> {
+      const home = getRoot().path("home");
+      await mkdir(home, { recursive: true });
+      for (const [key, value] of Object.entries({ HOME: home, XDG_CONFIG_HOME: home, GIT_CONFIG_NOSYSTEM: "1" })) vi.stubEnv(key, value);
+      const place = await gitSurfaceRecordPath(repo);
+      const surface = await readRunGitSurface(repo);
+      if ("unreadable" in place || "unreadable" in surface) throw new Error("the seed's git surface could not be read");
+      await mkdir(dirname(place.path), { recursive: true });
+      await writeFile(place.path, `${JSON.stringify(surfaceRecord(surface, randomBytes(16).toString("hex"), new Date().toISOString(), false))}\n`);
+    }
+
+    it("asks at the top on what a project the default branch holds names, the top naming nothing", async () => {
+      const seeded = await seed({ files: { [`${PROJECT}/${MANIFEST}`]: NAMED } });
+      route(PROJECT_READ, onGitHub(NAMED));
+
+      expect((await run(seeded.repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reasons: [DEPLOYING], act: "pr-merge" }, notDone: [] });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("asks the same unattended at the top, on a passing pre-flight record", async () => {
+      const seeded = await seed({ mode: "unattended", files: { [`${PROJECT}/${MANIFEST}`]: NAMED } });
+      route(PROJECT_READ, onGitHub(NAMED));
+      await preflightPassed(seeded.repo);
+
+      expect((await run(seeded.repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reasons: [DEPLOYING], act: "pr-merge" }, notDone: [] });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("asks in a sibling folder on what a project the default branch holds names", async () => {
+      const seeded = await seed({ files: { [`apps/api/${MANIFEST}`]: NAMED } });
+      route(`GET repos/o/r/contents/apps/api/${MANIFEST}`, onGitHub(NAMED));
+      const web = await project(seeded, { disk: PLAIN });
+
+      expect((await run(web, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reasons: [DEPLOYING] }, notDone: [] });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("refuses a failed read of a project elsewhere, the top's reading well", async () => {
+      const seeded = await seed({ files: { [`${PROJECT}/${MANIFEST}`]: PLAIN } });
+      route(PROJECT_READ, { message: "Bad Gateway" }, 502);
+
+      expect((await run(seeded.repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["the default branch's manifest read answered HTTP 502"] });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("refuses at the top where the default branch's only setup sits below it", async () => {
+      const seeded = await seed({ manifest: null, files: { [`${PROJECT}/${MANIFEST}`]: NAMED } });
+      route(PROJECT_READ, onGitHub(NAMED));
+      await put(seeded.repo, MANIFEST, PLAIN);
+
+      expect((await run(seeded.repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: [NO_TOP] });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("refuses the same unattended, on a passing pre-flight record", async () => {
+      const seeded = await seed({ mode: "unattended", manifest: null, files: { [`${PROJECT}/${MANIFEST}`]: NAMED } });
+      route(PROJECT_READ, onGitHub(NAMED));
+      await put(seeded.repo, MANIFEST, PLAIN);
+      await preflightPassed(seeded.repo);
+
+      expect((await run(seeded.repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: [NO_TOP] });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("refuses at the top where the setup is only the run's own, on its branch and in its work tree", async () => {
+      const seeded = await seed();
+      route(TOP_READ, { message: "Not Found" }, 404);
+
+      expect((await run(seeded.repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: [NO_TOP] });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("asks on the top's default branch manifest, a folder with no manifest there starting the verb", async () => {
+      const seeded = await seed();
+      route(TOP_READ, onGitHub(NAMED));
+      const web = await project(seeded, { disk: PLAIN });
+
+      const result = await run(web, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "asks", asks: { reasons: [DEPLOYING], act: "pr-merge" }, notDone: [] });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("asks the same unattended, on a passing pre-flight record", async () => {
+      const seeded = await seed();
+      route(TOP_READ, onGitHub(NAMED));
+      const web = await project(seeded, { mode: "unattended", disk: PLAIN });
+      await preflightPassed(seeded.repo);
+
+      const result = await run(web, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "asks", asks: { reasons: [DEPLOYING], act: "pr-merge" }, notDone: [] });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("asks on the manifest the top's HEAD alone names", async () => {
+      const seeded = await seed({ manifest: NAMED });
+      route(TOP_READ, onGitHub(PLAIN));
+      const web = await project(seeded, { disk: PLAIN });
+      await writeFile(join(seeded.repo, MANIFEST), PLAIN);
+
+      expect((await run(web, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reasons: [DEPLOYING] } });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("asks on the manifest the top's work tree alone names", async () => {
+      const seeded = await seed();
+      route(TOP_READ, onGitHub(PLAIN));
+      const web = await project(seeded, { disk: PLAIN });
+      await writeFile(join(seeded.repo, MANIFEST), NAMED);
+
+      expect((await run(web, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reasons: [DEPLOYING] } });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("asks on the guard the top alone holds", async () => {
+      const seeded = await seed();
+      route(TOP_READ, onGitHub(PLAIN));
+      const web = await project(seeded, { disk: PLAIN });
+      const guard = buildPersonOnlyGuardScript({ tool: "claude", layout: "claude", autonomy: resolveAutonomy({ autonomy: { deployingBranches: ["main"] } }) });
+      await put(seeded.repo, `${CLAUDE_HOOKS_DIR}/${PERSON_ONLY_GUARD_FILE}`, guard);
+
+      expect((await run(web, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reasons: [DEPLOYING] } });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("names the key a head loosens in the top's manifest", async () => {
+      const seeded = await seed();
+      route(TOP_READ, onGitHub(PLAIN));
+      await writeFile(join(seeded.repo, MANIFEST), `${JSON.stringify({ version: 1, autonomy: { adminRuleProof: true } })}\n`);
+      const web = await project(seeded, { disk: PLAIN });
+      route("GET repos/o/r/pulls/7/files", [
+        { filename: "a.txt" },
+        { filename: MANIFEST },
+        { filename: `${RUN_DIR}/record.md` },
+        { filename: `${RUN_DIR}/ledger.jsonl` },
+        { filename: `${PROJECT}/${RUN_DIR}/record.md` },
+        { filename: `${PROJECT}/${RUN_DIR}/ledger.jsonl` },
+      ]);
+      route("GET repos/o/r/pulls/7", pull(git(seeded.repo, ["rev-parse", "HEAD"]), { changed_files: 6 }));
+
+      const result = await run(web, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "asks", asks: { reasons: [`the diff touches paths that define the evidence: ${MANIFEST}`, "the head's manifest loosens autonomy.adminRuleProof against main's"] } });
+    });
+
+    describe("a head that changes another setup's manifest", () => {
+      const OTHER = `apps/api/${MANIFEST}`;
+      const HELD = `the diff touches paths that define the evidence: ${OTHER}`;
+      const LOOSENED = "the head's manifest loosens autonomy.deployingBranches against main's";
+
+      /** `main` holding `held` at {@link OTHER}, as GitHub answers it. */
+      async function holding(held: string): Promise<Seeded> {
+        const seeded = await seed({ files: { [OTHER]: held } });
+        route(`GET repos/o/r/contents/${OTHER}`, onGitHub(held));
+        return seeded;
+      }
+
+      /** What the seed's head changed in the work tree, committed and pushed as the head, the pull request naming {@link OTHER} beside the seed's files. */
+      function asTheHead(seeded: Seeded): void {
+        git(seeded.repo, ["add", "-A"]);
+        git(seeded.repo, ["commit", "-q", "-m", "the change"]);
+        git(seeded.repo, ["push", "-q", seeded.remote, `HEAD:refs/heads/${RUN_BRANCH}`]);
+        const head = git(seeded.repo, ["rev-parse", "HEAD"]);
+        route("GET repos/o/r/pulls/7", pull(head, { changed_files: 4 }));
+        route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: OTHER }, { filename: `${RUN_DIR}/record.md` }, { filename: `${RUN_DIR}/ledger.jsonl` }]);
+        route(`GET repos/o/r/commits/${head}/check-runs`, GREEN);
+      }
+
+      it("names the key it takes out, beside the path, started at the top", async () => {
+        const seeded = await holding(NAMED);
+        await writeFile(join(seeded.repo, OTHER), PLAIN);
+        asTheHead(seeded);
+
+        expect((await run(seeded.repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reasons: [HELD, LOOSENED, DEPLOYING] }, notDone: [] });
+        expect(kinds()).not.toContain("merge");
+      });
+
+      it("names the key its deletion takes, beside the path, started at the top", async () => {
+        const seeded = await holding(NAMED);
+        await rm(join(seeded.repo, OTHER));
+        asTheHead(seeded);
+
+        expect((await run(seeded.repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reasons: [HELD, LOOSENED, DEPLOYING] }, notDone: [] });
+        expect(kinds()).not.toContain("merge");
+      });
+
+      it("names the key it takes out, started in a sibling folder", async () => {
+        const seeded = await holding(NAMED);
+        await writeFile(join(seeded.repo, OTHER), PLAIN);
+        const web = await project(seeded, { disk: PLAIN });
+        route("GET repos/o/r/pulls/7", pull(git(seeded.repo, ["rev-parse", "HEAD"]), { changed_files: 6 }));
+        route("GET repos/o/r/pulls/7/files", [
+          { filename: "a.txt" },
+          { filename: OTHER },
+          { filename: `${RUN_DIR}/record.md` },
+          { filename: `${RUN_DIR}/ledger.jsonl` },
+          { filename: `${PROJECT}/${RUN_DIR}/record.md` },
+          { filename: `${PROJECT}/${RUN_DIR}/ledger.jsonl` },
+        ]);
+
+        expect((await run(web, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reasons: [HELD, LOOSENED, DEPLOYING] }, notDone: [] });
+        expect(kinds()).not.toContain("merge");
+      });
+
+      it("names no key for a change that loosens none, as a sync's", async () => {
+        const seeded = await holding(NAMED);
+        await writeFile(join(seeded.repo, OTHER), `${JSON.stringify({ version: 1, autonomy: { deployingBranches: ["main"] }, ledger: [] })}\n`);
+        asTheHead(seeded);
+
+        expect((await run(seeded.repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reasons: [HELD, DEPLOYING] }, notDone: [] });
+      });
+    });
+
+    it("lands a project the default branch holds, where it and the top agree, reading both", async () => {
+      const seeded = await seed({ files: { [`${PROJECT}/${MANIFEST}`]: PLAIN } });
+      route(TOP_READ, onGitHub(PLAIN));
+      route(PROJECT_READ, onGitHub(PLAIN));
+      const web = await project(seeded);
+
+      expect((await run(web, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "landed", notDone: [] });
+      expect(kinds()).toEqual(expect.arrayContaining([TOP_READ, PROJECT_READ]));
+    });
+
+    it("refuses a project the default branch holds where the top holds no setup at all, which waits for a person to place one", async () => {
+      const seeded = await seed({ manifest: null, files: { [`${PROJECT}/${MANIFEST}`]: PLAIN } });
+      route(PROJECT_READ, onGitHub(PLAIN));
+      const web = await project(seeded);
+
+      expect((await run(web, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: [NO_TOP] });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("keeps the project's own setting, which tightens the top's", async () => {
+      const seeded = await seed({ files: { [`${PROJECT}/${MANIFEST}`]: NAMED } });
+      route(TOP_READ, onGitHub(PLAIN));
+      route(PROJECT_READ, onGitHub(NAMED));
+      const web = await project(seeded);
+
+      expect((await run(web, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reasons: [DEPLOYING] } });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("lets no project below the top loosen the top's setting", async () => {
+      const seeded = await seed({ manifest: NAMED, files: { [`${PROJECT}/${MANIFEST}`]: PLAIN } });
+      route(TOP_READ, onGitHub(NAMED));
+      route(PROJECT_READ, onGitHub(PLAIN));
+      const web = await project(seeded);
+
+      expect((await run(web, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", asks: { reasons: [DEPLOYING] } });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("refuses where the default branch holds no manifest for the top or the project, so the run's own files would be the whole setting", async () => {
+      const seeded = await seed({ manifest: null });
+      const web = await project(seeded, { disk: PLAIN });
+
+      const result = await run(web, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: [NO_TOP] });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("refuses a failed read of the top's manifest, the project's reading well", async () => {
+      const seeded = await seed({ files: { [`${PROJECT}/${MANIFEST}`]: PLAIN } });
+      route(TOP_READ, { message: "Bad Gateway" }, 502);
+      route(PROJECT_READ, onGitHub(PLAIN));
+      const web = await project(seeded);
+
+      expect((await run(web, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: ["the default branch's manifest read answered HTTP 502"] });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("refuses as no setup found where no leg holds a manifest, at the top or below it", async () => {
+      const seeded = await seed({ manifest: null });
+      const web = await project(seeded);
+
+      expect((await run(web, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "refused", notDone: [expect.stringMatching(/^no setup found/)] });
+    });
+  });
+
   it("takes --title, --paths, --wait past 9 and --method with --fast-forward as usage errors", async () => {
     const { repo } = await seed();
     for (const argv of [["--title", "t"], ["--paths", "a.txt"], ["--wait", "10"], ["--fast-forward", "--method", "squash"]]) {
@@ -2439,8 +2873,10 @@ describe("stamity run land", () => {
      * A fresh checkout of a run that ended: its record closed at the head, with the lines `run end` commits, and nothing
      * under the git directory, neither the pull-request record nor a pre-flight's surface record.
      */
-    async function seedJob(opts: { status?: string; lines?: string; extra?: string; morning?: string; manifest?: string; mode?: "attended" | "unattended" } = {}): Promise<Seeded> {
-      const seeded = await seed({ mode: opts.mode ?? "unattended", prRecord: false, manifest: opts.manifest ?? LAND_ON });
+    async function seedJob(
+      opts: { status?: string; lines?: string; extra?: string; morning?: string; manifest?: string; mode?: "attended" | "unattended"; files?: Record<string, string> } = {},
+    ): Promise<Seeded> {
+      const seeded = await seed({ mode: opts.mode ?? "unattended", prRecord: false, manifest: opts.manifest ?? LAND_ON, ...(opts.files === undefined ? {} : { files: opts.files }) });
       const { repo, remote } = seeded;
       const closed = (await record(repo)).replace("Status: in progress", `Status: ${opts.status ?? "closed 2026-11-04"}`);
       await put(repo, `${RUN_DIR}/record.md`, `${closed}${opts.extra ?? ""}${opts.lines ?? END_LINES}`);
@@ -2504,6 +2940,18 @@ describe("stamity run land", () => {
       // A thread a person closed is theirs to close, in the job as at the run's own land.
       gh.threads = [threadsPage([thread(true, "alice", ["User", "alice"])], BOT)];
       expect((await run(repo, LANDS)).doc).toMatchObject({ outcome: "landed" });
+    });
+
+    it("holds on a closed thread someone beside its closer wrote in: a status line, a green job, and a person merges by hand", async () => {
+      const { repo } = await seedJob();
+      gh.threads = [threadsPage([{ ...(thread(true, "bob", ["User", "alice"], ["User", "bob"]) as object), id: "T1" }], BOT)];
+
+      const result = await run(repo, LANDS);
+
+      expect(result.code).toBe(0);
+      expect(result.doc).toMatchObject({ outcome: "asks", evidence: { threads: { unresolved: 0 } } });
+      expect(writes()).toEqual([PATCHED]);
+      expect(lastBody()).toContain("merge waits on: a person decides on closed review threads");
     });
 
     it("counts a resolver GitHub names as null over a person's comment, in a job and in a session with the job off (review/119)", async () => {
@@ -3016,6 +3464,106 @@ describe("stamity run land", () => {
 
       gh.merge = { status: 503, json: { message: "Unavailable" } };
       expect((await run(repo, LANDS)).code).toBe(1);
+    });
+
+    describe("what the setting stops, in a job and out of it", () => {
+      const TOP_READ = "GET repos/o/r/contents/.stamity/manifest.json";
+      const OTHER = "apps/api/.stamity/manifest.json";
+      const OTHER_READ = `GET repos/o/r/contents/${OTHER}`;
+      const NO_TOP = "main holds no .stamity/manifest.json at the repository's top, so nothing a run cannot write binds this land: a person places one there first";
+      const JOB_OFF = "autonomy.landJob is not on in every leg of the setting, so the job does not land here";
+      const FILES_READ = "GET repos/o/r/pulls/7/files";
+      const onGitHub = (text: string): Record<string, string> => ({ content: Buffer.from(text).toString("base64"), encoding: "base64" });
+      const SESSION = ["land", "--run", RUN];
+      /** Each way in, what starts it, and the exit a stop gives there: a hold in a job, a refusal in a session. */
+      const WAYS_IN = [
+        ["a job", (files: Record<string, string>) => seedJob({ files }), LANDS, 0],
+        ["a session", (files: Record<string, string>) => seed({ manifest: LAND_ON, files }), SESSION, 1],
+      ] as [string, (files: Record<string, string>) => Promise<Seeded>, string[], number][];
+
+      it.each(WAYS_IN)("stops %s where the default branch holds no manifest at the top", async (_way, arrange, args, code) => {
+        const { repo } = await arrange({});
+        route(TOP_READ, { message: "Not Found" }, 404);
+
+        const result = await run(repo, args);
+
+        expect(result).toMatchObject({ code, doc: { outcome: "refused", notDone: [NO_TOP] } });
+        expect(kinds()).not.toContain("merge");
+      });
+
+      it("puts that stop on a job's status line", async () => {
+        const { repo } = await seedJob();
+        route(TOP_READ, { message: "Not Found" }, 404);
+
+        await run(repo, LANDS);
+
+        expect(writes()).toEqual([PATCHED]);
+        expect(lastBody()).toContain("merge waits on: main holds no .stamity/manifest.json");
+      });
+
+      it("holds a job with the key off ahead of the reads that can fail", async () => {
+        const { repo } = await seedJob();
+        route(TOP_READ, onGitHub('{"version":1}\n'));
+        route(FILES_READ, { message: "Bad gateway" }, 502);
+
+        expect(await run(repo, LANDS)).toMatchObject({ code: 0, doc: { outcome: "refused", notDone: [JOB_OFF] } });
+        expect(kinds()).not.toContain(FILES_READ);
+      });
+
+      it("leaves a session with the key off to meet that failed read, the key binding only a job", async () => {
+        const { repo } = await seed({ manifest: LAND_ON });
+        route(TOP_READ, onGitHub('{"version":1}\n'));
+        route(FILES_READ, { message: "Bad gateway" }, 502);
+
+        expect(await run(repo, SESSION)).toMatchObject({ code: 1, doc: { outcome: "refused", notDone: ["the changed files read answered HTTP 502"] } });
+      });
+
+      it.each(WAYS_IN)("stops %s on a setup elsewhere whose read GitHub answers with a failure", async (_way, arrange, args, code) => {
+        const { repo } = await arrange({ [OTHER]: LAND_ON });
+        route(OTHER_READ, { message: "Bad gateway" }, 502);
+
+        const result = await run(repo, args);
+
+        expect(result).toMatchObject({ code, doc: { outcome: "refused", notDone: ["the default branch's manifest read answered HTTP 502"] } });
+        expect(kinds()).not.toContain("merge");
+      });
+
+      it.each(WAYS_IN)("stops %s on a setup elsewhere whose read GitHub never answers", async (_way, arrange, args, code) => {
+        const { repo } = await arrange({ [OTHER]: LAND_ON });
+        gh.failing.add(OTHER_READ);
+
+        const result = await run(repo, args);
+
+        expect(result).toMatchObject({ code, doc: { outcome: "refused", notDone: [expect.stringContaining("a read failed before GitHub answered")] } });
+        expect(kinds()).not.toContain("merge");
+      });
+
+      const ELSEWHERE_JOB = '{"version":1,"autonomy":{"landJob":{"workflows":["Elsewhere"]}}}\n';
+
+      it("holds a job on a setup elsewhere that names another land job, once the list is read", async () => {
+        const { repo } = await seedJob({ files: { [OTHER]: ELSEWHERE_JOB } });
+        route(OTHER_READ, onGitHub(ELSEWHERE_JOB));
+
+        expect(await run(repo, LANDS)).toMatchObject({ code: 0, doc: { outcome: "refused", notDone: [JOB_OFF] } });
+        expect(kinds()).toContain(FILES_READ);
+        expect(kinds()).not.toContain("merge");
+      });
+
+      it("lands a session past that setup, the key binding only a job", async () => {
+        const { repo } = await seed({ manifest: LAND_ON, files: { [OTHER]: ELSEWHERE_JOB } });
+        route(OTHER_READ, onGitHub(ELSEWHERE_JOB));
+
+        expect(await run(repo, SESSION)).toMatchObject({ code: 0, doc: { outcome: "landed" } });
+      });
+
+      it.each(WAYS_IN)("asks in %s where a setup elsewhere names the default branch as deploying", async (_way, arrange, args, code) => {
+        const named = `${JSON.stringify({ version: 1, autonomy: { deployingBranches: ["main"], landJob: { workflows: ["CI"] } } })}\n`;
+        const { repo } = await arrange({ [OTHER]: named });
+        route(OTHER_READ, onGitHub(named));
+
+        expect(await run(repo, args)).toMatchObject({ code, doc: { outcome: "asks", asks: { reasons: ["main is named in autonomy.deployingBranches"] } } });
+        expect(kinds()).not.toContain("merge");
+      });
     });
 
     describe("a hold whose status line does not write (review/121)", () => {

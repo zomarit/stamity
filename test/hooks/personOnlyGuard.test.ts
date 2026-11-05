@@ -15,6 +15,7 @@
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { gitignoreLine } from "../../src/cli/commands/init/panel.ts";
 import { parseAutonomyMarker, resolveAutonomy, type ResolvedAutonomy } from "../../src/config/autonomy.ts";
@@ -750,7 +751,8 @@ describe("the branch context read from .git", () => {
     expect(decide("claude", guard, "git push origin master").deny).toBe(true);
     expect(decide("claude", guard, "git push")).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
     expect(decide("claude", guard, "git push origin HEAD").deny).toBe(true);
-    expect(decide("claude", guard, "git push origin feat/x").deny).toBe(false);
+    // TEST CHANGE, justified (REQ-FLOW-134, the orchestrator's sign-off): a push from a place the guard cannot read asks now.
+    expect(decide("claude", guard, "git push origin feat/x")).toMatchObject({ deny: true, reason: expect.stringContaining("outside-write") });
   });
 });
 
@@ -827,7 +829,8 @@ describe("the branch read where the command runs", () => {
     for (const command of ['git -C "$WT" push', "cd && git push", "cd - && git push", "git -C missing push", `git -C ${outside} push`]) {
       expect(decide("claude", guard, command), command).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
     }
-    expect(decide("claude", guard, 'git -C "$WT" push origin feat/x').deny).toBe(false);
+    // TEST CHANGE, justified (REQ-FLOW-134, the orchestrator's sign-off): a push from a place the guard cannot read asks now.
+    expect(decide("claude", guard, 'git -C "$WT" push origin feat/x')).toMatchObject({ deny: true, reason: expect.stringContaining("outside-write") });
     expect(decide("claude", guard, "git push", undefined, getRepo().path("missing")).deny).toBe(true);
   });
 });
@@ -924,6 +927,418 @@ describe("a directory read only where the shell runs a command (review/116)", ()
     for (const command of denied) expect(decide(tool, guard, command), `${tool}: ${command}`).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
     const allowed = ["npx npm@10 exec -- git -C wt-feat push", "npx npm@10 exec -- git -C wt-main push origin feat/x"];
     for (const command of allowed) expect(decide(tool, guard, command).deny, `${tool}: ${command}`).toBe(false);
+  });
+
+  it.each(TOOLS)("%s: reads a runner's git place behind a package manager's single-dash setting and its value", async (tool) => {
+    // The first three read the place past the setting's value. The fourth is a pin.
+    const guard = await placeGuard(tool, LINKED);
+    const denied = [
+      "npm -loglevel silly exec -- git -C wt-main push",
+      "pnpm -reporter silent exec git -C wt-main push",
+      "npm -cache c x -- env -C wt-main git push",
+      "npm -g exec -- git -C wt-main push",
+    ];
+    for (const command of denied) expect(decide(tool, guard, command), `${tool}: ${command}`).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+    const allowed = [
+      "npm -loglevel silly exec -- git -C wt-feat push",
+      "npm -loglevel silly exec -- git -C wt-main push origin feat/x",
+      "npm -g exec -- git -C wt-main status",
+      "npm -loglevel=silly exec -- git -C wt-main status",
+    ];
+    for (const command of allowed) expect(decide(tool, guard, command).deny, `${tool}: ${command}`).toBe(false);
+  });
+
+  it.each(TOOLS)("%s: reads a runner's git place in every reading of a package manager's options beside today's", async (tool) => {
+    // Each denied row reads the place past the manager's options, in each reading of them. The allowed rows are pins.
+    const guard = await placeGuard(tool, LINKED);
+    const denied = [
+      "yarn -s workspace w exec git -C wt-main push",
+      "yarn --silent workspace w dlx git -C wt-main push",
+      "npm --x exec x git -C wt-main push",
+      "pnpm -x dlx dlx git -C wt-main push",
+      "npm -- exec git -C wt-main push",
+    ];
+    for (const command of denied) expect(decide(tool, guard, command), `${tool}: ${command}`).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+    const allowed = [
+      "yarn -s workspace w exec git -C wt-feat push",
+      "npm --x exec x git -C wt-main status",
+      "npm -- exec git -C wt-main push origin feat/x",
+    ];
+    for (const command of allowed) expect(decide(tool, guard, command).deny, `${tool}: ${command}`).toBe(false);
+  });
+
+  it.each(TOOLS)("%s: answers a chain of package managers under the line cap quickly, refused past the readings cap", async (tool) => {
+    // A long chain answers quickly. A line at the cap is a pin.
+    // TEST CHANGE, justified (REQ-FLOW-102): the count is the guard call's, shared by its four verdict calls here (two
+    // places, then the land and run readings), and each reading draws the text it re-reads, here about 60,000 characters
+    // of tail: four readings over the four calls stay under 16 lines' worth, and one more is refused.
+    const guard = await placeGuard(tool, LINKED);
+    const chain = `${"npm -loglevel silly exec ".repeat(2_500)}git status`;
+    const atCap = `git -C wt-main status; ${"npm -loglevel silly exec ".repeat(4)}echo${" a".repeat(30_000)}`;
+    const pastCap = `git -C wt-main status; ${"npm -loglevel silly exec ".repeat(5)}echo${" a".repeat(30_000)}`;
+    for (const command of [chain, atCap, pastCap]) expect(command.length, tool).toBeLessThan(65_536);
+    for (const command of [chain, pastCap]) {
+      const start = performance.now();
+      expect(decide(tool, guard, command), tool).toMatchObject({ deny: true, reason: expect.stringContaining("could not decide this shell call (MANAGER_READINGS_OVER_16)") });
+      expect(performance.now() - start, tool).toBeLessThan(10_000);
+    }
+    const start = performance.now();
+    expect(decide(tool, guard, atCap).deny, tool).toBe(false);
+    expect(performance.now() - start, tool).toBeLessThan(10_000);
+  });
+
+  it.each(TOOLS)("%s: counts the added readings over every place a line names, refused past the cap quickly", async (tool) => {
+    // The places' added readings count together. The fixture is the root on a feature branch and 32 linked worktrees.
+    const places: Record<string, string> = { ".git/HEAD": "ref: refs/heads/feat/x\n" };
+    for (let i = 0; i < 32; i += 1) {
+      places[`w${i}/.git`] = `gitdir: ../.git/worktrees/w${i}\n`;
+      places[`.git/worktrees/w${i}/HEAD`] = i % 2 === 0 ? "ref: refs/heads/main\n" : `ref: refs/heads/feat/y${i}\n`;
+      places[`.git/worktrees/w${i}/commondir`] = "../..\n";
+    }
+    const guard = await placeGuard(tool, places);
+    const named = Array.from({ length: 32 }, (_, i) => `git -C w${i} status; `).join("");
+    const head = `${named}${"npm -loglevel silly exec ".repeat(16)}echo`;
+    const command = head + " a".repeat(Math.floor((65_000 - head.length) / 2));
+    expect(command.length, tool).toBeLessThan(65_536);
+    const start = performance.now();
+    expect(decide(tool, guard, command), tool).toMatchObject({ deny: true, reason: expect.stringContaining("could not decide this shell call (MANAGER_READINGS_OVER_16)") });
+    expect(performance.now() - start, tool).toBeLessThan(5_000);
+    // A pin: the same places with no added reading still run.
+    expect(decide(tool, guard, `${named}echo a`).deny, tool).toBe(false);
+  });
+
+  it.each(TOOLS)("%s: counts each short added reading's floor over every place a line names, refused past the cap quickly", async (tool) => {
+    // Each added reading draws at least 4,096 characters against 16 lines' worth (16 × 65,536): seven short readings run
+    // over the 34 places read (the root, the 32 worktrees, and the place past the place cap, which cannot be read) and the
+    // two unattended readings, and an eighth is refused. The fixture is the root on a feature branch and 32 linked worktrees.
+    // TEST CHANGE, justified (REQ-FLOW-102): the line is 15,000 characters where it was 65,000, since 34 places on that
+    // line is past 8 lines' worth of places times text and is now refused whole. Each reading ends at its own segment, so
+    // the floor this row counts does not depend on the line's length, and seven still run and the eighth is refused.
+    const places: Record<string, string> = { ".git/HEAD": "ref: refs/heads/feat/x\n" };
+    for (let i = 0; i < 32; i += 1) {
+      places[`w${i}/.git`] = `gitdir: ../.git/worktrees/w${i}\n`;
+      places[`.git/worktrees/w${i}/HEAD`] = i % 2 === 0 ? "ref: refs/heads/main\n" : `ref: refs/heads/feat/y${i}\n`;
+      places[`.git/worktrees/w${i}/commondir`] = "../..\n";
+    }
+    const guard = await placeGuard(tool, places);
+    const named = Array.from({ length: 32 }, (_, i) => `git -C w${i} status; `).join("");
+    const line = (calls: number): string => {
+      const head = `${named}${"pnpm -r exec tsc; ".repeat(calls)}echo`;
+      return head + " a".repeat(Math.floor((15_000 - head.length) / 2));
+    };
+    for (const calls of [1, 7, 8]) expect(line(calls).length, tool).toBeLessThan(65_536);
+    const start = performance.now();
+    for (const calls of [1, 7]) expect(decide(tool, guard, line(calls)), `${tool}: ${calls}`).toEqual({ deny: false });
+    expect(decide(tool, guard, line(8)), tool).toMatchObject({ deny: true, reason: expect.stringContaining("could not decide this shell call (MANAGER_READINGS_OVER_16)") });
+    expect(performance.now() - start, tool).toBeLessThan(10_000);
+  });
+
+  it.each(TOOLS)("%s: runs harmless lines of package manager calls with an option before a runner, a brace among them, on each shell", async (tool) => {
+    // Each added reading draws the text it re-reads, so ordinary lines of such calls stay under the cap.
+    const guard = await placeGuard(tool);
+    const bash = [
+      Array.from({ length: 12 }, () => "pnpm -r exec tsc").join(" && "),
+      `{ ${Array.from({ length: 6 }, () => "npm --silent exec tsc").join("; ")}; }`,
+      "pnpm -w exec tsc && pnpm -w exec vitest run && pnpm -w exec eslint .",
+    ];
+    for (const command of bash) expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual({ deny: false });
+    // Cursor's shell hook names no shell, so its calls are read as POSIX text only.
+    if (tool === "cursor") return;
+    // TEST CHANGE, justified: the line behind a hashtable left this list for the row below, which says why it stops.
+    const powershell = [
+      "if (Test-Path dist) { npm --silent exec tsc }",
+      "Get-ChildItem packages | ForEach-Object { pnpm -r exec tsc }",
+      Array.from({ length: 6 }, () => "pnpm -r exec tsc").join("; "),
+    ];
+    for (const command of powershell) expect(decide(tool, guard, command, undefined, undefined, "PowerShell"), `${tool}: ${command}`).toEqual({ deny: false });
+  });
+
+  // TEST CHANGE, justified: this line was pinned to run, and `acceptHiddenVerdict` (review/70) stops it. Its first word is
+  // one the shell fills in, so its program is unsettled, and a word it cannot read stands past that; the reading has no
+  // assignment exception. Both results cannot hold, so the stop wins. An over-ask, on the safe side: it costs a click where
+  // the client asks, and is refused elsewhere. The row's first point holds: the readings' cap does not reach this line.
+  it.each(TOOLS)("%s: stops a line behind a PowerShell hashtable as a line it cannot read, in every mode, not at the readings' cap", async (tool) => {
+    const guard = await placeGuard(tool);
+    const line = "$o = @{ a = 1 }; pnpm -r exec tsc";
+    // Cursor's shell hook names no shell, so the same line reads as POSIX text there, and stops under the loosen reading.
+    const powershell = tool !== "cursor";
+    const shell: Shell = powershell ? "PowerShell" : "Bash";
+    // The copy reads a PowerShell call as it stands and as its own `pwsh -Command` line; the second reading stops this one.
+    const verdict = personOnlyVerdict(powershell ? `pwsh -Command '${line}'` : line, { ...BAKED_DEFAULT, powershell });
+    expect(verdict, tool).toMatchObject({ deny: true, rule: powershell ? "learn-accept" : "autonomy-loosen", ask: true });
+    if (verdict.deny) expect(decide(tool, guard, line, undefined, undefined, shell), tool).toEqual(expectedAttended(tool, verdict));
+    const helper = JSON.stringify({ ...JSON.parse(payload(tool, line, undefined, shell)), agent_id: "a1" });
+    expect(clientDecision(tool, run(guard, helper), `${tool} helper`).deny).toBe(true);
+    // One fact away: an assignment holding no word the guard cannot read runs on the same shell, in the same place.
+    const plain = "$o = 1; pnpm -r exec tsc";
+    if (powershell) expect(decide(tool, guard, plain, undefined, undefined, shell), tool).toEqual({ deny: false });
+    await getRepo().seedFiles({ ".stamity/runs/2026-11-05_x/record.md": record("in progress", "unattended") });
+    expect(decide(tool, guard, line, undefined, undefined, shell).deny, `${tool} unattended`).toBe(true);
+    if (powershell) expect(decide(tool, guard, plain, undefined, undefined, shell), `${tool} unattended`).toEqual({ deny: false });
+  });
+
+  it.each(TOOLS)("%s: reads a runner's git place behind pnpm's workspace-root flag", async (tool) => {
+    // The flag takes no value here, so the runner's word past it is read.
+    const guard = await placeGuard(tool, LINKED);
+    const denied = ["pnpm -w exec git -C wt-main push", "pnpm -w --filter x exec git -C wt-main push"];
+    for (const command of denied) expect(decide(tool, guard, command), `${tool}: ${command}`).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+    const allowed = ["pnpm -w exec git -C wt-feat push", "pnpm -w exec git -C wt-main status", "npm -w x exec -- git -C wt-feat push"];
+    for (const command of allowed) expect(decide(tool, guard, command).deny, `${tool}: ${command}`).toBe(false);
+  });
+
+  // Past the place reader's cap the line is refused with the verdicts' coded error. Each fixture place holds a fact only
+  // that checkout knows: another repository's origin, a tag, a default branch.
+  describe("the place reader's cap of added readings", () => {
+    const ORIGIN = '[remote "origin"]\n\turl = https://github.com/acme/app.git\n';
+    const FACTS: Record<string, string> = {
+      ".git/config": ORIGIN,
+      "other/.git/HEAD": "ref: refs/heads/feat/x\n",
+      "other/.git/config": '[remote "origin"]\n\turl = https://github.com/other/repo.git\n',
+      "tagged/.git/HEAD": "ref: refs/heads/feat/x\n",
+      "tagged/.git/config": ORIGIN,
+      "tagged/.git/refs/tags/only-there": "0".repeat(40),
+      "trunk/.git/HEAD": "ref: refs/heads/feat/x\n",
+      "trunk/.git/config": ORIGIN,
+      "trunk/.git/refs/remotes/origin/HEAD": "ref: refs/remotes/origin/trunk\n",
+    };
+    const PUSHES = ["cd other && git push -u origin feat/x", "cd tagged && git push origin only-there", "cd trunk && git push origin trunk"];
+    const READING = "npm -loglevel silly exec echo a; ";
+    const CODED = { deny: true, reason: expect.stringContaining("could not decide this shell call (MANAGER_READINGS_OVER_16)") };
+    const shells = (tool: Tool): readonly Shell[] => (tool === "cursor" ? ["Bash"] : ["Bash", "PowerShell"]);
+
+    it.each(TOOLS)("%s: reads each push behind a line at the cap exactly as that push alone, on each shell", async (tool) => {
+      const guard = await placeGuard(tool, FACTS);
+      for (const shell of shells(tool)) {
+        for (const push of PUSHES) {
+          const alone = decide(tool, guard, push, undefined, undefined, shell);
+          expect(alone.deny, `${tool} ${shell}: ${push}`).toBe(true);
+          expect(decide(tool, guard, `${READING.repeat(16)}${push}`, undefined, undefined, shell), `${tool} ${shell}: ${push}`).toEqual(alone);
+        }
+      }
+    });
+
+    it.each(TOOLS)("%s: refuses each push behind a line past the cap, by any count of readings, on each shell", async (tool) => {
+      const guard = await placeGuard(tool, FACTS);
+      for (const shell of shells(tool)) {
+        for (const push of PUSHES) {
+          for (const readings of [17, 60]) {
+            expect(decide(tool, guard, `${READING.repeat(readings)}${push}`, undefined, undefined, shell), `${tool} ${shell} ${readings}: ${push}`).toMatchObject(CODED);
+          }
+        }
+      }
+    });
+
+    // Added readings that fill the place cap refuse the line. A line that reaches the cap holding none reads as it did.
+    it.each(TOOLS)("%s: refuses a push behind added readings that fill the place cap, and reads the same places with none", async (tool) => {
+      const guard = await placeGuard(tool, FACTS);
+      const filling = "npm -a b exec -c exec -d exec git -C other -C tagged -C trunk status; ".repeat(11);
+      for (const shell of shells(tool)) {
+        for (const push of PUSHES) expect(decide(tool, guard, `${filling}${push}`, undefined, undefined, shell), `${tool} ${shell}: ${push}`).toMatchObject(CODED);
+      }
+      expect(decide(tool, guard, `${"git -C tagged status; ".repeat(40)}echo a`), tool).toEqual({ deny: false });
+    });
+
+    // The place reader reads a text holding a brace with its braces as words too, apart from the first reading, so that
+    // one's places and cap stay.
+    const BEHIND = [
+      ["npm --x}", "npm", "x"],
+      ["npm -x {y", "npm", "x"],
+      ["pnpm --x {y}", "pnpm", "exec"],
+      ["yarn -x y}", "yarn", "dlx"],
+      ["bun --x=${y}", "bun", "x"],
+    ] as const;
+    const WHERE = ["git -C other push -u origin feat/x", "git -C tagged push origin only-there", "git -C trunk push origin trunk"];
+
+    it.each(TOOLS)("%s: reads a runner's git place behind a brace in a manager's options as the runner-direct line reads it, on each shell", async (tool) => {
+      const guard = await placeGuard(tool, FACTS);
+      for (const shell of shells(tool)) {
+        for (const push of WHERE) {
+          for (const [options, manager, runner] of BEHIND) {
+            const direct = decide(tool, guard, `${manager} ${runner} ${push}`, undefined, undefined, shell);
+            expect(direct.deny, `${tool} ${shell}: ${push}`).toBe(true);
+            expect(decide(tool, guard, `${options} ${runner} ${push}`, undefined, undefined, shell), `${tool} ${shell}: ${options} ${push}`).toEqual(direct);
+          }
+        }
+      }
+    });
+
+    it.each(TOOLS)("%s: reads a git place behind a brace in a wrapper's or git's own option, and in a nested line, as the brace-free line reads it, on each shell", async (tool) => {
+      const guard = await placeGuard(tool, FACTS);
+      for (const shell of shells(tool)) {
+        for (const push of WHERE) {
+          const rows = [
+            [`timeout --kill-after=} 5 ${push}`, `timeout 5 ${push}`],
+            [`sudo -u {x ${push}`, `sudo -u x ${push}`],
+            [push.replace("git ", "git -c a={b "), push.replace("git ", "git -c a=b ")],
+            [`sh -c 'npm --x} x ${push}'`, `sh -c 'npm x ${push}'`],
+            [`{ sh -c 'npm --x} x ${push}'; }`, `sh -c 'npm x ${push}'`],
+            [`cd . && npm --x} x ${push}`, `cd . && npm x ${push}`],
+          ] as const;
+          for (const [behind, plain] of rows) {
+            const alone = decide(tool, guard, plain, undefined, undefined, shell);
+            expect(alone.deny, `${tool} ${shell}: ${plain}`).toBe(true);
+            expect(decide(tool, guard, behind, undefined, undefined, shell), `${tool} ${shell}: ${behind}`).toEqual(alone);
+          }
+        }
+      }
+    });
+
+    // Pins: the second reading adds places and never moves the first one's cap, so a line that ran still runs.
+    it.each(TOOLS)("%s: runs harmless lines with a brace at each place, past the place cap by the first reading too", async (tool) => {
+      const guard = await placeGuard(tool, FACTS);
+      const rows = [
+        "npm --x} x git -C tagged status",
+        "{ git -C tagged status; }",
+        "echo {a,b}; git -C other status",
+        `git commit -m '{"a": 1}'`,
+        `${"{ git -C tagged status; }; ".repeat(40)}echo a`,
+      ];
+      for (const command of rows) expect(decide(tool, guard, command), `${tool}: ${command.slice(0, 80)}`).toEqual({ deny: false });
+    });
+
+    // A later place the first reading never saw must not go unread: its cap fails closed as the added readings' does.
+    it.each(TOOLS)("%s: refuses a line whose reading with braces as words alone passes the place cap", async (tool) => {
+      const guard = await placeGuard(tool, FACTS);
+      expect(decide(tool, guard, `npm --x} x git ${"-C tagged ".repeat(40)}status`), tool).toMatchObject(CODED);
+    });
+
+    // Brace readings share the place cap, counted by the places they name, so reading one place again is not refused for it.
+    const HELD = Object.fromEntries(Array.from({ length: 40 }, (_, at) => [`held/${at}/HEAD`, "ref: refs/heads/feat/x\n"]));
+    const behind = (place: string): string => `echo "$(timeout --kill-after=} 5 git --git-dir ${place} status)"`;
+    const held = (count: number): string => Array.from({ length: count }, (_, at) => behind(`held/${at}`)).join("; ");
+
+    it.each(TOOLS)("%s: refuses a line whose brace readings together pass the place cap, past it by the first reading too, on each shell", async (tool) => {
+      const guard = await placeGuard(tool, { ...FACTS, ...HELD });
+      for (const shell of shells(tool)) {
+        expect(decide(tool, guard, held(40), undefined, undefined, shell), `${tool} ${shell}`).toMatchObject(CODED);
+        expect(decide(tool, guard, `${"git -C tagged status; ".repeat(40)}${held(40)}`, undefined, undefined, shell), `${tool} ${shell}`).toMatchObject(CODED);
+      }
+    });
+
+    // Pins: the shared cap counts places, not readings, and a brace reading starts from the first reading's own place, so
+    // a line past the cap by the first reading alone, with a brace on it, reads as it did.
+    it.each(TOOLS)("%s: runs lines under the shared cap, a place read again, and a line past it by the first reading alone, on each shell", async (tool) => {
+      const guard = await placeGuard(tool, { ...FACTS, ...HELD });
+      const rows = [
+        held(8),
+        Array.from({ length: 40 }, () => behind("held/0")).join("; "),
+        `${Array.from({ length: 40 }, (_, at) => `git -C held/${at} status`).join("; ")}; echo {a}`,
+      ];
+      for (const shell of shells(tool)) {
+        for (const command of rows) expect(decide(tool, guard, command, undefined, undefined, shell), `${tool} ${shell}: ${command.slice(0, 80)}`).toEqual({ deny: false });
+      }
+    });
+
+    // A place named again costs nothing: each entry in the list the guard walks costs the filesystem reads of finding its
+    // repository, so the list holds a place once, however many readings name it. Counted on the guard's own process, since
+    // the verdict reads the same either way.
+    const COUNTER = [
+      'import fs from "node:fs";',
+      'import { syncBuiltinESMExports } from "node:module";',
+      "let reads = 0;",
+      'for (const name of ["statSync", "lstatSync"]) {',
+      "  const real = fs[name];",
+      "  fs[name] = (...words) => { reads += 1; return real(...words); };",
+      "}",
+      "syncBuiltinESMExports();",
+      'process.on("exit", () => fs.writeFileSync(process.env.COUNTED_READS, String(reads)));',
+    ].join("\n");
+
+    it.each(TOOLS)("%s: reads a place once, however many readings name it, on each shell", async (tool) => {
+      const guard = await placeGuard(tool, { ...FACTS, ...HELD, "counter.mjs": COUNTER });
+      const out = getRepo().path("reads.txt");
+      const env = { NODE_OPTIONS: `--import=${pathToFileURL(getRepo().path("counter.mjs")).href}`, COUNTED_READS: out };
+      const counted = (readings: number, shell: Shell): number => {
+        const line = Array.from({ length: readings }, () => behind("held/0")).join("; ");
+        expect(decide(tool, guard, line, env, undefined, shell), `${tool} ${shell}`).toEqual({ deny: false });
+        return Number(readFileSync(out, "utf8"));
+      };
+      for (const shell of shells(tool)) expect(counted(200, shell), `${tool} ${shell}`).toBe(counted(2, shell));
+    });
+
+    // Each place is a full verdict of every text, so places times text is the call's work: past 8 lines' worth the call is
+    // refused, and neither many places on a short line nor one place on a long line comes near that.
+    it.each(TOOLS)("%s: refuses many places on a long line, and runs either one alone, on each shell", async (tool) => {
+      const guard = await placeGuard(tool, { ...FACTS, ...HELD });
+      const places = (count: number): string => Array.from({ length: count }, (_, at) => `git --git-dir held/${at} status`).join("; ");
+      const text = `echo ${"a".repeat(60_000)}`;
+      for (const shell of shells(tool)) {
+        expect(decide(tool, guard, `${places(30)}; ${text}`, undefined, undefined, shell), `${tool} ${shell}`).toMatchObject(CODED);
+        for (const command of [`${places(30)}; echo a`, `${places(1)}; ${text}`]) {
+          expect(decide(tool, guard, command, undefined, undefined, shell), `${tool} ${shell}: ${command.slice(0, 80)}`).toEqual({ deny: false });
+        }
+      }
+    });
+
+    // A line past the line cap is refused as that, unread, whatever its places.
+    it("keeps the line cap's own refusal on a line past it, with places on it", async () => {
+      const guard = await placeGuard("claude", { ...FACTS, ...HELD });
+      const places = Array.from({ length: 30 }, (_, at) => `git --git-dir held/${at} status`).join("; ");
+      expect(decide("claude", guard, `${places}; echo ${"a".repeat(70_000)}`)).toMatchObject({ deny: true, reason: expect.stringContaining("too long") });
+    });
+
+    // Each level of nesting doubles the brace readings, so they draw on 8 lines' worth of text, and a line past the line
+    // cap gets none.
+    it.each(TOOLS)("%s: refuses a nested line past the brace readings' text cap, quickly, and runs one level of it", async (tool) => {
+      const guard = await placeGuard(tool, FACTS);
+      const text = `echo {a}${" a".repeat(30_000)}`;
+      const start = performance.now();
+      expect(decide(tool, guard, `sh -c 'sh -c "sh -c \\"${text}\\""'`), tool).toMatchObject(CODED);
+      expect(performance.now() - start, tool).toBeLessThan(5_000);
+      expect(decide(tool, guard, `sh -c '${text}'`), tool).toEqual({ deny: false });
+    });
+
+    it("refuses a nested line past the line cap as too long, quickly", async () => {
+      const guard = await placeGuard("claude", FACTS);
+      const start = performance.now();
+      expect(decide("claude", guard, `sh -c 'sh -c "sh -c \\"${"$(a{) ".repeat(320_000)}\\""'`)).toMatchObject({ deny: true, reason: expect.stringContaining("too long") });
+      expect(performance.now() - start).toBeLessThan(15_000);
+    });
+
+    // A push from a place the guard cannot read asks, as one to another repository, and so does a push behind a full line.
+    const OUTSIDE = { deny: true, reason: expect.stringContaining("outside-write") };
+    const BY_URL = "cd tagged && git push https://github.com/acme/app.git only-there";
+
+    it.each(TOOLS)("%s: asks about each push behind a line that fills the place cap, on each shell, and refuses it unattended", async (tool) => {
+      const guard = await placeGuard(tool, FACTS);
+      const full = "git -C tagged status; ".repeat(40);
+      for (const shell of shells(tool)) {
+        for (const push of [...PUSHES, BY_URL]) expect(decide(tool, guard, `${full}${push}`, undefined, undefined, shell).deny, `${tool} ${shell}: ${push}`).toBe(true);
+      }
+      for (const push of PUSHES) expect(decide(tool, guard, `${full}${push}`, { STAMITY_UNATTENDED: "1" }).deny, `${tool}: ${push}`).toBe(true);
+    });
+
+    it.each(TOOLS)("%s: asks about a push from a place the guard cannot read, on each shell", async (tool) => {
+      const guard = await placeGuard(tool, FACTS);
+      const rows = [
+        'git -C "$X" push -u origin feat/x',
+        'cd "$X" && git push -u origin feat/x',
+        "git -C nowhere push -u origin feat/x",
+        "cd nowhere && git push -u origin feat/x",
+        "git -C {other,} push -u origin feat/x",
+        "cd oth{er,} && git push -u origin feat/x",
+        "cd - && git push -u origin feat/x",
+        "git --git-dir=nowhere push origin feat/x",
+        "git -C nowhere push https://github.com/acme/app.git feat/x",
+      ];
+      for (const shell of shells(tool)) {
+        for (const command of rows) expect(decide(tool, guard, command, undefined, undefined, shell), `${tool} ${shell}: ${command}`).toMatchObject(OUTSIDE);
+      }
+    });
+
+    // Pins: only a push asks. A place it can read keeps its reading, and a line past the cap holding no push still runs.
+    it.each(TOOLS)("%s: runs a line holding no push from a place the guard cannot read, and a push from its own checkout", async (tool) => {
+      const guard = await placeGuard(tool, FACTS);
+      const rows = [
+        'git -C "$X" status',
+        "cd nowhere && ls",
+        "git -C nowhere log",
+        "git push origin feat/x",
+        "git -C . push origin feat/x",
+        `${"git -C tagged status; ".repeat(40)}echo a`,
+      ];
+      for (const command of rows) expect(decide(tool, guard, command), `${tool}: ${command.slice(0, 80)}`).toEqual({ deny: false });
+    });
   });
 });
 
@@ -1039,8 +1454,13 @@ describe("a place inside a line u6 reads (build/89, review/153) and a value the 
     for (const command of ["echo wt-main | xargs -I {} git -C {} push", "xargs -I{} git --git-dir {} push"]) {
       expect(decide("claude", guard, command), command).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
     }
-    expect(decide("claude", guard, "xargs -I {} git -C wt-feat push").deny).toBe(false);
-    expect(decide("claude", guard, "echo wt-main | xargs -I {} git -C {} push origin feat/x").deny).toBe(false);
+    // TEST CHANGE, justified (REQ-FLOW-102): a git call under xargs now reads as holding a word the line cannot show, so
+    // this push asks whatever its place. A shown place alone still reads as one.
+    expect(decide("claude", guard, "xargs -I {} git -C wt-feat push")).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+    expect(decide("claude", guard, "git -C wt-feat push").deny).toBe(false);
+    // TEST CHANGE, justified (REQ-FLOW-134, the orchestrator's sign-off): a push from a place the guard cannot read asks now.
+    // TEST CHANGE, justified (REQ-FLOW-102): under xargs the push itself asks first, so it is the act named.
+    expect(decide("claude", guard, "echo wt-main | xargs -I {} git -C {} push origin feat/x")).toMatchObject({ deny: true, ask: true, reason: expect.stringContaining("push-default") });
   });
 
   it("reads a PowerShell here-string as a literal, so a feature branch's push after one stays allowed", async () => {
@@ -1088,6 +1508,58 @@ describe("a place inside a line u6 reads (build/89, review/153) and a value the 
       // The guard splits a brace as an operator, so u6's two brace keywords never reach it as words.
       expect([...(guard.KEYWORDS as Set<string>)], tool).toEqual([...(u6.KEYWORDS as Set<string>)].filter((word) => word !== "{" && word !== "}"));
       expect(String(guard.ASSIGNMENT), tool).toBe(String(u6.ASSIGNMENT));
+    }
+  });
+
+  it("skips a package manager's options before its subcommand by one rule in u6 and in the guard", () => {
+    // Each copy is evaluated with its tables and run on one table of lines, every index each reading lands on; the two u6
+    // copies are one text (personOnly.test.ts).
+    type Skip = (name: string, words: readonly (string | null)[], from: number) => number[];
+    const ruleOf = (source: string, from: string, to: string): Skip => {
+      const start = source.indexOf(from);
+      const end = source.indexOf(to, start);
+      expect(start, from).toBeGreaterThan(-1);
+      expect(end, to).toBeGreaterThan(start);
+      return new Function(`${source.slice(start, end)}\nreturn managerSubs;`)() as Skip;
+    };
+    const u6 = ruleOf(personOnlyVerdict.toString(), "const ASSIGNMENT", "function programName");
+    const lines: readonly (readonly (string | null)[])[] = [
+      ["npm", "-loglevel", "silly", "exec", "git"],
+      ["npm", "--loglevel", "silly", "exec", "git"],
+      ["npm", "-loglevel=silly", "exec", "git"],
+      ["npm", "-g", "exec", "git"],
+      ["npm", "-g", "publish", "exec", "git"],
+      ["npm", "-g", "--", "exec", "git"],
+      ["npm", "-w", "x", "-cache", "c", "x", "git"],
+      ["pnpm", "-reporter", "silent", "dlx", "git"],
+      ["yarn", "workspace", "x", "-v", "exec", "git"],
+      ["bun", "-loglevel", "silly"],
+      ["git", "-C", "x", "push"],
+      ["npm", "-loglevel", null, "exec", "git"],
+      ["yarn", "-s", "workspace", "x", "exec", "git"],
+      ["yarn", "--silent", "workspace", "x", "dlx", "git"],
+      ["npm", "--x", "exec", "exec", "git"],
+      ["pnpm", "-r", "--", "exec", "git"],
+      ["bun", "-a", "v", "-b", "w", "x", "git"],
+      ["pnpm", "-w", "exec", "git"],
+      ["npm", "-w", "exec", "git"],
+    ];
+    // The rule activated: today's index first (a single-dash word read as a flag), then each other one, in order.
+    // pnpm's `-w` is a flag, its value-taking reading kept beside it; npm's `-w` takes its value alone.
+    expect(u6("pnpm", lines[17] ?? [], 1)).toEqual([2, 3]);
+    expect(u6("npm", lines[18] ?? [], 1)).toEqual([3]);
+    expect(u6("npm", lines[0] ?? [], 1)).toEqual([2, 3]);
+    expect(u6("npm", lines[3] ?? [], 1)).toEqual([2, 3]);
+    expect(u6("yarn", lines[12] ?? [], 1)).toEqual([4, 3]);
+    expect(u6("npm", lines[14] ?? [], 1)).toEqual([2, 3]);
+    expect(u6("pnpm", lines[15] ?? [], 1)).toEqual([2, 3]);
+    expect(u6("git", lines[10] ?? [], 1)).toEqual([1]);
+    for (const tool of TOOLS) {
+      const content = planCoreHookScripts(POLICY, tool, { ...CLI_PIN, personOnlyGuard: true }).at(-1)?.content ?? "";
+      const guard = ruleOf(content, "const RUNNER = ", "function placesOf");
+      for (const words of lines) {
+        expect(guard(words[0] ?? "", words, 1), `${tool}: ${words.join(" ")}`).toEqual(u6(words[0] ?? "", words, 1));
+      }
     }
   });
 });
@@ -2084,6 +2556,19 @@ describe("the guard's reading of the land verb's job mode (REQ-FLOW-157)", () =>
     expect(decide(tool, guard, 'stamity run land "$MODE" --pr 7').deny).toBe(true);
     await getRepo().seedFiles({ ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") });
     for (const command of lines) expect(decide(tool, guard, command), `${tool} unattended: ${command}`).toEqual(refused);
+  });
+
+  // A word the shell completes may be the verb's, so the line's shape reads these lines too.
+  it.each(TOOLS)("%s: refuses a line whose verb word the shell completes, in every mode", async (tool) => {
+    const guard = await placeGuard(tool);
+    const completed = ["stamity run la?d --job --pr 7", "npx --no stamity run l*d --job", "stamity r?n land --job", "stamity run la?d --run x --approved abc"];
+    for (const command of completed) {
+      expect(decide(tool, guard, command).deny, `${tool}: ${command}`).toBe(true);
+      const helper = JSON.stringify({ ...JSON.parse(payload(tool, command)), agent_id: "a1" });
+      expect(clientDecision(tool, run(guard, helper), `${tool} helper: ${command}`).deny, `${tool} helper: ${command}`).toBe(true);
+    }
+    await getRepo().seedFiles({ ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") });
+    for (const command of completed) expect(decide(tool, guard, command).deny, `${tool} unattended: ${command}`).toBe(true);
   });
 });
 

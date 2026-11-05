@@ -125,7 +125,7 @@ const GRANTABLE_LOOKUP: ReadonlySet<string> = new Set<string>(GRANTABLE_TOOL_CAT
 const NEVER_DERIVABLE_LOOKUP: ReadonlySet<string> = NEVER_DERIVABLE_CATEGORIES;
 
 /** The categories a pack agent may actually be granted, as a message list. */
-const DERIVABLE_CATEGORIES: readonly GrantableToolCategory[] = GRANTABLE_TOOL_CATEGORIES.filter(
+export const DERIVABLE_CATEGORIES: readonly GrantableToolCategory[] = GRANTABLE_TOOL_CATEGORIES.filter(
   (category) => !NEVER_DERIVABLE_LOOKUP.has(category),
 );
 

@@ -11,6 +11,7 @@ import {
   HEAD_BYTES,
   MAX_LEARNING_FILE_BYTES,
   MAX_LEARNING_SUMMARY_LENGTH,
+  readNotation,
   REVIEW_WARNING_DAYS,
 } from "../learnings/validation.ts";
 import { READ_ONLY_GIT_SUBCOMMANDS } from "../roster/agentPolicies.ts";
@@ -47,6 +48,7 @@ import {
   REPORT_READ_MAX_BYTES,
   RUN_ID_PATTERN,
   RUNS_SEGMENTS,
+  UNICODE_TAG_CHARS,
   UNPRINTABLE_CHARS,
   USAGE_REVIEW_PATTERN,
 } from "../runs/layout.ts";
@@ -356,7 +358,27 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // Moved again 2026-11-05 on plan 023's pull-request review, by the measured size plus a small margin: 301,570 bytes /
   // 6,344 lines (copilot, generated), past the lines row, because the accept reading now leaves out what an option of
   // `learn` plainly takes. 6,344 + 96 = 6,440 lines; the bytes row (303,104) holds.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 303_104, lines: 6_440 },
+  // Moved again 2026-11-04 (REQ-FLOW-102, REQ-FLOW-120), by the measured size plus a small margin: 310,498 bytes / 6,497
+  // lines (copilot, generated), past both rows, because both verdicts and the place reader now read every reading of a
+  // package manager's options beside today's, capped per call. 310,498 + 4,894 = 315,392 bytes; 6,497 + 100 = 6,597 lines.
+  // Moved again 2026-11-04 (REQ-FLOW-102), by the measured size plus a small margin: 320,397 bytes (copilot, generated;
+  // 6,609 lines at the first of the round's commits), past both rows, because the verdict now reads more of a ref's
+  // routes. 320,397 + 3,187 = 323,584 bytes; 6,609 + 111 = 6,720 lines, which the round's later reads stay under.
+  // Moved again 2026-11-05 on rebasing onto 04966e3a, by what was measured: 322,471 bytes / 6,724 lines (copilot,
+  // generated), past the lines row, because main added 4 lines to the guard since the row was measured. 6,720 + 4 = 6,724
+  // lines; the bytes row holds.
+  // Moved again 2026-11-05 (REQ-FLOW-102, the maintainer's sign-off), by what was measured: 323,522 bytes / 6,734 lines
+  // (copilot, generated), past the lines row, because both verdicts now read whether a line settles a git call's
+  // subcommand, in place of the re-read. 6,724 + 10 = 6,734 lines; the bytes row holds.
+  // Moved again 2026-11-05 (REQ-FLOW-102), by what was measured: 325,941 bytes / 6,764 lines (copilot, generated), past
+  // both rows, because both verdicts now read more of what settles a wrapper's program and a git call's subcommand.
+  // 323,584 + 2,357 = 325,941 bytes; 6,734 + 30 = 6,764 lines.
+  // Moved again 2026-11-05 on combining the release tree, by what was measured: 330,110 bytes / 6,826 lines (copilot,
+  // generated), past both rows, because the land verb's reading and the readings above now stand in one guard.
+  // 325,941 + 4,169 = 330,110 bytes; 6,764 + 62 = 6,826 lines.
+  // Moved again 2026-11-05 on merging main, by what was measured: 331,435 bytes / 6,863 lines (copilot, generated), past
+  // both rows, because main's guard lines now stand beside them. 330,110 + 1,325 = 331,435 bytes; 6,826 + 37 = 6,863 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 331_435, lines: 6_863 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -946,6 +968,7 @@ ${CLOUD_SESSIONS.map((session) => `  ${json(session)},`).join("\n")}
 ${MATCH_SESSIONS_SOURCE}
 const INVISIBLE = new RegExp(${json(INVISIBLE_SMUGGLING_CHARS.source)}, "g");
 const UNPRINTABLE = new RegExp(${json(UNPRINTABLE_CHARS.source)}, ${json(UNPRINTABLE_CHARS.flags)});
+const TAG_CHARS = new RegExp(${json(UNICODE_TAG_CHARS.source)}, ${json(UNICODE_TAG_CHARS.flags)});
 const LEARNING_FIELDS = ${json(LEARNING_PRINTED_FIELDS)};
 const HANDOFF_FIELDS = ${json(HANDOFF_PRINTED_FIELDS)};
 const SCREEN = [
@@ -1002,10 +1025,14 @@ function inspect(dir, name, maxBytes, coversSummary, fields) {
   if (parsed === null) return { ...doc, skip: "invalid-frontmatter" };
   // The raw screen above read each escape as its literal characters; the parser
   // decoded them. Each printed field is screened as decoded and as \`text\` prints
-  // it, field by field, as \`learn read\` screens them.
+  // it, field by field, as \`learn read\` screens them, and again with the escape
+  // notation no parser decodes read as what it names.
   for (const field of fields) {
     const value = parsed.head[field];
-    if (typeof value === "string" && (screened(value) || screened(text(value, "")))) {
+    if (typeof value !== "string") continue;
+    const read = readNotation(value);
+    const flat = value.replace(/[\\u0000-\\u001f\\u007f]+/g, " ").replace(/\\s+/g, " ").trim();
+    if ([value, flat, text(value, ""), read, text(read, "")].some(screened)) {
       return { ...doc, skip: "injection-detected" };
     }
   }
@@ -1170,13 +1197,29 @@ function integrityHolds(declared, covered) {
   );
 }
 
+// The escape notation reader, as its source text (src/learnings/validation.ts in the engine that wrote this file).
+${readNotation.toString()}
+
+/**
+ * Text with nothing a terminal would run or hide, as \`printableText\` in the
+ * engine's learnings gate gives it: C0 controls and DEL to spaces, the rest of
+ * the unprintable set, the tag block and the invisible class dropped.
+ */
+function printable(value) {
+  return value
+    .replace(UNPRINTABLE, (char) => (char < " " || char === "\\u007f" ? " " : ""))
+    .replace(TAG_CHARS, "")
+    .replace(INVISIBLE, "");
+}
+
 /**
  * One field as a single index-safe line: control characters and newlines
- * collapse, so a forged summary cannot manufacture index lines of its own.
+ * collapse, so a forged summary cannot manufacture index lines of its own, and
+ * a printed field carries no mark the reader cannot see.
  */
 function text(value, fallback) {
   if (typeof value !== "string") return fallback;
-  const flat = value.replace(/[\\u0000-\\u001f\\u007f]+/g, " ").replace(/\\s+/g, " ").trim();
+  const flat = printable(value).replace(/\\s+/g, " ").trim();
   if (flat === "") return fallback;
   return flat.length > MAX_FIELD_CHARS ? flat.slice(0, MAX_FIELD_CHARS - 1) + "…" : flat;
 }
@@ -1315,9 +1358,7 @@ function nameId(doc) {
  * stem included, prints as a placeholder naming the pattern ids, never the name.
  */
 function printedName(name) {
-  const shown = name
-    .replace(UNPRINTABLE, (char) => (char < " " || char === "\\u007f" ? " " : ""))
-    .replace(INVISIBLE, "");
+  const shown = printable(name);
   const copies = [name, stem(name), text(shown, ""), text(stem(shown), "")];
   const ids = [...new Set(copies.flatMap(screenIds))].sort();
   if (ids.length === 0) return shown;
@@ -4740,8 +4781,8 @@ function present(path) {
   }
 }
 
-/** A line's words (a null where a command can follow), the lines they run, and its heredocs' bodies. */
-function shellWords(command) {
+/** A line's words (a null where a command can follow), the lines they run, and its heredocs' bodies; with braces, a brace is a word's. */
+function shellWords(command, braces = false) {
   const words = [];
   const nested = [];
   const docs = [];
@@ -4821,7 +4862,7 @@ function shellWords(command) {
         while (/[<>&|]/.test(command[k + 1] ?? "")) k += 1;
         drop = true;
       }
-    } else if (/[\s;&|(){}\`]/.test(c)) {
+    } else if ((braces ? /[\s;&|()\`]/ : /[\s;&|(){}\`]/).test(c)) {
       end();
       if (c === "\n" || c === "\r" || !/\s/.test(c)) {
         drop = false;
@@ -4845,7 +4886,7 @@ const WRAPPERS = new Map([
   ["timeout", ["sk", "--signal --kill-after"]],
   ["stdbuf", ["ioe", "--input --output --error"]],
   ["time", ["fo", "--format --output"]],
-  ["xargs", ["ILnPsdEa", "--max-args --max-procs --max-chars --delimiter --arg-file --process-slot-var"]],
+  ["xargs", ["ILnPsdEaJ", "--max-args --max-procs --max-chars --delimiter --arg-file --process-slot-var"]],
   ["command", []],
   ["builtin", []],
   ["nohup", []],
@@ -4862,10 +4903,45 @@ const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
 const POWERSHELLS = new Set(["pwsh", "powershell", "invoke-expression", "iex"]);
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
+/** Where a package manager's subcommand may stand, its options from from skipped: u6's managerSubs, the same rule. */
+function managerSubs(name, words, from) {
+  let sub = from;
+  while (MANAGERS.has(name) && typeof words[sub] === "string") {
+    const option = words[sub] ?? "";
+    const next = words[sub + 1] ?? "-";
+    if ((MANAGER_VALUED.has(option) && !(name === "pnpm" && option === "-w")) || (name === "yarn" && option === "workspace")) sub += 2;
+    else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(name + " " + next)) sub += 2;
+    else if (option.startsWith("-") && option !== "--") sub += 1;
+    else break;
+  }
+  const found = new Set([sub]);
+  const reached = new Set([from]);
+  let last = MANAGERS.has(name) ? from : -1;
+  for (let at = from; at <= last; at += 1) {
+    if (!reached.has(at)) continue;
+    const option = words[at];
+    const next = words[at + 1];
+    const step = (to) => {
+      reached.add(to);
+      last = Math.max(last, to);
+    };
+    if (typeof option !== "string") found.add(at);
+    else if (MANAGER_VALUED.has(option) || (name === "yarn" && option === "workspace")) {
+      step(at + 2);
+      if (name === "pnpm" && option === "-w") step(at + 1);
+    } else if (option === "--") found.add(at).add(at + 1);
+    else if (option.startsWith("-")) {
+      step(at + 1);
+      if (/^(?:--[^=]+|-[^-=][^=]*)$/.test(option) && typeof next === "string" && !next.startsWith("-")) step(at + 2);
+    } else found.add(at);
+  }
+  return [...found];
+}
+
 /** Where a shell call's git runs: its working directory and each place a command on the line moves it to. */
 function placesOf(command, cwd) {
-  const places = [{ work: cwd }];
-  const bases = [cwd];
+  let places = [{ work: cwd }];
+  let bases = [cwd];
   const full = () => places.length > PLACES_MAX || bases.length > PLACES_MAX;
   const has = (list, option) => list.split(" ").includes(option);
   const move = (path) => {
@@ -4879,8 +4955,20 @@ function placesOf(command, cwd) {
     if (typeof path !== "string") places.push(null);
     else for (const base of bases) places.push({ git: resolve(base, path) });
   };
-  const scan = (line, depth) => {
-    const { words, nested, docs } = shellWords(line);
+  // The added readings of a package manager's options u6 finds, 16 at most here (u6 weighs its own by the text each
+  // re-reads). Past that cap, or at the place cap on a line that has any (each re-reads its tail's places), a place the
+  // line names later would go unread and a push from it judged nowhere, so the call is refused with u6's coded error.
+  const READINGS_MAX = 16;
+  let readings = 0;
+  const overRead = () => Object.assign(new Error("readings"), { code: "MANAGER_READINGS_OVER_" + READINGS_MAX });
+  // Each text holding a brace, with the directories it starts from: read again below with its braces as words, as u6
+  // reads it, since a word a brace cuts here can hide the program whose place that reading finds.
+  const braced = [];
+  // With pick, an added reading: from word from, that manager's subcommand at pick, to its segment's end. It returns
+  // whether a shell runs, so a heredoc's body is read where that reading's shell reads it.
+  const scan = (line, depth, from = 0, pick = undefined, braces = false) => {
+    const { words, nested, docs } = shellWords(line, braces);
+    if (!braces && pick === undefined && /[{}]/.test(line)) braced.push([line, depth, [...bases]]);
     const inner = (text) => {
       if (depth < 4 && typeof text === "string") scan(text, depth + 1);
     };
@@ -4890,8 +4978,9 @@ function placesOf(command, cwd) {
       return tail;
     };
     let shell = false;
-    for (let k = 0, at = true; k < words.length && !full(); k += 1) {
+    for (let k = from, at = true; k < words.length && !full(); k += 1) {
       const word = words[k];
+      if (word === null && pick !== undefined) break;
       if (word === null) at = true;
       if (word === null || !at) continue;
       if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
@@ -4902,15 +4991,15 @@ function placesOf(command, cwd) {
       if (/\s/.test(word) && !/^@\s/.test(word)) inner(rest(k).join(" "));
       const name = programName(word);
       const assigned = /^\$env:git_dir(=.*)?$/i.exec(word);
-      // A package manager's options before a runner's subcommand (npm -w x exec), skipped as u6 skips them.
-      let sub = k + 1;
-      while (MANAGERS.has(name) && typeof words[sub] === "string") {
-        const option = words[sub];
-        const next = typeof words[sub + 1] === "string" ? words[sub + 1] : "-";
-        if (MANAGER_VALUED.has(option) || (name === "yarn" && option === "workspace")) sub += 2;
-        else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(name + " " + next)) sub += 2;
-        else if (option.startsWith("-") && option !== "--") sub += 1;
-        else break;
+      // A package manager's options before a runner's subcommand (npm -w x exec, npm -loglevel silly exec), skipped as
+      // u6 skips them: today's reading here, and each other reading that lands on a runner read from this word too.
+      const subs = managerSubs(name, words, k + 1);
+      const sub = k === from && pick !== undefined ? pick : subs[0];
+      for (const other of k === from && pick !== undefined ? [] : subs.slice(1)) {
+        if (!RUNNERS.has(name + " " + words[other])) continue;
+        readings += 1;
+        if (readings > READINGS_MAX) throw overRead();
+        if (scan(line, depth, k, other, braces)) shell = true;
       }
       if (assigned !== null) {
         const value = assigned[1] ?? (/^=/.test(words[k + 1] ?? "") ? words[(k += 1)] : undefined);
@@ -4982,12 +5071,33 @@ function placesOf(command, cwd) {
       if (SHELLS.has(name) || POWERSHELLS.has(name)) shell = true;
       for (const text of linesOf(name, rest(k + 1))) inner(text);
     }
+    if (pick !== undefined) return shell;
     for (const text of nested) inner(text);
     if (shell) for (const text of docs) inner(text);
+    return shell;
   };
   scan(command, 0);
-  if (full()) places.push(null);
-  return places;
+  const over = full();
+  if (over && readings > 0) throw overRead();
+  if (over) places.push(null);
+  // Each brace reading keeps its own list and starts where the first did, so the first's places and cap stay as read and
+  // a line read alike stops alike; past that list's cap it fails closed where the first had not filled its own, or the
+  // line holds an added reading. Each nesting level doubles these readings, so past 8 lines' worth of text the call is
+  // refused, and a line past the line cap gets none: u6 refuses it unread. A place costs its repository's reads and a full
+  // verdict of the line, so the call holds each once, under the cap.
+  const all = new Map(places.map((place) => [JSON.stringify(place), place]));
+  const most = Math.max(all.size, PLACES_MAX);
+  let spent = 0;
+  for (const [line, depth, from] of command.length > 65536 ? [] : braced) {
+    spent += line.length + 16;
+    if (spent > 8 * 65536) throw overRead();
+    places = [{ work: cwd }];
+    bases = from;
+    scan(line, depth, 0, undefined, true);
+    if (full() && (!over || readings > 0)) throw overRead();
+    for (const place of places) if (all.set(JSON.stringify(place), place).size > most) throw overRead();
+  }
+  return [...all.values()];
 }
 
 /**
@@ -5276,8 +5386,9 @@ function contextsOf(command, cwd, powershell, root) {
         const entry = branch === ".invalid" ? {} : (merged.branches.get(branch) ?? {});
         return entry.pushremote ?? merged.pushDefault ?? entry.remote ?? "origin";
       },
-      // A place the guard cannot read counts as the session's own, so a push to origin from it runs, as before; only a
-      // readable other checkout has its origin compared (review/130).
+      // A place the guard cannot read shows no repository, so a push from it asks; a readable other checkout has its
+      // origin compared (review/130).
+      placeUnread: dirs === null,
       // Where a push to origin goes, where its push URL is not its fetch URL (a pushurl or a pushInsteadOf, review/129).
       get originPush() {
         const own = rootOf();
@@ -5491,7 +5602,15 @@ function decide() {
   const found = [];
   // The acts the baked setting runs unasked (REQ-FLOW-137), from every place and reading.
   const ran = new Set();
-  for (const ctx of contextsOf(command, cwd, pwsh, root)) {
+  // One count of package managers' added readings for the whole call, over every place, text and verdict, so the cap
+  // bounds the call's work, not one verdict's: past it the verdict throws its coded error and the call is refused.
+  const readings = { used: 0 };
+  const contexts = contextsOf(command, cwd, pwsh, root);
+  // A place is a full verdict of each text: past 8 lines' worth the call is refused, not left to a timeout.
+  if (command.length <= 65536 && contexts.length * texts.join("").length > 8 * 65536) throw Object.assign(new Error("readings"), { code: "MANAGER_READINGS_OVER_16" });
+  for (const ctx of contexts) {
+    // Set, not spread: the context's getters read git only when the verdict asks.
+    ctx.readings = readings;
     for (const text of texts) {
       const always = personOnlyVerdict(text, ctx);
       if (always.deny) found.push(always);
@@ -5501,12 +5620,12 @@ function decide() {
   const refused = found.find((verdict) => !verdict.ask);
   if (refused !== undefined) return { ask: false, reason: refuseSentence(refused.act, refused.rule) };
   // The land verb alone on its line in every mode, read over the parsed program words (REQ-FLOW-121): no mode read.
-  const land = unattendedPushVerdict(command, pwsh, true, PACKAGE);
+  const land = unattendedPushVerdict(command, pwsh, true, PACKAGE, readings);
   if (land.deny) return { ask: false, reason: land.reason };
   // The mode is read for every ask and for a call the unattended rule would refuse, so an unreadable record refuses
   // those and no other call.
   const run = () => {
-    const verdict = unattendedPushVerdict(command, pwsh, false, PACKAGE);
+    const verdict = unattendedPushVerdict(command, pwsh, false, PACKAGE, readings);
     return verdict.deny ? verdict : undefined;
   };
   if (found.length > 0) {

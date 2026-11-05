@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { dirname, join, posix, relative as pathRelative, resolve, sep } from "node:path";
 import { parseJsonStrict } from "../config/parse.ts";
@@ -17,14 +18,13 @@ import {
 import { readHookDefinitions, type ReadHooksResult } from "../hooks/userHooks.ts";
 import { assertNoCuratedCollision, type PackSuppliedServer } from "../mcp/catalog.ts";
 import { toSuppliedServer, withOwnServers } from "../mcp/ownServers.ts";
-import { grantableFootprint } from "../roster/agentGrants.ts";
+import { DERIVABLE_CATEGORIES, grantableFootprint } from "../roster/agentGrants.ts";
 import { CONTENT_CLASSES } from "../types/content.ts";
 import { EngineError } from "../types/errors.ts";
-import { PACK_OWNER_PREFIX, isPackOwner, type SetupManifest } from "../types/manifest.ts";
+import { PACK_OWNER_PREFIX, isPackOwner, type LedgerEntry, type SetupManifest } from "../types/manifest.ts";
 import { CONTENT_PREFIX } from "../types/markers.ts";
 import {
   PACK_CONTENT_CLASSES,
-  PACK_SOURCE_KINDS,
   validatePackMcpServer,
   type PackContentClass,
 } from "./manifest.ts";
@@ -32,9 +32,10 @@ import {
   evaluatePackSource,
   loadOrgPolicy,
   ORG_POLICY_REL_PATH,
+  UNPROVEN_SOURCE_KIND,
   type EvaluatedSourceKind,
 } from "./orgPolicy.ts";
-import { packDirRelPath, RECEIPT_FILE } from "./receipt.ts";
+import { packDirRelPath, receiptRelPath, recordedSourceKind } from "./receipt.ts";
 
 /**
  * Installed-pack projection: the read half of the live-emission invariant.
@@ -123,8 +124,9 @@ export interface InstalledPack {
    * persisted: `pack.json` is not part of the install write set, so the
    * receipt is the only record of what the operator accepted. Empty for a pack
    * that disclosed nothing, for a receipt written before the field existed,
-   * and for any receipt that cannot be read — deny-by-default in all three,
-   * because a footprint that fails open is not a ceiling.
+   * and for any receipt that cannot be read or no longer matches its ledger
+   * row — deny-by-default in all of them, because a footprint that fails open
+   * is not a ceiling.
    */
   declaredTools: readonly string[];
 }
@@ -205,16 +207,11 @@ export async function discoverInstalledPacksWithPolicy(
   rootDir: string,
   manifest: SetupManifest,
 ): Promise<InstalledPackDiscovery> {
-  const rowsByPack = new Map<string, string[]>();
-  for (const entry of manifest.ledger) {
-    if (!isPackOwner(entry.adapter)) continue;
-    const id = entry.adapter.slice(PACK_OWNER_PREFIX.length);
-    rowsByPack.set(id, [...(rowsByPack.get(id) ?? []), entry.artifactId]);
-  }
+  const rowsByPack = packRowsById(manifest);
   // Read once for the whole discovery: a malformed policy fail-closes here
   // exactly as it does at install, and a repo with none pays one ENOENT.
   const policy =
-    rowsByPack.size === 0 || policyDenialSetAside.getStore() === true ? null : await loadOrgPolicy(rootDir);
+    rowsByPack.size === 0 || policyDenialSetAside.getStore() !== undefined ? null : await loadOrgPolicy(rootDir);
 
   const packs: InstalledPack[] = [];
   const denied: { id: string; matchedRule?: string }[] = [];
@@ -223,13 +220,17 @@ export async function discoverInstalledPacksWithPolicy(
     // before it can be joined into a path.
     const relDir = packDirRelPath(id);
     const root = join(rootDir, ...relDir.split("/"));
-    const classesPresent = classesOf(id, rowsByPack.get(id) ?? []);
+    const rows = rowsByPack.get(id) ?? [];
+    const classesPresent = classesOf(
+      id,
+      rows.map((row) => row.artifactId),
+    );
     // The receipt carries both the footprint that bounds this pack's agent
     // grants and the source kind the policy judges it by. One read answers
     // both; a pack that ships no agents and faces no policy costs none.
     const provenance =
       policy !== null || classesPresent.includes("agents")
-        ? await readRecordedProvenance(root)
+        ? await readRecordedProvenance(rootDir, id, rows)
         : { declaredTools: [], sourceKind: "unknown" as const };
 
     const decision = evaluatePackSource(policy, id, provenance.sourceKind);
@@ -255,11 +256,31 @@ export async function discoverInstalledPacksWithPolicy(
   return { packs, denied };
 }
 
+/** The ledger's pack-owned rows, by pack id. */
+function packRowsById(manifest: SetupManifest): Map<string, LedgerEntry[]> {
+  const rowsByPack = new Map<string, LedgerEntry[]>();
+  for (const entry of manifest.ledger) {
+    if (!isPackOwner(entry.adapter)) continue;
+    const id = entry.adapter.slice(PACK_OWNER_PREFIX.length);
+    rowsByPack.set(id, [...(rowsByPack.get(id) ?? []), entry]);
+  }
+  return rowsByPack;
+}
+
 /** One operator-readable line per pack the policy removed from the projection. */
 export function describeDeniedPacks(
   denied: readonly { id: string; matchedRule?: string }[],
 ): string[] {
   return denied.map((pack) => {
+    if (pack.matchedRule === UNPROVEN_SOURCE_KIND) {
+      return (
+        `Installed pack "${pack.id}" is refused because its source kind could not be proven: ` +
+        `${ORG_POLICY_REL_PATH} holds a source-kind rule, and the pack's receipt is missing, ` +
+        `unreadable, or no longer the bytes its ledger row records. None of its content was ` +
+        `projected into this setup. Its files are still on disk — restore the receipt, or run ` +
+        `\`clean --pack ${pack.id}\` and add the pack again.`
+      );
+    }
     const rule =
       pack.matchedRule === undefined ? "" : ` (matched rule: ${JSON.stringify(pack.matchedRule)})`;
     return (
@@ -270,60 +291,116 @@ export function describeDeniedPacks(
   });
 }
 
+/** A pack's parsed install receipt, or why it was not read. */
+export type VerifiedReceipt =
+  | { readonly ok: true; readonly receipt: unknown }
+  | { readonly ok: false; readonly reason: string };
+
 /**
- * What the receipt at `packRoot` records about this install: the tool footprint
- * (narrowed to grantable categories) and the source kind it came from.
+ * `packId`'s install receipt, parsed only when its bytes are the ones its own
+ * ledger row recorded: an edited receipt could otherwise name any source or
+ * any file hash. `rows` are pack-owned rows; one with no recorded hash matches
+ * nothing.
+ *
+ * The bytes match raw, or with every `\r\n` read as `\n`: the ledger holds the
+ * hash of the LF text the engine wrote, and a line-ending setting on a checkout
+ * is not an edit (`../merge/reclaim.ts::matchesRecordedHash`). Any other
+ * difference fails.
+ */
+export async function readVerifiedReceipt(
+  root: string,
+  packId: string,
+  rows: readonly LedgerEntry[],
+): Promise<VerifiedReceipt> {
+  let rel: string;
+  try {
+    rel = receiptRelPath(packId);
+  } catch {
+    return { ok: false, reason: "its id names no receipt path" };
+  }
+  const row = rows.find((entry) => entry.path === rel);
+  if (row === undefined) return { ok: false, reason: "no ledger row records its receipt" };
+  let bytes: Buffer;
+  try {
+    bytes = await readFile(join(root, ...rel.split("/")));
+  } catch {
+    return { ok: false, reason: "its receipt cannot be read" };
+  }
+  const recorded = row.contentHash?.toLowerCase();
+  const text = bytes.toString("utf8");
+  const folded = text.replaceAll("\r\n", "\n");
+  if (sha256(bytes) !== recorded && (folded === text || sha256(folded) !== recorded)) {
+    return { ok: false, reason: "its receipt's bytes do not match its ledger row" };
+  }
+  try {
+    return { ok: true, receipt: JSON.parse(text) as unknown };
+  } catch {
+    return { ok: false, reason: "its receipt is not JSON" };
+  }
+}
+
+function sha256(content: Buffer | string): string {
+  return createHash("sha256").update(content).digest("hex");
+}
+
+/**
+ * What `packId`'s install receipt proves about this install: the tool footprint
+ * (narrowed to grantable categories) and the judged source kind. Both come from
+ * the one verified read, {@link readVerifiedReceipt}, so a receipt that is not
+ * the install's says nothing here.
  *
  * Every failure resolves to the deny-shaped answer rather than throwing: a
- * receipt an operator deleted, truncated, or hand-edited into something
- * unparsable must not take the whole plan down. For the footprint that is `[]`
- * — no readable disclosure means no ceiling at all, which denies rather than
- * grants. It is re-narrowed on the way in for the same reason: the bytes on
- * disk are as trustworthy as the file's owner, and a hand-added category the
- * taxonomy does not grant licenses nothing here.
+ * receipt deleted, truncated, or edited must not take the whole plan down. For
+ * the footprint that is `[]` — no provable disclosure means no ceiling at all,
+ * which denies rather than grants. It is re-narrowed on the way in, so a
+ * category the taxonomy does not grant licenses nothing here.
  *
- * For the source kind it is `"unknown"`, which is deliberately NOT the deny
- * direction. Kind rules match no unknown, so a `deny: ["npm-package"]` policy
- * does not silently start denying packs whose provenance nobody can read;
- * name, scope and `"*"` rules still match, so a policy that means "nothing"
- * still means nothing.
+ * For the source kind it is `"unknown"`, which `./orgPolicy.ts` →
+ * `evaluatePackSource` refuses under any kind rule and passes through
+ * everywhere else: with no kind rule in force, the kind decides nothing.
  */
-async function readRecordedProvenance(packRoot: string): Promise<RecordedProvenance> {
-  const empty: RecordedProvenance = { declaredTools: [], sourceKind: "unknown" };
-  let raw: string;
-  try {
-    raw = await readFile(join(packRoot, RECEIPT_FILE), "utf8");
-  } catch {
-    return empty;
+async function readRecordedProvenance(
+  rootDir: string,
+  packId: string,
+  rows: readonly LedgerEntry[],
+): Promise<RecordedProvenance> {
+  const read = await readVerifiedReceipt(rootDir, packId, rows);
+  if (!read.ok) {
+    const trial = policyDenialSetAside.getStore()?.footprint;
+    return { declaredTools: trial ?? footprintOf(await receiptForProof(rootDir, packId)), sourceKind: "unknown" };
   }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return empty;
-  }
-  if (typeof parsed !== "object" || parsed === null) return empty;
+  return { declaredTools: footprintOf(read.receipt), sourceKind: recordedSourceKind(read.receipt) };
+}
 
-  const permissions = (parsed as { permissions?: unknown }).permissions;
+/** The grantable footprint a parsed receipt records; `[]` for anything else. */
+function footprintOf(receipt: unknown): readonly string[] {
+  if (typeof receipt !== "object" || receipt === null) return [];
+  const permissions = (receipt as { permissions?: unknown }).permissions;
   const declaredRaw =
     typeof permissions === "object" && permissions !== null
       ? (permissions as { toolFootprint?: unknown }).toolFootprint
       : undefined;
-  const declaredTools = Array.isArray(declaredRaw)
+  return Array.isArray(declaredRaw)
     ? grantableFootprint(declaredRaw.filter((entry): entry is string => typeof entry === "string"))
     : [];
+}
 
-  const source = (parsed as { source?: unknown }).source;
-  const kind =
-    typeof source === "object" && source !== null
-      ? (source as { kind?: unknown }).kind
-      : undefined;
-  const sourceKind: EvaluatedSourceKind =
-    typeof kind === "string" && (PACK_SOURCE_KINDS as readonly string[]).includes(kind)
-      ? (kind as EvaluatedSourceKind)
-      : "unknown";
-
-  return { declaredTools, sourceKind };
+/**
+ * The receipt as it stands on disk, inside {@link ignoringPolicyDenialForProof}
+ * alone, and `null` everywhere else. The proof has to render the agent copies
+ * `sync` wrote while the receipt still matched, and those carry its footprint:
+ * rendered with none, the copies of a refused pack would not prove, and they
+ * would stay live in every client. This plan is hashed and discarded, so what
+ * it reads grants nothing. A receipt that is gone, or that holds another
+ * footprint, is what {@link footprintsForProof} covers.
+ */
+async function receiptForProof(rootDir: string, packId: string): Promise<unknown> {
+  if (policyDenialSetAside.getStore() === undefined) return null;
+  try {
+    return JSON.parse(await readFile(join(rootDir, ...receiptRelPath(packId).split("/")), "utf8"));
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -439,7 +516,7 @@ export interface ResolvedPackContent {
 }
 
 /** Set inside {@link ignoringPolicyDenialForProof}; read by {@link discoverInstalledPacksWithPolicy}. */
-const policyDenialSetAside = new AsyncLocalStorage<true>();
+const policyDenialSetAside = new AsyncLocalStorage<{ readonly footprint?: readonly string[] }>();
 
 /**
  * Run `plan` with every installed pack admitted whatever the org policy says —
@@ -453,9 +530,53 @@ const policyDenialSetAside = new AsyncLocalStorage<true>();
  * already asks for, and the plan built under it is hashed and discarded. Scoped
  * by async context, as {@link withoutPolicyWarningPrint} is, so a plan running
  * concurrently in the same process still honours the policy.
+ *
+ * `footprint` stands in for the receipt of any pack whose own receipt does not
+ * verify, and for no other pack ({@link footprintsForProof}).
  */
-export function ignoringPolicyDenialForProof<T>(plan: () => Promise<T>): Promise<T> {
-  return policyDenialSetAside.run(true, plan);
+export function ignoringPolicyDenialForProof<T>(
+  plan: () => Promise<T>,
+  footprint?: readonly string[],
+): Promise<T> {
+  return policyDenialSetAside.run(footprint === undefined ? {} : { footprint }, plan);
+}
+
+/** True inside a plan a {@link footprintsForProof} entry stands in for: a trial, not what the setup renders. */
+export function isFootprintTrial(): boolean {
+  return policyDenialSetAside.getStore()?.footprint !== undefined;
+}
+
+/**
+ * The footprints the rendering proof may try for the installed packs whose
+ * receipt proves none: every set of categories an agent can be granted, the
+ * empty one first. Empty when each pack that ships agents has a verified
+ * receipt, which is the ordinary case, so the proof plans nothing more.
+ *
+ * Only the receipt records the footprint an agent copy was written with, so a
+ * copy outlives its receipt unless the proof can rebuild it another way. A
+ * footprint found here proves nothing alone: the caller counts a trial only
+ * where its rendering hashes to the recorded hash
+ * (`../cli/engine/emissionWrite.ts::engineRenderingsFor`). The set is small and
+ * closed because a grant is the agent's own capabilities bounded by the footprint.
+ */
+export async function footprintsForProof(
+  rootDir: string,
+  manifest: SetupManifest,
+): Promise<readonly (readonly string[])[]> {
+  for (const [id, rows] of packRowsById(manifest)) {
+    const shipsAgents = classesOf(id, rows.map((row) => row.artifactId)).includes("agents");
+    if (shipsAgents && !(await readVerifiedReceipt(rootDir, id, rows)).ok) return everyDerivableFootprint();
+  }
+  return [];
+}
+
+/** Every subset of the derivable categories, the empty one first. */
+function everyDerivableFootprint(): string[][] {
+  const footprints: string[][] = [[]];
+  for (const category of DERIVABLE_CATEGORIES) {
+    for (const footprint of footprints.slice()) footprints.push([...footprint, category]);
+  }
+  return footprints;
 }
 
 /** Set inside {@link withoutPolicyWarningPrint}; read by {@link resolveInstalledPackContent}. */

@@ -7,6 +7,7 @@ import { resolveAutonomy } from "../../src/config/autonomy.ts";
 import {
   askPathsOf,
   checkEvidence,
+  closedOverAnother,
   decideLand,
   entryPlaceOf,
   evidenceLine,
@@ -69,6 +70,8 @@ const PR: LandPr = {
 };
 
 const GREEN: CheckEvidence = { green: ["test"], pending: [], failing: [], missing: [] };
+/** How the ask on a closed thread opens, the thread ids following. */
+const CLOSED_THREADS = "a person decides on closed review threads that someone beside the closer wrote in, or that did not read whole: ";
 
 function input(over: Partial<LandInput> = {}, pr: Partial<LandPr> = {}): LandInput {
   return {
@@ -84,6 +87,7 @@ function input(over: Partial<LandInput> = {}, pr: Partial<LandPr> = {}): LandInp
     ledger: { open: [] },
     pendingThreads: 0,
     setAsideThreads: 0,
+    closedThreads: [],
     looserKeys: [],
     reviewToolConflict: [],
     ...over,
@@ -113,6 +117,8 @@ describe("LAND_ASK_PATHS (decision D2)", () => {
       ".github/CODEOWNERS",
       "docs/CODEOWNERS",
       ".stamity/change-classes.json",
+      ".stamity/policy.json",
+      ".stamity/handoffs/2026-11-05-a-note-a1b2c.md",
       ".stamity/runs/2026-10-23_overnight/held/person-only.patch",
     ];
     expect(askPathsOf([...asked, "src/a.ts"])).toEqual([...asked].toSorted());
@@ -168,6 +174,18 @@ describe("LAND_ASK_PATHS (decision D2)", () => {
     expect(closure).toEqual(["scripts/ci/records-only.mjs", "src/change/classify.ts", "src/roster/triggers.ts"]);
     for (const path of closure) expect(askPathsOf([path, "src/a.ts"]), path).toEqual([path]);
     expect(askPathsOf(["scripts/ci/fork-probe.mjs", "src/change/personOnlyPaths.ts", "test/change/classify.test.ts"])).toEqual([]);
+  });
+
+  // ADDED: the reader the `prove-pr` job runs can skip a push's checks, and CI runs the base commit's copy, so an edit to
+  // it decides for every later push. It imports nothing of the repository's, so the one file is the whole closure.
+  it("asks about the CI proven-push reader, the whole of its import closure", () => {
+    const closure = classifierClosure("scripts/ci/pr-proven.mjs");
+    expect(closure).toEqual(["scripts/ci/pr-proven.mjs"]);
+    expect(askPathsOf([...closure, "src/a.ts"])).toEqual(closure);
+    expect(decideLand(input({ files: { paths: [...closure, "src/a.ts"], complete: true } }))).toMatchObject({
+      outcome: "asks",
+      reason: "the diff touches paths that define the evidence: scripts/ci/pr-proven.mjs",
+    });
   });
 });
 
@@ -252,6 +270,48 @@ describe("unresolvedThreads", () => {
     expect(unresolvedThreads([{ isResolved: true, resolvedBy: "runner", authors: [runner, bot, alice], complete: true }], "runner")).toBe(1);
     expect(unresolvedThreads([{ isResolved: true, resolvedBy: "runner", authors: [bot, runner], complete: false }], "runner")).toBe(1);
     expect(unresolvedThreads([{ isResolved: true, resolvedBy: "runner", authors: [bot, runner], complete: true }], "runner")).toBe(0);
+  });
+});
+
+describe("closedOverAnother", () => {
+  const bot = { login: "codex", person: false };
+  const alice = { login: "alice", person: true };
+  const bob = { login: "bob", person: true };
+  const runner = { login: "runner", person: true };
+  const gone = { login: null, person: true };
+  const closed = (resolvedBy: string | null, authors: { login: string | null; person: boolean }[], complete = true): ThreadRead => ({ id: "T1", isResolved: true, resolvedBy, authors, complete });
+
+  it.each([
+    ["a closer who replied under someone else's comment", closed("bob", [alice, bob])],
+    ["a closer who wrote first, under someone else's reply", closed("bob", [bob, alice])],
+    ["a closer who never wrote in it", closed("bob", [alice])],
+    ["the one who opened it, closing over another person's reply", closed("alice", [alice, bob])],
+    ["an app closing over a person's comment", closed("codex", [bot, alice])],
+    ["a comment by an account GitHub no longer names", closed("bob", [bob, gone])],
+    ["a thread that did not read whole, whoever seems to be in it", closed("bob", [bob], false)],
+    ["a closer GitHub names as null over a person's comment", closed(null, [alice])],
+  ])("names %s", (_name, thread) => {
+    expect(closedOverAnother([thread], "runner")).toEqual(["T1"]);
+  });
+
+  it.each([
+    ["an open thread", { ...closed(null, [alice, bob]), isResolved: false }],
+    ["a person closing their own thread", closed("alice", [alice])],
+    ["a person closing an app's thread", closed("alice", [bot])],
+    ["a person closing a thread with an app's reply in it", closed("alice", [alice, bot])],
+    ["the closer's name in another case", closed("ALICE", [alice])],
+    ["the run's own reply beside the closer", closed("alice", [alice, runner])],
+    ["the run's own reply in another case", closed("alice", [alice, { login: "RUNNER", person: true }])],
+    ["the run's own close over its own comments and an app's", closed("runner", [bot, runner])],
+    ["an app closing its own thread", closed("codex", [bot])],
+  ])("passes over %s", (_name, thread) => {
+    expect(closedOverAnother([thread], "runner")).toEqual([]);
+  });
+
+  it("names each thread once, one with no id as having none, and leaves the count to unresolvedThreads", () => {
+    const threads = [closed("bob", [alice, bob]), { ...closed("bob", [alice, bob]), id: "T2" }, { isResolved: true, resolvedBy: "bob", authors: [alice], complete: true }, closed("alice", [alice])];
+    expect(closedOverAnother(threads, "runner")).toEqual(["T1", "T2", "(no id)"]);
+    expect(unresolvedThreads(threads, "runner")).toBe(0);
   });
 });
 
@@ -497,6 +557,12 @@ describe("decideLand, the factory's evidence (REQ-FLOW-152 to REQ-FLOW-154)", ()
     expect(decideLand(input({ reviewTool: verdict("clean"), defaultBranchRed: { failing: [], unread: null } }))).toEqual({ outcome: "land" });
   });
 
+  it("asks on a closed thread a person decides on, naming each, and a gap beside it still refuses", () => {
+    const reason = `${CLOSED_THREADS}T1, T2`;
+    expect(decideLand(input({ closedThreads: ["T1", "T2"] }))).toEqual({ outcome: "asks", reason, reasons: [reason], act: "pr-merge" });
+    expect(decideLand(input({ closedThreads: ["T1"], threads: 1 }))).toEqual({ outcome: "refused", reasons: ["1 review thread is unresolved"], pending: false });
+  });
+
   it.each([
     ["waiting", true],
     ["findings", false],
@@ -598,6 +664,7 @@ describe("decideLand, the factory's evidence (REQ-FLOW-152 to REQ-FLOW-154)", ()
     ["a loosened key", { looserKeys: ["autonomy.autoShip"] }, "the head's manifest loosens autonomy.autoShip against main's"],
     ["a red tip", { defaultBranchRed: { failing: ["test"], unread: null } }, "main is red: test failing on its tip"],
     ["legs that disagree", { reviewToolConflict: ["one", "two"] }, "the legs disagree on autonomy.reviewTool, and no leg wins: one, two; the review tool's word was not read"],
+    ["a closed thread a person decides on", { closedThreads: ["T1", "T2"] }, `${CLOSED_THREADS}T1, T2`],
   ])("does not let an eligible auto-ship pass over %s", (_name, over, reason) => {
     expect(reasonsOf({ setting: deploying, autoShip: eligible, ...over })).toEqual([reason]);
   });

@@ -442,6 +442,26 @@ describe("withOwnServers", () => {
     });
   });
 
+  // The row passes the pack bar, so a runner off the fetch table is refused here as a pack's is, before any client file.
+  it("refuses a runner off the fetch table, whatever lock the row sets", () => {
+    const row = ownRow({ command: "pnpm", packageNameLock: "pnpm", args: ["dlx", "acme-server"], requiresEnv: [] });
+    const refusal = (): unknown => withOwnServers([], setupWith([row]));
+
+    expect(refusal).toThrow(/mcp\.ownServers\[0\] \("acme-wiki"\)/);
+    expect(refusal).toThrow("no pin reaches");
+  });
+
+  it.each([
+    ["nohup", ["acme-server"]],
+    ["acmectl", ["serve", "pnpm", "dlx", "acme-server"]],
+  ])("refuses %s with %j as it does a pack's row, whatever lock the row sets", (command, args) => {
+    const row = ownRow({ command, packageNameLock: command, args, requiresEnv: [] });
+    const refusal = (): unknown => withOwnServers([], setupWith([row]));
+
+    expect(refusal).toThrow(/mcp\.ownServers\[0\] \("acme-wiki"\)/);
+    expect(refusal).toThrow("no pin reaches");
+  });
+
   describe("never repeats a composed pin", () => {
     const PIN_SHOWN = "<packageNameLock@pinnedVersion>";
     const LINK = `https://acme:${PLAIN_TOKEN}@registry.invalid/pkg`;

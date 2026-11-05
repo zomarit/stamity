@@ -1199,14 +1199,25 @@ describe("ci.yml — the merge-blocking gate", () => {
       }
       const steps = stepsOf(ci, "prove-pr");
       expect(steps.map((step) => step.name)).toEqual(["Checkout", "Set up Node", "Read the pull request's run"]);
-      expect(stepOf(steps, "Checkout").with).toEqual({ "persist-credentials": false, "fetch-depth": 1 });
+      // TEST CHANGE, justified: the reader runs from the base commit, as the classifier does. The step ran the pushed
+      // checkout's own copy, so the code that can skip a push's checks was that push's. The base can be many commits
+      // back, so the checkout carries the whole history; "the proven-push reader, from the base commit" runs the body.
+      expect(stepOf(steps, "Checkout").with).toEqual({ "persist-credentials": false, "fetch-depth": 0 });
       // No cache and no install: the reader is plain ESM over Node built-ins and `gh`.
       expect(stepOf(steps, "Set up Node").with).toEqual({ "node-version": "24" });
       const prove = stepOf(steps, "Read the pull request's run");
       expect(prove.id).toBe("prove");
-      expect(prove.run).toBe('node scripts/ci/pr-proven.mjs --sha "$PUSHED_SHA"');
-      // The sha and the token arrive through `env:`, never interpolated into the script body.
-      expect(prove.env).toEqual({ GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}", PUSHED_SHA: "${{ github.sha }}" });
+      const run = prove.run ?? "";
+      expect(run).toContain('git worktree add --detach "$BASE_TREE" "$BASE_SHA"');
+      expect(run).toContain('node "$BASE_TREE/scripts/ci/pr-proven.mjs" --sha "$PUSHED_SHA"');
+      expect(run).not.toContain("node scripts/ci/pr-proven.mjs");
+      expect(run).toContain('BASE_TREE="$RUNNER_TEMP/proven-base"');
+      // The shas and the token arrive through `env:`, never interpolated into the script body.
+      expect(prove.env).toEqual({
+        GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}",
+        PUSHED_SHA: "${{ github.sha }}",
+        BASE_SHA: "${{ github.event.before }}",
+      });
       expect(prove.run).not.toContain("${{");
       expect(prove["continue-on-error"]).toBeUndefined();
     });
@@ -1753,6 +1764,81 @@ describe.skipIf(!AGGREGATOR_EXECUTABLE)("ci.yml — the classifier runs from the
     const { status, lines, stderr } = classify(without.repo, without.base);
     expect(status, stderr).toBe(0);
     expect(lines, "a base without the script").toEqual(FALLBACK);
+  });
+
+  /**
+   * ADDED: the `prove-pr` job's step body, run the same way. Its answer can skip a push's checks, so it must come from
+   * the base's reader, and with no base to run it from it must read not proven, which is full CI.
+   */
+  describe("the proven-push reader, from the base commit", () => {
+    const READER = "scripts/ci/pr-proven.mjs";
+    const PROVE = runOf(stepsOf(ci, "prove-pr"), "Read the pull request's run");
+    /** A pushed copy that writes a word the real reader never does, so the output shows which copy answered. */
+    const PUSHED_COPY = "import { appendFileSync } from 'node:fs'\nappendFileSync(process.env.GITHUB_OUTPUT, 'proven=pushed-copy\\n')\n";
+
+    /** A repository whose first commit holds the real reader, or none, and whose head holds the pushed copy. */
+    function pushedRepository(withReader = true): { repo: string; base: string } {
+      const repo = join(tempRoot(), "repo");
+      mkdirSync(repo);
+      gitOut(repo, "init", "-q", "-b", "main");
+      commit(repo, { "README.md": "# fixture\n", ...(withReader ? { [READER]: readFileSync(join(REPO_ROOT, READER), "utf8") } : {}) });
+      const base = gitOut(repo, "rev-parse", "HEAD");
+      commit(repo, { [READER]: PUSHED_COPY });
+      return { repo, base };
+    }
+
+    /** The step body under `bash -e`, from the pushed checkout, with no token, so the real reader asks no network. */
+    function prove(repo: string, baseSha: string): { status: number | null; lines: string[]; stderr: string } {
+      const runnerTemp = join(dirname(repo), "runner-temp");
+      mkdirSync(runnerTemp, { recursive: true });
+      const output = join(runnerTemp, "github-output");
+      writeFileSync(output, "");
+      const result = spawnSync("bash", ["-e", "-c", PROVE], {
+        cwd: repo,
+        encoding: "utf8",
+        env: {
+          ...carriedProcessEnv(),
+          GIT_CONFIG_NOSYSTEM: "1",
+          GIT_CONFIG_GLOBAL: NO_GIT_CONFIG,
+          BASE_SHA: baseSha,
+          PUSHED_SHA: gitOut(repo, "rev-parse", "HEAD"),
+          GH_TOKEN: "",
+          GITHUB_EVENT_NAME: "push",
+          GITHUB_REF: "refs/heads/main",
+          GITHUB_REPOSITORY: "fixture/fixture",
+          RUNNER_TEMP: runnerTemp,
+          GITHUB_OUTPUT: output,
+        },
+      });
+      return { status: result.status, lines: readFileSync(output, "utf8").split("\n").filter((line) => line !== ""), stderr: result.stderr };
+    }
+
+    it("answers a push from the base's reader, whatever the pushed copy says", () => {
+      const { repo, base } = pushedRepository();
+      const { status, lines, stderr } = prove(repo, base);
+      expect(status, stderr).toBe(0);
+      expect(lines, stderr).toEqual(["proven=false"]);
+      // The real reader's own reason: it ran, and it stopped before any read.
+      expect(stderr).toContain("pr-proven: GH_TOKEN is not set");
+    });
+
+    it("writes not proven and runs no reader code when there is no base to run it from", () => {
+      const { repo } = pushedRepository();
+      for (const [label, sha] of [
+        ["empty", ""],
+        ["all zeros", "0".repeat(40)],
+        ["unknown", "d".repeat(40)],
+      ] as const) {
+        const { status, lines, stderr } = prove(repo, sha);
+        expect(status, `${label}: ${stderr}`).toBe(0);
+        expect(lines, label).toEqual(["proven=false"]);
+        expect(stderr, label).toContain("pr-proven: no base commit to run the reader from, so not proven");
+      }
+      const without = pushedRepository(false);
+      const { status, lines, stderr } = prove(without.repo, without.base);
+      expect(status, stderr).toBe(0);
+      expect(lines, "a base without the script").toEqual(["proven=false"]);
+    });
   });
 });
 

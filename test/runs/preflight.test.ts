@@ -1083,11 +1083,12 @@ describe("runPreflight — node, pin, scan, floors", () => {
 });
 
 describe("runPreflight — input-author", () => {
-  const authorRoutes = (permission: Reply, issueRepo = "o/r"): Record<string, Reply> => ({
+  const issue = { number: 12, state: "open", user: { login: "alice", type: "User" } };
+  const authorRoutes = (permission: Reply, item: Record<string, unknown> = issue): Record<string, Reply> => ({
     "/repos/o/r": repoReply(WRITER),
     "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(7)] },
     "/repos/o/r/rulesets/7": ruleset(7, "active", "never"),
-    [`/repos/${issueRepo}/issues/12`]: { status: 200, json: { number: 12, user: { login: "alice", type: "User" } } },
+    "/repos/o/r/issues/12": { status: 200, json: item },
     "/repos/o/r/collaborators/alice/permission": permission,
   });
 
@@ -1117,13 +1118,43 @@ describe("runPreflight — input-author", () => {
     expect(verdict.ok).toBe(false);
   });
 
-  it("an item on another repository is read there, and its author's permission on origin", async () => {
-    const { rest, calls } = restTable(authorRoutes({ status: 200, json: { permission: "write" } }, "t/board"));
+  // TEST CHANGE, justified: this case pinned a pass for an item outside origin. Who may edit an item there is set by that
+  // repository, so its author's right on origin says nothing of its text, and `run contract` already refuses the same item.
+  it("refuses an item outside origin's repository, reading nothing there", async () => {
+    const { rest, calls } = restTable({ ...authorRoutes({ status: 200, json: { permission: "write" } }), "/repos/t/board/issues/12": { status: 200, json: issue } });
     const verdict = await runPreflight(greenDeps({ rest, item: { owner: "t", repo: "board", number: 12 } }));
+    expect(check(verdict, "input-author")).toMatchObject({ state: "refuse", evidence: "t/board#12 is not in origin's repository, o/r" });
+    expect(verdict.ok).toBe(false);
+    expect(calls.some((path) => path.startsWith("/repos/t/board"))).toBe(false);
+    expect(calls.some((path) => path.includes("/collaborators/"))).toBe(false);
+  });
+
+  it.each([
+    ["another owner", { owner: "t", repo: "r" }, "/repos/t/r/issues/12"],
+    ["another name", { owner: "o", repo: "board" }, "/repos/o/board/issues/12"],
+  ])("holds the owner and the name each to origin's: %s refuses", async (_, other, path) => {
+    const { rest } = restTable({ ...authorRoutes({ status: 200, json: { permission: "write" } }), [path]: { status: 200, json: issue } });
+    const verdict = await runPreflight(greenDeps({ rest, item: { ...other, number: 12 } }));
+    expect(check(verdict, "input-author").state).toBe("refuse");
+  });
+
+  it("reads an item spelled in another case as origin's, since GitHub's names ignore case", async () => {
+    const { rest, calls } = restTable(authorRoutes({ status: 200, json: { permission: "write" } }));
+    const verdict = await runPreflight(greenDeps({ rest, item: { owner: "O", repo: "R", number: 12 } }));
     expect(check(verdict, "input-author").state).toBe("pass");
-    expect(calls).toContain("/repos/t/board/issues/12");
-    expect(calls).toContain("/repos/o/r/collaborators/alice/permission");
-    expect(calls).not.toContain("/repos/t/board/collaborators/alice/permission");
+    expect(calls).toContain("/repos/o/r/issues/12");
+  });
+
+  it.each([
+    ["a closed item", { ...issue, state: "closed" }, "o/r#12 is not open"],
+    ["an item whose state does not read", { number: 12, user: issue.user }, "o/r#12 is not open"],
+    ["a pull request", { ...issue, pull_request: { url: "https://api.github.com/repos/o/r/pulls/12" } }, "o/r#12 is a pull request"],
+  ])("refuses %s, as `run contract` does, whatever its author's right", async (_, item, evidence) => {
+    const { rest, calls } = restTable(authorRoutes({ status: 200, json: { permission: "write" } }, item));
+    const verdict = await runPreflight(greenDeps({ rest, item: { owner: "o", repo: "r", number: 12 } }));
+    expect(check(verdict, "input-author")).toMatchObject({ state: "refuse", evidence });
+    expect(verdict.ok).toBe(false);
+    expect(calls.some((path) => path.includes("/collaborators/"))).toBe(false);
   });
 
   it("an Enterprise Managed Users author and owner (a `_` in the name) are read, not refused (review/19)", async () => {
@@ -1132,7 +1163,7 @@ describe("runPreflight — input-author", () => {
       "/repos/acme_corp/r": repoReply(WRITER),
       "/repos/acme_corp/r/rules/branches/main": { status: 200, json: [pullRequestRule(7)] },
       "/repos/acme_corp/r/rulesets/7": ruleset(7, "active", "never"),
-      "/repos/acme_corp/r/issues/12": { status: 200, json: { number: 12, user: { login: "jdoe_acme", type: "User" } } },
+      "/repos/acme_corp/r/issues/12": { status: 200, json: { number: 12, state: "open", user: { login: "jdoe_acme", type: "User" } } },
       "/repos/acme_corp/r/collaborators/jdoe_acme/permission": { status: 200, json: { permission: "write" } },
     });
     // The origin's URLs name the same repository, as the push identity requires since review/63 and review/64.

@@ -420,14 +420,33 @@ leaves the curated catalog reachable.
 
 One bound applies to the source-kind tokens at projection rather than at install. At install the
 kind comes from the source being installed. At projection it is read back out of the receipt `add`
-wrote into the pack's own directory. A receipt that has been deleted or edited into something
-unparsable leaves the kind unknown, and an unknown kind matches no kind token. A
-`deny: ["npm-package"]` rule therefore does not reach that pack at projection, while a rule naming
-the pack, its scope, or `*` still does. That direction is deliberate, because an unreadable
-receipt must not silently widen a kind rule onto packs whose provenance nobody can check. It is
-also not a hiding place. The receipt is ledgered like every other installed byte, so deleting or
-editing it is a failing `pack-integrity` row in `stamity check`. If a rule has to hold whatever
-state a pack directory is left in, write it by name, by scope, or as `*`.
+wrote into the pack's own directory, and only from a receipt whose bytes match its ledger row. The
+two agree: `add` records the kind it judged, so a catalog pack is `catalog-pinned` at both. A receipt
+an earlier release wrote holds `local-path` beside a catalog tier and reads as `catalog-pinned` too,
+with no re-install and no rewrite. Line endings a checkout changed do not count as a difference.
+
+A pack whose receipt proves no kind is refused wherever the policy holds a kind rule, in either
+list. That covers a receipt that is missing, unparsable or changed, one with no ledger row, one
+holding no listed kind, and one claiming `catalog-pinned` beside a tier no catalog grants. The pack
+projects nothing, whatever else the policy admits, and `sync` and `stamity check` name it as
+unproven rather than as an ordinary policy match. Its files stay on disk. Restoring the receipt
+restores the pack, and `clean --pack` still removes it. A policy with no kind rule is unaffected:
+a rule naming the pack, its scope, or `*` decides as it always did. A changed or missing receipt
+is also a failing `pack-integrity` row in `stamity check`, because the receipt is ledgered like
+every other installed byte. And with or without a policy, a receipt that does not match its ledger
+row grants the pack's agents nothing, the same as a deleted one.
+
+One copy can outlast a refusal. An agent copy `sync` wrote with a grant is removed only when the
+engine can render those exact bytes again, and only the receipt records the footprint that takes.
+With the receipt gone, unparsable or changed, `sync` tries each footprint an agent can hold and
+removes the copy when one renders the bytes its ledger row records. A copy no footprint renders,
+because it was edited or the pack's own file has changed since, stays in the client with its
+grant, and `sync` names it as kept, so delete it by hand. The generated tool policy drops the agent
+either way.
+
+The ledger is not signed, so someone who changes a receipt and its ledger row together still
+chooses the kind. That writer can edit the policy file as well, so this bound is the same one
+`SECURITY.md` declares for the committed manifest.
 
 ### Write the policy with `stamity config policy`
 

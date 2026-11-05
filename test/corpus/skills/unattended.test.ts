@@ -818,9 +818,9 @@ describe("st-unattended — the build's signed-off decisions", () => {
 
   // review/85: the text names the REST writes REQ-FLOW-120 bars, since a respelling the guard misses
   // meets only this sentence.
-  it("refuses every raw push, pull request write and REST write REQ-FLOW-120 bars while the run is unattended", async () => {
+  it("bars the run from every raw push, pull request write and REST write REQ-FLOW-120 bars while it is unattended", async () => {
     expect(await flat()).toContain(
-      "While the mode is unattended no raw push, pull request write, or REST write on `contents/`, `git/` refs or objects or `merges` runs at all, however it is spelled.",
+      "While the mode is unattended the run makes no raw push, pull request write, or REST write on `contents/`, `git/` refs or objects or `merges`, however it is spelled.",
     );
   });
 

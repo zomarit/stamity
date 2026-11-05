@@ -45,6 +45,7 @@ import {
   applyNameFloor,
   applyReadFloors,
   awayFrom,
+  baseAttributes,
   baseEntry,
   describeGitFailure,
   DIFF_PINS,
@@ -58,6 +59,7 @@ import {
   holdsNul,
   insideOf,
   namePaths,
+  NO_USER_ATTRIBUTES,
   NPM_LOCKFILE,
   parseNameStatus,
   parseNumstat,
@@ -77,7 +79,8 @@ import {
   type ProjectRoot,
   type Section,
 } from "../engine/changeRange.ts";
-import { ghApi } from "../engine/ghRunner.ts";
+import { ghApi, type GhApiOptions } from "../engine/ghRunner.ts";
+import { trustedGh } from "../engine/ghTrust.ts";
 import { gitCheckRunner, revisionLines, type GitInputRunner } from "../engine/gitStatus.ts";
 import { gitWrite, gitWriteEnv } from "../engine/gitWrite.ts";
 import { readLegs, Refused } from "../engine/landSetting.ts";
@@ -379,12 +382,14 @@ interface SideRead {
  * attribute from hiding a code file's lines; `--submodule=short` keeps a
  * submodule one section. Section names come from the name list in the same
  * order (plan/62): `workSections` for the work tree when nothing is left out,
- * else a name list read with the same pathspec.
+ * else a name list read with the same pathspec. Every read that attributes can
+ * move starts with `pins` ({@link attributePins}).
  */
 function readSide(
   runner: GitRunner,
   root: ProjectRoot,
   commit: string,
+  pins: readonly string[],
   side: Side,
   workSections: readonly Section[],
   inside: (name: string) => string | null,
@@ -393,7 +398,7 @@ function readSide(
   const staged = side === "index" ? ["--staged"] : [];
   const label = side === "index" ? "diff --staged" : "diff";
   const numstat = parseNumstat(
-    runGit(runner, root.dir, `${label} --numstat`, ["diff", ...staged, "--numstat", "-M", "-z", ...DIFF_PINS, commit, "--"]),
+    runGit(runner, root.dir, `${label} --numstat`, [...pins, "diff", ...staged, "--numstat", "-M", "-z", ...DIFF_PINS, commit, "--"]),
   );
   const binaries = numstat.filter((row) => row.binary && !readsAsText(join(root.topLevel, row.to)));
   const pathspec = [...new Set(binaries.flatMap((row) => [row.from, row.to]))].map((name) => `:(top,literal,exclude)${name}`);
@@ -401,9 +406,10 @@ function readSide(
     side === "work tree" && pathspec.length === 0
       ? workSections
       : parseNameStatus(
-          runGit(runner, root.dir, `${label} --name-status`, ["diff", ...staged, "--name-status", "-M", "-z", ...DIFF_PINS, commit, "--", ...pathspec]),
+          runGit(runner, root.dir, `${label} --name-status`, [...pins, "diff", ...staged, "--name-status", "-M", "-z", ...DIFF_PINS, commit, "--", ...pathspec]),
         ).sections;
   const patch = runGit(runner, root.dir, `${label} --text`, [
+    ...pins,
     "-c",
     "core.quotePath=false",
     "diff",
@@ -506,14 +512,15 @@ function readLines(
   runner: GitRunner,
   root: ProjectRoot,
   commit: string,
+  pins: readonly string[],
   sections: readonly Section[],
   untracked: readonly string[],
   windows: boolean,
 ): ChangeLines {
   const inside = insideOf(root.prefix, windows);
   const away = awayFrom(root.prefix);
-  const work = readSide(runner, root, commit, "work tree", sections, inside, away);
-  const index = readSide(runner, root, commit, "index", sections, inside, away);
+  const work = readSide(runner, root, commit, pins, "work tree", sections, inside, away);
+  const index = readSide(runner, root, commit, pins, "index", sections, inside, away);
 
   const seen = (pick: (hunk: Hunk) => readonly string[]): Map<string, Set<string>> => {
     const byPath = new Map<string, Set<string>>();
@@ -622,6 +629,46 @@ function readLines(
   };
 }
 
+/** What git exits with on an option it does not know, as a git before 2.41 does on `--attr-source`. */
+const GIT_UNKNOWN_OPTION = 129;
+/** The tree-level attributes file, in any letter case, since a case-blind disk gives git any spelling of it. */
+const ATTRIBUTES_FILE = ".gitattributes";
+
+/**
+ * The options a line read starts with, so that a change cannot pick how its own lines are read. Git takes attributes for a
+ * diff from the work tree, and a `diff=` driver there moves where `-W` stops, which can take a call out of a hunk's context and
+ * a class down with it, with no class file touched. So the read takes `commit`'s attributes and no user file, the pin a range
+ * read takes (`../engine/changeRange.ts`). Git's `info/attributes` has no such switch and no change carries it, so it stays read.
+ *
+ * `--attr-source` needs git 2.41. Before that the work tree's attributes are the commit's so long as no attributes file differs,
+ * so the read runs as it did: a failure on every change would only raise each one. One that differs, staged, in the work tree
+ * or left untracked or ignored, throws, so the lines read as failed, and that raises this change alone. An attributes file reaches
+ * its own folder and below, so one that sits over no changed path counts for nothing: an ignored dependency folder holding one
+ * would otherwise fail every change. Folders compare in any letter case, so a case-blind disk's other spelling still counts.
+ */
+function attributePins(runner: GitRunner, root: ProjectRoot, commit: string, changed: readonly string[]): readonly string[] {
+  const pinned = baseAttributes(commit);
+  try {
+    runGit(runner, root.dir, "rev-parse --attr-source (git 2.41 or later)", [...pinned, "rev-parse", "--git-dir"]);
+    return pinned;
+  } catch (err) {
+    if (!(err instanceof GitReadError) || (err.failure as { status?: unknown }).status !== GIT_UNKNOWN_OPTION) throw err;
+  }
+  const staged = runGit(runner, root.dir, "diff --staged --name-only", ["diff", "--staged", "--name-only", "-z", ...DIFF_PINS, commit, "--"]);
+  const loose = runGit(runner, root.topLevel, "ls-files --others (attributes)", ["ls-files", "--others", "--full-name", "-z", "--", `:(top,icase,glob)**/${ATTRIBUTES_FILE}`]);
+  const touched = [...changed, ...staged.split("\0")].filter((path) => path !== "");
+  const folded = touched.map((path) => path.toLowerCase());
+  const reaches = (path: string): boolean => {
+    const folder = path.slice(0, path.lastIndexOf("/") + 1).toLowerCase();
+    return folded.some((name) => name.startsWith(folder));
+  };
+  const moved = [...touched, ...loose.split("\0")].filter((path) => path.split("/").at(-1)?.toLowerCase() === ATTRIBUTES_FILE && reaches(path));
+  if (moved.length > 0) {
+    throw new PatchError(`${namePaths([...new Set(moved)])} may change how this change's lines read, and only git 2.41 or later can read them under the base's attributes`);
+  }
+  return NO_USER_ATTRIBUTES;
+}
+
 /** What the git read hands the classifier, in project-relative paths. */
 interface ChangeRead extends PlacedChange {
   /** The changed lines, or why they could not be read. */
@@ -671,7 +718,8 @@ function readChange(runner: GitRunner, root: ProjectRoot, commit: string, window
   // The lines serve the line rules: their failure keeps the paths read above and says at least product.
   let lines: ChangeRead["lines"];
   try {
-    lines = readLines(runner, root, commit, diff.sections, untracked, windows);
+    const pins = attributePins(runner, root, commit, [...diff.paths, ...diff.renames.flatMap((rename) => [rename.from, rename.to]), ...untracked]);
+    lines = readLines(runner, root, commit, pins, diff.sections, untracked, windows);
   } catch (err) {
     if (err instanceof GitReadError) lines = { failed: describeGitFailure(err) };
     else if (err instanceof PatchError) lines = { failed: err.message };
@@ -1450,6 +1498,20 @@ function ghFound(cwd: string, env: NodeJS.ProcessEnv): PreflightDeps["gh"] {
   return { path: found, realPath };
 }
 
+/**
+ * What every REST read of the pre-flight starts under, or why `gh`'s answers cannot stand: the check `run land` runs, so the
+ * wall and the administrator's proof rest on a program the run could not write, started from a folder it cannot steer.
+ */
+function preflightGh(root: string, env: NodeJS.ProcessEnv): { options: GhApiOptions } | { untrusted: string } {
+  try {
+    const runner = gitCheckRunner({ timeoutMs: GATE_GIT_TIMEOUT_MS, maxBuffer: GATE_GIT_MAX_BUFFER });
+    const top = runner(["rev-parse", "--show-toplevel"], root).replace(/\r?\n$/, "");
+    return { options: trustedGh(root, env, top, []) };
+  } catch (cause) {
+    return { untrusted: cause instanceof Refused ? cause.message : "the work tree's top could not be read, so where gh lies proves nothing" };
+  }
+}
+
 /** A small JSON file at `path`, read without following a link, or `undefined`. */
 function readJson(path: string): unknown {
   const body = readRegular(path, 64 * 1024);
@@ -1606,12 +1668,14 @@ const GUARD_COPY_READ_MAX_BYTES = 1024 * 1024;
 
 /**
  * What keeps `autonomy.adminRuleProof` from being on in every leg (REQ-FLOW-151), in words, or `null` where it is on in all:
- * the default branch's manifest, `HEAD`'s, the work tree's and each guard copy. `run land` skips a manifest that is not
- * there, since it only tightens on what it finds; this pass stands on the legs, so a missing or unread manifest reads off,
- * or a run could turn the key on with a commit of its own on a default branch that holds no manifest. A guard copy differs:
- * each client keeps its own, so one that is absent is no leg, and only none at all, or one that does not read, counts as
- * off. A copy `HEAD` holds keeps its leg when it leaves the disk (`readGuardLegs`), so deleting one `HEAD` does not hold
- * drops that leg, and the default branch's manifest still decides. `run land`'s read is reused, so the two cannot drift.
+ * the default branch's manifest, `HEAD`'s, the work tree's and each guard copy, at the repository's top and, started below
+ * it, at the project too. `run land` skips a manifest that is not there, since it only tightens on what it finds; this pass
+ * stands on the legs, so a missing or unread manifest reads off, or a run could turn the key on with a commit of its own on a
+ * default branch that holds no manifest. A guard copy differs: each client keeps its own, so one that is absent is no leg,
+ * and only none at all in a place, or one that does not read, counts as off. A copy `HEAD` holds keeps its leg when it
+ * leaves the disk (`readGuardLegs`), so deleting one `HEAD` does not hold drops that leg, and the default branch's manifest
+ * still decides. `run land`'s read is reused, so the two cannot drift. It lists no setup elsewhere: one binds only what it
+ * names, the key off names nothing, and a key on there leaves this answer the top's.
  */
 async function adminRuleProofGap(root: string, repoPath: string, rest: RestRead): Promise<string | null> {
   const runner = gitCheckRunner({ timeoutMs: GATE_GIT_TIMEOUT_MS, maxBuffer: GATE_GIT_MAX_BUFFER });
@@ -1622,32 +1686,40 @@ async function adminRuleProofGap(root: string, repoPath: string, rest: RestRead)
       return null;
     }
   };
+  let noManifest = false;
   try {
     const about = await rest(repoPath);
     const branch = typeof about.json === "object" && about.json !== null ? (about.json as { default_branch?: unknown }).default_branch : undefined;
     if (about.status !== 200 || typeof branch !== "string" || branch === "") return "the default branch's name did not read";
-    const texts = await Promise.all(GUARD_COPIES.map((path) => readRegularFile(join(root, ...path.split("/")), GUARD_COPY_READ_MAX_BYTES)));
-    if (texts.includes(undefined)) return "a guard copy did not read";
-    const copies = GUARD_COPIES.flatMap((path, index) => {
-      const text = texts[index];
-      return typeof text === "string" ? [{ source: `the guard copy \`${path}\` on disk`, setting: guardCopySetting(text) }] : [];
-    });
-    if (copies.length === 0) return "no guard copy is on disk";
-    let onDefaultBranch = false;
-    let atHead = false;
+    const top = gitLine(["rev-parse", "--show-toplevel"]);
+    const prefix = gitLine(["rev-parse", "--show-prefix"]);
+    if (top === null || prefix === null) return "the repository's top did not read";
+    const places = prefix === "" ? [root] : [top, root];
+    const held = await Promise.all(places.map((place) => Promise.all(GUARD_COPIES.map((path) => readRegularFile(join(place, ...path.split("/")), GUARD_COPY_READ_MAX_BYTES)))));
+    if (held.some((texts) => texts.includes(undefined))) return "a guard copy did not read";
+    if (held.some((texts) => !texts.some((text) => typeof text === "string"))) return "no guard copy is on disk";
+    const copies = held.flatMap((texts, at) =>
+      GUARD_COPIES.flatMap((path, index) => {
+        const text = texts[index];
+        const named = at > 0 ? ` of ${prefix}` : "";
+        return typeof text === "string" ? [{ source: `the guard copy \`${path}\` on disk${named}`, setting: guardCopySetting(text) }] : [];
+      }),
+    );
+    let onDefaultBranch = true;
+    let atHead = true;
     const legs = await readLegs(
-      root,
-      gitLine(["rev-parse", "--show-prefix"]) ?? "",
+      { top, cwd: root, prefix },
       repoPath,
       branch,
       (args) => {
         const text = gitLine(args);
-        atHead = text !== null;
+        atHead &&= text !== null;
         return Promise.resolve(text);
       },
       async (path) => {
         const reply = await rest(path);
-        onDefaultBranch = reply.status === 200;
+        onDefaultBranch &&= reply.status === 200;
+        noManifest ||= reply.status === 404;
         return reply;
       },
       readGuardLegs,
@@ -1657,7 +1729,8 @@ async function adminRuleProofGap(root: string, repoPath: string, rest: RestRead)
     const off = [...legs, ...copies].filter((leg) => leg.setting.adminRuleProof !== true).map((leg) => leg.source);
     return off.length === 0 ? null : `it is off in ${[...new Set(off)].join(", ")}`;
   } catch (cause) {
-    // A refused or failed read proves nothing: the administrator's refusal stands.
+    // A refused or failed read proves nothing: the administrator's refusal stands. `run land`'s words for a top with no manifest are about a land.
+    if (noManifest) return "the default branch holds no manifest";
     return cause instanceof Refused ? cause.message : "a read of its legs failed";
   }
 }
@@ -1678,11 +1751,12 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
   const origin = pushIdentity.fetchUrl === null ? null : resolveRepo({ ...env }, pushIdentity.fetchUrl);
   const ghEnv: NodeJS.ProcessEnv = { ...env };
   const gh = ghFound(root, ghEnv);
+  const trust = origin === null || gh === null ? null : preflightGh(root, ghEnv);
   const rest: RestRead | null =
-    origin === null || gh === null
+    origin === null || trust === null || "untrusted" in trust
       ? null
       : async (path) => {
-          const reply = await ghApi({ method: "GET", path, hostname: origin.host }, { cwd: root, env: ghEnv });
+          const reply = await ghApi({ method: "GET", path, hostname: origin.host }, trust.options);
           return { status: reply.status, json: reply.json };
         };
   const canary = readJson(join(root, PREFLIGHT_CANARY_FILE));
@@ -1702,6 +1776,7 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
     runningVersion: ctx.app.version,
     scanRuns: () => Promise.resolve(!("failed" in scanChange(root, undefined))),
     rest,
+    ...(trust !== null && "untrusted" in trust ? { ghUntrusted: trust.untrusted } : {}),
     gh,
     repo: origin === null ? null : { owner: origin.owner, repo: origin.repo },
     ghRepoEnv: env["GH_REPO"] ?? null,

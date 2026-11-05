@@ -18,7 +18,7 @@ import {
   describePackIntegrityFinding,
   verifyInstalledPacks,
 } from "../../src/pack/verifyInstalled.ts";
-import { RECEIPT_FILE, type PackReceipt, type PackReceiptFile } from "../../src/pack/receipt.ts";
+import { buildReceipt, RECEIPT_FILE, type PackReceipt, type PackReceiptFile } from "../../src/pack/receipt.ts";
 import {
   computeAggregateContentSha,
   type CatalogPin,
@@ -1179,6 +1179,30 @@ describe("planPackInstall org policy gate", () => {
     expect(pinnedDenied.message).toContain('matched rule: "catalog-pinned"');
   });
 
+  it("records the kind it judged, for each of the three routes, and keeps the resolved kind on the source", async () => {
+    const project = getProject();
+    await seedPack();
+    await project.seedFiles({
+      [`node_modules/@acme/flat/${PACK_MANIFEST_FILE}`]: JSON.stringify({
+        name: "@acme/flat",
+        version: "1.0.0",
+        integrity: {},
+      }),
+    });
+
+    const routes = [
+      [await plan(), "local-path", "catalog-pinned"],
+      [await plan({ allowUntrusted: true }), "local-path", "local-path"],
+      [await planPackInstall(project.dir, "@acme/flat", { allowUntrusted: true }), "npm-package", "npm-package"],
+    ] as const;
+
+    for (const [installPlan, resolved, judged] of routes) {
+      expect(installPlan.source.kind).toBe(resolved);
+      expect(installPlan.judgedKind).toBe(judged);
+      expect(buildReceipt(installPlan, FIXED_NOW, "0.0.0").source.kind).toBe(judged);
+    }
+  });
+
   it("evaluates the policy on the resolved source identity, not the pack's own name", async () => {
     // Keyed on `pack.json` `name`, the identity a rule was written
     // against was one the pack controlled. An npm spec supplies the name it
@@ -1501,7 +1525,8 @@ describe("applyPackInstall", () => {
     const receipt = JSON.parse(receiptBytes) as PackReceipt;
     expect(receipt.packId).toBe(PACK_ID);
     expect(receipt.version).toBe("1.2.3");
-    expect(receipt.source).toEqual({ kind: "local-path", spec: PACK_SPEC });
+    expect(receipt.source).toEqual({ kind: "catalog-pinned", spec: PACK_SPEC });
+    expect(installPlan.source.kind).toBe("local-path");
     expect(receipt.trustTier).toBe("curator-verified");
     expect(receipt.tierBasis).toBe(installPlan.tierBasis);
     expect(receipt.checks).toEqual(installPlan.checks);
@@ -1994,6 +2019,27 @@ describe("adoptInstalledPacks", () => {
     expect(adoption.adopted).toEqual([CATALOG_ID]);
     expect(recorded.length).toBeGreaterThan(1);
     expect(byPath(adoption.rows)).toEqual(byPath(recorded));
+  });
+
+  it("takes a kept catalog pack back under the receipt form this release writes", async () => {
+    await keptCatalogPack();
+    const receipt = JSON.parse(await readFile(getProject().path(CATALOG_RECEIPT), "utf8")) as PackReceipt;
+    expect(receipt.source.kind).toBe("catalog-pinned");
+
+    const adoption = await adoptInstalledPacks(getProject().dir, new Set());
+
+    expect(adoption.refused).toEqual([]);
+    expect(adoption.adopted).toEqual([CATALOG_ID]);
+  });
+
+  it("takes a kept catalog pack back under the receipt form an earlier release wrote", async () => {
+    await keptCatalogPack();
+    await editReceipt((receipt) => void (receipt.source = { ...receipt.source, kind: "local-path" }));
+
+    const adoption = await adoptInstalledPacks(getProject().dir, new Set());
+
+    expect(adoption.refused).toEqual([]);
+    expect(adoption.adopted).toEqual([CATALOG_ID]);
   });
 
   it("refuses a kept pack from outside the bundled catalog: its pack.json and signature are not kept, so the trust ladder cannot run", async () => {

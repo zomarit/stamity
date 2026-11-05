@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import { packLedgerRelPath, type PackInstallPlan } from "../../src/pack/install.ts";
 import {
   buildReceipt,
+  judgedSourceKind,
   packDirRelPath,
   receiptRelPath,
+  recordedSourceKind,
   serializeReceipt,
   RECEIPT_FILE,
   type PackReceipt,
@@ -36,6 +38,7 @@ function planFixture(overrides: Partial<PackInstallPlan> = {}): PackInstallPlan 
       },
     },
     source: { kind: "local-path", packRoot: "/somewhere/packs/ops" },
+    judgedKind: "catalog-pinned",
     spec: "./packs/ops",
     writeSet: [
       {
@@ -105,7 +108,7 @@ describe("buildReceipt", () => {
     expect(receipt).toEqual({
       packId: "@acme/ops",
       version: "1.2.3",
-      source: { kind: "local-path", spec: "./packs/ops" },
+      source: { kind: "catalog-pinned", spec: "./packs/ops" },
       trustTier: "curator-verified",
       tierBasis: "catalog pin",
       checks: { manifest: "pass", orgPolicy: "n/a", trustTier: "pass", signing: "n/a" },
@@ -185,5 +188,44 @@ describe("serializeReceipt", () => {
     const text = serializeReceipt(buildReceipt(planFixture(), FIXED_NOW, "1.0.0"));
     expect(text.endsWith("}\n")).toBe(true);
     expect(text.endsWith("\n\n")).toBe(false);
+  });
+});
+
+describe("judgedSourceKind", () => {
+  it.each(["curator-verified", "scanned"])("promotes any resolved kind at the catalog tier %s", (tier) => {
+    expect(judgedSourceKind("local-path", tier)).toBe("catalog-pinned");
+    expect(judgedSourceKind("npm-package", tier)).toBe("catalog-pinned");
+  });
+
+  it.each(["publisher-signed", "pinned-unsigned"])("keeps the resolved kind at the tier %s", (tier) => {
+    expect(judgedSourceKind("local-path", tier)).toBe("local-path");
+    expect(judgedSourceKind("npm-package", tier)).toBe("npm-package");
+  });
+});
+
+describe("recordedSourceKind", () => {
+  const receipt = (kind: unknown, trustTier: unknown): unknown => ({ source: { kind, spec: "x" }, trustTier });
+
+  it.each([
+    ["the judged kind of a catalog install", "catalog-pinned", "curator-verified", "catalog-pinned"],
+    ["the judged kind of a scanned catalog install", "catalog-pinned", "scanned", "catalog-pinned"],
+    ["the resolved kind an earlier release wrote for a catalog install", "local-path", "curator-verified", "catalog-pinned"],
+    ["the resolved kind of a catalog install through npm", "npm-package", "scanned", "catalog-pinned"],
+    ["a directory install", "local-path", "pinned-unsigned", "local-path"],
+    ["an npm install", "npm-package", "publisher-signed", "npm-package"],
+  ])("reads %s", (_label, kind, tier, judged) => {
+    expect(recordedSourceKind(receipt(kind, tier))).toBe(judged);
+  });
+
+  it.each([
+    ["a catalog kind beside a tier no catalog grants", receipt("catalog-pinned", "pinned-unsigned")],
+    ["a catalog kind beside a signed tier", receipt("catalog-pinned", "publisher-signed")],
+    ["a catalog kind with no tier", receipt("catalog-pinned", undefined)],
+    ["a kind no release records", receipt("elsewhere", "curator-verified")],
+    ["no source at all", { trustTier: "curator-verified" }],
+    ["something that is not a receipt", "receipt"],
+    ["nothing", null],
+  ])("proves nothing from %s", (_label, recorded) => {
+    expect(recordedSourceKind(recorded)).toBe("unknown");
   });
 });

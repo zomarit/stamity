@@ -277,8 +277,8 @@ interface LauncherLine {
 }
 
 /**
- * One launcher argv as a display line: control characters flattened, length
- * bounded.
+ * One launcher argv as a display line: control and invisible format characters
+ * flattened, length bounded.
  *
  * Both rules are about the terminal, not about the data. A pack-supplied `args`
  * entry is third-party text — ingress checks `command` against a bare-launcher
@@ -286,8 +286,9 @@ interface LauncherLine {
  * but takes `args` as any string array (`readServerArgs`) — and it is about to
  * be printed on the one line whose whole job is to be read accurately. A
  * carriage return or an escape sequence in it could erase or repaint the line
- * the operator is reading, so the class is flattened to spaces before it is
- * shown rather than trusted to be inert.
+ * the operator is reading, and a direction override or a zero-width mark could
+ * make it read otherwise than the argv that runs, so both classes are flattened
+ * to spaces before it is shown rather than trusted to be inert.
  *
  * Placeholders pass through as themselves. A variable reference in a pinned row
  * is the literal token `${env:NAME}` (`../../../mcp/catalog.ts` → the `github`
@@ -312,7 +313,7 @@ interface LauncherLine {
 function launcherLine(command: string, args: readonly string[]): LauncherLine {
   const flat = [command, ...args]
     .join(" ")
-    .replace(/\p{Cc}+/gu, " ")
+    .replace(/[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]+/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
   if (flat === "") return { text: "(declares no command)", elided: false };

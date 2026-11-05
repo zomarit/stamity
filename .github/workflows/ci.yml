@@ -40,7 +40,9 @@
 #     not the app that reports it: every workflow's jobs report as GitHub
 #     Actions, so an `all-ci-checks` check run on the head from any other check suite is a second
 #     producer. That, any other conclusion, a tree no head carries, and any failed, malformed or
-#     stalled read all print `false`, which is full CI and never a red reader. The push-only
+#     stalled read all print `false`, which is full CI and never a red reader. The reader runs
+#     from a worktree of the push's base commit, never from the pushed checkout, so a push cannot
+#     answer for itself; no base commit to run it from means not proven. The push-only
 #     workflows (`pack-signing-rehearsal.yml`, `docs-site.yml`) are untouched and still run on
 #     the push.
 #   - `lanes`, one leg, and ONLY when `changes` said `full=false` and no push was proven. It stands
@@ -218,7 +220,8 @@ jobs:
   # GitHub Actions app, so an `all-ci-checks` check run from any other check suite on that head is a
   # second producer and reads not proven. Every failed, malformed or stalled read prints
   # `proven=false` and exits 0 (each read has a timeout), so a rate limit, a 404 or a hang means
-  # full CI rather than a red job. The two lanes it gates carry `!cancelled()`
+  # full CI rather than a red job. The full history is fetched because the reader runs from the
+  # base commit, and a push can be many commits long. The two lanes it gates carry `!cancelled()`
   # because a job whose need was skipped is itself skipped unless its `if` calls a status function,
   # and `needs.changes.result == 'success'` puts back the guard the implicit `success()` gave.
   prove-pr:
@@ -238,7 +241,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 1
+          fetch-depth: 0
 
       # No `cache: npm` and no install: the reader is plain ESM over Node built-ins and `gh`.
       - name: Set up Node
@@ -246,12 +249,27 @@ jobs:
         with:
           node-version: '24'
 
+      # The reader runs from a detached worktree of the base commit, outside the workspace, so the
+      # code that can skip a push's checks is never that push's own. No base to run it from (an
+      # empty or all-zero base, one git cannot find, or one without the script) writes not proven
+      # and runs no reader code: no base means full CI. Inline for the classifier's reason above.
       - name: Read the pull request's run
         id: prove
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PUSHED_SHA: ${{ github.sha }}
-        run: node scripts/ci/pr-proven.mjs --sha "$PUSHED_SHA"
+          BASE_SHA: ${{ github.event.before }}
+        run: |
+          BASE_TREE="$RUNNER_TEMP/proven-base"
+          if printf '%s' "$BASE_SHA" | grep -Eq '^[0-9a-fA-F]{7,64}$' \
+            && ! printf '%s' "$BASE_SHA" | grep -Eq '^0+$' \
+            && git worktree add --detach "$BASE_TREE" "$BASE_SHA" \
+            && [ -f "$BASE_TREE/scripts/ci/pr-proven.mjs" ]; then
+            node "$BASE_TREE/scripts/ci/pr-proven.mjs" --sha "$PUSHED_SHA"
+          else
+            echo "pr-proven: no base commit to run the reader from, so not proven" >&2
+            echo 'proven=false' >> "$GITHUB_OUTPUT"
+          fi
 
   check:
     name: check (${{ matrix.label }}, node ${{ matrix.node }})

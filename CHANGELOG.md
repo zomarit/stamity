@@ -31,6 +31,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **The org policy judges an installed pack by the source kind `add` judged.** A catalog pack is `catalog-pinned` at
+  every `sync` and `check`, as it is at install, and its receipt records that kind. A receipt an earlier release wrote
+  reads the same way, with no re-install and no rewrite. `add`'s printed source line does not change. Two things can
+  move at the first `sync` after the upgrade. A policy that denies `local-path`, or allows only `catalog-pinned`, gets
+  its catalog packs back, hooks included: content goes live on the upgrade, as that policy documented. A policy that
+  denies `catalog-pinned`, or admits `local-path` and not `catalog-pinned`, loses its catalog packs, as it always said.
+- **A receipt that is not the install's decides nothing at projection.** The source kind and the tool footprint are
+  read only from a receipt whose bytes match its ledger row. With a kind rule in the policy, a pack whose kind cannot
+  be proven is refused, in either list and whatever else the policy admits, until its receipt is restored or the pack
+  is added again. `sync` and `check` name it as unproven, its files stay, and `clean --pack` still removes it. `check`
+  already failed in that state. With no kind rule in force, verdicts do not change. With or without a policy file, a
+  receipt that does not match its ledger row now leaves that pack's agents with no grant. A refused pack's agent copies
+  leave the clients at the next `sync` even without a usable receipt, wherever the engine can rebuild the bytes their
+  ledger rows record. A copy it cannot rebuild stays with its grant, and `sync` names it as kept.
+- **A line-ending change is not a receipt edit.** `add`, `check` and projection count a receipt that differs from its
+  ledger row only in `\r\n` line endings as matching, so a checkout's line-ending setting does not refuse a pack.
+
 ## [1.17.0] - 2026-10-27
 
 ### Upgrading from 1.16.0

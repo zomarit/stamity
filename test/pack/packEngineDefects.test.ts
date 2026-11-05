@@ -199,7 +199,7 @@ async function installBypassingAdd(
     buildReceipt(
       {
         manifest: { name, version: "1.0.0" },
-        source: { kind: "local-path" },
+        judgedKind: "local-path",
         spec: `./${name}`,
         writeSet,
         checks: { manifest: "pass", trustTier: "pass", integrityMap: "pass", bodyScan: "pass" },

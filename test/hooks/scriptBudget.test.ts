@@ -312,7 +312,29 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     // TEST CHANGE, justified (REQ-FLOW-163, the pull request's review of 2026-11-05): the lines row moved, from 6,341 to
     // 6,440, the measured 6,344 lines of the largest copy (copilot) plus a small margin, since the accept reading now
     // leaves out what an option of `learn` plainly takes; the bytes row (303,104, measured 301,570) holds.
-    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 303_104, lines: 6_440 });
+    // TEST CHANGE, justified (REQ-FLOW-102, REQ-FLOW-120): both rows moved again, bytes from 299,008 to 315,392 and lines
+    // from 6,341 to 6,597, the measured 310,498 bytes / 6,497 lines of the largest copy (copilot) plus a small margin,
+    // since both verdicts and the place reader now read every reading of a package manager's options, capped per call.
+    // TEST CHANGE, justified (REQ-FLOW-102): both rows moved again, bytes from 315,392 to 323,584 and lines from 6,597 to
+    // 6,720, the measured 320,397 bytes of the largest copy (copilot) plus a small margin, 6,609 lines at the round's first
+    // commit, since the verdict now reads more of a ref's routes.
+    // TEST CHANGE, justified (REQ-CTX-016, the maintainer's sign-off of 2026-11-05): the lines row moved from 6,720 to
+    // 6,724, since main added 4 lines to the guard after the row was measured (6,724 measured); the bytes row holds.
+    // TEST CHANGE, justified (REQ-FLOW-102, the maintainer's sign-off of 2026-11-05): the lines row moved from 6,724 to
+    // 6,734, the measured lines of the largest copy (copilot), since both verdicts now read whether a line settles a git
+    // call's subcommand; the bytes row holds.
+    // TEST CHANGE, justified (REQ-FLOW-102, 2026-11-05): both rows moved, bytes from 323,584 to 325,941 and lines from 6,734
+    // to 6,764, the measured size of the largest copy (copilot), since both verdicts now read more of what settles a
+    // wrapper's program and a git call's subcommand.
+    // TEST CHANGE, justified (REQ-FLOW-121, REQ-FLOW-157, 2026-11-05): both rows moved again, bytes from 303,104 to 307,200
+    // and lines from 6,341 to 6,450, the measured 303,074 bytes / 6,350 lines of the largest copy (copilot, up from about
+    // 300,246 bytes) plus a small margin, since both verdicts now read a word the shell completes as the land verb's word.
+    // TEST CHANGE, justified (REQ-CTX-016, 2026-11-05): both rows moved, bytes from 325,941 to 330,110 and lines from 6,764
+    // to 6,826, the measured size of the largest copy (copilot), since the land verb's reading and the readings above now
+    // stand in one guard.
+    // TEST CHANGE, justified (REQ-CTX-016, 2026-11-05): both rows moved, bytes from 330,110 to 331,435 and lines from 6,826
+    // to 6,863, the measured size of the largest copy (copilot), since main's guard lines now stand beside them.
+    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 331_435, lines: 6_863 });
     const guards = renders.filter((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
     expect(guards).toHaveLength(TOOLS.length);
     for (const script of guards) expect(budgetViolation(script), script.tool).toBeUndefined();

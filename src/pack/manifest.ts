@@ -24,7 +24,7 @@ import {
   scanForDeniedPatterns,
   type DenyPattern,
 } from "../denyscan/denyScan.ts";
-import { getServerMeta, pinnedPackageSpec, type McpServerMeta } from "../mcp/catalog.ts";
+import { FETCH_LAUNCHERS, getServerMeta, pinnedPackageSpec, type McpServerMeta } from "../mcp/catalog.ts";
 import { scanValueForSecrets } from "../mcp/secretScan.ts";
 import { CODE_EVAL_FLAGS } from "../shared/launcherAllowlist.ts";
 import { TOOLS, VALID_TOOLS, type Tool } from "../types/core.ts";
@@ -1086,6 +1086,120 @@ function flagName(arg: string): string {
 const FIXED_SUBCOMMAND_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
 /**
+ * Programs whose next word is what runs: a package a registry serves, an image, or a
+ * file beside the row, so plain subcommand words pass {@link FIXED_SUBCOMMAND_PATTERN}
+ * while nothing pins what they reach. The host lane has no way to carry a pin, which is
+ * why they stop there; `../shared/launcherAllowlist.ts` states the same ban for the hook
+ * lane. The fetch launchers are on it as well, so this one set is the route's whole list.
+ *
+ * A named set, so adding a row here only refuses more. A row's other checks are the
+ * manifest being a person-only path, and a pack's signing and policy.
+ */
+const HOST_ROUTE_RUNNERS: ReadonlySet<string> = new Set([
+  ...FETCH_LAUNCHERS,
+  "npm",
+  "pnpm",
+  "pnpx",
+  "yarn",
+  "yarnpkg",
+  "cnpm",
+  "bun",
+  "deno",
+  "corepack",
+  "node",
+  "nodejs",
+  "tsx",
+  "ts-node",
+  "python",
+  "py",
+  "pypy",
+  "graalpy",
+  "micropython",
+  "jython",
+  "pip",
+  "uv",
+  "poetry",
+  "pipenv",
+  "pdm",
+  "ruby",
+  "jruby",
+  "truffleruby",
+  "gem",
+  "bundle",
+  "perl",
+  "php",
+  "docker",
+  "podman",
+  "podman-remote",
+  "nerdctl",
+  "dotnet",
+  "dnx",
+  "go",
+  "cargo",
+  "nix",
+  "mise",
+]);
+
+/**
+ * Programs whose job is to start the program their next words name, with a limit, a user or
+ * a scheduling setting of their own, as `WRAPPERS` in `../hooks/personOnly.ts` reads them on the
+ * guard's side. A server is named by its own executable, so none of these is a launcher here.
+ * Read on the launcher word alone: most of these names are also everyday subcommand words.
+ */
+const HOST_ROUTE_STARTERS: ReadonlySet<string> = new Set([
+  "arch",
+  "builtin",
+  "caffeinate",
+  "chroot",
+  "chrt",
+  "dbus-run-session",
+  "doas",
+  "exec",
+  "fakeroot",
+  "flock",
+  "gosu",
+  "ionice",
+  "ltrace",
+  "nice",
+  "nohup",
+  "nsenter",
+  "parallel",
+  "pkexec",
+  "proxychains",
+  "rlwrap",
+  "runuser",
+  "script",
+  "setpriv",
+  "setsid",
+  "stdbuf",
+  "strace",
+  "su",
+  "su-exec",
+  "sudo",
+  "systemd-run",
+  "taskset",
+  "time",
+  "timeout",
+  "torsocks",
+  "unbuffer",
+  "unshare",
+  "watch",
+  "xargs",
+  "xvfb-run",
+]);
+
+/**
+ * A word as the sets read it: no letter case, no Windows wrapper suffix, no version with whatever
+ * letters ride on it (`python3.12`, `node22`, `python-3.12`, `python3.13t`, `go1.22rc1`).
+ */
+function runnerName(word: string): string {
+  return word
+    .toLowerCase()
+    .replace(/\.(?:exe|cmd|bat|com|ps1)$/, "")
+    .replace(/[-._]?\d[a-z\d.]*$/, "");
+}
+
+/**
  * Argument-vector gate for a launcher the pin cannot reach.
  *
  * {@link pinnedPackageSpec} answers `undefined` for anything outside the fetch
@@ -1097,7 +1211,7 @@ const FIXED_SUBCOMMAND_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
  * `.mcp.json` and ran at editor start-up. The shell
  * deny-list above never saw it: `node` is not a shell.
  *
- * Two conditions, both required, and neither of them a second copy of a list
+ * Three conditions, all required, and none of them a second copy of a list
  * that already exists:
  *
  * 1. No argument carries an inline-code flag. The flag set is
@@ -1111,6 +1225,11 @@ const FIXED_SUBCOMMAND_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
  *    first condition sufficient rather than a game of naming flags: `node
  *    server.js`, `deno run x.ts` and `ruby ./boot.rb` all fail it, because a
  *    program argument is not a subcommand word.
+ * 3. No word of the vector, the launcher among them, is on
+ *    {@link HOST_ROUTE_RUNNERS}, whose next word is a program even when it has
+ *    a subcommand word's shape, and the launcher is not on
+ *    {@link HOST_ROUTE_STARTERS}. Reading every word means the condition holds
+ *    for a launcher no set names.
  *
  * The whole of {@link checkLauncherArgv} is deliberately NOT called here, and
  * the reason is a real difference between the lanes rather than a shortcut. A
@@ -1152,6 +1271,17 @@ function assertHostLauncherArgv(command: string, args: readonly string[], relPat
         `single hyphens), as in \`glab mcp serve\`. Nothing here pins what an option or a path ` +
         `argument would reach, so a program, a script or a redirected endpoint is refused rather ` +
         `than emitted into the client's start-up config.`,
+      { code: "VALIDATION_ERROR" },
+    );
+  }
+
+  const runner = [command, ...args].find((word) => HOST_ROUTE_RUNNERS.has(runnerName(word)));
+  const named = runner ?? (HOST_ROUTE_STARTERS.has(runnerName(command)) ? command : undefined);
+  if (named !== undefined) {
+    throw new EngineError(
+      `${relPath}: ${JSON.stringify(named)} runs what its next word names, and no pin reaches that ` +
+        `word on a host-installed launcher. Use a fetch launcher with an exact pin, or name the ` +
+        `server's own executable.`,
       { code: "VALIDATION_ERROR" },
     );
   }

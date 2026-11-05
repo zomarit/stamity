@@ -54,7 +54,8 @@
  * mutation or a REST body read from a file where the
  * API's default is not the default branch, a REST target held in a variable — passes. A line nested past four
  * levels is not read: both verdicts throw a coded `NESTING_DEPTH` error, which
- * the guard refuses; an HTTP call whose method or targets the line cannot show (a
+ * the guard refuses, and so is a line whose package managers' options give added
+ * readings that re-read more than 16 lines' worth of text (`MANAGER_READINGS_OVER_16`), counted over the guard's whole call; an HTTP call whose method or targets the line cannot show (a
  * method holding `$` or a backtick (pr/83), a
  * curl or wget configuration file, a curl write its globbing expands, a wget
  * write reading its targets from a file) throws a coded `HTTP_TARGET_HIDDEN`
@@ -299,10 +300,18 @@ export interface PersonOnlyContext {
    */
   readonly originPush?: string | null;
   /**
-   * Whether this place is the session's own repository, where `origin` is the origin; the guard reads a place it cannot
-   * read as its own, so only a readable other checkout has its `origin` compared. Absent reads true.
+   * Whether this place is the session's own repository, where `origin` is the origin, so only another checkout has its
+   * `origin` compared. Absent reads true.
    */
   readonly ownCheckout?: boolean;
+  /** Whether the guard could not read this place: it shows no repository, so a push from it reads as outside. */
+  readonly placeUnread?: boolean;
+  /**
+   * The characters the added readings of package managers' options re-read (`MANAGER_READINGS_OVER_16`, past 16 lines'
+   * worth), shared by every verdict call that passes the same object: the guard passes one per shell call, over all its
+   * places and texts, so the cap bounds the whole call. Absent, the call counts its own.
+   */
+  readonly readings?: { used: number };
 }
 
 /**
@@ -554,8 +563,11 @@ export function claudeAskRows(runs: readonly PersonOnlyRuleId[]): readonly strin
  * a request where the line does not show.
  *
  * Throws a coded `NESTING_DEPTH` error for a line nested past four levels (pr/58),
- * and `HTTP_TARGET_HIDDEN` as above, each of which the guard refuses as a call it
- * cannot decide.
+ * `HTTP_TARGET_HIDDEN` as above, and `MANAGER_READINGS_OVER_16` for a line whose
+ * package managers' added readings re-read more than 16 lines' worth of text (each
+ * at least 4,096 characters), counted in `ctx.readings` where the caller shares one
+ * count over several calls (the guard, over its places and texts), each of which
+ * the guard refuses as a call it cannot decide.
  *
  * Self-contained, so the emitted guard can carry it as source (see the module
  * comment).
@@ -566,6 +578,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   // that names none (the run verb's own push check) reads no package path, only the bare bin words.
   const PACKAGE_NAME = (ctx.packageName ?? "").toLowerCase();
   const OWN_REPOSITORY = ctx.ownRepository ?? true;
+  const READINGS = ctx.readings ?? { used: 0 };
   // <shell-reading>
   const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
   const KEYWORDS = new Set(["!", "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
@@ -585,6 +598,46 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   const MANAGERS = new Set(["npm", "pnpm", "yarn", "bun"]);
   const MANAGER_VALUED = new Set(["-w", "--workspace", "--filter", "-F", "--prefix", "-C", "--dir", "--cwd", "--registry", "--userconfig"]);
   /**
+   * Where a package manager's subcommand may stand, its options from `from` skipped. First today's reading: a long
+   * option's next word is its value unless it is an option or a runner's subcommand, and pnpm's `-w` is a flag, its
+   * value-taking reading kept beside it. Then each other index a reading lands on: each option word read as a flag and,
+   * holding no `=` with a word after it that is no option, as a setting taking that word, and the word after `--` read
+   * as the subcommand as well. The guard holds a copy.
+   */
+  function managerSubs(name: string, words: readonly (string | null)[], from: number): number[] {
+    let sub = from;
+    while (MANAGERS.has(name) && typeof words[sub] === "string") {
+      const option = words[sub] ?? "";
+      const next = words[sub + 1] ?? "-";
+      if ((MANAGER_VALUED.has(option) && !(name === "pnpm" && option === "-w")) || (name === "yarn" && option === "workspace")) sub += 2;
+      else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(`${name} ${next}`)) sub += 2;
+      else if (option.startsWith("-") && option !== "--") sub += 1;
+      else break;
+    }
+    const found = new Set([sub]);
+    const reached = new Set([from]);
+    let last = MANAGERS.has(name) ? from : -1;
+    for (let at = from; at <= last; at += 1) {
+      if (!reached.has(at)) continue;
+      const option = words[at];
+      const next = words[at + 1];
+      const step = (to: number): void => {
+        reached.add(to);
+        last = Math.max(last, to);
+      };
+      if (typeof option !== "string") found.add(at);
+      else if (MANAGER_VALUED.has(option) || (name === "yarn" && option === "workspace")) {
+        step(at + 2);
+        if (name === "pnpm" && option === "-w") step(at + 1);
+      } else if (option === "--") found.add(at).add(at + 1);
+      else if (option.startsWith("-")) {
+        step(at + 1);
+        if (/^(?:--[^=]+|-[^-=][^=]*)$/.test(option) && typeof next === "string" && !next.startsWith("-")) step(at + 2);
+      } else found.add(at);
+    }
+    return [...found];
+  }
+  /**
    * Per wrapper: the short letters and the long options that take a value (the next word when nothing is attached),
    * and the options whose value is a command line of its own (`env -S`, a runner's `-c`).
    */
@@ -598,7 +651,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     ["timeout", ["sk", ["--signal", "--kill-after"], []]],
     ["stdbuf", ["ioe", ["--input", "--output", "--error"], []]],
     ["time", ["fo", ["--format", "--output"], []]],
-    ["xargs", ["ILnPsdEa", ["--max-args", "--max-procs", "--max-chars", "--delimiter", "--arg-file", "--process-slot-var"], []]],
+    ["xargs", ["ILnPsdEaJ", ["--max-args", "--max-procs", "--max-chars", "--delimiter", "--arg-file", "--process-slot-var"], []]],
     ["npx", RUNNER_OPTIONS],
     ["bunx", RUNNER_OPTIONS],
     ["pnpx", RUNNER_OPTIONS],
@@ -772,14 +825,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     /**
      * Where the reading resumes after the line break at `nl` (REQ-FLOW-141): past the terminator line when the line's
      * one heredoc goes to a data sink, else at the next character, the body read as commands. Every receiver needs its
-     * operator's line to end at `nl`, no carriage return in the text, a terminator line equal to the delimiter (after
-     * leading tabs for `<<-`) and, unquoted, a body with no `$(` or backtick, and nothing piping onward. With `docs` 2:
-     * a bare `cat` first in the text, with no other redirection and nothing after it on its line. With `docs` 1: a bare
-     * `cat` (no argument) or `tee` (plain operands, `-a`, `-i`, `-p`) first on the line, its standard output sent by `>`
-     * or `>>` to one plain path, no other redirection, its targets named by no later word; the engine's own CLI
-     * (`engine`) first in its segment, with no other redirection and no earlier command defining or assigning; or
-     * `git commit` or `gh pr create|edit|comment` reading its message from stdin (`message`), first on the line, with no
-     * other redirection (review/118).
+     * operator's line to end at `nl`, no carriage return in the text, a terminator line equal to the delimiter and,
+     * unquoted, a body with no `$(` or backtick, and nothing piping onward. With `docs` 2: a bare `cat` first in the text,
+     * with no other redirection and nothing after it on its line. With `docs` 1: a bare `cat` or `tee` first on the line,
+     * its standard output sent to one plain path, no other redirection, its targets named by no later word; the engine's
+     * own CLI first in its segment, with no other redirection and no earlier command defining or assigning; or `git commit`
+     * or `gh pr create|edit|comment` reading its message from stdin, first on the line, with no other redirection (review/118).
      */
     const pastBody = (nl: number): number => {
       const d = doc;
@@ -1055,11 +1106,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   /** Each assignment word the reading below skips (`X=v git …`, `env X=v …`), as it decoded it (review/208). */
   const assigned: string[] = [];
   /**
-   * Per command the reading returns, which of its words may spell an option the line does not show (review/37,
-   * review/45, review/52): an argument holding an expansion, or a glob or brace form whose literal text before it is
-   * empty or opens with a dash; the program word where its last path part holds an expansion or a brace form, or a
-   * glob that can name this package (review/38). A mark is never lost: a command read from a nested string taken from
-   * a marked word has every word marked (review/54).
+   * Per command the reading returns, which of its words may spell an option the line does not show (review/37, review/45,
+   * review/52): an argument holding an expansion, or a glob or brace form with no literal text or a dash before it; the
+   * program word where its last path part holds an expansion or a brace form, or a glob that can name this package
+   * (review/38). A command read from a nested string taken from a marked word has every word marked (review/54).
    */
   const unread = new Map<string[], boolean[]>();
   /** Per command, which of its words hold any mark at all, a glob or brace form whatever its literal text included. */
@@ -1070,11 +1120,30 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   const spills = new Set<string[]>();
   /** The commands run under `xargs`, which adds arguments from its input that the line never shows (review/45). */
   const fed = new Set<string[]>();
+  /** The placeholders `xargs` fills in, as its own words name them, each true where all its input lands there (`-J`). */
+  const holders = new Map<string, boolean>();
+  /** Whether a placeholder opens in a fed word by `upTo`: past an `=` it fills a value, not an option's place or a key. */
+  const held = (cmd: string[], word: string, upTo = word.length): boolean => fed.has(cmd) && [...holders.keys()].some((each) => word.slice(0, upTo + each.length).includes(each));
+  /**
+   * Each wrapper's long option cut short: GNU's tools read a unique prefix as the whole option, and the table lists those
+   * that take a value or a whole line, so what the walk reads next may be its value. The line does not settle the program.
+   */
+  const cutShort = new Set<string>();
   /**
    * Per launcher command whose settling word's literal last path part is one of this package's words (review/100, the
    * review/38 reading), that word's index: the command runs this package, its folder filled in or not.
    */
   const launched = new Map<string[], number>();
+  // The added readings of a package manager's options, over every nesting level and every verdict call sharing READINGS
+  // (the guard's one count per call). Each is a pass over the rest of its segment, so each draws the characters it
+  // re-reads, at least READINGS_FLOOR: past READINGS_MAX lines' worth (so at most 256 passes) the verdict throws a coded
+  // error the guard refuses, as `NESTING_DEPTH` does. A short line of many such calls is read.
+  const READINGS_MAX = 16;
+  const READINGS_FLOOR = 4_096;
+  const drawReading = (words: string[]): void => {
+    READINGS.used += Math.max(READINGS_FLOOR, words.reduce((sum, each) => sum + each.length + 1, 0));
+    if (READINGS.used > READINGS_MAX * 65_536) throw Object.assign(new Error("readings"), { code: `MANAGER_READINGS_OVER_${READINGS_MAX}` });
+  };
 
   /**
    * Each simple command's words, its program word first and normalized; `sh -c` and `eval` text read too. With `pwsh`,
@@ -1102,26 +1171,42 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     let defined = false;
     let checked = 0;
     const allMarks = [...marks, ...braces.marks];
-    for (const [segment, words] of [...segments, ...braces.segments].entries()) {
-      let k = 0;
+    // Each segment, then each added reading pushed below, which `for … of` reaches: read from the manager at `forkAt`,
+    // its subcommand at `forkSub`, with `xargs` seen before it or not; `forked` holds each segment one was pushed for.
+    const forked = new Set<number>();
+    // The segments a brace cut from words before it: the reading with braces as words joins the two sides of such a cut.
+    // A keyword-only segment holds no such words, so the walk passes one a brace also cut, back to what stands before it.
+    const braceCut = new Set<number>();
+    if (plainLine) {
+      segments.forEach((each, at) => {
+        if (/^[{}]/.test(ends[at] ?? "") && (braceCut.has(at) || !each.every((word) => KEYWORDS.has(word)))) braceCut.add(at + 1);
+      });
+    }
+    const passes: [number, string[], number, number, boolean][] = [...segments, ...braces.segments].map((words, segment) => [segment, words, -1, -1, false]);
+    for (const [segment, words, forkAt, forkSub, fedBefore] of passes) {
+      let k = Math.max(forkAt, 0);
       let line: string | null = null;
       let lineFrom = 0;
-      let viaStdin = false;
+      let viaStdin = fedBefore;
       while (k < words.length && line === null) {
         const word = words[k] ?? "";
         if (programName(word) === "xargs") viaStdin = true;
-        let sub = k + 1;
-        while (MANAGERS.has(programName(word)) && sub < words.length) {
-          const option = words[sub] ?? "";
-          const next = words[sub + 1] ?? "-";
-          if (MANAGER_VALUED.has(option) || (programName(word) === "yarn" && option === "workspace")) sub += 2;
-          // npm reads any `--<key> <value>` as a setting (`--loglevel silly`): a long option's next word is its value
-          // unless it is an option or a runner's subcommand.
-          else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(`${programName(word)} ${next}`)) sub += 2;
-          else if (option.startsWith("-") && option !== "--") sub += 1;
-          else break;
+        // A package manager's options are read today's way. Each other reading that lands on another runner, or on the
+        // manager's own subcommand where today's lands on a runner, is a pass of its own from this word.
+        const manager = programName(word);
+        const subs = managerSubs(manager, words, k + 1);
+        const sub = k === forkAt ? forkSub : (subs[0] ?? k + 1);
+        const runner = `${manager} ${words[sub] ?? ""}`;
+        let plain = !RUNNERS.has(`${manager} ${words[subs[0] ?? k + 1] ?? ""}`);
+        for (const other of k === forkAt ? [] : subs.slice(1)) {
+          if (!RUNNERS.has(`${manager} ${words[other] ?? ""}`)) {
+            if (plain) continue;
+            plain = true;
+          }
+          drawReading(words.slice(k));
+          forked.add(segment);
+          passes.push([segment, words, k, other, viaStdin]);
         }
-        const runner = `${programName(word)} ${words[sub] ?? ""}`;
         if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
           if (ASSIGNMENT.test(word)) assigned.push(word);
           k += 1;
@@ -1150,10 +1235,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
                 isLine = lineOptions.includes(name);
                 value = option.includes("=") ? option.slice(name.length + 1) : words[k];
                 if (!option.includes("=")) k += 1;
-              }
+              } else if ([...long, ...lineOptions, programName(word) === "xargs" ? "--replace" : ""].some((each) => each !== name && each.startsWith(name))) cutShort.add(option);
             } else if (option.startsWith("-")) {
               for (let c = 1; c < option.length; c += 1) {
                 const letter = option[c] ?? "";
+                // `xargs`'s `-e`, `-i` and `-l` hold what follows, joined.
+                if (short.includes("J") && "eil".includes(letter)) break;
                 if (!short.includes(letter) && !lineOptions.includes(`-${letter}`)) continue;
                 isLine = lineOptions.includes(`-${letter}`);
                 value = c === option.length - 1 ? words[k] : option.slice(c + 1);
@@ -1161,6 +1248,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
                 break;
               }
             }
+            // One the shell fills in may be in any word, as the empty text is.
+            const slot = /^(?:--replace=|-[^-iIJ]*i)(.+)|^-[^-iIJ]*[IJ]/.exec(programName(word) === "xargs" ? option : "");
+            const holder = slot?.[1] ?? value;
+            if (slot !== null && holder !== undefined) holders.set((allMarks[segment] ?? []).slice(optionAt, k).some((each) => /e/.test(each.kinds)) ? "" : holder, option.includes("J"));
             // An option whose value is a command line (`env -S '…'`, `npx -c '…'`): that line is what runs.
             if (isLine && value !== undefined) {
               line = [value, ...words.slice(k)].join(" ");
@@ -1175,13 +1266,15 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       // assignment, keyword or wrapper first, no shell, `eval`, PowerShell host, command interpreter, `source` or
       // launcher as the program, no standard output redirected or piped onward, nothing earlier defining or assigning,
       // no carriage return. A reading that runs the word as a line still reads it, its substitution unquoted there.
-      if (plainLine && segment < segments.length && !defined) {
+      // A second reading never reads one as data: it only adds acts. Nor does a segment one was pushed for, or one in
+      // `braceCut`: a runner that reading lands on, or a wrapper or runner the brace reading joins to it, may run the word.
+      if (plainLine && forkAt === -1 && segment < segments.length && !defined) {
         defined = defines(segments.slice(checked, segment));
         checked = segment;
       }
       const opener = programName(words[0] ?? "");
       if (
-        plainLine && !defined && line === null && k === 0 && !/[|>]/.test(ends[segment] ?? "|") &&
+        plainLine && forkAt === -1 && !forked.has(segment) && !braceCut.has(segment) && !defined && line === null && k === 0 && !/[|>]/.test(ends[segment] ?? "|") &&
         !SHELLS.has(opener) && !POWERSHELLS.has(opener) && !["eval", "cmd", "source", ".", "node", "nodejs", "bun", "deno", "tsx"].includes(opener)
       ) {
         for (const each of wholly.get(segment) ?? []) captured.add(each);
@@ -1241,18 +1334,14 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       const dashes = (at: number): boolean => markOf(at).first === 0 || (cmd[at] ?? "").startsWith("-");
       // A launcher or a package manager whose script or package word the shell fills in runs a program the guard cannot
       // settle (review/87, review/93, review/98, review/99), read with no knowledge of any option. A launcher's head
-      // word is its first word that is no option (a dash word, joined value or not) and no possible value of a bare
-      // option (a dash word holding no `=`, whose next word may be its value, any word). `node`, `nodejs` and `tsx`
-      // (its `watch` passed) read that word as the script, settled by its literal last path part whatever its
-      // extension. `deno` and `bun` read it through a fixed table of their verbs: a script-taking one (`deno run`, bun
-      // given a path or a script file, `bun run` given one) reads the next head word as the script; a name-taking one
-      // (`bun run <name>`, `deno task <name>`, bun given a bare name) is settled by that literal name; their own tools
-      // (`bun test`, `deno test`, `deno fmt`, …) are settled, their later words file arguments; `bun x` reads its
-      // package word. A manager's package or bin word is its first literal word that is no option, its `run`, `exec`,
-      // `dlx` or `x` and a folder, filter or workspace value passed. A marked word before the settling word unsettles
-      // the program, except a manager's folder, filter or workspace value, which runs no code; so does a marked
-      // settling word (a script by its last part), and, with no settling word, any marked word. A marked word after it
-      // leaves the program to that word.
+      // word is its first word that is no option and no possible value of a bare option. `node`, `nodejs` and `tsx`
+      // (its `watch` passed) read it as the script, settled by its literal last path part. `deno` and `bun` read it
+      // through a fixed table of their verbs: a script-taking one reads the next head word as the script, a name-taking
+      // one is settled by that name, their own tools are settled, and `bun x` reads its package word. A manager's
+      // package or bin word is its first literal word that is no option, its `run`, `exec`, `dlx` or `x` and a folder,
+      // filter or workspace value passed. A marked word before the settling word unsettles the program, except such a
+      // value, which runs no code; so does a marked settling word, and, with none, any marked word. A marked word after
+      // it leaves the program to that word.
       const launcher = programName(program);
       const launches = ["node", "nodejs", "bun", "deno", "tsx"].includes(launcher);
       const valueOf = (at: number): boolean =>
@@ -1419,6 +1508,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     return commands;
   }
 
+  /** git's options before its subcommand (git 2.52): with a value, then with none. */
+  const GIT_TAKES = new Set(["-c", "-C", "--git-dir", "--work-tree", "--namespace", "--config-env", "--super-prefix", "--attr-source"]);
+  const GIT_FLAGS = /^(?:-[pPvh]|--(?:paginate|bare|version|help|(?:html|man|info|exec)-path|list-cmds=.*|(?:literal|glob|noglob|icase)-pathspecs|no-(?:pager|replace-objects|lazy-fetch|optional-locks|advice)))$/;
+
   /** git's subcommand, its arguments and its `-c` pairs, the global options skipped. */
   function gitParts(cmd: string[]): { sub: string; args: string[]; config: string[] } {
     const config: string[] = [];
@@ -1428,13 +1521,57 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       if (word === "-c") {
         config.push(cmd[k + 1] ?? "");
         k += 2;
-      } else if (["-C", "--git-dir", "--work-tree", "--namespace", "--config-env", "--super-prefix"].includes(word)) {
+      } else if (GIT_TAKES.has(word)) {
         k += 2;
       } else if (word.startsWith("-")) {
         k += 1;
       } else break;
     }
     return { sub: (cmd[k] ?? "").toLowerCase(), args: cmd.slice(k + 1), config };
+  }
+
+  /**
+   * `git subtree`'s words past its options, walked once from the left, so a value shaped as an option takes none. Before
+   * the first plain word a dash word off these lists counts as one, since it may hold what follows as its value.
+   */
+  function subtreeWords(args: string[]): number[] {
+    const words: number[] = [];
+    for (let at = 0; at < args.length; at += 1) {
+      const word = args[at] ?? "";
+      if (/^(?:-[Pmb]|--(?:prefix|message|branch|onto|annotate))$/.test(word)) at += 1;
+      else if (!word.startsWith("-") || (words.length === 0 && !/^(?:-[qdhS]|--(?:quiet|debug|help|squash|rejoin|ignore-joins|gpg-sign)|--(?:prefix|message|branch|onto|annotate|gpg-sign)=.*)$/.test(word))) words.push(at);
+    }
+    return words;
+  }
+
+  /**
+   * How far a line settles a git call's subcommand: 0 it does, 1 unless a known option's value splits, 2 it does not. A
+   * word before it that is no shown option on these lists, nor such an option's value, costs an ask, not a hole.
+   */
+  function gitUnsettled(cmd: string[]): number {
+    const marks = markMap.get(cmd) ?? [];
+    let worst = 0;
+    let k = 1;
+    for (; k < cmd.length; k += 1) {
+      const word = cmd[k] ?? "";
+      const { kinds, first } = marks[k] ?? { kinds: "", first: 0 };
+      const eq = word.indexOf("=");
+      if (kinds === "" && !held(cmd, word) && GIT_TAKES.has(word)) k += 1;
+      else if (eq < 0 || !GIT_TAKES.has(word.slice(0, eq)) || (kinds !== "" && first <= eq) || held(cmd, word, eq)) {
+        if (kinds !== "" || held(cmd, word) || (word.startsWith("-") && !GIT_FLAGS.test(word))) return 2;
+        if (word.startsWith("-")) continue;
+        break;
+      }
+      if (/[sgb]/.test(marks[k]?.kinds ?? "") || (fed.has(cmd) && holders.get(cmd[k] ?? "") === true)) worst = 1;
+    }
+    // A subtree call's own subcommand settles the same way.
+    if (cmd[k] === "subtree") {
+      const tail = cmd.slice(k + 1);
+      const at = subtreeWords(tail)[0] ?? -1;
+      const sub = tail[at] ?? "";
+      if (at < 0 ? fed.has(cmd) : held(cmd, sub) || !/^(?:add|merge|pull|push|split)$/.test(sub) || marks.slice(k + 1, k + 2 + at).some((mark) => mark.kinds !== "")) return 2;
+    }
+    return fed.has(cmd) && !/^[a-z][a-z-]+$/.test(cmd[k] ?? "") ? 2 : worst;
   }
 
   /**
@@ -1464,11 +1601,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const hidden = (): never => {
       throw Object.assign(new Error("http target hidden"), { code: "HTTP_TARGET_HIDDEN" });
     };
-    // wget reads a long option's unique prefix as the option (`--meth=DELETE`, `--post-d`, pr/11), and curl's 7.x line
-    // does too (`--req DELETE`, `--dat '{}'`, pr/84): one of two letters or more (`--me`, pr/29) is expanded to the
-    // method, body, `--execute`, `--config`, `--input-file`, `--next`, `--globoff` or `--url` option it begins, a full
-    // name kept as it is, so a misread prefix only adds a denial. A prefix the tool finds ambiguous (wget's `--po`,
-    // curl's `--dat`) is one it refuses, so reading it as the option over-reads a line that sends nothing into a denial.
+    // wget reads a long option's unique prefix as the option (pr/11), and curl's 7.x line does too (pr/84): one of two
+    // letters or more (pr/29) is expanded to the method, body, `--execute`, `--config`, `--input-file`, `--next`,
+    // `--globoff` or `--url` option it begins, a full name kept, so a misread prefix only adds a denial. A prefix the tool
+    // finds ambiguous is one it refuses, so reading it as the option over-reads a line that sends nothing into a denial.
     const LONG = new Map([
       ["wget", ["--method", "--post-data", "--post-file", "--body-data", "--body-file", "--execute", "--config", "--input-file"]],
       ["curl", ["--request", "--data", "--data-raw", "--data-binary", "--data-ascii", "--data-urlencode", "--json", "--form",
@@ -1487,11 +1623,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const cmd: string[] = [];
     for (let k = 0; k < expanded.length; k += 1) {
       const word = expanded[k] ?? "";
-      // curl's body or method letter with its value attached, or a short cluster's first value letter (`-d@<file>`,
-      // `-sd{…}`, `-sT f`, pr/81; `-sX$M`, pr/83), and gh's value letter after its one boolean, `-i`, its `=` aside as
-      // gh reads it (`-iXDELETE`, `-X=PUT`), read apart: the letters before it, the letter, its value. A cluster whose
-      // first value letter is another is read as no method and no body, the letters after it being its value (`-oX`,
-      // `-od`), and wget has no short method or body letter.
+      // curl's body or method letter with its value attached, or a short cluster's first value letter (pr/81, pr/83), and
+      // gh's value letter after its one boolean, `-i`, its `=` aside as gh reads it, read apart: the letters before it, the
+      // letter, its value. A cluster whose first value letter is another is read as no method and no body, the letters
+      // after it being its value, and wget has no short method or body letter.
       const lead =
         tool === "curl" ? /^-([^-:KHouAebcwmxrEdFTXCDPQtyYzU]*)([dFTX])([\s\S]*)$/.exec(word)
         : tool === "gh" ? /^-(i*)([XfFHpqt])=?([\s\S]*)$/.exec(word)
@@ -1629,21 +1764,19 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     return { write, method: verb, paths, targets, cmd: cmd.slice(0, end), next };
   }
 
+  const namesPackage = (word: string): boolean => PACKAGE_WORDS.includes(programName(word)) || /stamity/i.test(word);
   /**
-   * The words after the program where a command runs this package (REQ-FLOW-121's land line, REQ-FLOW-138), or
-   * `null` for any other program: one of `PACKAGE_WORDS` (its bins and unscoped name) or a word naming `stamity` as
-   * the program, a runner's package reading as that program above; a package manager's first word after its options,
-   * or after its `run`, `exec`, `dlx` or `x`, being one of those words (`yarn st`, `pnpm run st`, review/44); or a
-   * launcher (`node`, `bun`, `deno`, `tsx`) or a package manager given a word naming the package or the engine's CLI file
+   * The words after the program where a command runs this package (REQ-FLOW-121's land line, REQ-FLOW-138), or `null` for
+   * any other program: one of `PACKAGE_WORDS` or a word naming `stamity` as the program, a runner's package reading as that
+   * program above; a package manager's first word after its options, or after its `run`, `exec`, `dlx` or `x`, being one of
+   * those words (review/44); or a launcher or a package manager given a word naming the package or the engine's CLI file
    * by its path (review/53): under `node_modules/<package>/`, `node_modules/.bin/<bin>`, and, in the engine's own
-   * repository, any word whose file name is the CLI's, by any path spelling (absolute, `..`, a doubled slash, a leading
-   * expansion, review/68); the words after. With `basename`, only a launcher's or manager's
-   * word whose file name is a CLI file's (`cli.js`, `cli.ts`, …) anywhere, which may be the engine's or the
-   * repository's own.
+   * repository, any word whose file name is the CLI's, by any path spelling (review/68); the words after. With
+   * `basename`, only a launcher's or manager's word whose file name is a CLI file's anywhere, which may be the engine's or
+   * the repository's own.
    */
   function packageArgs(cmd: string[], basename = false): string[] | null {
     const program = cmd[0] ?? "";
-    const named = (word: string): boolean => PACKAGE_WORDS.includes(programName(word)) || /stamity/i.test(word);
     const engineFile = (word: string): boolean => {
       const path = word.replace(/\\/g, "/").toLowerCase();
       return (
@@ -1652,7 +1785,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         (OWN_REPOSITORY && /(?:^|\/)cli\.[cm]?[jt]s$/.test(path))
       );
     };
-    if (!basename && named(program)) return cmd.slice(1);
+    if (!basename && namesPackage(program)) return cmd.slice(1);
     const launchedAt = basename ? undefined : launched.get(cmd);
     if (launchedAt !== undefined) return cmd.slice(launchedAt + 1);
     if (!["node", "nodejs", "bun", "deno", "tsx", ...MANAGERS].includes(program)) return null;
@@ -1665,10 +1798,51 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += MANAGER_VALUED.has(cmd[k] ?? "") ? 2 : 1;
       if (["run", "run-script", "exec", "dlx", "x"].includes(cmd[k] ?? "")) k += 1;
       while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += 1;
-      if (named(cmd[k] ?? "")) return cmd.slice(k + 1);
+      if (namesPackage(cmd[k] ?? "")) return cmd.slice(k + 1);
     }
     const at = cmd.findIndex((word, index) => index > 0 && (/stamity/i.test(word) || engineFile(word)));
     return at === -1 ? null : cmd.slice(at + 1);
+  }
+  /**
+   * The words after a word naming this package on each other reading of a manager's options (`managerSubs`), so any
+   * reading's word counts. They only add to `packageArgs`, whose result stays read beside them: a reading's tail may open
+   * on another word than that one's. Each is a further read of its words, so each draws on the count of added readings.
+   */
+  function addedArgs(cmd: string[]): string[][] {
+    const program = cmd[0] ?? "";
+    const tails: string[][] = [];
+    if (!MANAGERS.has(program)) return tails;
+    const seen = new Set([packageArgs(cmd)?.length]);
+    for (const start of managerSubs(program, cmd, 1)) {
+      let k = start;
+      while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += MANAGER_VALUED.has(cmd[k] ?? "") ? 2 : 1;
+      if (["run", "run-script", "exec", "dlx", "x"].includes(cmd[k] ?? "")) k += 1;
+      while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += 1;
+      if (!namesPackage(cmd[k] ?? "") || seen.has(cmd.length - k - 1)) continue;
+      seen.add(cmd.length - k - 1);
+      tails.push(cmd.slice(k + 1));
+      drawReading(cmd.slice(k + 1));
+    }
+    return tails;
+  }
+
+  /** Whether the word at `index` holds a mark that may give a bare word, which a glob holding a path, giving only paths, does not. */
+  function hidesBareWord(cmd: string[], index: number): boolean {
+    return anyMark.get(cmd)?.[index] === true && !(/[\\/]/.test(cmd[index] ?? "") && /^g+$/.test(markMap.get(cmd)?.[index]?.kinds ?? ""));
+  }
+
+  /**
+   * Whether the words past `run`, at `at` in `args`, the end of `cmd`, may be the land verb: `land` itself, a hidden word
+   * or words `xargs` adds. A bare word the line shows right after `run` settles the verb. Past an option word nothing
+   * settles it, since the option may take the next word as its value.
+   */
+  function mayLand(cmd: string[], args: string[], at: number): boolean {
+    const past = args.slice(at + 1);
+    if (past.includes("land")) return true;
+    const start = cmd.length - past.length;
+    const verb = past[0];
+    if (verb !== undefined && !verb.startsWith("-") && !hidesBareWord(cmd, start)) return false;
+    return fed.has(cmd) || past.some((_, index) => hidesBareWord(cmd, start + index));
   }
   // </shell-reading>
 
@@ -1874,9 +2048,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * `--repo` value and its first positional word) is a URL read by `repoKey`, or a remote's name, read through the
    * context's `remoteRepo` (its push URL in git's merged configuration). With none, the remote the context's
    * `pushRemote` names is read. `origin` in the session's own checkout runs, and so does any word naming the origin's own
-   * repository, unless origin's own push URL (`ctx.originPush`) names another. Outside: a word the shell fills in, a
-   * remote the configuration does not place, a push remote the guard cannot tell, and a line that sets a remote or a URL
-   * through a `-c` pair or its environment.
+   * repository, unless origin's own push URL (`ctx.originPush`) names another. Outside: any push from a place the guard
+   * cannot read (`ctx.placeUnread`), a word the shell fills in, a remote the configuration does not place, a push remote
+   * the guard cannot tell, and a line that sets a remote or a URL through a `-c` pair or its environment.
    */
   const pushOutside = (words: readonly (readonly [string | null, WordMark | undefined])[], config: readonly string[]): void => {
     const origin = ctx.originRepo;
@@ -1884,7 +2058,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const outside = (): void => {
       deny("outside-write", "A push to another repository, or to a remote the guard cannot place");
     };
-    if (gitEnvironment || config.some((pair) => /^(?:remote|url)\./i.test(pair))) return outside();
+    if (ctx.placeUnread === true || gitEnvironment || config.some((pair) => /^(?:remote|url)\./i.test(pair))) return outside();
     const named = words.length > 0 ? words : [[ctx.pushRemote === undefined ? "origin" : ctx.pushRemote, undefined] as const];
     for (const [word, mark] of named) {
       if (word === null || (mark?.kinds ?? "") !== "" || /[$`]/.test(word)) return outside();
@@ -2063,6 +2237,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     };
     if (tags || refspecs.some((spec) => sides(spec).some(namesTag))) return deny("push-tags", "A push of tags");
     for (const [index, spec] of refspecs.entries()) {
+      // A destination naming a remote's HEAD ref moves it where the repository reached is this one, read whichever it is.
+      if (REMOTE_HEAD.test(destination(spec))) remoteHeadVerdict("git push");
       const name = destination(spec).replace(/^(refs\/)?heads\//i, "").toLowerCase();
       if (spec === ":" || spec === "+:") {
         if (deploying.length > 0) deny("push-deploying", "A matching push, a deploying branch among the branches it may push");
@@ -2167,6 +2343,14 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   /** A remote's HEAD ref by name (review/163): `refs/` optional, one remote segment, any case. */
   const REMOTE_HEAD = /^(?:refs\/)?remotes\/[^/]+\/HEAD$/i;
   /**
+   * A whole line that deletes local branches under `xargs` from a shown listing of them, narrowed by patterns at most. The
+   * listing prints branch names and its own marks, and `git branch` refuses a new name opening with a dash, so a plain
+   * listing gives `xargs` no remotes flag to add and the delete does not reach a remote's HEAD ref. A name made first to
+   * read as that flag is the residual. Any other feed, an operand a filter would read instead of the listing, a word the
+   * shell fills in or a further command falls outside this and keeps the ask.
+   */
+  const LOCAL_CLEANUP = /^git branch(?: --(?:no-)?merged(?: \w[\w./-]*)?)?(?: \| [ef]?grep(?: -[EFivw]+)* (?:\w+|'(?!-)[^']*'|"(?!-)(?:[^"$`\\]|\\.)*"))* \| xargs(?: -r| -n ?1)* git branch (?:-[dD]|--delete)$/;
+  /**
    * A write or a delete of a remote's HEAD ref (review/163): the guard reads origin's as the default branch, so moving
    * it steers a later push, and it is read as that push. Another remote's is read too, in the safe direction.
    */
@@ -2180,6 +2364,23 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * brace-expands may be any option word or any name git takes there, and more than one where it may split.
    */
   const shownWords = (marks: readonly WordMark[]): boolean => marks.every((mark) => mark.kinds === "");
+  /** A short option word whose reason option stands last, so its value is the next word; a later letter joins the reason. */
+  const REASON_OPTION = /^-[^-m]*m$/;
+  /** The places of a call's reason values, walked from the left as git reads them, so a value shaped as the option takes none. */
+  const reasonValues = (args: readonly string[]): Set<number> => {
+    const values = new Set<number>();
+    for (let at = 0; at < args.length; at += 1) if (REASON_OPTION.test(args[at] ?? "")) values.add((at += 1));
+    return values;
+  };
+  /**
+   * Whether a call naming a tag ref at `ref` may be that ref's deletion through a word the line cannot show. Such a word,
+   * unless it is the ref itself or a reason's value, may be the delete flag or a zero value, and one that may split may
+   * be either wherever it stands. A deletion is refuse-class, so an approval must not reach what the line cannot show.
+   */
+  const unshownDelete = (args: readonly string[], marks: readonly WordMark[], ref: number): boolean => {
+    const reasons = reasonValues(args);
+    return ref >= 0 && marks.some((mark, at) => mark.kinds !== "" && (/[sgb]/.test(mark.kinds) || (at !== ref && !reasons.has(at))));
+  };
 
   /**
    * `git symbolic-ref`'s writes (pr/70), and `git update-ref --stdin`'s symref commands read as its arguments (pr/82). A
@@ -2209,7 +2410,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       } else positionals.push(arg);
     }
     const [name = "", target] = positionals;
-    if (remove && /^(refs\/)?tags\//i.test(name)) return deny("tag-delete", `A symbolic tag ref deleted (\`${via}\`)`);
+    const tagAt = args.findIndex((arg) => /^(refs\/)?tags\//i.test(arg));
+    if ((remove && /^(refs\/)?tags\//i.test(name)) || unshownDelete(args, marks, tagAt)) {
+      return deny("tag-delete", `A symbolic tag ref deleted (\`${via}\`)`);
+    }
     if (target !== undefined && /^(refs\/)?tags\//i.test(name)) {
       return deny("tag", `A symbolic tag ref written or deleted (\`${via}\`)`);
     }
@@ -3084,22 +3288,24 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * `land-approved` (review/103): a land line (`run land` on a command running this package, or on a program the reading
    * cannot settle) carrying `--approved`, the person's one click on the verb's `asks` outcome, asks in every mode, so it
    * is refused unattended and for a sub-agent. A land line holding a word the shell fills in, an `--approved=` form, or
-   * arguments `xargs` adds may carry it, and reads the same: fail-closed.
+   * arguments `xargs` adds may carry it, and reads the same: fail-closed. A hidden word that may be a verb word itself
+   * is `acceptHiddenVerdict`'s.
    */
   function landApprovedVerdict(cmd: string[]): void {
     const unsure = unread.get(cmd) ?? [];
-    const args = unsure[0] === true ? cmd.slice(1) : packageArgs(cmd);
-    if (args === null) return;
-    const verbs = unsure[0] === true ? args : learnVerbWords(args);
-    if (verbs.includes("learn") && verbs.includes("accept")) deny("learn-accept", "A `learn accept` line");
-    const at = unsure[0] === true ? args.indexOf("run") : args.findIndex((word) => !word.startsWith("-"));
-    if (at === -1 || args[at] !== "run" || !args.slice(at + 1).includes("land")) return;
-    // The flag in any spelling, alone, followed by its value (the approved commit) or joined to it with `=` (review/110).
-    if (args.some((word) => word === "--approved" || word.startsWith("--approved="))) {
-      deny("land-approved", "Landing a run on the person's approval (`stamity run land --approved`)");
-      return;
+    for (const args of unsure[0] === true ? [cmd.slice(1)] : [packageArgs(cmd), ...addedArgs(cmd)]) {
+      if (args === null) continue;
+      const verbs = unsure[0] === true ? args : learnVerbWords(args);
+      if (verbs.includes("learn") && verbs.includes("accept")) deny("learn-accept", "A `learn accept` line");
+      const at = unsure[0] === true ? args.indexOf("run") : args.findIndex((word) => !word.startsWith("-"));
+      if (at === -1 || args[at] !== "run" || !args.slice(at + 1).includes("land")) continue;
+      // The flag in any spelling, alone, followed by its value (the approved commit) or joined to it with `=` (review/110).
+      if (args.some((word) => word === "--approved" || word.startsWith("--approved="))) {
+        deny("land-approved", "Landing a run on the person's approval (`stamity run land --approved`)");
+        continue;
+      }
+      if (hidesWords(cmd, args)) deny("land-approved", "A `stamity run land` line whose words the guard cannot read, which may carry `--approved`");
     }
-    if (hidesWords(cmd, args)) deny("land-approved", "A `stamity run land` line whose words the guard cannot read, which may carry `--approved`");
   }
 
   /**
@@ -3132,16 +3338,18 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   /**
    * `learn-accept`'s marked half (review/70): a hidden word may be either verb word, and one may give both. Read after
    * the loosen reading, so a line that already asks keeps its name. A first word that settles another verb is no accept,
-   * and neither is a glob holding a path, which gives only paths: the script word of `node scripts/*.mjs`.
+   * and neither is a glob holding a path, which gives only paths: the script word of `node scripts/*.mjs`. The land verb's
+   * word reads the same way: past `run`, a hidden word may be `land`, so the line asks as a land line it cannot read does.
    */
   function acceptHiddenVerdict(cmd: string[]): void {
     const unsettled = unread.get(cmd)?.[0] === true;
     const args = unsettled ? cmd.slice(1) : packageArgs(cmd);
     if (args === null || !hidesWords(cmd, args)) return;
     const offset = cmd.length - args.length;
-    const verbal = (at: number): boolean =>
-      anyMark.get(cmd)?.[offset + at] === true && !(/[\\/]/.test(args[at] ?? "") && /^g+$/.test(markMap.get(cmd)?.[offset + at]?.kinds ?? ""));
+    const verbal = (at: number): boolean => hidesBareWord(cmd, offset + at);
     const first = args.findIndex((word) => !word.startsWith("-"));
+    const run = unsettled ? args.indexOf("run") : first;
+    if (args[run] === "run" && mayLand(cmd, args, run)) deny("land-approved", "A `stamity run land` line whose words the guard cannot read, which may carry `--approved`");
     if (args.includes("learn") || args.includes("accept") || (unsettled ? args.some((_, at) => verbal(at)) : verbal(first))) {
       deny("learn-accept", "A line whose words the guard cannot read, which may be `learn accept`");
     }
@@ -3157,33 +3365,34 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const unsure = unread.get(cmd) ?? [];
     const unsettled = unsure[0] === true;
     const loosens = (words: string[]): boolean => words.some((word) => /^--loosen(=|$)/.test(word));
-    const args = unsettled ? cmd.slice(1) : packageArgs(cmd);
-    if (args === null) {
-      // A file that only shares the CLI's file name may be the repository's own CLI (review/53): it asks on the literal
-      // flag alone, never on an argument it cannot read or on a full `clean` or an `init --force`.
-      if (loosens(packageArgs(cmd, true) ?? [])) deny("autonomy-loosen", "Loosening the autonomy setting (`--loosen`)");
-      return;
-    }
-    const what = unsettled ? "A command the guard cannot read, which may be a stamity command," : "A stamity command";
-    if (loosens(args)) {
-      deny("autonomy-loosen", "Loosening the autonomy setting (`--loosen`)");
-      return;
-    }
-    if (fed.has(cmd)) {
-      deny("autonomy-loosen", `${what} run under \`xargs\`, which adds arguments the guard cannot read and which may spell \`--loosen\``);
-      return;
-    }
-    if ((unsettled && spills.has(cmd)) || args.some((_, index) => unsure[cmd.length - args.length + index] === true)) {
-      deny("autonomy-loosen", `${what} with an argument the guard cannot read, which may spell \`--loosen\``);
-      return;
-    }
-    if (ctx.stricterThanDefault === false) return;
-    const sub = args.find((word) => !word.startsWith("-"));
-    if (sub === "clean" && !args.some((word) => /^--pack(=|$)/.test(word))) {
-      deny("autonomy-loosen", "A full `clean`, which removes the guard holding an autonomy setting stricter than the default");
-    }
-    if (sub === "init" && args.some((word) => /^--force(=|$)/.test(word))) {
-      deny("autonomy-loosen", "An `init --force`, which lands the default autonomy setting over a stricter one");
+    for (const args of unsettled ? [cmd.slice(1)] : [packageArgs(cmd), ...addedArgs(cmd)]) {
+      if (args === null) {
+        // A file that only shares the CLI's file name may be the repository's own CLI (review/53): it asks on the literal
+        // flag alone, never on an argument it cannot read or on a full `clean` or an `init --force`.
+        if (loosens(packageArgs(cmd, true) ?? [])) deny("autonomy-loosen", "Loosening the autonomy setting (`--loosen`)");
+        continue;
+      }
+      const what = unsettled ? "A command the guard cannot read, which may be a stamity command," : "A stamity command";
+      if (loosens(args)) {
+        deny("autonomy-loosen", "Loosening the autonomy setting (`--loosen`)");
+        continue;
+      }
+      if (fed.has(cmd)) {
+        deny("autonomy-loosen", `${what} run under \`xargs\`, which adds arguments the guard cannot read and which may spell \`--loosen\``);
+        continue;
+      }
+      if ((unsettled && spills.has(cmd)) || args.some((_, index) => unsure[cmd.length - args.length + index] === true)) {
+        deny("autonomy-loosen", `${what} with an argument the guard cannot read, which may spell \`--loosen\``);
+        continue;
+      }
+      if (ctx.stricterThanDefault === false) continue;
+      const sub = args.find((word) => !word.startsWith("-"));
+      if (sub === "clean" && !args.some((word) => /^--pack(=|$)/.test(word))) {
+        deny("autonomy-loosen", "A full `clean`, which removes the guard holding an autonomy setting stricter than the default");
+      }
+      if (sub === "init" && args.some((word) => /^--force(=|$)/.test(word))) {
+        deny("autonomy-loosen", "An `init --force`, which lands the default autonomy setting over a stricter one");
+      }
     }
   }
 
@@ -3225,27 +3434,62 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   };
   /** `git update-ref`'s `--stdin`, by a unique prefix too, as git accepts it (review/35). */
   const stdinFlag = (arg: string): boolean => arg.length > 2 && "--stdin".startsWith(arg);
+  /** Whether a `git update-ref` call may read a `--stdin` text: it shows the option, or a word that may be it. */
+  const mayStdin = (args: string[], marks: readonly WordMark[]): boolean => args.some(stdinFlag) || !shownWords(marks);
+  // A zero sha, in a `--stdin` text or as `git update-ref`'s new value, and a `--stdin` `update` of a tag ref whose new
+  // value is empty, which git reads as the zero value (review/35): the ref not followed by one separator (a space, or an
+  // escape such as `-z`'s NUL) and a value.
+  const zero = /(^|[^0-9a-f])(0{40}|0{64})([^0-9a-f]|$)/i;
+  const refWord = String.raw`[^\s'"\\|;&<>()]`;
+  const separator = String.raw`(?: |\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|[0-7]{1,4}))`;
+  const emptied = new RegExp(String.raw`${before}update${separator}+refs\/tags\/${refWord}+(?!${refWord})(?!${separator}${refWord})`, "i");
+  // A `--stdin` text the line carries is read only as plain text: a place the shell or printf fills in may hold a line
+  // break and so any command, beside a shown one too, and an escape other than a line break, a space or `-z`'s NUL may
+  // spell one the guard does not decode. A shown command word says nothing of these.
+  const textGap = /\n|\\[nt]|\\x(?:0a|20)|\\0?(?:12|40)(?![0-7])|\\u00(?:0a|20)|\\0+(?![0-7])|\\x00/i;
+  const unshownText = (text: string): boolean => text.split(textGap).some((part) => /[$`%\\]/.test(part));
+  // What may feed that text: printf's and echo's words, whatever option stands first, a here-document or here-string
+  // holding a fill-in or an escape, and any command holding a word the line cannot show. `git update-ref`'s own words
+  // are its reader's. A text a program makes or a file holds is the residual.
+  const unshownFeed = (): boolean =>
+    (command.includes("<<") && /[$`\\]/.test(command)) ||
+    read.some((words) => {
+      if ((words[0] === "printf" || words[0] === "echo") && unshownText(words.slice(1).join(" "))) return true;
+      return !(words[0] === "git" && gitParts(words).sub === "update-ref") && !shownWords(markMap.get(words) ?? []);
+    });
   // The `--stdin` text the line carries, read once for the line however many calls take it (review/36), raw and as each
-  // command's unquoted words: whether it names a remote's HEAD ref (in excess, as the tag read does), and whether it
-  // names one it cannot show or, with no command shown, is a text the shell or printf fills in (review/22, review/26).
-  let stdinRead: { named: boolean; unshown: boolean } | undefined;
+  // command's unquoted words: whether it names a remote's HEAD ref (in excess, as the tag read does), whether it names
+  // one it cannot show or, with no command shown, is a text the shell or printf fills in (review/22, review/26) or a
+  // feed the line cannot show, whether it names a tag ref, and whether it may delete one.
+  type StdinText = { texts: string[]; named: boolean; unshown: boolean; tag: boolean; deletes: boolean };
+  let stdinRead: StdinText | undefined;
   let symrefsRead = false;
-  const stdinText = (): { named: boolean; unshown: boolean } => {
+  const stdinText = (): StdinText => {
     if (stdinRead !== undefined) return stdinRead;
-    const texts = [command, ...read.map((words) => words.join(" "))];
+    const texts = [...new Set([command, ...read.map((words) => words.join(" "))])];
     stdinRead = {
+      texts,
       named: texts.some((text) => /remotes\/[^\s/'"\\]+\/HEAD(?![\w-])/i.test(text)),
       unshown:
         texts.some((text) => unshownCommand.test(text) || unshownRemote(text)) ||
-        (!texts.some((text) => stdinCommand.test(text)) && /[$`%\\]/.test(command)),
+        (!texts.some((text) => stdinCommand.test(text)) && /[$`%\\]/.test(command)) ||
+        unshownFeed(),
+      tag: texts.some((text) => /refs\/tags\//i.test(text)),
+      deletes: texts.some((text) => /\bdelete\b/.test(text) || zero.test(text) || emptied.test(text)),
     };
     return stdinRead;
   };
   for (const cmd of read) {
     const program = cmd[0] ?? "";
     if (program === "git") {
-      const { sub, args, config } = gitParts(cmd);
-      const argMarks = (markMap.get(cmd) ?? []).slice(cmd.length - args.length);
+      if (gitUnsettled(cmd) > 1) deny("push-default", "A git call whose subcommand the line does not settle");
+      const { sub, args: lineArgs, config } = gitParts(cmd);
+      // `xargs` adds words the line never shows, read as one more word the shell fills in, which may split.
+      const added = fed.has(cmd) ? [{ first: 0, last: 1, kinds: "es" }] : [];
+      const args = [...lineArgs, ...added.map(() => "$")];
+      const argMarks = [...(markMap.get(cmd) ?? []).slice(cmd.length - lineArgs.length), ...added];
+      const reasons = reasonValues(args);
+      const named = (arg: string, index: number): boolean => !arg.startsWith("-") && !reasons.has(index);
       remoteWriteVerdict(sub, args, argMarks);
       // `git send-pack` pushes as `git push` does, its options and refspecs laid out the same (pr/16); with
       // no ref it updates the refs both sides have, the default branch among them, read as a matching push.
@@ -3254,36 +3498,33 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       else if (sub === "tag") tagVerdict(args);
       else if (
         sub === "update-ref" &&
-        (args.some((arg) => /^(refs\/)?tags\//i.test(arg)) || (args.includes("--stdin") && /refs\/tags\//i.test(command)))
+        (args.some((arg) => /^(refs\/)?tags\//i.test(arg)) || (mayStdin(args, argMarks) && stdinText().tag))
       ) {
         // `git update-ref` writes or deletes a ref by name (pr/53): a tag ref named on the line, or in a `--stdin` text
         // the line itself carries, is a tag created or deleted. A `--stdin` text read from a file is the residual.
-        // A deletion (`-d`, a zero new value, a `delete` command or a zero sha in that text, read in excess) is
-        // refuse-class (v0a).
-        const zero = /(^|[^0-9a-f])(0{40}|0{64})([^0-9a-f]|$)/i;
-        const [, value = ""] = args.filter((arg, index) => !arg.startsWith("-") && args[index - 1] !== "-m");
-        // `-d` in a short cluster before the reason option (`-dm <reason>`), and a `--stdin` `update` of a tag ref whose
-        // new value is empty, which git reads as the zero value (review/35): the ref not followed by one separator (a
-        // space, or an escape such as `-z`'s NUL) and a value.
-        const word = String.raw`[^\s'"\\|;&<>()]`;
-        const separator = String.raw`(?: |\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|[0-7]{1,4}))`;
-        const emptied = new RegExp(String.raw`${before}update${separator}+refs\/tags\/${word}+(?!${word})(?!${separator}${word})`, "i");
+        // A deletion (`-d`, a zero new value, a `delete` command or a zero sha in that text, read in excess, or a word
+        // the line cannot show that may be either) is refuse-class (v0a).
+        const [, value = ""] = args.filter(named);
+        const tagAt = args.findIndex((arg) => /^(refs\/)?tags\//i.test(arg));
+        // `-d` in a short cluster before the reason option (`-dm <reason>`).
         if (
           args.some((arg) => /^-[^-m]*d/.test(arg)) ||
           zero.test(value) ||
-          (args.includes("--stdin") && (/\bdelete\b/.test(command) || zero.test(command) || emptied.test(command)))
+          unshownDelete(args, argMarks, tagAt) ||
+          (mayStdin(args, argMarks) && stdinText().deletes)
         ) {
           deny("tag-delete", "A tag ref deleted (`git update-ref`)");
         } else deny("tag", "A tag ref write (`git update-ref`)");
-      } else if (sub === "update-ref" && args.includes("--stdin")) {
+      } else if (sub === "update-ref" && args.some(stdinFlag)) {
         // git 2.46's symref commands in that text (pr/82), by `git symbolic-ref`'s rules: `symref-create` and
         // `symref-update` as `<ref> <target>`, `symref-delete` as `-d <ref>`. A target missing or a printf placeholder
         // is one the line cannot show; a space, a quote or an escape (`\n`, `\0`, `\x00`, ` `) ends a word. A
         // command is read wherever it stands: the line break before it may be an escape or a `%b` placeholder ending in a
         // letter or a digit, and a command read in excess only adds a denial.
         const word = String.raw`(?:[\s'"]|\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|U[\da-fA-F]{1,8}|[0-7]{1,4}|[a-z]))+([^\s'"\\|;&<>()]+)`;
-        // Read once for the line (review/36): each later call would record the same acts again.
-        const symrefs = symrefsRead ? [] : command.matchAll(new RegExp(String.raw`symref-(create|update|delete)${word}(?:${word})?`, "g"));
+        // Read once for the line (review/36), raw and unquoted: each later call would record the same acts again.
+        const symref = new RegExp(String.raw`symref-(create|update|delete)${word}(?:${word})?`, "g");
+        const symrefs = symrefsRead ? [] : stdinText().texts.flatMap((text) => Array.from(text.matchAll(symref)));
         symrefsRead = true;
         for (const [, op, ref = "", target] of symrefs) {
           const shown = target === undefined || target.includes("%") ? "$" : target;
@@ -3292,18 +3533,15 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       } else if (sub === "symbolic-ref") symbolicRefVerdict(args, undefined, argMarks);
       else if (sub === "subtree") {
         // `git subtree push <remote> <branch>` runs `git push <remote> <split>:refs/heads/<branch>`.
-        const valued = new Set(["-P", "--prefix", "-m", "--message", "-b", "--branch", "--onto"]);
-        const kept = args.flatMap((word, index) => (!word.startsWith("-") && !valued.has(args[index - 1] ?? "") ? [index] : []));
-        const words = kept.map((index) => args[index] ?? "");
-        const keptMarks = kept.map((index) => argMarks[index] ?? { first: -1, last: 0, kinds: "" });
-        if (words[0] === "push") pushRead(words.slice(1), config, keptMarks.slice(1));
+        const [first = -1, ...kept] = subtreeWords(args);
+        if (args[first] === "push") pushRead(kept.map((index) => args[index] ?? ""), config, kept.map((index) => argMarks[index] ?? { first: -1, last: 0, kinds: "" }));
       }
       // After the readers above, so a tag or a deploying target is named first (review/25): `git update-ref` whose ref
       // (its first word, review/27) is a remote's HEAD ref, or a call holding a word the line cannot show, which may be
       // any option or that ref (review/26, review/35), or a `--stdin` text on the line naming one, or one it cannot show
       // (`stdinText`, review/22). A text read from a file is the residual.
       if (sub === "update-ref") {
-        const at = args.findIndex((arg, index) => !arg.startsWith("-") && !/^-[^-]*m$/.test(args[index - 1] ?? ""));
+        const at = args.findIndex(named);
         const stdin = at < 0 && args.some(stdinFlag);
         const text = stdin ? stdinText() : undefined;
         const via = stdin ? "git update-ref --stdin" : "git update-ref";
@@ -3313,8 +3551,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       // A remote-tracking branch delete (`-d`/`-D`/`--delete` with `-r`/`--remotes`) of `<remote>/HEAD` deletes that ref
       // itself (review/24). A word the line cannot show may be any one word git takes there, a flag cluster or a name,
       // and any number where it may split (review/35), so the call may be that delete where such words can supply each
-      // part the line does not show.
-      if (sub === "branch") {
+      // part the line does not show. `LOCAL_CLEANUP` shows where `xargs` adds no such word.
+      if (sub === "branch" && !LOCAL_CLEANUP.test(command)) {
         const flag = (short: RegExp, long: string): boolean => args.some((arg) => (arg.startsWith("--") ? arg.length > 2 && long.startsWith(arg) : short.test(arg)));
         const flags = flag(/^-[^-]*[dD]/, "--delete") && flag(/^-[^-]*r/, "--remotes");
         const head = args.some((arg) => !arg.startsWith("-") && /^(?:(?:refs\/)?remotes\/)?[^/]+\/HEAD$/i.test(arg));
@@ -3324,12 +3562,30 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
           remoteHeadVerdict("git branch -d -r", false);
         }
       }
+      // `git fetch` and `git pull` write a refspec's destination: one naming a remote's HEAD ref, on the line, in a `-c`
+      // pair or in a `--stdin` text the line carries, moves it. So may a destination the line cannot show, and any word
+      // `xargs` adds. A word with no literal colon is read as a source name, and a destination whose literal start already
+      // rules that ref out, a local branch named after a filled-in number among them, moves nothing it reads.
+      if (sub === "fetch" || sub === "pull") {
+        const repository = args.findIndex((arg) => !arg.startsWith("-"));
+        const moves = (word: string): boolean => word.includes(":") && REMOTE_HEAD.test(word.slice(word.indexOf(":") + 1));
+        const mayStart = (lead: string): boolean => "refs/remotes/".startsWith(lead) || "remotes/".startsWith(lead) || /^(?:refs\/)?remotes\//.test(lead);
+        const unshown = (word: string, at: number): boolean => {
+          const { last = 0, kinds = "" } = argMarks[at] ?? {};
+          const dst = word.indexOf(":") + 1;
+          return at > repository && dst > 0 && kinds !== "" && last >= dst && mayStart((word.slice(dst).split(/[$`*?[{%(]/)[0] ?? "").toLowerCase());
+        };
+        const text = sub === "fetch" && args.some(stdinFlag) ? stdinText() : undefined;
+        if ([...args, ...config].some(moves) || text?.named === true) remoteHeadVerdict(`git ${sub}`);
+        else if (args.some(unshown) || added.length > 0 || text?.unshown === true) remoteHeadVerdict(`git ${sub}`, false);
+      }
     } else if (program === "gh") {
       ghVerdict(cmd);
       if (ghPositionals(cmd)[0] !== "api") outsideVerdict(cmd);
     } else if (program === "curl" || program === "wget") httpVerdict(cmd);
     else if (["npm", "pnpm", "yarn", "bun"].includes(program)) publishVerdict(cmd);
   }
+  if (cutShort.size > 0) deny("push-default", "A call behind a wrapper's shortened option, whose program the line does not settle");
   // The loosen reading last, so a line holding another act names that one first.
   for (const cmd of read) {
     landApprovedVerdict(cmd);
@@ -3364,11 +3620,13 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
  * changes the environment the verb's git runs in.
  *
  * With `landOnly`, the guard's attended reading of the land verb's line (REQ-FLOW-121, a4): only that rule, and only
- * over the parsed program words (a command whose program is this package, then `run` and `land`), never the raw text,
+ * over the parsed program words (a command whose program is this package, then `run` and `land`, or a word the shell
+ * fills in or completes that may be either), never the raw text,
  * so a commit message naming the verb runs. A line that builds the verb by an expression is not seen there; the
  * verb's own checks back that residual. `identity` is this package as the guard bakes it, {@link PersonOnlyContext}'s
  * `packageWords`, `packageName` and `ownRepository` (review/44, review/53); the verb's line admits its words as its
- * first word too.
+ * first word too. `readings` is {@link PersonOnlyContext}'s count of the text added readings re-read, which the guard
+ * shares over every verdict call it makes.
  *
  * Self-contained, so the emitted guard can carry it as source (see the module
  * comment).
@@ -3378,11 +3636,13 @@ export function unattendedPushVerdict(
   powershell = false,
   landOnly = false,
   identity: { readonly words?: readonly string[]; readonly name?: string; readonly own?: boolean } = {},
+  readings: { used: number } = { used: 0 },
 ): UnattendedPushVerdict {
   const PACKAGE_WORDS = identity.words ?? ["stamity", "st"];
   // No scoped name is embedded here (build/10), as in personOnlyVerdict.
   const PACKAGE_NAME = (identity.name ?? "").toLowerCase();
   const OWN_REPOSITORY = identity.own ?? true;
+  const READINGS = readings;
   // <shell-reading>
   const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
   const KEYWORDS = new Set(["!", "{", "}", "if", "then", "else", "elif", "fi", "do", "done", "while", "until"]);
@@ -3402,6 +3662,46 @@ export function unattendedPushVerdict(
   const MANAGERS = new Set(["npm", "pnpm", "yarn", "bun"]);
   const MANAGER_VALUED = new Set(["-w", "--workspace", "--filter", "-F", "--prefix", "-C", "--dir", "--cwd", "--registry", "--userconfig"]);
   /**
+   * Where a package manager's subcommand may stand, its options from `from` skipped. First today's reading: a long
+   * option's next word is its value unless it is an option or a runner's subcommand, and pnpm's `-w` is a flag, its
+   * value-taking reading kept beside it. Then each other index a reading lands on: each option word read as a flag and,
+   * holding no `=` with a word after it that is no option, as a setting taking that word, and the word after `--` read
+   * as the subcommand as well. The guard holds a copy.
+   */
+  function managerSubs(name: string, words: readonly (string | null)[], from: number): number[] {
+    let sub = from;
+    while (MANAGERS.has(name) && typeof words[sub] === "string") {
+      const option = words[sub] ?? "";
+      const next = words[sub + 1] ?? "-";
+      if ((MANAGER_VALUED.has(option) && !(name === "pnpm" && option === "-w")) || (name === "yarn" && option === "workspace")) sub += 2;
+      else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(`${name} ${next}`)) sub += 2;
+      else if (option.startsWith("-") && option !== "--") sub += 1;
+      else break;
+    }
+    const found = new Set([sub]);
+    const reached = new Set([from]);
+    let last = MANAGERS.has(name) ? from : -1;
+    for (let at = from; at <= last; at += 1) {
+      if (!reached.has(at)) continue;
+      const option = words[at];
+      const next = words[at + 1];
+      const step = (to: number): void => {
+        reached.add(to);
+        last = Math.max(last, to);
+      };
+      if (typeof option !== "string") found.add(at);
+      else if (MANAGER_VALUED.has(option) || (name === "yarn" && option === "workspace")) {
+        step(at + 2);
+        if (name === "pnpm" && option === "-w") step(at + 1);
+      } else if (option === "--") found.add(at).add(at + 1);
+      else if (option.startsWith("-")) {
+        step(at + 1);
+        if (/^(?:--[^=]+|-[^-=][^=]*)$/.test(option) && typeof next === "string" && !next.startsWith("-")) step(at + 2);
+      } else found.add(at);
+    }
+    return [...found];
+  }
+  /**
    * Per wrapper: the short letters and the long options that take a value (the next word when nothing is attached),
    * and the options whose value is a command line of its own (`env -S`, a runner's `-c`).
    */
@@ -3415,7 +3715,7 @@ export function unattendedPushVerdict(
     ["timeout", ["sk", ["--signal", "--kill-after"], []]],
     ["stdbuf", ["ioe", ["--input", "--output", "--error"], []]],
     ["time", ["fo", ["--format", "--output"], []]],
-    ["xargs", ["ILnPsdEa", ["--max-args", "--max-procs", "--max-chars", "--delimiter", "--arg-file", "--process-slot-var"], []]],
+    ["xargs", ["ILnPsdEaJ", ["--max-args", "--max-procs", "--max-chars", "--delimiter", "--arg-file", "--process-slot-var"], []]],
     ["npx", RUNNER_OPTIONS],
     ["bunx", RUNNER_OPTIONS],
     ["pnpx", RUNNER_OPTIONS],
@@ -3589,14 +3889,12 @@ export function unattendedPushVerdict(
     /**
      * Where the reading resumes after the line break at `nl` (REQ-FLOW-141): past the terminator line when the line's
      * one heredoc goes to a data sink, else at the next character, the body read as commands. Every receiver needs its
-     * operator's line to end at `nl`, no carriage return in the text, a terminator line equal to the delimiter (after
-     * leading tabs for `<<-`) and, unquoted, a body with no `$(` or backtick, and nothing piping onward. With `docs` 2:
-     * a bare `cat` first in the text, with no other redirection and nothing after it on its line. With `docs` 1: a bare
-     * `cat` (no argument) or `tee` (plain operands, `-a`, `-i`, `-p`) first on the line, its standard output sent by `>`
-     * or `>>` to one plain path, no other redirection, its targets named by no later word; the engine's own CLI
-     * (`engine`) first in its segment, with no other redirection and no earlier command defining or assigning; or
-     * `git commit` or `gh pr create|edit|comment` reading its message from stdin (`message`), first on the line, with no
-     * other redirection (review/118).
+     * operator's line to end at `nl`, no carriage return in the text, a terminator line equal to the delimiter and,
+     * unquoted, a body with no `$(` or backtick, and nothing piping onward. With `docs` 2: a bare `cat` first in the text,
+     * with no other redirection and nothing after it on its line. With `docs` 1: a bare `cat` or `tee` first on the line,
+     * its standard output sent to one plain path, no other redirection, its targets named by no later word; the engine's
+     * own CLI first in its segment, with no other redirection and no earlier command defining or assigning; or `git commit`
+     * or `gh pr create|edit|comment` reading its message from stdin, first on the line, with no other redirection (review/118).
      */
     const pastBody = (nl: number): number => {
       const d = doc;
@@ -3872,11 +4170,10 @@ export function unattendedPushVerdict(
   /** Each assignment word the reading below skips (`X=v git …`, `env X=v …`), as it decoded it (review/208). */
   const assigned: string[] = [];
   /**
-   * Per command the reading returns, which of its words may spell an option the line does not show (review/37,
-   * review/45, review/52): an argument holding an expansion, or a glob or brace form whose literal text before it is
-   * empty or opens with a dash; the program word where its last path part holds an expansion or a brace form, or a
-   * glob that can name this package (review/38). A mark is never lost: a command read from a nested string taken from
-   * a marked word has every word marked (review/54).
+   * Per command the reading returns, which of its words may spell an option the line does not show (review/37, review/45,
+   * review/52): an argument holding an expansion, or a glob or brace form with no literal text or a dash before it; the
+   * program word where its last path part holds an expansion or a brace form, or a glob that can name this package
+   * (review/38). A command read from a nested string taken from a marked word has every word marked (review/54).
    */
   const unread = new Map<string[], boolean[]>();
   /** Per command, which of its words hold any mark at all, a glob or brace form whatever its literal text included. */
@@ -3887,11 +4184,30 @@ export function unattendedPushVerdict(
   const spills = new Set<string[]>();
   /** The commands run under `xargs`, which adds arguments from its input that the line never shows (review/45). */
   const fed = new Set<string[]>();
+  /** The placeholders `xargs` fills in, as its own words name them, each true where all its input lands there (`-J`). */
+  const holders = new Map<string, boolean>();
+  /** Whether a placeholder opens in a fed word by `upTo`: past an `=` it fills a value, not an option's place or a key. */
+  const held = (cmd: string[], word: string, upTo = word.length): boolean => fed.has(cmd) && [...holders.keys()].some((each) => word.slice(0, upTo + each.length).includes(each));
+  /**
+   * Each wrapper's long option cut short: GNU's tools read a unique prefix as the whole option, and the table lists those
+   * that take a value or a whole line, so what the walk reads next may be its value. The line does not settle the program.
+   */
+  const cutShort = new Set<string>();
   /**
    * Per launcher command whose settling word's literal last path part is one of this package's words (review/100, the
    * review/38 reading), that word's index: the command runs this package, its folder filled in or not.
    */
   const launched = new Map<string[], number>();
+  // The added readings of a package manager's options, over every nesting level and every verdict call sharing READINGS
+  // (the guard's one count per call). Each is a pass over the rest of its segment, so each draws the characters it
+  // re-reads, at least READINGS_FLOOR: past READINGS_MAX lines' worth (so at most 256 passes) the verdict throws a coded
+  // error the guard refuses, as `NESTING_DEPTH` does. A short line of many such calls is read.
+  const READINGS_MAX = 16;
+  const READINGS_FLOOR = 4_096;
+  const drawReading = (words: string[]): void => {
+    READINGS.used += Math.max(READINGS_FLOOR, words.reduce((sum, each) => sum + each.length + 1, 0));
+    if (READINGS.used > READINGS_MAX * 65_536) throw Object.assign(new Error("readings"), { code: `MANAGER_READINGS_OVER_${READINGS_MAX}` });
+  };
 
   /**
    * Each simple command's words, its program word first and normalized; `sh -c` and `eval` text read too. With `pwsh`,
@@ -3919,26 +4235,42 @@ export function unattendedPushVerdict(
     let defined = false;
     let checked = 0;
     const allMarks = [...marks, ...braces.marks];
-    for (const [segment, words] of [...segments, ...braces.segments].entries()) {
-      let k = 0;
+    // Each segment, then each added reading pushed below, which `for … of` reaches: read from the manager at `forkAt`,
+    // its subcommand at `forkSub`, with `xargs` seen before it or not; `forked` holds each segment one was pushed for.
+    const forked = new Set<number>();
+    // The segments a brace cut from words before it: the reading with braces as words joins the two sides of such a cut.
+    // A keyword-only segment holds no such words, so the walk passes one a brace also cut, back to what stands before it.
+    const braceCut = new Set<number>();
+    if (plainLine) {
+      segments.forEach((each, at) => {
+        if (/^[{}]/.test(ends[at] ?? "") && (braceCut.has(at) || !each.every((word) => KEYWORDS.has(word)))) braceCut.add(at + 1);
+      });
+    }
+    const passes: [number, string[], number, number, boolean][] = [...segments, ...braces.segments].map((words, segment) => [segment, words, -1, -1, false]);
+    for (const [segment, words, forkAt, forkSub, fedBefore] of passes) {
+      let k = Math.max(forkAt, 0);
       let line: string | null = null;
       let lineFrom = 0;
-      let viaStdin = false;
+      let viaStdin = fedBefore;
       while (k < words.length && line === null) {
         const word = words[k] ?? "";
         if (programName(word) === "xargs") viaStdin = true;
-        let sub = k + 1;
-        while (MANAGERS.has(programName(word)) && sub < words.length) {
-          const option = words[sub] ?? "";
-          const next = words[sub + 1] ?? "-";
-          if (MANAGER_VALUED.has(option) || (programName(word) === "yarn" && option === "workspace")) sub += 2;
-          // npm reads any `--<key> <value>` as a setting (`--loglevel silly`): a long option's next word is its value
-          // unless it is an option or a runner's subcommand.
-          else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(`${programName(word)} ${next}`)) sub += 2;
-          else if (option.startsWith("-") && option !== "--") sub += 1;
-          else break;
+        // A package manager's options are read today's way. Each other reading that lands on another runner, or on the
+        // manager's own subcommand where today's lands on a runner, is a pass of its own from this word.
+        const manager = programName(word);
+        const subs = managerSubs(manager, words, k + 1);
+        const sub = k === forkAt ? forkSub : (subs[0] ?? k + 1);
+        const runner = `${manager} ${words[sub] ?? ""}`;
+        let plain = !RUNNERS.has(`${manager} ${words[subs[0] ?? k + 1] ?? ""}`);
+        for (const other of k === forkAt ? [] : subs.slice(1)) {
+          if (!RUNNERS.has(`${manager} ${words[other] ?? ""}`)) {
+            if (plain) continue;
+            plain = true;
+          }
+          drawReading(words.slice(k));
+          forked.add(segment);
+          passes.push([segment, words, k, other, viaStdin]);
         }
-        const runner = `${programName(word)} ${words[sub] ?? ""}`;
         if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
           if (ASSIGNMENT.test(word)) assigned.push(word);
           k += 1;
@@ -3967,10 +4299,12 @@ export function unattendedPushVerdict(
                 isLine = lineOptions.includes(name);
                 value = option.includes("=") ? option.slice(name.length + 1) : words[k];
                 if (!option.includes("=")) k += 1;
-              }
+              } else if ([...long, ...lineOptions, programName(word) === "xargs" ? "--replace" : ""].some((each) => each !== name && each.startsWith(name))) cutShort.add(option);
             } else if (option.startsWith("-")) {
               for (let c = 1; c < option.length; c += 1) {
                 const letter = option[c] ?? "";
+                // `xargs`'s `-e`, `-i` and `-l` hold what follows, joined.
+                if (short.includes("J") && "eil".includes(letter)) break;
                 if (!short.includes(letter) && !lineOptions.includes(`-${letter}`)) continue;
                 isLine = lineOptions.includes(`-${letter}`);
                 value = c === option.length - 1 ? words[k] : option.slice(c + 1);
@@ -3978,6 +4312,10 @@ export function unattendedPushVerdict(
                 break;
               }
             }
+            // One the shell fills in may be in any word, as the empty text is.
+            const slot = /^(?:--replace=|-[^-iIJ]*i)(.+)|^-[^-iIJ]*[IJ]/.exec(programName(word) === "xargs" ? option : "");
+            const holder = slot?.[1] ?? value;
+            if (slot !== null && holder !== undefined) holders.set((allMarks[segment] ?? []).slice(optionAt, k).some((each) => /e/.test(each.kinds)) ? "" : holder, option.includes("J"));
             // An option whose value is a command line (`env -S '…'`, `npx -c '…'`): that line is what runs.
             if (isLine && value !== undefined) {
               line = [value, ...words.slice(k)].join(" ");
@@ -3992,13 +4330,15 @@ export function unattendedPushVerdict(
       // assignment, keyword or wrapper first, no shell, `eval`, PowerShell host, command interpreter, `source` or
       // launcher as the program, no standard output redirected or piped onward, nothing earlier defining or assigning,
       // no carriage return. A reading that runs the word as a line still reads it, its substitution unquoted there.
-      if (plainLine && segment < segments.length && !defined) {
+      // A second reading never reads one as data: it only adds acts. Nor does a segment one was pushed for, or one in
+      // `braceCut`: a runner that reading lands on, or a wrapper or runner the brace reading joins to it, may run the word.
+      if (plainLine && forkAt === -1 && segment < segments.length && !defined) {
         defined = defines(segments.slice(checked, segment));
         checked = segment;
       }
       const opener = programName(words[0] ?? "");
       if (
-        plainLine && !defined && line === null && k === 0 && !/[|>]/.test(ends[segment] ?? "|") &&
+        plainLine && forkAt === -1 && !forked.has(segment) && !braceCut.has(segment) && !defined && line === null && k === 0 && !/[|>]/.test(ends[segment] ?? "|") &&
         !SHELLS.has(opener) && !POWERSHELLS.has(opener) && !["eval", "cmd", "source", ".", "node", "nodejs", "bun", "deno", "tsx"].includes(opener)
       ) {
         for (const each of wholly.get(segment) ?? []) captured.add(each);
@@ -4058,18 +4398,14 @@ export function unattendedPushVerdict(
       const dashes = (at: number): boolean => markOf(at).first === 0 || (cmd[at] ?? "").startsWith("-");
       // A launcher or a package manager whose script or package word the shell fills in runs a program the guard cannot
       // settle (review/87, review/93, review/98, review/99), read with no knowledge of any option. A launcher's head
-      // word is its first word that is no option (a dash word, joined value or not) and no possible value of a bare
-      // option (a dash word holding no `=`, whose next word may be its value, any word). `node`, `nodejs` and `tsx`
-      // (its `watch` passed) read that word as the script, settled by its literal last path part whatever its
-      // extension. `deno` and `bun` read it through a fixed table of their verbs: a script-taking one (`deno run`, bun
-      // given a path or a script file, `bun run` given one) reads the next head word as the script; a name-taking one
-      // (`bun run <name>`, `deno task <name>`, bun given a bare name) is settled by that literal name; their own tools
-      // (`bun test`, `deno test`, `deno fmt`, …) are settled, their later words file arguments; `bun x` reads its
-      // package word. A manager's package or bin word is its first literal word that is no option, its `run`, `exec`,
-      // `dlx` or `x` and a folder, filter or workspace value passed. A marked word before the settling word unsettles
-      // the program, except a manager's folder, filter or workspace value, which runs no code; so does a marked
-      // settling word (a script by its last part), and, with no settling word, any marked word. A marked word after it
-      // leaves the program to that word.
+      // word is its first word that is no option and no possible value of a bare option. `node`, `nodejs` and `tsx`
+      // (its `watch` passed) read it as the script, settled by its literal last path part. `deno` and `bun` read it
+      // through a fixed table of their verbs: a script-taking one reads the next head word as the script, a name-taking
+      // one is settled by that name, their own tools are settled, and `bun x` reads its package word. A manager's
+      // package or bin word is its first literal word that is no option, its `run`, `exec`, `dlx` or `x` and a folder,
+      // filter or workspace value passed. A marked word before the settling word unsettles the program, except such a
+      // value, which runs no code; so does a marked settling word, and, with none, any marked word. A marked word after
+      // it leaves the program to that word.
       const launcher = programName(program);
       const launches = ["node", "nodejs", "bun", "deno", "tsx"].includes(launcher);
       const valueOf = (at: number): boolean =>
@@ -4236,6 +4572,10 @@ export function unattendedPushVerdict(
     return commands;
   }
 
+  /** git's options before its subcommand (git 2.52): with a value, then with none. */
+  const GIT_TAKES = new Set(["-c", "-C", "--git-dir", "--work-tree", "--namespace", "--config-env", "--super-prefix", "--attr-source"]);
+  const GIT_FLAGS = /^(?:-[pPvh]|--(?:paginate|bare|version|help|(?:html|man|info|exec)-path|list-cmds=.*|(?:literal|glob|noglob|icase)-pathspecs|no-(?:pager|replace-objects|lazy-fetch|optional-locks|advice)))$/;
+
   /** git's subcommand, its arguments and its `-c` pairs, the global options skipped. */
   function gitParts(cmd: string[]): { sub: string; args: string[]; config: string[] } {
     const config: string[] = [];
@@ -4245,13 +4585,57 @@ export function unattendedPushVerdict(
       if (word === "-c") {
         config.push(cmd[k + 1] ?? "");
         k += 2;
-      } else if (["-C", "--git-dir", "--work-tree", "--namespace", "--config-env", "--super-prefix"].includes(word)) {
+      } else if (GIT_TAKES.has(word)) {
         k += 2;
       } else if (word.startsWith("-")) {
         k += 1;
       } else break;
     }
     return { sub: (cmd[k] ?? "").toLowerCase(), args: cmd.slice(k + 1), config };
+  }
+
+  /**
+   * `git subtree`'s words past its options, walked once from the left, so a value shaped as an option takes none. Before
+   * the first plain word a dash word off these lists counts as one, since it may hold what follows as its value.
+   */
+  function subtreeWords(args: string[]): number[] {
+    const words: number[] = [];
+    for (let at = 0; at < args.length; at += 1) {
+      const word = args[at] ?? "";
+      if (/^(?:-[Pmb]|--(?:prefix|message|branch|onto|annotate))$/.test(word)) at += 1;
+      else if (!word.startsWith("-") || (words.length === 0 && !/^(?:-[qdhS]|--(?:quiet|debug|help|squash|rejoin|ignore-joins|gpg-sign)|--(?:prefix|message|branch|onto|annotate|gpg-sign)=.*)$/.test(word))) words.push(at);
+    }
+    return words;
+  }
+
+  /**
+   * How far a line settles a git call's subcommand: 0 it does, 1 unless a known option's value splits, 2 it does not. A
+   * word before it that is no shown option on these lists, nor such an option's value, costs an ask, not a hole.
+   */
+  function gitUnsettled(cmd: string[]): number {
+    const marks = markMap.get(cmd) ?? [];
+    let worst = 0;
+    let k = 1;
+    for (; k < cmd.length; k += 1) {
+      const word = cmd[k] ?? "";
+      const { kinds, first } = marks[k] ?? { kinds: "", first: 0 };
+      const eq = word.indexOf("=");
+      if (kinds === "" && !held(cmd, word) && GIT_TAKES.has(word)) k += 1;
+      else if (eq < 0 || !GIT_TAKES.has(word.slice(0, eq)) || (kinds !== "" && first <= eq) || held(cmd, word, eq)) {
+        if (kinds !== "" || held(cmd, word) || (word.startsWith("-") && !GIT_FLAGS.test(word))) return 2;
+        if (word.startsWith("-")) continue;
+        break;
+      }
+      if (/[sgb]/.test(marks[k]?.kinds ?? "") || (fed.has(cmd) && holders.get(cmd[k] ?? "") === true)) worst = 1;
+    }
+    // A subtree call's own subcommand settles the same way.
+    if (cmd[k] === "subtree") {
+      const tail = cmd.slice(k + 1);
+      const at = subtreeWords(tail)[0] ?? -1;
+      const sub = tail[at] ?? "";
+      if (at < 0 ? fed.has(cmd) : held(cmd, sub) || !/^(?:add|merge|pull|push|split)$/.test(sub) || marks.slice(k + 1, k + 2 + at).some((mark) => mark.kinds !== "")) return 2;
+    }
+    return fed.has(cmd) && !/^[a-z][a-z-]+$/.test(cmd[k] ?? "") ? 2 : worst;
   }
 
   /**
@@ -4281,11 +4665,10 @@ export function unattendedPushVerdict(
     const hidden = (): never => {
       throw Object.assign(new Error("http target hidden"), { code: "HTTP_TARGET_HIDDEN" });
     };
-    // wget reads a long option's unique prefix as the option (`--meth=DELETE`, `--post-d`, pr/11), and curl's 7.x line
-    // does too (`--req DELETE`, `--dat '{}'`, pr/84): one of two letters or more (`--me`, pr/29) is expanded to the
-    // method, body, `--execute`, `--config`, `--input-file`, `--next`, `--globoff` or `--url` option it begins, a full
-    // name kept as it is, so a misread prefix only adds a denial. A prefix the tool finds ambiguous (wget's `--po`,
-    // curl's `--dat`) is one it refuses, so reading it as the option over-reads a line that sends nothing into a denial.
+    // wget reads a long option's unique prefix as the option (pr/11), and curl's 7.x line does too (pr/84): one of two
+    // letters or more (pr/29) is expanded to the method, body, `--execute`, `--config`, `--input-file`, `--next`,
+    // `--globoff` or `--url` option it begins, a full name kept, so a misread prefix only adds a denial. A prefix the tool
+    // finds ambiguous is one it refuses, so reading it as the option over-reads a line that sends nothing into a denial.
     const LONG = new Map([
       ["wget", ["--method", "--post-data", "--post-file", "--body-data", "--body-file", "--execute", "--config", "--input-file"]],
       ["curl", ["--request", "--data", "--data-raw", "--data-binary", "--data-ascii", "--data-urlencode", "--json", "--form",
@@ -4304,11 +4687,10 @@ export function unattendedPushVerdict(
     const cmd: string[] = [];
     for (let k = 0; k < expanded.length; k += 1) {
       const word = expanded[k] ?? "";
-      // curl's body or method letter with its value attached, or a short cluster's first value letter (`-d@<file>`,
-      // `-sd{…}`, `-sT f`, pr/81; `-sX$M`, pr/83), and gh's value letter after its one boolean, `-i`, its `=` aside as
-      // gh reads it (`-iXDELETE`, `-X=PUT`), read apart: the letters before it, the letter, its value. A cluster whose
-      // first value letter is another is read as no method and no body, the letters after it being its value (`-oX`,
-      // `-od`), and wget has no short method or body letter.
+      // curl's body or method letter with its value attached, or a short cluster's first value letter (pr/81, pr/83), and
+      // gh's value letter after its one boolean, `-i`, its `=` aside as gh reads it, read apart: the letters before it, the
+      // letter, its value. A cluster whose first value letter is another is read as no method and no body, the letters
+      // after it being its value, and wget has no short method or body letter.
       const lead =
         tool === "curl" ? /^-([^-:KHouAebcwmxrEdFTXCDPQtyYzU]*)([dFTX])([\s\S]*)$/.exec(word)
         : tool === "gh" ? /^-(i*)([XfFHpqt])=?([\s\S]*)$/.exec(word)
@@ -4446,21 +4828,19 @@ export function unattendedPushVerdict(
     return { write, method: verb, paths, targets, cmd: cmd.slice(0, end), next };
   }
 
+  const namesPackage = (word: string): boolean => PACKAGE_WORDS.includes(programName(word)) || /stamity/i.test(word);
   /**
-   * The words after the program where a command runs this package (REQ-FLOW-121's land line, REQ-FLOW-138), or
-   * `null` for any other program: one of `PACKAGE_WORDS` (its bins and unscoped name) or a word naming `stamity` as
-   * the program, a runner's package reading as that program above; a package manager's first word after its options,
-   * or after its `run`, `exec`, `dlx` or `x`, being one of those words (`yarn st`, `pnpm run st`, review/44); or a
-   * launcher (`node`, `bun`, `deno`, `tsx`) or a package manager given a word naming the package or the engine's CLI file
+   * The words after the program where a command runs this package (REQ-FLOW-121's land line, REQ-FLOW-138), or `null` for
+   * any other program: one of `PACKAGE_WORDS` or a word naming `stamity` as the program, a runner's package reading as that
+   * program above; a package manager's first word after its options, or after its `run`, `exec`, `dlx` or `x`, being one of
+   * those words (review/44); or a launcher or a package manager given a word naming the package or the engine's CLI file
    * by its path (review/53): under `node_modules/<package>/`, `node_modules/.bin/<bin>`, and, in the engine's own
-   * repository, any word whose file name is the CLI's, by any path spelling (absolute, `..`, a doubled slash, a leading
-   * expansion, review/68); the words after. With `basename`, only a launcher's or manager's
-   * word whose file name is a CLI file's (`cli.js`, `cli.ts`, …) anywhere, which may be the engine's or the
-   * repository's own.
+   * repository, any word whose file name is the CLI's, by any path spelling (review/68); the words after. With
+   * `basename`, only a launcher's or manager's word whose file name is a CLI file's anywhere, which may be the engine's or
+   * the repository's own.
    */
   function packageArgs(cmd: string[], basename = false): string[] | null {
     const program = cmd[0] ?? "";
-    const named = (word: string): boolean => PACKAGE_WORDS.includes(programName(word)) || /stamity/i.test(word);
     const engineFile = (word: string): boolean => {
       const path = word.replace(/\\/g, "/").toLowerCase();
       return (
@@ -4469,7 +4849,7 @@ export function unattendedPushVerdict(
         (OWN_REPOSITORY && /(?:^|\/)cli\.[cm]?[jt]s$/.test(path))
       );
     };
-    if (!basename && named(program)) return cmd.slice(1);
+    if (!basename && namesPackage(program)) return cmd.slice(1);
     const launchedAt = basename ? undefined : launched.get(cmd);
     if (launchedAt !== undefined) return cmd.slice(launchedAt + 1);
     if (!["node", "nodejs", "bun", "deno", "tsx", ...MANAGERS].includes(program)) return null;
@@ -4482,10 +4862,51 @@ export function unattendedPushVerdict(
       while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += MANAGER_VALUED.has(cmd[k] ?? "") ? 2 : 1;
       if (["run", "run-script", "exec", "dlx", "x"].includes(cmd[k] ?? "")) k += 1;
       while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += 1;
-      if (named(cmd[k] ?? "")) return cmd.slice(k + 1);
+      if (namesPackage(cmd[k] ?? "")) return cmd.slice(k + 1);
     }
     const at = cmd.findIndex((word, index) => index > 0 && (/stamity/i.test(word) || engineFile(word)));
     return at === -1 ? null : cmd.slice(at + 1);
+  }
+  /**
+   * The words after a word naming this package on each other reading of a manager's options (`managerSubs`), so any
+   * reading's word counts. They only add to `packageArgs`, whose result stays read beside them: a reading's tail may open
+   * on another word than that one's. Each is a further read of its words, so each draws on the count of added readings.
+   */
+  function addedArgs(cmd: string[]): string[][] {
+    const program = cmd[0] ?? "";
+    const tails: string[][] = [];
+    if (!MANAGERS.has(program)) return tails;
+    const seen = new Set([packageArgs(cmd)?.length]);
+    for (const start of managerSubs(program, cmd, 1)) {
+      let k = start;
+      while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += MANAGER_VALUED.has(cmd[k] ?? "") ? 2 : 1;
+      if (["run", "run-script", "exec", "dlx", "x"].includes(cmd[k] ?? "")) k += 1;
+      while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += 1;
+      if (!namesPackage(cmd[k] ?? "") || seen.has(cmd.length - k - 1)) continue;
+      seen.add(cmd.length - k - 1);
+      tails.push(cmd.slice(k + 1));
+      drawReading(cmd.slice(k + 1));
+    }
+    return tails;
+  }
+
+  /** Whether the word at `index` holds a mark that may give a bare word, which a glob holding a path, giving only paths, does not. */
+  function hidesBareWord(cmd: string[], index: number): boolean {
+    return anyMark.get(cmd)?.[index] === true && !(/[\\/]/.test(cmd[index] ?? "") && /^g+$/.test(markMap.get(cmd)?.[index]?.kinds ?? ""));
+  }
+
+  /**
+   * Whether the words past `run`, at `at` in `args`, the end of `cmd`, may be the land verb: `land` itself, a hidden word
+   * or words `xargs` adds. A bare word the line shows right after `run` settles the verb. Past an option word nothing
+   * settles it, since the option may take the next word as its value.
+   */
+  function mayLand(cmd: string[], args: string[], at: number): boolean {
+    const past = args.slice(at + 1);
+    if (past.includes("land")) return true;
+    const start = cmd.length - past.length;
+    const verb = past[0];
+    if (verb !== undefined && !verb.startsWith("-") && !hidesBareWord(cmd, start)) return false;
+    return fed.has(cmd) || past.some((_, index) => hidesBareWord(cmd, start + index));
   }
   // </shell-reading>
 
@@ -4699,6 +5120,12 @@ export function unattendedPushVerdict(
     /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*@(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
   /**
+   * Job mode is the land workflow's alone (REQ-FLOW-157): it skips what only a session holds, so no agent's line carries
+   * it. A glob whose literal start could open the flag reads as the flag, since the shell may expand it to a file of that name.
+   */
+  const jobFlag = (option: string): boolean => /^--job(?:=|$)/.test(option) || (/[*?[]/.test(option) && "--job".startsWith(option.split(/[*?[]/)[0] ?? ""));
+
+  /**
    * What keeps a run verb's line from being the one simple command it must be (REQ-FLOW-121), or null when it is that
    * command: `stamity` or `st`, or `npx` with one of `-y`, `--yes`, `--no` or `--no-yes`, an optional
    * `--@<scope>:registry=<url>` and then `stamity` or `<pkg>@<semver>`; then `run <verb>` and literal words, at most one
@@ -4756,9 +5183,6 @@ export function unattendedPushVerdict(
     }
     if (words[at] !== "run") return "words between the program and `run <verb>`";
     if (!RUN_VERBS.has(words[at + 1] ?? "")) return "words between `run` and its verb";
-    // Job mode is the land workflow's alone (REQ-FLOW-157): it skips what only a session holds, so no agent's line carries it. A
-    // glob whose literal start could open the flag reads as the flag, since the shell may expand it to a file of that name.
-    const jobFlag = (option: string): boolean => /^--job(?:=|$)/.test(option) || (/[*?[]/.test(option) && "--job".startsWith(option.split(/[*?[]/)[0] ?? ""));
     if (words.slice(at + 2).some(jobFlag)) return "`--job`, which only the land workflow runs";
     // The program, the npx flag, the registry and the package are pinned above, so only the option words can splat.
     if (powershell && ats.some((index) => index > at)) return "an unquoted `@` in a word after `run`, which PowerShell reads as a splat";
@@ -4775,19 +5199,23 @@ export function unattendedPushVerdict(
     };
   }
   const commands = commandsOf(command, 0, powershell);
+  const lineWords = [...assigned, ...commands.flat()];
   // The land verb's line in every mode (REQ-FLOW-121, a4): read on the parsed program words alone, so a commit message,
   // a comment or a search that only names the verb runs; a parsed `stamity run land` passes only as the one simple
   // command `verbShape` admits.
   if (landOnly) {
     const lands = commands.some((cmd) => {
       // A program the reading cannot settle (review/87) may be this package: its words name the verb anywhere after it.
-      if (unread.get(cmd)?.[0] === true) {
-        const run = cmd.indexOf("run", 1);
-        return run !== -1 && cmd.slice(run + 1).includes("land");
-      }
-      const args = packageArgs(cmd) ?? [];
-      const at = args.findIndex((word) => !word.startsWith("-"));
-      return at !== -1 && args[at] === "run" && args.slice(at + 1).includes("land");
+      const unsettled = unread.get(cmd)?.[0] === true;
+      return (unsettled ? [cmd.slice(1)] : [packageArgs(cmd) ?? [], ...addedArgs(cmd)]).some((args) => {
+        const at = unsettled ? args.indexOf("run") : args.findIndex((word) => !word.startsWith("-"));
+        if (args[at] === "run" && (unsettled ? args.slice(at + 1).includes("land") : mayLand(cmd, args, at))) return true;
+        // The verb's words not shown, or a program not settled: the job flag beside a hidden word refuses here, since no
+        // click passes it. Any other such line may be any verb, and the person-only reading asks on it.
+        const start = cmd.length - args.length;
+        const hidden = args.some((_, index) => hidesBareWord(cmd, start + index));
+        return hidden && (unsettled || at === -1 || hidesBareWord(cmd, start + at)) && args.some((word) => word.startsWith("-") && jobFlag(word));
+      });
     });
     const broke = lands ? verbShape(command) : null;
     return broke === null
@@ -4797,15 +5225,18 @@ export function unattendedPushVerdict(
           reason: `\`stamity run land\` on a line that is more than the verb (${broke}; REQ-FLOW-121): the land verb runs only alone on its line, in every mode.`,
         };
   }
+  if (cutShort.size > 0) return deny("A call behind a wrapper's shortened option, whose program the line does not settle");
+  // Neither read changes with the git call.
+  const namesConfig = CONFIG_ENVIRONMENT.test(command) || lineWords.some((word) => CONFIG_ENVIRONMENT.test(word));
+  const setsProgram = PROGRAM_TEXT.test(command) || lineWords.some((word) => PROGRAM_WORD.test(word));
   for (const cmd of commands) {
     const program = cmd[0] ?? "";
     if (program === "git") {
       const { sub, args, config } = gitParts(cmd);
       if (sub === "push" || sub === "send-pack") return deny(`A raw \`git ${sub}\``);
+      if (gitUnsettled(cmd) > 0) return deny("A git call whose subcommand the line does not settle");
       // `git subtree push` runs `git push` itself.
-      const valued = new Set(["-P", "--prefix", "-m", "--message", "-b", "--branch", "--onto"]);
-      const first = args.find((word, index) => !word.startsWith("-") && !valued.has(args[index - 1] ?? ""));
-      if (sub === "subtree" && first === "push") return deny("A `git subtree push`");
+      if (sub === "subtree" && args[subtreeWords(args)[0] ?? -1] === "push") return deny("A `git subtree push`");
       // An alias, defined on the line or in the configuration, and a computed subcommand can run a push the line
       // does not show (u21's review, the 01:50Z sign-off): unattended, git runs only a builtin this verdict knows.
       if (config.some((pair) => /^alias\./i.test(pair))) return deny("A git call defining an alias (`-c alias.<name>=…`)");
@@ -4819,18 +5250,16 @@ export function unattendedPushVerdict(
       const configEnv = globals.flatMap((word, index) =>
         word === "--config-env" ? [globals[index + 1] ?? ""] : word.startsWith("--config-env=") ? [word.slice(13)] : [],
       );
-      if ([...config, ...configEnv].some((pair) => !CONFIG_KEYS.test((pair.split("=")[0] ?? "").trim()))) {
+      // A placeholder at or before the `=` is no key the line shows: what `xargs` feeds there sets any key.
+      const keyUnshown = (pair: string, key: string): boolean => !CONFIG_KEYS.test(key.trim()) || held(cmd, pair, key.length);
+      if ([...config, ...configEnv].some((pair) => keyUnshown(pair, pair.split("=")[0] ?? ""))) {
         return deny("A git call setting a configuration key outside the display and identity keys (`-c <key>=…`)");
       }
-      if (CONFIG_ENVIRONMENT.test(command) || [...assigned, ...commands.flat()].some((word) => CONFIG_ENVIRONMENT.test(word))) {
-        return deny("A git call on a line that names git's configuration variables (`GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>`, `GIT_CONFIG_VALUE_<n>`, `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`)");
-      }
+      if (namesConfig) return deny("A git call on a line that names git's configuration variables (`GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>`, `GIT_CONFIG_VALUE_<n>`, `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`)");
       // The environment twins of those keys (review/208): a variable whose value git runs as a program, set anywhere on
       // the line, as the reading decodes it (a quoted or escaped word, after a wrapper, inside a nested line) or as
       // the text spells it (`export`, PowerShell's `$env:`).
-      if (PROGRAM_TEXT.test(command) || [...assigned, ...commands.flat()].some((word) => PROGRAM_WORD.test(word))) {
-        return deny("A git call on a line that sets a program git runs through the environment (`GIT_EDITOR`, `GIT_SSH_COMMAND`, `GIT_EXEC_PATH`, …)");
-      }
+      if (setsProgram) return deny("A git call on a line that sets a program git runs through the environment (`GIT_EDITOR`, `GIT_SSH_COMMAND`, `GIT_EXEC_PATH`, …)");
       // A remote repointed mid-run sends the run verbs' push somewhere the pre-flight never proved (review/209).
       const remoteForm = sub === "remote" ? (args.find((word) => !word.startsWith("-")) ?? "").toLowerCase() : "";
       if (REMOTE_WRITES.has(remoteForm)) return deny(`A \`git remote ${remoteForm}\`, a write of a remote`);
@@ -4895,7 +5324,7 @@ export function unattendedPushVerdict(
       return SETTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => SETS_WORD.test(word) && (exports || word.includes("=")));
     }) ||
     SETS_TEXT.test(command) ||
-    (allexport && (NAMES_VARIABLE.test(command) || [...assigned, ...commands.flat()].some((word) => NAMES_VARIABLE.test(word))))
+    (allexport && (NAMES_VARIABLE.test(command) || lineWords.some((word) => NAMES_VARIABLE.test(word))))
   ) {
     return deny("A line that sets one of git's program or configuration variables (`GIT_EXEC_PATH`, `GIT_EDITOR`, `GIT_CONFIG_COUNT`, …), which the run verbs' own git reads,");
   }
@@ -4912,7 +5341,7 @@ export function unattendedPushVerdict(
     }) ||
     [...commands, ...assigned.map((word) => [word])].some(namesVerbInWords) ||
     namesVerb(command) ||
-    [...assigned, ...commands.flat()].some(namesVerb);
+    lineWords.some(namesVerb);
   const broke = runsVerb ? verbShape(command) : null;
   if (broke !== null) {
     return deny(`A run verb (\`stamity run start\`, \`checkpoint\`, \`end\` or \`land\`) on a line that is more than the verb (${broke}; REQ-FLOW-121)`);

@@ -55,9 +55,9 @@ export const LANDS_ON_EVIDENCE: readonly string[] = [
 
 /**
  * Beside the held set, the files that decide which checks run and who reviews (D2), named even where it holds them.
- * The last three are this repository's CI classifier and the source it loads (`.github/workflows/ci.yml`, "Classify
- * the change"): CI runs the base commit's copy, so an edit to them picks the checks of every later change, and a
- * person lands it (ledger build/5, review/83).
+ * The last four are this repository's CI classifier, the source it loads (`.github/workflows/ci.yml`, "Classify the
+ * change") and the reader that can skip a push's checks (the `prove-pr` job): CI runs the base commit's copy, so an
+ * edit to them picks the checks of every later change, and a person lands it (ledger build/5, review/83).
  */
 const DEFINES_THE_EVIDENCE: readonly string[] = [
   ".github/actions/**",
@@ -67,6 +67,7 @@ const DEFINES_THE_EVIDENCE: readonly string[] = [
   ".github/CODEOWNERS",
   "docs/CODEOWNERS",
   ".stamity/change-classes.json",
+  "scripts/ci/pr-proven.mjs",
   "scripts/ci/records-only.mjs",
   "src/change/classify.ts",
   "src/roster/triggers.ts",
@@ -215,6 +216,22 @@ function sameLogin(a: string | null, b: string): boolean {
 /** Whether a comment in the thread is a person's other than `viewer`'s; an author GitHub no longer names counts as one. */
 function holdsAPerson(thread: ThreadRead, viewer: string): boolean {
   return thread.authors.some((author) => author.login === null || (author.person && !sameLogin(author.login, viewer)));
+}
+
+/**
+ * The closed threads a person decides on, by node id: each holds a comment by a person other than its closer and the run's
+ * login, or did not read whole. A login does not say whose side an account is on, so no count can tell a settled thread here;
+ * {@link decideLand} asks, and a thread's closer alone in it, or beside the run's login or an app, asks nothing. It reads
+ * apart from {@link unresolvedThreads}, whose count refuses first, so no thread stops the land twice.
+ */
+export function closedOverAnother(threads: readonly ThreadRead[], viewer: string): string[] {
+  return threads
+    .filter((thread) => {
+      if (!thread.isResolved) return false;
+      const beside = thread.authors.filter(({ login }) => login === null || !sameLogin(thread.resolvedBy, login));
+      return !thread.complete || holdsAPerson({ ...thread, authors: beside }, viewer);
+    })
+    .map((thread) => thread.id ?? "(no id)");
 }
 
 /**
@@ -577,6 +594,8 @@ export interface LandInput {
    * `blocked` merge state may be those threads, so it is judged after them (review/68).
    */
   setAsideThreads: number;
+  /** The closed threads a person decides on, by node id ({@link closedOverAnother}). */
+  closedThreads: readonly string[];
   ledger: { open: string[] } | { refused: string };
   /** Present for `--fast-forward`. */
   forward?: ForwardFacts;
@@ -631,8 +650,8 @@ function mergeGap(input: LandInput): { reason: string; pending: boolean } | null
  * The decision, in this order: not the run's own (refused) or merged already (already-landed); then every gap in the
  * evidence (refused, `pending` where checks still run, the review tool is awaited or GitHub has not computed the merge
  * state, so a wait may help); then every reason the act is the person's (asks: mode `ask`, the ask set or a held patch, a
- * loosened key, legs disagreeing on the review tool, a red default branch, a deploying branch the change does not
- * auto-ship onto, a deploying act, a rule requiring a pull request for a fast-forward); else land.
+ * loosened key, legs disagreeing on the review tool, a closed thread a person decides on, a red default branch, a deploying
+ * branch the change does not auto-ship onto, a deploying act, a rule requiring a pull request for a fast-forward); else land.
  */
 export function decideLand(input: LandInput): LandDecision {
   const { pr, setting } = input;
@@ -687,6 +706,7 @@ export function decideLand(input: LandInput): LandDecision {
   const { defaultBranch } = input.own;
   if (input.looserKeys.length > 0) asks.push({ reason: `the head's manifest loosens ${input.looserKeys.join(", ")} against ${defaultBranch}'s`, act });
   if (input.reviewToolConflict.length > 0) asks.push({ reason: `the legs disagree on autonomy.reviewTool, and no leg wins: ${input.reviewToolConflict.join(", ")}; the review tool's word was not read`, act });
+  if (input.closedThreads.length > 0) asks.push({ reason: `a person decides on closed review threads that someone beside the closer wrote in, or that did not read whole: ${input.closedThreads.join(", ")}`, act });
   const red = input.defaultBranchRed;
   if (red !== undefined && red.failing.length > 0) asks.push({ reason: `${defaultBranch} is red: ${red.failing.join(", ")} failing on its tip`, act });
   if (red !== undefined && red.unread !== null) asks.push({ reason: `${defaultBranch}'s tip could not be read (${red.unread}), so whether it is red is not known`, act });

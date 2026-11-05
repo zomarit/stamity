@@ -638,6 +638,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // Half a wave is a requirement: it starts git through the wave-13 runner and reads the wave-13 kit, and its two
   // callers sit at wave 14 in different units, so it has to sit strictly between them. The rows either side stay put.
   "src/cli/engine/changeRange.ts": { unit: "change-range", wave: 13.5 },
+  // TEST CHANGE, justified: the check of where `gh` lies moved out of `run land` so the pre-flight runs it too. Both callers sit
+  // at wave 14 and neither may import the other, and it reads the wave-13 runner and setting, so it sits between them.
+  "src/cli/engine/ghTrust.ts": { unit: "gh-trust", wave: 13.5 },
   // Plan 021 file 1 (u4): the engine's one git runner that writes and its one
   // door onto GitHub's REST API, over the wave-1 PATH walk and the wave-4 bare
   // look, below the wave-14 `gate` and run verbs that start them.

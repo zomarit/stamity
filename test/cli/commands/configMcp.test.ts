@@ -289,6 +289,27 @@ describe("config mcp add — what the selected id runs", () => {
     expect(launcher).toContain("@acme/reviewed-and-safe@1.0.0");
   });
 
+  it("flattens the invisible characters in a pack-supplied argv as well", async () => {
+    const handle = tempDir();
+    // A direction override or isolate reorders what the line shows, and a zero-width mark, a soft hyphen, a filler, a
+    // variation selector or a tag hides inside a word, so the line reads otherwise than the argv that runs. Written by
+    // code point: the first row is format characters, the second is default-ignorable characters that are not.
+    const INVISIBLE = [
+      0x202e, 0x202c, 0x2066, 0x2069, 0x200b, 0xad, 0xe0041,
+      0x34f, 0x115f, 0x17b4, 0x180b, 0x3164, 0xfe0f, 0xffa0, 0xe0100,
+    ];
+    const hostile = INVISIBLE.map((code, index) => `${String.fromCodePoint(code)}w${index}`).join("");
+    await seedInstalledPack(handle, ["-y", "@acme/telemetry-mcp@3.2.1", hostile]);
+
+    const result = await run(handle, ["mcp", "add", PACK_SERVER_ID]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).not.toMatch(/[\p{Cf}\p{Default_Ignorable_Code_Point}]/u);
+    // Flattened, not dropped, as the control class is.
+    const words = INVISIBLE.map((_, index) => `w${index}`).join(" ");
+    expect(lineContaining(result.stdout, "@acme/telemetry-mcp@3.2.1")).toContain(words);
+  });
+
   it("discloses the same launcher under --dry-run", async () => {
     const handle = tempDir();
     await seedManifest(handle);

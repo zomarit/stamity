@@ -1,7 +1,7 @@
 import type * as ChildProcessModule from "node:child_process";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { gateCommand, scanChange, toProjectPath } from "../../../src/cli/commands/gate.ts";
@@ -1625,6 +1625,145 @@ describe.skipIf(!gitAvailable)("stamity gate classify reading the change from gi
 
       expect(doc["class"]).toBe("security-sensitive");
       expect(ruleOf(doc, "src/x.ts")).toBe("line rule delete-or-overwrite at src/x.ts, a context line of a hunk that removes one");
+    });
+
+    describe("the attributes a line read takes", () => {
+      /** A guard removed from a function that starts a process above a blank line: only the hunk's context shows the call. */
+      const CALL_GUARDED = [
+        "export function f(): void {",
+        '  const out = execSync("ls");',
+        "",
+        "  class Local {}",
+        ...Array.from({ length: 5 }, (_, at) => `  const pad${at} = ${at};`),
+        "  guard(out);",
+        "  const last = 1;",
+        "}",
+        "",
+      ].join("\n");
+      const CALL_UNGUARDED = CALL_GUARDED.replace("  guard(out);\n", "");
+      /** The Python driver's function lines make `class Local` start a function, so `-W` stops short of the call. */
+      const NARROWS = "*.ts diff=python\n";
+
+      /** A repository whose change takes the guard out, with `files` beside it in the work tree. */
+      async function unguarded(committed: Record<string, string>, files: Record<string, string>): Promise<string> {
+        const repo = await seedRepo("repo", { "src/a.ts": CALL_GUARDED, ...committed });
+        await getRoot().seedFiles(Object.fromEntries(Object.entries({ "src/a.ts": CALL_UNGUARDED, ...files }).map(([path, body]) => [`repo/${path}`, body])));
+        return repo;
+      }
+
+      /** A stand-in for git, since the suite runs one git and an old one is the thing to reach: `--attr-source` exits 129, as before 2.41. */
+      async function oldGit(): Promise<Record<string, string>> {
+        const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
+        await getRoot().seedFiles({ "old-git/git": `#!/bin/sh\ncase "$*" in *--attr-source*) exit 129;; esac\nexec "${real}" "$@"\n` });
+        await chmod(getRoot().path("old-git/git"), 0o755);
+        return { PATH: `${getRoot().path("old-git")}:${process.env["PATH"] ?? ""}` };
+      }
+
+      it("classes the change the same with no attribute to move it, which the cases below stand on", async () => {
+        const repo = await unguarded({}, {});
+        expect((await classifyIn(repo, ["--base", "HEAD"])).doc["class"]).toBe("security-sensitive");
+      });
+
+      it.each([
+        ["the change adds", {}, { ".gitattributes": NARROWS }],
+        ["the change adds in a folder", {}, { "src/.gitattributes": NARROWS }],
+        ["the change writes over the base's", { ".gitattributes": "*.md text\n" }, { ".gitattributes": NARROWS }],
+      ] as [string, Record<string, string>, Record<string, string>][])("keeps a hunk's whole-function context under an attribute %s", async (_label, committed, files) => {
+        const repo = await unguarded(committed, files);
+
+        const { doc } = await classifyIn(repo, ["--base", "HEAD"]);
+
+        expect(doc["class"]).toBe("security-sensitive");
+        expect(doc["lenses"]).toContain("stamity-security");
+      });
+
+      it("keeps the context under an attribute the change stages", async () => {
+        const repo = await unguarded({}, { ".gitattributes": NARROWS });
+        git(repo, ["add", "-A"]);
+
+        expect((await classifyIn(repo, ["--base", "HEAD"])).doc["class"]).toBe("security-sensitive");
+      });
+
+      it("keeps the context under a user attributes file named by config", async () => {
+        const repo = await unguarded({}, {});
+        await getRoot().seedFiles({ "named-attributes": NARROWS });
+        git(repo, ["config", "core.attributesFile", getRoot().path("named-attributes")]);
+
+        expect((await classifyIn(repo, ["--base", "HEAD"])).doc["class"]).toBe("security-sensitive");
+      });
+
+      it("still takes the base's own attributes, as the range read does", async () => {
+        const plain = await classifyIn(await unguarded({}, {}), ["--base", "HEAD"]);
+        await rm(getRoot().path("repo"), { recursive: true, force: true });
+
+        const committed = await classifyIn(await unguarded({ ".gitattributes": NARROWS }, {}), ["--base", "HEAD"]);
+
+        expect(plain.doc["class"]).toBe("security-sensitive");
+        expect(committed.doc["class"]).not.toBe("security-sensitive");
+      });
+
+      it.skipIf(process.platform === "win32")("does not raise a plain change on a git too old for the pin", async () => {
+        const repo = await seedRepo("repo", { "docs/x.md": "a\n" });
+        await getRoot().seedFiles({ "repo/docs/x.md": "b\n" });
+
+        const { doc } = await classifyIn(repo, ["--base", "HEAD"], await oldGit());
+
+        expect(doc["class"]).toBe("docs");
+      });
+
+      it.skipIf(process.platform === "win32").each([
+        ["in a dependency's folder", "node_modules/dep/.gitattributes"],
+        ["in a folder below the change", "docs/deep/.gitattributes"],
+        ["in a folder whose name starts the same", "doc/.gitattributes"],
+      ])("does not raise a plain change on a git too old for the pin, with an ignored attributes file %s", async (_label, loose) => {
+        const repo = await seedRepo("repo", { "docs/x.md": "a\n", ".gitignore": ".gitattributes\n" });
+        await getRoot().seedFiles({ "repo/docs/x.md": "b\n", [`repo/${loose}`]: NARROWS });
+
+        const { doc } = await classifyIn(repo, ["--base", "HEAD"], await oldGit());
+
+        expect(doc["class"]).toBe("docs");
+      });
+
+      it.skipIf(process.platform === "win32").each([
+        ["in the work tree", async (): Promise<string> => unguarded({ "docs/.gitattributes": "*.md text\n" }, { "docs/.gitattributes": NARROWS })],
+        ["left untracked", async (): Promise<string> => unguarded({}, { ".gitattributes": NARROWS })],
+        ["left ignored", async (): Promise<string> => unguarded({ ".gitignore": ".gitattributes\n" }, { ".gitattributes": NARROWS })],
+        ["left ignored beside the change", async (): Promise<string> => unguarded({ ".gitignore": ".gitattributes\n" }, { "src/.gitattributes": NARROWS })],
+        [
+          "left ignored in the change's folder under another letter case",
+          async (): Promise<string> => {
+            const repo = await unguarded({ ".gitignore": ".gitattributes\n" }, { "SRC/.gitattributes": NARROWS });
+            // A case-blind disk wrote into `src`, so the folder takes the other spelling here; any other disk has both folders already.
+            if (!(await readdir(repo)).includes("SRC")) await rename(join(repo, "src"), join(repo, "SRC"));
+            return repo;
+          },
+        ],
+        [
+          "left ignored beside a file only staged",
+          async (): Promise<string> => {
+            const repo = await unguarded({ ".gitignore": ".gitattributes\n", "docs/x.md": "a\n" }, { "docs/x.md": "b\n", "src/.gitattributes": NARROWS });
+            git(repo, ["add", "src/a.ts"]);
+            await writeFile(join(repo, "src/a.ts"), CALL_GUARDED);
+            return repo;
+          },
+        ],
+        [
+          "staged and off the disk",
+          async (): Promise<string> => {
+            const repo = await unguarded({}, { ".gitattributes": NARROWS });
+            git(repo, ["add", ".gitattributes"]);
+            await rm(join(repo, ".gitattributes"));
+            return repo;
+          },
+        ],
+      ] as [string, () => Promise<string>][])("fails closed on a git too old for the pin, with an attributes file %s", async (_label, arrange) => {
+        const repo = await arrange();
+
+        const { doc } = await classifyIn(repo, ["--base", "HEAD"], await oldGit());
+
+        expect(doc["class"]).toBe("security-sensitive");
+        expect(doc["reason"]).toContain("git 2.41 or later");
+      });
     });
 
     it.each([

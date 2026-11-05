@@ -703,6 +703,7 @@ function matchSessions(rows, env) {
 }
 const INVISIBLE = new RegExp("(?:[\\\\u00AD\\\\u034F\\\\u0600-\\\\u0605\\\\u061C\\\\u06DD\\\\u070F\\\\u0890-\\\\u0891\\\\u08E2\\\\u115F-\\\\u1160\\\\u17B4-\\\\u17B5\\\\u180B-\\\\u180F\\\\u200B-\\\\u200F\\\\u202A-\\\\u202E\\\\u2060-\\\\u206F\\\\u3164\\\\uFE00-\\\\uFE0F\\\\uFEFF\\\\uFFA0\\\\uFFF0-\\\\uFFFB]|\\\\uD804\\\\uDCBD|\\\\uD804\\\\uDCCD|\\\\uD80D[\\\\uDC30-\\\\uDC3F]|\\\\uD82F[\\\\uDCA0-\\\\uDCA3]|\\\\uD834[\\\\uDD73-\\\\uDD7A]|\\\\uDB40[\\\\uDC80-\\\\uDFFF]|[\\\\uDB41-\\\\uDB43][\\\\uDC00-\\\\uDFFF])", "g");
 const UNPRINTABLE = new RegExp("[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F\\\\u061C\\\\u200B-\\\\u200F\\\\u2028\\\\u2029\\\\u202A-\\\\u202E\\\\u2060\\\\u2066-\\\\u2069\\\\uFEFF]", "gu");
+const TAG_CHARS = new RegExp("[\\\\u{E0000}-\\\\u{E007F}]", "gu");
 const LEARNING_FIELDS = ["id","confidence","summary","reviewBy"];
 const HANDOFF_FIELDS = ["id","summary","expires","fromTool"];
 const SCREEN = [
@@ -870,10 +871,14 @@ function inspect(dir, name, maxBytes, coversSummary, fields) {
   if (parsed === null) return { ...doc, skip: "invalid-frontmatter" };
   // The raw screen above read each escape as its literal characters; the parser
   // decoded them. Each printed field is screened as decoded and as \`text\` prints
-  // it, field by field, as \`learn read\` screens them.
+  // it, field by field, as \`learn read\` screens them, and again with the escape
+  // notation no parser decodes read as what it names.
   for (const field of fields) {
     const value = parsed.head[field];
-    if (typeof value === "string" && (screened(value) || screened(text(value, "")))) {
+    if (typeof value !== "string") continue;
+    const read = readNotation(value);
+    const flat = value.replace(/[\\u0000-\\u001f\\u007f]+/g, " ").replace(/\\s+/g, " ").trim();
+    if ([value, flat, text(value, ""), read, text(read, "")].some(screened)) {
       return { ...doc, skip: "injection-detected" };
     }
   }
@@ -1038,13 +1043,34 @@ function integrityHolds(declared, covered) {
   );
 }
 
+// The escape notation reader, as its source text (src/learnings/validation.ts in the engine that wrote this file).
+function readNotation(text) {
+	return text.replace(/\\\\(?:[ux]\\{([0-9a-f]{1,6})\\}|U([0-9a-f]{8})|u([0-9a-f]{4})|x([0-9a-f]{2})|([0-7]{3}))/gi, (whole, brace, long, short, hex, octal) => {
+		const code = octal === undefined ? parseInt(brace ?? long ?? short ?? hex ?? "", 16) : parseInt(octal, 8);
+		return code > 1114111 ? whole : String.fromCodePoint(code);
+	}).replace(/\\\\[0abefnrtv]/g, " ");
+}
+
+/**
+ * Text with nothing a terminal would run or hide, as \`printableText\` in the
+ * engine's learnings gate gives it: C0 controls and DEL to spaces, the rest of
+ * the unprintable set, the tag block and the invisible class dropped.
+ */
+function printable(value) {
+  return value
+    .replace(UNPRINTABLE, (char) => (char < " " || char === "\\u007f" ? " " : ""))
+    .replace(TAG_CHARS, "")
+    .replace(INVISIBLE, "");
+}
+
 /**
  * One field as a single index-safe line: control characters and newlines
- * collapse, so a forged summary cannot manufacture index lines of its own.
+ * collapse, so a forged summary cannot manufacture index lines of its own, and
+ * a printed field carries no mark the reader cannot see.
  */
 function text(value, fallback) {
   if (typeof value !== "string") return fallback;
-  const flat = value.replace(/[\\u0000-\\u001f\\u007f]+/g, " ").replace(/\\s+/g, " ").trim();
+  const flat = printable(value).replace(/\\s+/g, " ").trim();
   if (flat === "") return fallback;
   return flat.length > MAX_FIELD_CHARS ? flat.slice(0, MAX_FIELD_CHARS - 1) + "…" : flat;
 }
@@ -1183,9 +1209,7 @@ function nameId(doc) {
  * stem included, prints as a placeholder naming the pattern ids, never the name.
  */
 function printedName(name) {
-  const shown = name
-    .replace(UNPRINTABLE, (char) => (char < " " || char === "\\u007f" ? " " : ""))
-    .replace(INVISIBLE, "");
+  const shown = printable(name);
   const copies = [name, stem(name), text(shown, ""), text(stem(shown), "")];
   const ids = [...new Set(copies.flatMap(screenIds))].sort();
   if (ids.length === 0) return shown;
@@ -2230,6 +2254,7 @@ function matchSessions(rows, env) {
 }
 const INVISIBLE = new RegExp("(?:[\\\\u00AD\\\\u034F\\\\u0600-\\\\u0605\\\\u061C\\\\u06DD\\\\u070F\\\\u0890-\\\\u0891\\\\u08E2\\\\u115F-\\\\u1160\\\\u17B4-\\\\u17B5\\\\u180B-\\\\u180F\\\\u200B-\\\\u200F\\\\u202A-\\\\u202E\\\\u2060-\\\\u206F\\\\u3164\\\\uFE00-\\\\uFE0F\\\\uFEFF\\\\uFFA0\\\\uFFF0-\\\\uFFFB]|\\\\uD804\\\\uDCBD|\\\\uD804\\\\uDCCD|\\\\uD80D[\\\\uDC30-\\\\uDC3F]|\\\\uD82F[\\\\uDCA0-\\\\uDCA3]|\\\\uD834[\\\\uDD73-\\\\uDD7A]|\\\\uDB40[\\\\uDC80-\\\\uDFFF]|[\\\\uDB41-\\\\uDB43][\\\\uDC00-\\\\uDFFF])", "g");
 const UNPRINTABLE = new RegExp("[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F\\\\u061C\\\\u200B-\\\\u200F\\\\u2028\\\\u2029\\\\u202A-\\\\u202E\\\\u2060\\\\u2066-\\\\u2069\\\\uFEFF]", "gu");
+const TAG_CHARS = new RegExp("[\\\\u{E0000}-\\\\u{E007F}]", "gu");
 const LEARNING_FIELDS = ["id","confidence","summary","reviewBy"];
 const HANDOFF_FIELDS = ["id","summary","expires","fromTool"];
 const SCREEN = [
@@ -2397,10 +2422,14 @@ function inspect(dir, name, maxBytes, coversSummary, fields) {
   if (parsed === null) return { ...doc, skip: "invalid-frontmatter" };
   // The raw screen above read each escape as its literal characters; the parser
   // decoded them. Each printed field is screened as decoded and as \`text\` prints
-  // it, field by field, as \`learn read\` screens them.
+  // it, field by field, as \`learn read\` screens them, and again with the escape
+  // notation no parser decodes read as what it names.
   for (const field of fields) {
     const value = parsed.head[field];
-    if (typeof value === "string" && (screened(value) || screened(text(value, "")))) {
+    if (typeof value !== "string") continue;
+    const read = readNotation(value);
+    const flat = value.replace(/[\\u0000-\\u001f\\u007f]+/g, " ").replace(/\\s+/g, " ").trim();
+    if ([value, flat, text(value, ""), read, text(read, "")].some(screened)) {
       return { ...doc, skip: "injection-detected" };
     }
   }
@@ -2565,13 +2594,34 @@ function integrityHolds(declared, covered) {
   );
 }
 
+// The escape notation reader, as its source text (src/learnings/validation.ts in the engine that wrote this file).
+function readNotation(text) {
+	return text.replace(/\\\\(?:[ux]\\{([0-9a-f]{1,6})\\}|U([0-9a-f]{8})|u([0-9a-f]{4})|x([0-9a-f]{2})|([0-7]{3}))/gi, (whole, brace, long, short, hex, octal) => {
+		const code = octal === undefined ? parseInt(brace ?? long ?? short ?? hex ?? "", 16) : parseInt(octal, 8);
+		return code > 1114111 ? whole : String.fromCodePoint(code);
+	}).replace(/\\\\[0abefnrtv]/g, " ");
+}
+
+/**
+ * Text with nothing a terminal would run or hide, as \`printableText\` in the
+ * engine's learnings gate gives it: C0 controls and DEL to spaces, the rest of
+ * the unprintable set, the tag block and the invisible class dropped.
+ */
+function printable(value) {
+  return value
+    .replace(UNPRINTABLE, (char) => (char < " " || char === "\\u007f" ? " " : ""))
+    .replace(TAG_CHARS, "")
+    .replace(INVISIBLE, "");
+}
+
 /**
  * One field as a single index-safe line: control characters and newlines
- * collapse, so a forged summary cannot manufacture index lines of its own.
+ * collapse, so a forged summary cannot manufacture index lines of its own, and
+ * a printed field carries no mark the reader cannot see.
  */
 function text(value, fallback) {
   if (typeof value !== "string") return fallback;
-  const flat = value.replace(/[\\u0000-\\u001f\\u007f]+/g, " ").replace(/\\s+/g, " ").trim();
+  const flat = printable(value).replace(/\\s+/g, " ").trim();
   if (flat === "") return fallback;
   return flat.length > MAX_FIELD_CHARS ? flat.slice(0, MAX_FIELD_CHARS - 1) + "…" : flat;
 }
@@ -2710,9 +2760,7 @@ function nameId(doc) {
  * stem included, prints as a placeholder naming the pattern ids, never the name.
  */
 function printedName(name) {
-  const shown = name
-    .replace(UNPRINTABLE, (char) => (char < " " || char === "\\u007f" ? " " : ""))
-    .replace(INVISIBLE, "");
+  const shown = printable(name);
   const copies = [name, stem(name), text(shown, ""), text(stem(shown), "")];
   const ids = [...new Set(copies.flatMap(screenIds))].sort();
   if (ids.length === 0) return shown;
@@ -3761,6 +3809,7 @@ function matchSessions(rows, env) {
 }
 const INVISIBLE = new RegExp("(?:[\\\\u00AD\\\\u034F\\\\u0600-\\\\u0605\\\\u061C\\\\u06DD\\\\u070F\\\\u0890-\\\\u0891\\\\u08E2\\\\u115F-\\\\u1160\\\\u17B4-\\\\u17B5\\\\u180B-\\\\u180F\\\\u200B-\\\\u200F\\\\u202A-\\\\u202E\\\\u2060-\\\\u206F\\\\u3164\\\\uFE00-\\\\uFE0F\\\\uFEFF\\\\uFFA0\\\\uFFF0-\\\\uFFFB]|\\\\uD804\\\\uDCBD|\\\\uD804\\\\uDCCD|\\\\uD80D[\\\\uDC30-\\\\uDC3F]|\\\\uD82F[\\\\uDCA0-\\\\uDCA3]|\\\\uD834[\\\\uDD73-\\\\uDD7A]|\\\\uDB40[\\\\uDC80-\\\\uDFFF]|[\\\\uDB41-\\\\uDB43][\\\\uDC00-\\\\uDFFF])", "g");
 const UNPRINTABLE = new RegExp("[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F\\\\u061C\\\\u200B-\\\\u200F\\\\u2028\\\\u2029\\\\u202A-\\\\u202E\\\\u2060\\\\u2066-\\\\u2069\\\\uFEFF]", "gu");
+const TAG_CHARS = new RegExp("[\\\\u{E0000}-\\\\u{E007F}]", "gu");
 const LEARNING_FIELDS = ["id","confidence","summary","reviewBy"];
 const HANDOFF_FIELDS = ["id","summary","expires","fromTool"];
 const SCREEN = [
@@ -3928,10 +3977,14 @@ function inspect(dir, name, maxBytes, coversSummary, fields) {
   if (parsed === null) return { ...doc, skip: "invalid-frontmatter" };
   // The raw screen above read each escape as its literal characters; the parser
   // decoded them. Each printed field is screened as decoded and as \`text\` prints
-  // it, field by field, as \`learn read\` screens them.
+  // it, field by field, as \`learn read\` screens them, and again with the escape
+  // notation no parser decodes read as what it names.
   for (const field of fields) {
     const value = parsed.head[field];
-    if (typeof value === "string" && (screened(value) || screened(text(value, "")))) {
+    if (typeof value !== "string") continue;
+    const read = readNotation(value);
+    const flat = value.replace(/[\\u0000-\\u001f\\u007f]+/g, " ").replace(/\\s+/g, " ").trim();
+    if ([value, flat, text(value, ""), read, text(read, "")].some(screened)) {
       return { ...doc, skip: "injection-detected" };
     }
   }
@@ -4096,13 +4149,34 @@ function integrityHolds(declared, covered) {
   );
 }
 
+// The escape notation reader, as its source text (src/learnings/validation.ts in the engine that wrote this file).
+function readNotation(text) {
+	return text.replace(/\\\\(?:[ux]\\{([0-9a-f]{1,6})\\}|U([0-9a-f]{8})|u([0-9a-f]{4})|x([0-9a-f]{2})|([0-7]{3}))/gi, (whole, brace, long, short, hex, octal) => {
+		const code = octal === undefined ? parseInt(brace ?? long ?? short ?? hex ?? "", 16) : parseInt(octal, 8);
+		return code > 1114111 ? whole : String.fromCodePoint(code);
+	}).replace(/\\\\[0abefnrtv]/g, " ");
+}
+
+/**
+ * Text with nothing a terminal would run or hide, as \`printableText\` in the
+ * engine's learnings gate gives it: C0 controls and DEL to spaces, the rest of
+ * the unprintable set, the tag block and the invisible class dropped.
+ */
+function printable(value) {
+  return value
+    .replace(UNPRINTABLE, (char) => (char < " " || char === "\\u007f" ? " " : ""))
+    .replace(TAG_CHARS, "")
+    .replace(INVISIBLE, "");
+}
+
 /**
  * One field as a single index-safe line: control characters and newlines
- * collapse, so a forged summary cannot manufacture index lines of its own.
+ * collapse, so a forged summary cannot manufacture index lines of its own, and
+ * a printed field carries no mark the reader cannot see.
  */
 function text(value, fallback) {
   if (typeof value !== "string") return fallback;
-  const flat = value.replace(/[\\u0000-\\u001f\\u007f]+/g, " ").replace(/\\s+/g, " ").trim();
+  const flat = printable(value).replace(/\\s+/g, " ").trim();
   if (flat === "") return fallback;
   return flat.length > MAX_FIELD_CHARS ? flat.slice(0, MAX_FIELD_CHARS - 1) + "…" : flat;
 }
@@ -4241,9 +4315,7 @@ function nameId(doc) {
  * stem included, prints as a placeholder naming the pattern ids, never the name.
  */
 function printedName(name) {
-  const shown = name
-    .replace(UNPRINTABLE, (char) => (char < " " || char === "\\u007f" ? " " : ""))
-    .replace(INVISIBLE, "");
+  const shown = printable(name);
   const copies = [name, stem(name), text(shown, ""), text(stem(shown), "")];
   const ids = [...new Set(copies.flatMap(screenIds))].sort();
   if (ids.length === 0) return shown;
@@ -5402,6 +5474,7 @@ function matchSessions(rows, env) {
 }
 const INVISIBLE = new RegExp("(?:[\\\\u00AD\\\\u034F\\\\u0600-\\\\u0605\\\\u061C\\\\u06DD\\\\u070F\\\\u0890-\\\\u0891\\\\u08E2\\\\u115F-\\\\u1160\\\\u17B4-\\\\u17B5\\\\u180B-\\\\u180F\\\\u200B-\\\\u200F\\\\u202A-\\\\u202E\\\\u2060-\\\\u206F\\\\u3164\\\\uFE00-\\\\uFE0F\\\\uFEFF\\\\uFFA0\\\\uFFF0-\\\\uFFFB]|\\\\uD804\\\\uDCBD|\\\\uD804\\\\uDCCD|\\\\uD80D[\\\\uDC30-\\\\uDC3F]|\\\\uD82F[\\\\uDCA0-\\\\uDCA3]|\\\\uD834[\\\\uDD73-\\\\uDD7A]|\\\\uDB40[\\\\uDC80-\\\\uDFFF]|[\\\\uDB41-\\\\uDB43][\\\\uDC00-\\\\uDFFF])", "g");
 const UNPRINTABLE = new RegExp("[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F\\\\u061C\\\\u200B-\\\\u200F\\\\u2028\\\\u2029\\\\u202A-\\\\u202E\\\\u2060\\\\u2066-\\\\u2069\\\\uFEFF]", "gu");
+const TAG_CHARS = new RegExp("[\\\\u{E0000}-\\\\u{E007F}]", "gu");
 const LEARNING_FIELDS = ["id","confidence","summary","reviewBy"];
 const HANDOFF_FIELDS = ["id","summary","expires","fromTool"];
 const SCREEN = [
@@ -5569,10 +5642,14 @@ function inspect(dir, name, maxBytes, coversSummary, fields) {
   if (parsed === null) return { ...doc, skip: "invalid-frontmatter" };
   // The raw screen above read each escape as its literal characters; the parser
   // decoded them. Each printed field is screened as decoded and as \`text\` prints
-  // it, field by field, as \`learn read\` screens them.
+  // it, field by field, as \`learn read\` screens them, and again with the escape
+  // notation no parser decodes read as what it names.
   for (const field of fields) {
     const value = parsed.head[field];
-    if (typeof value === "string" && (screened(value) || screened(text(value, "")))) {
+    if (typeof value !== "string") continue;
+    const read = readNotation(value);
+    const flat = value.replace(/[\\u0000-\\u001f\\u007f]+/g, " ").replace(/\\s+/g, " ").trim();
+    if ([value, flat, text(value, ""), read, text(read, "")].some(screened)) {
       return { ...doc, skip: "injection-detected" };
     }
   }
@@ -5737,13 +5814,34 @@ function integrityHolds(declared, covered) {
   );
 }
 
+// The escape notation reader, as its source text (src/learnings/validation.ts in the engine that wrote this file).
+function readNotation(text) {
+	return text.replace(/\\\\(?:[ux]\\{([0-9a-f]{1,6})\\}|U([0-9a-f]{8})|u([0-9a-f]{4})|x([0-9a-f]{2})|([0-7]{3}))/gi, (whole, brace, long, short, hex, octal) => {
+		const code = octal === undefined ? parseInt(brace ?? long ?? short ?? hex ?? "", 16) : parseInt(octal, 8);
+		return code > 1114111 ? whole : String.fromCodePoint(code);
+	}).replace(/\\\\[0abefnrtv]/g, " ");
+}
+
+/**
+ * Text with nothing a terminal would run or hide, as \`printableText\` in the
+ * engine's learnings gate gives it: C0 controls and DEL to spaces, the rest of
+ * the unprintable set, the tag block and the invisible class dropped.
+ */
+function printable(value) {
+  return value
+    .replace(UNPRINTABLE, (char) => (char < " " || char === "\\u007f" ? " " : ""))
+    .replace(TAG_CHARS, "")
+    .replace(INVISIBLE, "");
+}
+
 /**
  * One field as a single index-safe line: control characters and newlines
- * collapse, so a forged summary cannot manufacture index lines of its own.
+ * collapse, so a forged summary cannot manufacture index lines of its own, and
+ * a printed field carries no mark the reader cannot see.
  */
 function text(value, fallback) {
   if (typeof value !== "string") return fallback;
-  const flat = value.replace(/[\\u0000-\\u001f\\u007f]+/g, " ").replace(/\\s+/g, " ").trim();
+  const flat = printable(value).replace(/\\s+/g, " ").trim();
   if (flat === "") return fallback;
   return flat.length > MAX_FIELD_CHARS ? flat.slice(0, MAX_FIELD_CHARS - 1) + "…" : flat;
 }
@@ -5882,9 +5980,7 @@ function nameId(doc) {
  * stem included, prints as a placeholder naming the pattern ids, never the name.
  */
 function printedName(name) {
-  const shown = name
-    .replace(UNPRINTABLE, (char) => (char < " " || char === "\\u007f" ? " " : ""))
-    .replace(INVISIBLE, "");
+  const shown = printable(name);
   const copies = [name, stem(name), text(shown, ""), text(stem(shown), "")];
   const ids = [...new Set(copies.flatMap(screenIds))].sort();
   if (ids.length === 0) return shown;

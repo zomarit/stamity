@@ -40,7 +40,8 @@ set to any value but empty, `false` or `0`. A cloud's own marker means "cloud", 
   in the run's ledger, with the branch's own protection deciding any required human review. Where
   `autonomy.reviewTool` names a tool, that tool's clean word on the same head is evidence too, and
   silence holds the merge, a hand-written `clean: reaction` being [the exception](#the-review-tool). A diff to the CI definitions or the guard's own files still asks, a
-  required check failing on the default branch's tip asks (the brake), and an asks or refused outcome
+  required check failing on the default branch's tip asks (the brake), a closed review thread that
+  someone beside its closer and the run wrote in asks, so a person merges that pull request by hand, and an asks or refused outcome
   leaves each reason as a held row on the morning list and in the pull request's body, unless the
   land stopped before it could write there. A raw ready mark, a raw merge and a raw push to the
   default branch stay refused. `run land` is not the only

@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import pLimit from "p-limit";
@@ -10,7 +9,8 @@ import {
 import { lookupCatalogEntry, resolveBundledPackRoot, type CatalogEntry } from "../../pack/curated.ts";
 import type { PackInstallPlan, PackWriteSetEntry } from "../../pack/install.ts";
 import type { OrgPolicyDecision } from "../../pack/orgPolicy.ts";
-import { packDirRelPath, receiptRelPath } from "../../pack/receipt.ts";
+import { readVerifiedReceipt } from "../../pack/projection.ts";
+import { CATALOG_TIERS, packDirRelPath } from "../../pack/receipt.ts";
 import {
   describeRetiredPack,
   lookupRetiredPack,
@@ -22,7 +22,6 @@ import { computeAggregateContentSha, type CatalogPin, type TrustTier } from "../
 import {
   isPackOwner,
   MANIFEST_FILE,
-  type LedgerEntry,
   type SetupManifest,
 } from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
@@ -484,14 +483,16 @@ interface ExecutableLine {
   relPath: string;
 }
 
-/** One argv as a display line: control characters flattened, length bounded. */
+/** One argv as a display line: control, format and default-ignorable characters flattened, length bounded. */
 function commandLine(parts: readonly unknown[]): string {
   const flat = parts
     .filter((part) => typeof part === "string")
     .join(" ")
     // The argv comes out of a third-party file and is about to be printed: a
-    // control character in it could rewrite the line an operator is reading.
-    .replace(/\p{Cc}+/gu, " ")
+    // control character in it could rewrite the line an operator is reading, and a
+    // format or default-ignorable character could make it read otherwise than the
+    // argv that runs.
+    .replace(/[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]+/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
   if (flat === "") return "(declares no command)";
@@ -879,48 +880,6 @@ export function retiredPackRefusal(entry: RetiredPack, installed: boolean): Fail
     why: "a retired name is never reused",
     next: steps === null ? onPurpose : `${steps}; ${onPurpose}`,
   };
-}
-
-/** The tiers only a verified catalog pin grants (`../../pack/trust.ts`). */
-export const CATALOG_TIERS: ReadonlySet<string> = new Set(["curator-verified", "scanned"]);
-
-/** A pack's parsed install receipt, or why it was not read. */
-export type VerifiedReceipt =
-  | { readonly ok: true; readonly receipt: unknown }
-  | { readonly ok: false; readonly reason: string };
-
-/**
- * `packId`'s install receipt, parsed only when its bytes are the ones its own
- * ledger row recorded: an edited receipt could otherwise name any source or
- * any file hash. `rows` are the pack-owned rows carrying a recorded hash.
- */
-export async function readVerifiedReceipt(
-  root: string,
-  packId: string,
-  rows: readonly LedgerEntry[],
-): Promise<VerifiedReceipt> {
-  let rel: string;
-  try {
-    rel = receiptRelPath(packId);
-  } catch {
-    return { ok: false, reason: "its id names no receipt path" };
-  }
-  const row = rows.find((entry) => entry.path === rel);
-  if (row === undefined) return { ok: false, reason: "no ledger row records its receipt" };
-  let text: Buffer;
-  try {
-    text = await readFile(join(root, ...rel.split("/")));
-  } catch {
-    return { ok: false, reason: "its receipt cannot be read" };
-  }
-  if (createHash("sha256").update(text).digest("hex") !== row.contentHash?.toLowerCase()) {
-    return { ok: false, reason: "its receipt's bytes do not match its ledger row" };
-  }
-  try {
-    return { ok: true, receipt: JSON.parse(text.toString("utf8")) as unknown };
-  } catch {
-    return { ok: false, reason: "its receipt is not JSON" };
-  }
 }
 
 /**

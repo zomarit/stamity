@@ -6464,6 +6464,13 @@ refuses.
     a learning does not ask (REQ-FLOW-133)", "asks on the held patch of a run that still captured live: its learning
     reaches the diff only in that patch (REQ-FLOW-133)"), `test/change/personOnlyPaths.test.ts` ("holds what later runs
     read as knowledge and as content, and not a run's own proposal (REQ-FLOW-133)").
+- **Amended 2026-11-05** (the maintainer's decision for 1.18.0). One more reason asks: a closed review thread that holds a
+  comment by a person other than its closer and the run's login, or that did not read whole, each named by its id
+  (`closedOverAnother`, `src/runs/landEvidence.ts`). It stands beside the count of REQ-FLOW-132, which is unchanged and
+  refuses first, and auto-ship does not spare it. An approval holds for one head, so each new push asks again while such a
+  thread stays closed. An unattended run and the land job take no approval, so there the land stops and a person merges by
+  hand. A repository with one account rarely reaches it. Where the read after
+  the tool's own threads resolve raises an ask no approval covers, the land stops with no merge.
 - **Proof:** `test/runs/landEvidence.test.ts` (each class of the ask set matched), `test/cli/commands/runLand.test.ts`.
 - **Source:** `src/runs/landEvidence.ts`, `src/runs/hookPaths.ts`, `src/cli/commands/runLand.ts`.
 
@@ -7216,7 +7223,9 @@ to keep. Given a workspace `mcp` block, Then a member's own server survives by t
     `docsUrl`, the one check stricter than a pack's, and an id a pack or an earlier row holds; the validator already
     refuses a curated id. The pack's deny patterns run at the pack's windows over each free text a row holds
     (`assertReferencesClose`, `assertHostLock`, `assertLinksHoldNoCredential`, `assertCleanText` and `resolveOwnRows`,
-    `src/mcp/ownServers.ts`). No refusal repeats a typed value (`printableRefusal`).
+    `src/mcp/ownServers.ts`). No refusal repeats a typed value (`printableRefusal`). A host-installed server whose own
+    executable bears the name of a program that starts other programs is refused, and a rename is the only way out
+    (`assertHostLauncherArgv`, `src/pack/manifest.ts`).
   - A row's `sourcePackId` is `:own`, which no pack name can take, so `clean --pack` leaves own rows, and a full `clean`
     proves and removes their entries as it does a pack's (`OWN_SERVER_SOURCE`; `installedPackMcpSupply`,
     `src/cli/commands/clean.ts`).
@@ -8876,6 +8885,11 @@ above.
 - GIVEN a diff touching only `.stamity/learnings/` or `.stamity/overrides/` THEN no ask; GIVEN the held patch of a run that
   captured live THEN `asks` (added 2026-11-05). *(test: `test/runs/landEvidence.test.ts`,
   `test/change/personOnlyPaths.test.ts`)*
+- GIVEN a closed thread that holds a comment by a person other than its closer and the run's login, or that did not read
+  whole, THEN `asks` naming it and no merge call, and `--approved` with the head lands; GIVEN an unattended run THEN the
+  same ask and `--approved` refused; GIVEN a job THEN the status line and no merge; GIVEN a person closing their own
+  thread or an app's, or a thread only the run and its closer wrote in, THEN no ask (added 2026-11-05). *(test:
+  `test/runs/landEvidence.test.ts`, `test/cli/commands/runLand.test.ts`)*
 
 **REQ-FLOW-134** (added 2026-10-25)
 

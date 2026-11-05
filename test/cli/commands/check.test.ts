@@ -26,11 +26,11 @@ import {
   __resetContentRootCacheForTests,
   __setContentRootForTests,
 } from "../../../src/content/contentRoot.ts";
-import { applySync, planSync } from "../../../src/cli/commands/sync/engine.ts";
+import { applySync, planSync, type SyncApplyReport } from "../../../src/cli/commands/sync/engine.ts";
 import { AGENTS_MD_FILE } from "../../../src/emit/agentsMd.ts";
 import { TOUCHPOINT_POLICY } from "../../../src/emit/skillsProjection.ts";
 import { createApp, createEngine } from "../../../src/index.ts";
-import { applyPackInstall, planPackInstall } from "../../../src/pack/install.ts";
+import { applyPackInstall, planPackInstall, type PlanPackInstallOptions } from "../../../src/pack/install.ts";
 import { lookupCatalogEntry, resolveBundledPackRoot } from "../../../src/pack/curated.ts";
 import { packDirRelPath, receiptRelPath } from "../../../src/pack/receipt.ts";
 import { describeRetiredPack, lookupRetiredPack, type RetiredPack } from "../../../src/pack/retired.ts";
@@ -2931,6 +2931,8 @@ async function installAcmePack(
   root: string,
   files: Record<string, string>,
   declaredTools?: readonly Tool[],
+  installOptions: PlanPackInstallOptions = { allowUntrusted: true },
+  packFields: Record<string, unknown> = {},
 ): Promise<void> {
   await handle.seedFiles({
     ...Object.fromEntries(
@@ -2946,10 +2948,11 @@ async function installAcmePack(
         ]),
       ),
       ...(declaredTools === undefined ? {} : { declaredTools }),
+      ...packFields,
     })}\n`,
   });
   const engineVersion = createApp().version;
-  const plan = await planPackInstall(root, handle.path("pack-src/acme"), { allowUntrusted: true });
+  const plan = await planPackInstall(root, handle.path("pack-src/acme"), installOptions);
   expect(plan.collisions).toEqual([]);
   const seeded = await readManifest(root);
   if (seeded === null) throw new Error("fixture lost its manifest");
@@ -2959,9 +2962,9 @@ async function installAcmePack(
 }
 
 /** One real sync, as `sync` runs it. */
-async function resyncAt(root: string): Promise<void> {
+async function resyncAt(root: string): Promise<SyncApplyReport> {
   const engineVersion = createApp().version;
-  await applySync(root, await planSync(root, engineVersion), {
+  return applySync(root, await planSync(root, engineVersion), {
     engineVersion,
     force: false,
     dryRun: false,
@@ -3255,6 +3258,179 @@ describe("check — pack-reach", () => {
           `of its content reaches a client. Remove it with ${npxCommand("clean --pack acme")}, or ` +
           "change .stamity/policy.json",
       });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("names a catalog pack a later policy refuses, rather than passing", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude"] });
+    const files = { "commands/st-acme-cmd.md": ACME_CMD };
+    const integrity = Object.fromEntries(
+      Object.entries(files).map(([rel, body]) => [rel, createHash("sha256").update(body, "utf8").digest("hex")]),
+    );
+    await installAcmePack(handle, root, files, undefined, {
+      catalogPin: { sha256: computeAggregateContentSha(integrity), tier: "curator-verified" },
+    });
+    await resyncAt(root);
+    await writeFile(
+      join(root, STATE_DIR, "policy.json"),
+      JSON.stringify({ version: 1, packs: { deny: ["catalog-pinned"] } }),
+      "utf8",
+    );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    try {
+      const reach = await doctorRow(root, "pack-reach");
+
+      expect(reach.status).toBe("warn");
+      expect(reach.detail).toContain('pack "acme" is denied by the organisation\'s trust policy');
+      expect(reach.detail).toContain('matched rule: "catalog-pinned"');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  /** A synced pack with one granted agent, then `damage` to its receipt and a kind rule, then a sync. */
+  async function syncedAfterRefusal(
+    root: string,
+    damage: (receipt: string) => Promise<void>,
+  ): Promise<{ copy: string; report: SyncApplyReport }> {
+    const agent =
+      "---\nid: acme-agent\ndescription: acme agent\ntags: [review]\ncapabilities: [read, edit]\n---\n\n# Acme\n\nWatch.\n";
+    await installAcmePack(getRepo(), root, { "agents/stamity-acme-agent.md": agent }, undefined, undefined, {
+      permissions: { toolFootprint: ["read", "edit"] },
+    });
+    await resyncAt(root);
+    const copy = join(root, ".claude", "agents", "stamity-acme-agent.md");
+    expect(await readFile(copy, "utf8")).toContain("tools: Read");
+
+    await damage(join(root, receiptRelPath("acme")));
+    await writeFile(
+      join(root, STATE_DIR, "policy.json"),
+      JSON.stringify({ version: 1, packs: { deny: ["npm-package"] } }),
+      "utf8",
+    );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      return { copy, report: await resyncAt(root) };
+    } finally {
+      warn.mockRestore();
+    }
+  }
+
+  it("takes a refused pack's granted agent out of the client at the next sync", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["claude"] });
+
+    const { copy } = await syncedAfterRefusal(root, async (receipt) => {
+      await writeFile(receipt, `${await readFile(receipt, "utf8")}\n`, "utf8");
+    });
+
+    await expect(readFile(copy, "utf8")).rejects.toThrow();
+  });
+
+  // With no verified receipt to give the footprint, the proof finds it by the row's recorded hash,
+  // so the copy leaves. The keep is pinned below, for a copy no footprint renders.
+  it.each<[string, (receipt: string) => Promise<void>]>([
+    ["is gone", (receipt) => rm(receipt)],
+    ["cannot be parsed", (receipt) => writeFile(receipt, "not json", "utf8")],
+    [
+      "holds another footprint",
+      async (receipt) => {
+        const parsed = JSON.parse(await readFile(receipt, "utf8")) as { permissions: { toolFootprint: string[] } };
+        parsed.permissions.toolFootprint = ["network"];
+        await writeFile(receipt, JSON.stringify(parsed), "utf8");
+      },
+    ],
+  ])("takes a refused pack's granted agent out of the client when its receipt %s", async (_state, damage) => {
+    const root = await seedRepo(getRepo(), { tools: ["claude", "codex"] });
+
+    const codexCopy = join(root, ".codex", "agents", "stamity-acme-agent.toml");
+
+    const { copy, report } = await syncedAfterRefusal(root, async (receipt) => {
+      expect(existsSync(codexCopy)).toBe(true);
+      await damage(receipt);
+    });
+
+    await expect(readFile(copy, "utf8")).rejects.toThrow();
+    expect(existsSync(codexCopy)).toBe(false);
+    expect(report.reclaimed?.entries.filter((entry) => entry.path.includes("stamity-acme-agent"))).toEqual(
+      expect.not.arrayContaining([expect.objectContaining({ action: "skipped-user-content" })]),
+    );
+    const policies = await readFile(join(root, ".stamity", "generated", "agent-tool-policies.json"), "utf8");
+    expect(policies).not.toContain("stamity-acme-agent");
+  });
+
+  it("writes the granted agent back when the receipt is restored after its copy left", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["claude"] });
+    let bytes = "";
+
+    const { copy } = await syncedAfterRefusal(root, async (receipt) => {
+      bytes = await readFile(receipt, "utf8");
+      await rm(receipt);
+    });
+    await expect(readFile(copy, "utf8")).rejects.toThrow();
+
+    await writeFile(join(root, receiptRelPath("acme")), bytes, "utf8");
+    await resyncAt(root);
+
+    expect(await readFile(copy, "utf8")).toContain("tools: Read");
+  });
+
+  it("keeps and names a refused pack's agent copy no footprint renders, and drops its tool policy", async () => {
+    // The pack's own file changed since the copy was written, so no rendering matches the recorded hash.
+    const root = await seedRepo(getRepo(), { tools: ["claude"] });
+
+    const { copy, report } = await syncedAfterRefusal(root, async (receipt) => {
+      await rm(receipt);
+      const source = join(root, packDirRelPath("acme"), "agents", "stamity-acme-agent.md");
+      await writeFile(source, `${await readFile(source, "utf8")}\nChanged.\n`, "utf8");
+    });
+
+    expect(await readFile(copy, "utf8")).toContain("tools: Read");
+    expect(report.reclaimed?.entries).toContainEqual(
+      expect.objectContaining({ path: ".claude/agents/stamity-acme-agent.md", action: "skipped-user-content" }),
+    );
+    const policies = await readFile(join(root, ".stamity", "generated", "agent-tool-policies.json"), "utf8");
+    expect(policies).not.toContain("stamity-acme-agent");
+  });
+
+  it("keeps a refused pack's agent copy an owner edited, whatever the proof can render", async () => {
+    const root = await seedRepo(getRepo(), { tools: ["claude"] });
+    let edited = "";
+
+    const { copy } = await syncedAfterRefusal(root, async (receipt) => {
+      await rm(receipt);
+      const path = join(root, ".claude", "agents", "stamity-acme-agent.md");
+      edited = `${await readFile(path, "utf8")}\nMine.\n`;
+      await writeFile(path, edited, "utf8");
+    });
+
+    expect(await readFile(copy, "utf8")).toBe(edited);
+  });
+
+  it("names a pack whose source kind cannot be proven, as that and not as a policy match", async () => {
+    const handle = getRepo();
+    const root = await seedRepo(handle, { tools: ["claude"] });
+    await installAcmePack(handle, root, { "commands/st-acme-cmd.md": ACME_CMD });
+    await resyncAt(root);
+    await rm(join(root, receiptRelPath("acme")));
+    await writeFile(
+      join(root, STATE_DIR, "policy.json"),
+      JSON.stringify({ version: 1, packs: { deny: ["npm-package"] } }),
+      "utf8",
+    );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    try {
+      const reach = await doctorRow(root, "pack-reach");
+
+      expect(reach.status).toBe("warn");
+      expect(reach.detail).toContain('pack "acme" is refused because its source kind could not be proven');
+      expect(reach.detail).toContain(npxCommand("clean --pack acme"));
+      expect(reach.detail).not.toContain("matched rule");
+      expect((await doctorRow(root, "pack-integrity")).status).toBe("fail");
     } finally {
       warn.mockRestore();
     }

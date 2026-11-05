@@ -728,6 +728,33 @@ describe("add — execution disclosure", () => {
     expect(result.stdout).toContain("mcp_servers/scanner.json");
   });
 
+  it("flattens the invisible characters in a command line, as it does the control characters", async () => {
+    await initProject();
+    await commitHookScript();
+    // A direction override or isolate reorders what the line shows, and a zero-width mark, a soft hyphen, a filler or a
+    // variation selector hides inside a word, so the line reads otherwise than the argv that runs. Written by code
+    // point: the first row is format characters, the second is default-ignorable characters that are not.
+    const INVISIBLE = [
+      0x202e, 0x202c, 0x2066, 0x2069, 0x200b, 0xad,
+      0x34f, 0x115f, 0x17b4, 0x180b, 0x3164, 0xfe0f, 0xffa0, 0xe0100,
+    ];
+    const hostile = INVISIBLE.map((code, index) => `${String.fromCodePoint(code)}w${index}`).join("");
+    const server = JSON.parse(EXECUTABLE_CONTENT["mcp_servers/scanner.json"] ?? "{}") as { args: string[] };
+    await seedPack({
+      content: {
+        ...EXECUTABLE_CONTENT,
+        "mcp_servers/scanner.json": JSON.stringify({ ...server, args: [...server.args, hostile] }),
+      },
+    });
+
+    const result = await run(installArgs("--dry-run"));
+
+    expect(result.stderr).toBe("");
+    const words = INVISIBLE.map((_, index) => `w${index}`).join(" ");
+    expect(result.stdout).toContain(`npx -y @acme/scanner@1.0.0 ${words}`);
+    expect(result.stdout).not.toMatch(/[\p{Cf}\p{Default_Ignorable_Code_Point}]/u);
+  });
+
   it("states plainly when a pack wires no commands at all", async () => {
     await initProject();
     await seedPack();
@@ -1225,6 +1252,20 @@ describe("add — curated catalog", () => {
     expect(result.code).toBe(0);
     expect(result.stdout).toMatch(/trust\s+curator-verified — catalog pin verified/);
     expect(result.stdout).not.toContain("nothing attests who published these bodies");
+  });
+
+  it("prints the resolved source kind while the receipt records the judged one", async () => {
+    await initProject();
+    await seedCatalogPack();
+
+    const result = await run(["ops"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("(local-path)");
+    const receipt = JSON.parse(await readFile(getProject().path(OPS_DIR, "receipt.json"), "utf8")) as {
+      source: { kind: string };
+    };
+    expect(receipt.source.kind).toBe("catalog-pinned");
   });
 
   it("falls through to the untouched local-path/npm resolution for an unknown id", async () => {

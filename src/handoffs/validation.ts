@@ -413,13 +413,17 @@ function parseHandoff(raw: string, filePath: string): ParsedHandoff {
   // above read each escape as its literal characters; the session-start banner
   // then prints a field with controls turned to spaces, which can form a row
   // the decoded text does not. Each string field is screened again in both
-  // forms, alone, so the gate refuses what the banner refuses.
+  // forms, alone, so the gate refuses what the banner refuses, and with its
+  // escape notation read, raw and flattened, as the banner reads it too.
   for (const [field, value] of Object.entries(fm)) {
     if (typeof value !== "string") continue;
     // oxlint-disable-next-line no-control-regex -- the control range IS the subject: it is what the banner flattens.
     const flat = value.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
-    for (const [form, text] of [["decoded", value], ["printed", flat]] as const) {
-      if (form === "printed" && text === value) continue;
+    const read = readNotation(value);
+    // oxlint-disable-next-line no-control-regex -- the control range IS the subject: it is what the banner flattens.
+    const readFlat = read.replace(/[\x00-\x1f\x7f]+/g, " ").replace(/\s+/g, " ").trim();
+    for (const [form, text] of [["decoded", value], ["printed", flat], ["its escapes read", read], ["its escapes read", readFlat]] as const) {
+      if (form !== "decoded" && text === value) continue;
       const copied = screenDocument(text, `${filePath}, \`${field}\` as ${form}`, named);
       errors.push(...copied.errors);
       warnings.push(...copied.warnings);
@@ -498,6 +502,22 @@ function parseHandoff(raw: string, filePath: string): ParsedHandoff {
 }
 
 /** Record a defect for a non-ISO timestamp; returns the parsed epoch or `null`. */
+/**
+ * A field with its backslash escape notation read as the characters it names: `readNotation` in
+ * `../learnings/validation.ts`, which holds the reason and is held equal to this copy by test.
+ */
+export function readNotation(text: string): string {
+  return text
+    .replace(
+      /\\(?:[ux]\{([0-9a-f]{1,6})\}|U([0-9a-f]{8})|u([0-9a-f]{4})|x([0-9a-f]{2})|([0-7]{3}))/gi,
+      (whole: string, brace?: string, long?: string, short?: string, hex?: string, octal?: string) => {
+        const code = octal === undefined ? parseInt(brace ?? long ?? short ?? hex ?? "", 16) : parseInt(octal, 8);
+        return code > 0x10ffff ? whole : String.fromCodePoint(code);
+      },
+    )
+    .replace(/\\[0abefnrtv]/g, " ");
+}
+
 function checkTimestamp(
   errors: string[],
   source: string,

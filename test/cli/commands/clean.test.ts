@@ -871,6 +871,19 @@ describe("clean --pack — scoped removal", () => {
     expect(result.stdout).toContain(`Pack "${OPS_ID}" removed`);
   });
 
+  it("still removes a pack the org policy refuses for an unproven source kind", async () => {
+    const temp = tempDir();
+    const root = await seedScopedRepo(temp);
+    await writeFile(join(root, STATE_DIR, "policy.json"), JSON.stringify({ version: 1, packs: { deny: ["npm-package"] } }), "utf8");
+
+    const result = await runClean(root, ["--pack", OPS_ID, "-y"]);
+
+    expect(result.code).toBe(0);
+    expect(await readIfPresent(join(root, PACK_FILE))).toBeNull();
+    expect(await readIfPresent(join(root, OPS_RECEIPT))).toBeNull();
+    expect(rowsOwnedBy(await readLedgerOnDisk(root), "pack:@acme/ops")).toEqual([]);
+  });
+
   it("persists a manifest with zero rows of the pack and byte-unchanged foreign rows", async () => {
     const temp = tempDir();
     const root = await seedScopedRepo(temp);
@@ -2249,6 +2262,34 @@ describe("clean --pack — the documents naming the pack's agents leave them beh
     expect(parseSingleDoc(result.stdout)["documentsRewritten"]).toEqual([GUARD]);
     expect(parseSingleDoc(result.stdout)["hookDocumentsRewritten"]).toEqual([]);
     await checkOk(root);
+  }, 120_000);
+
+  it("removes a granted agent whose receipt is gone, and judges the documents by the real plan alone", async () => {
+    const temp = tempDir();
+    const root = temp.path("repo");
+    await mkdir(root, { recursive: true });
+    await seedGitRepo(root);
+    await run(root, ["init", "-y", "--tools", "claude"]);
+    const packDir = await writeMadeUpPack(temp.path("packs"), PACK, {
+      [`agents/${AGENT}.md`]: madeUpArtifact("acme-crew-lead", "agent", "Leads the acme crew.").replace(
+        "load: on-demand\n",
+        "load: on-demand\ncapabilities: [read, edit]\n",
+      ),
+    });
+    const packJson = join(packDir, "pack.json");
+    const declared = JSON.parse(await readFile(packJson, "utf-8")) as Record<string, unknown>;
+    await writeFile(packJson, JSON.stringify({ ...declared, permissions: { toolFootprint: ["read", "edit"] } }), "utf-8");
+    await run(root, ["add", packDir, "--allow-untrusted", "-y"]);
+    await run(root, ["sync"]);
+    const copy = join(root, ".claude", "agents", `${AGENT}.md`);
+    expect(await readFile(copy, "utf-8")).toContain("tools: Read");
+
+    await rm(join(root, STATE_DIR, "packs", PACK, "receipt.json"));
+    const result = await run(root, ["clean", "--pack", PACK, "-y", "--json"]);
+
+    expect(existsSync(copy)).toBe(false);
+    // With no receipt the real plan grants the agent nothing, so this document does not depend on the pack.
+    expect(parseSingleDoc(result.stdout)["documentsRewritten"]).not.toContain(`${STATE_DIR}/generated/agent-tool-policies.json`);
   }, 120_000);
 
   it("rewrites the model maps, Cursor's pins hook and Codex's override file too, and check is green", async () => {

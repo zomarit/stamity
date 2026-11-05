@@ -11,13 +11,26 @@ import { createManifest } from "../../src/manifest/manifest.ts";
 import { getServerMeta, resolveServerMeta } from "../../src/mcp/catalog.ts";
 import { applyPackInstall, planPackInstall, planPackRemoval } from "../../src/pack/install.ts";
 import {
+  evaluatePackSource,
+  loadOrgPolicy,
+  UNPROVEN_SOURCE_KIND,
+  type OrgPolicyDecision,
+  type OrgTrustPolicy,
+} from "../../src/pack/orgPolicy.ts";
+import {
   discoverInstalledPacks,
   discoverInstalledPacksWithPolicy,
+  footprintsForProof,
+  ignoringPolicyDenialForProof,
   packContentRoots,
   packHookDefinitions,
   packMcpServers,
+  readVerifiedReceipt,
   resolveInstalledPackContent,
 } from "../../src/pack/projection.ts";
+import { DERIVABLE_CATEGORIES } from "../../src/roster/agentGrants.ts";
+import { recordedSourceKind } from "../../src/pack/receipt.ts";
+import { computeAggregateContentSha, type CatalogPin } from "../../src/pack/trust.ts";
 import { outputOwners, type AdapterOutput, type ContentSelection } from "../../src/types/content.ts";
 import type { Tool } from "../../src/types/core.ts";
 import { EngineError } from "../../src/types/errors.ts";
@@ -1259,6 +1272,56 @@ describe("pack agent grants", () => {
     expect(document.policies.some((row) => row.agentId === "stamity-sentinel")).toBe(false);
     expect(rows.get(".claude/agents/stamity-sentinel.md")!.content).toMatch(/^tools: ""$/m);
   });
+
+  it("grants nothing from a receipt that no longer matches its ledger row", async () => {
+    const fixture = await seedFixture();
+    const manifest = await installPack(fixture.repoRoot, fixture.packDir, fixture.manifest);
+    const receipt = join(fixture.repoRoot, ".stamity", "packs", "opspack", "receipt.json");
+    await writeFile(receipt, `${await readFile(receipt, "utf8")}\n`, "utf8");
+
+    const rows = byPath(await planAll(ctxOf(fixture, manifest, ["claude"])));
+    const document = JSON.parse(
+      rows.get(".stamity/generated/agent-tool-policies.json")!.content,
+    ) as PolicyDocument;
+    expect(document.policies.some((row) => row.agentId === "stamity-sentinel")).toBe(false);
+    expect(rows.get(".claude/agents/stamity-sentinel.md")!.content).toMatch(/^tools: ""$/m);
+  });
+
+  it("offers the proof no footprint to try while every receipt verifies, and every derivable one otherwise", async () => {
+    const fixture = await seedFixture();
+    const manifest = await installPack(fixture.repoRoot, fixture.packDir, fixture.manifest);
+    expect(await footprintsForProof(fixture.repoRoot, manifest)).toEqual([]);
+
+    await rm(join(fixture.repoRoot, ".stamity", "packs", "opspack", "receipt.json"));
+
+    const footprints = await footprintsForProof(fixture.repoRoot, manifest);
+    expect(footprints).toHaveLength(2 ** DERIVABLE_CATEGORIES.length);
+    expect(footprints[0]).toEqual([]);
+    expect(new Set(footprints.map((set) => [...set].toSorted().join())).size).toBe(footprints.length);
+    expect(footprints.flat()).not.toContain("spawn");
+  });
+
+  it("lets a trial footprint stand in only inside the proof, and only for a receipt that does not verify", async () => {
+    const fixture = await seedFixture();
+    const manifest = await installPack(fixture.repoRoot, fixture.packDir, fixture.manifest);
+    const toolsOf = async (): Promise<readonly string[] | undefined> =>
+      (await discoverInstalledPacks(fixture.repoRoot, manifest)).find((pack) => pack.id === "opspack")?.declaredTools;
+    const verified = await toolsOf();
+    expect(verified).not.toEqual([]);
+
+    expect(await ignoringPolicyDenialForProof(toolsOf, ["network"])).toEqual(verified);
+
+    // A changed receipt grants nothing live, and the proof still reads it first, with no trial.
+    const receipt = join(fixture.repoRoot, ".stamity", "packs", "opspack", "receipt.json");
+    await writeFile(receipt, `${await readFile(receipt, "utf8")}\n`, "utf8");
+    expect(await toolsOf()).toEqual([]);
+    expect(await ignoringPolicyDenialForProof(toolsOf)).toEqual(verified);
+
+    await rm(receipt);
+
+    expect(await ignoringPolicyDenialForProof(toolsOf, ["network"])).toEqual(["network"]);
+    expect(await toolsOf()).toEqual([]);
+  });
 });
 
 // ── Hook consumption ───────────────────────────────────────────
@@ -1328,5 +1391,364 @@ describe("packHookDefinitions", () => {
     };
     const afterRows = byPath(await planAll(ctxOf(fixture, withoutPack)));
     expect(afterRows.get(".claude/settings.json")?.content).not.toContain(PACK_HOOK_SENTINEL);
+  });
+});
+
+// ── The judged source kind at projection ───────────────────────
+
+const RECEIPT_REL = ".stamity/packs/opspack/receipt.json";
+
+type PackRules = OrgTrustPolicy["packs"];
+type RecordedReceipt = Record<string, unknown> & { source: { kind: string; spec: string } };
+
+const sha256Of = (text: string): string => createHash("sha256").update(text, "utf8").digest("hex");
+
+/** The pin a catalog would issue for the fixture pack's bytes. */
+function fixturePin(): CatalogPin {
+  const integrity = Object.fromEntries(
+    Object.entries(opspackFiles()).map(([relPath, body]) => [relPath, sha256Of(body)]),
+  );
+  return { sha256: computeAggregateContentSha(integrity), tier: "curator-verified" };
+}
+
+/** `add` of the fixture pack behind a verified catalog pin. */
+async function installCatalogPack(fixture: Fixture): Promise<SetupManifest> {
+  const plan = await planPackInstall(fixture.repoRoot, fixture.packDir, { catalogPin: fixturePin() });
+  expect(plan.collisions).toEqual([]);
+  const applied = await applyPackInstall(fixture.repoRoot, plan, fixture.manifest, {
+    engineVersion: ENGINE_VERSION,
+    now: FIXED_NOW,
+  });
+  expect(applied.result.installed).toBe(true);
+  return applied.manifest;
+}
+
+async function writePolicy(fixture: Fixture, packs: PackRules): Promise<void> {
+  await writeFile(join(fixture.repoRoot, ".stamity", "policy.json"), JSON.stringify({ version: 1, packs }), "utf8");
+}
+
+const receiptPath = (fixture: Fixture): string => join(fixture.repoRoot, ...RECEIPT_REL.split("/"));
+
+/** The installed receipt's text after `edit`, written nowhere. */
+async function editedReceipt(fixture: Fixture, edit: (receipt: RecordedReceipt) => void): Promise<string> {
+  const receipt = JSON.parse(await readFile(receiptPath(fixture), "utf8")) as RecordedReceipt;
+  edit(receipt);
+  return `${JSON.stringify(receipt, null, 2)}\n`;
+}
+
+/** Land `text` as the receipt with a ledger row that matches it: what an install wrote, not an edit. */
+async function landReceipt(fixture: Fixture, manifest: SetupManifest, text: string): Promise<SetupManifest> {
+  await writeFile(receiptPath(fixture), text, "utf8");
+  return {
+    ...manifest,
+    ledger: manifest.ledger.map((row) => (row.path === RECEIPT_REL ? { ...row, contentHash: sha256Of(text) } : row)),
+  };
+}
+
+/** The same install as a release up to 1.17.0 recorded it: the resolved kind beside the catalog tier. */
+async function asEarlierReleaseWrote(fixture: Fixture, manifest: SetupManifest): Promise<SetupManifest> {
+  const text = await editedReceipt(fixture, (receipt) => {
+    receipt.source.kind = "local-path";
+  });
+  return landReceipt(fixture, manifest, text);
+}
+
+/** The verdict `add`'s plan reaches on the fixture pack under the policy in force. */
+async function addVerdict(fixture: Fixture): Promise<OrgPolicyDecision> {
+  try {
+    return (await planPackInstall(fixture.repoRoot, fixture.packDir, { catalogPin: fixturePin() })).policy;
+  } catch (cause) {
+    expect(cause).toBeInstanceOf(EngineError);
+    const matchedRule = /\(matched rule: "([^"]+)"\)/u.exec((cause as EngineError).message)?.[1];
+    return matchedRule === undefined ? { decision: "deny" } : { decision: "deny", matchedRule };
+  }
+}
+
+/** What an emission holds of the fixture pack's content. */
+async function emittedPackContent(fixture: Fixture, manifest: SetupManifest): Promise<string[]> {
+  const rows = byPath(await planAll(ctxOf(fixture, manifest, ["claude"])));
+  return [
+    ...[...rows.keys()].filter((path) => path.includes("stamity-runbook") || path.includes("stamity-sentinel")),
+    ...((rows.get(".claude/settings.json")?.content ?? "").includes(PACK_HOOK_SENTINEL) ? ["hook"] : []),
+  ];
+}
+
+const UNPROVEN = { id: "opspack", matchedRule: UNPROVEN_SOURCE_KIND };
+
+/** Each state in which a receipt proves no kind, reached from a clean catalog install. */
+const UNPROVEN_STATES: readonly [string, (fixture: Fixture, manifest: SetupManifest) => Promise<SetupManifest>][] = [
+  [
+    "missing",
+    async (fixture, manifest) => {
+      await rm(receiptPath(fixture));
+      return manifest;
+    },
+  ],
+  [
+    "unparsable",
+    async (fixture, manifest) => {
+      await writeFile(receiptPath(fixture), "{", "utf8");
+      return manifest;
+    },
+  ],
+  [
+    "not the bytes its ledger row records",
+    async (fixture, manifest) => {
+      await writeFile(receiptPath(fixture), `${await readFile(receiptPath(fixture), "utf8")}\n`, "utf8");
+      return manifest;
+    },
+  ],
+  [
+    "without a ledger row",
+    async (_fixture, manifest) => ({
+      ...manifest,
+      ledger: manifest.ledger.filter((row) => row.path !== RECEIPT_REL),
+    }),
+  ],
+  [
+    "holding no listed kind",
+    async (fixture, manifest) => {
+      const text = await editedReceipt(fixture, (receipt) => {
+        receipt.source.kind = "elsewhere";
+      });
+      return landReceipt(fixture, manifest, text);
+    },
+  ],
+];
+
+describe("the org policy judges an installed pack by the kind add judged", () => {
+  const forms: readonly [string, (fixture: Fixture, manifest: SetupManifest) => Promise<SetupManifest>][] = [
+    ["a receipt recording the judged kind", async (_fixture, manifest) => manifest],
+    ["a receipt from an earlier release", asEarlierReleaseWrote],
+  ];
+
+  describe.each(forms)("on a catalog pack with %s", (_label, form) => {
+    it.each<[PackRules, "allow" | "deny"]>([
+      [{ deny: ["local-path"] }, "allow"],
+      [{ deny: ["npm-package"] }, "allow"],
+      [{ deny: ["catalog-pinned"] }, "deny"],
+      [{ allow: ["local-path"] }, "deny"],
+      [{ allow: ["npm-package"] }, "deny"],
+      [{ allow: ["catalog-pinned"] }, "allow"],
+    ])("reaches add's verdict and rule under %j", async (rules, expected) => {
+      const fixture = await seedFixture();
+      const manifest = await form(fixture, await installCatalogPack(fixture));
+      await writePolicy(fixture, rules);
+      const add = await addVerdict(fixture);
+      expect(add.decision).toBe(expected);
+      const recorded = await readFile(receiptPath(fixture));
+      const ledger = structuredClone(manifest.ledger);
+
+      const discovery = await discoverInstalledPacksWithPolicy(fixture.repoRoot, manifest);
+
+      if (add.decision === "deny") {
+        expect(discovery.packs).toEqual([]);
+        expect(discovery.denied).toEqual([{ id: "opspack", matchedRule: add.matchedRule }]);
+      } else {
+        expect(discovery.packs.map((pack) => pack.id)).toEqual(["opspack"]);
+        expect(discovery.denied).toEqual([]);
+      }
+      const read = await readVerifiedReceipt(fixture.repoRoot, "opspack", manifest.ledger);
+      expect(read.ok).toBe(true);
+      const judged = recordedSourceKind(read.ok ? read.receipt : null);
+      expect(evaluatePackSource(await loadOrgPolicy(fixture.repoRoot), "opspack", judged)).toEqual(add);
+      // Read, never migrated: the bytes and the row are what the install left.
+      expect(await readFile(receiptPath(fixture))).toEqual(recorded);
+      expect(manifest.ledger).toEqual(ledger);
+    });
+  });
+
+  it.each<[PackRules, string]>([
+    [{ deny: ["catalog-pinned"] }, "catalog-pinned"],
+    [{ allow: ["local-path"] }, "not in allow list"],
+  ])("drops a catalog pack from the whole setup under a later policy %j that add refuses", async (rules, matchedRule) => {
+    const fixture = await seedFixture();
+    const manifest = await installCatalogPack(fixture);
+    expect(await emittedPackContent(fixture, manifest)).not.toEqual([]);
+    await writePolicy(fixture, rules);
+
+    const discovery = await discoverInstalledPacksWithPolicy(fixture.repoRoot, manifest);
+    expect(discovery.packs).toEqual([]);
+    expect(discovery.denied).toEqual([{ id: "opspack", matchedRule }]);
+
+    const resolved = await resolveInstalledPackContent(fixture.repoRoot, manifest, fixture.corpusRoot);
+    expect(resolved.items).toEqual([]);
+    expect(resolved.skillRows).toEqual([]);
+    expect(resolved.agents).toEqual([]);
+    expect(resolved.mcpServers).toEqual([]);
+    expect(await emittedPackContent(fixture, manifest)).toEqual([]);
+  });
+
+  it.each<[PackRules, string]>([
+    [{ allow: ["catalog-pinned"] }, "not in allow list"],
+    [{ deny: ["local-path"] }, "local-path"],
+  ])("keeps a catalog pack under %j and denies a true directory install under it", async (rules, matchedRule) => {
+    const catalog = await seedFixture();
+    const manifest = await installCatalogPack(catalog);
+    await writePolicy(catalog, rules);
+
+    const resolved = await resolveInstalledPackContent(catalog.repoRoot, manifest, catalog.corpusRoot);
+    expect(resolved.packs.map((pack) => pack.id)).toEqual(["opspack"]);
+    expect(resolved.policyWarnings).toEqual([]);
+
+    await rm(join(catalog.repoRoot, ".stamity", "packs"), { recursive: true });
+    await rm(join(catalog.repoRoot, ".stamity", "policy.json"));
+    const directory = await installPack(catalog.repoRoot, catalog.packDir, catalog.manifest);
+    await writePolicy(catalog, rules);
+
+    const discovery = await discoverInstalledPacksWithPolicy(catalog.repoRoot, directory);
+    expect(discovery.packs).toEqual([]);
+    expect(discovery.denied).toEqual([{ id: "opspack", matchedRule }]);
+  });
+
+  it("does not read a recorded catalog kind beside a tier no catalog grants as the catalog kind", async () => {
+    const fixture = await seedFixture();
+    const installed = await installPack(fixture.repoRoot, fixture.packDir, fixture.manifest);
+    const text = await editedReceipt(fixture, (receipt) => {
+      receipt.source.kind = "catalog-pinned";
+    });
+    const manifest = await landReceipt(fixture, installed, text);
+    await writePolicy(fixture, { allow: ["catalog-pinned"] });
+
+    const discovery = await discoverInstalledPacksWithPolicy(fixture.repoRoot, manifest);
+
+    expect(discovery.packs).toEqual([]);
+    expect(discovery.denied).toEqual([UNPROVEN]);
+  });
+});
+
+describe("a receipt that proves no source kind", () => {
+  it.each<[string, PackRules, (receipt: RecordedReceipt) => void]>([
+    [
+      "towards a kind the policy leaves alone",
+      { deny: ["local-path"] },
+      (receipt) => {
+        receipt.source.kind = "npm-package";
+      },
+    ],
+    [
+      "towards the catalog kind",
+      { allow: ["catalog-pinned"] },
+      (receipt) => {
+        receipt.source.kind = "catalog-pinned";
+        receipt["trustTier"] = "curator-verified";
+      },
+    ],
+  ])("is not admitted by an edit %s", async (_label, rules, edit) => {
+    const fixture = await seedFixture();
+    const manifest = await installPack(fixture.repoRoot, fixture.packDir, fixture.manifest);
+    await writeFile(receiptPath(fixture), await editedReceipt(fixture, edit), "utf8");
+    await writePolicy(fixture, rules);
+
+    const discovery = await discoverInstalledPacksWithPolicy(fixture.repoRoot, manifest);
+
+    expect(discovery.packs).toEqual([]);
+    expect(discovery.denied).toEqual([UNPROVEN]);
+  });
+
+  describe.each(UNPROVEN_STATES)("when it is %s", (_label, reach) => {
+    it("refuses the pack under a kind rule, and restoring the receipt restores it", async () => {
+      const fixture = await seedFixture();
+      const installed = await installCatalogPack(fixture);
+      const recorded = await readFile(receiptPath(fixture));
+      const manifest = await reach(fixture, installed);
+      await writePolicy(fixture, { deny: ["npm-package"] });
+
+      const discovery = await discoverInstalledPacksWithPolicy(fixture.repoRoot, manifest);
+      expect(discovery.packs).toEqual([]);
+      expect(discovery.denied).toEqual([UNPROVEN]);
+      expect(await emittedPackContent(fixture, manifest)).toEqual([]);
+
+      // The files and the rows stay, so the pack can still be removed.
+      expect(await readFile(join(fixture.repoRoot, ".stamity", "packs", "opspack", "skills", "stamity-runbook", "SKILL.md"), "utf8")).toBe(
+        RUNBOOK_SKILL,
+      );
+      expect(planPackRemoval(manifest, "opspack").length).toBeGreaterThan(0);
+
+      await writeFile(receiptPath(fixture), recorded);
+      const restored = await discoverInstalledPacksWithPolicy(fixture.repoRoot, installed);
+      expect(restored.packs.map((pack) => pack.id)).toEqual(["opspack"]);
+      expect(restored.denied).toEqual([]);
+    });
+
+    it("changes nothing with no policy", async () => {
+      const fixture = await seedFixture();
+      const manifest = await reach(fixture, await installCatalogPack(fixture));
+
+      const discovery = await discoverInstalledPacksWithPolicy(fixture.repoRoot, manifest);
+
+      expect(discovery.packs.map((pack) => pack.id)).toEqual(["opspack"]);
+      expect(discovery.denied).toEqual([]);
+    });
+
+    it.each<[PackRules, { id: string; matchedRule: string }[]]>([
+      [{}, []],
+      [{ deny: ["other"] }, []],
+      [{ allow: ["opspack"] }, []],
+      [{ allow: ["*"] }, []],
+      [{ deny: ["opspack"] }, [{ id: "opspack", matchedRule: "opspack" }]],
+      [{ deny: ["*"] }, [{ id: "opspack", matchedRule: "*" }]],
+      [{ allow: ["@acme/*"] }, [{ id: "opspack", matchedRule: "not in allow list" }]],
+    ])("reaches the verdict of a proven pack under %j, which names no kind", async (rules, denied) => {
+      const fixture = await seedFixture();
+      const manifest = await reach(fixture, await installCatalogPack(fixture));
+      await writePolicy(fixture, rules);
+
+      const discovery = await discoverInstalledPacksWithPolicy(fixture.repoRoot, manifest);
+
+      expect(discovery.denied).toEqual(denied);
+      expect(discovery.packs.map((pack) => pack.id)).toEqual(denied.length === 0 ? ["opspack"] : []);
+    });
+  });
+
+  it("tells the operator the kind could not be proven, gives the remedy, and quotes nothing from the receipt", async () => {
+    const fixture = await seedFixture();
+    const manifest = await installCatalogPack(fixture);
+    const planted = await editedReceipt(fixture, (receipt) => {
+      receipt.source.kind = "planted\u0007kind";
+    });
+    await writeFile(receiptPath(fixture), planted, "utf8");
+    await writePolicy(fixture, { deny: ["npm-package"] });
+
+    const resolved = await resolveInstalledPackContent(fixture.repoRoot, manifest, fixture.corpusRoot);
+
+    expect(resolved.policyWarnings).toHaveLength(1);
+    const line = resolved.policyWarnings?.[0] ?? "";
+    expect(line).toContain('"opspack"');
+    expect(line).toContain("could not be proven");
+    expect(line).toContain("restore the receipt");
+    expect(line).toContain("clean --pack opspack");
+    expect(line).not.toContain("matched rule");
+    expect(line).not.toContain("denied by the org trust policy");
+    expect(line).not.toContain("planted");
+    expect(line).not.toContain("\u0007");
+  });
+
+  it("is proven by a receipt differing from its ledger row only in line endings", async () => {
+    const fixture = await seedFixture();
+    const manifest = await installCatalogPack(fixture);
+    const text = await readFile(receiptPath(fixture), "utf8");
+    await writeFile(receiptPath(fixture), text.replaceAll("\n", "\r\n"), "utf8");
+    await writePolicy(fixture, { allow: ["catalog-pinned"] });
+
+    const read = await readVerifiedReceipt(fixture.repoRoot, "opspack", manifest.ledger);
+    expect(read.ok).toBe(true);
+
+    const discovery = await discoverInstalledPacksWithPolicy(fixture.repoRoot, manifest);
+    expect(discovery.packs.map((pack) => pack.id)).toEqual(["opspack"]);
+    expect(discovery.packs[0]?.declaredTools).not.toEqual([]);
+    expect(discovery.denied).toEqual([]);
+  });
+
+  it("is not proven by line endings plus any other byte difference", async () => {
+    const fixture = await seedFixture();
+    const manifest = await installCatalogPack(fixture);
+    const text = await readFile(receiptPath(fixture), "utf8");
+    await writeFile(receiptPath(fixture), `${text.replaceAll("\n", "\r\n")} `, "utf8");
+
+    expect(await readVerifiedReceipt(fixture.repoRoot, "opspack", manifest.ledger)).toEqual({
+      ok: false,
+      reason: "its receipt's bytes do not match its ledger row",
+    });
   });
 });

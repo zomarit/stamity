@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { learnCommand } from "../../src/cli/commands/learn.ts";
 import { matchesDeployingBranch } from "../../src/config/autonomy.ts";
 import {
@@ -1424,6 +1424,19 @@ describe("the nested-command depth limit (pr/58)", () => {
     }
   };
 
+  // A check of the whole line runs once, so the work stays linear in the calls. Counted, not timed, so a loaded machine
+  // cannot move it.
+  it("reads the unattended verdict's line-wide checks once, however many git calls stand on the line", () => {
+    const charactersRead = (calls: number): number => {
+      const test = vi.spyOn(RegExp.prototype, "test");
+      expect(unattendedPushVerdict("git status; ".repeat(calls))).toEqual({ deny: false });
+      const read = test.mock.calls.reduce((sum, [text]) => sum + String(text).length, 0);
+      test.mockRestore();
+      return read;
+    };
+    expect(charactersRead(400)).toBeLessThan(charactersRead(40) * 20);
+  });
+
   it("reads a line four layers down as its own", () => {
     expect(personOnlyVerdict(nest("git push --force origin feat/x", 4), ON_FEATURE)).toMatchObject({ deny: true, rule: "force-push" });
     expect(unattendedPushVerdict(nest("git push origin feat/x", 4)).deny).toBe(true);
@@ -2761,6 +2774,49 @@ describe("the land verb's line (a4, REQ-FLOW-121)", () => {
     expect(unattendedPushVerdict(command).deny).toBe(true);
   });
 
+  // A word the shell completes may be the verb's, so the line's shape reads these lines too.
+  it.each([
+    ["stamity run la?d --job --pr 7"],
+    ["stamity run l*d --job"],
+    ["stamity run l[a]nd --job"],
+    ["stamity run la{n,n}d --job"],
+    ["stamity run --pr 7 la?d --job"],
+    ["npx --no stamity run la?d --job"],
+    ["stamity r?n land --job"],
+    ["stamity r?n la?d --job"],
+    ["stamity r?n la?d --jo*"],
+    ['"$CLI" run la?d --job'],
+    ['"$CLI" r?n land --job'],
+    ['stamity run "$VERB" --job'],
+    ["stamity run $WORDS"],
+    ["echo land --job | xargs stamity run"],
+    ["npm test && stamity run la?d --job"],
+    ["sh -c 'stamity run la?d --job'"],
+  ])("refuses %j, a line that may be the verb, attended", (command) => {
+    const verdict = attended(command);
+    expect(verdict.deny, command).toBe(true);
+    if (verdict.deny) expect(verdict.reason).toContain("`stamity run land` on a line that is more than the verb");
+  });
+
+  it.each([
+    ["stamity run checkpoint --run x --paths a*"],
+    ["stamity run checkpoint --paths docs/*.md"],
+    ["stamity run checkpoint a* --job"],
+    ["stamity validate docs/*.md"],
+    ["stamity validate a* --job"],
+    ["stamity l*n a*t --run x"],
+    ["stamity r?n la?d"],
+    ['"$PM" run build'],
+    ['"$PM" run "$TARGET"'],
+    ['"$PY" *.py'],
+    ['"$TOOL" a* --jobs 4'],
+    ['ls | xargs "$EDITOR"'],
+    ["ls | xargs stamity validate"],
+    ["./tools/run la?d --job"],
+  ])("leaves %j to the rules that read it, attended", (command) => {
+    expect(attended(command), command).toEqual({ deny: false });
+  });
+
   it("lets a commit message, a comment or a search that names the verb run attended, and refuses it unattended", () => {
     for (const command of ["git commit -m 'docs: stamity run land --run x lands the run'", "rg 'stamity run land' docs && git status"]) {
       expect(attended(command), command).toEqual({ deny: false });
@@ -3630,10 +3686,31 @@ describe("the land verb's approved line (a4, review/103)", () => {
     expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule: "land-approved", ask: true });
   });
 
+  // A word the shell completes may be the land verb, so each of these lines asks.
+  it.each([
+    ["the verb completed by a one-letter glob", "stamity run la?d --run x --approved abc"],
+    ["the verb completed by a glob", "stamity run l*d --run x --approved abc"],
+    ["the verb completed by a bracket", "stamity run l[a]nd --run x --approved abc"],
+    ["the verb completed by a brace", "stamity run la{n,n}d --run x --approved abc"],
+    ["the verb completed after an option", "stamity run --run x la?d --approved abc"],
+    ["the verb completed with no flag on the line", "stamity run la?d --run x"],
+    ["the verb completed through the pinned runner", "npx --no stamity run la?d --approved abc"],
+    ["the verb completed through the package's own CLI file", "node node_modules/@zomarit/stamity/dist/cli.js run la?d --approved abc"],
+    ["the verb completed behind another command", "npm test && stamity run la?d --approved abc"],
+    ["the verb completed in a nested line", "sh -c 'stamity run la?d --approved abc'"],
+    ["the verb completed on a program word a glob may name", "st?mity run la?d --approved abc"],
+    ["a brace in a word holding a path, which may give a bare word", "stamity run la{/x,nd} --approved abc"],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule: "land-approved", ask: true });
+  });
+
   it.each([
     ["a plain land line", "stamity run land --run 2026-10-23_x --ready --json"],
     ["a land line with a literal wait", "npx --no stamity run land --run 2026-10-23_x --wait 8"],
     ["a commit message naming the flag", "git commit -m 'stamity run land --approved lands an asks hold'"],
+    ["a glob on another verb, which the word after `run` settles", "stamity run checkpoint --run x --paths a*"],
+    ["a glob holding a path on another verb", "stamity run checkpoint --paths docs/*.md"],
+    ["a glob holding a path after an option, which gives only paths", "stamity run --run x checkpoint --paths docs/*.md"],
   ])("runs %s", (_, command) => {
     expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
   });
@@ -4598,6 +4675,8 @@ describe("a remote's HEAD ref written or deleted (b14b, REQ-FLOW-102, review/163
     ["a stdin plain delete whose name the shell fills in", 'echo "delete $R" | git update-ref --stdin', "git update-ref --stdin"],
     ["a stdin text whose command word and name shell quoting both split", "printf 'sym''ref-update refs/remotes/origin/HE''AD refs/heads/feat/x\\n' | git update-ref --stdin", "git update-ref --stdin"],
     ["a stdin text the shell fills in whole", 'printf "$TEXT" | git update-ref --stdin', "git update-ref --stdin"],
+    ["a stdin update whose literal name is not that ref, its value a placeholder", "printf 'update refs/heads/a %s\\n' \"$SHA\" | git update-ref --stdin", "git update-ref --stdin"],
+    ["a stdin update split by NUL whose literal name is not that ref", "printf 'update\\0refs/heads/a\\0%s\\0' \"$SHA\" | git update-ref -z --stdin", "git update-ref --stdin"],
   ])("asks for %s as a push of the default branch", (_, command, via) => {
     for (const ctx of CONTEXTS) {
       const verdict = personOnlyVerdict(command, ctx);
@@ -4613,8 +4692,8 @@ describe("a remote's HEAD ref written or deleted (b14b, REQ-FLOW-102, review/163
     // TEST CHANGE, justified (review/35, the sign-off: close the class): two update-ref rows and the symbolic-ref read
     // of a name the shell fills in moved to the asking rows below, since a word the line cannot show on these calls is
     // read as one that may be any option or that ref.
-    ["a stdin update whose literal name is not that ref, its value a placeholder", "printf 'update refs/heads/a %s\\n' \"$SHA\" | git update-ref --stdin"],
-    ["a stdin update split by NUL whose literal name is not that ref", "printf 'update\\0refs/heads/a\\0%s\\0' \"$SHA\" | git update-ref -z --stdin"],
+    // TEST CHANGE, justified: two rows of a value a placeholder fills moved to the asking rows above, since the line does
+    // not show what a filled value holds.
     ["a stdin update whose literal name ends at a space escape", "printf 'update\\x20refs/heads/a\\x200123abc\\n' | git update-ref --stdin"],
     ["a stdin verify of a symref", "printf 'symref-verify refs/heads/a refs/heads/main\\n' | git update-ref --stdin"],
     ["a remote-tracking delete of a remote branch", "git branch -r -d origin/feat/x"],
@@ -4758,5 +4837,372 @@ describe("a remote's HEAD ref written or deleted (b14b, REQ-FLOW-102, review/163
       expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
       for (const ctx of CONTEXTS) expect(personOnlyVerdict(command, ctx), command).toEqual({ deny: false });
     }
+  });
+});
+
+describe("a package manager's options before its subcommand, read as the manager reads them (REQ-FLOW-102, REQ-FLOW-120)", () => {
+  // The act behind the manager's options is read: each person-only act, and each unattended push.
+  it.each([
+    ["a single-dash setting and its value before npm's runner", "npm -loglevel silly exec -- git push --force origin feat/x", "force-push"],
+    ["a single-dash setting and its value before pnpm's runner", "pnpm -reporter silent exec git push origin main", "push-default"],
+    ["an option word, the manager's own subcommand after it, then a runner's word", "npm --json publish exec -- git status", "publish"],
+    ["a long setting and its value before the package's bin word", "pnpm --reporter silent st run land --run x --approved", "land-approved"],
+    ["a single-dash setting and its value before the package's bin word", "pnpm -reporter silent st run land --run x --approved", "land-approved"],
+    ["yarn's workspace and its name before the package's bin word", "yarn workspace x st run land --run x --approved", "land-approved"],
+    // Pins, refused on the parent too: a value-less flag before the subcommand or the runner, and a joined value.
+    ["a single-dash flag, the manager's own subcommand after it, then a runner's word", "npm -g publish exec -- git status", "publish"],
+    ["a single-dash flag right before npm's runner", "npm -g exec -- git push --force origin feat/x", "force-push"],
+    ["a single-dash setting joined to its value before npm's runner", "npm -loglevel=silly exec -- git push --force origin feat/x", "force-push"],
+  ])("refuses %s", (_, command, rule) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule });
+  });
+
+  it.each([
+    ["a single-dash setting and its value before a runner's harmless command", "npm -loglevel silly exec -- git status"],
+    ["a single-dash flag before a runner's push to a feature branch", "npm -g exec -- git push origin feat/x"],
+    ["a single-dash setting and its value before a runner's push to a feature branch", "pnpm -reporter silent exec git push origin feat/x"],
+    ["a single-dash setting and its value with no runner after it", "npm -loglevel silly test"],
+    ["a setting and its value before the package's bin word on a plain land line", "pnpm -reporter silent st run land --run x --ready --json"],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["a single-dash setting and its value before npm's runner", "npm -loglevel silly exec -- git push origin feat/x"],
+    ["a single-dash setting and its value before pnpm's runner", "pnpm -reporter silent exec git push"],
+    ["a single-dash setting and its value before npm's short runner", "npm -cache c x -- git push origin feat/x"],
+  ])("refuses unattended %s", (_, command) => {
+    expect(unattendedPushVerdict(command), command).toMatchObject({ deny: true });
+  });
+
+  it.each([
+    ["a single-dash setting and its value before a runner's harmless command", "npm -loglevel silly exec -- git status"],
+    ["a single-dash flag before a runner's harmless command", "npm -g exec -- git status"],
+  ])("runs unattended %s", (_, command) => {
+    expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
+  });
+
+  // Each reading of the options is read beside today's.
+  it.each([
+    ["a single-dash flag before yarn's workspace and its name, then yarn's exec", "yarn -s workspace w exec git push --force origin feat/x", "force-push"],
+    ["a single-dash flag before yarn's workspace and its name, then yarn's dlx", "yarn -s workspace w dlx git push origin main", "push-default"],
+    ["a long flag before yarn's workspace and its name, then yarn's exec", "yarn --silent workspace w exec git push --force origin feat/x", "force-push"],
+    ["a long flag before yarn's workspace and its name, then yarn's dlx", "yarn --silent workspace w dlx git push origin main", "push-default"],
+    ["a single-dash flag before yarn's workspace, then a long setting and its value, then yarn's exec", "yarn -s workspace w --loglevel silly exec git push origin main", "push-default"],
+    ["a long setting whose value is npm's runner word, then npm's short runner", "npm --x exec x git push origin main", "push-default"],
+    ["a single-dash setting whose value is pnpm's runner word, then pnpm's runner", "pnpm -x dlx dlx git push origin main", "push-default"],
+    ["a single-dash setting whose value is bun's runner word, then bun's runner", "bun -x x x git push origin main", "push-default"],
+    ["a long setting whose value is yarn's runner word, then yarn's runner", "yarn --x dlx dlx git push origin main", "push-default"],
+    ["an end-of-options marker before npm's runner", "npm -- exec git push origin main", "push-default"],
+    ["a flag and an end-of-options marker before pnpm's runner", "pnpm -r -- exec git push --force origin feat/x", "force-push"],
+  ])("refuses %s, in both verdicts", (_, command, rule) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule });
+    expect(unattendedPushVerdict(command), command).toMatchObject({ deny: true });
+  });
+
+  it.each([
+    ["a single-dash flag before yarn's workspace, then yarn's exec running a harmless command", "yarn -s workspace w exec git status"],
+    ["a long setting whose value is npm's runner word, then npm's short runner running a harmless command", "npm --x exec x git status"],
+    ["an end-of-options marker before npm's runner running a harmless command", "npm -- exec git status"],
+    ["a single-dash flag before pnpm's runner running a build", "pnpm -r exec tsc"],
+    ["a single-dash setting and its value with no runner after it", "npm -loglevel silly test"],
+  ])("runs %s, in both verdicts", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
+    expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
+  });
+
+  // The text the added readings re-read is capped.
+  // TEST CHANGE, justified (REQ-FLOW-102): each added reading draws the characters it re-reads, at least 4,096, against
+  // 16 lines' worth (16 × 65,536), so the last row's 17 readings each re-read a long tail.
+  it("throws a coded MANAGER_READINGS_OVER_16 for a chain of managers past 16 lines' worth of added readings, in both verdicts, quickly", () => {
+    const thrown = (read: () => unknown): unknown => {
+      try {
+        read();
+        return null;
+      } catch (error) {
+        return (error as { code?: unknown }).code;
+      }
+    };
+    const line = `${"npm -loglevel silly exec ".repeat(2_500)}git status`;
+    expect(line.length).toBeLessThan(65_536);
+    for (const verdict of [() => personOnlyVerdict(line, ON_FEATURE), () => unattendedPushVerdict(line)]) {
+      const start = performance.now();
+      expect(thrown(verdict)).toBe("MANAGER_READINGS_OVER_16");
+      expect(performance.now() - start).toBeLessThan(3_000);
+    }
+    const tail = `echo${" a".repeat(31_000)}`;
+    expect(thrown(() => personOnlyVerdict(`${"npm -loglevel silly exec ".repeat(17)}${tail}`, ON_FEATURE))).toBe("MANAGER_READINGS_OVER_16");
+    expect(thrown(() => personOnlyVerdict(`${"npm -loglevel silly exec ".repeat(16)}${tail}`, ON_FEATURE))).toBeNull();
+  });
+
+  // Each added reading draws the text it re-reads, at least 4,096 characters: 256 run, the 257th is refused.
+  it("reads a short line of many package manager calls with an option before a runner, in both verdicts, quickly", () => {
+    const thrown = (read: () => unknown): unknown => {
+      try {
+        read();
+        return null;
+      } catch (error) {
+        return (error as { code?: unknown }).code;
+      }
+    };
+    const chained = Array.from({ length: 40 }, () => "pnpm -r exec tsc").join(" && ");
+    const segments = `${"pnpm -r exec tsc; ".repeat(256)}echo`;
+    const start = performance.now();
+    for (const command of [chained, segments, `${"npm -loglevel silly exec ".repeat(17)}git status`]) {
+      expect(personOnlyVerdict(command, ON_FEATURE), command.slice(0, 200)).toEqual({ deny: false });
+      expect(unattendedPushVerdict(command), command.slice(0, 200)).toEqual({ deny: false });
+    }
+    const past = `${"pnpm -r exec tsc; ".repeat(257)}echo`;
+    expect(thrown(() => personOnlyVerdict(past, ON_FEATURE))).toBe("MANAGER_READINGS_OVER_16");
+    expect(thrown(() => unattendedPushVerdict(past))).toBe("MANAGER_READINGS_OVER_16");
+    expect(performance.now() - start).toBeLessThan(3_000);
+  });
+
+  it("reads a line at the cap of added readings to its end, a long tail after it, quickly", () => {
+    const managers = "npm -loglevel silly exec ".repeat(16);
+    const tail = " a".repeat(30_000);
+    for (const [command, denied] of [[`${managers}echo${tail}`, false], [`${managers}git push --force origin feat/x${tail}`, true]] as const) {
+      expect(command.length).toBeLessThan(65_536);
+      const start = performance.now();
+      expect(personOnlyVerdict(command, ON_FEATURE).deny, command.slice(0, 450)).toBe(denied);
+      expect(unattendedPushVerdict(command).deny, command.slice(0, 450)).toBe(denied);
+      expect(performance.now() - start).toBeLessThan(3_000);
+    }
+  });
+
+  // Calls given one count share it.
+  // TEST CHANGE, justified (REQ-FLOW-102): the count is the characters the readings re-read, each at least 4,096, so six
+  // short readings draw 24,576, and the cap is 16 lines' worth (16 × 65,536).
+  it("throws a coded MANAGER_READINGS_OVER_16 once verdict calls sharing one count pass 16 lines' worth of added readings together", () => {
+    const thrown = (read: () => unknown): unknown => {
+      try {
+        read();
+        return null;
+      } catch (error) {
+        return (error as { code?: unknown }).code;
+      }
+    };
+    const line = `${"npm -loglevel silly exec ".repeat(6)}git status`;
+    const readings = { used: 0 };
+    expect(personOnlyVerdict(line, { ...ON_FEATURE, readings })).toEqual({ deny: false });
+    expect(readings.used).toBe(6 * 4_096);
+    expect(unattendedPushVerdict(line, false, false, {}, readings)).toEqual({ deny: false });
+    expect(readings.used).toBe(12 * 4_096);
+    const atCap = 16 * 65_536 - 6 * 4_096;
+    readings.used = atCap;
+    expect(personOnlyVerdict(line, { ...ON_FEATURE, readings })).toEqual({ deny: false });
+    expect(thrown(() => personOnlyVerdict(line, { ...ON_FEATURE, readings }))).toBe("MANAGER_READINGS_OVER_16");
+    expect(unattendedPushVerdict(line, false, false, {}, { used: atCap })).toEqual({ deny: false });
+    expect(thrown(() => unattendedPushVerdict(line, false, false, {}, { used: atCap + 1 }))).toBe("MANAGER_READINGS_OVER_16");
+    // A reading draws the text it re-reads, from its manager word to its segment's end, where that passes the floor.
+    const long = { used: 0 };
+    const tail = `echo${" a".repeat(5_000)}`;
+    expect(personOnlyVerdict(`npm -loglevel silly exec ${tail}`, { ...ON_FEATURE, readings: long })).toEqual({ deny: false });
+    expect(long.used).toBe(`npm -loglevel silly exec ${tail}`.length + 1);
+    // A call given no count counts its own, as before.
+    expect(personOnlyVerdict(line, ON_FEATURE)).toEqual({ deny: false });
+    expect(unattendedPushVerdict(line)).toEqual({ deny: false });
+  });
+
+  // pnpm's workspace-root flag takes no value here, so the runner's command past it is judged.
+  it.each([
+    ["pnpm's workspace-root flag before pnpm's runner", "pnpm -w exec git push --force origin feat/x", "force-push"],
+    ["pnpm's workspace-root flag before pnpm's dlx", "pnpm -w dlx git push origin main", "push-default"],
+    ["pnpm's workspace-root flag and a setting before pnpm's runner", "pnpm -w --filter x exec git push origin main", "push-default"],
+    // Pins, refused on the parent too: npm's workspace setting takes its value, and pnpm's flag read as taking one stays.
+    ["npm's workspace setting and its value before npm's runner", "npm -w x exec git push --force origin feat/x", "force-push"],
+    ["pnpm's workspace-root flag, a word, then pnpm's runner", "pnpm -w x exec git push origin main", "push-default"],
+  ])("refuses %s, in both verdicts", (_, command, rule) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule });
+    expect(unattendedPushVerdict(command), command).toMatchObject({ deny: true });
+  });
+
+  it.each([
+    ["pnpm's workspace-root flag before pnpm's runner running a build", "pnpm -w exec tsc"],
+    ["pnpm's workspace-root flag before pnpm's runner running a harmless git command", "pnpm -w exec git status"],
+    ["npm's workspace setting and its value before npm's runner running a build", "npm -w x exec tsc"],
+  ])("runs %s, in both verdicts", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
+    expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
+  });
+
+  // A substitution behind a manager's options is read as the runner reads it. The last two, the runner-direct controls,
+  // are pins.
+  it.each([
+    ["pnpm's workspace-root flag and a word, then a runner's shell running a quoted heredoc substitution", `pnpm -w x exec sh -c "$(cat <<'EOF'\ngit push --force origin feat/x\nEOF\n)"`],
+    ["pnpm's workspace-root flag and a word, then a runner's engine evaluating a quoted heredoc substitution", `pnpm -w x exec node -e "$(cat <<'EOF'\ngit push --force origin feat/x\nEOF\n)"`],
+    ["pnpm's workspace-root flag and a word, then a runner's commit whose message is a quoted heredoc substitution", `pnpm -w x exec git commit -m "$(cat <<'EOF'\ngit push --force origin feat/x\nEOF\n)"`],
+    ["a single-dash setting and its value, then npm's runner's shell running a quoted heredoc substitution", `npm -loglevel silly exec sh -c "$(cat <<'EOF'\ngit push --force origin feat/x\nEOF\n)"`],
+    ["a single-dash setting and its value, then npm's runner's engine evaluating a quoted heredoc substitution", `npm -loglevel silly exec node -e "$(cat <<'EOF'\ngit push --force origin feat/x\nEOF\n)"`],
+    ["a single-dash setting and its value, then pnpm's runner's shell running a quoted heredoc substitution", `pnpm -reporter silent exec sh -c "$(cat <<'EOF'\ngit push --force origin feat/x\nEOF\n)"`],
+    ["pnpm's runner's shell running a quoted heredoc substitution", `pnpm exec sh -c "$(cat <<'EOF'\ngit push --force origin feat/x\nEOF\n)"`],
+    ["npm's runner's engine evaluating a quoted heredoc substitution", `npm exec node -e "$(cat <<'EOF'\ngit push --force origin feat/x\nEOF\n)"`],
+  ])("refuses %s, in both verdicts", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, ask: false, rule: "force-push" });
+    expect(unattendedPushVerdict(command), command).toMatchObject({ deny: true });
+  });
+
+  // Behind a manager's options before its runner, a substitution is read as the runner-direct line reads it. Its cost,
+  // pinned too: a commit message's heredoc there is read as code, as the runner-direct line reads it.
+  it.each([
+    ["npm", "-loglevel silly", "exec"],
+    ["npm", "-x y", "x"],
+    ["pnpm", "-w x", "exec"],
+    ["pnpm", "-reporter silent", "dlx"],
+  ])("reads a quoted heredoc substitution behind %s's options %s before its runner as the runner-direct line reads it", (manager, options, runner) => {
+    for (const receiver of ["sh -c", "node -e", "git commit -m"]) {
+      for (const body of ["git push --force origin feat/x", "git push origin main", "git status"]) {
+        const tail = `${receiver} "$(cat <<'EOF'\n${body}\nEOF\n)"`;
+        const behind = `${manager} ${options} ${runner} ${tail}`;
+        const direct = `${manager} ${runner} ${tail}`;
+        expect(personOnlyVerdict(behind, ON_FEATURE), behind).toEqual(personOnlyVerdict(direct, ON_FEATURE));
+        expect(unattendedPushVerdict(behind), behind).toEqual(unattendedPushVerdict(direct));
+      }
+    }
+  });
+
+  // Pins: the substitution-as-data path stays where no added reading is pushed (REQ-FLOW-141).
+  it.each([
+    ["a commit whose message is a quoted heredoc substitution holding a push", `git commit -m "$(cat <<'EOF'\ngit push --force origin feat/x\nEOF\n)"`],
+    ["a manager's script with no added reading, then a quoted heredoc substitution", `npm test -- -m "$(cat <<'EOF'\ngit push --force origin feat/x\nEOF\n)"`],
+    ["a single-dash setting and its value, then a runner's commit whose message is a harmless quoted heredoc", `npm -loglevel silly exec git commit -m "$(cat <<'EOF'\nfix: a typo\nEOF\n)"`],
+  ])("runs %s, in both verdicts", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
+    expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
+  });
+
+  // A segment a brace cut from the words before it reads no substitution as data, and the wrapper row below holds the same.
+  it.each([
+    ["npm", "x"],
+    ["npm", "exec"],
+    ["pnpm", "dlx"],
+    ["pnpm", "exec"],
+    ["yarn", "dlx"],
+    ["yarn", "exec"],
+    ["bun", "x"],
+    ["bun", "exec"],
+  ])("reads a quoted heredoc substitution behind a brace in %s's options before its %s as the runner-direct line reads it", (manager, runner) => {
+    for (const options of ["--x}", "-x}", "--x {y", "-x {y", "--x {y}", "-x y}"]) {
+      for (const receiver of ["sh -c", "bash -c", "node -e"]) {
+        for (const body of ["git push --force origin feat/x", "git push origin main", "git status"]) {
+          const tail = `${receiver} "$(cat <<'EOF'\n${body}\nEOF\n)"`;
+          const behind = `${manager} ${options} ${runner} ${tail}`;
+          const direct = `${manager} ${runner} ${tail}`;
+          expect(personOnlyVerdict(behind, ON_FEATURE), behind).toEqual(personOnlyVerdict(direct, ON_FEATURE));
+          expect(unattendedPushVerdict(behind), behind).toEqual(unattendedPushVerdict(direct));
+        }
+      }
+    }
+  });
+
+  // The same cut before a wrapper's value: the first reading's second segment opens with the value, not the wrapper.
+  it("reads a quoted heredoc substitution behind a brace in a wrapper's option as the brace-free line reads it, in both verdicts", () => {
+    const tail = `sh -c "$(cat <<'EOF'\ngit push --force origin feat/x\nEOF\n)"`;
+    expect(personOnlyVerdict(`timeout -k} 5 ${tail}`, ON_FEATURE)).toEqual(personOnlyVerdict(`timeout -k 5 ${tail}`, ON_FEATURE));
+    expect(unattendedPushVerdict(`timeout -k} 5 ${tail}`)).toEqual(unattendedPushVerdict(`timeout -k 5 ${tail}`));
+  });
+
+  // Pins: a brace group, or a brace after a keyword alone, cuts no words from the receiver, so the substitution-as-data
+  // path stays (REQ-FLOW-141).
+  it.each([
+    ["a brace group around a commit whose message is a quoted heredoc substitution holding a push", `{ git commit -m "$(cat <<'EOF'\ngit push --force origin feat/x\nEOF\n)"; }`],
+    ["a brace group after another command, around the same commit", `git add . && { git commit -m "$(cat <<'EOF'\ngit push --force origin feat/x\nEOF\n)"; }`],
+    ["a brace group after a keyword alone, around the same commit", `if true; then { git commit -m "$(cat <<'EOF'\ngit push --force origin feat/x\nEOF\n)"; }; fi`],
+  ])("runs %s, in both verdicts", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
+    expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
+  });
+
+  // The walk passes keyword-only segments a brace also cut, back to the words the brace reading joins.
+  it.each([
+    ["npm", "x"],
+    ["npm", "exec"],
+    ["pnpm", "dlx"],
+    ["pnpm", "exec"],
+    ["yarn", "dlx"],
+    ["yarn", "exec"],
+    ["bun", "x"],
+    ["bun", "exec"],
+  ])("reads a quoted heredoc substitution behind a brace and a keyword-only segment in %s's options before its %s as the runner-direct line reads it", (manager, runner) => {
+    for (const options of ["--x} do}", "-x} do}", "--x} then}", "-x} then}"]) {
+      for (const receiver of ["sh -c", "bash -c", "node -e"]) {
+        for (const body of ["git push --force origin feat/x", "git push origin main", "git status"]) {
+          const tail = `${receiver} "$(cat <<'EOF'\n${body}\nEOF\n)"`;
+          const behind = `${manager} ${options} ${runner} ${tail}`;
+          const direct = `${manager} ${runner} ${tail}`;
+          expect(personOnlyVerdict(behind, ON_FEATURE), behind).toEqual(personOnlyVerdict(direct, ON_FEATURE));
+          expect(unattendedPushVerdict(behind), behind).toEqual(unattendedPushVerdict(direct));
+        }
+      }
+    }
+  });
+
+  // Pins: a keyword-only segment no brace joins to words before it keeps the substitution-as-data path (REQ-FLOW-141).
+  it.each([
+    ["a brace group after a keyword in a brace-grouped condition, around a commit", `if { true; } then { git commit -m "$(cat <<'EOF'\ngit push --force origin feat/x\nEOF\n)"; } fi`],
+    ["a brace group after two keyword segments, around a commit", `while true; do if true; then { git commit -m "$(cat <<'EOF'\ngit push --force origin feat/x\nEOF\n)"; }; fi; done`],
+  ])("runs %s, in both verdicts", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
+    expect(unattendedPushVerdict(command), command).toEqual({ deny: false });
+  });
+
+  // Each added reading adds to the first reading's result, so the land, `clean` and `init` checks read both.
+  it.each([
+    ["npm --x y st stamity run land --run x --approved"],
+    ["pnpm --x y st stamity run land --run x --approved"],
+    ["yarn -x y st stamity run land --approved=abc"],
+  ])("reads the land line after the word naming the package, beside an added reading: %s", (command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule: "land-approved" });
+    expect(unattendedPushVerdict(command, false, true), command).toMatchObject({ deny: true });
+  });
+
+  it.each([
+    ["npm --x y st stamity clean"],
+    ["npm --x y st stamity init --force"],
+    ["yarn -x y st stamity clean"],
+  ])("reads a full clean or a forced init after the word naming the package, beside an added reading: %s", (command) => {
+    expect(personOnlyVerdict(command, { ...ON_FEATURE, stricterThanDefault: true }), command).toMatchObject({ deny: true, rule: "autonomy-loosen" });
+  });
+
+  it("reads the loosen flag after a file sharing the CLI's name, beside an added reading", () => {
+    const line = "npm --a cli.js --loosen st x";
+    expect(personOnlyVerdict(line, { ...ON_FEATURE, stricterThanDefault: true, ownRepository: false }), line).toMatchObject({ deny: true, rule: "autonomy-loosen" });
+  });
+
+  // Pins: an added reading's tail still counts where the first reading's reads another or none.
+  it.each([
+    ["npm --x y st run land --approved"],
+    ["npm --x y st run land --note stamity --approved"],
+    ["npm --x y st run land --approved --note stamity"],
+  ])("keeps the added reading's land line: %s", (command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule: "land-approved" });
+    expect(unattendedPushVerdict(command, false, true), command).toMatchObject({ deny: true });
+  });
+
+  it("reads a clean in an added reading's tail where the first reading's tail is another", () => {
+    const line = "npm --x y st clean --note stamity";
+    expect(personOnlyVerdict(line, { ...ON_FEATURE, stricterThanDefault: true }), line).toMatchObject({ deny: true, rule: "autonomy-loosen" });
+  });
+
+  // Each added tail is a second read of the words after it, so each draws on the count: a line of many stays linear.
+  it("throws a coded MANAGER_READINGS_OVER_16 for a line of many added tails, in both verdicts, quickly, and reads a line of few", () => {
+    const thrown = (read: () => unknown): unknown => {
+      try {
+        read();
+        return null;
+      } catch (error) {
+        return (error as { code?: unknown }).code;
+      }
+    };
+    const line = `npm ${"-a st ".repeat(10_000)}run land`;
+    expect(line.length).toBeLessThan(65_536);
+    for (const verdict of [() => personOnlyVerdict(line, ON_FEATURE), () => unattendedPushVerdict(line, false, true)]) {
+      const start = performance.now();
+      expect(thrown(verdict)).toBe("MANAGER_READINGS_OVER_16");
+      expect(performance.now() - start).toBeLessThan(3_000);
+    }
+    const few = `npm ${"-a st ".repeat(4)}run lint`;
+    expect(personOnlyVerdict(few, ON_FEATURE), few).toEqual({ deny: false });
+    expect(unattendedPushVerdict(few, false, true), few).toEqual({ deny: false });
   });
 });

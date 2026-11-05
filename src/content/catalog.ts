@@ -813,8 +813,7 @@ function foldInvocableName(name: string): string {
 
 /**
  * A third-party string as it may be printed: every control character flattened
- * to a space, as `add` flattens a pack's argv rows (`../cli/commands/add.ts` →
- * `commandLine`). A pack's frontmatter `id:` is held to no character set — a
+ * to a space. A pack's frontmatter `id:` is held to no character set — a
  * YAML double-quoted scalar can spell ESC as an escape, so the bytes on disk
  * stay printable and the body scan has nothing to match — and a control
  * sequence in a refusal line would rewrite the line the operator is reading.

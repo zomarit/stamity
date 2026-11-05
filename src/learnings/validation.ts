@@ -484,11 +484,13 @@ export interface ScreenedCopy {
  * The copies of a parsed learning the screens read beyond its raw bytes: each
  * string head field as YAML decoded it and as each printer shows it — the read
  * verb's strip between two whitespace collapses (`fieldText` around
- * {@link printableText} in `./store.ts`), and the session-start banner's
- * `text()`, which turns C0 controls and DEL to spaces and collapses — and the
- * body as the read verb prints it. Each field alone, so no hit is made of two
- * fields printed apart. The write gate and the loader both screen this list,
- * so a file refused at write is refused on read under the same pattern id.
+ * {@link printableText} in `./store.ts`), which the session-start banner's
+ * `text()` prints too, and with only the C0 controls and DEL turned to spaces
+ * and collapsed, so a row the rest of the strip would break is still read, and
+ * with its escape notation read ({@link readNotation}) — and the body as the
+ * read verb prints it. Each field alone, so no hit is made of two fields printed
+ * apart. The write gate and the loader both screen this list, so a file refused
+ * at write is refused on read under the same pattern id.
  */
 export function screenedCopies(parsed: ParsedFrontmatter): ScreenedCopy[] {
   const copies: ScreenedCopy[] = [];
@@ -496,10 +498,15 @@ export function screenedCopies(parsed: ParsedFrontmatter): ScreenedCopy[] {
     if (typeof value !== "string") continue;
     copies.push({ part: "head", label: `\`${field}\` as decoded`, text: value });
     const shown = collapse(printableText(collapse(value)));
-    // oxlint-disable-next-line no-control-regex -- the control range IS the subject: it is what the banner flattens.
+    // oxlint-disable-next-line no-control-regex -- the control range IS the subject: this copy flattens it and no more.
     const flat = collapse(value.replace(/[\u0000-\u001f\u007f]+/g, " "));
     for (const text of new Set([shown, flat])) {
       if (text !== value) copies.push({ part: "head", label: `\`${field}\` as printed`, text });
+    }
+    const named = readNotation(value);
+    if (named === value) continue;
+    for (const text of new Set([named, collapse(printableText(collapse(named)))])) {
+      copies.push({ part: "head", label: `\`${field}\` as its escapes read`, text });
     }
   }
   const body = printableText(parsed.body, "\t\n\r");
@@ -509,6 +516,27 @@ export function screenedCopies(parsed: ParsedFrontmatter): ScreenedCopy[] {
 
 function collapse(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * A field with its backslash escape notation read as the characters it names and
+ * each named control as a space. No parser decodes the notation in a plain scalar
+ * and no printer decodes it anywhere, so every other copy shows it as literal
+ * characters, which a model may still read as what they name. A screen copy only:
+ * nothing printed or stored is changed. Self-contained, since the session-start
+ * banner carries it as source; `../handoffs/validation.ts` holds a copy, held equal
+ * by test, because the layering keeps that module from importing this one.
+ */
+export function readNotation(text: string): string {
+  return text
+    .replace(
+      /\\(?:[ux]\{([0-9a-f]{1,6})\}|U([0-9a-f]{8})|u([0-9a-f]{4})|x([0-9a-f]{2})|([0-7]{3}))/gi,
+      (whole: string, brace?: string, long?: string, short?: string, hex?: string, octal?: string) => {
+        const code = octal === undefined ? parseInt(brace ?? long ?? short ?? hex ?? "", 16) : parseInt(octal, 8);
+        return code > 0x10ffff ? whole : String.fromCodePoint(code);
+      },
+    )
+    .replace(/\\[0abefnrtv]/g, " ");
 }
 
 /**

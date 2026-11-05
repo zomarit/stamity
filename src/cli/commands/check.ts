@@ -25,11 +25,13 @@ import {
 } from "../../merge/managedBlocks.ts";
 import { lookupCatalogEntry, type CatalogEntry } from "../../pack/curated.ts";
 import { MOVED_CORE_SKILLS, movedRenderingAt } from "../../pack/moved.ts";
-import { ORG_POLICY_REL_PATH } from "../../pack/orgPolicy.ts";
+import { ORG_POLICY_REL_PATH, UNPROVEN_SOURCE_KIND } from "../../pack/orgPolicy.ts";
 import {
   discoverInstalledPacksWithPolicy,
+  readVerifiedReceipt,
   withoutPolicyWarningPrint,
 } from "../../pack/projection.ts";
+import { CATALOG_TIERS } from "../../pack/receipt.ts";
 import {
   describeRetiredPack,
   lookupRetiredPack,
@@ -77,13 +79,7 @@ import { sanitizeLabel } from "../kit/prompts.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import type { Palette } from "../kit/terminal.ts";
 import type { ReclaimActionEntry, ReclaimProof } from "../../merge/reclaim.ts";
-import {
-  CATALOG_TIERS,
-  installedCopyOf,
-  isFirstPartyRetiredCopy,
-  readVerifiedReceipt,
-  replaceSteps,
-} from "./add.ts";
+import { installedCopyOf, isFirstPartyRetiredCopy, replaceSteps } from "./add.ts";
 import { planSync, previewReclaim, type SyncPlanEntry } from "./sync/engine.ts";
 import { provenanceFromManifest, type ProvenanceRollup } from "./sync/report.ts";
 
@@ -1688,6 +1684,14 @@ function describeSilentPack(pack: PackReach, selected: readonly Tool[]): string 
 /** A pack the organisation's trust policy denies: installed, and projected nowhere. */
 function describeDeniedPack(pack: { id: string; matchedRule?: string }): string {
   const id = sanitizeLabel(pack.id);
+  if (pack.matchedRule === UNPROVEN_SOURCE_KIND) {
+    return (
+      `pack "${id}" is refused because its source kind could not be proven: ${ORG_POLICY_REL_PATH} ` +
+      `holds a source-kind rule, and its receipt is missing, unreadable, or no longer the bytes its ` +
+      `ledger row records, so none of its content reaches a client. Restore the receipt, or run ` +
+      `${packageCommand(`clean --pack ${id}`)} and add the pack again`
+    );
+  }
   const rule =
     pack.matchedRule === undefined
       ? ""

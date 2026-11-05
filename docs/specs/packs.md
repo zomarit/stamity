@@ -153,13 +153,30 @@ each with the real map.
   (`src/cli/commands/check.ts`). Its pass reads "no installed pack is recorded in the ledger", or "<n> catalog pack(s)
   match the copy this release bundles", adding "<n> pack(s) from a path or npm not judged" where any is; a receipt whose
   bytes do not match its ledger row is not compared and adds `Content not compared for pack "<id>" (<reason>).`
-  (`readVerifiedReceipt`, `installedCopyOf` and `isFirstPartyRetiredCopy`, which the row and `add` share,
-  `src/cli/commands/add.ts`). `docs/troubleshooting.md` carries the row in its doctor sample and its table.
+  (`readVerifiedReceipt`, `src/pack/projection.ts`; `installedCopyOf` and `isFirstPartyRetiredCopy`,
+  `src/cli/commands/add.ts`; the row and `add` share all three). `docs/troubleshooting.md` carries the row in its doctor
+  sample and its table.
 - **Proof:** `test/cli/commands/check.test.ts` ("check — pack-catalog", and "reads the retired map through the engine
   registry when run as a doctor row"; with the real map, "warns on every first-party copy of retired %s a release
   shipped, with the real map", which also holds each id's pins equal to its shipped copies' aggregates,
   `u13-retired-map`); `test/docsPages.test.ts` (the doctor table's row set).
-- **Source:** `src/cli/commands/check.ts`, `src/cli/commands/add.ts`.
+- **Source:** `src/cli/commands/check.ts`, `src/cli/commands/add.ts`, `src/pack/projection.ts`.
+- **Amended 2026-11-04:** the receipt read this row shares is also what projection judges a pack by. A receipt records
+  the source kind the org policy judged (`judgedSourceKind`, `src/pack/receipt.ts`), and every reader reaches that kind
+  from either form a release has written (`recordedSourceKind`, same file) with no receipt rewritten; a recorded
+  `catalog-pinned` beside a tier no catalog grants proves no kind. `readVerifiedReceipt` moved to
+  `src/pack/projection.ts`, feeds the footprint and the kind from one read, and counts a receipt that differs from its
+  ledger row only in `\r\n` line endings as matching. With a kind rule in the policy, a pack whose kind cannot be proven
+  is denied under the `matchedRule` literal `source kind not proven` (`UNPROVEN_SOURCE_KIND`, `src/pack/orgPolicy.ts`);
+  `sync` and `check` name it as unproven, its files stay, `clean --pack` still removes it, and restoring the receipt
+  restores it. Where no kind rule is in force, verdicts do not change. Before this it read the receipt unverified, and
+  an unknown kind matched no kind token, so the pack stayed live. The rendering proof (REQ-PLUGIN-046) keeps its rule
+  for such a pack's agent copies: only the receipt records the footprint a copy was written with, so where a receipt
+  does not verify the proof tries each derivable footprint (`footprintsForProof`, `src/pack/projection.ts`) and counts
+  a trial only where its rendering hashes to the row's recorded hash (`src/cli/engine/emissionWrite.ts`). Proof:
+  `test/pack/projection.test.ts`,
+  `test/pack/orgPolicy.test.ts`, `test/pack/receipt.test.ts`, `test/pack/install.test.ts`,
+  `test/pack/upgradeRemedy.test.ts`, `test/cli/commands/check.test.ts`.
 
 ### REQ-PACK-004 — `add` checks that a pack fits Codex's skills list before it writes
 

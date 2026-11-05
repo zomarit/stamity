@@ -56,6 +56,7 @@ import { displayPath, type SafeWriteFileOptions } from "../../merge/safeWrite.ts
 import { movedCoreSkill, movedRenderingAt } from "../../pack/moved.ts";
 import {
   discoverInstalledPacks,
+  footprintsForProof,
   ignoringPolicyDenialForProof,
   packMcpServers,
   withoutPolicyWarningPrint,
@@ -1021,6 +1022,11 @@ export interface RenderingProof {
  * keeps those files unjudged, with their rows, and names the cause rather
  * than an owner's file (review/61).
  *
+ * A pack agent's copy carries the grant its pack's footprint allowed, and only
+ * the receipt records that footprint. Where a receipt does not verify, the plan
+ * renders the copy with another grant, so {@link addCopiesOfUnprovenFootprint}
+ * looks for the one that was written.
+ *
  * At Cursor's two 1.11.0 guard names the rendering is never the running
  * engine's: it is the guard the frozen 1.11.0 builder renders for this setup
  * under `legacyCursor` ({@link releaseOneElevenGuardsFor}, REQ-FLOW-038), and
@@ -1069,6 +1075,7 @@ export async function engineRenderingsFor(
   let outputs: readonly AdapterOutput[];
   let charter: AdapterOutput | undefined;
   let index: ContentIndex;
+  let planWithFootprint: (footprint: readonly string[]) => Promise<readonly AdapterOutput[]>;
   try {
     const [built, repoInfo] = await Promise.all([buildContentIndex(), analyzeRepo(rootDir)]);
     index = built;
@@ -1076,12 +1083,15 @@ export async function engineRenderingsFor(
     setupClients.tools = clients;
     setupClients.selection = fullCorpusSelection(index);
     setupClients.detected = summarizeDetection(repoInfo);
-    const plan = (planned: SetupManifest): Promise<readonly AdapterOutput[]> =>
+    const plan = (planned: SetupManifest, footprint?: readonly string[]): Promise<readonly AdapterOutput[]> =>
       withoutPolicyWarningPrint(() =>
-        ignoringPolicyDenialForProof(async () =>
-          planFor(await provableSetup(rootDir, planned), { monorepoPackages: repoInfo.monorepoPackages }),
+        ignoringPolicyDenialForProof(
+          async () =>
+            planFor(await provableSetup(rootDir, planned), { monorepoPackages: repoInfo.monorepoPackages }),
+          footprint,
         ),
       );
+    planWithFootprint = (footprint) => plan(setupClients, footprint);
     outputs = await plan(setupClients);
     charter = outputs.find((output) => output.path === OWNED_PATHS.charterFileName);
     // A nested copy is the root charter as rendered before the import
@@ -1123,7 +1133,59 @@ export async function engineRenderingsFor(
     hashes.add(digest);
     renderings.set(path, hashes);
   }
+  await addCopiesOfUnprovenFootprint(rootDir, manifest, renderings, wanted, planWithFootprint);
   return { renderings };
+}
+
+/**
+ * Add to `renderings` the rendering of each `wanted` copy the plan rendered with
+ * other bytes than its row records, when a footprint from
+ * `../../pack/projection.ts::footprintsForProof` renders exactly those bytes.
+ *
+ * Without this a refused pack's agent copy, written with a grant, stays in the
+ * client with that grant once its receipt stops verifying, and leaves the
+ * ledger, so nothing names it again. The rule is unchanged: a trial's rendering
+ * counts only where it hashes to the row's recorded hash, and the delete still
+ * needs the file's bytes to hash to it (`../../merge/reclaim.ts`). So an edited
+ * copy, or a pack file that changed since, proves nothing and is kept.
+ *
+ * Stops at the first footprint that leaves no copy to find. A plan that throws
+ * ends the search: what it did not find is kept and named, as for any file no
+ * rendering proves.
+ */
+async function addCopiesOfUnprovenFootprint(
+  rootDir: string,
+  manifest: SetupManifest,
+  renderings: Map<string, Set<string>>,
+  wanted: ReadonlySet<string>,
+  planWithFootprint: (footprint: readonly string[]) => Promise<readonly AdapterOutput[]>,
+): Promise<void> {
+  const sought = new Map<string, string>();
+  for (const row of manifest.ledger) {
+    const recorded = row.contentHash?.toLowerCase();
+    const rendered = renderings.get(row.path);
+    if (wanted.has(row.path) && recorded !== undefined && rendered !== undefined && !rendered.has(recorded)) {
+      sought.set(row.path, recorded);
+    }
+  }
+  if (sought.size === 0) return;
+  for (const footprint of await footprintsForProof(rootDir, manifest)) {
+    let outputs: readonly AdapterOutput[];
+    try {
+      // oxlint-disable-next-line no-await-in-loop -- the search stops once nothing is sought; planning every footprint at once spends what it exists to save
+      outputs = await planWithFootprint(footprint);
+      // reason: not silent — a copy left unproven is kept and named by the sweep.
+    } catch {
+      return;
+    }
+    for (const output of outputs) {
+      const digest = sha256(output.content);
+      if (sought.get(output.path) !== digest) continue;
+      renderings.get(output.path)?.add(digest);
+      sought.delete(output.path);
+    }
+    if (sought.size === 0) return;
+  }
 }
 
 /** Exactly 64 lowercase hex characters: the shape of a SHA-256 the ledger records. */

@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   ORG_POLICY_REL_PATH,
+  UNPROVEN_SOURCE_KIND,
   evaluatePackSource,
   loadOrgPolicy,
   type OrgTrustPolicy,
@@ -288,12 +289,19 @@ describe("evaluatePackSource", () => {
     });
   });
 
-  it("matches no kind token for an install whose provenance cannot be read", () => {
-    // The projection lane reads the kind out of an installed pack's receipt; a
-    // receipt an operator deleted has none. "unknown" must not silently widen a
-    // kind rule — but name, scope and "*" rules still decide.
-    expect(evaluatePackSource(policyOf({ deny: ["npm-package"] }), "ops", "unknown")).toStrictEqual({
-      decision: "allow",
+  // TEST CHANGE, justified: an unproven kind under a kind rule was allowed by design; it is now refused, so that
+  // case flips and the two rules below keep the verdicts they always had.
+  it("refuses an install whose kind cannot be proven under a kind rule, while other rules still decide", () => {
+    // The projection lane has no kind to report for a receipt that proves none.
+    const unproven = { decision: "deny", matchedRule: UNPROVEN_SOURCE_KIND };
+    expect(evaluatePackSource(policyOf({ deny: ["npm-package"] }), "ops", "unknown")).toStrictEqual(unproven);
+    expect(evaluatePackSource(policyOf({ allow: ["catalog-pinned"] }), "ops", "unknown")).toStrictEqual(unproven);
+    // Whatever else the policy admits: the kind it turns on cannot be told.
+    expect(evaluatePackSource(policyOf({ allow: ["ops", "local-path"] }), "ops", "unknown")).toStrictEqual(unproven);
+    // A deny the pack meets on its own name is that rule's verdict, not this one's.
+    expect(evaluatePackSource(policyOf({ deny: ["ops", "local-path"] }), "ops", "unknown")).toStrictEqual({
+      decision: "deny",
+      matchedRule: "ops",
     });
     expect(evaluatePackSource(policyOf({ deny: ["*"] }), "ops", "unknown")).toStrictEqual({
       decision: "deny",
@@ -302,6 +310,20 @@ describe("evaluatePackSource", () => {
     expect(evaluatePackSource(policyOf({ deny: ["ops"] }), "ops", "unknown")).toStrictEqual({
       decision: "deny",
       matchedRule: "ops",
+    });
+  });
+
+  it("leaves an unproven kind alone where no kind rule is in force", () => {
+    expect(evaluatePackSource(null, "ops", "unknown")).toStrictEqual({ decision: "allow" });
+    expect(evaluatePackSource(policyOf({}), "ops", "unknown")).toStrictEqual({ decision: "allow" });
+    expect(evaluatePackSource(policyOf({ deny: ["other"] }), "ops", "unknown")).toStrictEqual({ decision: "allow" });
+    expect(evaluatePackSource(policyOf({ allow: ["ops"] }), "ops", "unknown")).toStrictEqual({
+      decision: "allow",
+      matchedRule: "ops",
+    });
+    expect(evaluatePackSource(policyOf({ allow: ["@acme/*"] }), "ops", "unknown")).toStrictEqual({
+      decision: "deny",
+      matchedRule: "not in allow list",
     });
   });
 

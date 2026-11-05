@@ -44,6 +44,13 @@ describe("heldPaths", () => {
     ".stamity/packs/acme__guard/rules/r.md",
     ".Stamity/Packs/x/hooks/pre.json",
     ".stamity/change-classes.json",
+    // The org trust policy, in any letter case: a later sync projects the packs it allows.
+    ".stamity/policy.json",
+    ".Stamity/Policy.json",
+    // A handoff, which a later session's start lists, archived or not, in any letter case.
+    ".stamity/handoffs/2026-11-05-a-note-a1b2c.md",
+    ".stamity/handoffs/archive/2026-11-05-a-note-a1b2c.md",
+    ".Stamity/Handoffs/a.md",
     ".github/CODEOWNERS",
     "docs/CODEOWNERS",
     "AGENTS.md",
@@ -142,6 +149,12 @@ describe("heldPaths", () => {
     ".claude/hooks.json",
     ".stamity/runs/2026-10-16_x/record.md",
     ".stamity/inbox.md",
+    // Look-alikes of the org trust policy.
+    ".stamity/policy.json.bak",
+    "docs/.stamity/policy.json",
+    // Look-alikes of the handoffs folder.
+    ".stamity/handoffsx/a.md",
+    ".stamity/handoffs.md",
     // A look-alike of the packs folder (review/175).
     ".stamity/packsx/a.json",
     ".stamity/packs.json",
@@ -186,6 +199,8 @@ describe("heldPaths", () => {
       "apps/web/.claude/settings.json",
       "apps/web/.claude/hooks/x.mjs",
       "apps/web/.stamity/generated/y",
+      "apps/web/.stamity/policy.json",
+      "apps/web/.stamity/handoffs/a.md",
       "apps/web/.cursor/hooks.json",
       "apps/web/.mcp.json",
       // The top-level patterns still hold at the top.
@@ -279,12 +294,14 @@ describe("heldPaths", () => {
       ".stamity/hooks/**",
       ".stamity/manifest.json",
       ".stamity/change-classes.json",
-      // TEST CHANGE, justified (plan 023 file 2, unit propose-learning, REQ-FLOW-133): the folders later runs read as
+      ".stamity/policy.json",
+// TEST CHANGE, justified (plan 023 file 2, unit propose-learning, REQ-FLOW-133): the folders later runs read as
       // knowledge and as content are held now, so a run proposes and a person accepts; the pinned list gains both globs.
       // Built at run time: written as a literal, a folder glob makes this file a declared reader of every tracked file
       // under that folder (test/ci/testInputsGuard.test.ts, `under`).
       [".stamity/learnings", "**"].join("/"),
       [".stamity/overrides", "**"].join("/"),
+      [".stamity/handoffs", "**"].join("/"),
       "CODEOWNERS",
       ".github/CODEOWNERS",
       "docs/CODEOWNERS",

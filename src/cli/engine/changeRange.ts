@@ -611,9 +611,17 @@ interface RangeLines {
   total: number | null;
 }
 
+/** No user attributes file: an empty `core.attributesFile`, which any git takes. */
+export const NO_USER_ATTRIBUTES: readonly string[] = ["-c", "core.attributesFile="];
+
+/** The options that put a diff under `base`'s attributes and no user file. `--attr-source` needs git 2.41. */
+export function baseAttributes(base: string): string[] {
+  return [`--attr-source=${base}`, ...NO_USER_ATTRIBUTES];
+}
+
 /** A range's `diff-tree` call, up to its output flag: the base's attributes and no user file, then {@link DIFF_PINS}. */
 function rangeDiff(base: string): string[] {
-  return [`--attr-source=${base}`, "-c", "core.attributesFile=", "diff-tree", "-r", "-M", ...DIFF_PINS];
+  return [...baseAttributes(base), "diff-tree", "-r", "-M", ...DIFF_PINS];
 }
 
 /**

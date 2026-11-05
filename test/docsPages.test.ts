@@ -5770,7 +5770,8 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
 
   it("troubleshooting gives the land verb's reasons as the verb words them, and the new entries", () => {
     const page = flowed(read(TROUBLESHOOTING));
-    const verb = read("src/runs/landEvidence.ts") + read("src/cli/commands/runLand.ts") + read("src/runs/pullRequest.ts");
+    // TEST CHANGE, justified: the check of where `gh` lies moved to its own module, with its reasons, so the pre-flight runs it too.
+    const verb = read("src/runs/landEvidence.ts") + read("src/cli/commands/runLand.ts") + read("src/cli/engine/ghTrust.ts") + read("src/runs/pullRequest.ts");
     for (const heading of [
       "### `run land` exits 1 and does not merge",
       "### `run land` cannot start a `gh` pinned only in the repository",
@@ -6410,14 +6411,14 @@ describe("every land reason the code prints is on the troubleshooting page", () 
   it.each([
     ["src/change/autoShip.ts", ["the classification is incomplete", "the line count is incomplete", "the line count is not a finite number", "lines are over autonomy.autoShip.maxLines", "the change is empty", "disagrees with the classified paths", "files are over autonomy.autoShip.maxFiles", "outside autonomy.autoShip.classes", "docs-class but not plain text", "outside autonomy.autoShip.paths", "a specialist lens is asked for"]],
     ["src/runs/reviewTool.ts", ["minutes from the request", "review rounds spent with no clean head, so a person decides", "and only a new run clears them", "and no request on this head yet"]],
-    ["src/runs/landEvidence.ts", ["wait on its word on this head", "mergeable_state is blocked, and the tool's open review threads may be what holds it", "failing on its tip", "so whether it is red is not known", "the legs disagree on autonomy.reviewTool, and no leg wins", "the head's manifest loosens"]],
+    ["src/runs/landEvidence.ts", ["wait on its word on this head", "mergeable_state is blocked, and the tool's open review threads may be what holds it", "failing on its tip", "so whether it is red is not known", "the legs disagree on autonomy.reviewTool, and no leg wins", "the head's manifest loosens", "a person decides on closed review threads that someone beside the closer wrote in, or that did not read whole"]],
     [
       "src/cli/commands/runLand.ts",
       [
         "was not resolved",
         "pending: run land again for the review tool's word; no approval passes a wait",
         "someone else wrote in review thread",
-        "which GitHub may show as resolved: a person reopens it and closes it themselves, so the land reads it as theirs",
+        "which GitHub may show as resolved: a person reopens it and closes it themselves, so the land reads it as theirs, and asks where another person wrote in it too",
         "autonomy.landJob is not on in every leg of the setting, so the job does not land here",
         "does not read Status: closed, so the run has not ended",
         "reads (blocked:, so a person decides",

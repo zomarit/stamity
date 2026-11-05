@@ -14,6 +14,7 @@ import {
   receiptRelPath,
   serializeReceipt,
 } from "../../src/pack/receipt.ts";
+import { installedCopyOf } from "../../src/cli/commands/add.ts";
 import { reAddArgsOf } from "../../src/cli/commands/check.ts";
 import { describePackIntegrityFinding } from "../../src/pack/verifyInstalled.ts";
 import { packOwner, type LedgerEntry } from "../../src/types/manifest.ts";
@@ -171,7 +172,7 @@ async function installBypassingAdd(
     buildReceipt(
       {
         manifest: { name, version: "1.0.0" },
-        source: { kind: "local-path" },
+        judgedKind: "local-path",
         spec: `./${name}`,
         writeSet,
         checks: { manifest: "pass", trustTier: "pass", integrityMap: "pass", bodyScan: "pass" },
@@ -670,6 +671,17 @@ describe("the re-add source a pack's receipt records (review/59)", () => {
       reAddArgsOf(PACK, receipt("local-path", `/somewhere/packs/${PACK}`, "curator-verified")),
     ).toBe(PACK);
   });
+
+  it.each(["local-path", "catalog-pinned"])(
+    "reads a catalog install's receipt holding the kind %s as from the catalog",
+    (kind) => {
+      const spec = `/somewhere/packs/${PACK}`;
+      expect(reAddArgsOf(PACK, receipt(kind, spec, "curator-verified"))).toBe(PACK);
+      const files = [{ path: `${packDirRelPath(PACK)}/skills/a/SKILL.md`, sha256: "a".repeat(64) }];
+      const recorded = { ...(receipt(kind, spec, "curator-verified") as object), files };
+      expect(installedCopyOf(PACK, recorded)?.fromCatalog).toBe(true);
+    },
+  );
 
   it("names an npm package by its name, with --allow-untrusted only at the unsigned floor", () => {
     expect(reAddArgsOf("@acme/ops", receipt("npm-package", "@acme/ops", "pinned-unsigned"))).toBe(

@@ -34,7 +34,7 @@ import { extractManagedBlock } from "../../merge/managedBlocks.ts";
 import { ledgerHashIndex, ledgerPathSet, safeWriteFile } from "../../merge/safeWrite.ts";
 import { planPackRemoval } from "../../pack/install.ts";
 import { packDirRelPath } from "../../pack/receipt.ts";
-import { discoverInstalledPacks, packMcpServers, withoutPolicyWarningPrint } from "../../pack/projection.ts";
+import { discoverInstalledPacks, isFootprintTrial, packMcpServers, withoutPolicyWarningPrint } from "../../pack/projection.ts";
 import { toLedgerEntries, trustedInfraPaths, type ReclaimCandidate } from "../../manifest/ledger.ts";
 import { OWNED_PATHS, needsRenderingProof } from "../../manifest/ownedPaths.ts";
 import {
@@ -478,7 +478,7 @@ function cleanPlanner(rootDir: string, engineVersion: string, seen?: PlanSeen): 
       ...registryOption({}),
       facts,
     });
-    if (seen !== undefined) {
+    if (seen !== undefined && !isFootprintTrial()) {
       seen.paths = new Set(outputs.map((output) => output.path));
       seen.contents = new Map(outputs.map((output) => [output.path, output.content]));
     }

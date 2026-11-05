@@ -95,8 +95,9 @@ export interface OrgPolicyDecision {
   decision: "allow" | "deny";
   /**
    * The pattern that decided, when one did: the matched deny or allow entry,
-   * or the literal `"not in allow list"` for an allowlist-mode miss. Absent
-   * when nothing matched (no policy, or denylist mode with no deny hit).
+   * the literal `"not in allow list"` for an allowlist-mode miss, or
+   * {@link UNPROVEN_SOURCE_KIND} for a kind nobody can prove under a kind rule.
+   * Absent when nothing matched (no policy, or denylist mode with no deny hit).
    */
   matchedRule?: string;
 }
@@ -112,6 +113,13 @@ const KIND_TOKENS: readonly PackSourceKind[] = ["local-path", "npm-package", "ca
 
 /** Stable `matchedRule` literal for an allowlist-mode miss; the add UX prints it. */
 const NOT_IN_ALLOW_LIST = "not in allow list";
+
+/**
+ * Stable `matchedRule` literal for a pack refused because its source kind could
+ * not be proven under a policy holding a kind rule. It names no pattern in the
+ * policy, so a surface reporting it says so rather than quoting a rule.
+ */
+export const UNPROVEN_SOURCE_KIND = "source kind not proven";
 
 const ROOT_FIELDS = ["version", "packs"] as const;
 const PACKS_FIELDS = ["allow", "deny"] as const;
@@ -363,12 +371,13 @@ export async function writeOrgPolicy(rootDir: string, policy: OrgTrustPolicy): P
 /**
  * A source kind the evaluator can be handed when none is on record.
  *
- * The projection lane reads an installed pack's kind out of its receipt, and a
- * receipt an operator deleted or truncated has no kind to report. `"unknown"`
- * equals no kind token, so kind rules simply do not match it while name, scope
- * and `"*"` rules still do — a deny-everything policy still denies, and a
- * `deny: ["npm-package"]` policy does not silently start denying packs whose
- * provenance nobody can read.
+ * The projection lane reads an installed pack's kind out of its receipt, and
+ * takes it only from a receipt whose bytes match their ledger row. `"unknown"`
+ * is what remains otherwise. It equals no kind token, so no kind rule can admit
+ * it, and {@link evaluatePackSource} refuses it wherever a kind rule is in
+ * force: a kind rule that a damaged receipt could step around is not a rule.
+ * Under name, scope and `"*"` rules alone the kind decides nothing, so it
+ * changes nothing there.
  */
 export type EvaluatedSourceKind = PackSourceKind | "unknown";
 
@@ -387,10 +396,13 @@ function patternMatches(pattern: string, packName: string, sourceKind: Evaluated
  * rule is reported when several match.
  *
  * Precedence: no policy → allow. A deny match → deny (deny-wins, including a
- * pattern duplicated across both lists). Then, with an `allow` list present,
- * an allow match → allow and anything unmatched → deny with the literal
- * `matchedRule` `"not in allow list"` — so an empty `allow` list denies
- * everything. With no `allow` list, whatever survived the deny list passes.
+ * pattern duplicated across both lists). Then an `"unknown"` kind under a policy
+ * naming any kind token → deny with {@link UNPROVEN_SOURCE_KIND}, whatever the
+ * allow list says, because the kind the policy turns on cannot be told. Then,
+ * with an `allow` list present, an allow match → allow and anything unmatched →
+ * deny with the literal `matchedRule` `"not in allow list"` — so an empty
+ * `allow` list denies everything. With no `allow` list, whatever survived the
+ * deny list passes.
  */
 export function evaluatePackSource(
   policy: OrgTrustPolicy | null,
@@ -402,6 +414,10 @@ export function evaluatePackSource(
   const { allow, deny } = policy.packs;
   const denied = deny?.find((pattern) => patternMatches(pattern, packName, sourceKind));
   if (denied !== undefined) return { decision: "deny", matchedRule: denied };
+
+  if (sourceKind === "unknown" && [...(allow ?? []), ...(deny ?? [])].some(isKindToken)) {
+    return { decision: "deny", matchedRule: UNPROVEN_SOURCE_KIND };
+  }
 
   if (allow !== undefined) {
     const allowed = allow.find((pattern) => patternMatches(pattern, packName, sourceKind));

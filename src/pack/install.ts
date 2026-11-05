@@ -69,6 +69,7 @@ import { lookupCatalogEntry, resolveBundledPackRoot } from "./curated.ts";
 import { checkAgentCapabilities, checkPermissions } from "./permissions.ts";
 import {
   buildReceipt,
+  judgedSourceKind,
   packDirRelPath,
   receiptRelPath,
   serializeReceipt,
@@ -191,6 +192,12 @@ export interface PackInstallPlan {
   /** The pack's own validated `pack.json` — not the project manifest. */
   manifest: PackManifest;
   source: ResolvedPackSource;
+  /**
+   * The kind the org policy judged this install as, and the kind its receipt
+   * records (`./receipt.ts::judgedSourceKind`). `source.kind` stays the resolved
+   * kind, the one `add` prints.
+   */
+  judgedKind: PackSourceKind;
   /** The operator's original source spec, recorded for receipt provenance. */
   spec: string;
   /** Every file the install would write, in enumeration order. */
@@ -483,27 +490,6 @@ function resolveSourceIdentity(
     );
   }
   return sourceName;
-}
-
-/**
- * The kind the org policy judges this install as.
- *
- * A catalog install resolves to a directory inside the engine package, so the
- * resolver honestly reports `local-path` — and that conflated the SHA-pinned
- * curated catalog with any directory on the machine. The pin is what
- * distinguishes them, and the pin is verified one layer up, so the promotion
- * happens here.
- *
- * The trigger is the resolved TIER, not the presence of a pin argument, because
- * only a verified catalog pin can produce a catalog-granted rung: `./trust.ts`
- * refuses a pin whose aggregate content SHA disagrees, and the two rungs below
- * (`publisher-signed`, `pinned-unsigned`) are not catalog-issued. So the
- * promotion happens exactly when a catalog vouched for these exact bytes, and
- * never on a claim.
- */
-function policySourceKind(source: ResolvedPackSource, tier: TrustTier): PackSourceKind {
-  if (tier === "curator-verified" || tier === "scanned") return "catalog-pinned";
-  return source.kind;
 }
 
 /**
@@ -1379,7 +1365,8 @@ async function planInstall(
   checks.trustTier = "pass";
 
   const identity = resolveSourceIdentity(packManifest, source);
-  const policy = applyOrgPolicy(identity, policySourceKind(source, tier), orgPolicy);
+  const judgedKind = judgedSourceKind(source.kind, tier);
+  const policy = applyOrgPolicy(identity, judgedKind, orgPolicy);
   checks.orgPolicy = orgPolicy === null ? "n/a" : "pass";
 
   // The gate returns the VERDICT, not just its row: a verified publisher-signed
@@ -1443,6 +1430,7 @@ async function planInstall(
   return {
     manifest: packManifest,
     source,
+    judgedKind,
     spec,
     writeSet,
     agentGrants: describeAgentGrants(agents, packManifest),
@@ -1944,7 +1932,8 @@ async function unlistedEntry(root: string, dir: string, listed: ReadonlySet<stri
  * - the receipt must then be the one {@link buildReceipt} writes for that plan
  *   in every field a later reader trusts: the file list (so the kept bytes are
  *   the gated bytes), the footprint the grants are bounded by, the source kind
- *   the policy judges, and the trust tier.
+ *   the policy judges (or the resolved kind, the form a receipt held before
+ *   1.18.0), and the trust tier.
  */
 async function keptPackGateRefusal(
   root: string,
@@ -1988,8 +1977,14 @@ async function keptPackGateRefusal(
     return `its files are not the bytes the bundled catalog's pack ${JSON.stringify(packId)} ships: ${oneLine(differs.join("; "))}`;
   }
   const source = receipt["source"];
+  const recordedKind = isPlainObject(source) ? source["kind"] : undefined;
   const fields: readonly [string, unknown, unknown][] = [
-    ["source kind", isPlainObject(source) ? source["kind"] : undefined, expected.source.kind],
+    // The resolved kind is what a release before 1.18.0 recorded for this same
+    // plan, so it stands for the judged kind here. The comparison is bound to
+    // the plan rather than made through `recordedSourceKind`, which reads any
+    // listed kind beside a catalog tier as the catalog kind: this gate refuses
+    // every kind but these two.
+    ["source kind", recordedKind === plan.source.kind ? expected.source.kind : recordedKind, expected.source.kind],
     ["trust tier", receipt["trustTier"], expected.trustTier],
     ["footprint", receipt["permissions"], expected.permissions],
   ];

@@ -1,6 +1,6 @@
-import { lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
-import { dirname, isAbsolute, join, parse, resolve } from "node:path";
+import { lstatSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { LAND_JOB_NAME } from "../../adapters/landWorkflow.ts";
 import { autoShipVerdict, filesOverLimit, type AutoShipRules, type AutoShipVerdict } from "../../change/autoShip.ts";
 import { CLASS_FILE } from "../../change/classify.ts";
@@ -11,8 +11,8 @@ import { hookPathsRead, setupRootsAt, type HookScratch } from "../../runs/hookPa
 import {
   askPathsOf,
   checkEvidence,
+  closedOverAnother,
   decideLand,
-  entryPlaceOf,
   evidenceLine,
   ledgerEvidence,
   parseBranch,
@@ -26,13 +26,11 @@ import {
   parsePr,
   parseReactions,
   parseReviews,
-  placeOf,
   parseThreadsPage,
   ownPr,
   pollWhilePending,
   threadResolved,
   toolThreadIds,
-  withinAny,
   unresolvedThreads,
   waitsLine,
   withStatusLine,
@@ -42,7 +40,6 @@ import {
   type LandDecision,
   type LandInput,
   type LandPr,
-  type PlaceReads,
   type PollClock,
   type RequiredCheck,
   type ThreadRead,
@@ -59,17 +56,16 @@ import {
   ghCommentEditors,
   ghMarkReady,
   ghMergePull,
-  ghProgramPath,
   ghResolveReviewThread,
   ghReviewThreads,
-  withoutVersionChoice,
   type GhApiOptions,
   type GhResponse,
   type MergeMethod,
 } from "../engine/ghRunner.ts";
 import { readGuardLegs } from "../engine/autonomyGate.ts";
+import { trustedGh } from "../engine/ghTrust.ts";
 import { gitWrite, gitWriteEnv, type GitWriteResult } from "../engine/gitWrite.ts";
-import { encodeQuery, READ_MAX_BYTES, readCapped, readLooserKeys, readSetting, Refused } from "../engine/landSetting.ts";
+import { encodeQuery, Held, READ_MAX_BYTES, readCapped, readLegs, readLooserKeys, readSetting, Refused, settingOfLegs, type LandSetting } from "../engine/landSetting.ts";
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
@@ -87,7 +83,9 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * **The evidence** (`../../runs/landEvidence.ts`): the required check runs on the head (a ruleset's and the
  * branch protection's, else every check run there), the review threads, the ledger as the head commit holds it (the
  * work tree's copy must equal it), `mergeable_state`. The setting is the strictest of the default branch's, `HEAD`'s
- * and the work tree's manifest and the baked guard. `gh` must resolve outside the work tree and the temp folders. Unattended, git's
+ * and the work tree's manifest and the baked guard, read at the repository's top wherever the verb started, a project
+ * below the top adding its own legs; a default branch with no manifest at the top refuses. `gh` must resolve outside the
+ * work tree and the temp folders. Unattended, git's
  * surface must still be the pre-flight's (REQ-FLOW-131), at the start and again just before the act.
  *
  * **The factory's evidence.** A required check failing on the default branch's tip asks, and a tip that does not read asks
@@ -126,7 +124,10 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * shows as the pull request's status line, never as a red job, since GitHub may put a failing job's run on the default branch's tip. Three ends
  * leave no line: a run still in progress, a head a newer job speaks for, and a pull request {@link ownPr} refuses, whose body is
  * not the run's to write, so its reason is only in the job's log. The method must pass every ruleset's `allowed_merge_methods`,
- * any linear-history rule and the repository's flags, merge before squash before rebase; none is a hold.
+ * any linear-history rule and the repository's flags, merge before squash before rebase; none is a hold. So is a default branch
+ * with no manifest at the top, and a refusal from a read of the setting past the verb's own folder: the top's legs from below it,
+ * the setups elsewhere, the keys a head loosens. Each stops the land as in a session, and none of them turns a job red, so the job
+ * off in a leg is judged on the top's and the project's legs first, ahead of the reads that can fail, and again on the setups.
  *
  * Exit 0 `landed` or `already-landed`; 1 `asks` or `refused` (the JSON's `outcome` is how a flow branches); 2 usage. A job's
  * exit is above.
@@ -165,7 +166,7 @@ const JOB_BOT = "github-actions[bot]";
 const bareLogin = (login: string): string => login.replace(/\[bot\]$/, "").toLowerCase();
 /** Why a thread someone wrote in stops the land, and the way out: GitHub may show it resolved, so this line is all a person has to go on (review/120). */
 const closedOverReason = (id: string | undefined): string =>
-  `someone else wrote in review thread ${id ?? "with no id"}, which GitHub may show as resolved: a person reopens it and closes it themselves, so the land reads it as theirs`;
+  `someone else wrote in review thread ${id ?? "with no id"}, which GitHub may show as resolved: a person reopens it and closes it themselves, so the land reads it as theirs, and asks where another person wrote in it too`;
 /** A branch name as it goes into a path unencoded, as the push check reads it. */
 const PATH_BRANCH = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/-]+$/;
 /** The manifest below the project root: a pull request whose file list leaves it out cannot loosen a key. */
@@ -206,19 +207,6 @@ interface LandResult {
   notDone: string[];
 }
 
-/**
- * A refusal that is a normal end for a job (REQ-FLOW-157): it exits 0, and `shown` puts its reasons in the status line. To a
- * session it is any refusal.
- */
-class Held extends Refused {
-  readonly shown: boolean;
-
-  constructor(shown: boolean, ...reasons: string[]) {
-    super(...reasons);
-    this.shown = shown;
-  }
-}
-
 /** The pre-flight record's reads (review/34): the kind by `lstat`, never through a link, and the capped read, which keeps the module's 64 KiB cap. */
 const RECORD_READS: RecordFileReads = {
   kind: (path) => {
@@ -242,26 +230,6 @@ const HOOK_SCRATCH: HookScratch = {
   remove: (root) => rmSync(root, { recursive: true, force: true }),
 };
 
-/**
- * review/96: the folder every `gh` call starts in: `/` on POSIX; on Windows the system drive's root (`SystemDrive` and
- * a `\`), else the root of the home folder's drive.
- */
-function filesystemRoot(): string {
-  if (process.platform !== "win32") return "/";
-  const drive = process.env["SystemDrive"] ?? "";
-  return /^[A-Za-z]:$/.test(drive) ? `${drive}\\` : parse(homedir()).root;
-}
-
-/**
- * build/18: the temp folders a planted `gh` must not lie in: `os.tmpdir()`; `/tmp` on POSIX; on win32 also `%TEMP%`,
- * `%TMP%` and the user's local `Temp` folder under `AppData`, from the verb's environment and the process's, as found.
- */
-function tempRoots(env: NodeJS.ProcessEnv): string[] {
-  if (process.platform !== "win32") return [tmpdir(), "/tmp"];
-  const named = [env, process.env].flatMap((from) => [from["TEMP"], from["TMP"], from["LOCALAPPDATA"] === undefined ? undefined : join(from["LOCALAPPDATA"], "Temp")]);
-  return [tmpdir(), join(homedir(), "AppData", "Local", "Temp"), ...named.filter((root): root is string => typeof root === "string" && root !== "")];
-}
-
 /** The run's git calls: `git`, whose failure to start is the verb's failure, and `gitLine`, one line of output or `null`. */
 function landGit(cwd: string, unattended: boolean): { git: (args: readonly string[]) => Promise<GitWriteResult>; gitLine: (args: readonly string[]) => Promise<string | null> } {
   const git = async (args: readonly string[]): Promise<GitWriteResult> => {
@@ -281,30 +249,6 @@ function landGit(cwd: string, unattended: boolean): { git: (args: readonly strin
     return read.code === 0 ? read.stdout.replace(/\r?\n$/, "") : null;
   };
   return { git, gitLine };
-}
-
-/** (1) gh, before any of its answers is trusted: outside the work tree and the temp folders. What every later call starts. */
-function trustedGh(cwd: string, env: NodeJS.ProcessEnv, top: string, lines: string[]): GhApiOptions {
-  const gh = ghProgramPath({ cwd, env });
-  if (gh === null) throw new Refused("gh not found on PATH");
-  if (!isAbsolute(gh)) throw new Refused("gh resolves to a PATH entry that is not an absolute path");
-  // review/91: the PATH entry (its folder's links resolved) and the program it finally names are each checked; a
-  // version manager's shim is a link whose target picks the tool by the name it was started under. build/18: each
-  // place and each root read as one real, normalised form (Windows' short and long names, either separator, any
-  // letter case), compared by a separator boundary; a place that does not resolve counts as inside.
-  const placeReads: PlaceReads = { platform: process.platform, realpath: (path) => realpathSync.native(path) };
-  const ghPlaces = [entryPlaceOf(gh, placeReads), placeOf(gh, placeReads)];
-  const where = (roots: readonly string[]): boolean => ghPlaces.some((place) => withinAny(place, roots, placeReads));
-  if (where([top])) throw new Refused("gh resolves to a program inside the work tree, whose answers the run could write");
-  if (where(tempRoots(env))) throw new Refused("gh resolves to a program inside a temp folder, whose answers the run could write");
-  // review/75, review/91: every later call starts this same absolute PATH entry, never one resolved again from PATH,
-  // and never its link target, so a shim still sees its own name. review/95, review/96: from the filesystem's root
-  // (every call names its host and its full API path, so gh needs no repository folder), which has no parent a
-  // version manager's shim reads a version file from and which no one but an administrator writes, and without the
-  // version managers' version-choosing variables, so the run cannot steer a shim to another program.
-  const shimNeutral = withoutVersionChoice(env);
-  if (shimNeutral.dropped.length > 0) lines.push(`gh environment: dropped ${shimNeutral.dropped.join(", ")}`);
-  return { cwd: filesystemRoot(), env: shimNeutral.env, program: gh };
 }
 
 /** (2) Origin's repository, every push URL naming the same one. */
@@ -555,14 +499,15 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
 
     if (ended !== null && ended.holds.length > 0) throw new Held(!ended.inProgress, ...ended.holds);
 
-    // (4) The setting: the strictest of the default branch's, HEAD's and the work tree's manifest and the baked guard.
-    const setting = await readSetting(cwd, prefix, repoPath, defaultBranch, gitLine, call, readGuardLegs);
+    // (4) The legs of the setting: the default branch's, HEAD's and the work tree's manifest and the baked guard, read at the top
+    // wherever the verb started, a project below the top adding its own. The job's hold is judged on them here, ahead of every read
+    // that can fail below, and again once the setups elsewhere are read.
+    const legs = await readLegs({ top, cwd, prefix }, repoPath, defaultBranch, gitLine, call, readGuardLegs);
     // REQ-FLOW-157: the strictest read keeps `landJob` only where every leg holds it equal, so no head turns the job on for itself.
-    if (job !== null && setting.landJob === undefined) throw new Held(true, "autonomy.landJob is not on in every leg of the setting, so the job does not land here");
-    // Legs that disagree on the review tool go to a person: `setting.reviewTool` is then only the first leg's, and it judges nothing.
-    const tool = setting.reviewToolConflict.length === 0 ? setting.reviewTool : undefined;
-    // A job has no client's shell limit and no next call to leave a wait to: its budget takes in the tool's whole wait.
-    if (job !== null) budgetEnd += (tool?.waitMinutes ?? 0) * 60_000;
+    const holdJobOff = (now: LandSetting): void => {
+      if (job !== null && now.landJob === undefined) throw new Held(true, "autonomy.landJob is not on in every leg of the setting, so the job does not land here");
+    };
+    holdJobOff(settingOfLegs(legs));
 
     // (5) The changed files, every page, a rename's old name included.
     const files: string[] = [];
@@ -575,8 +520,6 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       counted += read.count;
       if (read.count < 100) break;
     }
-    // Only a pull request that changes the manifest can loosen a key: a default branch tightened since the fork loosens nothing here.
-    const looserKeys = files.includes(`${prefix}${MANIFEST_PATH}`) ? await readLooserKeys(prefix, repoPath, defaultBranch, gitLine, call) : [];
 
     // (6) The required checks: the rulesets' and the branch protection's; a 403 or 404 on the rules falls back to all.
     const rules = await call(`${repoPath}/rules/branches/${defaultBranch}`);
@@ -614,6 +557,19 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     // REQ-FLOW-102: from every setup root the three trees hold, as the hold reads them.
     const { paths: hookPaths, setups } = await declaredHookPaths({ base: head.base, head: sha, tip: branch.tip, defaultBranch, prefix }, git, gitLine);
     result.evidence.held = askPathsOf(files, setups, typeof hookPaths === "string" ? [] : hookPaths);
+
+    // (4b) The setting whole: the legs above and what any other setup on the default branch names, read here for the list.
+    // A list that did not read has asked already, through `hookPaths`.
+    const setting = await readSetting(legs, { prefix, setups }, repoPath, defaultBranch, call);
+    holdJobOff(setting);
+    // Only a pull request that changes a manifest the setting reads can loosen a key, and those are the top's, the verb's own folder's and
+    // every setup the list names: a default branch tightened since the fork loosens nothing here.
+    const changedRoots = [...new Set(["", prefix, ...setups])].filter((root) => files.includes(`${root}${MANIFEST_PATH}`));
+    const looserKeys = await readLooserKeys(changedRoots, repoPath, defaultBranch, gitLine, call);
+    // Legs that disagree on the review tool go to a person: `setting.reviewTool` is then only the first leg's, and it judges nothing.
+    const tool = setting.reviewToolConflict.length === 0 ? setting.reviewTool : undefined;
+    // A job has no client's shell limit and no next call to leave a wait to: its budget takes in the tool's whole wait.
+    if (job !== null) budgetEnd += (tool?.waitMinutes ?? 0) * 60_000;
     // REQ-FLOW-152: read only where it can spare an ask, the tip being in this clone by now.
     const autoShip =
       setting.autoShip !== undefined && matchesDeployingBranch(defaultBranch, setting.deployingBranches)
@@ -723,6 +679,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       threads: threads === null ? null : threads - setAside(now).length,
       pendingThreads: threads !== null && review?.state === "waiting" ? toolOpen.length : 0,
       setAsideThreads: setAside(now).length,
+      closedThreads: closedOverAnother(lastThreads, viewer),
       ledger,
       looserKeys,
       reviewToolConflict: setting.reviewToolConflict,
@@ -923,8 +880,10 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
             const entry = lastThreads.find((read) => read.id === id);
             return entry === undefined || joinedBySomeone(entry, tool?.login, viewer);
           });
+      // This read can raise an ask no one was shown, a thread closed just now; with no approval it stops the land as a gap does.
+      const unasked = after.outcome === "asks" && approval === null ? after.reasons : [];
       // review/120: named whatever else stops it. A set, since `decide` has already named the threads it counts.
-      const stops = [...new Set([...failed, ...(after.outcome === "refused" ? after.reasons : []), ...joined.map((id) => closedOverReason(id))])];
+      const stops = [...new Set([...failed, ...(after.outcome === "refused" ? after.reasons : []), ...unasked, ...joined.map((id) => closedOverReason(id))])];
       if (stops.length > 0) throw new Held(true, ...stops);
       lines.push(`threads: resolved ${ownThreads.length} of the tool's own`);
     }
@@ -1147,18 +1106,16 @@ function rangeDisagreement(range: RangeFacts, files: readonly string[], pr: Land
 }
 
 /**
- * The class file GitHub holds at `tip`, for {@link classifyRange}: its text, `null` where the project at the top holds none, or
- * why it is not known. A project below the top with none there is not known: only a walk up the clone's trees would say
- * which rules it falls under, and the clone is what a run can write.
+ * The class file GitHub holds at `tip`, at the repository's top, for {@link classifyRange}: its text, `null` where it holds
+ * none, or why it is not known.
  */
-async function classFileAt(tip: string, prefix: string, read: (path: string) => Promise<GhResponse | null>): Promise<{ text: string | null } | { failed: string }> {
-  const path = `${prefix}${CLASS_FILE}`;
-  const reply = await read(`contents/${path.split("/").map((segment) => encodeQuery(segment)).join("/")}?ref=${encodeQuery(tip)}`);
-  if (reply?.status === 404) return prefix === "" ? { text: null } : { failed: `GitHub holds no ${path} at ${tip}, so what judges a project below the top is not known` };
+async function classFileAt(tip: string, read: (path: string) => Promise<GhResponse | null>): Promise<{ text: string | null } | { failed: string }> {
+  const reply = await read(`contents/${CLASS_FILE.split("/").map((segment) => encodeQuery(segment)).join("/")}?ref=${encodeQuery(tip)}`);
+  if (reply?.status === 404) return { text: null };
   const text = reply?.status === 200 ? parseFileContent(reply.json) : null;
   if (text !== null) return { text };
   const why = reply === null ? "gh failed" : reply.status === 200 ? "GitHub's answer is no file" : `HTTP ${reply.status}`;
-  return { failed: `${path} did not read from GitHub at ${tip} (${why})` };
+  return { failed: `${CLASS_FILE} did not read from GitHub at ${tip} (${why})` };
 }
 
 /**
@@ -1167,6 +1124,8 @@ async function classFileAt(tip: string, prefix: string, read: (path: string) => 
  * merge base by where it forks, and the tip is the rules as they stand today. Only the hunks are the clone's, the stated limit
  * in `../engine/changeRange.ts`. A compare that names no base, a class file that does not read, a range that disagrees with
  * GitHub and a commit this clone does not hold (a shallow clone) all read as not eligible, so the land asks instead of failing.
+ * So does a land started below the top, read no further: the rules judge paths from the top by the top's class file, and the
+ * start folder picks neither.
  */
 async function autoShipRead(
   cwd: string,
@@ -1177,6 +1136,7 @@ async function autoShipRead(
   const { tip, head, prefix, files, pr } = at;
   // review/42: GitHub's count is at most the range's, a rename counting once there, so this rule needs no read of every file.
   if (pr.changedFiles > rules.maxFiles) return { eligible: false, reasons: [filesOverLimit(pr.changedFiles, rules.maxFiles)] };
+  if (prefix !== "") return { eligible: false, reasons: [`auto-ship is judged only from the repository's top, and this land started in ${prefix}`] };
   const incomplete = (why: string): AutoShipVerdict => ({ eligible: false, reasons: [`the classification is incomplete: ${why}`] });
   const read = (path: string): Promise<GhResponse | null> =>
     call(path).catch((error: unknown) => {
@@ -1186,7 +1146,7 @@ async function autoShipRead(
   const compare = await read(`compare/${tip}...${head}`);
   const base = compare?.status === 200 ? parseMergeBase(compare.json) : null;
   if (base === null) return incomplete(`GitHub's compare of ${tip} and ${head} named no merge base (${compare === null ? "gh failed" : `HTTP ${compare.status}`})`);
-  const classFile = await classFileAt(tip, prefix, read);
+  const classFile = await classFileAt(tip, read);
   if ("failed" in classFile) return incomplete(classFile.failed);
   try {
     const range = await classifyRange(cwd, base, head, classFile.text);

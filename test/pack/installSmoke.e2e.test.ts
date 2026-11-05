@@ -531,14 +531,12 @@ describe("pack install smoke (real bin, pseudo-home)", () => {
       await expectReceiptMatchesDisk(fixture, localReceipt);
       await expectLedgerMatchesReceipt(fixture, CATALOG_PACK, localReceipt);
 
-      // Receipt provenance differs per source. The engine's resolved-source
-      // vocabulary is {local-path, npm-package} and a catalog id resolves to
-      // the bundled directory, so BOTH lanes record kind "local-path" — the
-      // distinguishing provenance the receipt carries is the spec and the
-      // trust tier (BD candidate noted in the unit report: a distinct
-      // catalog/bundled source kind would make the receipt say it outright).
+      // Receipt provenance differs per source. A catalog id resolves to the
+      // bundled directory, but the receipt records the kind the org policy
+      // judged, so the catalog lane says `catalog-pinned` outright and the
+      // local lane keeps its resolved kind.
       expect(localReceipt.source.kind).toBe("local-path");
-      expect(catalogReceipt.source.kind).toBe("local-path");
+      expect(catalogReceipt.source.kind).toBe("catalog-pinned");
       expect(localReceipt.source.spec).toBe(staged);
       expect(localReceipt.source.spec).not.toBe(catalogReceipt.source.spec);
       expect(localReceipt.trustTier).toBe("pinned-unsigned");

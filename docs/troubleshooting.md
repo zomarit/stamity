@@ -404,6 +404,13 @@ it holds for on its `approve with:` line. The reasons, and what each needs:
   already asks, over the manifest's path, and the extra name costs nothing but a line.
 - `the legs disagree on autonomy.reviewTool, and no leg wins: …`: the places the setting is read name
   different tools, so the tool's word was not read. A person decides, then makes them agree.
+- `a person decides on closed review threads that someone beside the closer wrote in, or that did not
+  read whole: <ids>`: GitHub shows these threads resolved, and each holds a comment by a person other
+  than the one who closed it and the run's login, or has more comments than one read holds. A person
+  reads those threads and answers the ask. The approval holds for that head, so a new push asks
+  again while such a thread stays closed. An unattended run and the land job take no approval, so
+  there a person merges by hand. On a repository with one account this rarely comes up. `<ids>` are
+  GitHub's internal thread ids, which its page does not show.
 - For `--fast-forward`, a rule that requires a pull request, branch protection that may require one,
   or rules the account cannot read: land it as a merge instead, without `--fast-forward`.
 - `the hook declarations at <place> could not be read`: the reason names the fix and where it
@@ -422,18 +429,20 @@ flag holds only while the head is still that commit, and an unattended run refus
   commit status never counts: the check has to report as a check run.
 - `required check <name> did not pass`: fix the change and push it.
 - `<n> review threads are unresolved`: resolve them. A thread the run's own login resolved stays
-  open while another person's comment is in it, so that person resolves it.
+  open while another person's comment is in it, so that person resolves it. If a third person wrote
+  in it too, the land then asks.
 - `the tool's open review threads (<n>) wait on its word on this head`: a pending reason. The threads
   the review tool opened stay open until it reads clean on this head. `run land` then resolves them
   itself, so wait, and run it again.
 - `the tool's review thread <id> was not resolved (…)`: the land tried to resolve one of the tool's own
   threads and could not, so nothing merged. Resolve it by hand, or run it again.
 - `someone else wrote in review thread <id>, which GitHub may show as resolved: a person reopens it and
-  closes it themselves, so the land reads it as theirs`: a comment by someone other than the tool or the
-  run's login sits in a thread the land closed, and the land counts that thread as open. Read the
-  comment. Then a person reopens the thread and closes it themselves, on an account other than the
-  run's. `<id>` is GitHub's internal thread id, which its page does not show, so look for the resolved
-  thread that holds the comment.
+  closes it themselves, so the land reads it as theirs, and asks where another person wrote in it too`:
+  a comment by someone other than the tool or the run's login sits in a thread the land closed, and the
+  land counts that thread as open. Read the comment. Then a person reopens the thread and closes it
+  themselves, on an account other than the run's. If someone else wrote in it too, the land then asks,
+  as listed under `asks`. `<id>` is GitHub's internal thread id, which its page does not show, so look
+  for the resolved thread that holds the comment.
 - `waiting for <tool> on <sha>, up to <n> minutes from the request`, or `no result from <tool> on
   <sha>, and no request on this head yet`: pending reasons. Wait, and run it again. A wait longer than
   the call ends as `asks` with `asks.pending` and the line `pending: run land again for the review

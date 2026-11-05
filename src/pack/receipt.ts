@@ -1,7 +1,8 @@
 import { grantableFootprint } from "../roster/agentGrants.ts";
 import { EngineError } from "../types/errors.ts";
 import { STATE_DIR } from "../types/markers.ts";
-import type { PackContentClass, PackSourceKind } from "./manifest.ts";
+import { PACK_SOURCE_KINDS, type PackContentClass, type PackSourceKind } from "./manifest.ts";
+import type { EvaluatedSourceKind } from "./orgPolicy.ts";
 import type { TrustTier } from "./trust.ts";
 
 /**
@@ -78,6 +79,55 @@ export function receiptRelPath(packId: string): string {
   return `${packDirRelPath(packId)}/${RECEIPT_FILE}`;
 }
 
+// ── Judged source kind ─────────────────────────────────────────
+
+/** The tiers only a verified catalog pin grants (`./trust.ts`). */
+export const CATALOG_TIERS: ReadonlySet<string> = new Set(["curator-verified", "scanned"]);
+
+/**
+ * The kind the org policy judges an install as: the one definition `add`, the
+ * receipt and projection all reach.
+ *
+ * A catalog install resolves to a directory inside the engine package, so the
+ * resolver honestly reports `local-path` — and that conflated the SHA-pinned
+ * curated catalog with any directory on the machine. The pin is what
+ * distinguishes them, and the pin is verified one layer up, so the promotion
+ * happens here.
+ *
+ * The trigger is the resolved TIER, not the presence of a pin argument, because
+ * only a verified catalog pin can produce a catalog-granted rung: `./trust.ts`
+ * refuses a pin whose aggregate content SHA disagrees, and the two rungs below
+ * (`publisher-signed`, `pinned-unsigned`) are not catalog-issued. So the
+ * promotion happens exactly when a catalog vouched for these exact bytes, and
+ * never on a claim.
+ */
+export function judgedSourceKind(kind: PackSourceKind, tier: string): PackSourceKind {
+  return CATALOG_TIERS.has(tier) ? "catalog-pinned" : kind;
+}
+
+/**
+ * The judged kind a receipt stands for, in either form a release has written:
+ * the judged kind itself, or (before 1.18.0) the resolved kind beside a catalog
+ * tier. No receipt is rewritten to migrate it: its bytes are what its ledger
+ * row hashes.
+ *
+ * Call it only on a receipt whose bytes matched their ledger row
+ * (`./projection.ts::readVerifiedReceipt`), because the tier it reads is
+ * otherwise a claim. For the same reason a recorded catalog kind beside any
+ * other tier is `"unknown"`, not the catalog kind, and so is a kind no release
+ * records.
+ */
+export function recordedSourceKind(receipt: unknown): EvaluatedSourceKind {
+  if (typeof receipt !== "object" || receipt === null) return "unknown";
+  const { source, trustTier } = receipt as { source?: unknown; trustTier?: unknown };
+  const kind =
+    typeof source === "object" && source !== null ? (source as { kind?: unknown }).kind : undefined;
+  if (!(PACK_SOURCE_KINDS as readonly unknown[]).includes(kind)) return "unknown";
+  const tier = typeof trustTier === "string" ? trustTier : "";
+  const judged = judgedSourceKind(kind as PackSourceKind, tier);
+  return judged === "catalog-pinned" && !CATALOG_TIERS.has(tier) ? "unknown" : judged;
+}
+
 // ── Receipt shape ──────────────────────────────────────────────
 
 /** One installed file: where it landed, what it is, and what it costs. */
@@ -97,7 +147,12 @@ export interface PackReceipt {
   packId: string;
   /** The pack's own version, from its validated `pack.json`. */
   version: string;
-  /** Where the pack came from: resolved source kind + the operator's spec. */
+  /**
+   * Where the pack came from: the source kind the org policy judged
+   * ({@link judgedSourceKind}) + the operator's spec. A receipt written before
+   * 1.18.0 holds the resolved kind instead, so a reader goes through
+   * {@link recordedSourceKind} and never compares this field directly.
+   */
   source: { kind: PackSourceKind; spec: string };
   trustTier: TrustTier;
   /**
@@ -151,7 +206,8 @@ interface PackReceiptInput {
     /** The disclosed footprint, as validated; narrowed on the way into the receipt. */
     permissions?: { toolFootprint?: readonly string[] };
   };
-  source: { kind: PackSourceKind };
+  /** The kind the org policy judged this install as ({@link judgedSourceKind}). */
+  judgedKind: PackSourceKind;
   /** The operator's original source spec. */
   spec: string;
   writeSet: readonly {
@@ -182,7 +238,7 @@ export function buildReceipt(
   return {
     packId: plan.manifest.name,
     version: plan.manifest.version,
-    source: { kind: plan.source.kind, spec: plan.spec },
+    source: { kind: plan.judgedKind, spec: plan.spec },
     trustTier: plan.trustTier,
     tierBasis: plan.tierBasis,
     checks: { ...plan.checks },

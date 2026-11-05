@@ -32,8 +32,8 @@ Governing text — the same file, "The ending" (its opening and its four steps):
 ## The ending
 
 The run verbs are the only push path: `stamity run checkpoint` and `stamity run end` push, and a raw
-`git push`, `gh pr create` or `gh pr edit` is refused by the shell guard. While the mode is unattended no raw push,
-pull request write, or REST write on `contents/`, `git/` refs or objects or `merges` runs at all, however it is
+`git push`, `gh pr create` or `gh pr edit` is refused by the shell guard. While the mode is unattended the run makes no raw push,
+pull request write, or REST write on `contents/`, `git/` refs or objects or `merges`, however it is
 spelled. The run's own pull request lands only through `stamity run land`. Every exit pushes its record through the run verbs, closing in this order:
 
 1. The close's own writes: the record, the ledger, the inbox and the learnings, each proposed with `learn capture --propose`,

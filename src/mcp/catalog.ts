@@ -409,7 +409,7 @@ export const PLATFORM_MCP_SERVER: Record<Platform, string> = {
  * Launchers that fetch the package at start-up. For these the version pin has
  * to be in the argument vector, because nothing else constrains what runs.
  */
-const FETCH_LAUNCHERS: ReadonlySet<string> = new Set(["npx", "bunx", "uvx", "pipx"]);
+export const FETCH_LAUNCHERS: ReadonlySet<string> = new Set(["npx", "bunx", "uvx", "pipx"]);
 
 /**
  * Catalog row for `id`, or `undefined` when the id is not curated. Own keys

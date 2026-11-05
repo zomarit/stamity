@@ -441,7 +441,7 @@ const lines =
 
 process.stdout.write(lines.join("\\n") + "\\n");
 ",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "text over 65536 bytes, held by digest: sha256 fe0b0e536ba0d40ffd00a3a412d70326f5f32b0c7144c8fa1761d28ae6430ce3, 298821 bytes, 6300 lines",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "text over 65536 bytes, held by digest: sha256 e7d805190b9b4b490050bd192ad318d2b8ecd860822ced3da3aaa87f4b6a9f7b, 328686 bytes, 6819 lines",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "#!/usr/bin/env node
 /* eslint-disable */
 // stamity — pre-tool-use allowlist guard.
@@ -2112,6 +2112,7 @@ function matchSessions(rows, env) {
 }
 const INVISIBLE = new RegExp("(?:[\\\\u00AD\\\\u034F\\\\u0600-\\\\u0605\\\\u061C\\\\u06DD\\\\u070F\\\\u0890-\\\\u0891\\\\u08E2\\\\u115F-\\\\u1160\\\\u17B4-\\\\u17B5\\\\u180B-\\\\u180F\\\\u200B-\\\\u200F\\\\u202A-\\\\u202E\\\\u2060-\\\\u206F\\\\u3164\\\\uFE00-\\\\uFE0F\\\\uFEFF\\\\uFFA0\\\\uFFF0-\\\\uFFFB]|\\\\uD804\\\\uDCBD|\\\\uD804\\\\uDCCD|\\\\uD80D[\\\\uDC30-\\\\uDC3F]|\\\\uD82F[\\\\uDCA0-\\\\uDCA3]|\\\\uD834[\\\\uDD73-\\\\uDD7A]|\\\\uDB40[\\\\uDC80-\\\\uDFFF]|[\\\\uDB41-\\\\uDB43][\\\\uDC00-\\\\uDFFF])", "g");
 const UNPRINTABLE = new RegExp("[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F\\\\u061C\\\\u200B-\\\\u200F\\\\u2028\\\\u2029\\\\u202A-\\\\u202E\\\\u2060\\\\u2066-\\\\u2069\\\\uFEFF]", "gu");
+const TAG_CHARS = new RegExp("[\\\\u{E0000}-\\\\u{E007F}]", "gu");
 const LEARNING_FIELDS = ["id","confidence","summary","reviewBy"];
 const HANDOFF_FIELDS = ["id","summary","expires","fromTool"];
 const SCREEN = [
@@ -2279,10 +2280,14 @@ function inspect(dir, name, maxBytes, coversSummary, fields) {
   if (parsed === null) return { ...doc, skip: "invalid-frontmatter" };
   // The raw screen above read each escape as its literal characters; the parser
   // decoded them. Each printed field is screened as decoded and as \`text\` prints
-  // it, field by field, as \`learn read\` screens them.
+  // it, field by field, as \`learn read\` screens them, and again with the escape
+  // notation no parser decodes read as what it names.
   for (const field of fields) {
     const value = parsed.head[field];
-    if (typeof value === "string" && (screened(value) || screened(text(value, "")))) {
+    if (typeof value !== "string") continue;
+    const read = readNotation(value);
+    const flat = value.replace(/[\\u0000-\\u001f\\u007f]+/g, " ").replace(/\\s+/g, " ").trim();
+    if ([value, flat, text(value, ""), read, text(read, "")].some(screened)) {
       return { ...doc, skip: "injection-detected" };
     }
   }
@@ -2447,13 +2452,34 @@ function integrityHolds(declared, covered) {
   );
 }
 
+// The escape notation reader, as its source text (src/learnings/validation.ts in the engine that wrote this file).
+function readNotation(text) {
+	return text.replace(/\\\\(?:[ux]\\{([0-9a-f]{1,6})\\}|U([0-9a-f]{8})|u([0-9a-f]{4})|x([0-9a-f]{2})|([0-7]{3}))/gi, (whole, brace, long, short, hex, octal) => {
+		const code = octal === undefined ? parseInt(brace ?? long ?? short ?? hex ?? "", 16) : parseInt(octal, 8);
+		return code > 1114111 ? whole : String.fromCodePoint(code);
+	}).replace(/\\\\[0abefnrtv]/g, " ");
+}
+
+/**
+ * Text with nothing a terminal would run or hide, as \`printableText\` in the
+ * engine's learnings gate gives it: C0 controls and DEL to spaces, the rest of
+ * the unprintable set, the tag block and the invisible class dropped.
+ */
+function printable(value) {
+  return value
+    .replace(UNPRINTABLE, (char) => (char < " " || char === "\\u007f" ? " " : ""))
+    .replace(TAG_CHARS, "")
+    .replace(INVISIBLE, "");
+}
+
 /**
  * One field as a single index-safe line: control characters and newlines
- * collapse, so a forged summary cannot manufacture index lines of its own.
+ * collapse, so a forged summary cannot manufacture index lines of its own, and
+ * a printed field carries no mark the reader cannot see.
  */
 function text(value, fallback) {
   if (typeof value !== "string") return fallback;
-  const flat = value.replace(/[\\u0000-\\u001f\\u007f]+/g, " ").replace(/\\s+/g, " ").trim();
+  const flat = printable(value).replace(/\\s+/g, " ").trim();
   if (flat === "") return fallback;
   return flat.length > MAX_FIELD_CHARS ? flat.slice(0, MAX_FIELD_CHARS - 1) + "…" : flat;
 }
@@ -2592,9 +2618,7 @@ function nameId(doc) {
  * stem included, prints as a placeholder naming the pattern ids, never the name.
  */
 function printedName(name) {
-  const shown = name
-    .replace(UNPRINTABLE, (char) => (char < " " || char === "\\u007f" ? " " : ""))
-    .replace(INVISIBLE, "");
+  const shown = printable(name);
   const copies = [name, stem(name), text(shown, ""), text(stem(shown), "")];
   const ids = [...new Set(copies.flatMap(screenIds))].sort();
   if (ids.length === 0) return shown;
@@ -5116,7 +5140,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".agents/skills/st-rework/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/st-spec/SKILL.md": "b5770c6320d8fd6357e55645b0c8b7708ccc14faf73e5c6c6a476bfb52923e50 18992 bytes",
   ".agents/skills/st-spec/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-unattended/SKILL.md": "988d71f90fc3598048cae7325697fe4563a3dc159f6045b0fffa5563da47abff 22582 bytes",
+  ".agents/skills/st-unattended/SKILL.md": "0cf3e856aa592ef16665d27d6f28a14cd6d06161fa3041b70af65d02a755999d 22584 bytes",
   ".agents/skills/st-unattended/agents/openai.yaml": "09cd1ea5e109f80be04b19f1b1e43602b6aad4972fc6e248d6e355a1c6e72df1 202 bytes",
   ".agents/skills/st-unattended/references/chains.md": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d 1479 bytes",
   ".agents/skills/st-unattended/references/cloud.md": "63f44ff0661456b7c2cd939be8664bafec1a0aeb38474daad064a142e1802274 11981 bytes",
@@ -5166,10 +5190,10 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/hooks/stamity/stamity-agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".claude/hooks/stamity/stamity-cloud-readiness.mjs": "acef8b976c3cf0dc29df1ab1584458bc83c66ab1e7284e28df62af60f1311c91 11348 bytes",
   ".claude/hooks/stamity/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "fe0b0e536ba0d40ffd00a3a412d70326f5f32b0c7144c8fa1761d28ae6430ce3 298821 bytes",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "e7d805190b9b4b490050bd192ad318d2b8ecd860822ced3da3aaa87f4b6a9f7b 328686 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
-  ".claude/hooks/stamity/stamity-session-start.mjs": "a6e01255d42c64bdc49333fb0a85c944d1c365b6755b4821c419f70bc445870a 53719 bytes",
+  ".claude/hooks/stamity/stamity-session-start.mjs": "0b524eb04048f7cf864619d8015c85370ccdc77496c3a17deb3a28062e46a624 54898 bytes",
   ".claude/hooks/stamity/stamity-unattended-ask-gate.mjs": "40a135c2b3bc84ada8c91863156c26be3197f2492bb7214c016d6d3104d92b4c 10029 bytes",
   ".claude/rules/stamity-api-versioning.md": "ed3a351d0ff5c6e76547267a3d79a69bd0267af96b659dc91398160921253391 5080 bytes",
   ".claude/rules/stamity-contract-census.md": "b28259931c7f72a65ef8a252a57bf689f82b4ab3305563415c8d4d1685762532 3884 bytes",
@@ -5194,7 +5218,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/skills/st-plain/agents/openai.yaml": "5689b5eeb9529ec28af36bfc3fe2af7d6c537bb323abe63cb9be9df53113d951 144 bytes",
   ".claude/skills/st-qa/SKILL.md": "64ecf1a501c71b4f29cd960d87f25e6485890f1de5643117eb739999880828b2 10420 bytes",
   ".claude/skills/st-qa/agents/openai.yaml": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1 135 bytes",
-  ".claude/skills/st-unattended/SKILL.md": "988d71f90fc3598048cae7325697fe4563a3dc159f6045b0fffa5563da47abff 22582 bytes",
+  ".claude/skills/st-unattended/SKILL.md": "0cf3e856aa592ef16665d27d6f28a14cd6d06161fa3041b70af65d02a755999d 22584 bytes",
   ".claude/skills/st-unattended/agents/openai.yaml": "09cd1ea5e109f80be04b19f1b1e43602b6aad4972fc6e248d6e355a1c6e72df1 202 bytes",
   ".claude/skills/st-unattended/references/chains.md": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d 1479 bytes",
   ".claude/skills/st-unattended/references/cloud.md": "63f44ff0661456b7c2cd939be8664bafec1a0aeb38474daad064a142e1802274 11981 bytes",
@@ -5288,23 +5312,23 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".mcp.json": "f4e65233eea1ba936b61b16f2ee2d90f84a2510436d58f6484d872f507314f2f 387 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "32e02f44376f17963d6d31abd7e8ff5005058780906f5601b4fa8fa9cd1d2bf4 298914 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "b8f4ea322540d6effaff0340bb4cf529803bf3effbc01a5a54aa46e59bec2062 328779 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "8480d3a6fe6ea5fe1cad1c683ecbb07f3999cbdb411ae7dff7a1ec09eb207068 20937 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "166d5e7b33f45f30454d5c44999215e6c6d6342593bcf2f2b5b30fd8117ce02a 53732 bytes",
+  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "58b28eb031ccc9c208a595c76060449c57dfb9473560232dd8d754900ee75835 54911 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "ef11a8d0e7c5650813c146de8c35c0c7f58d02123cbbe082e887823aa8f8c6a9 301571 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "f197053425e978f7d1e4d462abf7bc54ab8e31a2b4f7439627bbf7934ce23ef9 331436 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "97b118796dbd153216cacceb34fd122b82f9cf75eae3b1d2de4c0938482af8a5 22349 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "0a96a215736b984f48792fde512268a7dbef35ed27c299392640127481ed9711 58535 bytes",
+  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "f1f623d5ee0653d4252cc07da18b85c0be4466c80cb300fd393d8bbbf0cdfa16 59714 bytes",
   ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "26edf462560149f976278de1c4a70892cd08dd3ea2aa8e84feee51518d075a7c 33706 bytes",
+  ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "67b9f425d2598ba303758aaef668ef196a68ade40d40bc576fbae5cb2a0bcc92 34885 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "7c1eac3631bae9677f18c55bab586fa60070108891eb8805eb801aa10f9c859c 298950 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "28599b1cf6251f4959db3cb1e1a281ae341dc1dad542d53212b435335a83552b 328815 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "513a8e4c2631670fffed73a96be46542fea82d8e1719a5d26da0a872699277c6 20938 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "166d5e7b33f45f30454d5c44999215e6c6d6342593bcf2f2b5b30fd8117ce02a 53732 bytes",
+  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "58b28eb031ccc9c208a595c76060449c57dfb9473560232dd8d754900ee75835 54911 bytes",
   ".stamity/generated/models/claude.json": "d8b019734f996874130a675b78705669a3a4f121ed8a4e692c913206897bc280 697 bytes",
   ".stamity/generated/models/codex.json": "bd85ba11fdb0504946c2922d8e9b7f753b64a8085f122cf2aa51fc3e527d685a 833 bytes",
   ".stamity/generated/models/copilot.json": "36ce250308ef6f7089ea863a303c2993ed4d87fe606d76ba83706e7cd0fb3bb1 964 bytes",
@@ -5313,7 +5337,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "89986cf9fe1774b2db8aaea90e91523d0ea7ced64245b2ce53954f90351c2a98 94105 bytes",
+  ".stamity/manifest.json": "4e411ca331d4c818c1feb27a690a1c96a175ab5048648bb9f4a9c1eea157fca1 94105 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "8a27073afaf09be0ca5fc782dd2632108aab084a85b0dccaaad3ceba751a7173 6548 bytes",
@@ -5775,7 +5799,7 @@ const lines =
 
 process.stdout.write(lines.join("\\n") + "\\n");
 ",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "text over 65536 bytes, held by digest: sha256 fe0b0e536ba0d40ffd00a3a412d70326f5f32b0c7144c8fa1761d28ae6430ce3, 298821 bytes, 6300 lines",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "text over 65536 bytes, held by digest: sha256 e7d805190b9b4b490050bd192ad318d2b8ecd860822ced3da3aaa87f4b6a9f7b, 328686 bytes, 6819 lines",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "#!/usr/bin/env node
 /* eslint-disable */
 // stamity — pre-tool-use allowlist guard.
@@ -7446,6 +7470,7 @@ function matchSessions(rows, env) {
 }
 const INVISIBLE = new RegExp("(?:[\\\\u00AD\\\\u034F\\\\u0600-\\\\u0605\\\\u061C\\\\u06DD\\\\u070F\\\\u0890-\\\\u0891\\\\u08E2\\\\u115F-\\\\u1160\\\\u17B4-\\\\u17B5\\\\u180B-\\\\u180F\\\\u200B-\\\\u200F\\\\u202A-\\\\u202E\\\\u2060-\\\\u206F\\\\u3164\\\\uFE00-\\\\uFE0F\\\\uFEFF\\\\uFFA0\\\\uFFF0-\\\\uFFFB]|\\\\uD804\\\\uDCBD|\\\\uD804\\\\uDCCD|\\\\uD80D[\\\\uDC30-\\\\uDC3F]|\\\\uD82F[\\\\uDCA0-\\\\uDCA3]|\\\\uD834[\\\\uDD73-\\\\uDD7A]|\\\\uDB40[\\\\uDC80-\\\\uDFFF]|[\\\\uDB41-\\\\uDB43][\\\\uDC00-\\\\uDFFF])", "g");
 const UNPRINTABLE = new RegExp("[\\\\u0000-\\\\u001F\\\\u007F-\\\\u009F\\\\u061C\\\\u200B-\\\\u200F\\\\u2028\\\\u2029\\\\u202A-\\\\u202E\\\\u2060\\\\u2066-\\\\u2069\\\\uFEFF]", "gu");
+const TAG_CHARS = new RegExp("[\\\\u{E0000}-\\\\u{E007F}]", "gu");
 const LEARNING_FIELDS = ["id","confidence","summary","reviewBy"];
 const HANDOFF_FIELDS = ["id","summary","expires","fromTool"];
 const SCREEN = [
@@ -7613,10 +7638,14 @@ function inspect(dir, name, maxBytes, coversSummary, fields) {
   if (parsed === null) return { ...doc, skip: "invalid-frontmatter" };
   // The raw screen above read each escape as its literal characters; the parser
   // decoded them. Each printed field is screened as decoded and as \`text\` prints
-  // it, field by field, as \`learn read\` screens them.
+  // it, field by field, as \`learn read\` screens them, and again with the escape
+  // notation no parser decodes read as what it names.
   for (const field of fields) {
     const value = parsed.head[field];
-    if (typeof value === "string" && (screened(value) || screened(text(value, "")))) {
+    if (typeof value !== "string") continue;
+    const read = readNotation(value);
+    const flat = value.replace(/[\\u0000-\\u001f\\u007f]+/g, " ").replace(/\\s+/g, " ").trim();
+    if ([value, flat, text(value, ""), read, text(read, "")].some(screened)) {
       return { ...doc, skip: "injection-detected" };
     }
   }
@@ -7781,13 +7810,34 @@ function integrityHolds(declared, covered) {
   );
 }
 
+// The escape notation reader, as its source text (src/learnings/validation.ts in the engine that wrote this file).
+function readNotation(text) {
+	return text.replace(/\\\\(?:[ux]\\{([0-9a-f]{1,6})\\}|U([0-9a-f]{8})|u([0-9a-f]{4})|x([0-9a-f]{2})|([0-7]{3}))/gi, (whole, brace, long, short, hex, octal) => {
+		const code = octal === undefined ? parseInt(brace ?? long ?? short ?? hex ?? "", 16) : parseInt(octal, 8);
+		return code > 1114111 ? whole : String.fromCodePoint(code);
+	}).replace(/\\\\[0abefnrtv]/g, " ");
+}
+
+/**
+ * Text with nothing a terminal would run or hide, as \`printableText\` in the
+ * engine's learnings gate gives it: C0 controls and DEL to spaces, the rest of
+ * the unprintable set, the tag block and the invisible class dropped.
+ */
+function printable(value) {
+  return value
+    .replace(UNPRINTABLE, (char) => (char < " " || char === "\\u007f" ? " " : ""))
+    .replace(TAG_CHARS, "")
+    .replace(INVISIBLE, "");
+}
+
 /**
  * One field as a single index-safe line: control characters and newlines
- * collapse, so a forged summary cannot manufacture index lines of its own.
+ * collapse, so a forged summary cannot manufacture index lines of its own, and
+ * a printed field carries no mark the reader cannot see.
  */
 function text(value, fallback) {
   if (typeof value !== "string") return fallback;
-  const flat = value.replace(/[\\u0000-\\u001f\\u007f]+/g, " ").replace(/\\s+/g, " ").trim();
+  const flat = printable(value).replace(/\\s+/g, " ").trim();
   if (flat === "") return fallback;
   return flat.length > MAX_FIELD_CHARS ? flat.slice(0, MAX_FIELD_CHARS - 1) + "…" : flat;
 }
@@ -7926,9 +7976,7 @@ function nameId(doc) {
  * stem included, prints as a placeholder naming the pattern ids, never the name.
  */
 function printedName(name) {
-  const shown = name
-    .replace(UNPRINTABLE, (char) => (char < " " || char === "\\u007f" ? " " : ""))
-    .replace(INVISIBLE, "");
+  const shown = printable(name);
   const copies = [name, stem(name), text(shown, ""), text(stem(shown), "")];
   const ids = [...new Set(copies.flatMap(screenIds))].sort();
   if (ids.length === 0) return shown;
@@ -9171,10 +9219,10 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/hooks/stamity/stamity-agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".claude/hooks/stamity/stamity-cloud-readiness.mjs": "acef8b976c3cf0dc29df1ab1584458bc83c66ab1e7284e28df62af60f1311c91 11348 bytes",
   ".claude/hooks/stamity/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "fe0b0e536ba0d40ffd00a3a412d70326f5f32b0c7144c8fa1761d28ae6430ce3 298821 bytes",
+  ".claude/hooks/stamity/stamity-person-only-guard.mjs": "e7d805190b9b4b490050bd192ad318d2b8ecd860822ced3da3aaa87f4b6a9f7b 328686 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
-  ".claude/hooks/stamity/stamity-session-start.mjs": "a6e01255d42c64bdc49333fb0a85c944d1c365b6755b4821c419f70bc445870a 53719 bytes",
+  ".claude/hooks/stamity/stamity-session-start.mjs": "0b524eb04048f7cf864619d8015c85370ccdc77496c3a17deb3a28062e46a624 54898 bytes",
   ".claude/hooks/stamity/stamity-unattended-ask-gate.mjs": "40a135c2b3bc84ada8c91863156c26be3197f2492bb7214c016d6d3104d92b4c 10029 bytes",
   ".claude/rules/stamity-api-versioning.md": "ed3a351d0ff5c6e76547267a3d79a69bd0267af96b659dc91398160921253391 5080 bytes",
   ".claude/rules/stamity-contract-census.md": "b28259931c7f72a65ef8a252a57bf689f82b4ab3305563415c8d4d1685762532 3884 bytes",
@@ -9199,7 +9247,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/skills/st-plain/agents/openai.yaml": "5689b5eeb9529ec28af36bfc3fe2af7d6c537bb323abe63cb9be9df53113d951 144 bytes",
   ".claude/skills/st-qa/SKILL.md": "64ecf1a501c71b4f29cd960d87f25e6485890f1de5643117eb739999880828b2 10420 bytes",
   ".claude/skills/st-qa/agents/openai.yaml": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1 135 bytes",
-  ".claude/skills/st-unattended/SKILL.md": "988d71f90fc3598048cae7325697fe4563a3dc159f6045b0fffa5563da47abff 22582 bytes",
+  ".claude/skills/st-unattended/SKILL.md": "0cf3e856aa592ef16665d27d6f28a14cd6d06161fa3041b70af65d02a755999d 22584 bytes",
   ".claude/skills/st-unattended/agents/openai.yaml": "09cd1ea5e109f80be04b19f1b1e43602b6aad4972fc6e248d6e355a1c6e72df1 202 bytes",
   ".claude/skills/st-unattended/references/chains.md": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d 1479 bytes",
   ".claude/skills/st-unattended/references/cloud.md": "63f44ff0661456b7c2cd939be8664bafec1a0aeb38474daad064a142e1802274 11981 bytes",
@@ -9227,7 +9275,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "f74228053eedb54639dbecec705cb56f45be99c9c2d921a698ab45d9f58ba2ab 28615 bytes",
+  ".stamity/manifest.json": "48e15b1b777a9faa03dac1cd714f98fe60aec0e8d921fe6d33372dd2517ef554 28615 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "CLAUDE.md": "697c902a89fcffe97474d8ca71b309c303c3989f9c87dbbf2c6fb12d12e95bc4 55 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -10054,7 +10102,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".agents/skills/st-rework/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
   ".agents/skills/st-spec/SKILL.md": "b5770c6320d8fd6357e55645b0c8b7708ccc14faf73e5c6c6a476bfb52923e50 18992 bytes",
   ".agents/skills/st-spec/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94 43 bytes",
-  ".agents/skills/st-unattended/SKILL.md": "988d71f90fc3598048cae7325697fe4563a3dc159f6045b0fffa5563da47abff 22582 bytes",
+  ".agents/skills/st-unattended/SKILL.md": "0cf3e856aa592ef16665d27d6f28a14cd6d06161fa3041b70af65d02a755999d 22584 bytes",
   ".agents/skills/st-unattended/agents/openai.yaml": "09cd1ea5e109f80be04b19f1b1e43602b6aad4972fc6e248d6e355a1c6e72df1 202 bytes",
   ".agents/skills/st-unattended/references/chains.md": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d 1479 bytes",
   ".agents/skills/st-unattended/references/cloud.md": "63f44ff0661456b7c2cd939be8664bafec1a0aeb38474daad064a142e1802274 11981 bytes",
@@ -10098,16 +10146,16 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/codex/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "32e02f44376f17963d6d31abd7e8ff5005058780906f5601b4fa8fa9cd1d2bf4 298914 bytes",
+  ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "b8f4ea322540d6effaff0340bb4cf529803bf3effbc01a5a54aa46e59bec2062 328779 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "8480d3a6fe6ea5fe1cad1c683ecbb07f3999cbdb411ae7dff7a1ec09eb207068 20937 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "166d5e7b33f45f30454d5c44999215e6c6d6342593bcf2f2b5b30fd8117ce02a 53732 bytes",
+  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "58b28eb031ccc9c208a595c76060449c57dfb9473560232dd8d754900ee75835 54911 bytes",
   ".stamity/generated/models/codex.json": "bd85ba11fdb0504946c2922d8e9b7f753b64a8085f122cf2aa51fc3e527d685a 833 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "03d5f3b8237ee93d8de8189cb7788ea4cf1ab234bd3743470b8dbe0683699030 22768 bytes",
+  ".stamity/manifest.json": "cf0c19bf1e81a2ef9d7f62a095c57dda8c60b752097cf09083058aca8fd835f4 22768 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "AGENTS.override.md": "122504f41cc40a99c65cba4995c228bf4a5137d738324bbe3a847c6aaa5192db 25872 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -10402,7 +10450,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".agents/skills/st-plain/agents/openai.yaml": "5689b5eeb9529ec28af36bfc3fe2af7d6c537bb323abe63cb9be9df53113d951 144 bytes",
   ".agents/skills/st-qa/SKILL.md": "64ecf1a501c71b4f29cd960d87f25e6485890f1de5643117eb739999880828b2 10420 bytes",
   ".agents/skills/st-qa/agents/openai.yaml": "3757a9476321ed7a8e1ea39a8ea0d51eb0bd7ea7f67969c54f545099d5be20e1 135 bytes",
-  ".agents/skills/st-unattended/SKILL.md": "988d71f90fc3598048cae7325697fe4563a3dc159f6045b0fffa5563da47abff 22582 bytes",
+  ".agents/skills/st-unattended/SKILL.md": "0cf3e856aa592ef16665d27d6f28a14cd6d06161fa3041b70af65d02a755999d 22584 bytes",
   ".agents/skills/st-unattended/agents/openai.yaml": "09cd1ea5e109f80be04b19f1b1e43602b6aad4972fc6e248d6e355a1c6e72df1 202 bytes",
   ".agents/skills/st-unattended/references/chains.md": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d 1479 bytes",
   ".agents/skills/st-unattended/references/cloud.md": "63f44ff0661456b7c2cd939be8664bafec1a0aeb38474daad064a142e1802274 11981 bytes",
@@ -10457,16 +10505,16 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "ef11a8d0e7c5650813c146de8c35c0c7f58d02123cbbe082e887823aa8f8c6a9 301571 bytes",
+  ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "f197053425e978f7d1e4d462abf7bc54ab8e31a2b4f7439627bbf7934ce23ef9 331436 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "97b118796dbd153216cacceb34fd122b82f9cf75eae3b1d2de4c0938482af8a5 22349 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "0a96a215736b984f48792fde512268a7dbef35ed27c299392640127481ed9711 58535 bytes",
+  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "f1f623d5ee0653d4252cc07da18b85c0be4466c80cb300fd393d8bbbf0cdfa16 59714 bytes",
   ".stamity/generated/models/copilot.json": "36ce250308ef6f7089ea863a303c2993ed4d87fe606d76ba83706e7cd0fb3bb1 964 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "2995ca46572213caa59bc24d7a48fa19c3a45a99bf7695a231a532d8d1a8893a 20871 bytes",
+  ".stamity/manifest.json": "312d06a25d9c2b5e5c4347699ae90eb0e078d3004d5dbdc40630f641985608c4 20871 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
@@ -11031,7 +11079,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".agents/skills/st-quick/SKILL.md": "f33372d2d3efcb05c7d7d490b4fc836e692d12f1679e803a3e55c5b208601eea 15746 bytes",
   ".agents/skills/st-rework/SKILL.md": "f52a767dfa480f710960a536ceca6f5d736c1b4db1ca98155307b1c4f8791fde 21815 bytes",
   ".agents/skills/st-spec/SKILL.md": "b5770c6320d8fd6357e55645b0c8b7708ccc14faf73e5c6c6a476bfb52923e50 18992 bytes",
-  ".agents/skills/st-unattended/SKILL.md": "988d71f90fc3598048cae7325697fe4563a3dc159f6045b0fffa5563da47abff 22582 bytes",
+  ".agents/skills/st-unattended/SKILL.md": "0cf3e856aa592ef16665d27d6f28a14cd6d06161fa3041b70af65d02a755999d 22584 bytes",
   ".agents/skills/st-unattended/agents/openai.yaml": "09cd1ea5e109f80be04b19f1b1e43602b6aad4972fc6e248d6e355a1c6e72df1 202 bytes",
   ".agents/skills/st-unattended/references/chains.md": "36f0a28346c24a899d0f27e6f39070964cc25f2ebce886d0b21b99cc8d277d8d 1479 bytes",
   ".agents/skills/st-unattended/references/cloud.md": "63f44ff0661456b7c2cd939be8664bafec1a0aeb38474daad064a142e1802274 11981 bytes",
@@ -11079,19 +11127,19 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".gitignore": "14c0a079e08124240ec8c713fa4c32870948842d586a5829a19172c02ddd0482 204 bytes",
   ".stamity/generated/agent-tool-policies.json": "61acfa9a7ed7fdd035dd9fd34939bdd73bb6085baca7bf15174948e2583558b3 4649 bytes",
   ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "26edf462560149f976278de1c4a70892cd08dd3ea2aa8e84feee51518d075a7c 33706 bytes",
+  ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "67b9f425d2598ba303758aaef668ef196a68ade40d40bc576fbae5cb2a0bcc92 34885 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
-  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "7c1eac3631bae9677f18c55bab586fa60070108891eb8805eb801aa10f9c859c 298950 bytes",
+  ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "28599b1cf6251f4959db3cb1e1a281ae341dc1dad542d53212b435335a83552b 328815 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "513a8e4c2631670fffed73a96be46542fea82d8e1719a5d26da0a872699277c6 20938 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "166d5e7b33f45f30454d5c44999215e6c6d6342593bcf2f2b5b30fd8117ce02a 53732 bytes",
+  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "58b28eb031ccc9c208a595c76060449c57dfb9473560232dd8d754900ee75835 54911 bytes",
   ".stamity/generated/models/cursor.json": "6e108834236741075e1d082bba6be814bc0bf04642622c860a6b7e43c348bdbd 601 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "041c6425a18d9941a85d96e7abc1566dccf5fef0b7589ed86b63f4a63f00f420 22426 bytes",
+  ".stamity/manifest.json": "feba6d53e3125519fc3e01a8ca19e3ace8b01ff5012ae6b55ecff92d1386f885 22426 bytes",
   "AGENTS.md": "8a27073afaf09be0ca5fc782dd2632108aab084a85b0dccaaad3ceba751a7173 6548 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",

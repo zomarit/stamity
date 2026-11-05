@@ -1,8 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { chmod, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, dirname, join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { enginesOf, gateCommand, readPushIdentity } from "../../../src/cli/commands/gate.ts";
+import type * as GhRunnerModule from "../../../src/cli/engine/ghRunner.ts";
 import { VERSION } from "../../../src/composition/root.ts";
 import { autonomyMarkerLine, resolveAutonomy } from "../../../src/config/autonomy.ts";
 import { PERSON_ONLY_GUARD_FILE } from "../../../src/hooks/scripts.ts";
@@ -23,6 +25,10 @@ import { useTempDir } from "../../support/tempDir.ts";
 
 /** Every REST call the verb made, and the answer each path gets. */
 const rest = vi.hoisted(() => ({
+  /** TEST CHANGE, justified: the verb now checks where `gh` lies, and the test's `gh` sits in a temp folder, so a real program outside one stands for it. */
+  program: process.execPath as string | null,
+  /** What each read was started under. */
+  started: [] as { program?: string | undefined; cwd?: string | undefined; env?: NodeJS.ProcessEnv | undefined }[],
   calls: [] as { path: string; hostname: string; method: string }[],
   routes: new Map<string, { status: number; json: unknown }>(),
   /** The next answer for a path, taken once before `routes`; an `Error` is `gh` failing before GitHub answered. */
@@ -32,15 +38,18 @@ const rest = vi.hoisted(() => ({
 // Mocked: the real `ghApi` starts `gh`, which calls GitHub over the network
 // under the machine's login; a unit test can reach neither. The verb's own
 // work (which host, which paths, what it does with the answers) is unchanged.
-vi.mock("../../../src/cli/engine/ghRunner.ts", () => ({
-  ghApi: (request: { path: string; hostname: string; method: string }) => {
+vi.mock("../../../src/cli/engine/ghRunner.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof GhRunnerModule>()),
+  ghApi: (request: { path: string; hostname: string; method: string }, opts?: { program?: string; cwd?: string; env?: NodeJS.ProcessEnv }) => {
     const path = request.path.replace(/^\//, "");
     rest.calls.push({ path, hostname: request.hostname, method: request.method });
+    rest.started.push({ program: opts?.program, cwd: opts?.cwd, env: opts?.env });
     const first = rest.once.get(path);
     rest.once.delete(path);
     if (first instanceof Error) return Promise.reject(first);
     return Promise.resolve(first ?? rest.routes.get(path) ?? { status: 404, json: { message: "Not Found" } });
   },
+  ghProgramPath: () => rest.program,
 }));
 
 const SEED_ENV = {
@@ -90,8 +99,10 @@ describe("stamity gate preflight and scan --text", () => {
 
   beforeEach(() => {
     rest.calls.length = 0;
+    rest.started.length = 0;
     rest.routes.clear();
     rest.once.clear();
+    rest.program = process.execPath;
   });
 
   /**
@@ -403,6 +414,79 @@ describe("stamity gate preflight and scan --text", () => {
         expect(stateOf(doc, "direct-push")).toBe("refuse");
         expect(evidenceOf(doc, "direct-push")).toContain(`autonomy.adminRuleProof is on here but not in force: ${gap}`);
       });
+
+      describe("started in a project below the top", () => {
+        const PROJECT = "apps/web";
+        const PROJECT_READ = `repos/o/r/contents/${PROJECT}/${MANIFEST}?ref=main`;
+
+        /** `optedRepo` as the top, and below it a whole setup of its own with every leg on, the default branch's among them. */
+        async function projectBelow(top: Legs): Promise<string> {
+          const repo = await optedRepo(top);
+          const web = join(repo, PROJECT);
+          await mkdir(web, { recursive: true });
+          await cp(join(repo, ".claude"), join(web, ".claude"), { recursive: true });
+          await cp(join(repo, ".stamity"), join(web, ".stamity"), { recursive: true });
+          const on = JSON.stringify({ ...(JSON.parse(await readFile(join(repo, MANIFEST), "utf8")) as object), autonomy: { adminRuleProof: true } });
+          await writeFile(join(web, MANIFEST), on);
+          await mkdir(join(web, GUARD, ".."), { recursive: true });
+          await writeFile(join(web, GUARD), ON_MARKER);
+          git(repo, ["add", join(PROJECT, MANIFEST)]);
+          git(repo, ["commit", "-q", "-m", "the project's setup"]);
+          rest.routes.set(PROJECT_READ, { status: 200, json: { content: Buffer.from(on).toString("base64") } });
+          return web;
+        }
+
+        it("passes with every leg on at the top and at the project, reading both on the default branch", async () => {
+          const web = await projectBelow(ALL_ON);
+
+          const { code, doc } = await gate(web, PREFLIGHT);
+
+          expect(doc["refusals"]).toEqual([]);
+          expect(code).toBe(0);
+          expect(stateOf(doc, "direct-push")).toBe("pass");
+          expect(rest.calls.map((call) => call.path)).toEqual(expect.arrayContaining([DEFAULT_BRANCH_READ, PROJECT_READ]));
+        });
+
+        it.each<[string, Partial<Legs>]>([
+          ["the key off on the top's default branch", { defaultBranch: "off" }],
+          ["a top whose default branch holds no manifest", { defaultBranch: "absent" }],
+          ["a failed read of the top's default branch", { defaultBranch: "failed" }],
+          ["the key off at the top's HEAD", { head: "off" }],
+          ["no manifest at the top's HEAD", { head: "absent" }],
+          ["the key off in the top's work tree", { workTree: "off" }],
+          ["the top's guard copy baked off", { guard: "off" }],
+          ["no guard copy at the top", { guard: "absent" }],
+          ["a guard copy at the top that is no guard", { guard: "foreign" }],
+        ])("refuses on %s, the project's own legs all on", async (_label, change) => {
+          const web = await projectBelow({ ...ALL_ON, ...change });
+
+          const { code, doc } = await gate(web, PREFLIGHT);
+
+          expect(code).toBe(1);
+          expect(stateOf(doc, "direct-push")).toBe("refuse");
+          expect((doc["warnings"] as { id: string }[]).map((warning) => warning.id)).not.toContain("admin-can-lift");
+        });
+
+        it("refuses where the project's manifest is not on the default branch, the top's legs all on", async () => {
+          const web = await projectBelow(ALL_ON);
+          rest.routes.delete(PROJECT_READ);
+
+          const { code, doc } = await gate(web, PREFLIGHT);
+
+          expect(code).toBe(1);
+          expect(stateOf(doc, "direct-push")).toBe("refuse");
+        });
+
+        it("refuses where the project holds no guard copy, the top's legs all on", async () => {
+          const web = await projectBelow(ALL_ON);
+          await rm(join(web, GUARD));
+
+          const { code, doc } = await gate(web, PREFLIGHT);
+
+          expect(code).toBe(1);
+          expect(stateOf(doc, "direct-push")).toBe("refuse");
+        });
+      });
     });
 
     it("refuses hooks-loaded with no canary", async () => {
@@ -413,6 +497,63 @@ describe("stamity gate preflight and scan --text", () => {
 
       expect(code).toBe(1);
       expect(doc["refusals"]).toContainEqual(expect.objectContaining({ id: "hooks-loaded" }));
+    });
+
+    describe("the gh the reads start, checked as `run land` checks it", () => {
+      /** A file standing for `gh` at `dir`, which the check has to find for its folder to count. */
+      async function plant(dir: string): Promise<void> {
+        await mkdir(dir, { recursive: true });
+        rest.program = join(dir, "gh");
+        await writeFile(rest.program, "#!/bin/sh\nexit 0\n");
+      }
+
+      it.each([
+        ["a folder below the work tree", (repo: string) => join(repo, "tools", "bin"), "gh resolves to a program inside the work tree, whose answers the run could write"],
+        ["the work tree's own top", (repo: string) => repo, "gh resolves to a program inside the work tree, whose answers the run could write"],
+        ["a temp folder", (repo: string) => join(tmpdir(), `${basename(repo)}-gh`), "gh resolves to a program inside a temp folder, whose answers the run could write"],
+      ] as [string, (repo: string) => string, string][])("reads no REST through a gh in %s, and refuses direct-push", async (_where, place, words) => {
+        const repo = await seedRepo();
+        protectedRepo();
+        const dir = place(repo);
+        await plant(dir);
+
+        try {
+          const { code, doc } = await gate(repo, PREFLIGHT);
+
+          expect(code).toBe(1);
+          expect(stateOf(doc, "direct-push")).toBe("unknown");
+          expect(evidenceOf(doc, "direct-push")).toContain(words);
+          expect(rest.calls).toEqual([]);
+        } finally {
+          if (dir.startsWith(tmpdir())) await rm(dir, { recursive: true, force: true });
+        }
+      });
+
+      it("reads nothing past a gh that is no absolute path", async () => {
+        const repo = await seedRepo();
+        protectedRepo();
+        rest.program = "bin/gh";
+
+        const { code, doc } = await gate(repo, PREFLIGHT);
+
+        expect(code).toBe(1);
+        expect(evidenceOf(doc, "direct-push")).toContain("gh resolves to a PATH entry that is not an absolute path");
+        expect(rest.calls).toEqual([]);
+      });
+
+      it("starts the checked program from the filesystem's root, with no version choice from the environment", async () => {
+        const repo = await seedRepo({ helpers: [ghHelper()] });
+        protectedRepo();
+
+        await gate(repo, PREFLIGHT, { ASDF_GH_VERSION: "9.9.9" });
+
+        expect(rest.started.length).toBeGreaterThan(0);
+        for (const started of rest.started) {
+          expect(started.program).toBe(process.execPath);
+          expect(dirname(started.cwd ?? repo)).toBe(started.cwd);
+          expect(started.env?.["ASDF_GH_VERSION"]).toBeUndefined();
+        }
+      });
     });
 
     it("reads no REST with no gh on PATH, and refuses direct-push as unknown", async () => {
@@ -495,9 +636,9 @@ describe("stamity gate preflight and scan --text", () => {
     it("reads --item's author through the verb: a read author refuses, a write author passes (review/139)", async () => {
       const repo = await seedRepo();
       protectedRepo();
-      rest.routes.set("repos/o/r/issues/3", { status: 200, json: { user: { login: "reader" } } });
+      rest.routes.set("repos/o/r/issues/3", { status: 200, json: { state: "open", user: { login: "reader" } } });
       rest.routes.set("repos/o/r/collaborators/reader/permission", { status: 200, json: { permission: "read" } });
-      rest.routes.set("repos/o/r/issues/4", { status: 200, json: { user: { login: "writer" } } });
+      rest.routes.set("repos/o/r/issues/4", { status: 200, json: { state: "open", user: { login: "writer" } } });
       rest.routes.set("repos/o/r/collaborators/writer/permission", { status: 200, json: { permission: "write" } });
 
       const read = await gate(repo, [...PREFLIGHT, "--item", "o/r#3"]);
@@ -508,6 +649,19 @@ describe("stamity gate preflight and scan --text", () => {
       expect(evidenceOf(read.doc, "input-author")).toBe("o/r#3: reader has read permission on o/r");
       expect(write.code).toBe(0);
       expect(evidenceOf(write.doc, "input-author")).toBe("o/r#4: writer has write on o/r");
+    });
+
+    it("refuses --item outside origin's repository through the verb, whatever its author's right on origin", async () => {
+      const repo = await seedRepo();
+      protectedRepo();
+      rest.routes.set("repos/t/board/issues/5", { status: 200, json: { state: "open", user: { login: "writer" } } });
+      rest.routes.set("repos/o/r/collaborators/writer/permission", { status: 200, json: { permission: "write" } });
+
+      const outside = await gate(repo, [...PREFLIGHT, "--item", "t/board#5"]);
+
+      expect(outside.code).toBe(1);
+      expect(stateOf(outside.doc, "input-author")).toBe("refuse");
+      expect(evidenceOf(outside.doc, "input-author")).toBe("t/board#5 is not in origin's repository, o/r");
     });
 
     it("refuses GH_REPO naming another repository than origin's (review/139)", async () => {

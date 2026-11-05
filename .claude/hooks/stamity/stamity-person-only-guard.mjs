@@ -111,6 +111,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	const PACKAGE_WORDS = ctx.packageWords ?? ["stamity", "st"];
 	const PACKAGE_NAME = (ctx.packageName ?? "").toLowerCase();
 	const OWN_REPOSITORY = ctx.ownRepository ?? true;
+	const READINGS = ctx.readings ?? { used: 0 };
 	const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 	const KEYWORDS = /* @__PURE__ */ new Set([
 		"!",
@@ -190,6 +191,39 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		"--registry",
 		"--userconfig"
 	]);
+	function managerSubs(name, words, from) {
+		let sub = from;
+		while (MANAGERS.has(name) && typeof words[sub] === "string") {
+			const option = words[sub] ?? "";
+			const next = words[sub + 1] ?? "-";
+			if (MANAGER_VALUED.has(option) && !(name === "pnpm" && option === "-w") || name === "yarn" && option === "workspace") sub += 2;
+			else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(`${name} ${next}`)) sub += 2;
+			else if (option.startsWith("-") && option !== "--") sub += 1;
+			else break;
+		}
+		const found = /* @__PURE__ */ new Set([sub]);
+		const reached = /* @__PURE__ */ new Set([from]);
+		let last = MANAGERS.has(name) ? from : -1;
+		for (let at = from; at <= last; at += 1) {
+			if (!reached.has(at)) continue;
+			const option = words[at];
+			const next = words[at + 1];
+			const step = (to) => {
+				reached.add(to);
+				last = Math.max(last, to);
+			};
+			if (typeof option !== "string") found.add(at);
+			else if (MANAGER_VALUED.has(option) || name === "yarn" && option === "workspace") {
+				step(at + 2);
+				if (name === "pnpm" && option === "-w") step(at + 1);
+			} else if (option === "--") found.add(at).add(at + 1);
+			else if (option.startsWith("-")) {
+				step(at + 1);
+				if (/^(?:--[^=]+|-[^-=][^=]*)$/.test(option) && typeof next === "string" && !next.startsWith("-")) step(at + 2);
+			} else found.add(at);
+		}
+		return [...found];
+	}
 	const WRAPPER_OPTIONS = /* @__PURE__ */ new Map([
 		["env", [
 			"uCP",
@@ -248,7 +282,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			[]
 		]],
 		["xargs", [
-			"ILnPsdEa",
+			"ILnPsdEaJ",
 			[
 				"--max-args",
 				"--max-procs",
@@ -684,7 +718,16 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	const markMap = /* @__PURE__ */ new Map();
 	const spills = /* @__PURE__ */ new Set();
 	const fed = /* @__PURE__ */ new Set();
+	const holders = /* @__PURE__ */ new Map();
+	const held = (cmd, word, upTo = word.length) => fed.has(cmd) && [...holders.keys()].some((each) => word.slice(0, upTo + each.length).includes(each));
+	const cutShort = /* @__PURE__ */ new Set();
 	const launched = /* @__PURE__ */ new Map();
+	const READINGS_MAX = 16;
+	const READINGS_FLOOR = 4096;
+	const drawReading = (words) => {
+		READINGS.used += Math.max(READINGS_FLOOR, words.reduce((sum, each) => sum + each.length + 1, 0));
+		if (READINGS.used > READINGS_MAX * 65536) throw Object.assign(/* @__PURE__ */ new Error("readings"), { code: `MANAGER_READINGS_OVER_${READINGS_MAX}` });
+	};
 	function commandsOf(text, depth, pwsh, tainted = false, fedIn = false, capture = false) {
 		if (depth > 4) throw Object.assign(/* @__PURE__ */ new Error("nesting"), { code: "NESTING_DEPTH" });
 		const docs = capture ? 2 : depth === 0 && !pwsh ? 1 : 0;
@@ -701,24 +744,46 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		let defined = false;
 		let checked = 0;
 		const allMarks = [...marks, ...braces.marks];
-		for (const [segment, words] of [...segments, ...braces.segments].entries()) {
-			let k = 0;
+		const forked = /* @__PURE__ */ new Set();
+		const braceCut = /* @__PURE__ */ new Set();
+		if (plainLine) segments.forEach((each, at) => {
+			if (/^[{}]/.test(ends[at] ?? "") && (braceCut.has(at) || !each.every((word) => KEYWORDS.has(word)))) braceCut.add(at + 1);
+		});
+		const passes = [...segments, ...braces.segments].map((words, segment) => [
+			segment,
+			words,
+			-1,
+			-1,
+			false
+		]);
+		for (const [segment, words, forkAt, forkSub, fedBefore] of passes) {
+			let k = Math.max(forkAt, 0);
 			let line = null;
 			let lineFrom = 0;
-			let viaStdin = false;
+			let viaStdin = fedBefore;
 			while (k < words.length && line === null) {
 				const word = words[k] ?? "";
 				if (programName(word) === "xargs") viaStdin = true;
-				let sub = k + 1;
-				while (MANAGERS.has(programName(word)) && sub < words.length) {
-					const option = words[sub] ?? "";
-					const next = words[sub + 1] ?? "-";
-					if (MANAGER_VALUED.has(option) || programName(word) === "yarn" && option === "workspace") sub += 2;
-					else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(`${programName(word)} ${next}`)) sub += 2;
-					else if (option.startsWith("-") && option !== "--") sub += 1;
-					else break;
+				const manager = programName(word);
+				const subs = managerSubs(manager, words, k + 1);
+				const sub = k === forkAt ? forkSub : subs[0] ?? k + 1;
+				const runner = `${manager} ${words[sub] ?? ""}`;
+				let plain = !RUNNERS.has(`${manager} ${words[subs[0] ?? k + 1] ?? ""}`);
+				for (const other of k === forkAt ? [] : subs.slice(1)) {
+					if (!RUNNERS.has(`${manager} ${words[other] ?? ""}`)) {
+						if (plain) continue;
+						plain = true;
+					}
+					drawReading(words.slice(k));
+					forked.add(segment);
+					passes.push([
+						segment,
+						words,
+						k,
+						other,
+						viaStdin
+					]);
 				}
-				const runner = `${programName(word)} ${words[sub] ?? ""}`;
 				if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
 					if (ASSIGNMENT.test(word)) assigned.push(word);
 					k += 1;
@@ -744,15 +809,23 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 								isLine = lineOptions.includes(name);
 								value = option.includes("=") ? option.slice(name.length + 1) : words[k];
 								if (!option.includes("=")) k += 1;
-							}
+							} else if ([
+								...long,
+								...lineOptions,
+								programName(word) === "xargs" ? "--replace" : ""
+							].some((each) => each !== name && each.startsWith(name))) cutShort.add(option);
 						} else if (option.startsWith("-")) for (let c = 1; c < option.length; c += 1) {
 							const letter = option[c] ?? "";
+							if (short.includes("J") && "eil".includes(letter)) break;
 							if (!short.includes(letter) && !lineOptions.includes(`-${letter}`)) continue;
 							isLine = lineOptions.includes(`-${letter}`);
 							value = c === option.length - 1 ? words[k] : option.slice(c + 1);
 							if (c === option.length - 1) k += 1;
 							break;
 						}
+						const slot = /^(?:--replace=|-[^-iIJ]*i)(.+)|^-[^-iIJ]*[IJ]/.exec(programName(word) === "xargs" ? option : "");
+						const holder = slot?.[1] ?? value;
+						if (slot !== null && holder !== void 0) holders.set((allMarks[segment] ?? []).slice(optionAt, k).some((each) => /e/.test(each.kinds)) ? "" : holder, option.includes("J"));
 						if (isLine && value !== void 0) {
 							line = [value, ...words.slice(k)].join(" ");
 							lineFrom = optionAt;
@@ -761,12 +834,12 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					}
 				} else break;
 			}
-			if (plainLine && segment < segments.length && !defined) {
+			if (plainLine && forkAt === -1 && segment < segments.length && !defined) {
 				defined = defines(segments.slice(checked, segment));
 				checked = segment;
 			}
 			const opener = programName(words[0] ?? "");
-			if (plainLine && !defined && line === null && k === 0 && !/[|>]/.test(ends[segment] ?? "|") && !SHELLS.has(opener) && !POWERSHELLS.has(opener) && ![
+			if (plainLine && forkAt === -1 && !forked.has(segment) && !braceCut.has(segment) && !defined && line === null && k === 0 && !/[|>]/.test(ends[segment] ?? "|") && !SHELLS.has(opener) && !POWERSHELLS.has(opener) && ![
 				"eval",
 				"cmd",
 				"source",
@@ -1004,6 +1077,17 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		for (const inner of nested) commands.push(...commandsOf(inner.text, depth + 1, pwsh, tainted || inner.open, fedIn, captured.has(inner)));
 		return commands;
 	}
+	const GIT_TAKES = /* @__PURE__ */ new Set([
+		"-c",
+		"-C",
+		"--git-dir",
+		"--work-tree",
+		"--namespace",
+		"--config-env",
+		"--super-prefix",
+		"--attr-source"
+	]);
+	const GIT_FLAGS = /^(?:-[pPvh]|--(?:paginate|bare|version|help|(?:html|man|info|exec)-path|list-cmds=.*|(?:literal|glob|noglob|icase)-pathspecs|no-(?:pager|replace-objects|lazy-fetch|optional-locks|advice)))$/;
 	function gitParts(cmd) {
 		const config = [];
 		let k = 1;
@@ -1012,14 +1096,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			if (word === "-c") {
 				config.push(cmd[k + 1] ?? "");
 				k += 2;
-			} else if ([
-				"-C",
-				"--git-dir",
-				"--work-tree",
-				"--namespace",
-				"--config-env",
-				"--super-prefix"
-			].includes(word)) k += 2;
+			} else if (GIT_TAKES.has(word)) k += 2;
 			else if (word.startsWith("-")) k += 1;
 			else break;
 		}
@@ -1028,6 +1105,42 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			args: cmd.slice(k + 1),
 			config
 		};
+	}
+	function subtreeWords(args) {
+		const words = [];
+		for (let at = 0; at < args.length; at += 1) {
+			const word = args[at] ?? "";
+			if (/^(?:-[Pmb]|--(?:prefix|message|branch|onto|annotate))$/.test(word)) at += 1;
+			else if (!word.startsWith("-") || words.length === 0 && !/^(?:-[qdhS]|--(?:quiet|debug|help|squash|rejoin|ignore-joins|gpg-sign)|--(?:prefix|message|branch|onto|annotate|gpg-sign)=.*)$/.test(word)) words.push(at);
+		}
+		return words;
+	}
+	function gitUnsettled(cmd) {
+		const marks = markMap.get(cmd) ?? [];
+		let worst = 0;
+		let k = 1;
+		for (; k < cmd.length; k += 1) {
+			const word = cmd[k] ?? "";
+			const { kinds, first } = marks[k] ?? {
+				kinds: "",
+				first: 0
+			};
+			const eq = word.indexOf("=");
+			if (kinds === "" && !held(cmd, word) && GIT_TAKES.has(word)) k += 1;
+			else if (eq < 0 || !GIT_TAKES.has(word.slice(0, eq)) || kinds !== "" && first <= eq || held(cmd, word, eq)) {
+				if (kinds !== "" || held(cmd, word) || word.startsWith("-") && !GIT_FLAGS.test(word)) return 2;
+				if (word.startsWith("-")) continue;
+				break;
+			}
+			if (/[sgb]/.test(marks[k]?.kinds ?? "") || fed.has(cmd) && holders.get(cmd[k] ?? "") === true) worst = 1;
+		}
+		if (cmd[k] === "subtree") {
+			const tail = cmd.slice(k + 1);
+			const at = subtreeWords(tail)[0] ?? -1;
+			const sub = tail[at] ?? "";
+			if (at < 0 ? fed.has(cmd) : held(cmd, sub) || !/^(?:add|merge|pull|push|split)$/.test(sub) || marks.slice(k + 1, k + 2 + at).some((mark) => mark.kinds !== "")) return 2;
+		}
+		return fed.has(cmd) && !/^[a-z][a-z-]+$/.test(cmd[k] ?? "") ? 2 : worst;
 	}
 	function ghPositionals(cmd) {
 		const positionals = [];
@@ -1260,14 +1373,14 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			next
 		};
 	}
+	const namesPackage = (word) => PACKAGE_WORDS.includes(programName(word)) || /stamity/i.test(word);
 	function packageArgs(cmd, basename = false) {
 		const program = cmd[0] ?? "";
-		const named = (word) => PACKAGE_WORDS.includes(programName(word)) || /stamity/i.test(word);
 		const engineFile = (word) => {
 			const path = word.replace(/\\/g, "/").toLowerCase();
 			return PACKAGE_NAME !== "" && path.includes(`node_modules/${PACKAGE_NAME}/`) || /node_modules\/\.bin\/[^/]+$/.test(path) && PACKAGE_WORDS.includes(programName(path)) || OWN_REPOSITORY && /(?:^|\/)cli\.[cm]?[jt]s$/.test(path);
 		};
-		if (!basename && named(program)) return cmd.slice(1);
+		if (!basename && namesPackage(program)) return cmd.slice(1);
 		const launchedAt = basename ? void 0 : launched.get(cmd);
 		if (launchedAt !== void 0) return cmd.slice(launchedAt + 1);
 		if (![
@@ -1293,10 +1406,44 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				"x"
 			].includes(cmd[k] ?? "")) k += 1;
 			while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += 1;
-			if (named(cmd[k] ?? "")) return cmd.slice(k + 1);
+			if (namesPackage(cmd[k] ?? "")) return cmd.slice(k + 1);
 		}
 		const at = cmd.findIndex((word, index) => index > 0 && (/stamity/i.test(word) || engineFile(word)));
 		return at === -1 ? null : cmd.slice(at + 1);
+	}
+	function addedArgs(cmd) {
+		const program = cmd[0] ?? "";
+		const tails = [];
+		if (!MANAGERS.has(program)) return tails;
+		const seen = /* @__PURE__ */ new Set([packageArgs(cmd)?.length]);
+		for (const start of managerSubs(program, cmd, 1)) {
+			let k = start;
+			while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += MANAGER_VALUED.has(cmd[k] ?? "") ? 2 : 1;
+			if ([
+				"run",
+				"run-script",
+				"exec",
+				"dlx",
+				"x"
+			].includes(cmd[k] ?? "")) k += 1;
+			while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += 1;
+			if (!namesPackage(cmd[k] ?? "") || seen.has(cmd.length - k - 1)) continue;
+			seen.add(cmd.length - k - 1);
+			tails.push(cmd.slice(k + 1));
+			drawReading(cmd.slice(k + 1));
+		}
+		return tails;
+	}
+	function hidesBareWord(cmd, index) {
+		return anyMark.get(cmd)?.[index] === true && !(/[\\/]/.test(cmd[index] ?? "") && /^g+$/.test(markMap.get(cmd)?.[index]?.kinds ?? ""));
+	}
+	function mayLand(cmd, args, at) {
+		const past = args.slice(at + 1);
+		if (past.includes("land")) return true;
+		const start = cmd.length - past.length;
+		const verb = past[0];
+		if (verb !== void 0 && !verb.startsWith("-") && !hidesBareWord(cmd, start)) return false;
+		return fed.has(cmd) || past.some((_, index) => hidesBareWord(cmd, start + index));
 	}
 	function branchKey(name) {
 		const lower = name.toLowerCase();
@@ -1459,7 +1606,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const outside = () => {
 			deny("outside-write", "A push to another repository, or to a remote the guard cannot place");
 		};
-		if (gitEnvironment || config.some((pair) => /^(?:remote|url)\./i.test(pair))) return outside();
+		if (ctx.placeUnread === true || gitEnvironment || config.some((pair) => /^(?:remote|url)\./i.test(pair))) return outside();
 		const named = words.length > 0 ? words : [[ctx.pushRemote === void 0 ? "origin" : ctx.pushRemote, void 0]];
 		for (const [word, mark] of named) {
 			if (word === null || (mark?.kinds ?? "") !== "" || /[$`]/.test(word)) return outside();
@@ -1624,6 +1771,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		};
 		if (tags || refspecs.some((spec) => sides(spec).some(namesTag))) return deny("push-tags", "A push of tags");
 		for (const [index, spec] of refspecs.entries()) {
+			if (REMOTE_HEAD.test(destination(spec))) remoteHeadVerdict("git push");
 			const name = destination(spec).replace(/^(refs\/)?heads\//i, "").toLowerCase();
 			if (spec === ":" || spec === "+:") {
 				if (deploying.length > 0) deny("push-deploying", "A matching push, a deploying branch among the branches it may push");
@@ -1726,8 +1874,19 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		return list || positionals.length === 0 ? null : deny("tag", "A tag created (`git tag <name>`)");
 	}
 	const REMOTE_HEAD = /^(?:refs\/)?remotes\/[^/]+\/HEAD$/i;
+	const LOCAL_CLEANUP = /^git branch(?: --(?:no-)?merged(?: \w[\w./-]*)?)?(?: \| [ef]?grep(?: -[EFivw]+)* (?:\w+|'(?!-)[^']*'|"(?!-)(?:[^"$`\\]|\\.)*"))* \| xargs(?: -r| -n ?1)* git branch (?:-[dD]|--delete)$/;
 	const remoteHeadVerdict = (via, shown = true) => deny("push-default", `${shown ? "A remote's HEAD ref" : "A ref the line cannot show, which may be a remote's HEAD ref,"} written or deleted (\`${via}\`), which moves the branch the guard reads as the default`);
 	const shownWords = (marks) => marks.every((mark) => mark.kinds === "");
+	const REASON_OPTION = /^-[^-m]*m$/;
+	const reasonValues = (args) => {
+		const values = /* @__PURE__ */ new Set();
+		for (let at = 0; at < args.length; at += 1) if (REASON_OPTION.test(args[at] ?? "")) values.add(at += 1);
+		return values;
+	};
+	const unshownDelete = (args, marks, ref) => {
+		const reasons = reasonValues(args);
+		return ref >= 0 && marks.some((mark, at) => mark.kinds !== "" && (/[sgb]/.test(mark.kinds) || at !== ref && !reasons.has(at)));
+	};
 	function symbolicRefVerdict(args, via = "git symbolic-ref", marks = []) {
 		let remove = false;
 		const positionals = [];
@@ -1749,7 +1908,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			} else positionals.push(arg);
 		}
 		const [name = "", target] = positionals;
-		if (remove && /^(refs\/)?tags\//i.test(name)) return deny("tag-delete", `A symbolic tag ref deleted (\`${via}\`)`);
+		const tagAt = args.findIndex((arg) => /^(refs\/)?tags\//i.test(arg));
+		if (remove && /^(refs\/)?tags\//i.test(name) || unshownDelete(args, marks, tagAt)) return deny("tag-delete", `A symbolic tag ref deleted (\`${via}\`)`);
 		if (target !== void 0 && /^(refs\/)?tags\//i.test(name)) return deny("tag", `A symbolic tag ref written or deleted (\`${via}\`)`);
 		const remoteHead = REMOTE_HEAD.test(name);
 		const hidden = !shownWords(marks);
@@ -2421,17 +2581,18 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	}
 	function landApprovedVerdict(cmd) {
 		const unsure = unread.get(cmd) ?? [];
-		const args = unsure[0] === true ? cmd.slice(1) : packageArgs(cmd);
-		if (args === null) return;
-		const verbs = unsure[0] === true ? args : learnVerbWords(args);
-		if (verbs.includes("learn") && verbs.includes("accept")) deny("learn-accept", "A `learn accept` line");
-		const at = unsure[0] === true ? args.indexOf("run") : args.findIndex((word) => !word.startsWith("-"));
-		if (at === -1 || args[at] !== "run" || !args.slice(at + 1).includes("land")) return;
-		if (args.some((word) => word === "--approved" || word.startsWith("--approved="))) {
-			deny("land-approved", "Landing a run on the person's approval (`stamity run land --approved`)");
-			return;
+		for (const args of unsure[0] === true ? [cmd.slice(1)] : [packageArgs(cmd), ...addedArgs(cmd)]) {
+			if (args === null) continue;
+			const verbs = unsure[0] === true ? args : learnVerbWords(args);
+			if (verbs.includes("learn") && verbs.includes("accept")) deny("learn-accept", "A `learn accept` line");
+			const at = unsure[0] === true ? args.indexOf("run") : args.findIndex((word) => !word.startsWith("-"));
+			if (at === -1 || args[at] !== "run" || !args.slice(at + 1).includes("land")) continue;
+			if (args.some((word) => word === "--approved" || word.startsWith("--approved="))) {
+				deny("land-approved", "Landing a run on the person's approval (`stamity run land --approved`)");
+				continue;
+			}
+			if (hidesWords(cmd, args)) deny("land-approved", "A `stamity run land` line whose words the guard cannot read, which may carry `--approved`");
 		}
-		if (hidesWords(cmd, args)) deny("land-approved", "A `stamity run land` line whose words the guard cannot read, which may carry `--approved`");
 	}
 	function learnVerbWords(args) {
 		const valued = /* @__PURE__ */ new Set([
@@ -2471,8 +2632,10 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const args = unsettled ? cmd.slice(1) : packageArgs(cmd);
 		if (args === null || !hidesWords(cmd, args)) return;
 		const offset = cmd.length - args.length;
-		const verbal = (at) => anyMark.get(cmd)?.[offset + at] === true && !(/[\\/]/.test(args[at] ?? "") && /^g+$/.test(markMap.get(cmd)?.[offset + at]?.kinds ?? ""));
+		const verbal = (at) => hidesBareWord(cmd, offset + at);
 		const first = args.findIndex((word) => !word.startsWith("-"));
+		const run = unsettled ? args.indexOf("run") : first;
+		if (args[run] === "run" && mayLand(cmd, args, run)) deny("land-approved", "A `stamity run land` line whose words the guard cannot read, which may carry `--approved`");
 		if (args.includes("learn") || args.includes("accept") || (unsettled ? args.some((_, at) => verbal(at)) : verbal(first))) deny("learn-accept", "A line whose words the guard cannot read, which may be `learn accept`");
 	}
 	function loosenVerdict(cmd) {
@@ -2480,28 +2643,29 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const unsure = unread.get(cmd) ?? [];
 		const unsettled = unsure[0] === true;
 		const loosens = (words) => words.some((word) => /^--loosen(=|$)/.test(word));
-		const args = unsettled ? cmd.slice(1) : packageArgs(cmd);
-		if (args === null) {
-			if (loosens(packageArgs(cmd, true) ?? [])) deny("autonomy-loosen", "Loosening the autonomy setting (`--loosen`)");
-			return;
+		for (const args of unsettled ? [cmd.slice(1)] : [packageArgs(cmd), ...addedArgs(cmd)]) {
+			if (args === null) {
+				if (loosens(packageArgs(cmd, true) ?? [])) deny("autonomy-loosen", "Loosening the autonomy setting (`--loosen`)");
+				continue;
+			}
+			const what = unsettled ? "A command the guard cannot read, which may be a stamity command," : "A stamity command";
+			if (loosens(args)) {
+				deny("autonomy-loosen", "Loosening the autonomy setting (`--loosen`)");
+				continue;
+			}
+			if (fed.has(cmd)) {
+				deny("autonomy-loosen", `${what} run under \`xargs\`, which adds arguments the guard cannot read and which may spell \`--loosen\``);
+				continue;
+			}
+			if (unsettled && spills.has(cmd) || args.some((_, index) => unsure[cmd.length - args.length + index] === true)) {
+				deny("autonomy-loosen", `${what} with an argument the guard cannot read, which may spell \`--loosen\``);
+				continue;
+			}
+			if (ctx.stricterThanDefault === false) continue;
+			const sub = args.find((word) => !word.startsWith("-"));
+			if (sub === "clean" && !args.some((word) => /^--pack(=|$)/.test(word))) deny("autonomy-loosen", "A full `clean`, which removes the guard holding an autonomy setting stricter than the default");
+			if (sub === "init" && args.some((word) => /^--force(=|$)/.test(word))) deny("autonomy-loosen", "An `init --force`, which lands the default autonomy setting over a stricter one");
 		}
-		const what = unsettled ? "A command the guard cannot read, which may be a stamity command," : "A stamity command";
-		if (loosens(args)) {
-			deny("autonomy-loosen", "Loosening the autonomy setting (`--loosen`)");
-			return;
-		}
-		if (fed.has(cmd)) {
-			deny("autonomy-loosen", `${what} run under \`xargs\`, which adds arguments the guard cannot read and which may spell \`--loosen\``);
-			return;
-		}
-		if (unsettled && spills.has(cmd) || args.some((_, index) => unsure[cmd.length - args.length + index] === true)) {
-			deny("autonomy-loosen", `${what} with an argument the guard cannot read, which may spell \`--loosen\``);
-			return;
-		}
-		if (ctx.stricterThanDefault === false) return;
-		const sub = args.find((word) => !word.startsWith("-"));
-		if (sub === "clean" && !args.some((word) => /^--pack(=|$)/.test(word))) deny("autonomy-loosen", "A full `clean`, which removes the guard holding an autonomy setting stricter than the default");
-		if (sub === "init" && args.some((word) => /^--force(=|$)/.test(word))) deny("autonomy-loosen", "An `init --force`, which lands the default autonomy setting over a stricter one");
 	}
 	if (command.length > 65536) return deny("line-too-long", "A line too long for the guard to read (over 65,536 characters), which may hold an act that");
 	const read = commandsOf(command, 0, false);
@@ -2527,37 +2691,58 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		return false;
 	};
 	const stdinFlag = (arg) => arg.length > 2 && "--stdin".startsWith(arg);
+	const mayStdin = (args, marks) => args.some(stdinFlag) || !shownWords(marks);
+	const zero = /(^|[^0-9a-f])(0{40}|0{64})([^0-9a-f]|$)/i;
+	const refWord = String.raw`[^\s'"\\|;&<>()]`;
+	const separator = String.raw`(?: |\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|[0-7]{1,4}))`;
+	const emptied = new RegExp(String.raw`${before}update${separator}+refs\/tags\/${refWord}+(?!${refWord})(?!${separator}${refWord})`, "i");
+	const textGap = /\n|\\[nt]|\\x(?:0a|20)|\\0?(?:12|40)(?![0-7])|\\u00(?:0a|20)|\\0+(?![0-7])|\\x00/i;
+	const unshownText = (text) => text.split(textGap).some((part) => /[$`%\\]/.test(part));
+	const unshownFeed = () => command.includes("<<") && /[$`\\]/.test(command) || read.some((words) => {
+		if ((words[0] === "printf" || words[0] === "echo") && unshownText(words.slice(1).join(" "))) return true;
+		return !(words[0] === "git" && gitParts(words).sub === "update-ref") && !shownWords(markMap.get(words) ?? []);
+	});
 	let stdinRead;
 	let symrefsRead = false;
 	const stdinText = () => {
 		if (stdinRead !== void 0) return stdinRead;
-		const texts = [command, ...read.map((words) => words.join(" "))];
+		const texts = [.../* @__PURE__ */ new Set([command, ...read.map((words) => words.join(" "))])];
 		stdinRead = {
+			texts,
 			named: texts.some((text) => /remotes\/[^\s/'"\\]+\/HEAD(?![\w-])/i.test(text)),
-			unshown: texts.some((text) => unshownCommand.test(text) || unshownRemote(text)) || !texts.some((text) => stdinCommand.test(text)) && /[$`%\\]/.test(command)
+			unshown: texts.some((text) => unshownCommand.test(text) || unshownRemote(text)) || !texts.some((text) => stdinCommand.test(text)) && /[$`%\\]/.test(command) || unshownFeed(),
+			tag: texts.some((text) => /refs\/tags\//i.test(text)),
+			deletes: texts.some((text) => /\bdelete\b/.test(text) || zero.test(text) || emptied.test(text))
 		};
 		return stdinRead;
 	};
 	for (const cmd of read) {
 		const program = cmd[0] ?? "";
 		if (program === "git") {
-			const { sub, args, config } = gitParts(cmd);
-			const argMarks = (markMap.get(cmd) ?? []).slice(cmd.length - args.length);
+			if (gitUnsettled(cmd) > 1) deny("push-default", "A git call whose subcommand the line does not settle");
+			const { sub, args: lineArgs, config } = gitParts(cmd);
+			const added = fed.has(cmd) ? [{
+				first: 0,
+				last: 1,
+				kinds: "es"
+			}] : [];
+			const args = [...lineArgs, ...added.map(() => "$")];
+			const argMarks = [...(markMap.get(cmd) ?? []).slice(cmd.length - lineArgs.length), ...added];
+			const reasons = reasonValues(args);
+			const named = (arg, index) => !arg.startsWith("-") && !reasons.has(index);
 			remoteWriteVerdict(sub, args, argMarks);
 			if (sub === "push") pushRead(args, config, argMarks);
 			else if (sub === "send-pack") pushRead(args, [...config, "push.default=matching"], argMarks);
 			else if (sub === "tag") tagVerdict(args);
-			else if (sub === "update-ref" && (args.some((arg) => /^(refs\/)?tags\//i.test(arg)) || args.includes("--stdin") && /refs\/tags\//i.test(command))) {
-				const zero = /(^|[^0-9a-f])(0{40}|0{64})([^0-9a-f]|$)/i;
-				const [, value = ""] = args.filter((arg, index) => !arg.startsWith("-") && args[index - 1] !== "-m");
-				const word = String.raw`[^\s'"\\|;&<>()]`;
-				const separator = String.raw`(?: |\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|[0-7]{1,4}))`;
-				const emptied = new RegExp(String.raw`${before}update${separator}+refs\/tags\/${word}+(?!${word})(?!${separator}${word})`, "i");
-				if (args.some((arg) => /^-[^-m]*d/.test(arg)) || zero.test(value) || args.includes("--stdin") && (/\bdelete\b/.test(command) || zero.test(command) || emptied.test(command))) deny("tag-delete", "A tag ref deleted (`git update-ref`)");
+			else if (sub === "update-ref" && (args.some((arg) => /^(refs\/)?tags\//i.test(arg)) || mayStdin(args, argMarks) && stdinText().tag)) {
+				const [, value = ""] = args.filter(named);
+				const tagAt = args.findIndex((arg) => /^(refs\/)?tags\//i.test(arg));
+				if (args.some((arg) => /^-[^-m]*d/.test(arg)) || zero.test(value) || unshownDelete(args, argMarks, tagAt) || mayStdin(args, argMarks) && stdinText().deletes) deny("tag-delete", "A tag ref deleted (`git update-ref`)");
 				else deny("tag", "A tag ref write (`git update-ref`)");
-			} else if (sub === "update-ref" && args.includes("--stdin")) {
+			} else if (sub === "update-ref" && args.some(stdinFlag)) {
 				const word = String.raw`(?:[\s'"]|\\(?:x[\da-fA-F]{1,2}|u[\da-fA-F]{1,4}|U[\da-fA-F]{1,8}|[0-7]{1,4}|[a-z]))+([^\s'"\\|;&<>()]+)`;
-				const symrefs = symrefsRead ? [] : command.matchAll(new RegExp(String.raw`symref-(create|update|delete)${word}(?:${word})?`, "g"));
+				const symref = new RegExp(String.raw`symref-(create|update|delete)${word}(?:${word})?`, "g");
+				const symrefs = symrefsRead ? [] : stdinText().texts.flatMap((text) => Array.from(text.matchAll(symref)));
 				symrefsRead = true;
 				for (const [, op, ref = "", target] of symrefs) {
 					const shown = target === void 0 || target.includes("%") ? "$" : target;
@@ -2565,39 +2750,41 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				}
 			} else if (sub === "symbolic-ref") symbolicRefVerdict(args, void 0, argMarks);
 			else if (sub === "subtree") {
-				const valued = /* @__PURE__ */ new Set([
-					"-P",
-					"--prefix",
-					"-m",
-					"--message",
-					"-b",
-					"--branch",
-					"--onto"
-				]);
-				const kept = args.flatMap((word, index) => !word.startsWith("-") && !valued.has(args[index - 1] ?? "") ? [index] : []);
-				const words = kept.map((index) => args[index] ?? "");
-				const keptMarks = kept.map((index) => argMarks[index] ?? {
+				const [first = -1, ...kept] = subtreeWords(args);
+				if (args[first] === "push") pushRead(kept.map((index) => args[index] ?? ""), config, kept.map((index) => argMarks[index] ?? {
 					first: -1,
 					last: 0,
 					kinds: ""
-				});
-				if (words[0] === "push") pushRead(words.slice(1), config, keptMarks.slice(1));
+				}));
 			}
 			if (sub === "update-ref") {
-				const at = args.findIndex((arg, index) => !arg.startsWith("-") && !/^-[^-]*m$/.test(args[index - 1] ?? ""));
+				const at = args.findIndex(named);
 				const stdin = at < 0 && args.some(stdinFlag);
 				const text = stdin ? stdinText() : void 0;
 				const via = stdin ? "git update-ref --stdin" : "git update-ref";
 				if (at >= 0 ? REMOTE_HEAD.test(args[at] ?? "") : text?.named === true) remoteHeadVerdict(via);
 				else if (!shownWords(argMarks) || text?.unshown === true) remoteHeadVerdict(via, false);
 			}
-			if (sub === "branch") {
+			if (sub === "branch" && !LOCAL_CLEANUP.test(command)) {
 				const flag = (short, long) => args.some((arg) => arg.startsWith("--") ? arg.length > 2 && long.startsWith(arg) : short.test(arg));
 				const flags = flag(/^-[^-]*[dD]/, "--delete") && flag(/^-[^-]*r/, "--remotes");
 				const head = args.some((arg) => !arg.startsWith("-") && /^(?:(?:refs\/)?remotes\/)?[^/]+\/HEAD$/i.test(arg));
 				const hidden = argMarks.filter((mark) => mark.kinds !== "").length;
 				if (flags && head) remoteHeadVerdict("git branch -d -r");
 				else if (hidden > 0 && (argMarks.some((mark) => /[sgb]/.test(mark.kinds)) || hidden >= (flags ? 0 : 1) + (head ? 0 : 1))) remoteHeadVerdict("git branch -d -r", false);
+			}
+			if (sub === "fetch" || sub === "pull") {
+				const repository = args.findIndex((arg) => !arg.startsWith("-"));
+				const moves = (word) => word.includes(":") && REMOTE_HEAD.test(word.slice(word.indexOf(":") + 1));
+				const mayStart = (lead) => "refs/remotes/".startsWith(lead) || "remotes/".startsWith(lead) || /^(?:refs\/)?remotes\//.test(lead);
+				const unshown = (word, at) => {
+					const { last = 0, kinds = "" } = argMarks[at] ?? {};
+					const dst = word.indexOf(":") + 1;
+					return at > repository && dst > 0 && kinds !== "" && last >= dst && mayStart((word.slice(dst).split(/[$`*?[{%(]/)[0] ?? "").toLowerCase());
+				};
+				const text = sub === "fetch" && args.some(stdinFlag) ? stdinText() : void 0;
+				if ([...args, ...config].some(moves) || text?.named === true) remoteHeadVerdict(`git ${sub}`);
+				else if (args.some(unshown) || added.length > 0 || text?.unshown === true) remoteHeadVerdict(`git ${sub}`, false);
 			}
 		} else if (program === "gh") {
 			ghVerdict(cmd);
@@ -2610,6 +2797,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			"bun"
 		].includes(program)) publishVerdict(cmd);
 	}
+	if (cutShort.size > 0) deny("push-default", "A call behind a wrapper's shortened option, whose program the line does not settle");
 	for (const cmd of read) {
 		landApprovedVerdict(cmd);
 		loosenVerdict(cmd);
@@ -2621,10 +2809,11 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	} : { deny: false });
 };
 
-const unattendedPushVerdict = function unattendedPushVerdict(command, powershell = false, landOnly = false, identity = {}) {
+const unattendedPushVerdict = function unattendedPushVerdict(command, powershell = false, landOnly = false, identity = {}, readings = { used: 0 }) {
 	const PACKAGE_WORDS = identity.words ?? ["stamity", "st"];
 	const PACKAGE_NAME = (identity.name ?? "").toLowerCase();
 	const OWN_REPOSITORY = identity.own ?? true;
+	const READINGS = readings;
 	const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 	const KEYWORDS = /* @__PURE__ */ new Set([
 		"!",
@@ -2704,6 +2893,39 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		"--registry",
 		"--userconfig"
 	]);
+	function managerSubs(name, words, from) {
+		let sub = from;
+		while (MANAGERS.has(name) && typeof words[sub] === "string") {
+			const option = words[sub] ?? "";
+			const next = words[sub + 1] ?? "-";
+			if (MANAGER_VALUED.has(option) && !(name === "pnpm" && option === "-w") || name === "yarn" && option === "workspace") sub += 2;
+			else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(`${name} ${next}`)) sub += 2;
+			else if (option.startsWith("-") && option !== "--") sub += 1;
+			else break;
+		}
+		const found = /* @__PURE__ */ new Set([sub]);
+		const reached = /* @__PURE__ */ new Set([from]);
+		let last = MANAGERS.has(name) ? from : -1;
+		for (let at = from; at <= last; at += 1) {
+			if (!reached.has(at)) continue;
+			const option = words[at];
+			const next = words[at + 1];
+			const step = (to) => {
+				reached.add(to);
+				last = Math.max(last, to);
+			};
+			if (typeof option !== "string") found.add(at);
+			else if (MANAGER_VALUED.has(option) || name === "yarn" && option === "workspace") {
+				step(at + 2);
+				if (name === "pnpm" && option === "-w") step(at + 1);
+			} else if (option === "--") found.add(at).add(at + 1);
+			else if (option.startsWith("-")) {
+				step(at + 1);
+				if (/^(?:--[^=]+|-[^-=][^=]*)$/.test(option) && typeof next === "string" && !next.startsWith("-")) step(at + 2);
+			} else found.add(at);
+		}
+		return [...found];
+	}
 	const WRAPPER_OPTIONS = /* @__PURE__ */ new Map([
 		["env", [
 			"uCP",
@@ -2762,7 +2984,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			[]
 		]],
 		["xargs", [
-			"ILnPsdEa",
+			"ILnPsdEaJ",
 			[
 				"--max-args",
 				"--max-procs",
@@ -3198,7 +3420,16 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 	const markMap = /* @__PURE__ */ new Map();
 	const spills = /* @__PURE__ */ new Set();
 	const fed = /* @__PURE__ */ new Set();
+	const holders = /* @__PURE__ */ new Map();
+	const held = (cmd, word, upTo = word.length) => fed.has(cmd) && [...holders.keys()].some((each) => word.slice(0, upTo + each.length).includes(each));
+	const cutShort = /* @__PURE__ */ new Set();
 	const launched = /* @__PURE__ */ new Map();
+	const READINGS_MAX = 16;
+	const READINGS_FLOOR = 4096;
+	const drawReading = (words) => {
+		READINGS.used += Math.max(READINGS_FLOOR, words.reduce((sum, each) => sum + each.length + 1, 0));
+		if (READINGS.used > READINGS_MAX * 65536) throw Object.assign(/* @__PURE__ */ new Error("readings"), { code: `MANAGER_READINGS_OVER_${READINGS_MAX}` });
+	};
 	function commandsOf(text, depth, pwsh, tainted = false, fedIn = false, capture = false) {
 		if (depth > 4) throw Object.assign(/* @__PURE__ */ new Error("nesting"), { code: "NESTING_DEPTH" });
 		const docs = capture ? 2 : depth === 0 && !pwsh ? 1 : 0;
@@ -3215,24 +3446,46 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		let defined = false;
 		let checked = 0;
 		const allMarks = [...marks, ...braces.marks];
-		for (const [segment, words] of [...segments, ...braces.segments].entries()) {
-			let k = 0;
+		const forked = /* @__PURE__ */ new Set();
+		const braceCut = /* @__PURE__ */ new Set();
+		if (plainLine) segments.forEach((each, at) => {
+			if (/^[{}]/.test(ends[at] ?? "") && (braceCut.has(at) || !each.every((word) => KEYWORDS.has(word)))) braceCut.add(at + 1);
+		});
+		const passes = [...segments, ...braces.segments].map((words, segment) => [
+			segment,
+			words,
+			-1,
+			-1,
+			false
+		]);
+		for (const [segment, words, forkAt, forkSub, fedBefore] of passes) {
+			let k = Math.max(forkAt, 0);
 			let line = null;
 			let lineFrom = 0;
-			let viaStdin = false;
+			let viaStdin = fedBefore;
 			while (k < words.length && line === null) {
 				const word = words[k] ?? "";
 				if (programName(word) === "xargs") viaStdin = true;
-				let sub = k + 1;
-				while (MANAGERS.has(programName(word)) && sub < words.length) {
-					const option = words[sub] ?? "";
-					const next = words[sub + 1] ?? "-";
-					if (MANAGER_VALUED.has(option) || programName(word) === "yarn" && option === "workspace") sub += 2;
-					else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(`${programName(word)} ${next}`)) sub += 2;
-					else if (option.startsWith("-") && option !== "--") sub += 1;
-					else break;
+				const manager = programName(word);
+				const subs = managerSubs(manager, words, k + 1);
+				const sub = k === forkAt ? forkSub : subs[0] ?? k + 1;
+				const runner = `${manager} ${words[sub] ?? ""}`;
+				let plain = !RUNNERS.has(`${manager} ${words[subs[0] ?? k + 1] ?? ""}`);
+				for (const other of k === forkAt ? [] : subs.slice(1)) {
+					if (!RUNNERS.has(`${manager} ${words[other] ?? ""}`)) {
+						if (plain) continue;
+						plain = true;
+					}
+					drawReading(words.slice(k));
+					forked.add(segment);
+					passes.push([
+						segment,
+						words,
+						k,
+						other,
+						viaStdin
+					]);
 				}
-				const runner = `${programName(word)} ${words[sub] ?? ""}`;
 				if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
 					if (ASSIGNMENT.test(word)) assigned.push(word);
 					k += 1;
@@ -3258,15 +3511,23 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 								isLine = lineOptions.includes(name);
 								value = option.includes("=") ? option.slice(name.length + 1) : words[k];
 								if (!option.includes("=")) k += 1;
-							}
+							} else if ([
+								...long,
+								...lineOptions,
+								programName(word) === "xargs" ? "--replace" : ""
+							].some((each) => each !== name && each.startsWith(name))) cutShort.add(option);
 						} else if (option.startsWith("-")) for (let c = 1; c < option.length; c += 1) {
 							const letter = option[c] ?? "";
+							if (short.includes("J") && "eil".includes(letter)) break;
 							if (!short.includes(letter) && !lineOptions.includes(`-${letter}`)) continue;
 							isLine = lineOptions.includes(`-${letter}`);
 							value = c === option.length - 1 ? words[k] : option.slice(c + 1);
 							if (c === option.length - 1) k += 1;
 							break;
 						}
+						const slot = /^(?:--replace=|-[^-iIJ]*i)(.+)|^-[^-iIJ]*[IJ]/.exec(programName(word) === "xargs" ? option : "");
+						const holder = slot?.[1] ?? value;
+						if (slot !== null && holder !== void 0) holders.set((allMarks[segment] ?? []).slice(optionAt, k).some((each) => /e/.test(each.kinds)) ? "" : holder, option.includes("J"));
 						if (isLine && value !== void 0) {
 							line = [value, ...words.slice(k)].join(" ");
 							lineFrom = optionAt;
@@ -3275,12 +3536,12 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 					}
 				} else break;
 			}
-			if (plainLine && segment < segments.length && !defined) {
+			if (plainLine && forkAt === -1 && segment < segments.length && !defined) {
 				defined = defines(segments.slice(checked, segment));
 				checked = segment;
 			}
 			const opener = programName(words[0] ?? "");
-			if (plainLine && !defined && line === null && k === 0 && !/[|>]/.test(ends[segment] ?? "|") && !SHELLS.has(opener) && !POWERSHELLS.has(opener) && ![
+			if (plainLine && forkAt === -1 && !forked.has(segment) && !braceCut.has(segment) && !defined && line === null && k === 0 && !/[|>]/.test(ends[segment] ?? "|") && !SHELLS.has(opener) && !POWERSHELLS.has(opener) && ![
 				"eval",
 				"cmd",
 				"source",
@@ -3518,6 +3779,17 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		for (const inner of nested) commands.push(...commandsOf(inner.text, depth + 1, pwsh, tainted || inner.open, fedIn, captured.has(inner)));
 		return commands;
 	}
+	const GIT_TAKES = /* @__PURE__ */ new Set([
+		"-c",
+		"-C",
+		"--git-dir",
+		"--work-tree",
+		"--namespace",
+		"--config-env",
+		"--super-prefix",
+		"--attr-source"
+	]);
+	const GIT_FLAGS = /^(?:-[pPvh]|--(?:paginate|bare|version|help|(?:html|man|info|exec)-path|list-cmds=.*|(?:literal|glob|noglob|icase)-pathspecs|no-(?:pager|replace-objects|lazy-fetch|optional-locks|advice)))$/;
 	function gitParts(cmd) {
 		const config = [];
 		let k = 1;
@@ -3526,14 +3798,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			if (word === "-c") {
 				config.push(cmd[k + 1] ?? "");
 				k += 2;
-			} else if ([
-				"-C",
-				"--git-dir",
-				"--work-tree",
-				"--namespace",
-				"--config-env",
-				"--super-prefix"
-			].includes(word)) k += 2;
+			} else if (GIT_TAKES.has(word)) k += 2;
 			else if (word.startsWith("-")) k += 1;
 			else break;
 		}
@@ -3542,6 +3807,42 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			args: cmd.slice(k + 1),
 			config
 		};
+	}
+	function subtreeWords(args) {
+		const words = [];
+		for (let at = 0; at < args.length; at += 1) {
+			const word = args[at] ?? "";
+			if (/^(?:-[Pmb]|--(?:prefix|message|branch|onto|annotate))$/.test(word)) at += 1;
+			else if (!word.startsWith("-") || words.length === 0 && !/^(?:-[qdhS]|--(?:quiet|debug|help|squash|rejoin|ignore-joins|gpg-sign)|--(?:prefix|message|branch|onto|annotate|gpg-sign)=.*)$/.test(word)) words.push(at);
+		}
+		return words;
+	}
+	function gitUnsettled(cmd) {
+		const marks = markMap.get(cmd) ?? [];
+		let worst = 0;
+		let k = 1;
+		for (; k < cmd.length; k += 1) {
+			const word = cmd[k] ?? "";
+			const { kinds, first } = marks[k] ?? {
+				kinds: "",
+				first: 0
+			};
+			const eq = word.indexOf("=");
+			if (kinds === "" && !held(cmd, word) && GIT_TAKES.has(word)) k += 1;
+			else if (eq < 0 || !GIT_TAKES.has(word.slice(0, eq)) || kinds !== "" && first <= eq || held(cmd, word, eq)) {
+				if (kinds !== "" || held(cmd, word) || word.startsWith("-") && !GIT_FLAGS.test(word)) return 2;
+				if (word.startsWith("-")) continue;
+				break;
+			}
+			if (/[sgb]/.test(marks[k]?.kinds ?? "") || fed.has(cmd) && holders.get(cmd[k] ?? "") === true) worst = 1;
+		}
+		if (cmd[k] === "subtree") {
+			const tail = cmd.slice(k + 1);
+			const at = subtreeWords(tail)[0] ?? -1;
+			const sub = tail[at] ?? "";
+			if (at < 0 ? fed.has(cmd) : held(cmd, sub) || !/^(?:add|merge|pull|push|split)$/.test(sub) || marks.slice(k + 1, k + 2 + at).some((mark) => mark.kinds !== "")) return 2;
+		}
+		return fed.has(cmd) && !/^[a-z][a-z-]+$/.test(cmd[k] ?? "") ? 2 : worst;
 	}
 	function ghPositionals(cmd) {
 		const positionals = [];
@@ -3774,14 +4075,14 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 			next
 		};
 	}
+	const namesPackage = (word) => PACKAGE_WORDS.includes(programName(word)) || /stamity/i.test(word);
 	function packageArgs(cmd, basename = false) {
 		const program = cmd[0] ?? "";
-		const named = (word) => PACKAGE_WORDS.includes(programName(word)) || /stamity/i.test(word);
 		const engineFile = (word) => {
 			const path = word.replace(/\\/g, "/").toLowerCase();
 			return PACKAGE_NAME !== "" && path.includes(`node_modules/${PACKAGE_NAME}/`) || /node_modules\/\.bin\/[^/]+$/.test(path) && PACKAGE_WORDS.includes(programName(path)) || OWN_REPOSITORY && /(?:^|\/)cli\.[cm]?[jt]s$/.test(path);
 		};
-		if (!basename && named(program)) return cmd.slice(1);
+		if (!basename && namesPackage(program)) return cmd.slice(1);
 		const launchedAt = basename ? void 0 : launched.get(cmd);
 		if (launchedAt !== void 0) return cmd.slice(launchedAt + 1);
 		if (![
@@ -3807,10 +4108,44 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 				"x"
 			].includes(cmd[k] ?? "")) k += 1;
 			while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += 1;
-			if (named(cmd[k] ?? "")) return cmd.slice(k + 1);
+			if (namesPackage(cmd[k] ?? "")) return cmd.slice(k + 1);
 		}
 		const at = cmd.findIndex((word, index) => index > 0 && (/stamity/i.test(word) || engineFile(word)));
 		return at === -1 ? null : cmd.slice(at + 1);
+	}
+	function addedArgs(cmd) {
+		const program = cmd[0] ?? "";
+		const tails = [];
+		if (!MANAGERS.has(program)) return tails;
+		const seen = /* @__PURE__ */ new Set([packageArgs(cmd)?.length]);
+		for (const start of managerSubs(program, cmd, 1)) {
+			let k = start;
+			while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += MANAGER_VALUED.has(cmd[k] ?? "") ? 2 : 1;
+			if ([
+				"run",
+				"run-script",
+				"exec",
+				"dlx",
+				"x"
+			].includes(cmd[k] ?? "")) k += 1;
+			while (k < cmd.length && (cmd[k] ?? "").startsWith("-")) k += 1;
+			if (!namesPackage(cmd[k] ?? "") || seen.has(cmd.length - k - 1)) continue;
+			seen.add(cmd.length - k - 1);
+			tails.push(cmd.slice(k + 1));
+			drawReading(cmd.slice(k + 1));
+		}
+		return tails;
+	}
+	function hidesBareWord(cmd, index) {
+		return anyMark.get(cmd)?.[index] === true && !(/[\\/]/.test(cmd[index] ?? "") && /^g+$/.test(markMap.get(cmd)?.[index]?.kinds ?? ""));
+	}
+	function mayLand(cmd, args, at) {
+		const past = args.slice(at + 1);
+		if (past.includes("land")) return true;
+		const start = cmd.length - past.length;
+		const verb = past[0];
+		if (verb !== void 0 && !verb.startsWith("-") && !hidesBareWord(cmd, start)) return false;
+		return fed.has(cmd) || past.some((_, index) => hidesBareWord(cmd, start + index));
 	}
 	const deny = (what) => ({
 		deny: true,
@@ -3987,6 +4322,7 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 	};
 	const REGISTRY_URL = /^https:\/\/[A-Za-z0-9.-]+(?::(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]))?(?:\/[A-Za-z0-9._~/-]*)?$/;
 	const PINNED_PACKAGE = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*@(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+	const jobFlag = (option) => /^--job(?:=|$)/.test(option) || /[*?[]/.test(option) && "--job".startsWith(option.split(/[*?[]/)[0] ?? "");
 	function verbShape(line) {
 		const text = line.replace(/[ \t]+2>&1[ \t]*$/, "");
 		if (/[\r\n]/.test(text)) return "a line break";
@@ -4034,7 +4370,6 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		} else if (words[0] !== "stamity" && !PACKAGE_WORDS.includes(words[0] ?? "")) return "a first word other than `stamity`, `st` or `npx`: a prefix, a wrapper or another program";
 		if (words[at] !== "run") return "words between the program and `run <verb>`";
 		if (!RUN_VERBS.has(words[at + 1] ?? "")) return "words between `run` and its verb";
-		const jobFlag = (option) => /^--job(?:=|$)/.test(option) || /[*?[]/.test(option) && "--job".startsWith(option.split(/[*?[]/)[0] ?? "");
 		if (words.slice(at + 2).some(jobFlag)) return "`--job`, which only the land workflow runs";
 		if (powershell && ats.some((index) => index > at)) return "an unquoted `@` in a word after `run`, which PowerShell reads as a splat";
 		return null;
@@ -4044,43 +4379,39 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		reason: "A line too long for the guard to read (over 65,536 characters) is refused in every mode, before any reading: the person runs it themselves (REQ-FLOW-102)."
 	};
 	const commands = commandsOf(command, 0, powershell);
+	const lineWords = [...assigned, ...commands.flat()];
 	if (landOnly) {
 		const broke = commands.some((cmd) => {
-			if (unread.get(cmd)?.[0] === true) {
-				const run = cmd.indexOf("run", 1);
-				return run !== -1 && cmd.slice(run + 1).includes("land");
-			}
-			const args = packageArgs(cmd) ?? [];
-			const at = args.findIndex((word) => !word.startsWith("-"));
-			return at !== -1 && args[at] === "run" && args.slice(at + 1).includes("land");
+			const unsettled = unread.get(cmd)?.[0] === true;
+			return (unsettled ? [cmd.slice(1)] : [packageArgs(cmd) ?? [], ...addedArgs(cmd)]).some((args) => {
+				const at = unsettled ? args.indexOf("run") : args.findIndex((word) => !word.startsWith("-"));
+				if (args[at] === "run" && (unsettled ? args.slice(at + 1).includes("land") : mayLand(cmd, args, at))) return true;
+				const start = cmd.length - args.length;
+				return args.some((_, index) => hidesBareWord(cmd, start + index)) && (unsettled || at === -1 || hidesBareWord(cmd, start + at)) && args.some((word) => word.startsWith("-") && jobFlag(word));
+			});
 		}) ? verbShape(command) : null;
 		return broke === null ? { deny: false } : {
 			deny: true,
 			reason: `\`stamity run land\` on a line that is more than the verb (${broke}; REQ-FLOW-121): the land verb runs only alone on its line, in every mode.`
 		};
 	}
+	if (cutShort.size > 0) return deny("A call behind a wrapper's shortened option, whose program the line does not settle");
+	const namesConfig = CONFIG_ENVIRONMENT.test(command) || lineWords.some((word) => CONFIG_ENVIRONMENT.test(word));
+	const setsProgram = PROGRAM_TEXT.test(command) || lineWords.some((word) => PROGRAM_WORD.test(word));
 	for (const cmd of commands) {
 		const program = cmd[0] ?? "";
 		if (program === "git") {
 			const { sub, args, config } = gitParts(cmd);
 			if (sub === "push" || sub === "send-pack") return deny(`A raw \`git ${sub}\``);
-			const valued = /* @__PURE__ */ new Set([
-				"-P",
-				"--prefix",
-				"-m",
-				"--message",
-				"-b",
-				"--branch",
-				"--onto"
-			]);
-			const first = args.find((word, index) => !word.startsWith("-") && !valued.has(args[index - 1] ?? ""));
-			if (sub === "subtree" && first === "push") return deny("A `git subtree push`");
+			if (gitUnsettled(cmd) > 0) return deny("A git call whose subcommand the line does not settle");
+			if (sub === "subtree" && args[subtreeWords(args)[0] ?? -1] === "push") return deny("A `git subtree push`");
 			if (config.some((pair) => /^alias\./i.test(pair))) return deny("A git call defining an alias (`-c alias.<name>=…`)");
 			const globals = cmd.slice(1, cmd.length - args.length - 1);
 			const configEnv = globals.flatMap((word, index) => word === "--config-env" ? [globals[index + 1] ?? ""] : word.startsWith("--config-env=") ? [word.slice(13)] : []);
-			if ([...config, ...configEnv].some((pair) => !CONFIG_KEYS.test((pair.split("=")[0] ?? "").trim()))) return deny("A git call setting a configuration key outside the display and identity keys (`-c <key>=…`)");
-			if (CONFIG_ENVIRONMENT.test(command) || [...assigned, ...commands.flat()].some((word) => CONFIG_ENVIRONMENT.test(word))) return deny("A git call on a line that names git's configuration variables (`GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>`, `GIT_CONFIG_VALUE_<n>`, `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`)");
-			if (PROGRAM_TEXT.test(command) || [...assigned, ...commands.flat()].some((word) => PROGRAM_WORD.test(word))) return deny("A git call on a line that sets a program git runs through the environment (`GIT_EDITOR`, `GIT_SSH_COMMAND`, `GIT_EXEC_PATH`, …)");
+			const keyUnshown = (pair, key) => !CONFIG_KEYS.test(key.trim()) || held(cmd, pair, key.length);
+			if ([...config, ...configEnv].some((pair) => keyUnshown(pair, pair.split("=")[0] ?? ""))) return deny("A git call setting a configuration key outside the display and identity keys (`-c <key>=…`)");
+			if (namesConfig) return deny("A git call on a line that names git's configuration variables (`GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>`, `GIT_CONFIG_VALUE_<n>`, `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`)");
+			if (setsProgram) return deny("A git call on a line that sets a program git runs through the environment (`GIT_EDITOR`, `GIT_SSH_COMMAND`, `GIT_EXEC_PATH`, …)");
 			const remoteForm = sub === "remote" ? (args.find((word) => !word.startsWith("-")) ?? "").toLowerCase() : "";
 			if (REMOTE_WRITES.has(remoteForm)) return deny(`A \`git remote ${remoteForm}\`, a write of a remote`);
 			if (sub === "config" && writesRemote(args)) return deny("A `git config` write of a `remote.*` or `url.*` key");
@@ -4129,11 +4460,11 @@ const unattendedPushVerdict = function unattendedPushVerdict(command, powershell
 		const exports = cmd[0] === "export" || EXPORTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => EXPORTS.test(word));
 		if (assignsNoValue(cmd).some((word) => SETS_WORD.test(word))) return true;
 		return SETTERS.has(cmd[0] ?? "") && cmd.slice(1).some((word) => SETS_WORD.test(word) && (exports || word.includes("=")));
-	}) || SETS_TEXT.test(command) || allexport && (NAMES_VARIABLE.test(command) || [...assigned, ...commands.flat()].some((word) => NAMES_VARIABLE.test(word)))) return deny("A line that sets one of git's program or configuration variables (`GIT_EXEC_PATH`, `GIT_EDITOR`, `GIT_CONFIG_COUNT`, …), which the run verbs' own git reads,");
+	}) || SETS_TEXT.test(command) || allexport && (NAMES_VARIABLE.test(command) || lineWords.some((word) => NAMES_VARIABLE.test(word)))) return deny("A line that sets one of git's program or configuration variables (`GIT_EXEC_PATH`, `GIT_EDITOR`, `GIT_CONFIG_COUNT`, …), which the run verbs' own git reads,");
 	const broke = commands.some((cmd) => {
 		const at = cmd.findIndex((word, index) => index > 0 && !word.startsWith("-"));
 		return (cmd[0] === "stamity" || cmd[0] === "st") && cmd[at] === "run" && cmd.slice(at + 1).some((word) => RUN_VERBS.has(word));
-	}) || [...commands, ...assigned.map((word) => [word])].some(namesVerbInWords) || namesVerb(command) || [...assigned, ...commands.flat()].some(namesVerb) ? verbShape(command) : null;
+	}) || [...commands, ...assigned.map((word) => [word])].some(namesVerbInWords) || namesVerb(command) || lineWords.some(namesVerb) ? verbShape(command) : null;
 	if (broke !== null) return deny(`A run verb (\`stamity run start\`, \`checkpoint\`, \`end\` or \`land\`) on a line that is more than the verb (${broke}; REQ-FLOW-121)`);
 	return { deny: false };
 };
@@ -4212,8 +4543,8 @@ function present(path) {
   }
 }
 
-/** A line's words (a null where a command can follow), the lines they run, and its heredocs' bodies. */
-function shellWords(command) {
+/** A line's words (a null where a command can follow), the lines they run, and its heredocs' bodies; with braces, a brace is a word's. */
+function shellWords(command, braces = false) {
   const words = [];
   const nested = [];
   const docs = [];
@@ -4293,7 +4624,7 @@ function shellWords(command) {
         while (/[<>&|]/.test(command[k + 1] ?? "")) k += 1;
         drop = true;
       }
-    } else if (/[\s;&|(){}\`]/.test(c)) {
+    } else if ((braces ? /[\s;&|()\`]/ : /[\s;&|(){}\`]/).test(c)) {
       end();
       if (c === "\n" || c === "\r" || !/\s/.test(c)) {
         drop = false;
@@ -4317,7 +4648,7 @@ const WRAPPERS = new Map([
   ["timeout", ["sk", "--signal --kill-after"]],
   ["stdbuf", ["ioe", "--input --output --error"]],
   ["time", ["fo", "--format --output"]],
-  ["xargs", ["ILnPsdEa", "--max-args --max-procs --max-chars --delimiter --arg-file --process-slot-var"]],
+  ["xargs", ["ILnPsdEaJ", "--max-args --max-procs --max-chars --delimiter --arg-file --process-slot-var"]],
   ["command", []],
   ["builtin", []],
   ["nohup", []],
@@ -4334,10 +4665,45 @@ const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
 const POWERSHELLS = new Set(["pwsh", "powershell", "invoke-expression", "iex"]);
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
+/** Where a package manager's subcommand may stand, its options from from skipped: u6's managerSubs, the same rule. */
+function managerSubs(name, words, from) {
+  let sub = from;
+  while (MANAGERS.has(name) && typeof words[sub] === "string") {
+    const option = words[sub] ?? "";
+    const next = words[sub + 1] ?? "-";
+    if ((MANAGER_VALUED.has(option) && !(name === "pnpm" && option === "-w")) || (name === "yarn" && option === "workspace")) sub += 2;
+    else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(name + " " + next)) sub += 2;
+    else if (option.startsWith("-") && option !== "--") sub += 1;
+    else break;
+  }
+  const found = new Set([sub]);
+  const reached = new Set([from]);
+  let last = MANAGERS.has(name) ? from : -1;
+  for (let at = from; at <= last; at += 1) {
+    if (!reached.has(at)) continue;
+    const option = words[at];
+    const next = words[at + 1];
+    const step = (to) => {
+      reached.add(to);
+      last = Math.max(last, to);
+    };
+    if (typeof option !== "string") found.add(at);
+    else if (MANAGER_VALUED.has(option) || (name === "yarn" && option === "workspace")) {
+      step(at + 2);
+      if (name === "pnpm" && option === "-w") step(at + 1);
+    } else if (option === "--") found.add(at).add(at + 1);
+    else if (option.startsWith("-")) {
+      step(at + 1);
+      if (/^(?:--[^=]+|-[^-=][^=]*)$/.test(option) && typeof next === "string" && !next.startsWith("-")) step(at + 2);
+    } else found.add(at);
+  }
+  return [...found];
+}
+
 /** Where a shell call's git runs: its working directory and each place a command on the line moves it to. */
 function placesOf(command, cwd) {
-  const places = [{ work: cwd }];
-  const bases = [cwd];
+  let places = [{ work: cwd }];
+  let bases = [cwd];
   const full = () => places.length > PLACES_MAX || bases.length > PLACES_MAX;
   const has = (list, option) => list.split(" ").includes(option);
   const move = (path) => {
@@ -4351,8 +4717,20 @@ function placesOf(command, cwd) {
     if (typeof path !== "string") places.push(null);
     else for (const base of bases) places.push({ git: resolve(base, path) });
   };
-  const scan = (line, depth) => {
-    const { words, nested, docs } = shellWords(line);
+  // The added readings of a package manager's options u6 finds, 16 at most here (u6 weighs its own by the text each
+  // re-reads). Past that cap, or at the place cap on a line that has any (each re-reads its tail's places), a place the
+  // line names later would go unread and a push from it judged nowhere, so the call is refused with u6's coded error.
+  const READINGS_MAX = 16;
+  let readings = 0;
+  const overRead = () => Object.assign(new Error("readings"), { code: "MANAGER_READINGS_OVER_" + READINGS_MAX });
+  // Each text holding a brace, with the directories it starts from: read again below with its braces as words, as u6
+  // reads it, since a word a brace cuts here can hide the program whose place that reading finds.
+  const braced = [];
+  // With pick, an added reading: from word from, that manager's subcommand at pick, to its segment's end. It returns
+  // whether a shell runs, so a heredoc's body is read where that reading's shell reads it.
+  const scan = (line, depth, from = 0, pick = undefined, braces = false) => {
+    const { words, nested, docs } = shellWords(line, braces);
+    if (!braces && pick === undefined && /[{}]/.test(line)) braced.push([line, depth, [...bases]]);
     const inner = (text) => {
       if (depth < 4 && typeof text === "string") scan(text, depth + 1);
     };
@@ -4362,8 +4740,9 @@ function placesOf(command, cwd) {
       return tail;
     };
     let shell = false;
-    for (let k = 0, at = true; k < words.length && !full(); k += 1) {
+    for (let k = from, at = true; k < words.length && !full(); k += 1) {
       const word = words[k];
+      if (word === null && pick !== undefined) break;
       if (word === null) at = true;
       if (word === null || !at) continue;
       if (ASSIGNMENT.test(word) || KEYWORDS.has(word)) {
@@ -4374,15 +4753,15 @@ function placesOf(command, cwd) {
       if (/\s/.test(word) && !/^@\s/.test(word)) inner(rest(k).join(" "));
       const name = programName(word);
       const assigned = /^\$env:git_dir(=.*)?$/i.exec(word);
-      // A package manager's options before a runner's subcommand (npm -w x exec), skipped as u6 skips them.
-      let sub = k + 1;
-      while (MANAGERS.has(name) && typeof words[sub] === "string") {
-        const option = words[sub];
-        const next = typeof words[sub + 1] === "string" ? words[sub + 1] : "-";
-        if (MANAGER_VALUED.has(option) || (name === "yarn" && option === "workspace")) sub += 2;
-        else if (/^--[^=]+$/.test(option) && !next.startsWith("-") && !RUNNERS.has(name + " " + next)) sub += 2;
-        else if (option.startsWith("-") && option !== "--") sub += 1;
-        else break;
+      // A package manager's options before a runner's subcommand (npm -w x exec, npm -loglevel silly exec), skipped as
+      // u6 skips them: today's reading here, and each other reading that lands on a runner read from this word too.
+      const subs = managerSubs(name, words, k + 1);
+      const sub = k === from && pick !== undefined ? pick : subs[0];
+      for (const other of k === from && pick !== undefined ? [] : subs.slice(1)) {
+        if (!RUNNERS.has(name + " " + words[other])) continue;
+        readings += 1;
+        if (readings > READINGS_MAX) throw overRead();
+        if (scan(line, depth, k, other, braces)) shell = true;
       }
       if (assigned !== null) {
         const value = assigned[1] ?? (/^=/.test(words[k + 1] ?? "") ? words[(k += 1)] : undefined);
@@ -4454,12 +4833,33 @@ function placesOf(command, cwd) {
       if (SHELLS.has(name) || POWERSHELLS.has(name)) shell = true;
       for (const text of linesOf(name, rest(k + 1))) inner(text);
     }
+    if (pick !== undefined) return shell;
     for (const text of nested) inner(text);
     if (shell) for (const text of docs) inner(text);
+    return shell;
   };
   scan(command, 0);
-  if (full()) places.push(null);
-  return places;
+  const over = full();
+  if (over && readings > 0) throw overRead();
+  if (over) places.push(null);
+  // Each brace reading keeps its own list and starts where the first did, so the first's places and cap stay as read and
+  // a line read alike stops alike; past that list's cap it fails closed where the first had not filled its own, or the
+  // line holds an added reading. Each nesting level doubles these readings, so past 8 lines' worth of text the call is
+  // refused, and a line past the line cap gets none: u6 refuses it unread. A place costs its repository's reads and a full
+  // verdict of the line, so the call holds each once, under the cap.
+  const all = new Map(places.map((place) => [JSON.stringify(place), place]));
+  const most = Math.max(all.size, PLACES_MAX);
+  let spent = 0;
+  for (const [line, depth, from] of command.length > 65536 ? [] : braced) {
+    spent += line.length + 16;
+    if (spent > 8 * 65536) throw overRead();
+    places = [{ work: cwd }];
+    bases = from;
+    scan(line, depth, 0, undefined, true);
+    if (full() && (!over || readings > 0)) throw overRead();
+    for (const place of places) if (all.set(JSON.stringify(place), place).size > most) throw overRead();
+  }
+  return [...all.values()];
 }
 
 /**
@@ -4748,8 +5148,9 @@ function contextsOf(command, cwd, powershell, root) {
         const entry = branch === ".invalid" ? {} : (merged.branches.get(branch) ?? {});
         return entry.pushremote ?? merged.pushDefault ?? entry.remote ?? "origin";
       },
-      // A place the guard cannot read counts as the session's own, so a push to origin from it runs, as before; only a
-      // readable other checkout has its origin compared (review/130).
+      // A place the guard cannot read shows no repository, so a push from it asks; a readable other checkout has its
+      // origin compared (review/130).
+      placeUnread: dirs === null,
       // Where a push to origin goes, where its push URL is not its fetch URL (a pushurl or a pushInsteadOf, review/129).
       get originPush() {
         const own = rootOf();
@@ -5001,7 +5402,15 @@ function decide() {
   const found = [];
   // The acts the baked setting runs unasked (REQ-FLOW-137), from every place and reading.
   const ran = new Set();
-  for (const ctx of contextsOf(command, cwd, pwsh, root)) {
+  // One count of package managers' added readings for the whole call, over every place, text and verdict, so the cap
+  // bounds the call's work, not one verdict's: past it the verdict throws its coded error and the call is refused.
+  const readings = { used: 0 };
+  const contexts = contextsOf(command, cwd, pwsh, root);
+  // A place is a full verdict of each text: past 8 lines' worth the call is refused, not left to a timeout.
+  if (command.length <= 65536 && contexts.length * texts.join("").length > 8 * 65536) throw Object.assign(new Error("readings"), { code: "MANAGER_READINGS_OVER_16" });
+  for (const ctx of contexts) {
+    // Set, not spread: the context's getters read git only when the verdict asks.
+    ctx.readings = readings;
     for (const text of texts) {
       const always = personOnlyVerdict(text, ctx);
       if (always.deny) found.push(always);
@@ -5011,12 +5420,12 @@ function decide() {
   const refused = found.find((verdict) => !verdict.ask);
   if (refused !== undefined) return { ask: false, reason: refuseSentence(refused.act, refused.rule) };
   // The land verb alone on its line in every mode, read over the parsed program words (REQ-FLOW-121): no mode read.
-  const land = unattendedPushVerdict(command, pwsh, true, PACKAGE);
+  const land = unattendedPushVerdict(command, pwsh, true, PACKAGE, readings);
   if (land.deny) return { ask: false, reason: land.reason };
   // The mode is read for every ask and for a call the unattended rule would refuse, so an unreadable record refuses
   // those and no other call.
   const run = () => {
-    const verdict = unattendedPushVerdict(command, pwsh, false, PACKAGE);
+    const verdict = unattendedPushVerdict(command, pwsh, false, PACKAGE, readings);
     return verdict.deny ? verdict : undefined;
   };
   if (found.length > 0) {

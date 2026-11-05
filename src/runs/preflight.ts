@@ -99,8 +99,10 @@ export interface PreflightDeps {
   runningVersion: string;
   /** Resolves true when `gate scan` can run here. */
   scanRuns: () => Promise<boolean>;
-  /** `null` when `gh` is not available. */
+  /** `null` when `gh` is not available, or its answers cannot stand. */
   rest: RestRead | null;
+  /** Why `gh`'s answers cannot stand, where one was found and `rest` is `null` for that. */
+  ghUntrusted?: string;
   /**
    * The `gh` the REST reads run, as the REST runner resolves it on `PATH`: its
    * path and the file that path resolves to (`realPath` `null` when it cannot
@@ -140,6 +142,7 @@ export interface PreflightDeps {
 export const REQUIRED_FLOORS = ["question-protocol", "injection-screening"] as const;
 
 const NO_REST_FIX = "add a ruleset that requires a pull request, or run as an account that can read the protection";
+const GH_PLACE_FIX = "put a gh the run cannot write first on PATH, outside the work tree and the temp folders";
 const OPEN_FIX =
   "add a ruleset that requires a pull request on the default branch with no direct-push bypass for this account " +
   "(a pull-request-only bypass is fine), or run as an account without that bypass";
@@ -800,6 +803,7 @@ async function directPush(deps: PreflightDeps): Promise<DirectPushCheck> {
     return settle("unknown", "no GitHub origin repository to check", ORIGIN_FIX);
   }
   if (deps.rest === null) {
+    if (deps.ghUntrusted !== undefined) return settle("unknown", `${deps.ghUntrusted}, so no direct-push block is proven`, GH_PLACE_FIX);
     return settle("unknown", "no REST access (gh is unavailable), so no direct-push block is proven", NO_REST_FIX);
   }
   const name = `${deps.repo.owner}/${deps.repo.repo}`;
@@ -827,7 +831,7 @@ async function directPush(deps: PreflightDeps): Promise<DirectPushCheck> {
 }
 
 async function inputAuthor(deps: PreflightDeps): Promise<CheckResult> {
-  const fix = "start from an item an admin or write author opened, or have one restate it";
+  const fix = "start from an open issue an admin or write author opened, or have one restate it";
   const item = deps.item;
   if (item === undefined) return { state: "pass", evidence: "no item named; input by path", fix };
   if (!safeRepo(item.owner, item.repo) || !Number.isSafeInteger(item.number) || item.number <= 0) {
@@ -837,14 +841,20 @@ async function inputAuthor(deps: PreflightDeps): Promise<CheckResult> {
     return { state: "unknown", evidence: "the item's author cannot be read without REST and a GitHub origin", fix };
   }
   const ref = `${item.owner}/${item.repo}#${item.number}`;
-  const issue = await read(deps.rest, `/repos/${item.owner}/${item.repo}/issues/${item.number}`);
-  const user = issue !== null && issue.status === 200 && isRecord(issue.json) ? issue.json["user"] : undefined;
+  const origin = `${deps.repo.owner}/${deps.repo.repo}`;
+  // GitHub's names ignore case. An item elsewhere refuses, as `run contract` refuses it: who may edit it there says nothing of origin, which the run pushes to.
+  if (`${item.owner}/${item.repo}`.toLowerCase() !== origin.toLowerCase()) {
+    return { state: "refuse", evidence: `${ref} is not in origin's repository, ${origin}`, fix: `start from an item in ${origin}, or have an admin or write author restate it there` };
+  }
+  const issue = await read(deps.rest, `/repos/${origin}/issues/${item.number}`);
+  const about = issue !== null && issue.status === 200 && isRecord(issue.json) ? issue.json : undefined;
+  const user = about?.["user"];
   const login = isRecord(user) ? user["login"] : undefined;
-  if (typeof login !== "string" || !LOGIN_SHAPE.test(login)) {
+  if (about === undefined || typeof login !== "string" || !LOGIN_SHAPE.test(login)) {
     return { state: "unknown", evidence: `${ref}: the author is unreadable (${statusText(issue)})`, fix };
   }
-  // The permission is read on origin, the repository the run pushes to, never on the item's own repository.
-  const origin = `${deps.repo.owner}/${deps.repo.repo}`;
+  if (about["pull_request"] !== undefined) return { state: "refuse", evidence: `${ref} is a pull request`, fix };
+  if (about["state"] !== "open") return { state: "refuse", evidence: `${ref} is not open`, fix };
   const reply = await read(deps.rest, `/repos/${origin}/collaborators/${encodeURIComponent(login)}/permission`);
   const permission = reply !== null && reply.status === 200 && isRecord(reply.json) ? reply.json["permission"] : undefined;
   if (typeof permission !== "string") {

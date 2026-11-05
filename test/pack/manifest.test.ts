@@ -898,6 +898,115 @@ describe("validatePackMcpServer host-installed launcher argv", () => {
     expect(error.message).toContain("./server.mjs");
   });
 
+  // The host route reads the launcher as well as the shape of its words.
+  it.each([
+    ["npm", ["exec", "acme-server"]],
+    ["npm", ["x", "acme-server"]],
+    ["pnpm", ["dlx", "acme-server"]],
+    ["pnpx", ["acme-server"]],
+    ["yarn", ["dlx", "acme-server"]],
+    ["bun", ["x", "acme-server"]],
+    ["deno", ["x", "acme-server"]],
+    ["corepack", ["pnpm", "dlx", "acme-server"]],
+    ["uv", ["tool", "run", "acme-server"]],
+    ["pip", ["run", "acme-server"]],
+    ["docker", ["run", "acme-server"]],
+    ["podman", ["run", "acme-server"]],
+    ["dotnet", ["tool", "exec", "acme-server"]],
+    ["dnx", ["acme-server"]],
+    ["nix", ["run", "acme-server"]],
+    ["mise", ["exec", "acme-server"]],
+    ["node", ["server"]],
+    ["nodejs", ["server"]],
+    ["tsx", ["server"]],
+    ["python", ["server"]],
+    ["python3", ["server"]],
+    ["python3.12", ["server"]],
+    ["ruby", ["server"]],
+    ["perl", ["server"]],
+    ["php", ["server"]],
+  ])("refuses the runner %s with %j: its next word is what runs, and no pin reaches it", (command, args) => {
+    const error = refuse(hostLauncher({ command, packageNameLock: command, args }));
+    expect(error.message).toContain(RELPATH);
+    expect(error.message).toContain("no pin reaches");
+  });
+
+  it.each([
+    ["npx.cmd"],
+    ["NPX"],
+    ["Npx.exe"],
+    ["bunx.ps1"],
+    ["uvx.exe"],
+    ["pipx.bat"],
+    ["NPM.CMD"],
+    ["pnpm.exe"],
+    ["python-3.12"],
+    ["python3.13t"],
+    ["python3t"],
+    ["go1.22rc1"],
+    ["yarnpkg"],
+    ["cnpm"],
+    ["pypy3"],
+    ["graalpy"],
+    ["micropython"],
+    ["jruby"],
+    ["truffleruby"],
+    ["nerdctl"],
+    ["podman-remote"],
+  ])("refuses %s, a runner's other spelling, on the host route", (command) => {
+    const error = refuse(hostLauncher({ command, packageNameLock: command, args: ["acme-server"] }));
+    expect(error.message).toContain("no pin reaches");
+  });
+
+  it.each([
+    ["nohup", ["acme-server"]],
+    ["NOHUP.EXE", ["acme-server"]],
+    ["sudo", ["acme-server"]],
+    ["doas", ["acme-server"]],
+    ["nice", ["acme-server"]],
+    ["ionice", ["acme-server"]],
+    ["time", ["acme-server"]],
+    ["timeout", ["inf", "acme-server"]],
+    ["taskset", ["ff", "acme-server"]],
+    ["setsid", ["acme-server"]],
+    ["caffeinate", ["acme-server"]],
+    ["arch", ["acme-server"]],
+    ["xargs", ["acme-server"]],
+    ["unbuffer", ["acme-server"]],
+    ["strace", ["acme-server"]],
+    ["systemd-run", ["acme-server"]],
+  ])("refuses the launcher %s with %j: it only starts what its next words name", (command, args) => {
+    const error = refuse(hostLauncher({ command, packageNameLock: command, args }));
+    expect(error.message).toContain(RELPATH);
+    expect(error.message).toContain("no pin reaches");
+  });
+
+  it.each([
+    ["acmectl", ["npx", "acme-server"]],
+    ["acmectl", ["serve", "pnpm", "dlx", "acme-server"]],
+    ["acmectl", ["serve", "now", "python3", "server"]],
+    ["acmectl", ["node22", "server"]],
+    ["acmectl", ["python-3", "server"]],
+  ])("refuses %s with %j: the set reads every word of the vector", (command, args) => {
+    const error = refuse(hostLauncher({ command, packageNameLock: command, args }));
+    expect(error.message).toContain(RELPATH);
+    expect(error.message).toContain("no pin reaches");
+  });
+
+  it.each([["acmectl"], ["glab"], ["nodeman"], ["gopher"], ["my-npm"], ["uv-server"]])(
+    "accepts %s, a program the set does not name",
+    (command) => {
+      expect(validatePackMcpServer(hostLauncher({ command, packageNameLock: command }), RELPATH).command).toBe(command);
+    },
+  );
+
+  it.each([[["mcp", "time"]], [["mcp", "watch"]], [["mcp", "exec"]], [["mcp", "start"]], [["nodeman", "uv-server"]]])(
+    "accepts %j: a launcher's name is read as a launcher, not as a subcommand word",
+    (args) => {
+      expect(validatePackMcpServer(hostLauncher({ args }), RELPATH).args).toEqual(args);
+    },
+  );
+
   it("refuses an empty argument vector on a host-installed launcher", () => {
     const error = refuse(hostLauncher({ args: [] }));
     expect(error.message).toContain("`args` is empty");
