@@ -557,6 +557,11 @@ async function proposeCapture(ctx: CliContext, rootDir: string, folder: string, 
   }
   const digest = proposalDigest(document);
   const morning = proposalRow(fileName, text(draft.frontmatter, "summary"), digest);
+  // Refused here, since the list would refuse the row and `accept` reads the row from the list: no such proposal could go live.
+  const unlisted = ctx.engine.runs.morning.rowTextProblems(morning);
+  if (unlisted.length > 0) {
+    return refuse(ctx, fileName, unlisted.map((problem) => `The proposal's morning row reads: ${problem}. Shorten --title or --summary so the list can carry it.`));
+  }
   const shared = { fileName, path, digest, morning, gatesRun: [...WRITE_GATES], warnings: gated.warnings };
   if (ctx.dryRun) {
     ctx.io.out(`Dry run: ${JSON.stringify(fileName)} would be proposed at ${path}. Nothing was written.\n`);

@@ -295,6 +295,14 @@ function textProblems(key: string, value: unknown, cap: number): string[] {
   return problems;
 }
 
+/**
+ * What {@link parseMorning} would refuse in a row's question and source, for a verb printing a row before any list holds
+ * it. Empty means the two read: a row refused here would fail the whole list.
+ */
+export function rowTextProblems(row: { readonly question: string; readonly source: string }): string[] {
+  return [...textProblems("question", row.question, TEXT_CAPS.question), ...textProblems("source", row.source, TEXT_CAPS.source)];
+}
+
 /** `lines` joined, with blank lines dropped from both ends; {@link MORNING_EMPTY} when nothing is left. */
 function trimBlankEdges(lines: readonly string[]): string {
   let start = 0;

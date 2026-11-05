@@ -1508,6 +1508,37 @@ describe("learn capture --propose — a run proposes (REQ-FLOW-163)", () => {
     expect(parseMorning(morningList(JSON.stringify({ id: "Q1", ...row })))).toMatchObject({ ok: true });
   });
 
+  // Red before the pull request's review: the row printed past the list's cap, the list refused it, and no accept could
+  // ever pass. The row's fixed text is 120 characters, so a 181-character slug and a 200-character summary make 501.
+  it.each([
+    ["for real", []],
+    ["under --dry-run", ["--dry-run"]],
+  ])("refuses a proposal whose morning row would pass the list's cap, %s, naming the cap, and writes no proposal", async (_name, argv) => {
+    const root = await seedRun(tempDir());
+    const before = await snapshot(root);
+
+    const result = await runLearn(root, ["capture", "--propose", "--run", RUN, "--title", "a".repeat(181), "--summary", "s".repeat(200), "--json", ...argv], { stdinLines: [BODY] });
+
+    expect(result.code, result.stdout + result.stderr).toBe(1);
+    const [error] = parseSingleDoc(result.stdout)["errors"] as string[];
+    expect(error).toContain("question is 501 characters, over the 500-character cap");
+    expect(error).toContain("--title");
+    expect(error).toContain("--summary");
+    expect(await snapshot(root)).toEqual(before);
+  });
+
+  it("counts the row as the list counts it, so a row past the cap in code units alone still proposes", async () => {
+    const root = await seedRun(tempDir());
+    const summary = `${"s".repeat(100)}${"\u{1F600}".repeat(50)}`;
+
+    const result = await runLearn(root, ["capture", "--propose", "--run", RUN, "--title", "a".repeat(230), "--summary", summary, "--json"], { stdinLines: [BODY] });
+
+    expect(result.code, result.stdout + result.stderr).toBe(0);
+    const row = parseSingleDoc(result.stdout)["morning"] as Record<string, unknown>;
+    expect(Array.from(row["question"] as string)).toHaveLength(500);
+    expect(parseMorning(morningList(JSON.stringify({ id: "Q1", ...row })))).toMatchObject({ ok: true });
+  });
+
   it("refuses a slug already live with the store's message, and writes no proposal", async () => {
     const root = await seedRun(tempDir());
     expect((await capture(root)).code).toBe(0);
@@ -1603,6 +1634,23 @@ describe("learn accept — a person accepts (REQ-FLOW-163)", () => {
     const { id: _id, ...row } = parsed.questions[0] as unknown as Record<string, unknown>;
     return row;
   }
+
+  // The longest row capture lets through is one a person can still accept: no proposal is left unacceptable.
+  it("goes live on a row standing exactly at the list's cap", async () => {
+    const root = await seedRun(tempDir());
+    const slug = "a".repeat(180);
+    const proposal = await runLearn(root, ["capture", "--propose", "--run", RUN, "--title", slug, "--summary", "s".repeat(200), "--json"], { stdinLines: [BODY] });
+    expect(proposal.code, proposal.stdout + proposal.stderr).toBe(0);
+    const doc = parseSingleDoc(proposal.stdout);
+    const row = doc["morning"] as Record<string, unknown>;
+    expect(row["question"]).toHaveLength(500);
+    await writeRows(root, row);
+
+    const result = await runLearn(root, ["accept", "--run", RUN, "--proposal", slug, "--digest", doc["digest"] as string, "--json"]);
+
+    expect(result.code, result.stdout + result.stderr).toBe(0);
+    expect(await readIfPresent(join(root, LEARNINGS_DIR, `${slug}.md`))).not.toBeNull();
+  });
 
   it("goes live on a closed unattended run, read back by the loader with its digest verified", async () => {
     const root = await proposed(tempDir());

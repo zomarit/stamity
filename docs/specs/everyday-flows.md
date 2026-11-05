@@ -7304,8 +7304,9 @@ not proposed in this release. Given a live `learn capture` under an unattended m
 - **As built, beyond the delta:**
   - The capture prints one row for the run to copy into the morning list: kind `decision`, `1 leave it out · 2 accept`,
     default `1`, its source `proposals/<slug>.md`, its question naming `learn accept` and the digest. So no answer leaves
-    it out. A slug already live or already proposed in this run refuses, and so do a run with no record here and a link
-    at the run folder or its `proposals/`.
+    it out. A slug already live or already proposed in this run refuses, and so do a run with no record here, a link at
+    the run folder or its `proposals/`, and a row the list's parser would refuse: its question past 500 characters, which
+    a long title and summary reach. `accept` reads the row from the list, so no such proposal could go live.
   - The digest is the sha-256 of the proposal's whole text. `accept` reads the mode first, then the file, the digest, the
     head, which must carry no `type` key, and the morning row, which must be the one capture printed, so a default of
     accept refuses (`runAccept` and `proposalRowProblem`). The bytes go through `persistLearning`, and the proposal stays
@@ -9097,8 +9098,9 @@ above.
 **REQ-FLOW-163** (added 2026-11-05)
 
 - GIVEN `capture --propose` THEN the proposal is in the run folder, nothing is under `.stamity/learnings/`, and one
-  `decision` row prints with default `1`; GIVEN a slug already live or already proposed, a run with no record, or a link
-  at `proposals/` THEN it refuses and writes no proposal. *(test: `test/cli/commands/learn.test.ts`)*
+  `decision` row prints with default `1`; GIVEN a slug already live or already proposed, a run with no record, a link at
+  `proposals/`, or a row past the list's 500-character cap THEN it refuses and writes no proposal. *(test:
+  `test/cli/commands/learn.test.ts`)*
 - GIVEN `accept` on the digest and row capture printed THEN every gate runs and the learning loads; GIVEN a file that no
   longer reads the digest, a head with a `type` key, or a morning row other than the one printed, a default of accept among
   them, THEN it refuses and nothing goes live; GIVEN an unattended mode THEN `accept` and a live `capture` refuse, the
