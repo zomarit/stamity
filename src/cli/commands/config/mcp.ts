@@ -670,23 +670,6 @@ async function readOwnRow(rootDir: string, file: string): Promise<McpOwnServer> 
 }
 
 /**
- * `message` with no composed pin of `rows` left in it. The seam withholds every
- * field a refusal quotes, and keeps the pin so a refusal can say which token it
- * wants. But `packageNameLock` is held to no shape, so a link with its password
- * lands in that token, and the pin refusals print it. Each is quoted as the seam
- * leaves it, C1 controls escaped, and the two field names stand in its place.
- */
-function withoutComposedPins(message: string, rows: readonly McpOwnServer[]): string {
-  return rows.reduce((text, { packageNameLock, pinnedVersion }) => {
-    const quoted = JSON.stringify(`${packageNameLock}@${pinnedVersion}`).replaceAll(
-      /[\u0080-\u009f]/g,
-      (control) => `\\u${control.charCodeAt(0).toString(16).padStart(4, "0")}`,
-    );
-    return text.replaceAll(quoted, "<packageNameLock@pinnedVersion>");
-  }, message);
-}
-
-/**
  * Add the row in `file` to `mcp.ownServers` (REQ-FLOW-160). Every row goes
  * through the seam with the rows it joins, so the verb adds no trust of its own:
  * the pin, secret and text checks, and the refusal of an id a pack or another
@@ -716,7 +699,7 @@ export async function runMcpOwnAdd(
     throw new CliFailure({
       code: "VALIDATION_ERROR",
       message: `the row in ${file} was not added, and nothing was written`,
-      why: withoutComposedPins(cause.message, mcp.ownServers),
+      why: cause.message,
       next: "fix what the refusal names and run the command again",
     });
   }

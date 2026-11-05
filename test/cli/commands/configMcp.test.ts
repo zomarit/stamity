@@ -599,6 +599,36 @@ describe("config mcp own <file> — adding a row (REQ-FLOW-160)", () => {
       expect(result.stderr).toContain(PIN_SHOWN);
       expect(result.stderr).not.toContain(PLAIN);
     });
+
+    it.each<[string, readonly string[]]>([
+      ["config mcp add", ["config", "mcp", "add", "context7"]],
+      ["config mcp list", ["config", "mcp", "list"]],
+      ["config set mcp.servers", ["config", "set", "mcp.servers", "context7"]],
+      ["sync", ["sync"]],
+    ])("withholds a hand-added row's pin on %s", async (_route, argv) => {
+      const handle = tempDir();
+      await seedManifest(handle, { mcp: { servers: [], ownServers: asRows(linkRow(["-y", PIN])) } });
+
+      const result = await cli(handle.dir, argv);
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain(`("${OWN_ID}")`);
+      expect(result.stderr).toContain(PIN_SHOWN);
+      expect(result.stdout + result.stderr).not.toContain(PLAIN);
+    });
+
+    it("stops a selected host launcher at the seam on sync, where the emitter would print its lock", async () => {
+      const handle = tempDir();
+      const row = { ...linkRow(["serve"]), command: "acme-mcp" };
+      await seedManifest(handle, { mcp: { servers: [OWN_ID], ownServers: asRows(row) } });
+
+      const result = await cli(handle.dir, ["sync"]);
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain(`("${OWN_ID}")`);
+      expect(result.stderr).toContain("`packageNameLock`");
+      expect(result.stdout + result.stderr).not.toContain(PLAIN);
+    });
   });
 
   it("refuses a file that does not parse, quoting none of it, and writes nothing", async () => {

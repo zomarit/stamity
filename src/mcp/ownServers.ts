@@ -7,7 +7,7 @@ import {
 import { EngineError } from "../types/errors.ts";
 import { MANIFEST_FILE, type McpOwnServer, type SetupManifest } from "../types/manifest.ts";
 import { STATE_DIR } from "../types/markers.ts";
-import { resolveServerMeta, type PackSuppliedServer } from "./catalog.ts";
+import { pinnedPackageSpec, resolveServerMeta, type PackSuppliedServer } from "./catalog.ts";
 
 /**
  * A repository's own MCP servers (REQ-FLOW-160): `mcp.ownServers` rows joining
@@ -27,8 +27,10 @@ import { resolveServerMeta, type PackSuppliedServer } from "./catalog.ts";
  *
  * Every refusal here is printed to a terminal or a CI log, and an own row is
  * where a person types a real credential, so no refusal repeats a typed value:
- * {@link maskArgs} names each argument by its place, and {@link maskFields}
- * withholds the other fields a refusal would quote.
+ * {@link maskPin} withholds the token the lock and the version make, {@link maskArgs}
+ * names each argument by its place, and {@link maskFields} withholds the other
+ * fields a refusal would quote. The emitter's own refusals print a row as it is, so
+ * {@link assertHostLock} stops here the one row that would otherwise reach them.
  */
 
 /**
@@ -58,24 +60,41 @@ function assertArgsList(row: unknown, label: string): void {
   throw new EngineError(`${label}: \`args\` must be an array of strings.`, { code: "VALIDATION_ERROR" });
 }
 
+/** What stands where a refusal would print the pin: the two fields it is made of, so the person can build it. */
+const WITHHELD_PIN = "<packageNameLock@pinnedVersion>";
+
+/**
+ * `message` with the row's composed pin withheld. The validator quotes it as the
+ * token a refusal wants and as any argument that holds it. `packageNameLock` is
+ * held to no shape, so a link with its password lands in that token, and no mask
+ * of one field can see the two joined. It runs first, so a pin an argument holds
+ * reads the same as a pin no argument holds. The `id` is how the person finds the
+ * row, so a pin equal to it stays, as a field equal to it does.
+ */
+function maskPin(message: string, row: unknown): string {
+  const { id, packageNameLock, pinnedVersion } = (row ?? {}) as Partial<McpOwnServer>;
+  if (typeof packageNameLock !== "string" || typeof pinnedVersion !== "string") return message;
+  const pin = `${packageNameLock}@${pinnedVersion}`;
+  return pin === id ? message : message.replaceAll(JSON.stringify(pin), WITHHELD_PIN);
+}
+
 /**
  * `message` with each of the row's arguments named by its place. The validator
  * quotes an argument it refuses, which suits a pack's public file and not a
  * person's token, and it masks only what the secret scan recognises. So every
  * argument goes, whether the scan knew it or not, and with it any `${...}`
- * reference inside one, which the validator quotes alone. The row's id and its
- * pin stay when an argument repeats them: the message states those from fields
- * that are not arguments.
+ * reference inside one, which the validator quotes alone. The row's id stays when
+ * an argument repeats it: the message states it from a field that is not an
+ * argument.
  */
 function maskArgs(message: string, row: unknown): string {
-  const { id, args, packageNameLock, pinnedVersion } = (row ?? {}) as Partial<McpOwnServer>;
+  const { id, args } = (row ?? {}) as Partial<McpOwnServer>;
   if (!Array.isArray(args)) return message;
-  const stated = new Set([id, `${packageNameLock ?? ""}@${pinnedVersion ?? ""}`]);
   let masked = message;
   for (const [index, arg] of args.entries()) {
     if (typeof arg !== "string") continue;
     for (const value of [arg, ...(arg.match(INTERPOLATION) ?? [])]) {
-      if (!stated.has(value)) masked = masked.replaceAll(JSON.stringify(value), `<args[${index}]>`);
+      if (value !== id) masked = masked.replaceAll(JSON.stringify(value), `<args[${index}]>`);
     }
   }
   return masked;
@@ -98,9 +117,8 @@ const C1_CONTROLS = /[\u0080-\u009f]/g;
  * variable `name` left in it. The validator quotes each of them when it refuses
  * one, and the pin refusals quote a `command` that has a launcher's shape, which a
  * pasted token can have. These fields are where a pasted shell line, or a link
- * with its password in it, lands. Two things stay. The `id` is how the person
- * finds the row, so a field equal to it stays too. The pin says which token the
- * refusal wants, and it prints only once its version has an exact version's shape.
+ * with its password in it, lands. The `id` stays: it is how the person finds the
+ * row, so a field equal to it stays too.
  */
 function maskFields(message: string, row: unknown): string {
   const { id, command, docsUrl, pinnedVersion, transport, requiresEnv } = (row ?? {}) as Partial<McpOwnServer>;
@@ -128,7 +146,7 @@ function maskFields(message: string, row: unknown): string {
  * values as `JSON.stringify` prints them.
  */
 function printableRefusal(message: string, row: unknown): string {
-  return maskFields(maskArgs(message, row), row).replaceAll(
+  return maskFields(maskArgs(maskPin(message, row), row), row).replaceAll(
     C1_CONTROLS,
     (control) => `\\u${control.charCodeAt(0).toString(16).padStart(4, "0")}`,
   );
@@ -145,6 +163,23 @@ function assertReferencesClose(definition: PackMcpServerDefinition, label: strin
   throw new EngineError(
     `${label}: \`args[${index}]\` opens an environment reference and never closes it. Write it as ` +
       `\${env:NAME}.`,
+    { code: "VALIDATION_ERROR" },
+  );
+}
+
+/**
+ * Refuse a host-installed launcher whose lock is not its `command`. The validator
+ * leaves this to the emitter, which refuses it only once the row is selected and
+ * prints the lock and the pin whole, past every mask here. The emitter serves packs
+ * and the catalog too and asks nothing about where a row came from, so the row stops
+ * here, in the emitter's own terms and by field name alone.
+ */
+function assertHostLock(definition: PackMcpServerDefinition, label: string): void {
+  if (pinnedPackageSpec(definition) !== undefined || definition.command === definition.packageNameLock) return;
+  throw new EngineError(
+    `${label}: \`packageNameLock\` must equal \`command\` on a host-installed launcher. The person's ` +
+      `machine holds that binary, so the lock can only name it, and no client document can be written ` +
+      `for a launch that differs from its lock.`,
     { code: "VALIDATION_ERROR" },
   );
 }
@@ -270,6 +305,7 @@ function resolveOwnRows(
       assertArgsList(row, label);
       const definition = validatePackMcpServer(row, label);
       assertReferencesClose(definition, label);
+      assertHostLock(definition, label);
       assertCleanText(definition, label);
       const holder = holders.get(definition.id);
       if (holder !== undefined) {

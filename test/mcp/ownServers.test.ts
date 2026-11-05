@@ -226,11 +226,11 @@ describe("withOwnServers", () => {
       expect(refusal).not.toThrow(PLAIN_TOKEN);
     });
 
-    it("and still names the row and the pin when an argument repeats them", () => {
+    it("and still names the row when an argument repeats its id", () => {
       const refusal = (): unknown => withOwnServers([], setupWith([fetchRow([OWN_ID, "-y", OWN_PIN])]));
 
       expect(refusal).toThrow(/mcp\.ownServers\[0\] \("acme-wiki"\)/);
-      expect(refusal).toThrow(OWN_PIN);
+      expect(refusal).toThrow(`"${OWN_ID}" before the package token`);
     });
 
     it("while a pack keeps the validator's own words, which print the argument", () => {
@@ -431,14 +431,87 @@ describe("withOwnServers", () => {
       expect(() => withOwnServers([], setupWith([row]))).toThrow(/mcp\.ownServers\[0\] \("acme-mcp"\)/);
     });
 
-    it("and keeps the pin, which says what the refusal wants", () => {
-      const refusal = (): unknown => withOwnServers([], setupWith([ownRow({ args: ["-y", OWN_PACKAGE] })]));
-
-      expect(refusal).toThrow(`"${OWN_PIN}"`);
-    });
-
     it("while a pack keeps the validator's own words, which print the field", () => {
       expect(() => validatePackMcpServer(ownRow({ transport: PLAIN_TOKEN }), "mcp_servers/wiki.json")).toThrow(PLAIN_TOKEN);
+    });
+  });
+
+  describe("never repeats a composed pin", () => {
+    const PIN_SHOWN = "<packageNameLock@pinnedVersion>";
+    const LINK = `https://acme:${PLAIN_TOKEN}@registry.invalid/pkg`;
+    const pinOf = (lock: string): string => `${lock}@${OWN_VERSION}`;
+    const lockRow = (lock: string, args: readonly string[]): Record<string, unknown> =>
+      ownRow({ packageNameLock: lock, args, requiresEnv: [] });
+    const hostLockRow = (lock: string, args: readonly string[]): Record<string, unknown> => ({
+      ...lockRow(lock, args),
+      command: "acme-mcp",
+    });
+    const floatingLock = `https://acme:${PLAIN_TOKEN}@latest.invalid/pkg`;
+    const flagLock = `--package=${PLAIN_TOKEN}`;
+    const programLock = `--eval=${PLAIN_TOKEN}`;
+
+    it.each<[string, Record<string, unknown>, string]>([
+      ["when the arguments do not carry it", lockRow(LINK, ["-y", OWN_PIN]), `exact package token ${PIN_SHOWN}`],
+      ["when an argument names the lock bare", lockRow(LINK, ["-y", LINK]), `rather than the pin ${PIN_SHOWN}`],
+      ["when an argument comes before it", lockRow(LINK, ["-y", "--flag", pinOf(LINK)]), `before the package token ${PIN_SHOWN}`],
+      // The next four quote the pin as an argument, not as the token the refusal wants.
+      ["when it reads as a floating spec", lockRow(floatingLock, ["-y", pinOf(floatingLock)]), `floating spec ${PIN_SHOWN}`],
+      [
+        "when it repeats where the launcher still reads options",
+        lockRow(flagLock, ["-y", pinOf(flagLock), pinOf(flagLock)]),
+        `carries ${PIN_SHOWN} after the package token`,
+      ],
+      ["as a stray argument on a host launcher", hostLockRow(PLAIN_TOKEN, [pinOf(PLAIN_TOKEN)]), `carries ${PIN_SHOWN}; for the host-installed`],
+      ["as a program on a host launcher", hostLockRow(programLock, [pinOf(programLock)]), `carries ${PIN_SHOWN}, which passes a program`],
+      ["when the version carries the value", ownRow({ pinnedVersion: `${OWN_VERSION}+${PLAIN_TOKEN}`, args: ["-y", OWN_PACKAGE] }), `rather than the pin ${PIN_SHOWN}`],
+      ["when the lock holds a C1 control", lockRow(`${LINK}\u0085`, ["-y", OWN_PIN]), `exact package token ${PIN_SHOWN}`],
+    ])("%s", (_path, row, shown) => {
+      const refusal = (): unknown => withOwnServers([], setupWith([row]));
+
+      expect(refusal).toThrow(/mcp\.ownServers\[0\] \("acme-wiki"\)/);
+      expect(refusal).toThrow(shown);
+      expect(refusal).not.toThrow(PLAIN_TOKEN);
+      expect(refusal).not.toThrow(PLAIN_TOKEN.slice(0, 12));
+    });
+
+    it("for an ordinary package name too, and the row and the two fields still say where to look", () => {
+      const refusal = (): unknown => withOwnServers([], setupWith([ownRow({ args: ["-y", OWN_PACKAGE] })]));
+
+      expect(refusal).toThrow(/mcp\.ownServers\[0\] \("acme-wiki"\)/);
+      expect(refusal).toThrow(PIN_SHOWN);
+      expect(refusal).not.toThrow(`"${OWN_PIN}"`);
+    });
+
+    it("and keeps the row's id when the pin equals it", () => {
+      const id = pinOf("acme");
+      const refusal = (): unknown => withOwnServers([], setupWith([ownRow({ id, packageNameLock: "acme" })]));
+
+      expect(refusal).toThrow(`mcp.ownServers[0] (${JSON.stringify(id)})`);
+    });
+
+    it("while a pack keeps the validator's own words, which print the pin", () => {
+      expect(() => validatePackMcpServer(ownRow({ args: ["-y", OWN_PACKAGE] }), "mcp_servers/wiki.json")).toThrow(`"${OWN_PIN}"`);
+    });
+
+    describe("nor lets a row past the seam that the emitter would print it for", () => {
+      const row = hostLockRow(LINK, ["serve"]);
+
+      it("refuses a host launcher whose lock is not its command, naming the fields", () => {
+        const refusal = (): unknown => withOwnServers([], setupWith([row]));
+
+        expect(refusal).toThrow(/mcp\.ownServers\[0\] \("acme-wiki"\): `packageNameLock` must equal `command`/);
+        expect(refusal).not.toThrow(PLAIN_TOKEN);
+      });
+
+      it("takes a host launcher whose lock is its command", () => {
+        const [server] = withOwnServers([], setupWith([hostLockRow("acme-mcp", ["serve"])]));
+
+        expect(server?.id).toBe(OWN_ID);
+      });
+
+      it("while a pack's row keeps the validator's verdict", () => {
+        expect(validatePackMcpServer(row, "mcp_servers/wiki.json").packageNameLock).toBe(LINK);
+      });
     });
   });
 
