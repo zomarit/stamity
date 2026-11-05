@@ -25,6 +25,8 @@ import { useTempDir } from "../../support/tempDir.ts";
 const rest = vi.hoisted(() => ({
   calls: [] as { path: string; hostname: string; method: string }[],
   routes: new Map<string, { status: number; json: unknown }>(),
+  /** The next answer for a path, taken once before `routes`; an `Error` is `gh` failing before GitHub answered. */
+  once: new Map<string, { status: number; json: unknown } | Error>(),
 }));
 
 // Mocked: the real `ghApi` starts `gh`, which calls GitHub over the network
@@ -34,7 +36,10 @@ vi.mock("../../../src/cli/engine/ghRunner.ts", () => ({
   ghApi: (request: { path: string; hostname: string; method: string }) => {
     const path = request.path.replace(/^\//, "");
     rest.calls.push({ path, hostname: request.hostname, method: request.method });
-    return Promise.resolve(rest.routes.get(path) ?? { status: 404, json: { message: "Not Found" } });
+    const first = rest.once.get(path);
+    rest.once.delete(path);
+    if (first instanceof Error) return Promise.reject(first);
+    return Promise.resolve(first ?? rest.routes.get(path) ?? { status: 404, json: { message: "Not Found" } });
   },
 }));
 
@@ -86,6 +91,7 @@ describe("stamity gate preflight and scan --text", () => {
   beforeEach(() => {
     rest.calls.length = 0;
     rest.routes.clear();
+    rest.once.clear();
   });
 
   /**
@@ -366,6 +372,36 @@ describe("stamity gate preflight and scan --text", () => {
         expect((doc["warnings"] as { id: string }[]).map((warning) => warning.id)).not.toContain("admin-can-lift");
         if (leg === null) expect(evidenceOf(doc, "direct-push")).not.toContain("not in force");
         else expect(evidenceOf(doc, "direct-push")).toContain(`autonomy.adminRuleProof is on here but not in force: ${leg}`);
+      });
+
+      // The gap reads the repository first, so `once` fails that read alone and the verdict's own read of it still answers.
+      it.each<[string, (repo: string) => Promise<void>, string]>([
+        [
+          "a default branch name that did not read",
+          () => {
+            rest.once.set("repos/o/r", { status: 500, json: { message: "Server Error" } });
+            return Promise.resolve();
+          },
+          "the default branch's name did not read",
+        ],
+        ["a guard copy that is a folder", (repo) => mkdir(join(repo, SECOND_GUARD), { recursive: true }).then(() => undefined), "a guard copy did not read"],
+        [
+          "a leg's read failing before GitHub answered",
+          () => {
+            rest.once.set(DEFAULT_BRANCH_READ, new Error("gh did not start"));
+            return Promise.resolve();
+          },
+          "a read of its legs failed",
+        ],
+      ])("refuses on %s, naming it in the direct-push evidence", async (_label, breakIt, gap) => {
+        const repo = await optedRepo(ALL_ON);
+        await breakIt(repo);
+
+        const { code, doc } = await gate(repo, PREFLIGHT);
+
+        expect(code).toBe(1);
+        expect(stateOf(doc, "direct-push")).toBe("refuse");
+        expect(evidenceOf(doc, "direct-push")).toContain(`autonomy.adminRuleProof is on here but not in force: ${gap}`);
       });
     });
 

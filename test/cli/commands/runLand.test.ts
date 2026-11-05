@@ -1792,6 +1792,54 @@ describe("stamity run land", () => {
         expect(posted()).toEqual([]);
         expect(result.doc).toMatchObject({ outcome: "refused" });
       });
+
+      it("posts nothing on a pull request already merged at the head", async () => {
+        const { repo, head } = await seedTool();
+        route("GET repos/o/r/pulls/7", pull(head, { state: "closed", merged: true, mergeable_state: null }));
+        answers([fromTool(2, block(head, "completed", true))]);
+        gh.editors = [editorsPage([never(2)])];
+
+        const result = await run(repo, ["land", "--run", RUN]);
+
+        expect(posted()).toEqual([]);
+        expect(result.doc).toMatchObject({ outcome: "already-landed", evidence: { review: { state: "findings" } } });
+      });
+
+      // A head with no marker has spent no round, so even `rounds: 1` reads findings here: why no page says "never as findings".
+      it("names a marker that did not post, and the findings stand with no round spent", async () => {
+        const { repo, head } = await seedTool({ ...TOOL, rounds: 1 });
+        answers([fromTool(2, block(head, "completed", true))]);
+        gh.editors = [editorsPage([never(2)])];
+        route("POST repos/o/r/issues/7/comments", { message: "Forbidden" }, 403);
+
+        const result = await run(repo, ["land", "--run", RUN]);
+
+        expect(posted()).toEqual([requestMarker(head)]);
+        expect(result.code).toBe(1);
+        expect(result.doc).toMatchObject({
+          outcome: "refused",
+          evidence: { review: { state: "findings" } },
+          notDone: ["the review request was not posted to #7 (HTTP 403)", expect.stringContaining("reports findings")],
+        });
+        expect(result.doc).not.toHaveProperty("asks");
+      });
+    });
+
+    it("ends the wait and refuses where the marker alone did not post, with no pending ask", async () => {
+      const { slept } = fakeClock();
+      const { repo, head } = await seedTool();
+      answers([fromTool(2, block(head, "running"))]);
+      gh.editors = [editorsPage([never(2)])];
+      route("POST repos/o/r/issues/7/comments", { message: "Forbidden" }, 403);
+
+      const result = await run(repo, ["land", "--run", RUN, "--wait", "5"]);
+
+      expect(posted()).toEqual([requestMarker(head)]);
+      expect(result.code).toBe(1);
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: ["the review request was not posted to #7 (HTTP 403)", expect.stringContaining("no request on this head yet")] });
+      expect(result.doc).not.toHaveProperty("asks");
+      expect(slept).toEqual([]);
+      expect(kinds()).not.toContain("merge");
     });
 
     it("keeps polling on --wait while the tool works, then lands on its word", async () => {
@@ -2656,6 +2704,8 @@ describe("stamity run land", () => {
 
           const result = await run(repo, LANDS);
 
+          // This read fails into a decision: it ends as `Held`, leaves `jobFailed` false, and so exits 0 with its status line.
+          expect(result.code).toBe(0);
           expect(result.doc).toMatchObject({ outcome: "refused", notDone: ["the review threads could not be read"] });
           expect(kinds()).not.toContain("merge");
           expect(lastBody()).toContain("merge waits on: the review threads could not be read");
