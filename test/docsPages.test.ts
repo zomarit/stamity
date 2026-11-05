@@ -860,6 +860,9 @@ const RELEASE_CUT_DATE = "2026-10-26";
  *
  * NOT MOVED, 2026-11-05, by unit factory-guide (REQ-FLOW-159): `docs/factory.md` was written on this
  * date, so it is the sixth commit-form page, naming its lane base 2e11da51.
+ *
+ * NOT MOVED, 2026-11-05, at integration: the five pages above left the lane base for 907f64f0, a commit
+ * on this branch that holds the land job, since cc10ab71 holds none of its code.
  */
 const REATTESTATION_DATE = "2026-11-05";
 

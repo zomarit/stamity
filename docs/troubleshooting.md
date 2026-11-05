@@ -2,7 +2,7 @@
 title: Troubleshooting
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit cc10ab71. Re-attested 2026-11-05 for the brake, the administrator's opt-in, the review tool and auto-ship, and for the land job as read on its own lane, which this commit does not hold. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 907f64f0. Re-attested 2026-11-05 for the brake, the administrator's opt-in, the review tool, auto-ship and the land job. -->
 <!-- Re-open when: a `check` probe is added or removed, an error code starts or stops being
      thrown, or a remedy below stops working. `test/docsPages.test.ts` holds this page to the
      hand-page contract and reads the probe rows out of `src/cli/commands/check.ts`;

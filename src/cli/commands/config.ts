@@ -1089,7 +1089,9 @@ export const KEY_SPECS: readonly ConfigKeySpec[] = [
     "autoShip",
     AUTO_SHIP_PRESETS,
     "low-risk lets `run land` merge onto a deploying branch unasked when a change holds at most 10 files and 200 lines, all " +
-      "records, docs or tests. A fast-forward still asks. Turning it on or widening it loosens the setting",
+      "records, docs or tests. The rules read paths, size and class, never content, so a repository whose site tool passes raw " +
+      "HTML through `.md` files should leave `docs` out of `classes`. A fast-forward still asks. Turning it on or widening it " +
+      "loosens the setting",
   ),
   presetSpec(
     "reviewTool",

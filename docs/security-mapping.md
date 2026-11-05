@@ -2,7 +2,7 @@
 title: Security mapping
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit cc10ab71. Re-attested 2026-11-05 for the brake, the administrator's opt-in, the review tool and auto-ship, and for the land job as read on its own lane, which this commit does not hold. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 907f64f0. Re-attested 2026-11-05 for the brake, the administrator's opt-in, the review tool, auto-ship and the land job. -->
 <!-- Re-open when: a catalogue edition below moves, a control's implementing symbol moves, or a
      surface is added to or removed from the engine. `test/docsPages.test.ts` resolves every
      `file::symbol` address and pins the surface count, so it catches the last two, not the first. -->

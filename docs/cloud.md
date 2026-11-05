@@ -2,7 +2,7 @@
 title: Cloud runs
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit cc10ab71. Re-attested 2026-11-05 for the brake, the administrator's opt-in, the review tool and auto-ship, and for the land job as read on its own lane, which this commit does not hold. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit 907f64f0. Re-attested 2026-11-05 for the brake, the administrator's opt-in, the review tool, auto-ship and the land job. -->
 <!-- Re-open when: a row of `CLIENT_CLOUD_FACTS` moves, a run contract key or a pre-flight check
      changes, or a client's answer to a person-only act moves. `test/docsPages.test.ts` holds this
      page to the hand-page contract, the contract parser and that table; a vendor page that changed

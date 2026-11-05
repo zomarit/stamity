@@ -2653,6 +2653,19 @@ person-only manifest, which `run land` asks about, and `SECURITY.md`'s manifest 
 comments say the same (`needsRenderingProof`'s doc, `src/manifest/ownedPaths.ts:337-344`; `ReclaimOptions.renderings`,
 `src/merge/reclaim.ts`).
 
+Amended 2026-11-05 (plan 023 file 1, unit `land-job`). `.github/workflows/stamity-land.yml`, the land job's workflow
+(REQ-FLOW-157), sits under the byte proof at the repository root and outside the rendering proof. The engine renders it
+only while `autonomy.landJob` is on, so turning the setting off, the one time the file has to go, leaves no rendering
+to compare, and a kept copy would go on merging. A recorded hash that matches the bytes, plus the workflow's header line,
+proves its delete or a backup-free overwrite. So "a forged row and hash alone no longer delete" has a second exception:
+a forged row hashing an owner's file at that name that carries the header line deletes it, and that row sits in the same
+person-only manifest. The recognisers are `needsByteProof`, `bytesShowEngineOutput` and `renderingProofClass` in
+`src/manifest/ownedPaths.ts`. Tests: `test/adapters/landWorkflow.test.ts`.
+
+- GIVEN the engine's unedited land workflow and `autonomy.landJob` turned off WHEN `sync -y` or `clean -y` runs THEN it
+  is deleted; GIVEN a copy a person edited THEN it stays; GIVEN an owner's file at that name with no header line THEN
+  the bytes do not read as the engine's.
+
 ### REQ-PLUGIN-047 `check` takes the expected release and client set from its caller
 
 Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (plan 020 file 1, run

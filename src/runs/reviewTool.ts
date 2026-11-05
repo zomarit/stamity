@@ -6,7 +6,8 @@
  * malformed reads `waiting` until the wait runs out, then `silent`, and each of those holds the merge. A block the tool
  * gave that this reader cannot use holds the same way, and its reason says so rather than calling the tool silent.
  *
- * **The state comment** is the proven signal. Only a comment whose author is a `Bot` of the configured login, and whose
+ * **The state comment** is read from real pull requests and proven only in tests: the full loop of request, wait, read and
+ * resolve is `not run`. Only a comment whose author is a `Bot` of the configured login, and whose
  * last editor is that login or nobody, counts: a person pasting the same text proves nothing, and neither does a write
  * token rewriting the tool's own comment, which keeps the bot as author. Any comment of the tool's rewritten that way,
  * marker or not, holds the read rather than dropping out of it, or a reply could stand in for it. The tool edits one comment
