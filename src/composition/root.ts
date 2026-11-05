@@ -139,6 +139,7 @@ import * as adapterCursorLegacyGuards from "../adapters/cursorLegacyGuards.ts";
 import * as adapterCopilot from "../adapters/copilot.ts";
 import * as adapterCodex from "../adapters/codex.ts";
 import * as adapterToml from "../adapters/toml.ts";
+import * as adapterLandWorkflow from "../adapters/landWorkflow.ts";
 import * as adapterRegistry from "../adapters/registry.ts";
 import * as promptGuard from "../guard/promptGuard.ts";
 import * as outputBounds from "../guard/outputBounds.ts";
@@ -361,6 +362,8 @@ export interface EngineRegistry {
     readonly copilot: typeof adapterCopilot;
     readonly codex: typeof adapterCodex;
     readonly toml: typeof adapterToml;
+    /** The land job's workflow: the row a sync writes, and the watched names `sync` and `check` compare (REQ-FLOW-157). */
+    readonly landWorkflow: typeof adapterLandWorkflow;
     /**
      * The typed residue table itself. Named `registry` after the module that
      * holds it (`src/adapters/registry.ts`) — this repo has no `index.ts`
@@ -560,6 +563,7 @@ export function createEngine(): EngineRegistry {
       copilot: adapterCopilot,
       codex: adapterCodex,
       toml: adapterToml,
+      landWorkflow: adapterLandWorkflow,
       registry: adapterRegistry,
     },
     guard: { promptGuard, outputBounds, tokenEstimate },

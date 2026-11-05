@@ -10,6 +10,7 @@ import { detectCIProviders } from "../../src/detect/repoAnalyzer.ts";
 import { readManifest, writeManifest } from "../../src/manifest/manifest.ts";
 import { bytesShowEngineOutput, needsByteProof, OWNED_PATHS, renderingProofClass } from "../../src/manifest/ownedPaths.ts";
 import type { SetupManifest } from "../../src/types/manifest.ts";
+import { canonical } from "../support/identity.ts";
 import { runInProcess } from "../support/inProcess.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -163,6 +164,12 @@ describe("the land job's row through init, sync and clean", () => {
   const temp = useTempDir("land-row");
   /** A real `init` and two real syncs: one case took over the 20 s default on a machine running other suites. */
   const REAL_SETUP_MS = 60_000;
+  /**
+   * The line a real sync pins, read from this checkout's own manifest: a real setup runs as the package it is, so a registry
+   * fork's line names its registry, and a package with no npm channel has none and writes no file.
+   */
+  const { name, version, npmChannel, registry } = canonical();
+  const INSTALL = pinnedCliInstall({ packageName: name, version, npmChannel, ...(registry === undefined ? {} : { registry }) });
 
   async function initialised(): Promise<string> {
     const root = temp().path(`repo-${Math.random().toString(36).slice(2, 8)}`);
@@ -187,6 +194,19 @@ describe("the land job's row through init, sync and clean", () => {
 
   const rows = async (root: string): Promise<string[]> => ((await readManifest(root))?.ledger ?? []).filter((row) => row.path === LAND_WORKFLOW_PATH).map((row) => `${row.adapter}:${row.artifactId}`);
 
+  /** What a sync with the setting on leaves, for this package's kind: the pinned file and a row per client, or neither and the reason. */
+  async function expectLandRow(root: string, sync: { stdout: string }): Promise<void> {
+    if (INSTALL === null) {
+      expect(existsSync(join(root, LAND_WORKFLOW_PATH))).toBe(false);
+      expect(await rows(root)).toEqual([]);
+      expect(sync.stdout).toContain("this package has no npm channel, so no land workflow is written");
+      return;
+    }
+    expect(await readFile(join(root, LAND_WORKFLOW_PATH), "utf8")).toContain(`      - run: ${INSTALL}\n`);
+    expect(await rows(root)).toEqual([`claude:${LAND_WORKFLOW_ARTIFACT_ID}`, `cursor:${LAND_WORKFLOW_ARTIFACT_ID}`]);
+    expect(sync.stdout).toContain('autonomy.landJob.workflows names "CI"');
+  }
+
   it("emits nothing with the setting off", async () => {
     const root = await initialised();
     await syncs(root);
@@ -194,21 +214,17 @@ describe("the land job's row through init, sync and clean", () => {
     expect(await rows(root)).toEqual([]);
   });
 
-  it("writes the file with the setting on, one row per client, the pinned version, and warns of a name no workflow carries", async () => {
+  it("writes the file with the setting on, one row per client, the pinned line, and warns of a name no workflow carries; with no npm channel, says why it wrote nothing", async () => {
     const root = await initialised();
     await setLandJob(root, true);
 
-    const sync = await syncs(root);
-
-    expect(await readFile(join(root, LAND_WORKFLOW_PATH), "utf8")).toMatch(/npm install --global \S+@\d+\.\d+\.\d+/);
-    expect(await rows(root)).toEqual([`claude:${LAND_WORKFLOW_ARTIFACT_ID}`, `cursor:${LAND_WORKFLOW_ARTIFACT_ID}`]);
-    expect(sync.stdout).toContain('autonomy.landJob.workflows names "CI"');
+    await expectLandRow(root, await syncs(root));
   }, REAL_SETUP_MS);
 
   it("takes the unedited file back with clean once the setting is off, with no sync between", async () => {
     const root = await initialised();
     await setLandJob(root, true);
-    await syncs(root);
+    await expectLandRow(root, await syncs(root));
     await setLandJob(root, false);
 
     const clean = await runInProcess(COMMANDS, ["clean", "-y"], { cwd: root });
@@ -220,7 +236,7 @@ describe("the land job's row through init, sync and clean", () => {
   it("takes it back with a sync too, so turning the setting off stops the job", async () => {
     const root = await initialised();
     await setLandJob(root, true);
-    await syncs(root);
+    await expectLandRow(root, await syncs(root));
     await setLandJob(root, false);
     await syncs(root);
     expect(existsSync(join(root, LAND_WORKFLOW_PATH))).toBe(false);
@@ -229,8 +245,11 @@ describe("the land job's row through init, sync and clean", () => {
   it("leaves a copy a person edited when the setting goes off", async () => {
     const root = await initialised();
     await setLandJob(root, true);
-    await syncs(root);
-    await writeFile(join(root, LAND_WORKFLOW_PATH), `${await readFile(join(root, LAND_WORKFLOW_PATH), "utf8")}# mine\n`);
+    await expectLandRow(root, await syncs(root));
+    // With no npm channel no sync wrote a copy, so the file at the name is a person's from the start, and it stays the same way.
+    const written = INSTALL === null ? "name: Mine\n" : await readFile(join(root, LAND_WORKFLOW_PATH), "utf8");
+    await mkdir(dirname(join(root, LAND_WORKFLOW_PATH)), { recursive: true });
+    await writeFile(join(root, LAND_WORKFLOW_PATH), `${written}# mine\n`);
     await setLandJob(root, false);
     await syncs(root);
     expect(await readFile(join(root, LAND_WORKFLOW_PATH), "utf8")).toContain("# mine");
