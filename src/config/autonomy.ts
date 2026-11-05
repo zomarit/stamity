@@ -130,6 +130,10 @@ function reviewToolDefects(value: unknown): string[] {
   for (const text of ["stateMarker", "stateSection"]) {
     if (value[text] !== undefined && !isOneLine(value[text], MAX_KEY_TEXT_LENGTH)) defects.push(`\`autonomy.reviewTool.${text}\` must be one line`);
   }
+  // Without both a state comment can never read, so every land would hold through the whole wait.
+  if (clean === "state-comment" && (value["stateMarker"] === undefined || value["stateSection"] === undefined)) {
+    defects.push("`autonomy.reviewTool.clean` of state-comment needs both `stateMarker` and `stateSection`");
+  }
   if (!inRange(waitMinutes, 1, 120)) defects.push("`autonomy.reviewTool.waitMinutes` must be a whole number from 1 to 120");
   if (!inRange(rounds, 1, 3)) defects.push("`autonomy.reviewTool.rounds` must be a whole number from 1 to 3");
   return defects;

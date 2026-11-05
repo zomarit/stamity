@@ -640,6 +640,24 @@ describe("directPushVerdict — an administrator under adminRuleProof (REQ-FLOW-
     expect(calls).not.toContain("/user/memberships/orgs/o");
   });
 
+  it("a pinned organization ruleset over a plain member beside a repository ruleset blocks with no warning, since one rule it cannot lift binds (review/25)", async () => {
+    const { rest } = restTable({
+      "/repos/o/r": repoReply(ADMIN),
+      "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(8), pullRequestRule(9, 1, "Organization")] },
+      "/repos/o/r/rulesets/8": ruleset(8, "active", "never"),
+      "/repos/o/r/rulesets/9": ruleset(9, "active", "never", PINNED),
+      "/user/memberships/orgs/o": MEMBER,
+    });
+
+    const verdict = await runPreflight(greenDeps({ rest, adminRuleProof: true }));
+
+    expect(check(verdict, "direct-push").state).toBe("pass");
+    expect(check(verdict, "direct-push").evidence).toContain("ruleset 9 (bypass never)");
+    expect(check(verdict, "direct-push").evidence).toContain("8 (bypass never)");
+    expect(check(verdict, "direct-push").evidence).not.toContain("could still lift");
+    expect(warned(verdict)).not.toContain("admin-can-lift");
+  });
+
   it("one binding repository ruleset beside a bypassed one and an unread one blocks, naming only the one that binds", async () => {
     const { rest } = restTable({
       "/repos/o/r": repoReply(ADMIN),

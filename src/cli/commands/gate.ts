@@ -24,13 +24,12 @@ import {
   type TestSource,
 } from "../../change/testInputs.ts";
 import { linesPastCap, SCAN_LINE_MAX_CHARS, scanAddedLines, type ScanFile, type ScanHit } from "../../change/scan.ts";
-import { strictestAutonomy } from "../../config/autonomy.ts";
 import { CLAUDE_HOOKS_DIR } from "../../hooks/model.ts";
 import { PERSON_ONLY_GUARD_FILE } from "../../hooks/scripts.ts";
 import { PREFLIGHT_CANARY_FILE } from "../../mcp/env.ts";
 import { readGitSurface, SURFACE_RECORD_FILE, SURFACE_RECORD_LABEL, surfaceRecord, type GitSurface } from "../../runs/gitSurface.ts";
 import { screenOutbound } from "../../runs/morning.ts";
-import { REQUIRED_FLOORS, runPreflight, type PreflightDeps, type PushUrlFacts, type RestRead } from "../../runs/preflight.ts";
+import { ITEM_REF_SHAPE, REQUIRED_FLOORS, runPreflight, type PreflightDeps, type PushUrlFacts, type RestRead } from "../../runs/preflight.ts";
 import { resolveRepo } from "../../runs/pullRequest.ts";
 import { RECORD_FILE, REPORT_READ_MAX_BYTES, runRelPath, USAGE_REVIEW_PATTERN } from "../../runs/layout.ts";
 import { findCardRun, readCurrentBranch } from "../../runs/resumeCard.ts";
@@ -81,7 +80,7 @@ import {
 import { ghApi } from "../engine/ghRunner.ts";
 import { gitCheckRunner, revisionLines, type GitInputRunner } from "../engine/gitStatus.ts";
 import { gitWrite, gitWriteEnv } from "../engine/gitWrite.ts";
-import { readSetting } from "../engine/landSetting.ts";
+import { readLegs, Refused } from "../engine/landSetting.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
 import type { GitRunner } from "../../workspace/git.ts";
@@ -1226,7 +1225,7 @@ function runTextScan(ctx: CliContext, file: string, label: string): CommandResul
 
 /** `owner/repo#n`, as `--item` takes it, in GitHub's name alphabets; anything else exits 2. */
 function parseItemRef(value: string): { owner: string; repo: string; number: number } {
-  const match = /^([A-Za-z0-9][A-Za-z0-9_-]{0,99})\/([A-Za-z0-9._-]{1,100})#([1-9][0-9]{0,8})$/.exec(value);
+  const match = ITEM_REF_SHAPE.exec(value);
   if (match === null) throw new InvalidArgumentError("an item is owner/repo#<number>.");
   return { owner: match[1] ?? "", repo: match[2] ?? "", number: Number(match[3]) };
 }
@@ -1606,12 +1605,15 @@ const GUARD_COPIES: readonly string[] = [`${CLAUDE_HOOKS_DIR}/${PERSON_ONLY_GUAR
 const GUARD_COPY_READ_MAX_BYTES = 1024 * 1024;
 
 /**
- * Whether `autonomy.adminRuleProof` is on in every leg (REQ-FLOW-151): the default branch's manifest, `HEAD`'s, the work
- * tree's and each guard copy on disk. `readSetting` skips a leg that is not there, since `run land` only tightens on what
- * it finds; this pass stands on the legs, so a missing or unread one reads off, or a run could turn the key on with a
- * commit of its own on a default branch that holds no manifest. `run land`'s read is reused, so the two cannot drift.
+ * What keeps `autonomy.adminRuleProof` from being on in every leg (REQ-FLOW-151), in words, or `null` where it is on in all:
+ * the default branch's manifest, `HEAD`'s, the work tree's and each guard copy. `run land` skips a manifest that is not
+ * there, since it only tightens on what it finds; this pass stands on the legs, so a missing or unread manifest reads off,
+ * or a run could turn the key on with a commit of its own on a default branch that holds no manifest. A guard copy differs:
+ * each client keeps its own, so one that is absent is no leg, and only none at all, or one that does not read, counts as
+ * off. A copy `HEAD` holds keeps its leg when it leaves the disk (`readGuardLegs`), so deleting one `HEAD` does not hold
+ * drops that leg, and the default branch's manifest still decides. `run land`'s read is reused, so the two cannot drift.
  */
-async function adminRuleProofInForce(root: string, repoPath: string, rest: RestRead): Promise<boolean> {
+async function adminRuleProofGap(root: string, repoPath: string, rest: RestRead): Promise<string | null> {
   const runner = gitCheckRunner({ timeoutMs: GATE_GIT_TIMEOUT_MS, maxBuffer: GATE_GIT_MAX_BUFFER });
   const gitLine = (args: readonly string[]): string | null => {
     try {
@@ -1623,13 +1625,17 @@ async function adminRuleProofInForce(root: string, repoPath: string, rest: RestR
   try {
     const about = await rest(repoPath);
     const branch = typeof about.json === "object" && about.json !== null ? (about.json as { default_branch?: unknown }).default_branch : undefined;
-    if (about.status !== 200 || typeof branch !== "string" || branch === "") return false;
+    if (about.status !== 200 || typeof branch !== "string" || branch === "") return "the default branch's name did not read";
     const texts = await Promise.all(GUARD_COPIES.map((path) => readRegularFile(join(root, ...path.split("/")), GUARD_COPY_READ_MAX_BYTES)));
-    const copies = texts.filter((text) => typeof text === "string");
-    if (copies.length === 0 || texts.includes(undefined)) return false;
+    if (texts.includes(undefined)) return "a guard copy did not read";
+    const copies = GUARD_COPIES.flatMap((path, index) => {
+      const text = texts[index];
+      return typeof text === "string" ? [{ source: `the guard copy \`${path}\` on disk`, setting: guardCopySetting(text) }] : [];
+    });
+    if (copies.length === 0) return "no guard copy is on disk";
     let onDefaultBranch = false;
     let atHead = false;
-    const setting = await readSetting(
+    const legs = await readLegs(
       root,
       gitLine(["rev-parse", "--show-prefix"]) ?? "",
       repoPath,
@@ -1646,11 +1652,13 @@ async function adminRuleProofInForce(root: string, repoPath: string, rest: RestR
       },
       readGuardLegs,
     );
-    const strictest = strictestAutonomy(setting, ...copies.map((text) => guardCopySetting(text)));
-    return onDefaultBranch && atHead && strictest.adminRuleProof === true;
-  } catch {
+    if (!onDefaultBranch) return "the default branch holds no manifest";
+    if (!atHead) return "`HEAD` holds no manifest";
+    const off = [...legs, ...copies].filter((leg) => leg.setting.adminRuleProof !== true).map((leg) => leg.source);
+    return off.length === 0 ? null : `it is off in ${[...new Set(off)].join(", ")}`;
+  } catch (cause) {
     // A refused or failed read proves nothing: the administrator's refusal stands.
-    return false;
+    return cause instanceof Refused ? cause.message : "a read of its legs failed";
   }
 }
 
@@ -1683,8 +1691,8 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
   const floors = floorCopies(root, manifest);
   const usage = usageReviewLines(root, now);
   // The work tree's key is one leg of several, so off there settles it and on there alone proves nothing.
-  const adminRuleProof =
-    manifest?.autonomy?.adminRuleProof === true && rest !== null && origin !== null && (await adminRuleProofInForce(root, `repos/${origin.owner}/${origin.repo}`, rest));
+  const adminProofGap =
+    manifest?.autonomy?.adminRuleProof === true && rest !== null && origin !== null ? await adminRuleProofGap(root, `repos/${origin.owner}/${origin.repo}`, rest) : undefined;
   const verdict = await runPreflight({
     env,
     nodeVersion: process.versions.node,
@@ -1700,7 +1708,8 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
     canary: canary === undefined ? null : { at: typeof at === "string" ? at : "" },
     now,
     ...(item === undefined ? {} : { item }),
-    adminRuleProof,
+    adminRuleProof: adminProofGap === null,
+    ...(typeof adminProofGap === "string" ? { adminRuleProofGap: adminProofGap } : {}),
     floors,
     pushIdentity,
     reviewState: { counter: existsSync(join(root, REVIEW_GATE_STATE_FILE)), usageReviewLines: usage ?? 0, recordUnread: usage === null },

@@ -2,7 +2,7 @@ import { lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync 
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, parse, resolve } from "node:path";
 import { LAND_JOB_NAME } from "../../adapters/landWorkflow.ts";
-import { autoShipVerdict, type AutoShipRules, type AutoShipVerdict } from "../../change/autoShip.ts";
+import { autoShipVerdict, filesOverLimit, type AutoShipRules, type AutoShipVerdict } from "../../change/autoShip.ts";
 import { CLASS_FILE } from "../../change/classify.ts";
 import { matchesDeployingBranch } from "../../config/autonomy.ts";
 import { personOnlyVerdict } from "../../hooks/personOnly.ts";
@@ -766,10 +766,15 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     /**
      * REQ-FLOW-154: asks the tool on a head whose only stops are waits, so no round goes on a head that cannot land, and
      * only where the run has not asked on it yet. A run the tool started itself gets the marker alone (build/11): the clock
-     * starts and no second run does. A dry run writes nothing, and a request that fails leaves the land waiting.
+     * starts and no second run does. A head it already finished with findings gets the marker alone too, whatever else stops
+     * that head, so a tool reviewing every push still spends its rounds (review/47). A dry run writes nothing, and a request
+     * that fails ends the wait, since with no marker no wait could end: a job leaves its status line, a session refuses.
      */
     const askTool = async (now: LandDecision, beforeReady: boolean): Promise<LandDecision> => {
-      if (tool === undefined || facts === undefined || ctx.dryRun || !pending(now) || review?.state !== "waiting") return now;
+      if (tool === undefined || facts === undefined || ctx.dryRun) return now;
+      const standing = ownPr(pr, own);
+      const finished = review?.state === "findings" && !standing.already && standing.refusals.length === 0;
+      if (!finished && (!pending(now) || review?.state !== "waiting")) return now;
       const asked = requestMarker(sha);
       if (facts.comments.some((comment) => comment.body.includes(asked))) return now;
       const body = ranOnHead(facts, tool) ? asked : `${tool.request}\n\n${asked}`;
@@ -780,10 +785,10 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       return now;
     };
     /**
-     * A job waits on the tool alone, whose silence sends no event, and not on a request that never posted, which no wait ends.
-     * Anything else pending goes on the status line, since a check outside the watched workflows sends no event either.
+     * Nothing waits on a request that never posted, which no wait ends. A job waits on the tool alone, whose silence sends no
+     * event; anything else pending goes on the status line, since a check outside the watched workflows sends no event either.
      */
-    const worthWaiting = (now: LandDecision): boolean => pending(now) && (job === null || (review?.state === "waiting" && !requestFailed));
+    const worthWaiting = (now: LandDecision): boolean => pending(now) && !requestFailed && (job === null || review?.state === "waiting");
     /** `--wait`: while only pending checks or an uncomputed merge state stop it, sleep a poll's interval, then read again. */
     const waitOut = async (decision: LandDecision, beforeReady: boolean): Promise<LandDecision> => {
       let now = decision;
@@ -844,7 +849,8 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     if (decision.outcome === "refused") {
       bodyTakesWaits = true;
       // A tool wait runs up to `waitMinutes`, past the verb's budget, so what is left of it goes to the next call.
-      if (decision.pending && review?.state === "waiting") {
+      // A request that did not post is no wait: the next call would only hear the same, so this refuses (review/49).
+      if (decision.pending && review?.state === "waiting" && !requestFailed) {
         const [reason = ""] = decision.reasons;
         result.outcome = "asks";
         result.asks = { reason, reasons: decision.reasons, act: fastForward ? "push-default" : "pr-merge", head: sha, pending: true };
@@ -1168,6 +1174,8 @@ async function autoShipRead(
   call: (path: string) => Promise<GhResponse>,
 ): Promise<AutoShipVerdict> {
   const { tip, head, prefix, files, pr } = at;
+  // review/42: GitHub's count is at most the range's, a rename counting once there, so this rule needs no read of every file.
+  if (pr.changedFiles > rules.maxFiles) return { eligible: false, reasons: [filesOverLimit(pr.changedFiles, rules.maxFiles)] };
   const incomplete = (why: string): AutoShipVerdict => ({ eligible: false, reasons: [`the classification is incomplete: ${why}`] });
   const read = (path: string): Promise<GhResponse | null> =>
     call(path).catch((error: unknown) => {

@@ -316,19 +316,46 @@ describe("stamity gate preflight and scan --text", () => {
         expect(stateOf(split.doc, "direct-push")).toBe("refuse");
       });
 
-      it.each<[string, Partial<Legs>]>([
-        ["an agent's work-tree-only edit", { defaultBranch: "off", head: "off", guard: "off" }],
-        ["an agent's edit of the work tree and the guard copy", { defaultBranch: "off", head: "off" }],
-        ["an agent's commit on its own branch, the guard copy baked to match", { defaultBranch: "off" }],
-        ["a default branch that holds no manifest", { defaultBranch: "absent" }],
-        ["a default branch manifest read that failed", { defaultBranch: "failed" }],
-        ["a key off at HEAD", { head: "off" }],
-        ["no manifest at HEAD", { head: "absent" }],
-        ["a key off in the work tree", { workTree: "off" }],
-        ["a guard copy baked off", { guard: "off" }],
-        ["no guard copy at all", { guard: "absent" }],
-        ["a guard copy that is no guard", { guard: "foreign" }],
-      ])("refuses as today on %s", async (_label, change) => {
+      it("skips a guard copy that is absent, so deleting one `HEAD` does not hold drops that leg (review/27)", async () => {
+        const repo = await optedRepo(ALL_ON);
+        await mkdir(join(repo, SECOND_GUARD, ".."), { recursive: true });
+        await writeFile(join(repo, SECOND_GUARD), OFF_MARKER);
+        const held = await gate(repo, PREFLIGHT);
+        await rm(join(repo, SECOND_GUARD));
+        const dropped = await gate(repo, PREFLIGHT);
+
+        expect(held.code).toBe(1);
+        expect(dropped.code).toBe(0);
+      });
+
+      it("keeps the leg of a guard copy `HEAD` holds when it leaves the disk (review/27)", async () => {
+        const repo = await optedRepo(ALL_ON);
+        await mkdir(join(repo, SECOND_GUARD, ".."), { recursive: true });
+        await writeFile(join(repo, SECOND_GUARD), OFF_MARKER);
+        git(repo, ["add", "-f", SECOND_GUARD]);
+        git(repo, ["commit", "-q", "-m", "a copy baked off"]);
+        await rm(join(repo, SECOND_GUARD));
+
+        const { code, doc } = await gate(repo, PREFLIGHT);
+
+        expect(code).toBe(1);
+        expect(evidenceOf(doc, "direct-push")).toContain(`it is off in the guard copy \`${SECOND_GUARD}\` committed at \`HEAD\``);
+      });
+
+      // TEST CHANGE, justified (review/23): each row now names the words its evidence carries. The refusal and its fix are pinned as before.
+      it.each<[string, Partial<Legs>, string | null]>([
+        ["an agent's work-tree-only edit", { defaultBranch: "off", head: "off", guard: "off" }, "it is off in the default branch's manifest"],
+        ["an agent's edit of the work tree and the guard copy", { defaultBranch: "off", head: "off" }, "it is off in the default branch's manifest"],
+        ["an agent's commit on its own branch, the guard copy baked to match", { defaultBranch: "off" }, "it is off in the default branch's manifest"],
+        ["a default branch that holds no manifest", { defaultBranch: "absent" }, "the default branch holds no manifest"],
+        ["a default branch manifest read that failed", { defaultBranch: "failed" }, "the default branch's manifest read answered HTTP 500"],
+        ["a key off at HEAD", { head: "off" }, "it is off in the manifest committed at `HEAD`"],
+        ["no manifest at HEAD", { head: "absent" }, "`HEAD` holds no manifest"],
+        ["a key off in the work tree", { workTree: "off" }, null],
+        ["a guard copy baked off", { guard: "off" }, `it is off in the guard copy \`${GUARD}\` on disk`],
+        ["no guard copy at all", { guard: "absent" }, "no guard copy is on disk"],
+        ["a guard copy that is no guard", { guard: "foreign" }, `it is off in the guard copy \`${GUARD}\` on disk`],
+      ])("refuses as today on %s, naming the leg", async (_label, change, leg) => {
         const repo = await optedRepo({ ...ALL_ON, ...change });
 
         const { code, doc } = await gate(repo, PREFLIGHT);
@@ -337,6 +364,8 @@ describe("stamity gate preflight and scan --text", () => {
         expect(stateOf(doc, "direct-push")).toBe("refuse");
         expect(doc["refusals"]).toContainEqual(expect.objectContaining({ id: "direct-push", fix: "run as an account or token without admin on this repository" }));
         expect((doc["warnings"] as { id: string }[]).map((warning) => warning.id)).not.toContain("admin-can-lift");
+        if (leg === null) expect(evidenceOf(doc, "direct-push")).not.toContain("not in force");
+        else expect(evidenceOf(doc, "direct-push")).toContain(`autonomy.adminRuleProof is on here but not in force: ${leg}`);
       });
     });
 

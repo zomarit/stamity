@@ -44,7 +44,7 @@ const CLAUDE_COPY = GUARD_COPY_PATHS[0] ?? "";
 const CLAUDE_ONLY: GuardCopies = { planned: [CLAUDE_COPY], baking: [CLAUDE_COPY] };
 const MARKER = "// stamity-autonomy ";
 const AUTO_SHIP_ON = { maxFiles: 10, maxLines: 200, classes: ["records", "docs", "tests"] };
-const REVIEW_TOOL_ON = { login: "chatgpt-codex-connector[bot]", request: "@codex review", clean: "state-comment", waitMinutes: 40, rounds: 2 } as const;
+const REVIEW_TOOL_ON = { login: "chatgpt-codex-connector[bot]", request: "@codex review", clean: "state-comment", stateMarker: "codex-review-state:v1", stateSection: "code_review", waitMinutes: 40, rounds: 2 } as const;
 
 function setting(autonomy?: AutonomyConfig): ResolvedAutonomy {
   return resolveAutonomy(autonomy === undefined ? {} : { autonomy });

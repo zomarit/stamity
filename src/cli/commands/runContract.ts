@@ -3,6 +3,7 @@ import { InvalidArgumentError } from "commander";
 import { isPlainObject } from "../../config/parse.ts";
 import { printableText } from "../../learnings/validation.ts";
 import { contractFromItem, CRITERIA_MAX_BYTES, criteriaHits, ITEM_BODY_MAX_BYTES, parseItemBody, planFiles, planHash } from "../../runs/itemContract.ts";
+import { ITEM_REF_SHAPE } from "../../runs/preflight.ts";
 import { resolveRepo } from "../../runs/pullRequest.ts";
 import { ghApi, type GhResponse } from "../engine/ghRunner.ts";
 import { gitWrite } from "../engine/gitWrite.ts";
@@ -73,10 +74,10 @@ function failureClass(cause: unknown): string {
   return "no code";
 }
 
-/** `owner/repo#n`, in GitHub's name alphabets; anything else exits 2. `gate preflight --item`'s grammar, less the `.` and `..` its `safeRepo` refuses later. */
+/** `owner/repo#n`, in GitHub's name alphabets; anything else exits 2. `gate preflight --item`'s one shape, less the `.` and `..` its `safeRepo` refuses later. */
 export function parseItemRef(value: string): ItemRef {
-  const match = /^([A-Za-z0-9][A-Za-z0-9_-]{0,99})\/((?!\.{1,2}#)[A-Za-z0-9._-]{1,100})#([1-9][0-9]{0,8})$/.exec(value);
-  if (match === null) throw new InvalidArgumentError("an item is owner/repo#<number>.");
+  const match = ITEM_REF_SHAPE.exec(value);
+  if (match === null || match[2] === "." || match[2] === "..") throw new InvalidArgumentError("an item is owner/repo#<number>.");
   return { owner: match[1] ?? "", repo: match[2] ?? "", number: Number(match[3]) };
 }
 

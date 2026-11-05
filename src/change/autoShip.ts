@@ -46,6 +46,11 @@ function namedPaths(paths: readonly string[], where: string): string {
   return `${named} ${paths.length === 1 ? "is" : "are"} ${where}`;
 }
 
+/** The file limit's reason, one wording for this verdict and for a land that stops on GitHub's count before any read. */
+export function filesOverLimit(files: number, maxFiles: number): string {
+  return `${files} files are over autonomy.autoShip.maxFiles (${maxFiles})`;
+}
+
 /**
  * Every rule the change fails, or the evidence naming each one it met. The class
  * rule reads `result.class` beside each path's class, since a crossing rename or
@@ -67,7 +72,7 @@ export function autoShipVerdict(facts: AutoShipFacts, rules: AutoShipRules | nul
   const empty = files === 0 || result.byPath.length === 0;
   if (empty) reasons.push("the change is empty");
   else if (files !== result.byPath.length) reasons.push(`the file count (${files}) disagrees with the classified paths (${result.byPath.length})`);
-  if (files > maxFiles) reasons.push(`${files} files are over autonomy.autoShip.maxFiles (${maxFiles})`);
+  if (files > maxFiles) reasons.push(filesOverLimit(files, maxFiles));
   const seen = [...new Set([result.class, ...result.byPath.map((entry) => entry.class)])];
   const unnamed = seen.filter((name) => !classes.includes(name));
   // An empty change reads `product` only because nothing was named, so its own reason stands alone.

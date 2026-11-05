@@ -581,6 +581,8 @@ describe("the factory keys", () => {
       ["a request holding a line separator", { reviewTool: { ...REVIEW_TOOL, request: `a${String.fromCharCode(0x2028)}b` } }, "`autonomy.reviewTool.request`"],
       ["a login of another shape", { reviewTool: { ...REVIEW_TOOL, login: "-bad" } }, "`autonomy.reviewTool.login` must be a GitHub login"],
       ["a state marker on two lines", { reviewTool: { ...REVIEW_TOOL, stateMarker: "a\nb" } }, "`autonomy.reviewTool.stateMarker`"],
+      ["a state comment with no marker", { reviewTool: { ...REVIEW_TOOL, stateMarker: undefined } }, "needs both `stateMarker` and `stateSection`"],
+      ["a state comment with no section", { reviewTool: { ...REVIEW_TOOL, stateSection: undefined } }, "needs both `stateMarker` and `stateSection`"],
       ["an unknown tool member", { reviewTool: { ...REVIEW_TOOL, extra: 1 } }, "unknown field `autonomy.reviewTool.extra`"],
       ["a maxFiles of 0", { autoShip: { ...AUTO_SHIP, maxFiles: 0 } }, "`autonomy.autoShip.maxFiles` must be a positive whole number"],
       ["a maxLines of 1.5", { autoShip: { ...AUTO_SHIP, maxLines: 1.5 } }, "`autonomy.autoShip.maxLines` must be a positive whole number"],
@@ -589,6 +591,12 @@ describe("the factory keys", () => {
       ["workflows that are not a list", { landJob: { workflows: "CI" } }, "`autonomy.landJob.workflows`"],
       ["a key that is not an object", { landJob: ["CI"] }, "`autonomy.landJob` must be an object"],
     ];
+    it("asks neither state key of a tool that reads no state comment, and fails closed on a state comment that has none (build/10)", () => {
+      const { stateMarker: _marker, stateSection: _section, ...plain } = REVIEW_TOOL;
+      expect(collectManifestErrors(manifestWith({ reviewTool: { ...plain, clean: "review-state" } }))).toEqual([]);
+      expect(resolveAutonomy({ autonomy: { reviewTool: plain } }).mode).toBe("ask");
+    });
+
     for (const [label, block, fragment] of refused) {
       it(`refuses ${label}`, () => {
         const errors = collectManifestErrors(manifestWith(block));

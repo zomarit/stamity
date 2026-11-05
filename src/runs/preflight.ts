@@ -119,6 +119,8 @@ export interface PreflightDeps {
   item?: { owner: string; repo: string; number: number } | undefined;
   /** `autonomy.adminRuleProof` as the strictest read of its legs gives it (REQ-FLOW-151); absent reads false. */
   adminRuleProof?: boolean | undefined;
+  /** Why a key the work tree turns on is not in force, in words; absent where it is, or where it is not turned on. */
+  adminRuleProofGap?: string | undefined;
   /** The emitted copies of the floor rules, one entry per client copy. */
   floors: readonly { id: string; path: string; exists: boolean }[];
   /**
@@ -182,8 +184,12 @@ const MANIFEST_FIX = "repair .stamity/manifest.json (a regular file that parses 
  * REST path. `_` is in: every Enterprise Managed Users login carries one, and
  * u4's `NAME_PART` accepts it.
  */
-const OWNER_SHAPE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
-const REPO_SHAPE = /^[A-Za-z0-9._-]{1,100}$/;
+const OWNER_NAME = "[A-Za-z0-9][A-Za-z0-9_-]{0,99}";
+const REPO_NAME = "[A-Za-z0-9._-]{1,100}";
+const OWNER_SHAPE = new RegExp(`^${OWNER_NAME}$`);
+const REPO_SHAPE = new RegExp(`^${REPO_NAME}$`);
+/** `owner/repo#n` in those alphabets, the one shape `--item` takes on `gate preflight` and `run contract`. */
+export const ITEM_REF_SHAPE = new RegExp(`^(${OWNER_NAME})/(${REPO_NAME})#([1-9][0-9]{0,8})$`);
 /** A user or bot login as the issue read returns it. */
 const LOGIN_SHAPE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}(?:\[bot\])?$/;
 
@@ -811,9 +817,11 @@ async function directPush(deps: PreflightDeps): Promise<DirectPushCheck> {
       adminCanLift: detail.adminCanLift === true,
     };
   }
+  // review/23: the fix stays the plain one, so an owner with no second account learns from here which leg to put right.
+  const gap = detail.fix === ADMIN_FIX && deps.adminRuleProofGap !== undefined ? `; autonomy.adminRuleProof is on here but not in force: ${deps.adminRuleProofGap}` : "";
   return settle(
     detail.verdict === "open" ? "refuse" : "unknown",
-    `${name}: ${detail.evidence}`,
+    `${name}: ${detail.evidence}${gap}`,
     detail.fix ?? (detail.verdict === "open" ? OPEN_FIX : NO_REST_FIX),
   );
 }

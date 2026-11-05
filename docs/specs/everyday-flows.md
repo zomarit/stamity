@@ -6876,7 +6876,8 @@ Then the check fails closed.
 
 - **As built, beyond the delta:**
   - The legs are the default branch's manifest, `HEAD`'s, the work tree's and the baked guard's copy, so an agent's edit of
-    the work tree alone does not pass (`adminRuleProofInForce`, `src/cli/commands/gate.ts`).
+    the work tree alone does not pass (`adminRuleProofGap`, `src/cli/commands/gate.ts`). Where the work tree's key is on
+    and another leg is not, the refusal and its fix stand as before, and its evidence names that leg.
   - A repository ruleset counts, and so does an organization ruleset that is not pinned to this repository, or one held
     by an organization owner, where the ruleset says the account cannot bypass it. Classic branch protection never
     counts for an administrator, and a ruleset in `evaluate` mode is not active and counts for nothing.
@@ -6948,12 +6949,16 @@ carry the marker.
 - **As built, beyond the delta:**
   - The land posts `request` and a `<!-- stamity:review-request <head> -->` marker once per head, and only where the head's
     only stops are waits, so no round goes on a head that cannot land. A run the tool started itself gets the marker
-    alone. A round is a distinct head carrying a request marker. Only the run's own markers count, so a stranger's
+    alone. A head the tool already finished with `findings` gets the marker alone too, whatever else stops it, so a tool
+    reviewing every push still spends `rounds`. A request that does not post ends the wait, since with no marker no wait
+    can end: a job leaves its status line, and a session refuses, with no `asks.pending`. A round is a distinct head
+    carrying a request marker. Only the run's own markers count, so a stranger's
     comment cannot spend one, and, with `autonomy.landJob` on, `github-actions[bot]`'s beside them, since the job posts
     under that login.
   - `waiting` is a pending gap, so `--wait` keeps polling; `findings`, `silent` and `spent` are plain gaps. The wait is timed
     from the request marker, never from the tool's comment, which it edits in place.
-  - `state-comment` is the Codex preset. `review-state` needs `APPROVED` on the head. `reaction` needs `+1` and is the
+  - `state-comment` is the Codex preset, and the manifest check refuses one without both `stateMarker` and
+    `stateSection`. `review-state` needs `APPROVED` on the head. `reaction` needs `+1` and is the
     weakest: a reaction cannot be tied to a commit, so one left on an earlier head reads clean on every later head, and
     no request is sent, since the land asks only while `waiting`. So this requirement's exact head and silence do not
     hold under `clean: reaction`.
@@ -8754,7 +8759,9 @@ above.
   merge holds. *(test: `test/runs/reviewTool.test.ts`)*
 - GIVEN a `waiting` verdict THEN `--wait` keeps polling, and past the budget `asks` with `asks.pending`, which `--approved`
   does not pass; GIVEN `clean` on the head and open threads the tool opened THEN the land resolves them, reads again and
-  merges; GIVEN a failed resolve THEN it refuses, naming the thread. *(test: `test/cli/commands/runLand.test.ts`)*
+  merges; GIVEN a failed resolve THEN it refuses, naming the thread; GIVEN `findings` on a head with no marker THEN the
+  land posts the marker alone; GIVEN a request that does not post THEN a session refuses with no `asks.pending`.
+  *(test: `test/cli/commands/runLand.test.ts`)*
 
 **REQ-FLOW-155** (added 2026-11-05)
 

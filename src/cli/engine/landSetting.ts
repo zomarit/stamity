@@ -92,12 +92,11 @@ async function defaultBranchSetting(prefix: string, repoPath: string, defaultBra
 }
 
 /**
- * The setting as the strictest of the default branch's manifest (so the run cannot loosen it on its own branch),
- * `HEAD`'s, the work tree's and the baked guard's, whose legs `guard` reads from `cwd` (none where the setup has no
- * guard), and those legs named where they disagree on the review tool; none of the three manifests there refuses as
- * `no setup found`. A leg with no manifest at all is no leg, so it names no tool and disagrees with nothing.
+ * Each leg of the setting, named: the default branch's manifest (so the run cannot loosen it on its own branch), `HEAD`'s,
+ * the work tree's and the baked guard's, whose legs `guard` reads from `cwd` (none where the setup has no guard). None of
+ * the three manifests there refuses as `no setup found`. A leg with no manifest at all is no leg.
  */
-export async function readSetting(
+export async function readLegs(
   cwd: string,
   prefix: string,
   repoPath: string,
@@ -105,7 +104,7 @@ export async function readSetting(
   gitLine: GitLine,
   call: GitHubCall,
   guard: (rootDir: string) => Promise<readonly AutonomyLeg[]>,
-): Promise<LandSetting> {
+): Promise<[AutonomyLeg, ...AutonomyLeg[]]> {
   const manifests: AutonomyLeg[] = [];
   const remote = await defaultBranchSetting(prefix, repoPath, defaultBranch, call);
   if (remote !== null) manifests.push({ source: "the default branch's manifest", setting: remote });
@@ -115,8 +114,13 @@ export async function readSetting(
   if (local !== null) manifests.push({ source: "the manifest on disk", setting: local.truncated ? settingOf("") : settingOf(local.text) });
   const [first] = manifests;
   if (first === undefined) throw new Refused(`no setup found: no ${MANIFEST} on ${defaultBranch}, at HEAD or in the work tree`);
-  const legs = [...manifests, ...(await guard(cwd))];
-  return { ...strictestAutonomy(first.setting, ...legs.slice(1).map((leg) => leg.setting)), reviewToolConflict: reviewToolConflict(legs) };
+  return [first, ...manifests.slice(1), ...(await guard(cwd))];
+}
+
+/** The strictest of {@link readLegs}, and those legs named where they disagree on the review tool; a leg with no manifest names no tool and disagrees with nothing. */
+export async function readSetting(...at: Parameters<typeof readLegs>): Promise<LandSetting> {
+  const legs = await readLegs(...at);
+  return { ...strictestAutonomy(legs[0].setting, ...legs.slice(1).map((leg) => leg.setting)), reviewToolConflict: reviewToolConflict(legs) };
 }
 
 /**

@@ -945,7 +945,7 @@ describe("collectManifestErrors", () => {
 
 /** The factory keys through the whole-manifest check (plan 023 file 1, unit settings; REQ-FLOW-137). The field rules are test/config/autonomy.test.ts's. */
 describe("collectManifestErrors — the autonomy factory keys", () => {
-  const reviewTool = { login: "chatgpt-codex-connector[bot]", request: "@codex review", clean: "state-comment", waitMinutes: 40, rounds: 2 };
+  const reviewTool = { login: "chatgpt-codex-connector[bot]", request: "@codex review", clean: "state-comment", stateMarker: "codex-review-state:v1", stateSection: "code_review", waitMinutes: 40, rounds: 2 };
   const withTool = (rounds: number): unknown => ({ ...createManifest(createOptions()), autonomy: { reviewTool: { ...reviewTool, rounds } } });
 
   it("admits a review tool at the most rounds, and refuses one past them by name", () => {

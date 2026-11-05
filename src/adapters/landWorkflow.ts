@@ -66,7 +66,7 @@ export function buildLandWorkflow(workflows: readonly string[], review: { login:
     "# Finishes a run's land where its session cannot: it merges a run's own pull request on the",
     "# evidence `stamity run land` reads, or leaves it open. Written only while `autonomy.landJob` is on.",
     "# The head is data: the CLI installs by version before any head file exists, and no head code runs.",
-    "# GITHUB_TOKEN starts no push run after this merge, so a deploy on push does not run for it.",
+    "# Under the emitted GITHUB_TOKEN this merge starts no Actions push workflow; that is all it stops.",
     "# Generated — edits are overwritten on the next sync.",
     "",
     "on:",

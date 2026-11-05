@@ -96,6 +96,12 @@ describe("the land job's workflow (REQ-FLOW-157)", () => {
     expect(workflowOf([named]).yaml.on["workflow_run"]?.workflows).toEqual([named]);
   });
 
+  it("says only what the token stops, so nobody reads it as a route that does not deploy (W-1 of integration round 10)", () => {
+    const { text } = workflowOf();
+    expect(text).toContain("this merge starts no Actions push workflow; that is all it stops");
+    expect(text).not.toContain("deploy");
+  });
+
   it("writes nothing for a package with no npm channel", () => {
     expect(buildLandWorkflow(["CI"], undefined, { ...CLI, npmChannel: false })).toBeNull();
   });

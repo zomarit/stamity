@@ -1353,8 +1353,10 @@ describe("stamity run land", () => {
       expect(result.doc).toMatchObject({ outcome: "landed", evidence: { autoShip: { eligible: true, evidence: expect.stringContaining("auto-ship rules met: 4 of at most 10 files") } } });
     });
 
+    // TEST CHANGE, justified (review/42): a change over the file limit now stops on GitHub's count before any read, so this
+    // case keeps to the rules the range answers, and the next one pins the file limit.
     it("asks, naming each rule the change fails", async () => {
-      const { repo } = await seedOn({ maxFiles: 1, maxLines: 1, classes: ["records"] });
+      const { repo } = await seedOn({ maxLines: 1, classes: ["records"] });
 
       const result = await run(repo, ["land", "--run", RUN]);
 
@@ -1364,11 +1366,20 @@ describe("stamity run land", () => {
           reasons: [
             "main is named in autonomy.deployingBranches",
             expect.stringMatching(/^auto-ship: \d+ lines are over autonomy\.autoShip\.maxLines \(1\)$/),
-            "auto-ship: 3 files are over autonomy.autoShip.maxFiles (1)",
             "auto-ship: product is outside autonomy.autoShip.classes (records)",
           ],
         },
       });
+      expect(kinds()).not.toContain("merge");
+    });
+
+    it("stops on GitHub's count over the file limit, before any range or class file is read (review/42)", async () => {
+      const { repo } = await seedOn({ maxFiles: 2 });
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "asks", asks: { reasons: ["main is named in autonomy.deployingBranches", "auto-ship: 3 files are over autonomy.autoShip.maxFiles (2)"] } });
+      expect(kinds().filter((kind) => kind.includes("/compare/") || kind.includes("change-classes"))).toEqual([]);
       expect(kinds()).not.toContain("merge");
     });
 
@@ -1386,7 +1397,9 @@ describe("stamity run land", () => {
     });
 
     it("takes the merge base from GitHub, so a planted local parent override cannot shrink what is read (review/52)", async () => {
-      const { repo, remote, base, head: work } = await seedOn({ maxFiles: 3 });
+      // TEST CHANGE, justified (review/42): the limit here was maxFiles, which GitHub's count now answers with no read, so the
+      // planted override would go unread. maxLines is answered by the range alone, so the read stays what this case proves.
+      const { repo, remote, base, head: work } = await seedOn({ maxLines: 1 });
       await put(repo, "c.txt", "c\n");
       git(repo, ["add", "-A"]);
       git(repo, ["commit", "-q", "-m", "a small last step"]);
@@ -1403,7 +1416,7 @@ describe("stamity run land", () => {
 
       const result = await run(repo, ["land", "--run", RUN]);
 
-      expect(result.doc).toMatchObject({ outcome: "asks", asks: { reasons: ["main is named in autonomy.deployingBranches", "auto-ship: 4 files are over autonomy.autoShip.maxFiles (3)"] } });
+      expect(result.doc).toMatchObject({ outcome: "asks", asks: { reasons: ["main is named in autonomy.deployingBranches", expect.stringMatching(/^auto-ship: \d+ lines are over autonomy\.autoShip\.maxLines \(1\)$/)] } });
       expect(kinds()).not.toContain("merge");
     });
 
@@ -1719,12 +1732,66 @@ describe("stamity run land", () => {
       expect(result.doc).toMatchObject({ outcome: "refused", notDone: ["1 review thread is unresolved", expect.stringContaining("no request on this head yet")] });
     });
 
-    it("names a request that did not post, and the run goes on", async () => {
+    // TEST CHANGE, justified (review/49): this pinned `asks` with `asks.pending`. With no marker no wait can end, so that told a
+    // token that cannot comment to call again on every call; a request that did not post is a plain refusal now.
+    it("refuses where the request did not post, naming it, and waits on nothing", async () => {
+      const { slept } = fakeClock();
       const { repo } = await seedTool();
       answers([]);
       route("POST repos/o/r/issues/7/comments", { message: "Forbidden" }, 403);
 
-      expect((await run(repo, ["land", "--run", RUN])).doc).toMatchObject({ outcome: "asks", notDone: ["the review request was not posted to #7 (HTTP 403)"] });
+      const result = await run(repo, ["land", "--run", RUN, "--wait", "5"]);
+
+      expect(result.code).toBe(1);
+      expect(result.doc).toMatchObject({ outcome: "refused", notDone: ["the review request was not posted to #7 (HTTP 403)", expect.stringContaining("no request on this head yet")] });
+      expect(result.doc).not.toHaveProperty("asks");
+      expect(slept).toEqual([]);
+      expect(kinds()).not.toContain("merge");
+    });
+
+    describe("a head the tool finished with findings before the land was called (review/47)", () => {
+      const EARLIER = "e".repeat(40);
+
+      it("posts the marker alone, so that round counts and the rounds read spent", async () => {
+        const { repo, head } = await seedTool();
+        const finished = fromTool(2, block(head, "completed", true));
+        answers([]);
+        gh.routes.set("GET repos/o/r/issues/7/comments", [
+          { status: 200, json: [fromRun(1, EARLIER, minutesAgo(90)), finished] },
+          { status: 200, json: [fromRun(1, EARLIER, minutesAgo(90)), finished, fromRun(3, head)] },
+        ]);
+        gh.editors = [editorsPage([never(1), never(2), never(3)])];
+
+        const result = await run(repo, ["land", "--run", RUN]);
+
+        expect(posted()).toEqual([requestMarker(head)]);
+        expect(result.doc).toMatchObject({ outcome: "refused", evidence: { review: { state: "spent" } }, notDone: [expect.stringContaining("2 of 2 review rounds spent")] });
+        expect(kinds()).not.toContain("merge");
+      });
+
+      it("reads findings still while rounds remain, and posts nothing on a head already marked", async () => {
+        const { repo, head } = await seedTool();
+        answers([fromRun(1, head, minutesAgo(5)), fromTool(2, block(head, "completed", true))]);
+        gh.editors = [editorsPage([never(1), never(2)])];
+
+        const result = await run(repo, ["land", "--run", RUN]);
+
+        expect(posted()).toEqual([]);
+        expect(result.doc).toMatchObject({ outcome: "refused", evidence: { review: { state: "findings" } } });
+      });
+
+      it("writes nothing on a dry run, nor on a pull request that does not read as the run's own", async () => {
+        const { repo, head } = await seedTool();
+        answers([fromTool(2, block(head, "completed", true))]);
+        gh.editors = [editorsPage([never(2)])];
+
+        await run(repo, ["land", "--run", RUN, "--dry-run"]);
+        route("GET repos/o/r/pulls/7", pull(head, { body: "someone rewrote this" }));
+        const result = await run(repo, ["land", "--run", RUN]);
+
+        expect(posted()).toEqual([]);
+        expect(result.doc).toMatchObject({ outcome: "refused" });
+      });
     });
 
     it("keeps polling on --wait while the tool works, then lands on its word", async () => {
