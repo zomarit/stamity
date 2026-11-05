@@ -518,6 +518,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // module's session-start screen (so a card the hook withholds is withheld
   // here too), and is reached by the wave-14 `stamity ledger status` verb.
   "src/runs/resumeCard.ts": { unit: "ctx-ledger-status", wave: 5 },
+  // The one short page a run leaves a person: pure text over the wave-1 run layout, the wave-4 morning list and the
+  // wave-5 record head, reached by the `run overview` verb.
+  "src/runs/overview.ts": { unit: "run-overview", wave: 6 },
   // Key-level ownership of `.claude/settings.json`: pure planning plus the
   // merge writer and the reclaim reducer, over the MCP merge lane (wave 4,
   // whose read and serialise helpers it shares) and the safe-write lane (wave
