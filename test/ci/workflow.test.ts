@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -11,10 +12,10 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { parse } from "yaml";
 // @ts-expect-error — the probe is a plain .mjs script with no type declarations, and stays that
 // way: it re-execs itself under a type-stripping flag, so it cannot be TypeScript itself.
@@ -2311,8 +2312,16 @@ describe.skipIf(process.platform === "win32" || spawnSync("sh", ["-c", "exit 0"]
       RUNNER_TEMP: temp,
       GITHUB_WORKSPACE: REPO_ROOT,
     };
-    /** The drive's PATH: the `git` shim and the `gh` stub first. */
-    const shimmed = { ...env, PATH: `${join(work, "bin")}${delimiter}${env["PATH"] ?? ""}` };
+    // TEST CHANGE, justified: the verbs refuse a `gh` inside a temp folder. A runner's RUNNER_TEMP lies outside
+    // them, and this suite's stands in with a folder inside one, so the stub the step wrote is copied, same bytes,
+    // to a folder under the home folder that comes first on PATH. The check and the step are unchanged.
+    let ghFolder = "";
+    beforeAll(() => {
+      ghFolder = mkdtempSync(join(homedir(), ".stamity-release-prep-gh-"));
+    });
+    afterAll(() => rmSync(ghFolder, { recursive: true, force: true }));
+    /** The drive's PATH: the `gh` stub and the `git` shim first. */
+    const shimmed = () => ({ ...env, PATH: `${ghFolder}${delimiter}${join(work, "bin")}${delimiter}${env["PATH"] ?? ""}` });
     const steps = stepsOf(nightly, "release-prep-unattended");
 
     function sh(body: string): { status: number | null; out: string } {
@@ -2324,7 +2333,7 @@ describe.skipIf(process.platform === "win32" || spawnSync("sh", ["-c", "exit 0"]
     function stamity(args: readonly string[]): Record<string, unknown> {
       const result = spawnSync("npx", ["--no", "stamity", ...args, "--json"], {
         cwd: repo,
-        env: { ...shimmed, STAMITY_UNATTENDED: "1" },
+        env: { ...shimmed(), STAMITY_UNATTENDED: "1" },
         encoding: "utf8",
         timeout: 120_000,
       });
@@ -2333,7 +2342,7 @@ describe.skipIf(process.platform === "win32" || spawnSync("sh", ["-c", "exit 0"]
     }
 
     function gitIn(args: readonly string[]): string {
-      return execFileSync("git", [...args], { cwd: repo, env: shimmed, encoding: "utf8" }).trim();
+      return execFileSync("git", [...args], { cwd: repo, env: shimmed(), encoding: "utf8" }).trim();
     }
 
     function put(path: string, text: string): void {
@@ -2345,6 +2354,7 @@ describe.skipIf(process.platform === "win32" || spawnSync("sh", ["-c", "exit 0"]
       await ensureDistBuilt();
       const built = sh(runOf(steps, "Scratch repository"));
       expect(built.status, built.out).toBe(0);
+      copyFileSync(join(work, "bin", "gh"), join(ghFolder, "gh"));
       expect(gitIn(["remote", "get-url", "origin"]), "origin reads as GitHub").toBe("https://github.com/o/r.git");
       put(".stamity/preflight-canary.json", JSON.stringify({ at: new Date().toISOString() }));
       const verdict = stamity(["gate", "preflight", "--unattended"]) as { ok: boolean; checks: { id: string; state: string; evidence: string }[] };
