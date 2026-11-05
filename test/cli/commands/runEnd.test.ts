@@ -1283,10 +1283,146 @@ describe("stamity run end", () => {
       ["run-contract: 1", "plan: docs/plans/x.md", "base: 02e040eb", "acceptance: done", "scope: { in: [src] }", `answerer: ${answerer}`, ""].join("\n");
 
     const requests = () => rest.calls.filter((call) => call.path === REVIEWERS);
+    const COMMENTS = "repos/o/r/issues/7/comments";
+    const comments = () => rest.calls.filter((call) => call.path === COMMENTS);
 
     beforeEach(() => {
       rest.routes.set("GET repos/o/r/pulls/7", { status: 200, json: { number: 7, user: { login: "the-run" } } });
       rest.routes.set(`POST ${REVIEWERS}`, { status: 201, json: { number: 7 } });
+      // TEST CHANGE, justified (run-overview, REQ-FLOW-156, review/73): a failed notice now posts one comment, so the cases
+      // below that pin a whole `notDone` list need that post to answer; a case about a failed post replaces this route.
+      rest.routes.set(`POST ${COMMENTS}`, { status: 201, json: { id: 1 } });
+    });
+
+    describe("said on the pull request when it fails (review/73)", () => {
+      const UNSENT = "notice not sent: the review request answered HTTP 422, so it reached nobody";
+
+      it("leaves one comment holding the notDone line alone, and exits 0", async () => {
+        const { repo } = await seed("attended");
+        await put(repo, CONTRACT, contract('"@a-person"'));
+        rest.routes.set(`POST ${REVIEWERS}`, { status: 422, json: { message: "Reviews may only be requested from collaborators" } });
+
+        const { code, doc } = await run(repo, ENDED);
+
+        expect(code).toBe(0);
+        expect(doc).toMatchObject({ pr: { number: 7 }, notDone: [UNSENT] });
+        expect(comments()).toEqual([{ method: "POST", path: COMMENTS, body: { body: UNSENT } }]);
+        expect(rest.calls.findIndex((call) => call.path === "repos/o/r/pulls" && call.method === "POST")).toBeLessThan(rest.calls.findIndex((call) => call.path === COMMENTS));
+      });
+
+      it("says a failure that came before any GitHub call too, naming the class", async () => {
+        const { repo } = await seed("attended");
+        await put(repo, CONTRACT, 'run-contract: 2\nanswerer: "@a-person"\nsome-key: x\n');
+
+        const { code } = await run(repo, ENDED);
+
+        expect(code).toBe(0);
+        expect(comments().map((call) => call.body)).toEqual([{ body: `notice not sent: ${CONTRACT} did not parse` }]);
+      });
+
+      it("leaves none on a sent notice", async () => {
+        const { repo } = await seed("attended");
+        await put(repo, CONTRACT, contract('"@a-person"'));
+
+        const { doc } = await run(repo, ENDED);
+
+        expect(doc).toMatchObject({ notice: "a-person", notDone: [] });
+        expect(comments()).toEqual([]);
+      });
+
+      it("leaves none with no contract", async () => {
+        const { repo } = await seed("attended");
+
+        const { code } = await run(repo, ENDED);
+
+        expect(code).toBe(0);
+        expect(comments()).toEqual([]);
+      });
+
+      it("leaves none on a --refused end, which sends no notice", async () => {
+        const { repo } = await seed("attended");
+        await put(repo, CONTRACT, contract('"@a-person"'));
+        rest.routes.set(`POST ${REVIEWERS}`, { status: 422, json: null });
+
+        const { code } = await run(repo, [...ENDED, "--refused"]);
+
+        expect(code).toBe(0);
+        expect(comments()).toEqual([]);
+      });
+
+      it("leaves none on a later end that finds the notice already sent", async () => {
+        const { repo } = await seed("attended");
+        await put(repo, CONTRACT, contract('"@a-person"'));
+
+        await run(repo, ENDED);
+        rest.routes.set(`POST ${REVIEWERS}`, { status: 422, json: null });
+        const later = await run(repo, ENDED);
+
+        expect(later.doc).toMatchObject({ notDone: [] });
+        expect(comments()).toEqual([]);
+      });
+
+      it("posts a second comment on a second end that fails again, the record holding no notice line", async () => {
+        const { repo } = await seed("attended");
+        await put(repo, CONTRACT, contract('"@a-person"'));
+        rest.routes.set(`POST ${REVIEWERS}`, { status: 422, json: null });
+
+        await run(repo, ENDED);
+        const later = await run(repo, ENDED);
+
+        expect(later.code).toBe(0);
+        expect(comments()).toHaveLength(2);
+      });
+
+      it("posts once on an end whose land job lines run it a second pass, which fails the same way", async () => {
+        const { repo } = await seed("attended", { files: { ".stamity/manifest.json": '{"version":1,"autonomy":{"landJob":{"workflows":["CI"]}}}\n' } });
+        await put(repo, CONTRACT, contract('"@a-person"'));
+        rest.routes.set(`POST ${REVIEWERS}`, { status: 422, json: null });
+
+        const { code, doc } = await run(repo, ENDED);
+
+        expect(code).toBe(0);
+        // Two requests prove the second pass ran, and failed, so the one comment is the guard's and not a lone pass.
+        expect(requests()).toHaveLength(2);
+        expect(comments()).toHaveLength(1);
+        expect(doc).toMatchObject({ notDone: [UNSENT] });
+      });
+
+      it("adds one notDone line and moves no exit code where the comment fails with a status", async () => {
+        const { repo } = await seed("attended");
+        await put(repo, CONTRACT, contract('"@a-person"'));
+        rest.routes.set(`POST ${REVIEWERS}`, { status: 422, json: null });
+        rest.routes.set(`POST ${COMMENTS}`, { status: 403, json: { message: "Resource not accessible" } });
+
+        const { code, doc } = await run(repo, ENDED);
+
+        expect(code).toBe(0);
+        expect(doc).toMatchObject({ pr: { number: 7 }, notDone: [UNSENT, "the notice's comment was not posted to #7 (HTTP 403)"] });
+      });
+
+      it("adds one notDone line and moves no exit code where gh never reached GitHub, naming none of its words", async () => {
+        const { repo } = await seed("attended");
+        await put(repo, CONTRACT, contract('"@a-person"'));
+        rest.routes.set(`POST ${REVIEWERS}`, { status: 422, json: null });
+        rest.rejected.set(`POST ${COMMENTS}`, "GH_NOT_LOGGED_IN");
+
+        const { code, doc } = await run(repo, ENDED);
+
+        expect(code).toBe(0);
+        expect(doc).toMatchObject({ notDone: [UNSENT, "the notice's comment was not posted to #7 (gh failed before GitHub answered)"] });
+      });
+
+      it("posts nothing where the outbound screen matches the line, as every text a run sends passes it", async () => {
+        const { repo } = await seed("attended");
+        await put(repo, CONTRACT, contract('"@a-person"'));
+        rest.rejected.set(`POST ${REVIEWERS}`, TOKEN);
+
+        const { code, doc } = await run(repo, ENDED);
+
+        expect(code).toBe(0);
+        expect(comments()).toEqual([]);
+        expect((doc as { notDone: string[] }).notDone).toContain("the notice's comment was not posted to #7 (the outbound screen matched it)");
+      });
     });
 
     it("asks the login the contract names, once, carrying the two lists and nothing else, after the pull request", async () => {

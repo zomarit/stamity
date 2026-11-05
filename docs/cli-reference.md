@@ -391,7 +391,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
-| `<subcommand>` | which run action to run — one of `start`, `checkpoint`, `end`, `land`, `contract` |
+| `<subcommand>` | which run action to run — one of `start`, `checkpoint`, `end`, `land`, `contract`, `overview` |
 
 | Flag | What it does | Default |
 |---|---|---|

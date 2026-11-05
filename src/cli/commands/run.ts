@@ -9,7 +9,9 @@ import { personOnlyVerdict } from "../../hooks/personOnly.ts";
 import { RUN_ENDED_MARKER_FILE } from "../../mcp/env.ts";
 import { checkSurfaceRecord, type RecordFileReads, type RecordUse, type SurfaceCheck } from "../../runs/gitSurface.ts";
 import { hookPathsAt, setupRootOf, setupRootsAt, type HookScratch } from "../../runs/hookPaths.ts";
+import { parseLedgerText, type LedgerRow } from "../../runs/ledgerStore.ts";
 import { blastRadiusSection, MORNING_FILE, prBodyFrom, screenOutbound, withBlastRadius } from "../../runs/morning.ts";
+import { overviewFrom } from "../../runs/overview.ts";
 import { inferPrerequisites, type PrereqRow } from "../../runs/prerequisites.ts";
 import { ensureDraftPr, HOST_NAME, PR_RECORD_FILE, prRecordText, resolveRepo, type PrOutcome } from "../../runs/pullRequest.ts";
 import { parseRunContract } from "../../runs/runContract.ts";
@@ -162,6 +164,8 @@ import { runLand } from "./runLand.ts";
  * the record; a later `end` that finds the line sends nothing, and the JSON's `notice` names whom this call asked. It
  * does not read `--final-round`, which most runs never pass, and a `--refused` end sends nothing. A failure never moves
  * the exit code: it is a `notDone` line, leaves no record line, and the next `end` tries again. No contract says nothing.
+ * That line is also one comment on the pull request (review/73), as a status line in the body would be replaced at land:
+ * its text the line alone, once per `end` call, and a comment that fails is one more `notDone` line.
  *
  * **The land job's lines** (REQ-FLOW-157): with `autonomy.landJob` on, an `end` with its own pull request appends `PR: <n>`
  * and `Login: <login>` to the record and runs itself once more, so they reach the head through every check above. A failure
@@ -172,6 +176,11 @@ import { runLand } from "./runLand.ts";
  *
  * **`contract`** (REQ-FLOW-155) reads a ready item and writes the run's contract, pushing nothing; its body is
  * `./runContract.ts`, registered here only.
+ *
+ * **`overview`** (REQ-FLOW-161) prints the run's one short page from its record, ledger and morning list, writing nothing
+ * and calling neither git nor GitHub; the page is `../../runs/overview.ts`, each line cleaned here as it prints. Exit 0
+ * where the record reads whole, a ledger that does not read named on the page; 1 for a record missing or over its cap,
+ * since a land line past the cap could not be seen. The JSON is `{ subcommand, run, overview }`, `overview` the page.
  */
 
 const START = "start";
@@ -179,6 +188,7 @@ const CHECKPOINT = "checkpoint";
 const END = "end";
 const LAND = "land";
 const CONTRACT = "contract";
+const OVERVIEW = "overview";
 
 /** Every option beyond `--run`, by its key in commander's parsed options. */
 const OPTION_FLAGS: Readonly<Record<string, string>> = {
@@ -207,6 +217,7 @@ const SUBCOMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> = {
   // No --paths and no --title: land stages and titles nothing.
   [LAND]: ["fastForward", "method", "ready", "wait", "approved", "job", "pr"],
   [CONTRACT]: ["item"],
+  [OVERVIEW]: [],
 };
 
 /** `--wait`'s most minutes: under a client's ten-minute shell-call limit (decision D17). */
@@ -302,7 +313,7 @@ export const runCommand: CommandModule = {
 
   configure(cmd: Command): void {
     cmd
-      .addArgument(new Argument("<subcommand>", "which run action to run").choices([START, CHECKPOINT, END, LAND, CONTRACT]))
+      .addArgument(new Argument("<subcommand>", "which run action to run").choices([START, CHECKPOINT, END, LAND, CONTRACT, OVERVIEW]))
       .option("--run <run-id>", "the run folder's name under .stamity/runs/", parseRun)
       .option("--paths <path...>", "checkpoint and end: also stage these paths, relative to the project root")
       .option("--pr [number]", "checkpoint: open or update the run's draft pull request after the push (with --title); land --job: the pull request to land")
@@ -356,9 +367,56 @@ export const runCommand: CommandModule = {
       checkRunId(ctx, CONTRACT, String(opts["run"]));
       return runContract(ctx, opts);
     }
+    if (args[0] === OVERVIEW) return Promise.resolve(runOverview(ctx, String(opts["run"])));
     return runStart(ctx, String(opts["run"]));
   },
 };
+
+/** The ledger as the page may count it: its rows, or, with none of them, why it did not read. A run with no ledger yet has no rows. */
+function overviewLedger(ctx: CliContext, runDir: string): { ledger: LedgerRow[]; ledgerFailure?: string } {
+  const { LEDGER_FILE, LEDGER_READ_MAX_BYTES } = ctx.engine.runs.layout;
+  const path = join(ctx.app.runtime.cwd, runDir, LEDGER_FILE);
+  if (!exists(path)) return { ledger: [] };
+  const read = readCapped(path, LEDGER_READ_MAX_BYTES);
+  if (read === null) return { ledger: [], ledgerFailure: `${LEDGER_FILE} could not be read` };
+  if (read.truncated) return { ledger: [], ledgerFailure: `${LEDGER_FILE} is over ${LEDGER_READ_MAX_BYTES} bytes` };
+  const parsed = parseLedgerText(read.text);
+  if (parsed.unreadable.length > 0) return { ledger: [], ledgerFailure: `${LEDGER_FILE}'s line ${parsed.unreadable.join(", ")} does not read as a row` };
+  return { ledger: [...parsed.rows.values()] };
+}
+
+/** REQ-FLOW-161: reads the run folder and prints its page. Every line is a run's own text, so each is cleaned as it prints. */
+function runOverview(ctx: CliContext, run: string): CommandResult {
+  checkRunId(ctx, OVERVIEW, run);
+  const { layout } = ctx.engine.runs;
+  const cwd = ctx.app.runtime.cwd;
+  const runDir = layout.runRelPath(run);
+  const recordRel = `${runDir}/${layout.RECORD_FILE}`;
+  const record = readCapped(join(cwd, recordRel), RECORD_READ_MAX_BYTES);
+  if (record === null) {
+    throw new CliFailure({
+      code: "FAILURE",
+      message: `run overview found no record at ${recordRel}`,
+      why: "the page's facts are the record's, so with none there is no page",
+      next: "run it from the project root, naming the run folder that holds the record",
+    });
+  }
+  if (record.truncated) {
+    throw new CliFailure({
+      code: "FAILURE",
+      message: `run overview will not read ${recordRel}: it is over ${RECORD_READ_MAX_BYTES} bytes`,
+      why: "a land or usage line past the cap could not be seen, so the page could say no land yet of a run that landed",
+      next: `read ${recordRel} itself`,
+    });
+  }
+  const morning = readCapped(join(cwd, runDir, MORNING_FILE), MORNING_READ_MAX_BYTES);
+  const page = overviewFrom({ record: record.text, ...overviewLedger(ctx, runDir), morning: morning?.text ?? null })
+    .split("\n")
+    .map((line) => sanitizeLabel(line))
+    .join("\n");
+  ctx.io.out(`run: ${run}\n\n${page}`);
+  return { exitCode: 0, json: { subcommand: OVERVIEW, run, overview: page } };
+}
 
 /** `run` checked against the run folder's grammar; anything else is refused before git runs. */
 function checkRunId(ctx: CliContext, verb: string, run: string): void {
@@ -1542,7 +1600,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   lines.push(`pr: ${step.pr === null ? "not opened" : `#${step.pr.number} ${step.pr.url} (${step.pr.how})`}`);
   const noticed =
     verb === END && opts["refused"] !== true && step.pr !== null && step.repo !== undefined
-      ? await runEndNotice(ctx, { cwd, top, runDir, recordRel, repo: step.repo, number: step.pr.number }, lines, result.notDone)
+      ? await noticeOrSayIt(ctx, { cwd, top, runDir, recordRel, repo: step.repo, number: step.pr.number }, lines, result.notDone, firstPass)
       : null;
   // REQ-FLOW-157: the land job has only what the head holds, so an `end` that wrote its lines commits them through this same
   // door; the pull request's number exists only after the first push, so that takes a second pass, whose lines already stand.
@@ -1611,6 +1669,42 @@ async function stampLandJobLines(ctx: CliContext, at: { cwd: string; recordRel: 
 /** The record line a sent notice leaves, as {@link runEndNotice} writes it: prose that merely says "notice" is not one. */
 const NOTICE_SENT = /^- \S+ notice: #[0-9]+ review requested of /m;
 
+/** How a failed notice's `notDone` line opens, which is what {@link noticeOrSayIt} finds it by. */
+const NOTICE_NOT_SENT = "notice not sent: ";
+
+/** The pull request a notice is about, and where its record and contract are. */
+interface NoticeTarget {
+  cwd: string;
+  top: string;
+  runDir: string;
+  recordRel: string;
+  repo: OriginRepo;
+  number: number;
+}
+
+/**
+ * review/73: {@link runEndNotice}, and where it failed, that `notDone` line said on the pull request as well. `draftPr` writes
+ * the body before the notice runs and a status line would be replaced at land, so the failure gets a comment, whose text is
+ * the line alone, which names a class and never GitHub's words. `carried` is the first pass's lines: the land job's second pass
+ * retries the notice, and one `end` call says a failure once. A failed comment is one more `notDone` line and moves no exit code.
+ */
+async function noticeOrSayIt(ctx: CliContext, at: NoticeTarget, lines: string[], notDone: string[], carried: readonly string[]): Promise<string | null> {
+  const from = notDone.length;
+  const noticed = await runEndNotice(ctx, at, lines, notDone);
+  const failed = notDone.slice(from).find((line) => line.startsWith(NOTICE_NOT_SENT));
+  if (noticed !== null || failed === undefined || carried.some((line) => line.startsWith(NOTICE_NOT_SENT))) return noticed;
+  const unposted = (why: string): void => void notDone.push(`the notice's comment was not posted to #${at.number} (${why})`);
+  const body = sanitizeLabel(failed);
+  if (!screenOutbound(body, "pr-comment").ok) {
+    unposted("the outbound screen matched it");
+    return noticed;
+  }
+  const { host: hostname, owner, repo } = at.repo;
+  const written = await ghApi({ method: "POST", path: `repos/${owner}/${repo}/issues/${at.number}/comments`, body: { body }, hostname }, { cwd: at.top, env: { ...ctx.app.runtime.env } }).catch(() => null);
+  if (written?.status !== 201) unposted(written === null ? "gh failed before GitHub answered" : `HTTP ${written.status}`);
+  return noticed;
+}
+
 /** Whom an `answerer` asks: `@login` or `@org/team`, anything else `null`, so no free text reaches a request. */
 function reviewerOf(answerer: string): { login: string } | { org: string; team: string } | null {
   const [name = "", team, stray] = answerer.slice(1).split("/");
@@ -1628,11 +1722,11 @@ function reviewerOf(answerer: string): { login: string } | { org: string; team: 
  * Returns whom it asked, else `null`. The record line goes in after the push, as `land:` does, so the next `end`
  * commits it; a session that ends here leaves it in the work tree, and a fresh clone's `end` would ask once more.
  */
-async function runEndNotice(ctx: CliContext, at: { cwd: string; top: string; runDir: string; recordRel: string; repo: OriginRepo; number: number }, lines: string[], notDone: string[]): Promise<string | null> {
+async function runEndNotice(ctx: CliContext, at: NoticeTarget, lines: string[], notDone: string[]): Promise<string | null> {
   const rel = `${at.runDir}/${CONTRACT_FILE}`;
   if (!exists(join(at.cwd, rel))) return null;
   const unsent = (why: string): null => {
-    notDone.push(`notice not sent: ${why}`);
+    notDone.push(`${NOTICE_NOT_SENT}${why}`);
     return null;
   };
   const record = readCapped(join(at.cwd, at.recordRel), RECORD_READ_MAX_BYTES);

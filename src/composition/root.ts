@@ -113,6 +113,7 @@ import * as runsPlanCheck from "../runs/planCheck.ts";
 import * as runsGitSurface from "../runs/gitSurface.ts";
 import * as runsHookPaths from "../runs/hookPaths.ts";
 import * as runsLandEvidence from "../runs/landEvidence.ts";
+import * as runsOverview from "../runs/overview.ts";
 import * as hooksModel from "../hooks/model.ts";
 import * as portableRunner from "../hooks/portableRunner.ts";
 import * as userHooks from "../hooks/userHooks.ts";
@@ -303,6 +304,7 @@ export interface EngineRegistry {
     readonly gitSurface: typeof runsGitSurface;
     /** The evidence `run land` merges on and the decision it reaches (REQ-FLOW-132, REQ-FLOW-133). */
     readonly landEvidence: typeof runsLandEvidence;
+    readonly overview: typeof runsOverview;
     /** The hook files and declared scripts a commit's hook declarations name (review/175, build/2). */
     readonly hookPaths: typeof runsHookPaths;
   };
@@ -539,6 +541,7 @@ export function createEngine(): EngineRegistry {
       planCheck: runsPlanCheck,
       gitSurface: runsGitSurface,
       landEvidence: runsLandEvidence,
+      overview: runsOverview,
       hookPaths: runsHookPaths,
     },
     hooks: { model: hooksModel, portableRunner, userHooks, scripts: hookScripts, personOnly: hookPersonOnly },
