@@ -53,6 +53,12 @@ Commit what it writes and push it to the default branch. A cloud run starts from
 the setup has to be there. You also need `gh`, the GitHub command line tool, signed in.
 [Getting started](getting-started.md) covers this step in full.
 
+You also need CI before Step 2: a workflow that runs on each pull request and reports check runs, as
+GitHub Actions does. A commit status alone does not count. `run land` needs at least one check run on
+the exact commit, so with none it holds on `has no check run yet` for good. On Claude's cloud the land
+job then has no workflow to wake it either. So no run ever merges. If your repository has no CI yet,
+add it now.
+
 ## Step 2: Block direct pushes to the default branch
 
 **Who:** a person with admin rights on the repository. **Where:** the repository's settings on GitHub.
@@ -63,9 +69,10 @@ A run refuses to start unless its account cannot push straight to the default br
 2. Set it to **Active** and point it at the default branch.
 3. Turn on **Require a pull request before merging**, with 0 required approvals. With 1 or more,
    every merge waits for that approval. That is safe, but it is not a merge with nobody watching.
-4. Turn on **Require status checks to pass** and add your CI job. With no required check, a merge
-   does not wait for your tests. Leave **Require branches to be up to date** off, or a pull request
-   stops each time the default branch moves.
+4. Turn on **Require status checks to pass** and add your CI job. With no required check, `run land`
+   waits only for the check runs it finds on the commit, so a job that has not started yet is not
+   waited for. Leave **Require branches to be up to date** off, or a pull request stops each time the
+   default branch moves.
 5. Leave the bypass list empty, and leave **Restrict updates** off, since it stops the land job.
 
 Now think about whose account the run uses. On Claude's cloud a run acts as you, the connected user,
@@ -129,6 +136,12 @@ npx @zomarit/stamity config set autonomy.landJob ci
 npx @zomarit/stamity sync --loosen
 ```
 
+The order matters, since a `config set` line replaces its whole key and says nothing. Make a hand
+raise of `maxFiles` or `maxLines` after the `config set` lines and before `sync --loosen`. A raise made
+after `sync --loosen` needs `sync --loosen` again: until then the manifest and the guard differ, so
+`run land` drops `autoShip` and asks with no `auto-ship:` reason. If you did Step 9's list, leave out
+the `landJob` line, which would put your list back to `CI`.
+
 Commit what changed, open one pull request, and merge it yourself. Do this before you cut the branch
 in Step 6. A run reads the strictest copy of the setting, and the class file comes from the base
 commit, so a change on only one branch does nothing.
@@ -183,9 +196,17 @@ is made there by hand. Skip this step if you use Cursor alone.
    filter where the page shows one. As read on 2026-11-05 it shows filters for pull requests only.
    With no filter, every label starts a session, and the prompt below stops when no issue is ready.
 4. In the task's environment, set the variable `STAMITY_UNATTENDED=1` and add `gh auth setup-git` to
-   the setup script. The script must also give the session Node 22.22.2 or newer and a signed-in
-   `gh`, as Cloud runs says. No page gives a tested line for that yet, so a first run may refuse on
-   `node-engine`.
+   the setup script. The script must also give the session Node 22.22.2 or newer, as Cloud runs says.
+   No page gives a tested line for that yet, so a first run may refuse on `node-engine`.
+
+   `gh` needs no sign-in from you. Claude's cloud environments page, read on 2026-11-05, says `gh` is
+   already installed, and that with `GH_TOKEN` and `GITHUB_TOKEN` both unset its proxy puts your own
+   GitHub credentials on `gh api` calls for the task's repository. So leave both unset: a token you
+   set goes to `gh` as it is, and the run's reads then speak for that token's account, not yours.
+   The page does not say whether `gh` is signed in while the setup script runs, or whether the proxy
+   answers every read the pre-flight makes. Both are unknown until a real run. So a first session may
+   not start, since a setup script that exits non-zero stops it, and a first run may refuse on
+   `direct-push`.
 5. Paste the start prompt below as the task's prompt, with your own owner and repository.
 
 ```text
@@ -216,13 +237,20 @@ task and per account, so a lost event is likely when many labels land in one hou
 
 **Who:** you. **Where:** Cursor's automations page. Skip this step if you use Claude alone.
 
-1. Save a cloud environment as [Cloud runs](cloud.md) says, under Cursor's cloud agents.
+1. Save a cloud environment as [Cloud runs](cloud.md) says, under Cursor's cloud agents. Cloud runs
+   asks for a signed-in `gh` there. Cursor's pages, read on 2026-11-05, do not say how to get one, so
+   that part is unknown until a real run, and a first run may refuse on `direct-push`.
 2. Add a new automation on this one repository, using that environment.
 3. Choose the GitHub trigger **Issue label changed**. It may not be offered to you: if not, take the
    webhook branch below.
 4. Paste the start prompt from Step 7 as the automation's prompt, and save it.
 
-The trigger also fires when a label comes off. That does no harm: the prompt finds nothing new.
+This trigger fires when a label is added to an issue or taken off one, and Cursor's page names no
+filter for one label, so any label on any issue may start a session. Such a session finds nothing new
+only while no labelled issue is unclaimed. While one is, each label event can start a session that
+takes it, so two sessions can take one issue and its branch. Step 10 says how to stay out of that
+window, and check 7 under When nothing fired says how to start again. The webhook branch below fires
+only on `labeled`, for this label alone, so a label taken off starts nothing there.
 
 ### Where the issue trigger is not offered
 
@@ -266,7 +294,10 @@ are meant to finish the merge themselves, so skip this step there. If you turned
 now, do Step 4's lines for it, then items 3 to 5 of the list below.
 
 A job exits 0 on every normal end, merged or held, so a green job does not mean a merge: a hold shows
-as the pull request's status line, never a red job. A red job means GitHub did not answer a read or a
+as the pull request's status line, never a red job. Three ends leave no line: a run still in progress,
+a head a newer job speaks for, and a pull request that does not read as the run's own, such as one
+whose base someone changed. That last one is no wait: nothing lands it until a person puts it right,
+and its reason is only in the job's log. A red job means GitHub did not answer a read or a
 write. The merge method comes from the ruleset, else the repository's settings, at run time, and with
 no method allowed the job holds. If a push to your default branch deploys, read the land job's limits
 in [Cloud runs](cloud.md) first.
@@ -292,9 +323,10 @@ name, or you require more than one, the entry looks like this, with your own nam
 **Who:** a person with write or admin rights. The issue's author needs the same rights.
 **Where:** the issue on GitHub.
 
-Add `stamity:ready` to the issue. Then wait for its draft pull request to open before you add another
-label, on any issue. Until that draft opens the issue reads as unclaimed, and on Claude any label
-starts a session, so a second run could take the same issue. Nothing stops that but this wait.
+Add `stamity:ready` to the issue. Then wait for its draft pull request to open before you add or take
+off another label, on any issue. Until that draft opens the issue reads as unclaimed. On Claude any
+label added starts a session, and on Cursor's label trigger any label added or taken off can, so a
+second run could take the same issue. Nothing stops that but this wait.
 
 The run first checks that it may start. Then it switches to the issue's branch, writes its contract,
 opens a draft pull request and does the plan. If the evidence holds it merges. If not, the body says
@@ -333,10 +365,14 @@ Go through these in order, and stop at the first one that explains it:
    the label came from someone without write access, if the issue is claimed, or if the issue has no
    `Branch:` or `Plan:` line, or one of the wrong shape. File such an item again as in Step 6.
 7. **A `Refused:` draft.** The run started and refused. Read `## Refused` in the body and fix what it
-   names. Then close the draft, take the label off and put it on again. A draft from the issue's
+   names. Then close the draft, take the label off and put it on again. On Cursor's label trigger that
+   is two events, so a quick off and on can start two sessions, and both can read the issue as
+   unclaimed and take one branch. There, take the label off, wait for the session that starts to end
+   on Cursor's page, and only then put the label on. A draft from the issue's
    branch claims the issue until you close it. A draft from `stamity/<run-id>` does not claim the
    issue, since the run refused before it reached that branch, so the next label event can start the
    run again. Take the label off until you have fixed the cause.
 
 A pull request that opened and did not merge is not this section. Its body names each reason after
-`merge waits on:`, and [Troubleshooting](troubleshooting.md) explains them.
+`merge waits on:`, and [Troubleshooting](troubleshooting.md) explains them. If the body names none,
+Step 9 lists the ends that leave no line.

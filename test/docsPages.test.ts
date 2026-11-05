@@ -5825,6 +5825,10 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
 // land evidence, the pre-flight's administrator refusal and who may call the land verb, so the four pages say the same
 // three things, and each limit is stated as a limit. Each pin fails on the lane base cc10ab71, whose pages say none of it.
 describe("the security pages say one thing about the brake, the lift and the job (REQ-FLOW-145)", () => {
+  const SPEC = "docs/specs/everyday-flows.md";
+  const NO_LINE_ENDS =
+    "Three ends leave no line: a run still in progress, a head a newer job speaks for, and a pull request that does not read as the run's own, such as one whose base someone changed. That last one is no wait: nothing lands it until a person puts it right, and its reason is only in the job's log.";
+
   it.each([SECURITY, SECURITY_MAPPING, CLOUD, TROUBLESHOOTING])("%s names the brake, the lift and the job", (page) => {
     const flat = flowed(read(page));
     expect(flat, `${page} does not name the brake`).toContain("the brake");
@@ -5834,8 +5838,9 @@ describe("the security pages say one thing about the brake, the lift and the job
     expect(flat).toContain("`stamity run land --job`");
     expect(flat, `${page} does not call the job the evidence's second caller`).toContain("second caller");
     expect(flat).toContain("with no bypass");
-    expect(flat, `${page} does not say a job's merge blinds the brake`).toContain("A job's merge starts no `push` run, so the brake has nothing to read on that tip.");
+    expect(flat, `${page} does not say a job's merge blinds the brake`).toContain("Under the emitted token a job's merge starts no Actions `push` workflow, so the brake has no such run to read on that tip.");
     expect(flat, `${page} does not say a hold is no red job`).toContain("A job exits 0 on every normal end, and a hold shows as the pull request's status line, never as a red job.");
+    expect(flat, `${page} does not name the ends that leave no line`).toContain(NO_LINE_ENDS);
     expect(flat, `${page} does not name the merge method's source`).toContain("merge method comes from the ruleset or the repository at run time");
     expect(flat, `${page} does not carry the one not-run list`).toContain(
       "No real run has proven the land job, so the whole job is `not run` until one does. That covers the ready mark, the thread reads and the thread resolve under `GITHUB_TOKEN`, the merge call under that token, the review request and the status line the job writes, the `issue_comment` wake, and the checkout of `refs/pull/<n>/head`.",
@@ -5858,7 +5863,7 @@ describe("the security pages say one thing about the brake, the lift and the job
       "should leave `docs` out of `autoShip.classes`",
       "to fake them a run needs a raw write under `.git/`",
       "A deleted comment leaves no last editor to read",
-      "`GITHUB_TOKEN` starts no `push` run after its merge",
+      "`GITHUB_TOKEN` starts no Actions `push` workflow after its merge",
       "`GITHUB_TOKEN` is the emitted workflow's configuration, not an engine check",
       "a `workflow_dispatch` runs the file at the ref the dispatch names",
       "Its proof that a pull request is a run's own is text at the head",
@@ -5870,8 +5875,28 @@ describe("the security pages say one thing about the brake, the lift and the job
       expect(security, `SECURITY.md says again: ${overstated}`).not.toContain(overstated);
       expect(flowed(read(CLOUD)), `docs/cloud.md says again: ${overstated}`).not.toContain(overstated);
     }
-    expect(flowed(read(CLOUD))).toContain("a deploy on push must not rely on this path");
+    expect(flowed(read(CLOUD))).toContain("so an Actions deploy on push must not rely on this path, and a webhook or a GitHub App on the push still fires");
     expect(flowed(read(CLOUD))).toContain("A deleted state comment is not seen");
+  });
+
+  // TEST CHANGE, justified (review/123, review/124): the old pins held two sentences that said too much, one a reader could
+  // take as "a job's merge does not deploy", the other that only two ends leave no line. These pin what the code does.
+  it("says what a job's merge stops, that nothing else stops, and which ends leave no line, on every page", () => {
+    const signedOff = "Stamity never deploys, tags or releases itself, but a merge onto a deploying branch starts that repository's own pipeline, with nobody asked, by the person's opt-in. That is the point of auto-ship.";
+    const stops =
+      "Under the emitted `GITHUB_TOKEN`, a land job's merge starts no Actions `push` workflow. That is all it stops: a webhook or a GitHub App listening to the push still fires, and under any other token the workflow starts too.";
+    for (const page of [SECURITY, CLOUD, SPEC]) {
+      expect(flowed(read(page)), `${page} does not say what a job's merge stops`).toContain(`${signedOff} ${stops}`);
+    }
+    for (const page of [SPEC, FACTORY]) {
+      expect(flowed(read(page)), `${page} does not name the ends that leave no line`).toContain(NO_LINE_ENDS);
+    }
+    for (const page of [SECURITY, SECURITY_MAPPING, CLOUD, TROUBLESHOOTING, FACTORY, SPEC]) {
+      const flat = flowed(read(page));
+      expect(flat, `${page} still calls a job's merge free of a push run`).not.toContain("starts no `push` run");
+      expect(flat, `${page} still names two ends alone`).not.toMatch(/only a run still in progress/i);
+    }
+    expect(flowed(read(SPEC)), "the criteria still read every hold as a line").not.toContain("GIVEN a hold of any kind");
   });
 
   it("names the review request beside the door, and the five fixed calls of the land verb, on both pages", () => {
@@ -6074,6 +6099,57 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     expect(flowed(section("Step 4: Choose what to loosen"))).toContain("do Step 9's list now, before you cut the branch");
   });
 
+  it("names CI as a need before Step 2, and says what happens with none (review/128)", () => {
+    const step = flowed(section("Step 1: Install stamity"));
+    expect(step).toContain("You also need CI before Step 2");
+    expect(step).toContain("reports check runs");
+    expect(step).toContain("`has no check run yet` for good");
+    expect(step).toContain("So no run ever merges");
+    expect(read("src/runs/landEvidence.ts"), "the page quotes a reason the code does not print").toContain("has no check run yet");
+    const rule = flowed(section("Step 2: Block direct pushes"));
+    expect(rule, "run land does wait for the check runs it finds").not.toContain("a merge does not wait for your tests");
+    expect(rule).toContain("waits only for the check runs it finds on the commit");
+    expect(flowed(read("docs/specs/everyday-flows.md"))).toContain("Given a reader with a repository, a client and a CI workflow that reports check runs");
+  });
+
+  it("places Step 4's hand edits among its lines, so neither undoes the other (review/126)", () => {
+    const step = flowed(section("Step 4: Choose what to loosen"));
+    expect(step).toContain("a `config set` line replaces its whole key and says nothing");
+    expect(step).toContain("after the `config set` lines and before `sync --loosen`");
+    expect(step).toContain("A raise made after `sync --loosen` needs `sync --loosen` again");
+    expect(step).toContain("asks with no `auto-ship:` reason");
+    expect(step).toContain("If you did Step 9's list, leave out the `landJob` line");
+  });
+
+  it("says what a label toggle can start on Cursor, and what a reader does instead (review/127)", () => {
+    const step = flowed(section("Step 8: Cursor"));
+    expect(step, "the claim the window makes false").not.toContain("does no harm");
+    expect(step).toContain("any label on any issue may start a session");
+    expect(step).toContain("two sessions can take one issue and its branch");
+    expect(step).toContain("fires only on `labeled`, for this label alone");
+    const walk = flowed(section("Step 10: Add the label"));
+    expect(walk).toContain("before you add or take off another label, on any issue");
+    expect(walk).toContain("on Cursor's label trigger any label added or taken off can");
+    const nothing = flowed(section("When nothing fired"));
+    expect(nothing).toContain("On Cursor's label trigger that is two events");
+    expect(nothing).toContain("take the label off, wait for the session that starts to end on Cursor's page, and only then put the label on");
+    expect(flowed(read(CLOUD)), "the twin on the cloud page").toContain("On Cursor's label trigger a quick label off and on is two events");
+  });
+
+  it("says how each cloud's `gh` is signed in, and names what is unknown (review/129)", () => {
+    const claude = flowed(section("Step 7: Claude"));
+    expect(claude).toContain("`gh` needs no sign-in from you");
+    expect(claude).toContain("leave both unset");
+    expect(claude).toContain("unknown until a real run");
+    expect(claude).toContain("may refuse on `direct-push`");
+    const cursor = flowed(section("Step 8: Cursor"));
+    expect(cursor).toContain("do not say how to get one, so that part is unknown until a real run");
+    expect(cursor).toContain("may refuse on `direct-push`");
+    const cloud = flowed(read(CLOUD));
+    expect(cloud).toContain("Leave both unset, since a token you set goes to `gh` as it is");
+    expect(cloud).toContain("do not say how `gh` gets signed in there, so that is unknown until a real run");
+  });
+
   it("states how a job ends and where its merge method comes from", () => {
     const step = flowed(section("Step 9: Check the land job"));
     expect(step).toContain("exits 0 on every normal end");
@@ -6145,7 +6221,21 @@ describe("every land reason the code prints is on the troubleshooting page", () 
     ["src/change/autoShip.ts", ["the classification is incomplete", "the line count is incomplete", "the line count is not a finite number", "lines are over autonomy.autoShip.maxLines", "the change is empty", "disagrees with the classified paths", "files are over autonomy.autoShip.maxFiles", "outside autonomy.autoShip.classes", "docs-class but not plain text", "outside autonomy.autoShip.paths", "a specialist lens is asked for"]],
     ["src/runs/reviewTool.ts", ["minutes from the request", "review rounds spent with no clean head, so a person decides", "and only a new run clears them", "and no request on this head yet"]],
     ["src/runs/landEvidence.ts", ["wait on its word on this head", "mergeable_state is blocked, and the tool's open review threads may be what holds it", "failing on its tip", "so whether it is red is not known", "the legs disagree on autonomy.reviewTool, and no leg wins", "the head's manifest loosens"]],
-    ["src/cli/commands/runLand.ts", ["was not resolved", "pending: run land again for the review tool's word; no approval passes a wait"]],
+    [
+      "src/cli/commands/runLand.ts",
+      [
+        "was not resolved",
+        "pending: run land again for the review tool's word; no approval passes a wait",
+        "someone else wrote in review thread",
+        "which GitHub may show as resolved: a person reopens it and closes it themselves, so the land reads it as theirs",
+        "autonomy.landJob is not on in every leg of the setting, so the job does not land here",
+        "does not read Status: closed, so the run has not ended",
+        "reads (blocked:, so a person decides",
+        "holds a ## Refused row, so a person decides",
+        "names no Login:",
+        "so the job has none to take",
+      ],
+    ],
   ] as const)("%s", (path, reasons) => {
     const source = read(path);
     for (const reason of reasons) {
@@ -6160,20 +6250,13 @@ describe("every land reason the code prints is on the troubleshooting page", () 
   });
 
   it("states the land job's own reasons, its exits and its check row", () => {
-    // Read from the page alone: `land-job` lands on its own lane, so these reasons are not in this tree's source yet.
-    for (const reason of [
-      "autonomy.landJob is not on in every leg of the setting, so the job does not land here",
-      "does not read Status: closed, so the run has not ended",
-      "reads (blocked:, so a person decides",
-      "holds a ## Refused row, so a person decides",
-      "does not name #<n> on a PR: line",
-      "names no Login:",
-      "no merge method is allowed on <branch>, so the job has none to take",
-      "someone else wrote in the tool's review thread <id> before it closed, so a person decides",
-      "holding a runner up to `waitMinutes` per head",
-    ]) {
+    // TEST CHANGE, justified (review/125): a row read from the page alone pinned a reason the code does not print. Each fixed
+    // reason now sits in the table above, held against the source; these are the page's own spelling of a value in the code.
+    for (const reason of ["does not name #<n> on a PR: line", "no merge method is allowed on <branch>, so the job has none to take", "holding a runner up to `waitMinutes` per head"]) {
       expect(page, `the page does not state: ${reason}`).toContain(reason);
     }
+    expect(page, "the page quotes a reason the code does not print").not.toContain("someone else wrote in the tool's review thread");
+    expect(page, "the page's way out is not the one the code states").toContain("a person reopens the thread and closes it themselves, on an account other than the run's");
     expect(page).toContain("Rename the entry in `autonomy.landJob.workflows`, or the workflow, so the two agree.");
     expect(page).toContain("Any change to that list is a loosening");
     expect(page, "the page tells a person to pass a refusal").toContain("are refusals, so `--approved` does not pass them");

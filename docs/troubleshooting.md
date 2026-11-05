@@ -391,7 +391,7 @@ it holds for on its `approve with:` line. The reasons, and what each needs:
 - `<branch> is red: <checks> failing on its tip`: the brake. Fix the default branch first. The land
   that carries the fix goes through on a person's `--approved`, since this is an ask and not a refusal.
   With no required set read, every check run on the tip counts, so any failing run asks. The land
-  job's own run is left out. A job's merge starts no `push` run, so the brake has nothing to read on that tip.
+  job's own run is left out. Under the emitted token a job's merge starts no Actions `push` workflow, so the brake has no such run to read on that tip.
 - `<branch>'s tip could not be read (…), so whether it is red is not known`: fix the read the reason
   names, then run it again.
 - `the head's manifest loosens <keys> against <branch>'s`: the pull request loosens an `autonomy` key
@@ -422,8 +422,12 @@ flag holds only while the head is still that commit, and an unattended run refus
   itself, so wait, and run it again.
 - `the tool's review thread <id> was not resolved (…)`: the land tried to resolve one of the tool's own
   threads and could not, so nothing merged. Resolve it by hand, or run it again.
-- `someone else wrote in the tool's review thread <id> before it closed, so a person decides`: a comment
-  landed in that thread just as it closed. Read it, then resolve the thread or answer it.
+- `someone else wrote in review thread <id>, which GitHub may show as resolved: a person reopens it and
+  closes it themselves, so the land reads it as theirs`: a comment by someone other than the tool or the
+  run's login sits in a thread the land closed, and the land counts that thread as open. Read the
+  comment. Then a person reopens the thread and closes it themselves, on an account other than the
+  run's. `<id>` is GitHub's internal thread id, which its page does not show, so look for the resolved
+  thread that holds the comment.
 - `waiting for <tool> on <sha>, up to <n> minutes from the request`, or `no result from <tool> on
   <sha>, and no request on this head yet`: pending reasons. Wait, and run it again. A wait longer than
   the call ends as `asks` with `asks.pending` and the line `pending: run land again for the review
@@ -471,8 +475,10 @@ flag holds only while the head is still that commit, and an unattended run refus
 
 **The land job.** `stamity run land --job`, off by default, is the second caller of this evidence. It
 merges through the same rules, with no bypass, so it reads the same reasons, and a few of its own.
-A job exits 0 on every normal end, and a hold shows as the pull request's status line, never as a red job. So read the pull request's `merge waits on:` line, not the job's colour. Only a run
-still in progress and a head a newer job speaks for leave no line. It exits 1 only for a true failure,
+A job exits 0 on every normal end, and a hold shows as the pull request's status line, never as a red job. So read the pull request's `merge waits on:` line, not the job's colour. Three ends leave no line: a run
+still in progress, a head a newer job speaks for, and a pull request that does not read as the run's own,
+such as one whose base someone changed. That last one is no wait: nothing lands it until a person puts it
+right, and its reason is only in the job's log. It exits 1 only for a true failure,
 a read or a write GitHub did not answer as it should. It exits 0 as `not-a-run` where the pull
 request's body names no run, where it is closed, and where an attended run closed through `run
 checkpoint --pr` alone left no `PR:` line. It waits out a review tool's silence in one call, holding a

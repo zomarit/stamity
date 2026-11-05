@@ -143,7 +143,13 @@ merges through the same rules, with no bypass.
 
 ### Secrets
 
-The run needs no secret of its own: it acts as the cloud's GitHub connection. An MCP server's
+The run needs no secret of its own: it acts as the cloud's GitHub connection. Nor does `gh` need a
+sign-in from you. Claude's cloud environments page, read 2026-11-05, says `gh` is already installed,
+and that with `GH_TOKEN` and `GITHUB_TOKEN` both unset the proxy puts your own credentials on `gh api`
+calls for the session's repositories. Leave both unset, since a token you set goes to `gh` as it is,
+and the run's reads then speak for that token's account. The page does not say whether `gh` is signed
+in while the setup script runs, or whether the proxy answers every read the pre-flight makes, so both
+are unknown until a real run. An MCP server's
 credential is read as `${VAR}` from the session's environment. `.env.mcp` is git-ignored, so set the
 variable in the cloud environment, never in a committed file. The pre-flight warns `token-env`,
 naming each credential-shaped variable it sees, by name only.
@@ -177,7 +183,8 @@ units. `stamity check`'s `cloud-install` row prints the install lines, `node --v
 the CLI's global install at the version that generated the setup. Put them in the install step of
 the environment you saved in Cursor, with `STAMITY_UNATTENDED=1`, and give that environment a `gh`
 that is signed in and is origin's only credential helper, which the pre-flight's `direct-push`
-check needs. The saved environment's origin URL must not carry credentials: in that install step,
+check needs. Cursor's pages, read 2026-11-05, do not say how `gh` gets signed in there, so that is
+unknown until a real run. The saved environment's origin URL must not carry credentials: in that install step,
 set origin's URL, and its push URL where one is set, to the repository's plain https URL, then run
 `gh auth setup-git`. The first check showed why: on 2026-10-19 Cursor's origin push URL carried its
 own credentials, which cannot be tied to `gh`'s identity, and `direct-push` refused. `init` and
@@ -413,7 +420,9 @@ drift only: a person with write access may name any plan committed on the branch
 control and invisible characters and HTML comments, are cut at the next heading, are held to 16,384
 bytes, and are scanned before anything is written. A comment opener with no closer refuses. A dropped
 comment is counted, and a run that sees a count above zero refuses to start, since a visible criterion
-may have gone with the comment: edit the issue, close the `Refused:` draft, and label it again.
+may have gone with the comment: edit the issue, close the `Refused:` draft, and label it again. On
+Cursor's label trigger a quick label off and on is two events, which can start two runs on one branch,
+so follow check 7 under When nothing fired in [The factory](factory.md).
 
 What starts the run is the vendor's. As read on 2026-11-05, Claude Code's scheduled tasks can start
 on an issue's `labeled` action once the Claude GitHub App is installed, and Cursor's automations
@@ -444,7 +453,7 @@ By default a default branch named in `autonomy.deployingBranches` asks before ev
 file count, its line count, its classes, its paths where you set them, and no specialist lens. A
 `docs`-class path must also end in `.md` or `.txt`. The `low-risk` preset allows 10 files and 200 lines,
 all records, docs or tests. Any rule that fails, and anything that cannot be read, asks and names each
-reason. A fast-forward still asks. Stamity never deploys, tags or releases itself, but a merge onto a deploying branch starts that repository's own pipeline, with nobody asked, by the person's opt-in. That is the point of auto-ship. A land job's merge is the exception: it starts no `push` run.
+reason. A fast-forward still asks. Stamity never deploys, tags or releases itself, but a merge onto a deploying branch starts that repository's own pipeline, with nobody asked, by the person's opt-in. That is the point of auto-ship. Under the emitted `GITHUB_TOKEN`, a land job's merge starts no Actions `push` workflow. That is all it stops: a webhook or a GitHub App listening to the push still fires, and under any other token the workflow starts too.
 
 Limits: the rules read paths, size and class, never content, so a script inside a `.md` file passes
 them. If your site tool passes raw HTML through `.md` files, leave `docs` out of `classes`. The range
@@ -471,8 +480,10 @@ caller of the land evidence, and it merges through the same rules, with no bypas
   job can land an attended run that ended on `run end`. One closed through `run checkpoint --pr` alone
   has no such lines, so the job leaves it to a person.
 - **A hold is a status line.** A job exits 0 on every normal end, and a hold shows as the pull request's status line, never as a red job. So a pending check, an ask and a refusal
-  each write `merge waits on: <reasons>` and exit 0, and only a run still in progress and a head a newer
-  job speaks for leave no line. It exits 1 only for a true failure, a read or a write GitHub did not
+  each write `merge waits on: <reasons>` and exit 0. Three ends leave no line: a run still in progress,
+  a head a newer job speaks for, and a pull request that does not read as the run's own, such as one
+  whose base someone changed. That last one is no wait: nothing lands it until a person puts it right,
+  and its reason is only in the job's log. It exits 1 only for a true failure, a read or a write GitHub did not
   answer as it should.
 - **It can leave things behind.** A job that merges nothing can still leave the pull request marked
   ready, the tool's threads resolved and an evidence line in the body, since it does those before its
@@ -490,8 +501,8 @@ caller of the land evidence, and it merges through the same rules, with no bypas
 Limits: No real run has proven the land job, so the whole job is `not run` until one does. That covers the ready mark, the thread reads and the thread resolve under `GITHUB_TOKEN`, the merge call under that token, the review request and the status line the job writes, the `issue_comment` wake, and the checkout of `refs/pull/<n>/head`. `GITHUB_TOKEN` is the emitted workflow's
 configuration, not an engine check. A dispatch runs the file at the ref it names, not the default
 branch's copy, and an unnamed dispatch runs unasked, so name `workflow-dispatch` in
-`autonomy.deployingActs` to make it ask. `GITHUB_TOKEN` starts no `push` run after the merge, so a
-deploy on push must not rely on this path. A job's merge starts no `push` run, so the brake has nothing to read on that tip. A "Restrict updates" rule refuses the job,
+`autonomy.deployingActs` to make it ask. `GITHUB_TOKEN` starts no Actions `push` workflow after the merge, so an
+Actions deploy on push must not rely on this path, and a webhook or a GitHub App on the push still fires. Under the emitted token a job's merge starts no Actions `push` workflow, so the brake has no such run to read on that tip. A "Restrict updates" rule refuses the job,
 and it is never given a bypass. List every required workflow in `landJob.workflows`: one left out
 finishes with nothing to wake the job. The `land-job-workflows` row of `stamity check` warns on a name
 no workflow carries, which is the only sign a renamed workflow gives.

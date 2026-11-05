@@ -6893,7 +6893,7 @@ Given `autonomy.autoShip` is set, the default branch is in `autonomy.deployingBr
 (files, lines, classes, paths, no specialist lens), When `run land` decides, Then it merges with no ask and the pull
 request's evidence line names the rules it met (`autoShipVerdict`, `src/change/autoShip.ts`; `decideLand`,
 `src/runs/landEvidence.ts`). Given any rule fails, or the line count or classification is incomplete, Then the land asks
-and names each reason. Given `--fast-forward`, Then the land still asks. Stamity never deploys, tags or releases itself, but a merge onto a deploying branch starts that repository's own pipeline, with nobody asked, by the person's opt-in. That is the point of auto-ship. A land job's merge is the exception: it starts no `push` run.
+and names each reason. Given `--fast-forward`, Then the land still asks. Stamity never deploys, tags or releases itself, but a merge onto a deploying branch starts that repository's own pipeline, with nobody asked, by the person's opt-in. That is the point of auto-ship. Under the emitted `GITHUB_TOKEN`, a land job's merge starts no Actions `push` workflow. That is all it stops: a webhook or a GitHub App listening to the push still fires, and under any other token the workflow starts too.
 
 - **As built, beyond the delta:**
   - Two more rules hold whatever `classes` and `paths` declare: a `docs`-class path must end in `.md` or `.txt`, and the
@@ -6927,7 +6927,7 @@ the land's evidence line says so. Given the tip cannot be read, Then it asks, na
   the one judged. The brake is an ask, not a refusal, since `--approved` never passes a refusal and a refusal would lock
   out the fix for a red default branch. With no required set read, every check run on the tip counts. The land job's own
   check run, `stamity-land`, is left out, since a job's end says nothing of the branch.
-- **Limits:** A job's merge starts no `push` run, so the brake has nothing to read on that tip. Its required contexts then read missing, which is not red, so the next land passes the brake
+- **Limits:** Under the emitted token a job's merge starts no Actions `push` workflow, so the brake has no such run to read on that tip. Its required contexts then read missing, which is not red, so the next land passes the brake
   with no CI read on that commit. No real land has run the brake; its tests use fixtures.
 - **Proof:** `test/runs/landEvidence.test.ts`, `test/cli/commands/runLand.test.ts`.
 - **Source:** `src/cli/commands/runLand.ts`, `src/runs/landEvidence.ts`.
@@ -7033,7 +7033,7 @@ later `run end` sends nothing. Given `--refused`, Then nothing is sent.
 Added 2026-11-05 (plan 023 file 1, unit `land-job`).
 
 Given `autonomy.landJob` is on and a run has ended unblocked, When the watched workflow completes on the head, Then the job
-reads the evidence gates `run land` uses and merges, or merges nothing and says why on the pull request's status line. Given a thread a
+reads the evidence gates `run land` uses and merges, or merges nothing and says why on the pull request's status line, save the three ends that leave none. Given a thread a
 person opened and the run closed, Then it stays unresolved evidence whichever account the job runs as. Given job mode on an
 agent's command line, Then the guard refuses it (REQ-FLOW-121).
 
@@ -7060,7 +7060,7 @@ agent's command line, Then the guard refuses it (REQ-FLOW-121).
     tool sends no event, so the job waits it out in the one call, polling every 2 minutes and holding a runner up to
     `waitMinutes` per head. A request that did not post is not waited on.
   - A job exits 0 on every normal end, and a hold shows as the pull request's status line, never as a red job. That covers `pending`, `asks` and `refused`, since GitHub may put a failing job's run on the
-    default branch's tip. Only a run still in progress and a head a newer job speaks for leave no line. It exits 1 only for
+    default branch's tip. Three ends leave no line: a run still in progress, a head a newer job speaks for, and a pull request that does not read as the run's own, such as one whose base someone changed. That last one is no wait: nothing lands it until a person puts it right, and its reason is only in the job's log. It exits 1 only for
     a true failure, a read or a write GitHub did not answer as it should. It writes no `land:` line: the body's evidence
     line stands. A head pushed while the job runs fails the merge on its `sha`, and that head's own job speaks for it.
   - The merge method comes from the ruleset or the repository at run time, and nothing allowed reads as a hold. It reads the ruleset's `allowed_merge_methods`, else the repository's flags, merge before squash
@@ -7069,7 +7069,7 @@ agent's command line, Then the guard refuses it (REQ-FLOW-121).
     line in the body, since it does those before its last read or the merge call.
 - **Limits:** No real run has proven the land job, so the whole job is `not run` until one does. That covers the ready mark, the thread reads and the thread resolve under `GITHUB_TOKEN`, the merge call under that token, the review request and the status line the job writes, the `issue_comment` wake, and the checkout of `refs/pull/<n>/head`. A `workflow_dispatch` runs the file at the ref it names, not the default branch's copy, and
   an unnamed dispatch runs unasked, so that route reaches job mode past the guard's line; the evidence is still read
-  there. `GITHUB_TOKEN` starts no `push` run after the merge, so a deploy on push must not rely on this path. A job's merge starts no `push` run, so the brake has nothing to read on that tip. A
+  there. `GITHUB_TOKEN` starts no Actions `push` workflow after the merge, so an Actions deploy on push must not rely on this path, and a webhook or a GitHub App on the push still fires. Under the emitted token a job's merge starts no Actions `push` workflow, so the brake has no such run to read on that tip. A
   "Restrict updates" rule refuses the job, and it is never given a bypass. A required check outside `landJob.workflows`
   finishes with nothing to wake the job, so every required workflow should be named. A watched workflow that was renamed
   stops the job with no other sign than `check`'s `land-job-workflows` row, which warns and never fails.
@@ -7097,8 +7097,8 @@ the run refuses to start.
 
 Added 2026-11-05 (plan 023 file 1, unit `factory-guide`).
 
-Given a reader with a repository and a client, When they follow `docs/factory.md` in order, Then each step names who does it
-and where, and the page links to `docs/cloud.md` rather than restating it.
+Given a reader with a repository, a client and a CI workflow that reports check runs, When they follow `docs/factory.md` in
+order, Then each step names who does it and where, and the page links to `docs/cloud.md` rather than restating it.
 
 - **Proof:** `test/docsPages.test.ts`.
 - **Source:** `docs/factory.md`.
@@ -8779,8 +8779,8 @@ above.
   payload carrying `--job` THEN refused on every client; GIVEN `landJob` off THEN no workflow file is emitted, and `clean`
   removes it after turning off; GIVEN the emitted file THEN its steps are in the stated order and name no head code; GIVEN
   a `landJob.workflows` name no workflow file carries THEN `check`'s `land-job-workflows` row warns; GIVEN a silent tool
-  THEN the job waits it out, writes the status line and exits 0; GIVEN a hold of any kind THEN exit 0 and the status
-  line, and GIVEN a true failure THEN exit 1; GIVEN a failing `stamity-land` run on the tip THEN the brake does not read
+  THEN the job waits it out, writes the status line and exits 0; GIVEN a hold THEN exit 0 and the status
+  line, save the three ends that leave none, and GIVEN a true failure THEN exit 1; GIVEN a failing `stamity-land` run on the tip THEN the brake does not read
   it. *(test: `test/adapters/landWorkflow.test.ts`,
   `test/cli/commands/runLand.test.ts`, `test/cli/commands/check.test.ts`, `test/hooks/personOnlyGuard.test.ts`)*
 
@@ -8793,8 +8793,9 @@ above.
 
 **REQ-FLOW-159** (added 2026-11-05)
 
-- GIVEN `docs/factory.md` THEN every step names who acts, it links to `docs/cloud.md`, and it says a Claude event over the
-  cap is dropped. *(test: `test/docsPages.test.ts`)*
+- GIVEN `docs/factory.md` THEN every step names who acts, it links to `docs/cloud.md`, it says a Claude event over the
+  cap is dropped, and it names a CI workflow that reports check runs as a need before Step 2.
+  *(test: `test/docsPages.test.ts`)*
 
 ## References
 
