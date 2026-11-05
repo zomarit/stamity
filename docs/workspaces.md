@@ -241,6 +241,14 @@ before any member is touched. The spellings differ, so the read-time duplicate c
 and both stay inside the root, so containment passes them too. Cascading both would race that one
 directory's manifest write.
 
+Two members that hold different rows in `mcp.ownServers` under one id are refused the same way, on
+a preview too, naming both members and the id. One id across a workspace reads as one server, so
+two programs behind it are for you to settle. A row counts whether or not its member selects it,
+and two rows that differ only in key order are the same row. Make the rows the same, or give one
+member another id. If that member selects the id, run `stamity config mcp remove <id>` and
+`stamity sync` in it before you rename the row. A row renamed first can no longer prove the old
+client entries are stamity's, so the old server keeps launching.
+
 The cascade itself runs members in parallel, at the machine's core count, capped at eight. Rows come
 back in manifest order whatever order they finished in. One member's failure is one row: it never
 stops the others, and it never quietly passes either. Per member, in order:
@@ -252,8 +260,13 @@ stops the others, and it never quietly passes either. Per member, in order:
 2. **Compute the patch** over three fields: `tools`, `maturityTier` and `mcp`. A field the workspace
    does not declare is left exactly as the member has it, so a member carrying `scaleup` under a
    workspace declaring no tier keeps it. `mcp` patches as a whole block rather than field by field.
-   A workspace that declares `mcp` replaces the member's entire block, its server list and its
-   `protocolVersion` together. A patch that changes nothing writes nothing.
+   A workspace that declares `mcp` replaces the member's server list and its `protocolVersion`
+   together, and the member's own servers survive that. It keeps every row in its `mcp.ownServers`,
+   selected or not, and every id it selected that has one of those rows, listed after the
+   workspace's. Any other id it selected goes. When that changes the member's block, every id in
+   the result must resolve for that member, through the curated catalog, a pack installed in it,
+   or a row of its own. An id that does not fails the member by name, before anything in it is
+   written. A patch that changes nothing writes nothing.
 3. **Write it back** into the manifest read in step 1, validated before it persists and written
    atomically. Patching the document from disk rather than composing a fresh one is what keeps the
    member's ledger, import choice and creation stamp intact.
@@ -268,6 +281,11 @@ stops the others, and it never quietly passes either. Per member, in order:
    collision class plain `sync --force` clears, which is content the engine cannot prove it wrote at
    a name it wants. It overwrites that content behind a verified `.bak` in the member's own
    directory, per member.
+
+A workspace selects servers and supplies no rows. It can name a member's own id in
+`defaults.mcp.servers`, and a member that cannot resolve that id then fails. A row written as
+`defaults.mcp.ownServers` in `workspace.json` is not read, and launches nothing. `workspace sync`
+prints a warning naming that key, and `stamity validate` does not report it.
 
 Each row ends as `synced`, `failed` or `skipped`, and the tally under them names the counts and the
 run's verdict. A `skipped` row was never attempted and counts toward neither side of the verdict.
@@ -304,7 +322,9 @@ only when a lock refused one of its removals.
   `STAMITY_NO_CLIENT_PROBE=1` is set.
 
 A sync preview reports the plan computed from the unpatched manifest, the one each member has today.
-It does not invent a plan for a manifest that does not exist yet.
+It does not invent a plan for a manifest that does not exist yet. The check at step 2 still runs on
+the patched `mcp` block, so a member the real run would fail for an id it cannot resolve fails the
+same way here.
 
 `--force` is read by `workspace init` and `workspace sync` only, with the two meanings described
 above. `--loosen` is read by `workspace sync` only: in every member, a guard copy looser than the
@@ -324,7 +344,7 @@ fields:
 |---|---|
 | `workspace status` | `root`, `members` with each row's `state`, and `journal` — an array, empty when no member is in flight |
 | `workspace init` | `path`, `created`, `dryRun`, `members`, the resolved `defaults`, and `manifest` in full |
-| `workspace sync` | `root`, `dryRun`, `outcome`, `counts`, `repos[]` with each row's `state` and error, and `journalWarnings`. Rows the cascade reached also carry `patched`, plus `lockedApplied` (the locked ids whose removal the lock refused), `gitignoreAdded` (the `.gitignore` lines that member's sync appended) and `gitignoreRemoved` (the recorded lines it took back), each present only when it has entries |
+| `workspace sync` | `root`, `dryRun`, `outcome`, `counts`, `repos[]` with each row's `state` and error, and `journalWarnings`. Rows past step 2 of the cascade also carry `patched`, plus `lockedApplied` (the locked ids whose removal the lock refused), `gitignoreAdded` (the `.gitignore` lines that member's sync appended) and `gitignoreRemoved` (the recorded lines it took back), each present only when it has entries |
 
 Exit statuses are 0, 1 and 2 only. The failure class travels as `error.code` rather than in the
 number. See the [CLI reference](cli-reference.md) for what each status and code means.

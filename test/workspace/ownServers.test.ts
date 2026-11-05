@@ -355,7 +355,7 @@ async function runSync(
 interface SyncDoc {
   outcome?: string;
   repos?: { repoPath: string; state: string; patched?: string[]; error?: { message: string } }[];
-  error?: { code: string; message: string };
+  error?: { code: string; message: string; next?: string };
 }
 
 async function syncDocument(cwd: string, args: readonly string[] = []): Promise<SyncDoc> {
@@ -460,6 +460,20 @@ describe("workspace sync — two members, one own id, different rows", () => {
     expect((await runSync(root, ["--dry-run"])).code).toBe(1);
   });
 
+  it("names the order that takes the old server down before a rename", async () => {
+    const temp = getTemp();
+    await seedCorpus(temp);
+    const root = await seedWorkspace(temp, ["apps/api", "apps/web"], undefined);
+    await seedMember(root, "apps/api", { servers: [], ownServers: [ownRowAt("2.4.0")] });
+    await seedMember(root, "apps/web", { servers: [], ownServers: [ownRowAt("2.5.0")] });
+
+    const doc = await syncDocument(root);
+
+    // A row renamed first can no longer prove the old client entry, which then keeps launching.
+    expect(doc.error?.next).toContain("config mcp remove");
+    expect(doc.error?.next).toContain("stamity sync");
+  });
+
   it("names every clash in one refusal", async () => {
     const temp = getTemp();
     await seedCorpus(temp);
@@ -543,5 +557,93 @@ describe("workspace sync — a block naming an own id", () => {
     const web = doc.repos?.find((row) => row.repoPath === "apps/web");
     expect(web?.state).toBe("failed");
     expect(web?.error?.message).toContain(OWN_ID);
+  });
+
+  async function seedRowlessMember(): Promise<{ root: string; api: string; web: string }> {
+    const temp = getTemp();
+    await seedCorpus(temp);
+    const root = await seedWorkspace(temp, ["apps/api", "apps/web"], { servers: [OWN_ID] });
+    const api = await seedMember(root, "apps/api", { servers: [], ownServers: [ownRow()] });
+    const web = await seedMember(root, "apps/web", { servers: ["github"] });
+    // A second tool, so the patch this member is owed carries more than `mcp`.
+    await writeManifest(web, { ...memberWith({ servers: ["github"] }), tools: ["claude", "cursor"] }, { now: T0 });
+    return { root, api, web };
+  }
+
+  function rowOf(doc: SyncDoc, repoPath: string): NonNullable<SyncDoc["repos"]>[number] | undefined {
+    return doc.repos?.find((row) => row.repoPath === repoPath);
+  }
+
+  it("writes nothing to a member with no row, on the first run or the next", async () => {
+    const { root, web } = await seedRowlessMember();
+    const before = await manifestBytes(web);
+    const expectRefused = async (doc: SyncDoc): Promise<void> => {
+      const row = rowOf(doc, "apps/web");
+      expect(row?.state).toBe("failed");
+      expect(row?.error?.message).toContain(OWN_ID);
+      // A patch that never landed is not reported as one.
+      expect(row?.patched).toBeUndefined();
+      expect(await manifestBytes(web)).toBe(before);
+    };
+
+    await expectRefused(await syncDocument(root));
+    await expectRefused(await syncDocument(root));
+    await expect(launched(web)).rejects.toThrow(/ENOENT/);
+  });
+
+  it("fails the same row under --dry-run, in the same words, and writes nothing", async () => {
+    const { root, api, web } = await seedRowlessMember();
+    const before = [await manifestBytes(api), await manifestBytes(web)];
+
+    const preview = await runSync(root, ["--dry-run", "--json"]);
+    const previewed = JSON.parse(preview.stdout) as SyncDoc;
+
+    expect(preview.code).toBe(1);
+    expect(previewed.outcome).toBe("partial");
+    expect(rowOf(previewed, "apps/api")?.state).toBe("synced");
+    expect(rowOf(previewed, "apps/api")?.patched).toEqual(["mcp"]);
+    expect(rowOf(previewed, "apps/web")?.state).toBe("failed");
+    expect([await manifestBytes(api), await manifestBytes(web)]).toEqual(before);
+
+    const real = await syncDocument(root);
+
+    expect(rowOf(real, "apps/web")?.error).toEqual(rowOf(previewed, "apps/web")?.error);
+  });
+
+  it.each([[[] as string[]], [["--dry-run"]]])(
+    "leaves a member whose row fails the seam unwritten (%j)",
+    async (args) => {
+      const temp = getTemp();
+      await seedCorpus(temp);
+      const root = await seedWorkspace(temp, ["apps/api"], { servers: [CURATED_ID] });
+      const api = await seedMember(root, "apps/api", {
+        servers: [OWN_ID],
+        ownServers: [ownRow({ pinnedVersion: "latest" })],
+      });
+      const before = await manifestBytes(api);
+
+      const doc = await syncDocument(root, args);
+
+      expect(rowOf(doc, "apps/api")?.state).toBe("failed");
+      expect(rowOf(doc, "apps/api")?.error?.message).toContain(`mcp.ownServers[0] ("${OWN_ID}")`);
+      expect(await manifestBytes(api)).toBe(before);
+    },
+  );
+});
+
+describe("workspace sync — a row typed into workspace.json", () => {
+  it("names the key it does not read, and launches nothing from it", async () => {
+    const temp = getTemp();
+    await seedCorpus(temp);
+    const typed = { servers: [CURATED_ID], ownServers: [ownRow()] } as NonNullable<WorkspaceDefaults["mcp"]>;
+    const root = await seedWorkspace(temp, ["apps/api"], typed);
+    const api = await seedMember(root, "apps/api", { servers: [] });
+
+    const result = await runSync(root);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toContain("defaults.mcp.ownServers");
+    expect(Object.keys(await launched(api))).toEqual([CURATED_ID]);
+    expect((await readManifest(api))?.mcp?.ownServers).toBeUndefined();
   });
 });

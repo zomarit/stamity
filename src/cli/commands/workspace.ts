@@ -13,6 +13,7 @@ import {
 } from "../kit/prompts.ts";
 import { assertNotLoosened } from "../engine/autonomyGate.ts";
 import { keepSavedModelLists } from "../engine/clientModels.ts";
+import { installedPackServers } from "../engine/emissionWrite.ts";
 import { readClientModelLists } from "./init/apply.ts";
 import { applySync, planSync, refusalRemedyLines, type SyncPlan } from "./sync/engine.ts";
 import { TOOLS, VALID_TOOLS, type Tool } from "../../types/core.ts";
@@ -953,9 +954,10 @@ function sameList(a: readonly string[], b: readonly string[]): boolean {
  * and every one of its rows. The workspace replaces what it can supply, and an own
  * server is not that, so the merge is what keeps one launching.
  *
- * An id stays only while the member holds its row, so a kept id always resolves. A
+ * A member's id stays only while the member holds its row, so a kept id resolves. A
  * row nothing selects stays too, and stays unselected: it is the member's, and the
- * workspace has no say over it.
+ * workspace has no say over it. An id the block names is taken as written, and
+ * {@link refuseUnresolvedSelection} answers for it before anything is written.
  *
  * Copied, not aliased: the resolved config is already detached from the workspace
  * manifest, and copying again keeps the member's document from sharing an array
@@ -1059,9 +1061,41 @@ function refusedPaths(repoPath: string, plan: SyncPlan, refused: readonly string
 }
 
 /**
- * The `RepoSyncCallback` this lane supplies: read, patch, write, plan, apply.
+ * Fails a member whose patched selection names an id it cannot resolve, while
+ * nothing has been written. The merge keeps a member's own ids honest, but the
+ * block's ids go in as written, and `writeManifest` checks shape alone: past this
+ * point the id would land with no row, and the member's own sync would refuse.
  *
- * Step order is the contract. The manifest patch lands BEFORE `planSync`, so
+ * Asked of the patched manifest, so a real run and a preview get one answer. A
+ * preview plans the unpatched manifest, which is valid, and could not get there
+ * on its own. The supply read is emission's, so a row that fails the seam fails
+ * here with the seam's own message, also before the write.
+ */
+async function refuseUnresolvedSelection(
+  ctx: CliContext,
+  repoPath: string,
+  memberDir: string,
+  patched: SetupManifest,
+): Promise<void> {
+  const packServers = await installedPackServers(memberDir, patched);
+  const { unknown } = ctx.engine.mcp.catalog.validateServerIds(patched.mcp?.servers ?? [], packServers);
+  if (unknown.length === 0) return;
+  throw new EngineError(
+    `Workspace member "${repoPath}" cannot resolve MCP server id(s) ` +
+      `${unknown.map((id) => JSON.stringify(id)).join(", ")} from the workspace's mcp block, so ` +
+      `nothing was written to it. Give the member a row in its ${STATE_DIR}/${MANIFEST_FILE} ` +
+      `mcp.ownServers, install the pack that supplies the id there, or take the id out of ` +
+      `defaults.mcp.servers in ${ctx.engine.workspace.model.WORKSPACE_MANIFEST_FILE}.`,
+    { code: "VALIDATION_ERROR" },
+  );
+}
+
+/**
+ * The `RepoSyncCallback` this lane supplies: read, patch, check, write, plan, apply.
+ *
+ * Step order is the contract. The check comes before the dry-run branch, so a
+ * member whose patched selection cannot resolve fails with nothing written, in
+ * either mode. The manifest patch lands BEFORE `planSync`, so
  * the plan is built from the values the workspace just wrote — and the manifest
  * `applySync` persists at its commit point carries them forward rather than
  * reverting them. The patch is applied to the manifest read in step 1 and never
@@ -1092,6 +1126,11 @@ function createBridge(
     if (manifest === null) throw missingMemberManifest(ctx, repo.path, memberDir);
 
     const { patch, fields } = propagationPatch(manifest, resolved);
+    // Ahead of the outcome too: a patch refused here reached no manifest, so the
+    // row reports none. With no `mcp` patch, the plan below answers for the member.
+    if (patch.mcp !== undefined) {
+      await refuseUnresolvedSelection(ctx, repo.path, memberDir, { ...manifest, ...patch });
+    }
     // Recorded whatever happens next, so a member whose apply then fails still
     // reports the patch that reached its manifest.
     const outcome: MemberOutcome = { patched: fields, lockedApplied: [...resolved.lockedApplied], gitignoreAdded: [], gitignoreRemoved: [] };
@@ -1102,8 +1141,9 @@ function createBridge(
       // sync moves them: the write below leaves `models.listed` out, and the plan
       // then reads the member with no lists (REQ-LADDER-009).
       for (const warning of await keepSavedModelLists(memberDir)) ctx.io.err(`warning: ${repo.path}: ${warning}\n`);
-      // `writeManifest` validates before persisting and writes atomically, so a
-      // bad patch never reaches disk at all.
+      // `writeManifest` validates the shape before persisting and writes
+      // atomically, so a malformed patch never reaches disk. Whether its ids
+      // resolve was settled above.
       await ctx.engine.manifest.manifest.writeManifest(
         memberDir,
         { ...manifest, ...patch },
@@ -1366,9 +1406,23 @@ async function refuseOwnRowClashes(
       .join("; "),
     why: "one id across a workspace reads as one server, and these rows launch different programs or say different things under it",
     next:
-      `make the rows the same in each member's ${STATE_DIR}/${MANIFEST_FILE}, or rename the id in one of them ` +
-      "along with its entry in mcp.servers",
+      `make the rows the same in each member's ${STATE_DIR}/${MANIFEST_FILE}, or give one member another id: ` +
+      "run stamity config mcp remove <id> and stamity sync in it before you rename the row, because a row " +
+      "renamed first leaves the old server launching",
   });
+}
+
+/**
+ * Names a row typed under `defaults.mcp` in `workspace.json`. The reader lets the
+ * key through and {@link WorkspaceMcpConfig} carries no rows, so it launches
+ * nothing, and a person who put one there believes a server is shared.
+ */
+function warnOfBlockRows(ctx: CliContext, manifest: WorkspaceManifest): void {
+  if (!Object.hasOwn(manifest.defaults.mcp ?? {}, "ownServers")) return;
+  ctx.io.err(
+    `warning: defaults.mcp.ownServers in ${ctx.engine.workspace.model.WORKSPACE_MANIFEST_FILE} is not read: ` +
+      `a workspace selects ids, and each member holds its own rows in ${STATE_DIR}/${MANIFEST_FILE} mcp.ownServers\n`,
+  );
 }
 
 /**
@@ -1398,6 +1452,7 @@ async function runSync(
 
   // Named BEFORE the cascade writes a single byte — see {@link printSyncPreflight}.
   printSyncPreflight(ctx, rootDir, manifest.repos.length);
+  warnOfBlockRows(ctx, manifest);
 
   ctx.spinner.start(ctx.dryRun ? "previewing the cascade…" : "syncing every member…");
   const result = await ctx.engine.workspace.sync.syncWorkspaceRepos({
