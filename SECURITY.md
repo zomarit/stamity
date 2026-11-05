@@ -83,6 +83,14 @@ granted only to a catalog install whose pin verified against the pack's aggregat
 re-read as a local path. Deny wins. An `allow` list denies everything it does not name. Absent a
 policy file, every route is open.
 
+The policy gates pack sources and nothing else. A row a person adds to `mcp.ownServers`, by hand or
+through `stamity config mcp own <file>`, is not a pack source, so `.stamity/policy.json` does not
+reach it: a server a policy denies as a pack can still launch from such a row. The row clears the
+same pin, secret and text checks a pack server clears (`src/mcp/ownServers.ts::withOwnServers`). The
+manifest that holds it is a person-only path, and that hold is on an unattended run's push: an
+agent on your machine can still run the verb, as it can edit the manifest or a client's MCP file by
+hand, and a selected row launches after the next `sync`.
+
 ## What the engine defends today
 
 Addresses are `file::symbol`, not `file:line`. A symbol survives an edit above it, and every one

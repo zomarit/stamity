@@ -190,12 +190,13 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | Argument | What it is |
 |---|---|
 | `[subcommand]` | list \| get \| set \| detect \| mcp \| policy — omit on a terminal for the interactive picker |
-| `[key]` | config key, the mcp action (list \| add \| remove), or the policy action (list \| init \| allow \| deny \| remove) |
-| `[value]` | new value, the MCP server id, or the policy pattern |
+| `[key]` | config key, the mcp action (list \| add \| remove \| own), or the policy action (list \| init \| allow \| deny \| remove) |
+| `[value]` | new value, the MCP server id, the own server row file, or the policy pattern |
 
 | Flag | What it does | Default |
 |---|---|---|
 | `--force` | config policy init: replace an existing .stamity/policy.json — including a defective one, which is the way out of a fail-closed policy | — |
+| `--remove <id>` | config mcp own: deselect an own server, take its entries out of the client documents, then delete its row | — |
 
 ## `stamity workspace`
 

@@ -20,6 +20,7 @@ import {
   type MaturityTier,
   type Tool,
 } from "../types/core.ts";
+import type { McpOwnServer } from "../types/manifest.ts";
 import { CONTENT_PREFIX, STATE_DIR } from "../types/markers.ts";
 import {
   PREDECESSOR_CONTENT_PREFIX,
@@ -75,6 +76,8 @@ export interface PredecessorDefaults {
   communicationStyle?: CommunicationStyle;
   /** MCP server ids, as written. Validated against this engine's catalog downstream. */
   mcpServers?: string[];
+  /** A repository's own server rows, carried so an id above keeps the row that resolves it. */
+  ownServers?: McpOwnServer[];
 }
 
 /**
@@ -121,6 +124,11 @@ export function mapPredecessorDefaults(
   const mcp = field(manifestRaw, "mcp");
   const mcpServers = isRecord(mcp) ? uniqueStrings(field(mcp, "servers")) : [];
   if (mcpServers.length > 0) defaults.mcpServers = mcpServers;
+
+  // Shape only, as the manifest reader takes them: the pack bar runs at the seam.
+  const ownRows = isRecord(mcp) ? field(mcp, "ownServers") : undefined;
+  const ownServers = Array.isArray(ownRows) ? ownRows.filter(isRecord) : [];
+  if (ownServers.length > 0) defaults.ownServers = ownServers as unknown as McpOwnServer[];
 
   return defaults;
 }

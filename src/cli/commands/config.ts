@@ -27,6 +27,7 @@ import {
   validateServerIds,
   type PackSuppliedServer,
 } from "../../mcp/catalog.ts";
+import { withOwnServers } from "../../mcp/ownServers.ts";
 import { discoverInstalledPacks, packMcpServers } from "../../pack/projection.ts";
 import {
   CLIENT_MODEL_PROJECTION,
@@ -83,7 +84,10 @@ import {
   requireSetupManifest,
   runMcpAdd,
   runMcpList,
+  runMcpOwnAdd,
+  runMcpOwnRemove,
   runMcpRemove,
+  supplyClause,
   writeSetupManifest,
 } from "./config/mcp.ts";
 import { runPolicy } from "./config/policy.ts";
@@ -905,21 +909,16 @@ export const KEY_SPECS: readonly ConfigKeySpec[] = [
       // operator the round-trip of a selection that command just wrote.
       const { unknown } = validateServerIds(servers, context.packServers);
       if (unknown.length > 0) {
-        const packIds = context.packServers.map((server) => server.id);
         throw new CliFailure({
           code: "VALIDATION_ERROR",
           message: `unknown MCP server(s): ${unknown.join(", ")}`,
           why:
-            "only reviewed, version-pinned servers — from the curated catalog or an " +
-            "installed pack — can be selected",
-          // Both halves, always, in the shape `config mcp add` prints them: an
+            "only version-pinned servers — a row in mcp.ownServers, the curated catalog " +
+            "or an installed pack — can be selected",
+          // Every part, always, in the shape `config mcp add` prints them: an
           // operator shown only the curated ids reads the refusal as "delete
           // the pack server you selected", which is the opposite of the truth.
-          next:
-            `use ids from — curated: ${CURATED_IDS.join(", ")}` +
-            (packIds.length === 0
-              ? "; no installed pack supplies a server"
-              : `; installed packs: ${packIds.join(", ")}`),
+          next: `use ids from — curated: ${CURATED_IDS.join(", ")}${supplyClause(context.packServers)}`,
         });
       }
       draft.mcp = { ...draft.mcp, servers };
@@ -1390,8 +1389,8 @@ async function runGet(
  * Pack supply costs a ledger scan plus a directory read per installed pack, so
  * only a row that declares {@link ConfigKeySpec.needsPackSupply} pays for it —
  * and a repo with no pack rows in its ledger touches no extra file even then.
- * Resolved through the same seam `config mcp` and emission use, so the three
- * surfaces cannot disagree about which ids exist.
+ * Resolved through the same seam `config mcp` and emission use, own rows
+ * included, so the three surfaces cannot disagree about which ids exist.
  */
 async function applyContext(
   rootDir: string,
@@ -1400,7 +1399,7 @@ async function applyContext(
 ): Promise<ConfigApplyContext> {
   if (specFor(key).needsPackSupply !== true) return NO_PACK_SUPPLY;
   const packs = await discoverInstalledPacks(rootDir, manifest);
-  return { packServers: await packMcpServers(packs, rootDir) };
+  return { packServers: withOwnServers(await packMcpServers(packs, rootDir), manifest) };
 }
 
 /** Validate and persist one key, printing the before->after diff. */
@@ -1577,21 +1576,50 @@ async function runDetect(ctx: CliContext, rootDir: string): Promise<CommandResul
   return { exitCode: 0, json: { changed: rows, detected, platform: platform ?? null } };
 }
 
+/** Dispatch `config mcp own <file>` and `config mcp own --remove <id>`, which take one or the other. */
+async function runMcpOwn(
+  ctx: CliContext,
+  rootDir: string,
+  file: string | undefined,
+  remove: string | undefined,
+): Promise<CommandResult> {
+  if (file !== undefined && remove !== undefined) {
+    throw new CliFailure({
+      code: "USAGE",
+      message: "config mcp own takes either a file or --remove, not both",
+      why: "one run adds a row or removes one",
+      next: "run stamity config mcp own <file>, or stamity config mcp own --remove <id>",
+    });
+  }
+  if (remove !== undefined) return runMcpOwnRemove(ctx, rootDir, remove);
+  if (file === undefined) {
+    throw new CliFailure({
+      code: "USAGE",
+      message: "config mcp own needs a file or --remove <id>",
+      why: "a row is added from a JSON file and removed by id",
+      next: "run stamity config mcp own <file>, or stamity config mcp own --remove <id>",
+    });
+  }
+  return runMcpOwnAdd(ctx, rootDir, file);
+}
+
 /** Dispatch `config mcp <action> [id]` onto the MCP submodule. */
 async function runMcp(
   ctx: CliContext,
   rootDir: string,
   action: string | undefined,
   id: string | undefined,
+  remove: string | undefined,
 ): Promise<CommandResult> {
   if (action === undefined || action === "list") return runMcpList(ctx, rootDir);
+  if (action === "own") return runMcpOwn(ctx, rootDir, id, remove);
 
   if (action !== "add" && action !== "remove") {
     throw new CliFailure({
       code: "USAGE",
       message: `unknown mcp action ${JSON.stringify(action)}`,
-      why: "config mcp takes one of three actions",
-      next: "use one of: list, add, remove",
+      why: "config mcp takes one of four actions",
+      next: "use one of: list, add, remove, own",
     });
   }
   if (id === undefined) {
@@ -1624,12 +1652,12 @@ export const configCommand: CommandModule = {
     {
       name: "key",
       description:
-        "config key, the mcp action (list | add | remove), or the policy action (list | init | allow | deny | remove)",
+        "config key, the mcp action (list | add | remove | own), or the policy action (list | init | allow | deny | remove)",
       required: false,
     },
     {
       name: "value",
-      description: "new value, the MCP server id, or the policy pattern",
+      description: "new value, the MCP server id, the own server row file, or the policy pattern",
       required: false,
     },
   ],
@@ -1646,6 +1674,10 @@ export const configCommand: CommandModule = {
     cmd.option(
       "--force",
       "config policy init: replace an existing .stamity/policy.json — including a defective one, which is the way out of a fail-closed policy",
+    );
+    cmd.option(
+      "--remove <id>",
+      "config mcp own: deselect an own server, take its entries out of the client documents, then delete its row",
     );
   },
 
@@ -1689,7 +1721,7 @@ export const configCommand: CommandModule = {
       case "detect":
         return runDetect(ctx, rootDir);
       case "mcp":
-        return runMcp(ctx, rootDir, first, second);
+        return runMcp(ctx, rootDir, first, second, typeof opts["remove"] === "string" ? opts["remove"] : undefined);
       case "policy":
         return runPolicy(ctx, rootDir, first, second, opts["force"] === true);
       default:

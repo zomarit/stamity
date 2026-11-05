@@ -33,6 +33,7 @@ import {
   reconcileGitignore,
   requiredGitignoreEntries,
 } from "../../../mcp/env.ts";
+import { provableOwnServers } from "../../../mcp/ownServers.ts";
 import { extractManagedBlock } from "../../../merge/managedBlocks.ts";
 import {
   ledgerHashIndex,
@@ -48,12 +49,14 @@ import type { Tool } from "../../../types/core.ts";
 import { EngineError } from "../../../types/errors.ts";
 import {
   isPackOwner,
+  MANIFEST_FILE,
   PACK_OWNER_PREFIX,
   type CoOwnership,
   type ImportDecision,
   type LedgerEntry,
   type ListedModels,
   type McpConfig,
+  type McpOwnServer,
   type SetupManifest,
 } from "../../../types/manifest.ts";
 import { STATE_DIR } from "../../../types/markers.ts";
@@ -333,6 +336,9 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
   const carriedIds = new Set(manifest.ledger.filter((row) => isPackOwner(row.adapter)).map((row) => row.adapter.slice(PACK_OWNER_PREFIX.length)));
   const adoption = await adoptInstalledPacks(rootDir, carriedIds, force ? (previous?.ledger ?? []) : undefined);
   manifest.ledger = [...manifest.ledger, ...adoption.rows];
+  // After the pack rows, so a row is judged against what they supply, and before
+  // the plan, so the rows resolve what the carried selection names.
+  const leftOwnRows = await carryOwnServers(rootDir, manifest, previous);
 
   // State directories: probe first so the report lists only what this run adds.
   const missing = await Promise.all(
@@ -626,6 +632,7 @@ export async function applyInit(opts: InitApplyOptions): Promise<InitApplyReport
   }
   if (modelLists.problem !== null) warnings.push(modelLists.problem);
   for (const refusal of adoption.refused) warnings.push(adoptionRefusalWarning(refusal));
+  if (leftOwnRows.length > 0) warnings.push(ownRowsLeftWarning(leftOwnRows));
 
   return {
     manifestPath: manifestPath(rootDir),
@@ -915,9 +922,11 @@ async function composeManifest(
     decisions.maturitySource === "flag"
       ? decisions.maturityTier
       : defaults?.maturityTier ?? decisions.maturityTier;
+  const carriedServers = defaults?.mcpServers ?? [];
+  const carriedRows = defaults?.ownServers ?? [];
   const mcp: McpConfig | undefined =
-    defaults?.mcpServers !== undefined && defaults.mcpServers.length > 0
-      ? { servers: [...defaults.mcpServers] }
+    carriedServers.length > 0 || carriedRows.length > 0
+      ? { servers: [...carriedServers], ...(carriedRows.length === 0 ? {} : { ownServers: [...carriedRows] }) }
       : undefined;
 
   const fresh = createManifest({
@@ -981,6 +990,53 @@ async function loadFullSelection(): Promise<ContentSelection> {
     throw error;
   }
   return fullCoreSelection(await buildContentIndex(roots));
+}
+
+/**
+ * Carry the replaced setup's own MCP rows onto `manifest` over a `--force`
+ * re-init, with the ids it selected among them (REQ-FLOW-160), and return the
+ * ids of the rows left behind.
+ *
+ * A re-init starts from a fresh selection, so a row it dropped would leave its
+ * entry unprovable and still launching. A row is the person's own setup, as an
+ * installed pack is, so it survives as the pack rows do.
+ *
+ * A row past the bar stays behind, named: `--force` exists to replace broken
+ * state, so a hand-edited row must not stop it, and carrying the row would refuse
+ * the plan below. Each row is tried with those already kept, so a row that clashes
+ * with a pack or an earlier row leaves too.
+ */
+async function carryOwnServers(rootDir: string, manifest: SetupManifest, previous: SetupManifest | null): Promise<string[]> {
+  const rows = previous?.mcp?.ownServers ?? [];
+  if (rows.length === 0) return [];
+  const held = await installedPackServers(rootDir, manifest);
+  const kept: McpOwnServer[] = [];
+  const left: string[] = [];
+  for (const row of rows) {
+    const proven = provableOwnServers(held, { mcp: { servers: [], ownServers: [...kept, row] } });
+    if (proven.length > held.length + kept.length) kept.push(row);
+    else left.push(String(row.id));
+  }
+  const keptIds = new Set(kept.map((row) => row.id));
+  const selected = (previous?.mcp?.servers ?? []).filter((id) => keptIds.has(id));
+  const servers = manifest.mcp?.servers ?? [];
+  if (kept.length > 0) {
+    manifest.mcp = {
+      ...manifest.mcp,
+      servers: [...servers, ...selected.filter((id) => !servers.includes(id))],
+      ownServers: [...(manifest.mcp?.ownServers ?? []), ...kept],
+    };
+  }
+  return left;
+}
+
+/** The note {@link carryOwnServers}'s left rows earn: a client document may still hold their entries. */
+function ownRowsLeftWarning(ids: readonly string[]): string {
+  return (
+    `Own MCP server row(s) ${ids.join(", ")} did not clear the pack bar, so this re-init left them out of ` +
+    `${STATE_DIR}/${MANIFEST_FILE}. An entry a client document still holds for them is yours now and goes on ` +
+    `launching: remove it by hand, or fix the row and run stamity config mcp own <file>.`
+  );
 }
 
 /**
