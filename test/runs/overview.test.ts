@@ -108,8 +108,9 @@ const LEDGER: LedgerRow[] = [
   row("review/5", "open"),
 ];
 
+// TEST CHANGE, justified (review/50): `overviewFrom` now takes the run, to compare with the list's title. Each call names it.
 const page = (over: Partial<Parameters<typeof overviewFrom>[0]> = {}): string =>
-  overviewFrom({ record: RECORD, ledger: LEDGER, morning: morning(`${HELD_ROW}\n${REFUSED_ROW}`), ...over });
+  overviewFrom({ run: RUN, record: RECORD, ledger: LEDGER, morning: morning(`${HELD_ROW}\n${REFUSED_ROW}`), ...over });
 
 /** The text under `## <name>`, up to the next heading. */
 const section = (text: string, name: string): string => {
@@ -310,6 +311,13 @@ describe("overviewFrom", () => {
     expect(text).not.toContain("tried: push the workflow");
   });
 
+  // review/50: `prBodyFrom` refuses such a list (`src/runs/morning.ts`), so the page does not print it as this run's either.
+  it("shows no row of a list whose title names another run, and names both runs", () => {
+    const text = section(page({ morning: morning(HELD_ROW).replace(RUN, "2026-11-04_other") }), "Only you can do");
+
+    expect(text).toBe(`Only you can do\n\nmorning.md's title names run 2026-11-04_other, not ${RUN}, so its list is not shown\n`);
+  });
+
   it("prints the record's facts and names the failure where the ledger did not read, counting nothing from it", () => {
     const text = page({ ledger: [], ledgerFailure: "ledger.jsonl's line 3 does not read as a row" });
 
@@ -374,7 +382,7 @@ describe("stamity run overview", () => {
     const { code, stdout } = await overview(cwd, ["--json"]);
 
     expect(code).toBe(0);
-    expect(JSON.parse(stdout)).toMatchObject({ subcommand: "overview", run: RUN, overview: overviewFrom({ record: RECORD, ledger: LEDGER, morning: morning(HELD_ROW) }) });
+    expect(JSON.parse(stdout)).toMatchObject({ subcommand: "overview", run: RUN, overview: overviewFrom({ run: RUN, record: RECORD, ledger: LEDGER, morning: morning(HELD_ROW) }) });
   });
 
   it("prints on a run folder holding the record alone, saying what it has not got", async () => {
@@ -394,6 +402,32 @@ describe("stamity run overview", () => {
 
     expect(code).toBe(0);
     expect(stdout).toContain("no readable morning.md in the run folder, so there is no list to show\n");
+  });
+
+  // review/49, build/16: the read stops at the cap. Past it the cut text either fails to parse, on a fault that is not in the
+  // file, or parses whole and prints as the whole list, so neither padding may reach the parser.
+  it.each([
+    ["a long row, so the sections after it are cut off", morning(`${HELD_ROW}\n${"x".repeat(1_048_577)}`)],
+    ["blank lines after a whole list, so what is left still parses", `${morning(HELD_ROW)}${"\n".repeat(1_048_577)}`],
+  ])("names its size and shows no row where morning.md is over its cap with %s", async (_name, list) => {
+    const cwd = await seed({ "record.md": RECORD, "morning.md": list });
+
+    const { code, stdout } = await overview(cwd);
+
+    expect(code).toBe(0);
+    expect(stdout).toContain("morning.md is over 1048576 bytes, so its list is not shown\n");
+    expect(stdout).not.toContain("does not parse");
+    expect(stdout).not.toContain("tried: push the workflow");
+  });
+
+  it("reads a list exactly at its cap", async () => {
+    const list = morning(HELD_ROW);
+    const cwd = await seed({ "record.md": RECORD, "morning.md": `${list}${"\n".repeat(1_048_576 - Buffer.byteLength(list))}` });
+
+    const { code, stdout } = await overview(cwd);
+
+    expect(code).toBe(0);
+    expect(stdout).toContain(`> ${HELD_ROW}\n`);
   });
 
   it("names each ledger line that is no row, exits 0 and counts no row beside it", async () => {

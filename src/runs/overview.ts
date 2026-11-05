@@ -14,12 +14,16 @@ import { readRecordHead } from "./resumeCard.ts";
  */
 
 export interface OverviewInput {
+  /** The run the page is for: a list whose title names another is not shown as this one's. */
+  readonly run: string;
   readonly record: string;
   readonly ledger: readonly LedgerRow[];
   /** `morning.md`'s text; `null` where the run folder holds none. */
   readonly morning: string | null;
   /** Why the ledger did not read, where it did not: nothing is then counted from it, and an empty `ledger` is no claim of none. */
   readonly ledgerFailure?: string;
+  /** Why `morning` is not the whole list, where it is not: nothing is then read from it. */
+  readonly morningFailure?: string;
 }
 
 /** The most rows of one list the page prints; the person's own list is never cut. */
@@ -148,10 +152,12 @@ function landLine(lines: readonly string[]): string {
 }
 
 /** The refused and held rows `morning.md` holds, or a line saying why there are none to show. */
-function humanOnly(morning: string | null): string[] {
+function humanOnly({ run, morning, morningFailure }: OverviewInput): string[] {
+  if (morningFailure !== undefined) return [`${morningFailure}, so its list is not shown`];
   if (morning === null) return [`no readable ${MORNING_FILE} in the run folder, so there is no list to show`];
   const parsed = parseMorning(morning);
   if (!parsed.ok) return [`${MORNING_FILE} does not parse, so its list is not shown: ${parsed.problems[0] ?? "no problem named"}`];
+  if (parsed.runId !== run) return [`${MORNING_FILE}'s title names run ${parsed.runId}, not ${run}, so its list is not shown`];
   const rows = [MORNING_REFUSED, HELD].flatMap((name) => {
     const body = parsed.sections[name] ?? MORNING_EMPTY;
     return body === MORNING_EMPTY ? [] : body.split("\n");
@@ -179,7 +185,7 @@ export function overviewFrom(input: OverviewInput): string {
     ],
     ["How", [...gatesLines(lines), fromLedger("rounds", roundsLine), fromLedger("findings", findingsLine), usageLine(lines)]],
     ["Why", [...listed("defaults", captured(lines, DEFAULT_LINE)), ...listed("choices", captured(lines, CHOICE_LINE))]],
-    ["Only you can do", humanOnly(input.morning)],
+    ["Only you can do", humanOnly(input)],
   ];
   return `${sections.map(([name, rows]) => [`## ${name}`, "", ...rows].join("\n")).join("\n\n")}\n`;
 }

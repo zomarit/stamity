@@ -179,7 +179,7 @@ import { runLand } from "./runLand.ts";
  *
  * **`overview`** (REQ-FLOW-161) prints the run's one short page from its record, ledger and morning list, writing nothing
  * and calling neither git nor GitHub; the page is `../../runs/overview.ts`, each line cleaned here as it prints. Exit 0
- * where the record reads whole, a ledger that does not read named on the page; 1 for a record missing or over its cap,
+ * where the record reads whole, a ledger or morning list that does not read named on the page; 1 for a record missing or over its cap,
  * since a land line past the cap could not be seen. The JSON is `{ subcommand, run, overview }`, `overview` the page.
  */
 
@@ -408,12 +408,13 @@ function runOverview(ctx: CliContext, run: string): CommandResult {
     throw new CliFailure({
       code: "FAILURE",
       message: `run overview will not read ${recordRel}: it is over ${RECORD_READ_MAX_BYTES} bytes`,
-      why: "a land or usage line past the cap could not be seen, so the page could say no land yet of a run that landed",
+      why: "a land or usage line past the cap could not be seen, so the page could say none is recorded of a run the record says landed",
       next: `read ${recordRel} itself`,
     });
   }
   const morning = readCapped(join(cwd, runDir, MORNING_FILE), MORNING_READ_MAX_BYTES);
-  const page = overviewFrom({ record: record.text, ...overviewLedger(ctx, runDir), morning: morning?.text ?? null })
+  const morningFailure = morning?.truncated === true ? { morningFailure: `${MORNING_FILE} is over ${MORNING_READ_MAX_BYTES} bytes` } : {};
+  const page = overviewFrom({ run, record: record.text, ...overviewLedger(ctx, runDir), morning: morning?.text ?? null, ...morningFailure })
     .split("\n")
     .map((line) => sanitizeLabel(line))
     .join("\n");
