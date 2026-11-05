@@ -134,7 +134,7 @@ When the work needs one, or input asks for one ("ship it overnight", item text t
 Held paths never reach an unattended pushed tree: a change to CI workflows or actions, hook and guard configuration
 (`.stamity/generated/`, the manifest), `.stamity/change-classes.json`, CODEOWNERS, the charter files and their override, or a
 client's rule and instruction files is moved by `run checkpoint` and `run end` into `.stamity/runs/<id>/held/person-only.patch`,
-restored in the index only, and listed in their `held`. Each listed path is a row here; the run never routes one around the verbs.
+restored in the index only, and listed in their `held`. Each listed path is a row here; the run never routes one around the verbs. A `held` row here, `merge waits on:` aside, reads `tried: <act> · failed: <why> · yours because: <reason> · do: <exact step>`; a refused act's reads `refused, not tried again: <act> · yours because: <reason> · do: <exact step>`, and no agent respells the act. Past `question`'s cap the run shortens `failed:` and keeps `do:` whole. A row `st-qa` sends here sits outside the three person QA rows and keeps its `Not done:` line.
 
 ## The morning walk
 

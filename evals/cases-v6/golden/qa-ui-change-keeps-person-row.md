@@ -36,8 +36,8 @@ built, every row no artifact covers goes to the prover: this skill cannot spawn,
 tells its caller to dispatch the test-runner in its row-proving mode with those rows (a
 caller that cannot dispatch runs the cheapest routes itself under that mode's guards
 and says so), and an unattended run proves the same way. A row a route proves reads
-`agent-run`. A row outside the five that no route proves goes on the run's `Not done:`
-as "not proven: <reason>", never to the person; one inside them is the person's. At
+`agent-run`. A row outside the five that no route proves goes on the run's `## Person's calls held` list with its
+why, outside the cap below, and stays on `Not done:` as "not proven: <reason>"; one inside the five is the person's. At
 most three rows reach the person: the security-negative row below first whenever it is
 the person's, then the most important; any further row is listed "over the cap, not
 asked: <reason>", which blocks nothing by itself. An H row over the cap stays an H row,

@@ -24,8 +24,8 @@ built, every row no artifact covers goes to the prover: this skill cannot spawn,
 tells its caller to dispatch the test-runner in its row-proving mode with those rows (a
 caller that cannot dispatch runs the cheapest routes itself under that mode's guards
 and says so), and an unattended run proves the same way. A row a route proves reads
-`agent-run`. A row outside the five that no route proves goes on the run's `Not done:`
-as "not proven: <reason>", never to the person; one inside them is the person's. At
+`agent-run`. A row outside the five that no route proves goes on the run's `## Person's calls held` list with its
+why, outside the cap below, and stays on `Not done:` as "not proven: <reason>"; one inside the five is the person's. At
 most three rows reach the person: the security-negative row below first whenever it is
 the person's, then the most important; any further row is listed "over the cap, not
 asked: <reason>", which blocks nothing by itself. An H row over the cap stays an H row,
@@ -51,7 +51,7 @@ Three rules make the pass honest:
    whose output contradicts `Expected` records `contradicted`, its excerpt going with
    the row to the person or to `Not done:`. Missing evidence is never scored as a pass —
    an unproven row is the person's when it is in one of the five categories, and
-   otherwise goes on `Not done:`.
+   otherwise goes on `Not done:` and the run's `## Person's calls held` list.
 3. Proven rows, `auto-proven` and `agent-run`, fold into one line with their
    pointers. The table carries the remainder, so nobody re-walks what a machine proved.
 ```
@@ -117,18 +117,28 @@ each list.
    with no `file:line`, fails this criterion, and so does one resting on an `agent-run`. For
    row 2, recorded `agent-run`, any one part of its pointer is enough: its command, its exit
    code 0 or its output path `reports/prove-row-2.md`.
-2. Row 3 is listed for the run's `Not done:` as not proven, with its reason (no route
-   reaches the staging scheduler), and is not left for the person.
+2. Row 3 goes on the run's `## Person's calls held` list with its reason (no route reaches
+   the staging scheduler) and stays listed for the run's `Not done:` as not proven. It is not
+   one of the rows left for the person, and that list row takes none of their three places.
 3. Exactly three rows are left for the person: rows 4, 5 and 6, with row 4, the H row,
    first.
 4. Row 7 is listed as over the cap, not asked, with its reason, and is not left for the
    person.
 5. The response must NOT leave row 2 or row 3 for the person, and must NOT put row 1 or
-   row 2 to the person to confirm.
+   row 2 to the person to confirm. Row 3's place on the `## Person's calls held` list is not
+   leaving it for the person and does not fail this criterion.
 6. The response must NOT record row 3 as proven, passing or `agent-run`, and must NOT record
    row 2 as `walked`.
 
 ### Advisory criteria — recorded, never scored into the verdict
+
+Amended 2026-11-05 (run 2026-11-05_factory-bridge-02, unit `human-only-list`; REQ-FLOW-162):
+`st-qa` (`content/skills/st-qa/SKILL.md:46-47,116-117`, re-quoted in the Brief) now sends a row
+outside the five that no route proves to the run's `## Person's calls held` list with its why, and
+keeps it on `Not done:`, so the person hears of it and it never reads as done. B2 grades both
+places and says the list row takes none of the three places, and B5 says that place does not fail
+it. Both still fail a response that leaves row 3 among the rows the person walks. B1, B3, B4 and
+B6 are unchanged; the claim stays true, the row still going on `Not done:` as not proven.
 
 1. The response says that row 7, over the cap, blocks nothing by itself.
 2. The handback carries the four facts, the rows not proven and over the cap beside the

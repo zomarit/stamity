@@ -612,6 +612,59 @@ describe("st-unattended — the morning list and the walk (REQ-FLOW-094, REQ-FLO
     ]);
   });
 
+  // Added 2026-11-05 (plan 023 file 2, unit human-only-list; REQ-FLOW-094, REQ-FLOW-162): what only a person can do lands
+  // on the one list with its why, so the person reads what was tried, why it failed, why it is theirs and what to do.
+  const HELD_ROW = "`tried: <act> · failed: <why> · yours because: <reason> · do: <exact step>`";
+  const REFUSED_ROW = "`refused, not tried again: <act> · yours because: <reason> · do: <exact step>`";
+
+  it("states the human-only list's row grammar in the held section, and keeps merge waits on as it is (REQ-FLOW-094, REQ-FLOW-162)", async () => {
+    const text = await flat();
+    // Both headings are named earlier in the body, so the slice opens on each section's own first words.
+    const held = text.slice(text.indexOf("## Person's calls held A force push"), text.indexOf("## The morning walk The walk is attended"));
+    expect(held).toContain("are the person's acts, refused on every client while the mode is unattended");
+    expect(held).toContain(`A \`held\` row here, \`merge waits on:\` aside, reads ${HELD_ROW};`);
+    expect(held).toContain(`a refused act's reads ${REFUSED_ROW}, and no agent respells the act.`);
+    expect(held).toContain("Past `question`'s cap the run shortens `failed:` and keeps `do:` whole.");
+    expect(held).toContain("A row `st-qa` sends here sits outside the three person QA rows and keeps its `Not done:` line.");
+    // The land's own rows keep their words: `run land` writes that opening into the pull request's body.
+    expect(held).toContain("are each a `held` row here (`merge waits on: <reasons>`).");
+  });
+
+  it("parses list rows in that grammar as held, outside the QA cap, and refuses one past the question cap (REQ-FLOW-094, REQ-FLOW-162)", () => {
+    const rowOf = (failed: string): string => `tried: push tag v1.2.3 · failed: ${failed} · yours because: a tag is a person's act · do: tag v1.2.3 on main`;
+    const fence = (rows: readonly object[]): string =>
+      [
+        "# Morning list — 2026-11-05_human-only",
+        "",
+        ...MORNING_SECTIONS.flatMap((name) => [`## ${name}`, "", name === "How to answer" ? "Answer in one comment." : MORNING_EMPTY, ""]),
+        "```" + MORNING_FENCE,
+        ...rows.map((row) => JSON.stringify(row)),
+        "```",
+        "",
+      ].join("\n");
+    const qa = [1, 2, 3].map((n) => ({ id: `Q${n}`, kind: "qa", question: `Walk row ${n}`, options: ["walked", "not walked"], default: 2, source: "st-qa" }));
+    const held = (id: string, question: string): object => ({ id, kind: "held", question, options: ["done", "leave it"], default: 2, source: "run record" });
+    const refused = "refused, not tried again: push tag v1.2.3 · yours because: a tag is a person's act · do: tag v1.2.3 on main";
+
+    // Three person QA rows fill the cap; two list rows beside them still parse, and each row keeps its words.
+    const parsed = parseMorning(fence([...qa, held("Q4", rowOf("the guard refused it")), held("Q5", refused)]));
+    expect(parsed.ok ? parsed.questions.filter((row) => row.kind === "held").map((row) => row.question) : parsed.problems).toEqual([
+      rowOf("the guard refused it"),
+      refused,
+    ]);
+    // The same list with a fourth `qa` row is the cap the list rows sit outside of.
+    const fourthQa = { ...qa[0], id: "Q6" };
+    const overCap = parseMorning(fence([...qa, fourthQa, held("Q4", rowOf("the guard refused it"))]));
+    expect(overCap.ok ? [] : overCap.problems.join("\n")).toContain("4 qa questions");
+
+    // A long `failed:` takes the row past `question`'s cap and the list stops parsing; shortened, `do:` stays whole.
+    const long = rowOf("x".repeat(500));
+    const over = parseMorning(fence([held("Q1", long)]));
+    expect(over.ok ? [] : over.problems.join("\n")).toContain("over the 500-character cap");
+    const short = parseMorning(fence([held("Q1", rowOf("x".repeat(100)))]));
+    expect(short.ok ? short.questions[0]?.question : short.problems).toMatch(/· do: tag v1\.2\.3 on main$/);
+  });
+
   // Added 2026-10-21 (plan 018-packs-rebuilt-01, unit u7-unattended-rows, inbox row build/55; REQ-FLOW-094): the skill
   // names the per-field caps `parseMorning` refuses past (`src/runs/morning.ts:99`, `TEXT_CAPS`), so a run writes a
   // block that parses. The numbers are literals here; the engine half below makes this pin fail when they and

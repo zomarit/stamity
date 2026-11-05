@@ -695,7 +695,7 @@ describe("qa — the human checkpoint", () => {
   // row first; a row outside the five that no route proves goes on `Not done:`, never to the person;
   // and at most three rows reach the person. The old sentences are asserted gone; the class clause
   // and the placement pins are held word for word.
-  it("keeps a person row for five categories only, proves first, caps at three, and skips the walk by class unless a page renders (REQ-FLOW-069, REQ-FLOW-081)", async () => {
+  it("keeps a person row for five categories only, proves first, caps at three, and skips the walk by class unless a page renders (REQ-FLOW-069, REQ-FLOW-081, REQ-FLOW-162)", async () => {
     const text = flow(await load("skills/st-qa/SKILL.md"));
 
     // The five categories a person adds something to; every other row is the prover's.
@@ -721,10 +721,16 @@ describe("qa — the human checkpoint", () => {
     );
     expect(text).not.toContain("runs the cheapest routes itself and says so");
     expect(text).not.toContain("the run's test-runner executes its check before this table is built");
-    // A row outside the five that no route proves is a gap the run reports, not a person's row.
+    // TEST CHANGE, justified (2026-11-05, plan 023 file 2, unit human-only-list; REQ-FLOW-162): the pin read "goes on
+    // the run's `Not done:` as "not proven: <reason>", never to the person; one inside them is the person's." What
+    // moved: such a row now also goes on the run's one human-only list with its why, so the person hears of it, while
+    // it stays on `Not done:`, so an unproven row never reads as done. It takes no place among the three walked rows,
+    // and the title gains the requirement's id. The old sentence is asserted gone.
+    // A row outside the five that no route proves stays a gap the run reports, and now reaches the list.
     expect(text).toContain(
-      'A row outside the five that no route proves goes on the run\'s `Not done:` as "not proven: <reason>", never to the person; one inside them is the person\'s.',
+      'A row outside the five that no route proves goes on the run\'s `## Person\'s calls held` list with its why, outside the cap below, and stays on `Not done:` as "not proven: <reason>"; one inside the five is the person\'s.',
     );
+    expect(text).not.toContain('as "not proven: <reason>", never to the person');
     expect(text).not.toContain(
       "A row whose check is missing, cannot run or fails stays on the human path under that pass's rule 2.",
     );
@@ -894,6 +900,8 @@ describe("qa — the human checkpoint", () => {
     expect(autoProve).toContain(
       "an unproven row is the person's when it is in one of the five categories, and otherwise goes on `Not done:`",
     );
+    // Added 2026-11-05 (plan 023 file 2, unit human-only-list; REQ-FLOW-162): rule 2 says what the row rule above says.
+    expect(autoProve).toContain("otherwise goes on `Not done:` and the run's `## Person's calls held` list.");
     // "All rows auto-proven" covers the prover's rows.
     expect(text).toContain('When every row auto-proved, `agent-run` rows included, the checkpoint closes on its pointers with no ask and records "all N rows auto-proven".');
     // An unattended run still proves before it records its person rows unsigned.
