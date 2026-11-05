@@ -1042,14 +1042,14 @@ both lockfiles that day). Each is held by a package this repository does not con
   code path is not reached in the published CLI: `eslint` is a development tool that ships in no
   package, the `glob` route is the one above, and `@tufjs/models` matches a pattern only for a
   target the top level of the TUF metadata does not hold. `sigstore` asks for one target,
-  `trusted_root.json`, and that level held it when read on 2026-11-05.
+  `trusted_root.json`, and that level held it when read on 2026-11-05. The head of
+  `src/pack/sigstoreVerifier.ts` names the mirror that serves this metadata.
 - `deepmerge` 4.2.0 and later (GHSA-gcqx-w48m-w2h4, low, prototype poisoning of a merged object),
   alert #54, with no patched version. It is in the site's build only, through `@svgr/webpack` in
   `website/package-lock.json`, at 4.3.1: the docs site's lockfile ships in no package, so the
   published CLI does not reach it.
 
-The root `package.json` carries no override for `glob` or `minimatch`: it would clean this
-repository's audit while an install of the package still gets the older versions.
+The root `package.json` carries no override for `glob` or `minimatch`.
 
 Four other alerts read open that day, all in the site's lockfile, and it moved past each the same
 day: `serialize-javascript` to 7.1.4 (GHSA-m5mm-p8h7-m29v, alert #50, the one advisory this page
