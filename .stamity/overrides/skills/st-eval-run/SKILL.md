@@ -260,6 +260,9 @@ Write `evals/runs/<YYYY-MM-DD>-run-<n>/RESULTS.md`, in the shape
   run used when the file is edited in place afterwards,
 - a per-case table — case id, class, verdict, cited span,
 - per-metric scores beside the threshold each was measured against.
+- a composed run whose prior complete run is itself composed carries a
+  `## 0a. Safety measure` section, written by the route of record's driver; a
+  section typed by hand does not count.
 
 Publish the run artifact with `node scripts/records.mjs commit -m …`; it lives on
 the `records` branch, never on `main`. Results left only in the session

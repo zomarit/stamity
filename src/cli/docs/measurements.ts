@@ -596,8 +596,8 @@ function metricScore(results: string, metric: string): string {
   return score;
 }
 
-/** A § 5 score cell: the bolded score to three places and its count. */
-const SCORE_CELL = /^\*\*[01]\.\d{3}\*\* \(\d+\/\d+\)$/;
+/** A § 5 score cell: the bolded score to three places and its count, capturing how many cases it scored. */
+const SCORE_CELL = /^\*\*[01]\.\d{3}\*\* \(\d+\/(\d+)\)$/;
 
 /**
  * The trimmed cells of the § 5 row of `metric`, split on `|` so index 1 is the metric's name and
@@ -1348,8 +1348,78 @@ const SAFETY_CLASS = /\badversarial\b|\btwin\b|\*\*floor\*\*/;
  * hold a real run's count to the set's.
  */
 export function safetyCases(results: string): readonly string[] {
+  return safetyRows(results).map(({ id }) => id);
+}
+
+/** The § 6 rows {@link safetyCases} keeps, as each case's id and class cell. */
+function safetyRows(results: string): readonly { readonly id: string; readonly cell: string }[] {
   const rows = (resultsSection(results, VERDICTS_HEADING) ?? "").split("\n").map((line) => VERDICT_ROW.exec(line));
-  return rows.flatMap((row) => (row !== null && SAFETY_CLASS.test(row[2] ?? "") ? [row[1] ?? ""] : []));
+  return rows.flatMap((row) =>
+    row !== null && SAFETY_CLASS.test(row[2] ?? "") ? [{ id: row[1] ?? "", cell: row[2] ?? "" }] : [],
+  );
+}
+
+/** How many floor cases, guardrail cases and benign twins a run scored. */
+interface SafetyCounts {
+  readonly floors: number;
+  readonly guardrails: number;
+  readonly twins: number;
+}
+
+/**
+ * The safety counts a results file's § 5 table states: `floors 48/48` on the golden row, `(39/39)` on
+ * the guardrail row and `(0/10)` on the twin row, the denominator of each, so a miss moves nothing.
+ * `null` when the section, a row or a count does not read. Exported so the suite can hold run 57's
+ * form to this reader.
+ */
+export function safetyCounts(results: string): SafetyCounts | null {
+  const section = resultsSection(results, SCORES_HEADING) ?? "";
+  const rows = section.split("\n").map((line) => line.split("|").map((cell) => cell.trim()));
+  const row = (metric: string): readonly string[] => rows.find((cells) => cells[1] === metric) ?? [];
+  const floors = FLOOR_COUNT.exec(row("Golden rubric pass rate").at(-2) ?? "")?.[2];
+  const guardrails = SCORE_CELL.exec(row("Adversarial guardrail hold rate")[2] ?? "")?.[1];
+  const twins = SCORE_CELL.exec(row("Benign-twin false-refusal rate")[2] ?? "")?.[1];
+  if (floors === undefined || guardrails === undefined || twins === undefined) return null;
+  return { floors: Number(floors), guardrails: Number(guardrails), twins: Number(twins) };
+}
+
+/**
+ * Hold a run's § 6 to the counts its § 5 states (REQ-PROVE-033).
+ *
+ * § 6 alone decides the safety set ({@link safetyCases}), so a mark dropped there takes a case out of
+ * every check and the page's count reads whole. A case in two counts counts once in each, as run 57's
+ * 48 floors and 49 adversarial cases share 21 of its 76. A results file forged in both sections stays
+ * out of reach of this check.
+ *
+ * Throws `EngineError` (`VALIDATION_ERROR`) when any count differs, naming both numbers of each, and
+ * when § 5 does not read: a check with one side missing would pass for the wrong reason.
+ */
+function holdSafetyCounts(runOfRecord: string, results: string): void {
+  const cells = safetyRows(results).map(({ cell }) => cell);
+  const twin = /\btwin\b/;
+  const marked: SafetyCounts = {
+    floors: cells.filter((cell) => cell.includes("**floor**")).length,
+    guardrails: cells.filter((cell) => /\badversarial\b/.test(cell) && !twin.test(cell)).length,
+    twins: cells.filter((cell) => twin.test(cell)).length,
+  };
+  const stated = safetyCounts(results);
+  if (stated === null) {
+    fail(
+      `Run ${runOfRecord}'s § 5 does not read as safety counts, and its § 6 marks ${marked.floors} floor case(s), ` +
+        `${marked.guardrails} guardrail case(s) and ${marked.twins} twin(s): the page cannot hold the two to each ` +
+        'other. § 5 states "floors N/M" on the golden row and (<passed>/<total>) on the guardrail and twin rows.',
+    );
+  }
+  const counts = [
+    ["floor cases", stated.floors, marked.floors],
+    ["guardrail cases", stated.guardrails, marked.guardrails],
+    ["twins", stated.twins, marked.twins],
+  ] as const;
+  const differences = counts.filter(([, inScores, inVerdicts]) => inScores !== inVerdicts);
+  if (differences.length > 0) {
+    const named = differences.map(([what, inScores, inVerdicts]) => `${what}: § 5 states ${inScores}, § 6 marks ${inVerdicts}`);
+    fail(`Run ${runOfRecord}'s safety counts disagree (${named.join("; ")}), so the page cannot show its safety list whole.`);
+  }
 }
 
 /** One carried-case table row: the case id, then its case-file sha256. */
@@ -1554,7 +1624,8 @@ function proveRows(
  * One link from a full measure of this release needs no more: its two runs are this release's, so
  * every case was measured in it. Any other shape must name its safety cases: a longer chain through
  * a {@link SAFETY_HEADING} section ({@link proveRows}, and {@link readPriorRun} refuses one with
- * none), and one link from an earlier release's full measure through its re-measured table.
+ * none), and one link from an earlier release's full measure through its re-measured table. A run
+ * that names them also has its § 6 held to the counts its § 5 states ({@link holdSafetyCounts}).
  */
 function proveChain(root: string, runOfRecord: string, results: string, measure: SafetyMeasure | null): ProvenChain {
   const { self, release, bound } = runOfRecordInRelease(root, runOfRecord);
@@ -1585,6 +1656,7 @@ function proveChain(root: string, runOfRecord: string, results: string, measure:
   if (named && cases.length === 0) {
     fail(`Run ${runOfRecord}'s § 6 names no safety case; the page cannot hold the chain to the set.`);
   }
+  if (named) holdSafetyCounts(runOfRecord, results);
   const chain = [self, ...ids];
   const numbers = [runOfRecord, ...links.map(({ number }) => number)];
   const measuredIn = [results, ...links.map((link) => link.results)].map(
