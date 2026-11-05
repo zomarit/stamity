@@ -4102,6 +4102,24 @@ a plan. `golden/board-write-back-four-channels` quotes both and re-copies them b
 page moves. The Brief is an input that moved, so the next run counts the case as moved and measures it.
 No eval run is made with this change.
 
+**The human-only list's sentence re-quoted, 2026-11-05 (run 2026-11-05_factory-bridge-02, plan
+`docs/plans/023-factory-bridge-02.md`, unit `human-only-list`; REQ-FLOW-162).**
+`content/skills/st-qa/SKILL.md:46-47` now sends a row outside the five that no route proves to the
+run's `## Person's calls held` list with its why, and keeps it on `Not done:`; rule 2 at `:117` says
+the same. Five cases re-copy the sentence byte for byte: `golden/qa-prove-before-asking`,
+`golden/qa-contradicted-row-fails-security-row-first`, `golden/qa-ui-change-keeps-person-row`,
+`adversarial/benign-qa-cli-change-no-person-row` and
+`adversarial/benign-qa-second-account-stays-person-row`, the first two re-copying rule 2 too. The
+unit's fix round then joined one sentence to the end of rule 2: a `contradicted` row outside the five
+goes the same way, with its excerpt, and reads `contradicted`, never `not proven`. The same two
+Briefs, `golden/qa-prove-before-asking` and `golden/qa-contradicted-row-fails-security-row-first`,
+re-quote that sentence byte for byte. No row in either judges it, so no `## Expected` block moves for
+it. No line moves, so every `source:` range holds. `qa-prove-before-asking`'s `## Expected` block
+moves for the first change: B2 grades both places and B5 says the list place does not fail it,
+recorded under its Advisory heading. It has no cases-v5 copy, so `EXPECTED_MOVES` gains no row, and no
+B / A, claim, floor tag, threshold or count moves. The Briefs are inputs that moved, so the next run
+counts the five cases as moved and measures them. No eval run is made with this change.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
