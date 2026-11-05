@@ -349,7 +349,11 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // past both rows, because the verdict now reads every route the line shows to a remote's HEAD ref, the default branch
   // the push check reads: a remote-tracking branch delete, a ref name the line cannot show, and the `--stdin` text raw
   // and unquoted. 296,333 + 2,675 = 299,008 bytes; 6,248 + 93 = 6,341 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 299_008, lines: 6_341 },
+  // Moved again 2026-11-05 on plan 023's propose-learning unit (review/70, the orchestrator's sign-off), by the measured
+  // size plus a small margin: 300,246 bytes / 6,307 lines (copilot, generated; about 299,003 bytes before the round), past
+  // the bytes row, because the accept reading now reads a word the shell completes as a verb word. 300,246 + 2,858 =
+  // 303,104 bytes; the lines row (6,341) holds.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 303_104, lines: 6_341 },
 };
 
 /** One generated script, ready for an adapter to place and register. */

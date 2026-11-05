@@ -2105,6 +2105,23 @@ describe("the guard's reading of the accept line of a run's proposal (REQ-FLOW-1
     expect(decide(tool, guard, ACCEPT).deny).toBe(true);
     expect(decide(tool, guard, capture)).toEqual({ deny: false });
   });
+
+  // Red before review/70: a verb word the shell completes passed every client's copy, so a sub-agent took a proposal live.
+  it.each(TOOLS)("%s: reads a verb word the shell completes as the verb, and a word another verb settles as none", async (tool) => {
+    const guard = await placeGuard(tool);
+    const lines = ["npx --no stamity learn acc*pt --run x", "stamity learn ac{c,c}ept --run x", "stamity le?rn accept --run x", "stamity l*n a*t --run x", "stamity l{e,e}arn a{c,c}cept --run x"];
+    const other = "npx --no stamity validate docs/*.md";
+    for (const command of lines) {
+      const verdict = personOnlyVerdict(command, BAKED_DEFAULT);
+      expect(verdict, command).toMatchObject({ deny: true, rule: "learn-accept", ask: true });
+      if (verdict.deny) expect(decide(tool, guard, command), `${tool}: ${command}`).toEqual(expectedAttended(tool, verdict));
+      expect(helper(tool, guard, command).deny, `${tool} helper: ${command}`).toBe(true);
+    }
+    expect(decide(tool, guard, other)).toEqual({ deny: false });
+    await getRepo().seedFiles({ ".stamity/runs/2026-11-05_x/record.md": record("in progress", "unattended") });
+    for (const command of lines) expect(decide(tool, guard, command).deny, `${tool} unattended: ${command}`).toBe(true);
+    expect(decide(tool, guard, other)).toEqual({ deny: false });
+  });
 });
 
 describe("the guard's reading of the land verb's approved line (a4, review/103)", () => {

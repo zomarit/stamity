@@ -187,12 +187,14 @@ export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
     ask: true,
   },
   // review/62, REQ-FLOW-163: the person's yes to a run's proposal asks in every mode, so it is refused unattended and for
-  // a sub-agent. It is read in `landApprovedVerdict`, on that reading's words, since the guard's bytes sit at their
-  // ceiling. A `learn` line whose words the guard cannot read asks too, as any such line of this package does
-  // (`autonomy-loosen`), so a filled-in verb fails closed under that rule's name.
+  // a sub-agent. The two literal words are read in `landApprovedVerdict`, on that reading's words. review/70: a word the
+  // shell fills in or completes, a glob or a brace form with literal text before it among them, may be either verb word,
+  // so `acceptHiddenVerdict` asks on a line of this package holding such a word beside `learn` or `accept`, or as its
+  // first word, and on one whose program the guard cannot settle. A line whose first word settles another verb cannot
+  // reach this one, so it stays out. A word `autonomy-loosen` reads asks there first, under that rule's name.
   {
     id: "learn-accept",
-    act: "taking a run's proposed learning live (`stamity learn accept`)",
+    act: "taking a run's proposed learning live (`stamity learn accept`, or a line whose words the guard cannot read, which may be it)",
     ask: true,
   },
   {
@@ -3095,10 +3097,30 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       deny("land-approved", "Landing a run on the person's approval (`stamity run land --approved`)");
       return;
     }
+    if (hidesWords(cmd, args)) deny("land-approved", "A `stamity run land` line whose words the guard cannot read, which may carry `--approved`");
+  }
+
+  /** Whether `args`, the end of `cmd`, hold a mark or take arguments from `xargs`: a word the line does not show whole. */
+  function hidesWords(cmd: string[], args: string[]): boolean {
     const marked = anyMark.get(cmd) ?? [];
+    return fed.has(cmd) || args.some((_, index) => marked[cmd.length - args.length + index] === true);
+  }
+
+  /**
+   * `learn-accept`'s marked half (review/70): a hidden word may be either verb word, and one may give both. Read after
+   * the loosen reading, so a line that already asks keeps its name. A first word that settles another verb is no accept,
+   * and neither is a glob holding a path, which gives only paths: the script word of `node scripts/*.mjs`.
+   */
+  function acceptHiddenVerdict(cmd: string[]): void {
+    const unsettled = unread.get(cmd)?.[0] === true;
+    const args = unsettled ? cmd.slice(1) : packageArgs(cmd);
+    if (args === null || !hidesWords(cmd, args)) return;
     const offset = cmd.length - args.length;
-    if (fed.has(cmd) || args.some((_, index) => marked[offset + index] === true)) {
-      deny("land-approved", "A `stamity run land` line whose words the guard cannot read, which may carry `--approved`");
+    const verbal = (at: number): boolean =>
+      anyMark.get(cmd)?.[offset + at] === true && !(/[\\/]/.test(args[at] ?? "") && /^g+$/.test(markMap.get(cmd)?.[offset + at]?.kinds ?? ""));
+    const first = args.findIndex((word) => !word.startsWith("-"));
+    if (args.includes("learn") || args.includes("accept") || (unsettled ? args.some((_, at) => verbal(at)) : verbal(first))) {
+      deny("learn-accept", "A line whose words the guard cannot read, which may be `learn accept`");
     }
   }
 
@@ -3289,6 +3311,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   for (const cmd of read) {
     landApprovedVerdict(cmd);
     loosenVerdict(cmd);
+    acceptHiddenVerdict(cmd);
   }
   // A refuse-class act decides the line; with none, the first act asks (v0a); with none, the acts that run are named.
   return acts.find((act) => !act.ask) ?? acts[0] ?? (ran.length > 0 ? { deny: false, runs: ran } : { deny: false });

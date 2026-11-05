@@ -2430,9 +2430,20 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			deny("land-approved", "Landing a run on the person's approval (`stamity run land --approved`)");
 			return;
 		}
+		if (hidesWords(cmd, args)) deny("land-approved", "A `stamity run land` line whose words the guard cannot read, which may carry `--approved`");
+	}
+	function hidesWords(cmd, args) {
 		const marked = anyMark.get(cmd) ?? [];
+		return fed.has(cmd) || args.some((_, index) => marked[cmd.length - args.length + index] === true);
+	}
+	function acceptHiddenVerdict(cmd) {
+		const unsettled = unread.get(cmd)?.[0] === true;
+		const args = unsettled ? cmd.slice(1) : packageArgs(cmd);
+		if (args === null || !hidesWords(cmd, args)) return;
 		const offset = cmd.length - args.length;
-		if (fed.has(cmd) || args.some((_, index) => marked[offset + index] === true)) deny("land-approved", "A `stamity run land` line whose words the guard cannot read, which may carry `--approved`");
+		const verbal = (at) => anyMark.get(cmd)?.[offset + at] === true && !(/[\\/]/.test(args[at] ?? "") && /^g+$/.test(markMap.get(cmd)?.[offset + at]?.kinds ?? ""));
+		const first = args.findIndex((word) => !word.startsWith("-"));
+		if (args.includes("learn") || args.includes("accept") || (unsettled ? args.some((_, at) => verbal(at)) : verbal(first))) deny("learn-accept", "A line whose words the guard cannot read, which may be `learn accept`");
 	}
 	function loosenVerdict(cmd) {
 		if (ctx.powershell === true && (cmd[0] ?? "").startsWith("$") && (cmd.length === 1 || /^[-+*/%]?=$/.test(cmd[1] ?? "") || /^\$(?:\{[^}]*\}|[\w:]+)[-+*/%]?=/.test(cmd[0] ?? ""))) return;
@@ -2572,6 +2583,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	for (const cmd of read) {
 		landApprovedVerdict(cmd);
 		loosenVerdict(cmd);
+		acceptHiddenVerdict(cmd);
 	}
 	return acts.find((act) => !act.ask) ?? acts[0] ?? (ran.length > 0 ? {
 		deny: false,

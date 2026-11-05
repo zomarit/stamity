@@ -195,8 +195,10 @@ The board never creates a label, so a person makes this one, once. The spelling 
 
 1. Cut a branch from the default branch. Choose your own name: a plan branch is never
    `stamity/<run-id>`, which the run keeps for itself and refuses here.
-2. Run `/st-plan` for the plan, with `/st-spec` first if you want a spec. With no `docs/specs/`
-   folder, `plan check` gives only an advisory. Commit what you wrote and push the branch.
+2. Run `/st-plan` for the plan, with `/st-spec` first if you want a spec. A missing `docs/specs/`
+   folder alone gives only an advisory from `plan check`, but every id the plan cites must then be
+   defined in the plan's own delta, or the next step exits 1. Commit what you wrote and push the
+   branch.
 3. Run `npx @zomarit/stamity plan check docs/plans/<file>.md`. It must exit 0.
 4. Run `/st-board fill --source docs/plans/<file>.md` to file the issue for that plan, with
    `/st-board setup` first if no board is linked. The body it writes holds a summary, the criteria,

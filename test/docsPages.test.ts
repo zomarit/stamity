@@ -6350,8 +6350,12 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
       expect(step).toContain("and `Ref:` when the item names a spec");
       expect(step, "the old sentence read as if every body held one").not.toContain("the plan's hash, and `Ref:`. Check");
       expect(flowed(read("content/commands/st-board.md"))).toContain("a `Ref:` when the item names a spec");
-      expect(step).toContain("With no `docs/specs/` folder, `plan check` gives only an advisory");
+      // TEST CHANGE, justified (review/73): the advisory holds for the missing folder alone. A cited id the delta does not
+      // define is a blocker with no spec too, so the pin moves to the sentence saying so, and to the code behind it.
+      expect(step).toContain("A missing `docs/specs/` folder alone gives only an advisory from `plan check`");
+      expect(step).toContain("every id the plan cites must then be defined in the plan's own delta, or the next step exits 1");
       expect(read("src/cli/commands/plan.ts")).toContain('code: "missing-spec-input"');
+      expect(read("src/runs/planCoverage.ts")).toContain('add("dangling-requirement"');
     });
 
     it("says to use one cloud per label, and names that as a reading (finding 1)", () => {

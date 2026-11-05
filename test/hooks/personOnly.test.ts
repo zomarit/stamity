@@ -3502,8 +3502,36 @@ describe("the accept line of a run's proposal (REQ-FLOW-163, review/62)", () => 
   it.each([
     ["a learn line with a filled-in word", "stamity learn \"$VERB\" --run x"],
     ["a learn line under xargs", "echo accept | xargs stamity learn"],
+    ["one brace giving both words", "stamity {learn,accept} --run x"],
+    ["both words completed on a filled-in program", "\"$CLI\" l*n a*t --run x"],
   ])("asks for %s, which may be the verb", (_, command) => {
     expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, ask: true });
+  });
+
+  // Red before review/70: a word the shell completes, literal text before its mark, was neither of the two literal words
+  // nor a word the loosen reading counts, so these lines asked nobody.
+  it.each([
+    ["the verb completed by a glob", "stamity learn acc*pt --run x"],
+    ["the verb completed by a one-letter glob", "stamity learn acce?t --run x"],
+    ["the verb completed by a bracket", "stamity learn acc[e]pt --run x"],
+    ["the verb completed by a brace", "stamity learn ac{c,c}ept --run x"],
+    ["the verb completed through the pinned runner", "npx --no stamity learn acc*pt --run x"],
+    ["the verb completed through the package's own CLI file", "node node_modules/@zomarit/stamity/dist/cli.js learn acc*pt"],
+    ["the verb completed behind another command", "npm test && stamity learn acc*pt"],
+    ["the verb completed in a nested line", "sh -c 'stamity learn acc*pt'"],
+    ["`learn` completed by a glob", "stamity le?rn accept --run x"],
+    ["`learn` completed by a brace", "stamity l{e,e}arn accept --run x"],
+    ["both words completed", "stamity l*n a*t --run x"],
+    ["both words completed by a brace each", "stamity l{e,e}arn a{c,c}cept --run x"],
+    ["both words completed after a program option", "stamity --json l*n a*t --run x"],
+    ["both words completed through the pinned runner", "npx --no stamity l*n a*t --run x"],
+    ["both words completed on a program word a glob may name", "st?mity l*n a*t --run x"],
+    ["both words completed on a program word a brace may name", "st{a,a}mity l*n a*t --run x"],
+    ["both words completed behind a word on such a program", "n{p,p}x stamity l*n a*t --run x"],
+    ["both words completed after a script word a glob fills in", "node di*/cli.js l*n a*t --run x"],
+    ["a brace in a word holding a path, which may give a bare word", "st{a,a}mity l{/x,earn} a{/b,ccept} --run x"],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule: "learn-accept", ask: true });
   });
 
   it.each([
@@ -3513,6 +3541,11 @@ describe("the accept line of a run's proposal (REQ-FLOW-163, review/62)", () => 
     ["a line that only names the verb", "echo 'stamity learn accept --run x'"],
     ["a commit message naming it", "git commit -m 'stamity learn accept takes a digest'"],
     ["another program's learn accept", "./tools/learn accept"],
+    ["another program's completed words", "./tools/learn acc*pt"],
+    ["a word completed on another verb, which the first word settles", "stamity validate docs/*.md"],
+    ["a word completed on a run verb, which the first word settles", "stamity run end --run 2026-11-05_x --paths src/*.ts"],
+    ["a script word a glob fills in, which gives only paths", "node scripts/*.mjs --check"],
+    ["a glob holding a path on a program word that may name the package", "st?mity docs/*.md"],
   ])("runs %s", (_, command) => {
     expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
   });
