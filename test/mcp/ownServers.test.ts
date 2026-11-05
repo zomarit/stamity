@@ -333,6 +333,125 @@ describe("withOwnServers", () => {
       expect(refusal).toThrow(/literal credential/);
       expect(refusal).not.toThrow(PLAIN_TOKEN);
     });
+
+    describe("whose name a client document prints", () => {
+      const rowNaming = (name: string, ...args: readonly string[]): Record<string, unknown> =>
+        ownRow({
+          args: ["-y", OWN_PIN, ...args],
+          requiresEnv: [{ name, description: "Issued by the wiki's admin page" }],
+        });
+
+      // The cut and closed-up reads drop a reference whole, so each of these words
+      // reaches a client document unread by them. A pack's scan reads the file as written.
+      it.each([
+        ["role-must-always", "REVIEWER", "${env:REVIEWER} must always approve."],
+        ["cross-agent-directive", "IGNORE", "when the agent runs ${env:IGNORE}"],
+        ["tool-preamble-data-access", "READ", "before using this tool ${env:READ}"],
+        ["tool-gated-side-effect", "SEND", "tool will not work unless ${env:SEND}"],
+        ["sensitive-path-access", "ID_RSA", "read ${env:ID_RSA}"],
+        ["exfiltrate", "EXFILTRATE", "${env:EXFILTRATE}"],
+        ["jailbreak-mode", "JAILBREAK", "${env:JAILBREAK}"],
+      ])("refuses `%s` when a name holds the word it needs", (patternId, name, arg) => {
+        expect(() => withOwnServers([], setupWith([rowNaming(name, arg)]))).toThrow(
+          `mcp.ownServers[0] ("acme-wiki"): \`args\` matches ${patternId}`,
+        );
+      });
+
+      // The read that keeps a name must not bring back what the sign row refused:
+      // a credential word is what these names are for, and a word alone directs nothing.
+      it.each([
+        "ANTHROPIC_API_KEY",
+        "AWS_SECRET_ACCESS_KEY",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "PASSWORD",
+        "REVIEWER_TOKEN",
+        "AGENT_TOKEN",
+        "SYSTEM_TOKEN",
+      ])("passes %s in each form a reference takes", (name) => {
+        const reference = `\${env:${name}}`;
+        const forms = [
+          `--token=${reference}`,
+          "--header",
+          `X-Api-Key: ${reference}`,
+          `https://example.invalid/sse?token=${reference}&workspace=main`,
+          "--read-only",
+        ];
+
+        const [row] = withOwnServers([], setupWith([rowNaming(name, ...forms)]));
+
+        expect(row?.args).toEqual(["-y", OWN_PIN, ...forms]);
+      });
+    });
+  });
+
+  describe("never repeats a typed field", () => {
+    const withheldBeside = (text: string): string => `${text} <value withheld>`;
+
+    it.each([
+      ["a shell line in `command`", ownRow({ command: `TOKEN=${PLAIN_TOKEN} npx` }), withheldBeside("`command`")],
+      ["a password in `docsUrl`", ownRow({ docsUrl: `http://acme:${PLAIN_TOKEN}@wiki.invalid/` }), withheldBeside("`docsUrl`")],
+      ["a value in `pinnedVersion`", ownRow({ pinnedVersion: PLAIN_TOKEN }), withheldBeside("`pinnedVersion`")],
+      [
+        "a value in a variable `name`",
+        ownRow({ requiresEnv: [{ name: PLAIN_TOKEN, description: "Read-only wiki token" }] }),
+        withheldBeside("`name`"),
+      ],
+      ["a value in `transport`", ownRow({ transport: PLAIN_TOKEN }), withheldBeside("got string")],
+      ["a value past the cut a wrong type gets", ownRow({ transport: PLAIN_TOKEN.repeat(4) }), withheldBeside("got string")],
+      // A word the launcher pattern accepts is printed by the pin refusals instead.
+      ["a value shaped like a launcher", ownRow({ command: PLAIN_TOKEN }), withheldBeside("host-installed launcher")],
+      ["a field beside a row with no `args`", ownRow({ docsUrl: `http://${PLAIN_TOKEN}/`, args: undefined }), withheldBeside("`docsUrl`")],
+    ])("%s", (_shape, row, placeholder) => {
+      const refusal = (): unknown => withOwnServers([], setupWith([row]));
+
+      expect(refusal).toThrow(/mcp\.ownServers\[0\] \("acme-wiki"\)/);
+      expect(refusal).toThrow(placeholder);
+      expect(refusal).not.toThrow(PLAIN_TOKEN);
+      expect(refusal).not.toThrow(PLAIN_TOKEN.slice(0, 12));
+    });
+
+    it("a number typed where a string belongs", () => {
+      const refusal = (): unknown => withOwnServers([], setupWith([ownRow({ docsUrl: 20_261_105 })]));
+
+      expect(refusal).toThrow("`docsUrl` must be a string (got number <value withheld>)");
+      expect(refusal).not.toThrow("20261105");
+    });
+
+    it("a variable's name in the label of a refused description, which names it by place", () => {
+      const row = ownRow({ requiresEnv: [{ name: OWN_VAR, description: `Issued as ${LITERAL_TOKEN}` }] });
+      const refusal = (): unknown => withOwnServers([], setupWith([row]));
+
+      expect(refusal).toThrow("`requiresEnv[0].description` carries a literal credential");
+      expect(refusal).not.toThrow(OWN_VAR);
+    });
+
+    it("and keeps the row's id in its label when a field repeats it", () => {
+      const row = ownRow({ id: "acme-mcp", command: "acme-mcp", packageNameLock: "acme-mcp", args: ["--bad"], requiresEnv: [] });
+
+      expect(() => withOwnServers([], setupWith([row]))).toThrow(/mcp\.ownServers\[0\] \("acme-mcp"\)/);
+    });
+
+    it("and keeps the pin, which says what the refusal wants", () => {
+      const refusal = (): unknown => withOwnServers([], setupWith([ownRow({ args: ["-y", OWN_PACKAGE] })]));
+
+      expect(refusal).toThrow(`"${OWN_PIN}"`);
+    });
+
+    it("while a pack keeps the validator's own words, which print the field", () => {
+      expect(() => validatePackMcpServer(ownRow({ transport: PLAIN_TOKEN }), "mcp_servers/wiki.json")).toThrow(PLAIN_TOKEN);
+    });
+  });
+
+  describe("escapes a C1 control", () => {
+    it.each([
+      ["in an id, where the label and the validator's own line each print it", { id: "acme\u009b31mwiki" }],
+      ["in a stray key, which the validator quotes", { "acme\u0085wiki": true }],
+    ])("%s", (_place, overrides) => {
+      const refusal = (): unknown => withOwnServers([], setupWith([ownRow(overrides)]));
+
+      expect(refusal).toThrow(/acme\\u00(?:9b31m|85)wiki/);
+      expect(refusal).not.toThrow(/[\u0080-\u009f]/);
+    });
   });
 
   it("refuses a directive spread past a row's shipped window, at the pack's widened one", () => {

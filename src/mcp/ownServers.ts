@@ -26,8 +26,9 @@ import { resolveServerMeta, type PackSuppliedServer } from "./catalog.ts";
  * {@link withOwnServers} and refuses.
  *
  * Every refusal here is printed to a terminal or a CI log, and an own row is
- * where a person types a real credential, so no refusal repeats an argument:
- * {@link maskArgs} names each one by its place.
+ * where a person types a real credential, so no refusal repeats a typed value:
+ * {@link maskArgs} names each argument by its place, and {@link maskFields}
+ * withholds the other fields a refusal would quote.
  */
 
 /**
@@ -80,6 +81,59 @@ function maskArgs(message: string, row: unknown): string {
   return masked;
 }
 
+/** What stands where a refusal would print a typed field; the field's name stays beside it. */
+const WITHHELD = "<value withheld>";
+
+/** How a refusal prints a number typed where a string belongs. */
+const TYPED_NUMBER = /\(got number [^)]*\)/g;
+
+/** `../config/parse.ts` cuts a string of a wrong type to this many characters before quoting it. */
+const TYPE_REFUSAL_CUT = 40;
+
+/** Control characters JSON's quoting leaves as they are, and some terminals obey. */
+const C1_CONTROLS = /[\u0080-\u009f]/g;
+
+/**
+ * `message` with no typed `command`, `docsUrl`, `pinnedVersion`, `transport` or
+ * variable `name` left in it. The validator quotes each of them when it refuses
+ * one, and the pin refusals quote a `command` that has a launcher's shape, which a
+ * pasted token can have. These fields are where a pasted shell line, or a link
+ * with its password in it, lands. Two things stay. The `id` is how the person
+ * finds the row, so a field equal to it stays too. The pin says which token the
+ * refusal wants, and it prints only once its version has an exact version's shape.
+ */
+function maskFields(message: string, row: unknown): string {
+  const { id, command, docsUrl, pinnedVersion, transport, requiresEnv } = (row ?? {}) as Partial<McpOwnServer>;
+  const names = (Array.isArray(requiresEnv) ? requiresEnv : []).map(
+    (requirement) => (requirement as { name?: unknown } | null)?.name,
+  );
+  let masked = message.replaceAll(TYPED_NUMBER, `(got number ${WITHHELD})`);
+  for (const [index, name] of names.entries()) {
+    masked = masked.replaceAll(`requiresEnv[${String(name)}]`, `requiresEnv[${index}]`);
+  }
+  for (const value of [command, docsUrl, pinnedVersion, transport, ...names]) {
+    if (typeof value !== "string" || value === id) continue;
+    masked = masked
+      .replaceAll(JSON.stringify(value), WITHHELD)
+      .replaceAll(JSON.stringify(`${value.slice(0, TYPE_REFUSAL_CUT)}…`), WITHHELD);
+  }
+  return masked;
+}
+
+/**
+ * A refusal as it may print: no typed value, and no C1 control. The row's id
+ * reaches a message through the label and again through the validator's own line,
+ * and a stray key through its quote, so the escape runs here over the whole
+ * message and not in {@link rowLabel} alone. It runs last, because the masks match
+ * values as `JSON.stringify` prints them.
+ */
+function printableRefusal(message: string, row: unknown): string {
+  return maskFields(maskArgs(message, row), row).replaceAll(
+    C1_CONTROLS,
+    (control) => `\\u${control.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
+}
+
 /**
  * Refuse a `${env:` that never closes. The validator reads closed references
  * only, so this argument passes it and stops at the emitter, whose refusal
@@ -96,9 +150,12 @@ function assertReferencesClose(definition: PackMcpServerDefinition, label: strin
 }
 
 /**
- * The bar for `args` with their references closed up: every row but the one that
- * reads on past an assignment sign, which would take whatever follows `--token=`
- * for the value the reference supplies.
+ * The bar for `args` with their references in the text or closed up: every row
+ * but the one that reads on past an assignment sign. That row wants any eight
+ * characters there, which every reference is, and with a reference closed up it
+ * would take whatever follows `--token=` for the value the reference supplies. It
+ * is the only row a reference meets by its shape, whatever its name says, so it is
+ * the only one left out.
  */
 const CLOSED_UP_PATTERNS = PACK_BODY_DENY_PATTERNS.filter((row) => row.id !== "inline-secret-assignment");
 
@@ -113,12 +170,14 @@ type RowText = [field: string, text: string, patterns?: readonly DenyPattern[]];
  * row spans whitespace and two arguments render as one line
  * (`./descriptionScan.ts`).
  *
- * References stay out of the argument texts, as in the validator's secret gate,
- * which calls them the cure for an inline credential and has by now proved each
- * one a declared name. So `args` are read twice: cut at each reference, and
- * closed up, since a reference between a directive's words takes nothing out of
- * it. Closing up is per argument: a brace opened in one and closed in another is
- * no reference.
+ * The validator's secret gate calls a reference the cure for an inline credential,
+ * so no credential check may read one as a value. That is all it earns: the name
+ * inside it is free text a client document prints, and a pack's scan reads it. So
+ * `args` are read three ways. Cut at each reference, against the full list, so a
+ * literal after a sign still stops. Closed up, since a reference between a
+ * directive's words takes nothing out of it. As written, since a name can hold the
+ * word a row needs. Closing up is per argument: a brace opened in one and closed in
+ * another is no reference.
  */
 function rowTexts(definition: PackMcpServerDefinition): RowText[] {
   const { args, requiresEnv = [] } = definition;
@@ -131,6 +190,7 @@ function rowTexts(definition: PackMcpServerDefinition): RowText[] {
     ...args.flatMap((arg, index) => arg.split(INTERPOLATION).map((text): RowText => [`args[${index}]`, text])),
     ...args.join(" ").split(INTERPOLATION).map((text): RowText => ["args", text]),
     ["args", args.map((arg) => arg.replaceAll(INTERPOLATION, "")).join(" "), CLOSED_UP_PATTERNS],
+    ["args", args.join(" "), CLOSED_UP_PATTERNS],
     ...requiresEnv.map((requirement, index): RowText => [
       `requiresEnv[${index}].description`,
       requirement.description,
@@ -224,7 +284,7 @@ function resolveOwnRows(
       kept.push(row);
     } catch (cause) {
       if (!(cause instanceof EngineError)) throw cause;
-      problems.push(maskArgs(cause.message, row));
+      problems.push(printableRefusal(cause.message, row));
     }
   }
   const servers = [...packRows, ...own].toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
