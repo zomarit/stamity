@@ -1028,13 +1028,34 @@ so where it says which edition each id belongs to.
 
 ## What is still open
 
-One advisory, in one Dependabot alert, is open (read live on 2026-10-26). It is a known residual
-in 1.17.0, in the documentation site's lockfile only:
+Three advisories stand, one Dependabot alert each (read live on 2026-11-05, with `npm audit` over
+both lockfiles that day). Each is held by a package this repository does not control:
 
-- `serialize-javascript` < 7.1.3 (GHSA-m5mm-p8h7-m29v, low, cross-site scripting through an
-  unescaped `</script` at the end of a serialized function body), alert #50, patched in 7.1.3.
-  It is in `website/package-lock.json` only, locked at 7.1.2: the docs site's lockfile ships in
-  no package, so the published CLI does not reach it.
+- `glob` 9.0.0 to 14.0.1 (GHSA-3g3m-2fjr-6pw4, medium, a filesystem walk that goes on after its
+  `AbortSignal` fires), alert #51, patched in 14.0.2. It is in the root lockfile at 13.0.6, through
+  `sigstore`, `make-fetch-happen` and `cacache`, and the latest `cacache`, 21.0.1, still asks for
+  `^13.0.0`. The code path is not reached: `cacache` calls `glob` only in `rm.all` and `verify`, and
+  `make-fetch-happen` calls neither.
+- `minimatch` 7.0.0 to 11.0.0 (GHSA-g3hv-75wg-m249, medium, denial of service through a pattern that
+  amplifies), alert #52, patched in 11.0.1. It is in the root lockfile at 10.2.6, through `eslint`,
+  `glob` and `@tufjs/models`, and the latest `@tufjs/models`, 5.0.2, still asks for `^10.2.6`. The
+  code path is not reached in the published CLI: `eslint` is a development tool that ships in no
+  package, the `glob` route is the one above, and `@tufjs/models` matches a pattern only for a
+  target the top level of the TUF metadata does not hold. `sigstore` asks for one target,
+  `trusted_root.json`, and that level held it when read on 2026-11-05.
+- `deepmerge` 4.2.0 and later (GHSA-gcqx-w48m-w2h4, low, prototype poisoning of a merged object),
+  alert #54, with no patched version. It is in the site's build only, through `@svgr/webpack` in
+  `website/package-lock.json`, at 4.3.1: the docs site's lockfile ships in no package, so the
+  published CLI does not reach it.
+
+The root `package.json` carries no override for `glob` or `minimatch`: it would clean this
+repository's audit while an install of the package still gets the older versions.
+
+Four other alerts read open that day, all in the site's lockfile, and it moved past each the same
+day: `serialize-javascript` to 7.1.4 (GHSA-m5mm-p8h7-m29v, alert #50, the one advisory this page
+named at 1.17.0), `qs` to 6.16.1 (GHSA-6pq8-jhm2-2vcw, alert #53), `follow-redirects` to 1.16.2
+(GHSA-mrwp-f3q8-3g9p, alert #55) and `joi` to 17.13.9 (GHSA-4528-x5fx-h6hg, alert #56). `npm audit`
+in `website/` then reads only the `deepmerge` chain.
 
 The two advisories this page named at 1.16.0 are no longer open. `http-cache-semantics`
 (GHSA-ch52-4w7c-c8xp, alerts #23 and #27) moved from 4.2.0 to 4.3.0 in the root lockfile and the
@@ -1043,8 +1064,7 @@ the advisory itself still names no patched version. The `braces` advisory (GHSA-
 alert #26) was withdrawn, and its alert with it. Both were tracked in `.stamity/inbox.md` (on the
 `records` branch) as the row `2026-10-08_product-core/close/1`.
 
-The site's lockfile moves to `serialize-javascript` 7.1.3 with a dependency update; this cut does
-not move it. The advisory is not an accepted risk: no decision recorded here accepts it. One
+None of the three is an accepted risk: no decision recorded here accepts them. One
 item was recorded on this page as an accepted risk, in those words and with its reasons, and it
 is retired: the documentation site's `image-size` dependency, reached through Docusaurus's MDX
 loader, where two high-severity advisories described denial of service through infinite loops in
