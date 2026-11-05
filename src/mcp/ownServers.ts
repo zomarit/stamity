@@ -1,4 +1,4 @@
-import { INVISIBLE_SMUGGLING_CHARS, scanNormalized } from "../denyscan/denyScan.ts";
+import { INVISIBLE_SMUGGLING_CHARS, scanNormalized, type DenyPattern } from "../denyscan/denyScan.ts";
 import {
   PACK_BODY_DENY_PATTERNS,
   validatePackMcpServer,
@@ -96,14 +96,31 @@ function assertReferencesClose(definition: PackMcpServerDefinition, label: strin
 }
 
 /**
+ * The bar for `args` with their references closed up: every row but the one that
+ * reads on past an assignment sign, which would take whatever follows `--token=`
+ * for the value the reference supplies.
+ */
+const CLOSED_UP_PATTERNS = PACK_BODY_DENY_PATTERNS.filter((row) => row.id !== "inline-secret-assignment");
+
+/** A text to scan, labelled for the refusal; `patterns` defaults to the pack's list. */
+type RowText = [field: string, text: string, patterns?: readonly DenyPattern[]];
+
+/**
  * Every free text a row carries, labelled for the refusal. A pack's scan reads
  * the whole file, so an own row's reads all of it too: the validator has
  * already held `id`, `transport`, `pinnedVersion` and each variable's `name` to
  * a fixed shape, and the rest is here. `args` also counts joined, since a deny
  * row spans whitespace and two arguments render as one line
  * (`./descriptionScan.ts`).
+ *
+ * References stay out of the argument texts, as in the validator's secret gate,
+ * which calls them the cure for an inline credential and has by now proved each
+ * one a declared name. So `args` are read twice: cut at each reference, and
+ * closed up, since a reference between a directive's words takes nothing out of
+ * it. Closing up is per argument: a brace opened in one and closed in another is
+ * no reference.
  */
-function rowTexts(definition: PackMcpServerDefinition): [field: string, text: string][] {
+function rowTexts(definition: PackMcpServerDefinition): RowText[] {
   const { args, requiresEnv = [] } = definition;
   return [
     ["description", definition.description],
@@ -111,9 +128,10 @@ function rowTexts(definition: PackMcpServerDefinition): [field: string, text: st
     ["command", definition.command],
     ["packageNameLock", definition.packageNameLock],
     ["docsUrl", definition.docsUrl],
-    ...args.map((arg, index): [string, string] => [`args[${index}]`, arg]),
-    ["args", args.join(" ")],
-    ...requiresEnv.map((requirement, index): [string, string] => [
+    ...args.flatMap((arg, index) => arg.split(INTERPOLATION).map((text): RowText => [`args[${index}]`, text])),
+    ...args.join(" ").split(INTERPOLATION).map((text): RowText => ["args", text]),
+    ["args", args.map((arg) => arg.replaceAll(INTERPOLATION, "")).join(" "), CLOSED_UP_PATTERNS],
+    ...requiresEnv.map((requirement, index): RowText => [
       `requiresEnv[${index}].description`,
       requirement.description,
     ]),
@@ -127,15 +145,15 @@ function rowTexts(definition: PackMcpServerDefinition): [field: string, text: st
  * ids are reported, since the span is the payload.
  */
 function assertCleanText(definition: PackMcpServerDefinition, label: string): void {
-  const problems = rowTexts(definition).flatMap(([field, text]) => {
+  const problems = rowTexts(definition).flatMap(([field, text, patterns = PACK_BODY_DENY_PATTERNS]) => {
     const stripped = text.replace(INVISIBLE_SMUGGLING_CHARS, "");
-    const hits = scanNormalized(stripped, PACK_BODY_DENY_PATTERNS);
+    const hits = scanNormalized(stripped, patterns);
     if (hits.length === 0) return [];
     return [`${label}: \`${field}\` matches ${[...new Set(hits.map((hit) => hit.patternId))].join(", ")}`];
   });
   if (problems.length === 0) return;
   throw new EngineError(
-    `${problems.join("\n")}\nThese words match known injection or exfiltration patterns, and this ` +
+    `${[...new Set(problems)].join("\n")}\nThese words match known injection or exfiltration patterns, and this ` +
       `text reaches what an agent or a person reads about the server. Reword them.`,
     { code: "VALIDATION_ERROR" },
   );

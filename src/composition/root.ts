@@ -65,6 +65,7 @@ import * as mcpCatalog from "../mcp/catalog.ts";
 import * as descriptionScan from "../mcp/descriptionScan.ts";
 import * as mcpEnv from "../mcp/env.ts";
 import * as mcpEmit from "../mcp/emit.ts";
+import * as ownServers from "../mcp/ownServers.ts";
 import * as secretScan from "../mcp/secretScan.ts";
 import * as packManifest from "../pack/manifest.ts";
 import * as packInstall from "../pack/install.ts";
@@ -211,6 +212,8 @@ export interface EngineRegistry {
     readonly descriptionScan: typeof descriptionScan;
     readonly env: typeof mcpEnv;
     readonly emit: typeof mcpEmit;
+    /** A repository's own server rows, joined to the pack rows (REQ-FLOW-160). */
+    readonly ownServers: typeof ownServers;
     readonly secretScan: typeof secretScan;
   };
   /**
@@ -481,6 +484,7 @@ export function createEngine(): EngineRegistry {
       descriptionScan,
       env: mcpEnv,
       emit: mcpEmit,
+      ownServers,
       secretScan,
     },
     pack: {
