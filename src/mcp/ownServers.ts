@@ -19,6 +19,11 @@ import { pinnedPackageSpec, resolveServerMeta, type PackSuppliedServer } from ".
  * proof ask nothing about where a row came from, and {@link OWN_SERVER_SOURCE}
  * is what keeps it out of a pack's accounting.
  *
+ * One check is stricter than a pack's, and it is the only one: {@link assertLinksHoldNoCredential}.
+ * A pack's file is public and reviewed before install, while an own row is typed by a
+ * person who may paste a link with its password in it. `../pack/manifest.ts` stays as
+ * it is, so what a pack may carry does not move.
+ *
  * The bar runs here and not in the manifest reader, on every read. A setup with
  * a bad row must still open: `clean` exists to clear such a state, so it reads
  * through {@link provableOwnServers}, and a rendering proof plans from
@@ -184,6 +189,96 @@ function assertHostLock(definition: PackMcpServerDefinition, label: string): voi
   );
 }
 
+/** What a `${...}` reference reads as in a link: its own colon is not the one before a password. */
+const LINK_REFERENCE = "${}";
+
+/** A link's scheme and the part of its authority before the last `@`. */
+const LINK_USERINFO = /([a-z][a-z0-9+.-]*):[/\\]{2}([^/\\?#\s]*)@/gi;
+
+/** A whole link, up to the next space. */
+const LINK = /[a-z][a-z0-9+.-]*:[/\\]{2}\S*/gi;
+
+/** A name and a value in a link's query or fragment. */
+const LINK_PARAMETER = /[?&#;]([^=&#;\s]+)=([^&#;\s]*)/g;
+
+/**
+ * Parameter names that carry a credential. The short words count only as the whole
+ * name, so `sort_key` and `monkey` stay plain. An `api_key` or an `access_key` is the
+ * secret scan's already.
+ */
+const CREDENTIAL_PARAMETER = /^(?:key|auth|pwd|sig|signature)$|(?:token|secret|passw(?:or)?d|credentials?)$/i;
+
+/** An ssh link authenticates by key, so a bare name before its `@` is a login, as `git@` is. */
+const SSH_SCHEME = /(?:^|\+)ssh$/i;
+
+/** Whether `text`, read with its references marked, holds anything but references. */
+function holdsLiteral(text: string): boolean {
+  return text.replaceAll(LINK_REFERENCE, "") !== "";
+}
+
+/**
+ * Whether the part before a link's `@` holds a typed credential. The secret sits
+ * after the colon, or, with nothing there, in the name: a token alone before the `@`
+ * is an ordinary way to log in, and it cannot be told from a user name. So a name
+ * stays only beside a password given by reference, or on an ssh link.
+ */
+function userinfoHoldsCredential(scheme: string, userinfo: string): boolean {
+  const [name = "", ...rest] = userinfo.split(":");
+  const password = rest.join(":");
+  if (password !== "") return holdsLiteral(password);
+  return holdsLiteral(name) && !(rest.length === 0 && SSH_SCHEME.test(scheme));
+}
+
+/** `text` as the link reads take it: nothing invisible, and each reference marked. */
+function linkText(text: string): string {
+  return text.replace(INVISIBLE_SMUGGLING_CHARS, "").replaceAll(INTERPOLATION, LINK_REFERENCE);
+}
+
+/** Whether a link in `text` holds a typed credential before its `@`. */
+function linkUserinfoHoldsCredential(text: string): boolean {
+  return [...linkText(text).matchAll(LINK_USERINFO)].some(([, scheme = "", userinfo = ""]) =>
+    userinfoHoldsCredential(scheme, userinfo),
+  );
+}
+
+/** Whether a link in `text` holds a typed credential in a parameter. */
+function linkParameterHoldsCredential(text: string): boolean {
+  return (linkText(text).match(LINK) ?? []).some((link) =>
+    [...link.matchAll(LINK_PARAMETER)].some(
+      ([, name = "", value = ""]) => CREDENTIAL_PARAMETER.test(name) && holdsLiteral(value),
+    ),
+  );
+}
+
+/**
+ * Refuse a row with a credential typed into a link in `packageNameLock` or `args`.
+ * The client documents are committed, and the secret scan knows such a link only for
+ * a few database schemes, so the row would be written whole. A reference in the same
+ * place holds none. The refusal names the field alone.
+ *
+ * A fetch launcher's pin is always an argument, so reading `args` reads the pin, and
+ * that catches a link the `@version` completes. Its parameters stay unread there: the
+ * lock's read has them, and on the pin the `@version` would count as typed text
+ * beside a reference.
+ */
+function assertLinksHoldNoCredential(definition: PackMcpServerDefinition, label: string): void {
+  const pin = pinnedPackageSpec(definition);
+  const holdsCredential = (text: string): boolean =>
+    linkUserinfoHoldsCredential(text) || (text !== pin && linkParameterHoldsCredential(text));
+  const texts: [field: string, text: string][] = [
+    ["packageNameLock", definition.packageNameLock],
+    ...definition.args.map((arg, index): [string, string] => [`args[${index}]`, arg]),
+  ];
+  const fields = texts.filter(([, text]) => holdsCredential(text)).map(([field]) => `\`${field}\``);
+  if (fields.length === 0) return;
+  throw new EngineError(
+    `${label}: ${fields.join(", ")} holds a credential in a link. The client documents are committed, ` +
+      `so it would be written there. Declare the variable in \`requiresEnv\` and write it in that place ` +
+      `as \${env:NAME}.`,
+    { code: "VALIDATION_ERROR" },
+  );
+}
+
 /**
  * The bar for `args` with their references in the text or closed up: every row
  * but the one that reads on past an assignment sign. That row wants any eight
@@ -306,6 +401,7 @@ function resolveOwnRows(
       const definition = validatePackMcpServer(row, label);
       assertReferencesClose(definition, label);
       assertHostLock(definition, label);
+      assertLinksHoldNoCredential(definition, label);
       assertCleanText(definition, label);
       const holder = holders.get(definition.id);
       if (holder !== undefined) {

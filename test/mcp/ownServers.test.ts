@@ -515,6 +515,84 @@ describe("withOwnServers", () => {
     });
   });
 
+  describe("a credential held in a link", () => {
+    const ZERO_WIDTH = String.fromCodePoint(0x20_0b);
+    const PASSWORD_LINK = `https://acme:${PLAIN_TOKEN}@registry.invalid/pkg`;
+    const lockRow = (lock: string): Record<string, unknown> =>
+      ownRow({ packageNameLock: lock, args: ["-y", `${lock}@${OWN_VERSION}`] });
+    const argRow = (...args: readonly string[]): Record<string, unknown> => ownRow({ args: ["-y", OWN_PIN, ...args] });
+
+    it.each<[string, Record<string, unknown>, string]>([
+      ["a password in the package link", lockRow(PASSWORD_LINK), "`packageNameLock`, `args[1]`"],
+      ["a token alone in the package link", lockRow(`https://${PLAIN_TOKEN}@registry.invalid/pkg`), "`packageNameLock`"],
+      ["a token before an empty password", lockRow(`https://${PLAIN_TOKEN}:@registry.invalid/pkg`), "`packageNameLock`"],
+      ["a scheme with a plus", lockRow(`git+https://acme:${PLAIN_TOKEN}@git.invalid/pkg.git`), "`packageNameLock`"],
+      ["an upper-case scheme", lockRow(`HTTPS://acme:${PLAIN_TOKEN}@registry.invalid/pkg`), "`packageNameLock`"],
+      // The lock holds no `@`: the version completes the link, so only the pin shows it.
+      ["a link the pin's version completes", lockRow(`https://acme:${PLAIN_TOKEN}`), "`args[1]`"],
+      ["a link as an argument", argRow(`https://acme:${PLAIN_TOKEN}@wiki.invalid/`), "`args[2]`"],
+      ["a link inside a flag", argRow(`--endpoint=https://acme:${PLAIN_TOKEN}@wiki.invalid/`), "`args[2]`"],
+      ["the second link of an argument", argRow(`https://a.invalid,https://acme:${PLAIN_TOKEN}@b.invalid`), "`args[2]`"],
+      ["a password on an ssh link", argRow(`ssh://git:${PLAIN_TOKEN}@git.invalid/pkg`), "`args[2]`"],
+      ["a password beside a referenced name", argRow(`https://${OWN_REFERENCE}:${PLAIN_TOKEN}@wiki.invalid/`), "`args[2]`"],
+      ["a literal joined to a reference", argRow(`https://acme:${PLAIN_TOKEN}${OWN_REFERENCE}@wiki.invalid/`), "`args[2]`"],
+      ["a link split by a zero-width space", argRow(`https:${ZERO_WIDTH}//acme:${PLAIN_TOKEN}@wiki.invalid/`), "`args[2]`"],
+      ["a `key` in the query", argRow(`https://wiki.invalid/sse?key=${PLAIN_TOKEN}`), "`args[2]`"],
+      ["an `auth` after another parameter", argRow(`https://wiki.invalid/sse?a=1&auth=${PLAIN_TOKEN}`), "`args[2]`"],
+      ["a `token` in the fragment", lockRow(`https://registry.invalid/pkg#token=${PLAIN_TOKEN}`), "`packageNameLock`"],
+    ])("refuses %s, by field name alone", (_shape, row, fields) => {
+      const refusal = (): unknown => withOwnServers([], setupWith([row]));
+
+      expect(refusal).toThrow(`mcp.ownServers[0] ("acme-wiki"): ${fields}`);
+      expect(refusal).toThrow("holds a credential in a link");
+      expect(refusal).not.toThrow(PLAIN_TOKEN);
+      expect(refusal).not.toThrow(PLAIN_TOKEN.slice(0, 12));
+    });
+
+    it("refuses a value too short for the secret scan", () => {
+      expect(() => withOwnServers([], setupWith([argRow("https://wiki.invalid/sse?token=abc123")]))).toThrow(
+        "`args[2]` holds a credential in a link",
+      );
+    });
+
+    it.each([
+      ["the password", `https://acme:${OWN_REFERENCE}@registry.invalid/pkg`],
+      ["the name and the password", `https://${OWN_REFERENCE}:${OWN_REFERENCE}@registry.invalid/pkg`],
+      ["a token alone", `https://${OWN_REFERENCE}@registry.invalid/pkg`],
+      ["a token before an empty password", `https://${OWN_REFERENCE}:@registry.invalid/pkg`],
+      ["a parameter", `https://registry.invalid/pkg?key=${OWN_REFERENCE}`],
+    ])("passes a reference in place of %s, in the lock and as an argument", (_place, link) => {
+      const fromLock = withOwnServers([], setupWith([lockRow(link)]));
+      const fromArg = withOwnServers([], setupWith([argRow(link)]));
+
+      expect(fromLock[0]?.packageNameLock).toBe(link);
+      expect(fromArg[0]?.args).toContain(link);
+    });
+
+    it.each([
+      ["a link with no credential", "https://registry.invalid/pkg"],
+      ["a bare ssh login", "ssh://git@git.invalid/acme/wiki.git"],
+      ["a bare login on git over ssh", "git+ssh://git@git.invalid/acme/wiki.git"],
+      ["parameters no credential word ends", "https://wiki.invalid/sse?sort_key=name&monkey=1&author=acme"],
+      ["an empty credential parameter", "https://wiki.invalid/sse?key="],
+      ["an address outside a link", "--contact=ops@acme.invalid"],
+      ["a scoped package", "@acme/other-mcp"],
+      ["a credential word outside a link", "--mode?key=plain"],
+    ])("passes %s", (_shape, arg) => {
+      const [server] = withOwnServers([], setupWith([argRow(arg)]));
+
+      expect(server?.args).toContain(arg);
+    });
+
+    it("while a pack's bar and a pack's row stay as they were", () => {
+      const row = lockRow(PASSWORD_LINK);
+      const packed = { ...packRow(PACK_SERVER_ID), ...row, id: PACK_SERVER_ID } as PackSuppliedServer;
+
+      expect(validatePackMcpServer(row, "mcp_servers/wiki.json").packageNameLock).toBe(PASSWORD_LINK);
+      expect(withOwnServers([packed], {})).toEqual([packed]);
+    });
+  });
+
   describe("escapes a C1 control", () => {
     it.each([
       ["in an id, where the label and the validator's own line each print it", { id: "acme\u009b31mwiki" }],
@@ -712,11 +790,16 @@ async function idsIn(rootDir: string, relPath: string): Promise<string[]> {
   return Object.keys(doc["mcpServers"] ?? doc["servers"] ?? {}).toSorted();
 }
 
-/** Every client document still naming the row's package: none means it no longer launches. */
-async function docsLaunchingOwn(rootDir: string): Promise<string[]> {
+/** Every client document that exists and holds `text`. */
+async function docsHolding(rootDir: string, text: string): Promise<string[]> {
   const present = [...MERGED_DOCS, CODEX_DOC].filter((path) => existsSync(join(rootDir, ...path.split("/"))));
   const texts = await Promise.all(present.map((path) => readText(rootDir, path)));
-  return present.filter((_path, index) => texts[index]?.includes(OWN_PACKAGE));
+  return present.filter((_path, index) => texts[index]?.includes(text));
+}
+
+/** Every client document still naming the row's package: none means it no longer launches. */
+function docsLaunchingOwn(rootDir: string): Promise<string[]> {
+  return docsHolding(rootDir, OWN_PACKAGE);
 }
 
 /** Each merged document's sorted ids, keyed by path, read together. */
@@ -763,6 +846,35 @@ describe("sync — an own row", () => {
     const rootDir = await seedRepo([OWN_ID], [ownRow({ pinnedVersion: "9.9.9" })]);
 
     await expect(planFor(rootDir)).rejects.toThrow(/mcp\.ownServers\[0\] \("acme-wiki"\)/);
+  });
+
+  describe("with a link in its package lock", () => {
+    const LINK_HOST = "registry.invalid";
+    const lockRow = (lock: string): Record<string, unknown> =>
+      ownRow({ packageNameLock: lock, args: ["-y", `${lock}@${OWN_VERSION}`] });
+
+    it("is refused for a credential typed there, and no client document holds it", async () => {
+      const row = lockRow(`https://acme:${PLAIN_TOKEN}@${LINK_HOST}/pkg`);
+      const rootDir = await seedRepo([OWN_ID], [row]);
+
+      const outcome = await syncRepo(rootDir).then(
+        () => "written",
+        (cause: unknown) => (cause instanceof Error ? cause.message : String(cause)),
+      );
+
+      // Read first: on a seam that takes the row, this names the documents holding it.
+      expect(await docsHolding(rootDir, PLAIN_TOKEN)).toEqual([]);
+      expect(outcome).toContain('mcp.ownServers[0] ("acme-wiki"): `packageNameLock`, `args[1]` holds a credential');
+      expect(outcome).not.toContain(PLAIN_TOKEN);
+    });
+
+    it("reaches every client document with a reference in that place", async () => {
+      const rootDir = await seedRepo([OWN_ID], [lockRow(`https://acme:${OWN_REFERENCE}@${LINK_HOST}/pkg`)]);
+
+      await syncRepo(rootDir);
+
+      expect(await docsHolding(rootDir, LINK_HOST)).toEqual([...MERGED_DOCS, CODEX_DOC]);
+    });
   });
 
   it("refuses an unselected bad row too: the pack bar is not selection-scoped", async () => {
