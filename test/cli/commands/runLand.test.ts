@@ -2583,6 +2583,18 @@ describe("stamity run land", () => {
           expect(lastBody()).toContain(REMEDY);
         });
 
+        it("says the threads did not read, and names nobody, where the re-read after the resolve fails", async () => {
+          const { repo } = await cleanJob();
+          gh.threads = [threadsPage([open()], BOT), threadsPage([open()], BOT), { errors: [{ message: "Something went wrong" }] }];
+
+          const result = await run(repo, LANDS);
+
+          expect(result.doc).toMatchObject({ outcome: "refused", notDone: ["the review threads could not be read"] });
+          expect(kinds()).not.toContain("merge");
+          expect(lastBody()).toContain("merge waits on: the review threads could not be read");
+          expect(lastBody()).not.toContain("someone else wrote");
+        });
+
         it("stops it whoever closed the thread", async () => {
           const { repo } = await cleanJob();
           gh.threads = [threadsPage([open()], BOT), threadsPage([open()], BOT), threadsPage([closedBy("alice", ["User", "alice"])], BOT)];

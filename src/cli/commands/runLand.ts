@@ -122,9 +122,10 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  *
  * **A job's exit.** 0 on every normal end, pending or held; 1 for a true failure alone, a read or a write GitHub did not answer
  * as it should, the status line's own among them, since a green job and no line would hide the hold. A hold shows as the pull
- * request's status line, never as a red job, since GitHub may put a failing job's run on the default branch's tip. Only a run still
- * in progress and a head a newer job speaks for leave no line. The method must pass every ruleset's `allowed_merge_methods`, any
- * linear-history rule and the repository's flags, merge before squash before rebase; none is a hold.
+ * request's status line, never as a red job, since GitHub may put a failing job's run on the default branch's tip. Three ends
+ * leave no line: a run still in progress, a head a newer job speaks for, and a pull request {@link ownPr} refuses, whose body is
+ * not the run's to write, so its reason is only in the job's log. The method must pass every ruleset's `allowed_merge_methods`,
+ * any linear-history rule and the repository's flags, merge before squash before rebase; none is a hold.
  *
  * Exit 0 `landed` or `already-landed`; 1 `asks` or `refused` (the JSON's `outcome` is how a flow branches); 2 usage. A job's
  * exit is above.
@@ -908,10 +909,13 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       show(checks, pr);
       const after = decide(inputFor(pr, checks, false));
       // Whoever closed it: a comment by anyone but the tool or the run's login is theirs to weigh, and only this read shows it.
-      const joined = ownThreads.filter((id) => {
-        const entry = lastThreads.find((read) => read.id === id);
-        return entry === undefined || joinedBySomeone(entry, tool?.login, viewer);
-      });
+      // A read that failed shows no thread, so it names no one: `after` already refuses on the threads not reading.
+      const joined = threads === null
+        ? []
+        : ownThreads.filter((id) => {
+            const entry = lastThreads.find((read) => read.id === id);
+            return entry === undefined || joinedBySomeone(entry, tool?.login, viewer);
+          });
       // review/120: named whatever else stops it. A set, since `decide` has already named the threads it counts.
       const stops = [...new Set([...failed, ...(after.outcome === "refused" ? after.reasons : []), ...joined.map((id) => closedOverReason(id))])];
       if (stops.length > 0) throw new Held(true, ...stops);
