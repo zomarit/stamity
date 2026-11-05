@@ -2,7 +2,7 @@
 title: Troubleshooting
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 907f64f0. Re-attested 2026-11-05 for the brake, the administrator's opt-in, the review tool, auto-ship and the land job. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit d9a33cfa. Re-attested 2026-11-05 for the brake, the administrator's opt-in, the review tool, auto-ship and the land job. -->
 <!-- Re-open when: a `check` probe is added or removed, an error code starts or stops being
      thrown, or a remedy below stops working. `test/docsPages.test.ts` holds this page to the
      hand-page contract and reads the probe rows out of `src/cli/commands/check.ts`;
@@ -437,7 +437,9 @@ flag holds only while the head is still that commit, and an unattended run refus
 - `waiting for <tool> on <sha>, up to <n> minutes from the request`, or `no result from <tool> on
   <sha>, and no request on this head yet`: pending reasons. Wait, and run it again. A wait longer than
   the call ends as `asks` with `asks.pending` and the line `pending: run land again for the review
-  tool's word; no approval passes a wait`, so `--approved` is no way past it.
+  tool's word; no approval passes a wait`, so `--approved` is no way past it. Beside `the review request
+  was not posted to #<n> (…)` the second reason is a refusal, not a wait, since with no request no wait
+  can end: fix what that line names, then run it again.
 - `<tool> reports findings on <sha>, and only a new run clears them`: fix them, push, and let the tool
   run again. Its flags stay true after every thread is resolved.
 - `<tool> gave no result on <sha> within <n> minutes`: the tool stayed silent, and silence never

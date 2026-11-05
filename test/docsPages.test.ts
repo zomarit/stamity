@@ -863,6 +863,9 @@ const RELEASE_CUT_DATE = "2026-10-26";
  *
  * NOT MOVED, 2026-11-05, at integration: the five pages above left the lane base for 907f64f0, a commit
  * on this branch that holds the land job, since cc10ab71 holds none of its code.
+ *
+ * NOT MOVED, 2026-11-05, at integration: the same five moved on to d9a33cfa, after the closing audit's
+ * fixes changed the land verb and three of those pages. The date is the same day, so it stays.
  */
 const REATTESTATION_DATE = "2026-11-05";
 
