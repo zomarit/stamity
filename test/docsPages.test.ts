@@ -5816,6 +5816,14 @@ describe("the security pages say one thing about the brake, the lift and the job
     expect(flat).toContain("`stamity run land --job`");
     expect(flat, `${page} does not call the job the evidence's second caller`).toContain("second caller");
     expect(flat).toContain("with no bypass");
+    expect(flat, `${page} does not say a job's merge blinds the brake`).toContain("A job's merge starts no `push` run, so the brake has nothing to read on that tip.");
+    expect(flat, `${page} does not say a hold is no red job`).toContain("A job exits 0 on every normal end, and a hold shows as the pull request's status line, never as a red job.");
+    expect(flat, `${page} does not name the merge method's source`).toContain("merge method comes from the ruleset or the repository at run time");
+    expect(flat, `${page} does not carry the one not-run list`).toContain(
+      "No real run has proven the land job, so the whole job is `not run` until one does. That covers the ready mark, the thread reads and the thread resolve under `GITHUB_TOKEN`, the merge call under that token, the review request and the status line the job writes, the `issue_comment` wake, and the checkout of `refs/pull/<n>/head`.",
+    );
+    // Wherever the exact-head claim stands, the one mode it does not hold for stands beside it.
+    expect(flat, `${page} does not name clean: reaction's limit`).toMatch(/`clean: reaction`[^.]*`\+1` names no commit/);
   });
 
   it("SECURITY.md no longer calls the pre-flight the wall for an administrator under the opt-in", () => {
@@ -5833,9 +5841,16 @@ describe("the security pages say one thing about the brake, the lift and the job
       "to fake them a run needs a raw write under `.git/`",
       "A deleted comment leaves no last editor to read",
       "`GITHUB_TOKEN` starts no `push` run after its merge",
-      "are `not run`: no real run has proven them",
+      "`GITHUB_TOKEN` is the emitted workflow's configuration, not an engine check",
+      "a `workflow_dispatch` runs the file at the ref the dispatch names",
+      "Its proof that a pull request is a run's own is text at the head",
+      "A job that merges nothing can still leave the pull request marked ready, the tool's threads resolved and an evidence line in the body",
     ]) {
       expect(security, `SECURITY.md does not state: ${limit}`).toContain(limit);
+    }
+    for (const overstated of ["adds no trust", "`GITHUB_TOKEN` alone", "re-proves the same reads"]) {
+      expect(security, `SECURITY.md says again: ${overstated}`).not.toContain(overstated);
+      expect(flowed(read(CLOUD)), `docs/cloud.md says again: ${overstated}`).not.toContain(overstated);
     }
     expect(flowed(read(CLOUD))).toContain("a deploy on push must not rely on this path");
     expect(flowed(read(CLOUD))).toContain("A deleted state comment is not seen");
@@ -5922,12 +5937,15 @@ describe("every land reason the code prints is on the troubleshooting page", () 
       "holds a ## Refused row, so a person decides",
       "does not name #<n> on a PR: line",
       "names no Login:",
+      "no merge method is allowed on <branch>, so the job has none to take",
+      "someone else wrote in the tool's review thread <id> before it closed, so a person decides",
       "holding a runner up to `waitMinutes` per head",
-      "A `silent` or `spent` hold then writes its `merge waits on:` line on the pull request and exits 1",
     ]) {
       expect(page, `the page does not state: ${reason}`).toContain(reason);
     }
     expect(page).toContain("Rename the entry in `autonomy.landJob.workflows`, or the workflow, so the two agree.");
+    expect(page).toContain("Any change to that list is a loosening");
+    expect(page, "the page tells a person to pass a refusal").toContain("are refusals, so `--approved` does not pass them");
   });
 });
 
@@ -5950,6 +5968,13 @@ describe("docs/specs/everyday-flows.md carries the bridge's delta", () => {
     const notice = spec.slice(spec.indexOf("### REQ-FLOW-156 "), spec.indexOf("### REQ-FLOW-157 "));
     expect(notice).toContain("the first `run end` with a pull request");
     expect(notice.includes("--final-round"), "the notice still rides on the final round").toBe(false);
+    expect(flat, "the spec says a merge here deploys nothing").not.toContain("Stamity never deploys, tags or releases by this route");
+    expect(flat).toContain("Stamity never deploys, tags or releases itself, but a merge onto a deploying branch starts that repository's own pipeline, with nobody asked, by the person's opt-in. That is the point of auto-ship.");
+    expect(flat, "the spec calls the state comment proven by a run").not.toContain("`state-comment` is proven for Codex");
+    expect(flat).toContain("the full loop of request, wait, read and resolve is `not run`");
+    expect(flat).toContain(
+      "No real run has proven the land job, so the whole job is `not run` until one does.",
+    );
   });
 });
 

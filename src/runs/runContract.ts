@@ -4,7 +4,7 @@ import { isPlainObject, parseYamlStrict, unknownFields } from "../config/parse.t
 import { isIsoDate } from "./disposition.ts";
 
 /**
- * The run contract (REQ-FLOW-098): a committed YAML file that states, by
+ * The run contract (REQ-FLOW-098): a YAML file that states, by
  * reference, what one unattended run is for. A person writes one, or
  * `stamity run contract` writes it from a ready item (REQ-FLOW-155).
  *

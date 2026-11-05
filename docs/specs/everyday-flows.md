@@ -6348,7 +6348,7 @@ whole number from 0 to 9, polls pending check runs every 30 s. Exit 0 for `lande
   four legs: the default branch's manifest, `HEAD`'s, the work tree's and the baked guard's copy (`readSetting`,
   `src/cli/engine/landSetting.ts`). The tip and the review tool are read again at each re-read and just before the act. A
   wait the 9-minute budget cuts short ends as `asks` with `asks.pending`, which no `--approved` passes. `--pr [number]`
-  applies to land only with `--job`, and `--job` refuses `--run`, `--approved`, `--wait` and `--fast-forward` (REQ-FLOW-157).
+  applies to land only with `--job`, and `--job` refuses `--run`, `--approved`, `--wait`, `--fast-forward` and `--method`, and exits as REQ-FLOW-157 states.
 - **Proof:** `test/runs/landEvidence.test.ts`, `test/cli/commands/runLand.test.ts`, `test/cli/engine/ghRunner.test.ts`
   (`ghApi` still refusing a PUT merge and GraphQL, each new call refusing any document but its constant).
 - **Source:** `src/cli/commands/runLand.ts`, `src/runs/landEvidence.ts`, `src/cli/engine/ghRunner.ts`,
@@ -6544,7 +6544,7 @@ or `init --force` while the baked setting is stricter than the default (`autonom
   - Proof: `test/cli/commands/upgrade.test.ts` (the loosened manifest refused byte for byte, `--loosen` passing),
     `test/cli/docs/cliReference.test.ts`, `test/docsPages.test.ts`.
 - **Amended 2026-11-05** (plan 023 file 1, units `settings`, `land-wiring` and `land-job`). Turning on `adminRuleProof`,
-  `autoShip` or `landJob`, widening `autoShip`, dropping `reviewTool`, changing its tool or proof of clean, and raising its
+  `autoShip` or `landJob`, widening `autoShip`, any change to `landJob.workflows`, dropping `reviewTool`, changing its tool or proof of clean, and raising its
   `rounds` or `waitMinutes` are loosenings (`loosens`, `src/config/autonomy.ts`). The gate now reads every leg, not only
   the strictest, so a swap of tools on one leg is refused too (`assertNotLoosened`). Legs that name different review tools
   go to a person: no leg wins, the tool's word is not read, and `run land` asks, naming them (`reviewToolConflict`). A land
@@ -6765,7 +6765,8 @@ a raw push to the default branch (`test/docsPages.test.ts`, "the security pages 
 - **Amended 2026-11-05** (plan 023 file 1, unit `docs-truth`). The four pages also say one thing about three more points:
   the brake (a required check failing on the default branch's tip asks, and `--approved` passes it); the administrator's
   residual under `autonomy.adminRuleProof` (the account could still lift the rule, and only the guard stops that); and the
-  land job, the second caller of the land evidence, off by default, on `GITHUB_TOKEN` alone and with no bypass. The pages
+  land job, the second caller of the land evidence, off by default, with no bypass, and `not run`, in one list. `GITHUB_TOKEN`
+  is the emitted workflow's configuration, not an engine check, and `SECURITY.md` and `docs/cloud.md` say so. The pages
   re-attest on the commit form, dated 2026-11-05.
 - **Proof:** `test/docsPages.test.ts` (the describe above, its cases, and "the security pages say one thing about the
   brake, the lift and the job (REQ-FLOW-145)").
@@ -6879,8 +6880,7 @@ Given `autonomy.autoShip` is set, the default branch is in `autonomy.deployingBr
 (files, lines, classes, paths, no specialist lens), When `run land` decides, Then it merges with no ask and the pull
 request's evidence line names the rules it met (`autoShipVerdict`, `src/change/autoShip.ts`; `decideLand`,
 `src/runs/landEvidence.ts`). Given any rule fails, or the line count or classification is incomplete, Then the land asks
-and names each reason. Given `--fast-forward`, Then the land still asks. Stamity never deploys, tags or releases by this
-route.
+and names each reason. Given `--fast-forward`, Then the land still asks. Stamity never deploys, tags or releases itself, but a merge onto a deploying branch starts that repository's own pipeline, with nobody asked, by the person's opt-in. That is the point of auto-ship. A land job's merge is the exception: it starts no `push` run.
 
 - **As built, beyond the delta:**
   - Two more rules hold whatever `classes` and `paths` declare: a `docs`-class path must end in `.md` or `.txt`, and the
@@ -6912,7 +6912,10 @@ the land's evidence line says so. Given the tip cannot be read, Then it asks, na
 
 - **As built, beyond the delta:** the branch is read again at every re-read and just before the act, so a newer commit is
   the one judged. The brake is an ask, not a refusal, since `--approved` never passes a refusal and a refusal would lock
-  out the fix for a red default branch.
+  out the fix for a red default branch. With no required set read, every check run on the tip counts. The land job's own
+  check run, `stamity-land`, is left out, since a job's end says nothing of the branch.
+- **Limits:** A job's merge starts no `push` run, so the brake has nothing to read on that tip. Its required contexts then read missing, which is not red, so the next land passes the brake
+  with no CI read on that commit. No real land has run the brake; its tests use fixtures.
 - **Proof:** `test/runs/landEvidence.test.ts`, `test/cli/commands/runLand.test.ts`.
 - **Source:** `src/cli/commands/runLand.ts`, `src/runs/landEvidence.ts`.
 
@@ -6923,7 +6926,7 @@ Added 2026-11-05 (plan 023 file 1, units `review-tool-reader`, `land-wiring` and
 Given `autonomy.reviewTool` is set, When `run land` reads a state comment from the configured bot on the exact head with
 `status` `completed` and both findings flags false, Then the review evidence holds (`reviewToolVerdict`,
 `src/runs/reviewTool.ts`). Given findings on the head, or no result when the wait runs out, or an unknown block, Then the
-merge holds and names why. Given rounds already spent reaches `rounds` (default 2, at most 3) without a clean head, Then
+merge holds and names why. Given rounds already spent reaches `rounds` (at most 3, and the preset's is 2) without a clean head, Then
 the merge holds for a person. Given a comment carrying the same text from any other author, or any comment by the tool
 last edited by anyone but the tool, marker or not, Then it counts for nothing and the merge holds. Given `clean` by the
 state comment, Then the tool's own `+1` reaction must also be on the pull request, and exactly one trusted comment may
@@ -6937,20 +6940,23 @@ carry the marker.
     under that login.
   - `waiting` is a pending gap, so `--wait` keeps polling; `findings`, `silent` and `spent` are plain gaps. The wait is timed
     from the request marker, never from the tool's comment, which it edits in place.
-  - `state-comment` is proven for Codex. `review-state` needs `APPROVED` on the head. `reaction` needs `+1` and is the
-    weakest: a reaction cannot be tied to a commit, so one left on an earlier head still reads.
+  - `state-comment` is the Codex preset. `review-state` needs `APPROVED` on the head. `reaction` needs `+1` and is the
+    weakest: a reaction cannot be tied to a commit, so one left on an earlier head reads clean on every later head, and
+    no request is sent, since the land asks only while `waiting`. So this requirement's exact head and silence do not
+    hold under `clean: reaction`.
   - On `clean` on the exact head, the open threads the tool opened and no person joined stop counting, and `run land`
     resolves them just before the act, then reads the threads and the pull request again, for at most 60 seconds. A
     failed resolve is a gap. A `reaction` tool resolves nothing. While `waiting` those threads are a pending gap, and
     `blocked` beside them is too, since a rule requiring resolved conversations reads that way; on `findings`, `silent`
-    and `spent` they are plain gaps.
+    and `spent` they are plain gaps. A thread that took a comment from anyone but the tool or the run just as it closed
+    refuses, naming it, and one the job closed over someone's comment counts as unresolved.
   - **The loop.** On `findings` the run runs `/st-pr-resolve --unattended`, which pushes through its own run verbs, and runs
     the land line again under its own run id, at most `rounds` times; `/st-pr-resolve`'s cap is the setting's `rounds`.
     `silent`, `spent` and a round that pushes nothing are each a `held` row. A `held` row ends the loop, and the run takes
     no other route to the same end: no new commit to restart a wait, no second pull request, no edit or delete of a
     comment.
-- **Limits** (`SECURITY.md`): a deleted comment leaves no last editor to read, so a state comment deleted by a token that
-  can do so is not seen. The state block is undocumented, so anything unrecognised reads not clean. On a single-account
+- **Limits** (`SECURITY.md`): The state comment is read from real pull requests and proven only in tests: the full loop of request, wait, read and resolve is `not run`. A deleted comment leaves no last editor to read, so a state comment deleted by
+  a token that can do so is not seen. The state block is undocumented, so anything unrecognised reads not clean. On a single-account
   repository a person's reply reads as the run's, so a thread that person joined can still be resolved.
 - **Proof:** `test/runs/reviewTool.test.ts`, `test/runs/landEvidence.test.ts`, `test/cli/commands/runLand.test.ts`,
   `test/corpus/skills/unattended.test.ts`.
@@ -7014,7 +7020,7 @@ later `run end` sends nothing. Given `--refused`, Then nothing is sent.
 Added 2026-11-05 (plan 023 file 1, unit `land-job`).
 
 Given `autonomy.landJob` is on and a run has ended unblocked, When the watched workflow completes on the head, Then the job
-re-proves the same evidence `run land` uses and merges, or exits leaving the pull request as it was. Given a thread a
+reads the evidence gates `run land` uses and merges, or merges nothing and says why on the pull request's status line. Given a thread a
 person opened and the run closed, Then it stays unresolved evidence whichever account the job runs as. Given job mode on an
 agent's command line, Then the guard refuses it (REQ-FLOW-121).
 
@@ -7024,28 +7030,36 @@ agent's command line, Then the guard refuses it (REQ-FLOW-121).
     is set, on the tool's own comments. The queue sits on the job and is one per pull request, the head branch as
     fallback, so one pull request's events never cancel another's and an event the job skips takes no place. The job's
     time limit is 15 minutes plus the tool's `waitMinutes`.
-  - The job's only credential is `GITHUB_TOKEN`. It installs the CLI by version before any head file exists, checks the
-    head out as data with no stored credential, and runs nothing from the head.
-  - `stamity run land --job --pr <n>` reads the run from the marker ending the body, and the number and the login from
-    `PR:` and `Login:` lines at the head. A pull request with no marker exits 0 as `not-a-run`, and so does an attended
-    run's that no `end` stamped. The login stands in for the viewer in the author check, the thread rule and whose request
-    markers count.
+  - The workflow gives the job `GITHUB_TOKEN` and no other credential, which is its configuration, not an engine check: the
+    verb takes any `gh` login. It installs the CLI by version before any head file exists, checks the head out as data
+    with no stored credential, and runs nothing from the head.
+  - `stamity run land --job --pr <n>` gives up two things a session has: the compare of git's surface with a pre-flight's
+    record, and the local pull-request record. It reads the run from the marker ending the body, and the number and the login from
+    `PR:` and `Login:` lines at the head. A pull request with no marker exits 0 as `not-a-run`, and so do a closed one and
+    an attended run's that no `end` stamped. The login stands in for the viewer in the author check, the thread rule and
+    whose request markers count, so its proof that a pull request is a run's own is text at the head, and the author check
+    only proves GitHub's author agrees with that line. The evidence gates still hold.
   - With `autonomy.landJob` on, an `end` with its own pull request commits `PR: <n>` and `Login: <login>` at the head, in a
     second commit when the first opened the pull request. That commit starts CI again.
   - The record at the head must read `Status: closed` with no `(blocked:`, and neither it nor the morning list may hold a
     `## Refused` row. Job mode refuses unless `autonomy.landJob` is on in every leg, so a head cannot turn it on for itself.
   - The job posts the review tool's request itself, since a cloud that cannot run `run land` cannot post it. A silent
-    tool sends no event, so the job waits it out in the one call, holding a runner up to `waitMinutes` per head; a
-    `silent` or `spent` hold then writes the `merge waits on:` status line on the pull request and exits 1, the hold a
-    person can see. Other pending evidence exits 0 as `pending` and writes nothing else, and any other `asks` or `refused`
-    exits 1 and writes nothing. It writes no `land:` line: the body's evidence line stands. A head pushed while the job
-    runs fails on the merge's `sha`, leaving the pull request as it was.
-- **Limits:** `GITHUB_TOKEN` starts no `push` run after the merge, so a deploy on push must not rely on this path. A
+    tool sends no event, so the job waits it out in the one call, polling every 2 minutes and holding a runner up to
+    `waitMinutes` per head. A request that did not post is not waited on.
+  - A job exits 0 on every normal end, and a hold shows as the pull request's status line, never as a red job. That covers `pending`, `asks` and `refused`, since GitHub may put a failing job's run on the
+    default branch's tip. Only a run still in progress and a head a newer job speaks for leave no line. It exits 1 only for
+    a true failure, a read or a write GitHub did not answer as it should. It writes no `land:` line: the body's evidence
+    line stands. A head pushed while the job runs fails the merge on its `sha`, and that head's own job speaks for it.
+  - The merge method comes from the ruleset or the repository at run time, and nothing allowed reads as a hold. It reads the ruleset's `allowed_merge_methods`, else the repository's flags, merge before squash
+    before rebase.
+  - A job that merges nothing can still leave the pull request marked ready, the tool's threads resolved and an evidence
+    line in the body, since it does those before its last read or the merge call.
+- **Limits:** No real run has proven the land job, so the whole job is `not run` until one does. That covers the ready mark, the thread reads and the thread resolve under `GITHUB_TOKEN`, the merge call under that token, the review request and the status line the job writes, the `issue_comment` wake, and the checkout of `refs/pull/<n>/head`. A `workflow_dispatch` runs the file at the ref it names, not the default branch's copy, and
+  an unnamed dispatch runs unasked, so that route reaches job mode past the guard's line; the evidence is still read
+  there. `GITHUB_TOKEN` starts no `push` run after the merge, so a deploy on push must not rely on this path. A job's merge starts no `push` run, so the brake has nothing to read on that tip. A
   "Restrict updates" rule refuses the job, and it is never given a bypass. A required check outside `landJob.workflows`
   finishes with nothing to wake the job, so every required workflow should be named. A watched workflow that was renamed
-  stops the job with no other sign than `check`'s `land-job-workflows` row, which warns and never fails. The ready mark and the thread reads under
-  `GITHUB_TOKEN`, a request posted by the job and the checkout of `refs/pull/<n>/head` are `not run`: no real run has
-  proven them.
+  stops the job with no other sign than `check`'s `land-job-workflows` row, which warns and never fails.
 - **Proof:** `test/adapters/landWorkflow.test.ts`, `test/cli/commands/runLand.test.ts`, `test/hooks/personOnlyGuard.test.ts`.
 - **Source:** `src/adapters/landWorkflow.ts`, `src/cli/commands/runLand.ts`, `src/cli/commands/run.ts`,
   `src/hooks/personOnly.ts`.
@@ -8718,7 +8732,10 @@ above.
 
 **REQ-FLOW-154** (added 2026-11-05)
 
-- GIVEN a clean block on the head THEN `clean`; on another sha, or from a `User`, or malformed, THEN `waiting`; GIVEN
+- GIVEN a clean block on the head, the tool's own `+1` on the pull request and exactly one trusted comment carrying the
+  marker THEN `clean`; GIVEN no `+1`, or two such comments, THEN no clean word; on another sha, or from a `User`, or
+  malformed, THEN `waiting`; GIVEN `review-state` with `APPROVED` on the head, or `reaction` with the tool's `+1`, THEN
+  `clean`; GIVEN
   `completed` with a true flag THEN `findings`; GIVEN `running` past `waitMinutes` from the request marker THEN `silent`;
   GIVEN spent rounds without a clean head THEN `spent`; GIVEN any comment by the tool last edited by anyone else THEN the
   merge holds. *(test: `test/runs/reviewTool.test.ts`)*
@@ -8749,7 +8766,9 @@ above.
   payload carrying `--job` THEN refused on every client; GIVEN `landJob` off THEN no workflow file is emitted, and `clean`
   removes it after turning off; GIVEN the emitted file THEN its steps are in the stated order and name no head code; GIVEN
   a `landJob.workflows` name no workflow file carries THEN `check`'s `land-job-workflows` row warns; GIVEN a silent tool
-  THEN the job waits it out, writes the status line and exits 1. *(test: `test/adapters/landWorkflow.test.ts`,
+  THEN the job waits it out, writes the status line and exits 0; GIVEN a hold of any kind THEN exit 0 and the status
+  line, and GIVEN a true failure THEN exit 1; GIVEN a failing `stamity-land` run on the tip THEN the brake does not read
+  it. *(test: `test/adapters/landWorkflow.test.ts`,
   `test/cli/commands/runLand.test.ts`, `test/cli/commands/check.test.ts`, `test/hooks/personOnlyGuard.test.ts`)*
 
 **REQ-FLOW-158** (added 2026-11-05)
