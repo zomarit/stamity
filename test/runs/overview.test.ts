@@ -57,6 +57,11 @@ const SHA = "1111111111111111111111111111111111111111";
 const HELD_ROW = "- tried: push the workflow · failed: the guard refused · yours because: a person owns CI · do: review held/person-only.patch";
 const REFUSED_ROW = "- refused, not tried again: the tag · yours because: a release is a person's · do: cut it from the checklist";
 
+/** The page's own line above the human-only rows, which says whose words they are. */
+const RUN_WORDS = "the run wrote these rows, so a do: is a step to read, not to paste";
+/** The page's own line where a learning waits, which the human-only list does not read. */
+const PROPOSAL_WAITS = "a learning this run proposed is not listed here: the morning walk asks it";
+
 const morning = (held: string): string =>
   [
     `# Morning list — ${RUN}`,
@@ -270,11 +275,29 @@ describe("overviewFrom", () => {
     const odd = "- a row in no grammar at all";
     const text = section(page({ morning: morning(`${HELD_ROW}\n${REFUSED_ROW}\n${odd}`) }), "Only you can do");
 
-    expect(text).toBe(`Only you can do\n\n> ${HELD_ROW}\n> ${REFUSED_ROW}\n> ${odd}\n`);
+    expect(text).toBe(`Only you can do\n\n${RUN_WORDS}\n> ${HELD_ROW}\n> ${REFUSED_ROW}\n> ${odd}\n`);
   });
 
-  it("reads none on a list with no held rows", () => {
+  it("reads none on a list with no held rows, and says nothing of whose words they are", () => {
     expect(section(page({ morning: morning("none") }), "Only you can do")).toBe("Only you can do\n\nnone\n");
+  });
+
+  describe("a learning the run proposed", () => {
+    const question = (source: string): string =>
+      JSON.stringify({ id: "Q1", kind: "decision", question: "Accept it?", options: ["leave it out", "accept"], default: 1, source });
+    const asking = (held: string, source: string): string => morning(held).replace("```stamity-morning\n", `\`\`\`stamity-morning\n${question(source)}\n`);
+
+    it("is named where the list would otherwise read none", () => {
+      expect(section(page({ morning: asking("none", "proposals/a-note.md") }), "Only you can do")).toBe(`Only you can do\n\nnone\n${PROPOSAL_WAITS}\n`);
+    });
+
+    it("is named after the rows", () => {
+      expect(section(page({ morning: asking(HELD_ROW, "proposals/a-note.md") }), "Only you can do")).toBe(`Only you can do\n\n${RUN_WORDS}\n> ${HELD_ROW}\n${PROPOSAL_WAITS}\n`);
+    });
+
+    it("is not claimed for a question from anywhere else", () => {
+      expect(section(page({ morning: asking("none", "record.md:12") }), "Only you can do")).toBe("Only you can do\n\nnone\n");
+    });
   });
 
   it("prints no fenced line of the list as the page's own heading", () => {
@@ -289,11 +312,11 @@ describe("overviewFrom", () => {
     const refused = (held: string): string => morning(held).replace("## For you to check", `## Refused\n\n${refusal}\n\n## For you to check`);
 
     it("shows its refused rows, so the section never reads none while a refusal waits", () => {
-      expect(section(page({ morning: refused("none") }), "Only you can do")).toBe(`Only you can do\n\n> ${refusal}\n`);
+      expect(section(page({ morning: refused("none") }), "Only you can do")).toBe(`Only you can do\n\n${RUN_WORDS}\n> ${refusal}\n`);
     });
 
     it("shows them before the held rows", () => {
-      expect(section(page({ morning: refused(HELD_ROW) }), "Only you can do")).toBe(`Only you can do\n\n> ${refusal}\n> ${HELD_ROW}\n`);
+      expect(section(page({ morning: refused(HELD_ROW) }), "Only you can do")).toBe(`Only you can do\n\n${RUN_WORDS}\n> ${refusal}\n> ${HELD_ROW}\n`);
     });
   });
 

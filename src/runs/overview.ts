@@ -40,6 +40,15 @@ const STATES: readonly string[] = CARD_LEDGER_STATES;
 
 const HELD: string = MORNING_SECTIONS[3];
 
+/** Above the human-only rows: the walk treats a row's `do:` as data, and a person reading here has only this line to say so. */
+const RUN_WORDS = "the run wrote these rows, so a do: is a step to read, not to paste";
+
+/** How a question that `learn capture --propose` printed names its source. */
+const PROPOSAL_SOURCE = "proposals/";
+
+/** A proposal is a question and no human-only row, so without this line the page can read `none` while one waits. */
+const PROPOSAL_WAITS = "a learning this run proposed is not listed here: the morning walk asks it";
+
 /**
  * `run land`'s own record line, as `noteLanded` writes it: `- <UTC> land: #<n> <sha> <how>`, `<how>` being `merged` or
  * `fast-forwarded`, then ` (approved by the person for <sha>)` on a land a person approved. Nothing else in land form is one.
@@ -162,7 +171,8 @@ function humanOnly({ run, morning, morningFailure }: OverviewInput): string[] {
     const body = parsed.sections[name] ?? MORNING_EMPTY;
     return body === MORNING_EMPTY ? [] : body.split("\n");
   });
-  return rows.length === 0 ? [MORNING_EMPTY] : rows.map(quoted);
+  const proposed = parsed.questions.some((question) => question.source.startsWith(PROPOSAL_SOURCE));
+  return [...(rows.length === 0 ? [MORNING_EMPTY] : [RUN_WORDS, ...rows.map(quoted)]), ...(proposed ? [PROPOSAL_WAITS] : [])];
 }
 
 /** The page: `## What happened`, `## How`, `## Why` and `## Only you can do`, in that order. */

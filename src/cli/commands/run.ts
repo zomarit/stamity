@@ -1698,11 +1698,12 @@ interface NoticeTarget {
  * reads it as review. No land evidence reads a comment's marker, only a pull request body's. `retried` is the land job's second
  * pass still to come: it runs the notice again and says what it finds, so one `end` call says a failure once, and never one that
  * pass cleared. A second pass that stops first says nothing here, and exits non-zero. A failed comment is one more `notDone` line
- * and moves no exit code.
+ * and moves no exit code. review/60: a notice sent takes back the failed line the first pass carried in.
  */
 async function noticeOrSayIt(ctx: CliContext, at: NoticeTarget, lines: string[], notDone: string[], retried: boolean): Promise<string | null> {
   const from = notDone.length;
   const noticed = await runEndNotice(ctx, at, lines, notDone);
+  if (noticed !== null) notDone.splice(0, notDone.length, ...notDone.filter((line) => !line.startsWith(NOTICE_NOT_SENT)));
   const failed = notDone.slice(from).find((line) => line.startsWith(NOTICE_NOT_SENT));
   if (noticed !== null || failed === undefined || retried) return noticed;
   const unposted = (why: string): void => void notDone.push(`the notice's comment was not posted to #${at.number} (${why})`);

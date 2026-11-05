@@ -1397,7 +1397,8 @@ describe("stamity run end", () => {
 
         expect(code).toBe(0);
         expect(requests()).toHaveLength(2);
-        expect(doc).toMatchObject({ notice: "a-person" });
+        // TEST CHANGE, justified (review/60): `notDone` is pinned too, so the first pass's line cannot outlive the sent notice.
+        expect(doc).toMatchObject({ notice: "a-person", notDone: [] });
         expect(comments()).toEqual([]);
       });
 
