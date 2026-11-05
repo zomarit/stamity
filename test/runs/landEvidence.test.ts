@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join, posix, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { PERSON_ONLY_PATHS } from "../../src/change/personOnlyPaths.ts";
+import { heldPaths, PERSON_ONLY_PATHS } from "../../src/change/personOnlyPaths.ts";
 import { resolveAutonomy } from "../../src/config/autonomy.ts";
 import {
   askPathsOf,
@@ -117,6 +117,26 @@ describe("LAND_ASK_PATHS (decision D2)", () => {
     ];
     expect(askPathsOf([...asked, "src/a.ts"])).toEqual([...asked].toSorted());
     expect(askPathsOf(["app/.stamity/manifest.json", "app/src/a.ts"], "app/")).toEqual(["app/.stamity/manifest.json"]);
+  });
+
+  it("lands the learnings and overrides on the evidence, so an attended run with a learning does not ask (REQ-FLOW-133)", () => {
+    const paths = [".stamity/learnings/cache-warmup.md", ".stamity/overrides/rules/house-style.md"];
+
+    // Built at run time: a folder glob written as a literal declares a read of every tracked file under it (test/ci/testInputsGuard.test.ts).
+    for (const glob of [".stamity/learnings", ".stamity/overrides"].map((folder) => [folder, "**"].join("/"))) {
+      expect(LANDS_ON_EVIDENCE, glob).toContain(glob);
+      expect(PERSON_ONLY_PATHS, glob).toContain(glob);
+    }
+    expect(askPathsOf(paths)).toEqual([]);
+    expect(decideLand(input({ files: { paths, complete: true } }))).toEqual({ outcome: "land" });
+  });
+
+  it("asks on the held patch of a run that still captured live: its learning reaches the diff only in that patch (REQ-FLOW-133)", () => {
+    const patch = ".stamity/runs/2026-11-05_night/held/person-only.patch";
+    const live = ".stamity/learnings/cache-warmup.md";
+
+    expect(heldPaths([live])).toEqual([live]);
+    expect(decideLand(input({ files: { paths: [patch], complete: true } }))).toMatchObject({ outcome: "asks", reason: expect.stringContaining("held patch") });
   });
 
   it("matches a declared hook script and a path under a hook folder, without case, beside the globs (build/2)", () => {

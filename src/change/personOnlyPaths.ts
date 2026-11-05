@@ -6,8 +6,8 @@
  * Bitbucket), hook and guard configuration (the emitted hooks, the manifest,
  * the clients' settings, the editor's workspace and tasks files), the class file, CODEOWNERS, the charter files with
  * Codex's override, each client's rule and instruction files, the agent,
- * command, skill and MCP-server definitions the four clients read, and the
- * cloud agents' environment files decide what every later run is
+ * command, skill and MCP-server definitions the four clients read, the learnings
+ * and overrides under `.stamity/`, and the cloud agents' environment files decide what every later run is
  * allowed to do, so a change to one of them is the person's to push. In an unattended run `stamity run checkpoint` and `run end` (u18b) move
  * such a change into an inert patch under the run folder, restore those paths
  * in the index only and list it; an attended push holds nothing.
@@ -61,6 +61,9 @@ export const PERSON_ONLY_PATHS: readonly string[] = [
   ".stamity/hooks/**",
   ".stamity/manifest.json",
   ".stamity/change-classes.json",
+  // What later runs read as knowledge and as content (REQ-FLOW-133): a run proposes into its own folder, a person accepts.
+  ".stamity/learnings/**",
+  ".stamity/overrides/**",
   "CODEOWNERS",
   ".github/CODEOWNERS",
   "docs/CODEOWNERS",

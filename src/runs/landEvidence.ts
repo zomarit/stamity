@@ -4,7 +4,7 @@
  * no process, so every branch is provable with no network.
  *
  * **The ask set** ({@link LAND_ASK_PATHS}, decision D2): the person-only paths less the charter, rule and
- * agent-definition files, which land on the evidence (the review loop reads their diff), plus what decides which
+ * agent-definition files, the learnings and the overrides, which land on the evidence (the review loop reads their diff), plus what decides which
  * checks run and who reviews. A diff touching one, a rename's old path included, or carrying a held patch, asks.
  *
  * **The evidence**: every required check run on the head green (a commit status never counts), no unresolved review
@@ -22,7 +22,11 @@ import { matchesDeployingBranch, type ResolvedAutonomy } from "../config/autonom
 import { parseLedgerText } from "./ledgerStore.ts";
 import { UNREAD_EDITOR, type ReviewToolFacts, type ReviewToolVerdict } from "./reviewTool.ts";
 
-/** The person-only globs that land on the evidence: the charter, the rule files and the agent definitions (D2). */
+/**
+ * The person-only globs that land on the evidence: the charter, the rule files and the agent definitions (D2), and the
+ * learnings and overrides (REQ-FLOW-133), or every attended run with a learning would ask. An unattended run's change to
+ * any of these reaches the diff only in a held patch, which asks.
+ */
 export const LANDS_ON_EVIDENCE: readonly string[] = [
   "**/AGENTS.md",
   "**/AGENTS.override.md",
@@ -45,6 +49,8 @@ export const LANDS_ON_EVIDENCE: readonly string[] = [
   ".github/prompts/**",
   ".github/skills/**",
   ".github/chatmodes/**",
+  ".stamity/learnings/**",
+  ".stamity/overrides/**",
 ];
 
 /**

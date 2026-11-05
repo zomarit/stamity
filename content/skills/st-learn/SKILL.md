@@ -106,6 +106,34 @@ only ever appends. Retire the learning and recapture it — take the body, fix
 what the hand edit was for, and run `stamity learn capture` again. The recaptured
 file carries a digest that verifies, which is the whole reason the stamp exists.
 
+## An unattended run proposes
+
+An unattended run captures with `--propose`, and a person decides what goes live:
+`.stamity/learnings/` and `.stamity/overrides/` are what every later run reads, so
+both are held paths. A learning captured live in such a run moves to the run's held
+patch, and a held patch makes `run land` ask.
+
+```bash
+${STAMITY:CLI} learn capture --propose --run <run-id> \
+  --title "cache warmup order" \
+  --summary "<one index line>" \
+  --body-file <path>
+```
+
+Every gate runs, as under `--dry-run`, and the note lands at
+`.stamity/runs/<run-id>/proposals/<slug>.md` and nowhere under `.stamity/learnings/`.
+A slug already live, or already proposed in this run, is refused. The run verbs stage
+that folder themselves, so a proposal needs no `--paths`.
+
+The command prints one `decision` row for the morning list, `1 leave it out · 2 accept`, default `1`,
+so no answer leaves it out. The run gives the row the list's next `Q<n>`.
+
+When a person answers `2`, `stamity learn accept --run <run-id> --proposal <slug>` takes
+the proposal live. Every gate runs again on the file as it stands, through the same
+write path, and a proposal whose head names a content class (`type: rule`) goes to
+`.stamity/overrides/` by that class's own gates. The verb refuses while the session is
+unattended: accepting is a person's call.
+
 ## Quality bar
 
 - **The summary is an index line.** It is what a future session sees before

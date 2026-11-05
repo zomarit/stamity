@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { lstat, open, readdir, readFile, stat } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import { Argument, Option, type Command } from "commander";
 // Registration-time import: `configure()` runs while the program is being built,
@@ -67,12 +67,25 @@ import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts
  * skipped or unknown id is exit 1, so a refused body is never printed. Flags
  * belong to one verb each, checked before the action runs (`preAction`, as
  * `gate.ts` checks its own): a flag on the wrong verb is a usage error, exit 2.
+ *
+ * **A run proposes, a person accepts (REQ-FLOW-163).** `.stamity/learnings/` and
+ * `.stamity/overrides/` are what later runs read, so both are held paths
+ * (REQ-FLOW-133) and an unattended run writes neither. `capture --propose --run
+ * <id>` runs the dry run's gates and writes the note into the run's own folder;
+ * `accept --run <id> --proposal <slug>` hands those bytes to the store, or to
+ * the override path, whose gates all run again. Nothing here trusts the
+ * proposal: the run wrote that file, and it may have changed since its capture.
  */
 
 /** The write verb. */
 const CAPTURE = "capture";
 /** The screened read verb. */
 const READ = "read";
+/** The verb that takes a run's proposal live: a person's, refused under an unattended mode. */
+const ACCEPT = "accept";
+
+/** A run's proposals, inside its run folder; `run checkpoint` and `run end` stage this folder's `.md` files by name. */
+const PROPOSALS_DIR = "proposals";
 
 /**
  * The learnings subtree of the state directory. The store keeps its own copy of
@@ -268,12 +281,13 @@ function refuse(
   /** Gates that ran, ending with the one that refused. Dry run only — the real
    *  path gets a flat error list from the store and cannot attribute it. */
   gatesRun?: readonly string[],
+  verb: typeof CAPTURE | typeof ACCEPT = CAPTURE,
 ): CommandResult {
   const doc: FailureDoc = {
     code: "VALIDATION_ERROR",
-    message: `learn capture refused ${JSON.stringify(fileName)}`,
+    message: `learn ${verb} refused ${JSON.stringify(fileName)}`,
     why: errors.join(" "),
-    next: "rewrite the part the rule above names, then re-run the capture",
+    next: `rewrite the part the rule above names, then re-run the ${verb}`,
   };
   if (!ctx.json) ctx.io.err(`${renderFailureHuman(doc, ctx.palette)}\n`);
   return {
@@ -354,6 +368,28 @@ async function dryRunCapture(
   document: string,
   now: Date,
 ): Promise<CommandResult> {
+  const gated = await writeGates(ctx, rootDir, fileName, document, now);
+  if ("refused" in gated) return gated.refused;
+
+  ctx.io.out(
+    `Dry run: ${JSON.stringify(fileName)} passes every write gate ` +
+      `(${WRITE_GATES.join(", ")}). Nothing was written.\n`,
+  );
+  for (const warning of gated.warnings) ctx.io.out(`  advisory: ${warning}\n`);
+  return {
+    exitCode: 0,
+    json: { dryRun: true, fileName, gatesRun: [...WRITE_GATES], warnings: gated.warnings },
+  };
+}
+
+/** The dry run's gate sequence, shared with `--propose`: the refusal, or the note's advisories. */
+async function writeGates(
+  ctx: CliContext,
+  rootDir: string,
+  fileName: string,
+  document: string,
+  now: Date,
+): Promise<{ refused: CommandResult } | { warnings: string[] }> {
   const { validation } = ctx.engine.learnings;
   const { frontmatter } = ctx.engine.content;
   // No `caps` argument, exactly like the live call in `run` below: the real
@@ -361,18 +397,19 @@ async function dryRunCapture(
   // would be answering a different question.
   const caps = validation.resolveLearningsCaps();
   const dir = join(rootDir, STATE_DIR, LEARNINGS_DIR);
+  const stop = (errors: readonly string[], gatesRun: readonly string[]): { refused: CommandResult } => ({
+    refused: refuse(ctx, fileName, errors, gatesRun),
+  });
 
   const gates = validation.validateLearningContent(fileName, document, {
     maxFileBytes: caps.maxFileBytes,
     now,
   });
-  if (!gates.valid) return refuse(ctx, fileName, gates.errors, WRITE_GATES.slice(0, 1));
+  if (!gates.valid) return stop(gates.errors, WRITE_GATES.slice(0, 1));
 
   const existing = await listLearningFileNames(dir);
   if (existing.includes(fileName)) {
-    return refuse(
-      ctx,
-      fileName,
+    return stop(
       [
         `Learning "${fileName}" already exists in ${dir}. Learnings are append-only: ` +
           `retire that file or write this note under a different slug.`,
@@ -381,9 +418,7 @@ async function dryRunCapture(
     );
   }
   if (existing.length >= caps.maxCount) {
-    return refuse(
-      ctx,
-      fileName,
+    return stop(
       [
         `The learnings directory ${dir} holds ${existing.length} files, at the ` +
           `${caps.maxCount} file cap. Retire or consolidate a learning before adding ` +
@@ -395,9 +430,7 @@ async function dryRunCapture(
 
   const sanitization = validation.sanitizeLearningsContent(document);
   if (sanitization.content.trim() === "") {
-    return refuse(
-      ctx,
-      fileName,
+    return stop(
       [
         `Learning "${fileName}" could not be neutralized — the sanitizer dropped it ` +
           `(patterns: ${sanitization.strippedPatternIds.join(", ") || "none reported"}). ` +
@@ -415,7 +448,7 @@ async function dryRunCapture(
     parsed = frontmatter.parseFrontmatter(sanitization.content, `Learning "${fileName}"`);
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
-    return refuse(ctx, fileName, [message], WRITE_GATES.slice(0, 4));
+    return stop([message], WRITE_GATES.slice(0, 4));
   }
 
   const stamped = frontmatter.composeFrontmatter(
@@ -427,23 +460,217 @@ async function dryRunCapture(
     now,
   });
   if (!recheck.valid) {
-    return refuse(
-      ctx,
-      fileName,
+    return stop(
       recheck.errors.map((error) => `Stamped form — ${error}`),
       WRITE_GATES,
     );
   }
+  return { warnings: gates.warnings };
+}
 
-  ctx.io.out(
-    `Dry run: ${JSON.stringify(fileName)} passes every write gate ` +
-      `(${WRITE_GATES.join(", ")}). Nothing was written.\n`,
-  );
-  for (const warning of gates.warnings) ctx.io.out(`  advisory: ${warning}\n`);
+/**
+ * The run folder a proposal lives in, relative to the root, after the checks both verbs share: `run` is a run id, and
+ * neither that folder nor its proposals folder is a link, which would put the file where the link points (a link to
+ * `.stamity/learnings/` would make a proposal live). A proposals folder not made yet passes.
+ */
+async function proposalsFolder(ctx: CliContext, rootDir: string, run: string): Promise<string> {
+  const { layout } = ctx.engine.runs;
+  if (!layout.isRunId(run)) {
+    throw new CliFailure({
+      code: "VALIDATION_ERROR",
+      message: `--run ${JSON.stringify(run)} is not a run id (YYYY-MM-DD_<lowercase-slug>)`,
+      why: `a run id matches ${layout.RUN_ID_PATTERN.source}, the name of its folder under ${STATE_DIR}/runs/`,
+      next: "pass the run folder's name exactly as it is on disk",
+    });
+  }
+  const runDir = layout.runRelPath(run);
+  const folder = `${runDir}/${PROPOSALS_DIR}`;
+  const entries = await Promise.all([runDir, folder].map((path) => lstat(join(rootDir, path)).catch(() => null)));
+  if (entries.some((entry) => entry !== null && !entry.isDirectory())) {
+    throw new CliFailure({
+      code: "VALIDATION_ERROR",
+      message: `${folder} is not the run folder's own directory`,
+      why: "a link there would put a proposal where the link points, and a proposal is what stays out of the live folders",
+      next: "remove the link, then re-run the verb",
+    });
+  }
+  return folder;
+}
+
+/** {@link proposalsFolder} for `capture --propose`, which also needs the run's record: no run here, no folder to mint. */
+async function proposingFolder(ctx: CliContext, rootDir: string, run: string): Promise<string> {
+  const folder = await proposalsFolder(ctx, rootDir, run);
+  const { layout } = ctx.engine.runs;
+  const record = `${layout.runRelPath(run)}/${layout.RECORD_FILE}`;
+  if ((await lstat(join(rootDir, record)).catch(() => null))?.isFile() !== true) {
+    throw new CliFailure({
+      code: "VALIDATION_ERROR",
+      message: `learn capture --propose found no record at ${record}`,
+      why: "a proposal lives in its run's folder, so a run that does not exist here has nowhere to hold it",
+      next: "name the run this session is working in, from the project root",
+    });
+  }
+  return folder;
+}
+
+/** The row a proposal asks for on the morning list, less its `Q<n>`, which the run numbers: no answer leaves it out. */
+function proposalRow(fileName: string, summary: string): Record<string, unknown> {
   return {
-    exitCode: 0,
-    json: { dryRun: true, fileName, gatesRun: [...WRITE_GATES], warnings: gates.warnings },
+    kind: "decision",
+    question: `Accept the proposed learning ${fileName.slice(0, -".md".length)}? ${summary.replaceAll(/\s+/g, " ")}`,
+    options: ["leave it out", "accept"],
+    default: 1,
+    source: `${PROPOSALS_DIR}/${fileName}`,
   };
+}
+
+/**
+ * `capture --propose`: every gate the real capture runs, then the note into the run's folder. Nothing goes under
+ * `.stamity/learnings/`, and a proposal is append-only as a learning is. The row is printed, not written: the run
+ * writes `morning.md` after this call, with its file tools, and numbers the list's questions itself.
+ */
+async function proposeCapture(ctx: CliContext, rootDir: string, folder: string, draft: LearningDraft, document: string, now: Date): Promise<CommandResult> {
+  const { fileName } = draft;
+  const gated = await writeGates(ctx, rootDir, fileName, document, now);
+  if ("refused" in gated) return gated.refused;
+
+  const path = `${folder}/${fileName}`;
+  if ((await lstat(join(rootDir, path)).catch(() => null)) !== null) {
+    return refuse(ctx, fileName, [`${path} is already proposed. Proposals are append-only: capture this note under a different title.`]);
+  }
+  const morning = proposalRow(fileName, text(draft.frontmatter, "summary"));
+  const shared = { fileName, path, morning, gatesRun: [...WRITE_GATES], warnings: gated.warnings };
+  if (ctx.dryRun) {
+    ctx.io.out(`Dry run: ${JSON.stringify(fileName)} would be proposed at ${path}. Nothing was written.\n`);
+    return { exitCode: 0, json: { dryRun: true, ...shared } };
+  }
+
+  await ctx.engine.merge.atomicWrite.atomicWriteFile(join(rootDir, path), document, { boundaryDir: rootDir });
+  ctx.io.out(`Proposed ${JSON.stringify(fileName)} -> ${path}; nothing went live.\n`);
+  ctx.io.out(`Add this row to the morning list's questions, with the next Q<n>: ${JSON.stringify(morning)}\n`);
+  return { exitCode: 0, json: shared };
+}
+
+/** At most `bytes` of `path`, or `null` where it is absent or is not a regular file: a link is no record. */
+async function headOf(path: string, bytes: number): Promise<string | null> {
+  const entry = await lstat(path).catch((cause: NodeJS.ErrnoException) => {
+    if (cause.code === "ENOENT") return null;
+    throw cause;
+  });
+  if (entry === null || !entry.isFile()) return null;
+  const handle = await open(path, "r");
+  try {
+    const { buffer, bytesRead } = await handle.read(Buffer.alloc(bytes), 0, bytes, 0);
+    return buffer.toString("utf8", 0, bytesRead);
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * What makes this session unattended, or `null`, as the shell guard reads it (`unattendedBy`, `../../hooks/scripts.ts`):
+ * a run in progress reading `Mode: unattended`, else `STAMITY_UNATTENDED` set with no run in progress reading
+ * `Mode: attended`. Never the named run's own `Mode:` alone: an unattended run that closed is the one whose proposal a
+ * person walks in the morning, so that line would refuse the very accept this verb exists for. A read that fails
+ * refuses, since it leaves the mode unknown.
+ */
+async function unattendedSession(ctx: CliContext, rootDir: string): Promise<string | null> {
+  const { layout, resumeCard } = ctx.engine.runs;
+  const runsDir = join(rootDir, ...layout.RUNS_SEGMENTS);
+  try {
+    const entries = await readdir(runsDir, { withFileTypes: true }).catch((cause: NodeJS.ErrnoException) => {
+      if (cause.code === "ENOENT" || cause.code === "ENOTDIR") return [];
+      throw cause;
+    });
+    const runs = entries.filter((entry) => entry.isDirectory() && layout.isRunId(entry.name)).map((entry) => entry.name);
+    const heads = await Promise.all(
+      runs.map(async (run) => {
+        const record = await headOf(join(runsDir, run, layout.RECORD_FILE), layout.RECORD_HEAD_READ_BYTES);
+        return { run, head: record === null ? null : resumeCard.readRecordHead(record) };
+      }),
+    );
+    const running = heads.filter(({ head }) => head?.inProgress === true);
+    const held = running.find(({ head }) => head?.mode === "unattended");
+    if (held !== undefined) return `${layout.runRelPath(held.run)}/${layout.RECORD_FILE} reads \`Status: in progress\` and \`Mode: unattended\``;
+    if (running.some(({ head }) => head?.mode === "attended")) return null;
+    return resumeCard.readsUnattended(null, ctx.app.runtime.env["STAMITY_UNATTENDED"])
+      ? "STAMITY_UNATTENDED is set and no in-progress run record reads `Mode: attended`"
+      : null;
+  } catch (cause) {
+    return `the run records could not be read (${cause instanceof Error ? cause.message : String(cause)})`;
+  }
+}
+
+/** A content class, typed off the engine function as `dryRunCapture` types its parse. */
+type ProposalClass = Parameters<CliContext["engine"]["content"]["userContent"]["saveUserContent"]>[1];
+
+/** The content class a proposal's head names, or `null` for a learning; a head that does not parse is the store's to refuse. */
+function proposalClass(ctx: CliContext, document: string, fileName: string): ProposalClass | null {
+  const { frontmatter, userContent } = ctx.engine.content;
+  try {
+    const type = frontmatter.parseFrontmatter(document, `Proposal "${fileName}"`).frontmatter["type"];
+    return typeof type === "string" && Object.hasOwn(userContent.CLASS_LAYOUT, type) ? (type as ProposalClass) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The proposal's text, refused where it is no regular file of the run's proposals folder. */
+async function readProposal(ctx: CliContext, rootDir: string, path: string): Promise<string> {
+  const entry = await lstat(join(rootDir, path)).catch(() => null);
+  const cap = ctx.engine.guard.promptGuard.MAX_USER_CONTENT_LENGTH;
+  if (entry === null || !entry.isFile() || entry.size > cap) {
+    throw new CliFailure({
+      code: "VALIDATION_ERROR",
+      message: `${path} is no proposal to accept`,
+      why: entry === null ? "that file does not exist" : `a proposal is a regular file of at most ${cap} bytes, and this path is not one`,
+      next: "pass the slug the morning list's row names, from the run folder that holds it",
+    });
+  }
+  return await readFile(join(rootDir, path), "utf8");
+}
+
+/**
+ * `accept`: a person's yes to one proposal. Refused under an unattended mode, before any file is read. The proposal's
+ * bytes then go through the store's whole write path, or the override path's for a head naming a content class, so
+ * every gate runs again on the file as it stands now. The proposal stays in the run folder as the record of what was
+ * asked; a second accept of a learning is the store's append-only refusal.
+ */
+async function runAccept(ctx: CliContext, run: string, slug: string): Promise<CommandResult> {
+  const rootDir = ctx.app.runtime.cwd;
+  const unattended = await unattendedSession(ctx, rootDir);
+  if (unattended !== null) {
+    throw new CliFailure({
+      code: "VALIDATION_ERROR",
+      message: "learn accept refused: this session is unattended",
+      why: `${unattended}, and accepting is a person's call: what goes live is read by every later run`,
+      next: "leave the proposal in the run folder; a person accepts it at the morning walk",
+    });
+  }
+  const folder = await proposalsFolder(ctx, rootDir, run);
+  const fileName = `${slug}.md`;
+  const nameErrors = ctx.engine.learnings.validation.validateLearningFileName(fileName);
+  if (nameErrors.length > 0) return refuse(ctx, fileName, nameErrors, undefined, ACCEPT);
+  const document = await readProposal(ctx, rootDir, `${folder}/${fileName}`);
+
+  const type = proposalClass(ctx, document, fileName);
+  if (type !== null) {
+    const { discoverUserContent, saveUserContent } = ctx.engine.content.userContent;
+    // A save re-saves an id as an edit, so the append-only rule a learning gets from the store is checked here.
+    if ((await discoverUserContent(rootDir)).some((artifact) => artifact.type === type && artifact.id === slug)) {
+      return refuse(ctx, fileName, [`The ${type} override ${JSON.stringify(slug)} is already live, and a proposal does not replace it: retire that file first.`], undefined, ACCEPT);
+    }
+    const saved = await saveUserContent(rootDir, type, slug, document);
+    if (!saved.saved) return refuse(ctx, fileName, saved.errors, undefined, ACCEPT);
+    ctx.io.out(`Accepted ${JSON.stringify(fileName)} as a ${type} override -> ${saved.path ?? ""}\n`);
+    ctx.io.out(`Run ${packageCommand("sync")} to emit it.\n`);
+    return { exitCode: 0, json: { run, proposal: slug, fileName, class: type, path: saved.path, warnings: saved.warnings } };
+  }
+
+  const result = await ctx.engine.learnings.store.persistLearning({ rootDir, fileName, content: document, now: ctx.app.runtime.clock.now() });
+  if (!result.written) return refuse(ctx, fileName, result.errors, undefined, ACCEPT);
+  ctx.io.out(`Accepted ${JSON.stringify(fileName)} -> ${result.path ?? ""}\n`);
+  return { exitCode: 0, json: { run, proposal: slug, fileName, path: result.path, sanitized: result.sanitized } };
 }
 
 /** The loader's result, typed off the engine function as `dryRunCapture` types its parse. */
@@ -455,6 +682,7 @@ const CAPTURE_ONLY_FLAGS: readonly (readonly [string, string])[] = [
   ["summary", "--summary"],
   ["confidence", "--confidence"],
   ["bodyFile", "--body-file"],
+  ["propose", "--propose"],
 ];
 
 /**
@@ -478,12 +706,28 @@ function checkVerbFlags(command: Command): void {
         exitCode: 2,
       });
     }
+    if (opts["proposal"] !== undefined) command.error("error: --proposal applies to accept only", { exitCode: 2 });
+    if ((opts["propose"] === true) !== (opts["run"] !== undefined)) {
+      command.error("error: --propose and --run go together: --propose names the run whose folder takes the note", { exitCode: 2 });
+    }
     return;
   }
-  if (opts["dryRun"] === true) command.error("error: read writes nothing, so it takes no --dry-run", { exitCode: 2 });
+  if (opts["dryRun"] === true) {
+    const why = verb === ACCEPT ? "accept goes live or refuses; capture --propose --dry-run runs the same gates" : "read writes nothing";
+    command.error(`error: ${why}, so it takes no --dry-run`, { exitCode: 2 });
+  }
   const misplaced = CAPTURE_ONLY_FLAGS.filter(([key]) => command.getOptionValueSource(key) === "cli");
   if (misplaced.length > 0) {
     command.error(`error: ${misplaced.map(([, flag]) => flag).join(", ")} applies to capture only`, { exitCode: 2 });
+  }
+  if (verb === ACCEPT) {
+    if (opts["body"] !== undefined) command.error("error: --body applies to read only", { exitCode: 2 });
+    if (opts["run"] === undefined) command.error("error: required option '--run <id>' not specified", { exitCode: 2 });
+    if (opts["proposal"] === undefined) command.error("error: required option '--proposal <slug>' not specified", { exitCode: 2 });
+    return;
+  }
+  if (opts["run"] !== undefined || opts["proposal"] !== undefined) {
+    command.error("error: --run and --proposal apply to capture --propose and accept, not to read", { exitCode: 2 });
   }
 }
 
@@ -601,7 +845,7 @@ export const learnCommand: CommandModule = {
   configure(cmd: Command): void {
     cmd
       .addArgument(
-        new Argument("<subcommand>", "capture a learning, or read the screened index").choices([CAPTURE, READ]),
+        new Argument("<subcommand>", "capture a learning, accept a run's proposal, or read the screened index").choices([CAPTURE, READ, ACCEPT]),
       )
       .option("--title <text>", "capture (required): what the learning is about; also its file-name slug")
       .option("--summary <text>", "capture (required): one index line, under 200 characters")
@@ -612,6 +856,9 @@ export const learnCommand: CommandModule = {
       )
       .option("--body-file <path>", "capture: read the body from a file instead of stdin")
       .option("--body <id>", "read: print one loaded learning's body instead of the index")
+      .option("--propose", "capture: run the gates and write the note to the run's folder, not to the live learnings")
+      .option("--run <id>", "capture --propose, accept (required): the run whose folder holds the proposal")
+      .option("--proposal <slug>", "accept (required): the proposal to take live")
       .hook("preAction", checkVerbFlags);
   },
 
@@ -619,11 +866,13 @@ export const learnCommand: CommandModule = {
     // Commander's `choices()` refused every other verb at parse time, and the
     // preAction hook refused every flag on the wrong verb.
     if (args[0] === READ) return await runRead(ctx, optionalText(opts, "body"));
+    if (args[0] === ACCEPT) return await runAccept(ctx, text(opts, "run"), text(opts, "proposal"));
 
     const rootDir = ctx.app.runtime.cwd;
     // Before the body is read: a capture pointed at the wrong directory should
     // not first consume the caller's pipe.
     await requireStateDir(rootDir);
+    const folder = opts["propose"] === true ? await proposingFolder(ctx, rootDir, text(opts, "run")) : null;
 
     const now = ctx.app.runtime.clock.now();
     const draft = draftLearning({
@@ -638,6 +887,7 @@ export const learnCommand: CommandModule = {
       draft.body,
     );
 
+    if (folder !== null) return await proposeCapture(ctx, rootDir, folder, draft, document, now);
     if (ctx.dryRun) return await dryRunCapture(ctx, rootDir, draft.fileName, document, now);
 
     const result = await ctx.engine.learnings.store.persistLearning({

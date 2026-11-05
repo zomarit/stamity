@@ -1401,14 +1401,20 @@ describe("stamity run checkpoint", () => {
     expect(pushedFile(remote, "b.txt/inner.txt")).toBe("now a folder");
   });
 
-  it("stages a learning file the close captured when --paths names it (review/146)", async () => {
+  // TEST CHANGE, justified (plan 023 file 2, unit propose-learning, REQ-FLOW-133): the case pinned the old behaviour, an
+  // unattended close's live learning riding the push. `.stamity/learnings/**` is a held path now, so a run proposes
+  // instead, and one that still captures live has its learning held: review/146's named path is kept, in the patch.
+  it("holds a learning file the close captured live, when --paths names it (review/146, REQ-FLOW-133)", async () => {
     const { repo, remote } = await seed("unattended");
     await put(repo, ".stamity/learnings/push-hooks.md", "# A learning\n");
 
-    const { code } = await run(repo, [...CHECKPOINT, "--paths", ".stamity/learnings/push-hooks.md"]);
+    const { code, doc } = await run(repo, [...CHECKPOINT, "--paths", ".stamity/learnings/push-hooks.md"]);
 
     expect(code).toBe(0);
-    expect(pushedTree(remote)).toContain(".stamity/learnings/push-hooks.md");
+    expect(doc["held"]).toEqual([".stamity/learnings/push-hooks.md"]);
+    expect(pushedTree(remote)).not.toContain(".stamity/learnings/push-hooks.md");
+    expect(pushedTree(remote)).toContain(PATCH);
+    expect(readFileSync(join(repo, PATCH), "utf8")).toContain("A learning");
   });
 
   it("refuses to commit on the default branch, committing and pushing nothing", async () => {

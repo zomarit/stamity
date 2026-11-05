@@ -1107,6 +1107,19 @@ describe("learn — the thin capture lane", () => {
     expect(text).toContain("stamity learn capture");
   });
 
+  it("says an unattended run proposes, no answer leaves it out, and a person accepts (REQ-FLOW-163)", async () => {
+    const text = flow(await load("skills/st-learn/SKILL.md"));
+
+    expect(text).toContain("An unattended run captures with `--propose`");
+    expect(text).toContain("learn capture --propose --run <run-id>");
+    expect(text).toContain("`.stamity/runs/<run-id>/proposals/<slug>.md`");
+    expect(text).toContain("`1 leave it out · 2 accept`, default `1`");
+    expect(text).toContain("so no answer leaves it out");
+    expect(text).toContain("`stamity learn accept --run <run-id> --proposal <slug>`");
+    expect(text).toContain("The verb refuses while the session is unattended");
+    expect(text).toContain("a held patch makes `run land` ask");
+  });
+
   it("answers a refused capture with a redaction, never a bypass", async () => {
     const text = flow(await load("skills/st-learn/SKILL.md"));
 

@@ -239,6 +239,14 @@ describe("heldPaths", () => {
     });
   });
 
+  it("holds what later runs read as knowledge and as content, and not a run's own proposal (REQ-FLOW-133)", () => {
+    const held = [".stamity/learnings/cache-warmup.md", ".stamity/overrides/rules/house-style.md", ".stamity/overrides/skills/st-learn/SKILL.md"];
+    const free = [".stamity/runs/2026-11-05_night/proposals/cache-warmup.md", ".stamity/inbox.md", "docs/learnings/notes.md"];
+
+    expect(heldPaths([...free, ...held])).toEqual(held);
+    expect(heldPaths(["apps/web/.stamity/learnings/cache-warmup.md"], "apps/web/")).toEqual(["apps/web/.stamity/learnings/cache-warmup.md"]);
+  });
+
   it("names every glob the plan's table lists", () => {
     expect(PERSON_ONLY_PATHS).toEqual([
       ".github/workflows/**",
@@ -271,6 +279,12 @@ describe("heldPaths", () => {
       ".stamity/hooks/**",
       ".stamity/manifest.json",
       ".stamity/change-classes.json",
+      // TEST CHANGE, justified (plan 023 file 2, unit propose-learning, REQ-FLOW-133): the folders later runs read as
+      // knowledge and as content are held now, so a run proposes and a person accepts; the pinned list gains both globs.
+      // Built at run time: written as a literal, a folder glob makes this file a declared reader of every tracked file
+      // under that folder (test/ci/testInputsGuard.test.ts, `under`).
+      [".stamity/learnings", "**"].join("/"),
+      [".stamity/overrides", "**"].join("/"),
       "CODEOWNERS",
       ".github/CODEOWNERS",
       "docs/CODEOWNERS",

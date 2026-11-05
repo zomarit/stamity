@@ -5724,18 +5724,24 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
     const list = /export const LANDS_ON_EVIDENCE[^=]*=\s*\[([^\]]*)\]/.exec(evidence)?.[1] ?? "";
     const globs = [...list.matchAll(/"([^"]+)"/g)].map((match) => match[1] ?? "");
     expect(globs.length, "LANDS_ON_EVIDENCE could not be read").toBeGreaterThan(10);
+    // TEST CHANGE, justified (plan 023 file 2, unit propose-learning, REQ-FLOW-133): `.stamity/learnings/**` and
+    // `.stamity/overrides/**` joined LANDS_ON_EVIDENCE. They lie in no client's folder, so they are a kind of their own,
+    // named after the phrase on the land row. The phrase itself, and so the mapping's pin below, stays as it was.
+    const folders = "the learnings and overrides under `.stamity/`";
     // Each glob is one of the kinds the page names: a charter, a rule file, or an agent, command, skill, prompt or chat-mode tree.
     const kind = (glob: string): string | null =>
-      /AGENTS(\.override)?\.md|CLAUDE\.md/.test(glob) ? "the charter"
-        : /rules|instructions/.test(glob) ? "the rule files"
-          : /\/agents\//.test(glob) ? "agent" : /\/commands\//.test(glob) ? "command" : /\/skills\//.test(glob) ? "skill"
-            : /\/prompts\//.test(glob) ? "prompt" : /\/chatmodes\//.test(glob) ? "chat-mode" : null;
+      /^\.stamity\/(?:learnings|overrides)\//.test(glob) ? folders
+        : /AGENTS(\.override)?\.md|CLAUDE\.md/.test(glob) ? "the charter"
+          : /rules|instructions/.test(glob) ? "the rule files"
+            : /\/agents\//.test(glob) ? "agent" : /\/commands\//.test(glob) ? "command" : /\/skills\//.test(glob) ? "skill"
+              : /\/prompts\//.test(glob) ? "prompt" : /\/chatmodes\//.test(glob) ? "chat-mode" : null;
     for (const glob of globs) expect(kind(glob), `the page names no kind for ${glob}`).not.toBeNull();
     const phrase = "the charter, the rule files and the agent, command, skill, prompt and chat-mode definitions under each client's folder";
-    for (const name of new Set(globs.map(kind))) expect(phrase, `the land row omits ${name}`).toContain(name ?? "");
+    for (const name of new Set(globs.map(kind))) expect(`${phrase}, and ${folders}`, `the land row omits ${name}`).toContain(name ?? "");
     const security = flowed(read(SECURITY));
     const land = security.slice(security.indexOf("| An agent working on a change, attended or not"), security.indexOf("| An agent, or the text that steers it | Loosening"));
-    expect(land).toContain(`other than ${phrase}`);
+    expect(land).toContain(`other than ${phrase}, and ${folders}`);
+    expect(new Set(globs.map(kind)), "the two folders left LANDS_ON_EVIDENCE").toContain(folders);
     const mapping = flowed(read(SECURITY_MAPPING));
     expect(mapping).toContain(`other than ${phrase}, which land on the evidence with the review loop their only reader`);
     expect(mapping).toContain("The ledger is a file the run itself writes and commits, so an empty or rewritten one passes");

@@ -106,7 +106,7 @@ import { runLand } from "./runLand.ts";
  * `--paths` and any path but the run folder's and the inbox that a commit the push would send (read from origin's
  * tips, never from `Base:`) or the index changes, as
  * `refused ending carries only the run's records: …` (review/50); stages
- * only the run folder's record, ledger, plan, morning list, origin pin and `held/*.patch`,
+ * only the run folder's record, ledger, plan, morning list, origin pin, `held/*.patch` and `proposals/*.md`,
  * `.stamity/inbox.md` and `--paths` (never `-A`, never `-f`), a path git
  * ignores reported as `records: not committed (…)`; in an unattended run
  * (`Mode: unattended`, or no `Mode:` line with `STAMITY_UNATTENDED` set, as
@@ -260,6 +260,9 @@ const INBOX_PATH = ".stamity/inbox.md";
 /** The held patch's folder inside the run folder, and the one patch this verb writes there. */
 const HELD_DIR = "held";
 const HELD_PATCH = "person-only.patch";
+
+/** The run's proposed learnings' folder (REQ-FLOW-163, `./learn.ts`), staged by its folder as `held/` is. */
+const PROPOSALS_DIR = "proposals";
 
 /** A branch the push command names unquoted: what the guard's shell reading and git both take as one word. */
 const PUSHABLE_BRANCH = /^(?!-)[A-Za-z0-9._/-]+$/;
@@ -1194,10 +1197,14 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   const runOwned = [...RUN_FILES.map((file) => `${runDir}/${file}`), INBOX_PATH];
   const gone = runOwned.filter((path) => !exists(join(cwd, path))).map(fromTop);
   const goneTracked = await indexTracked(top, gone, verb);
-  const own = runOwned.flatMap((path) => {
-    const fromRoot = fromTop(path);
-    return isRegular(join(cwd, path)) || goneTracked.has(fromRoot) ? [fromRoot] : [];
-  });
+  const proposalsDir = `${runDir}/${PROPOSALS_DIR}`;
+  const own = [
+    ...runOwned.flatMap((path) => {
+      const fromRoot = fromTop(path);
+      return isRegular(join(cwd, path)) || goneTracked.has(fromRoot) ? [fromRoot] : [];
+    }),
+    ...listFiles(join(cwd, proposalsDir), ".md").map((name) => fromTop(`${proposalsDir}/${name}`)),
+  ];
   const heldDir = `${runDir}/${HELD_DIR}`;
   const patchRel = `${heldDir}/${HELD_PATCH}`;
   /** The held patch written whole, atomically, inside the project; else the reason, for `notDone`. */
@@ -1209,7 +1216,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
       return `hold failed: ${patchRel} could not be written (${cause instanceof Error ? cause.message : "write failed"})`;
     }
   };
-  const patches = [...new Set([patchRel, ...listPatches(join(cwd, heldDir)).map((name) => `${heldDir}/${name}`)])].map(fromTop);
+  const patches = [...new Set([patchRel, ...listFiles(join(cwd, heldDir), ".patch").map((name) => `${heldDir}/${name}`)])].map(fromTop);
   const { paths: named, deleted: namedDeleted } = await namedPaths(top, cwd, prefix, base, (opts["paths"] ?? []) as string[], result.notDone, verb);
   // review/84: a deletion already staged is no ignored record, though check-ignore reads its path as untracked now.
   const ignored = await ignoredPaths(top, [...own, ...named.filter((path) => !namedDeleted.includes(path)), ...patches], verb);
@@ -2947,12 +2954,12 @@ function dropRunEndedMarker(cwd: string): string | null {
   }
 }
 
-/** The `*.patch` files directly in the run's `held/` folder; none where it is absent or not a folder. */
-function listPatches(dir: string): string[] {
+/** The regular files ending in `suffix` directly in a run's `dir`; none where it is absent or not a folder. */
+function listFiles(dir: string, suffix: string): string[] {
   try {
     if (!lstatSync(dir).isDirectory()) return [];
     return readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && entry.name.endsWith(".patch"))
+      .filter((entry) => entry.isFile() && entry.name.endsWith(suffix))
       .map((entry) => entry.name)
       .toSorted();
   } catch {
