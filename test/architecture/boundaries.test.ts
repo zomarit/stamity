@@ -574,6 +574,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // Author signing consumes the existing wave-6 trust/verifier contract.
   "src/pack/sign.ts": { unit: "finish-pack-signing", wave: 7 },
   "src/pack/orgPolicy.ts": { unit: "p5-org-policy", wave: 6 },
+  // Plan 023 file 2: a repository's own server rows, over the wave-5 pack bar
+  // they ride, under the wave-8 projection that merges them with pack supply.
+  "src/mcp/ownServers.ts": { unit: "own-server-core", wave: 6 },
   // wave 7 — pack-install leaves over the trust ladder
   "src/pack/receipt.ts": { unit: "p5-install-pipeline", wave: 7 },
   "src/pack/curated.ts": { unit: "p5-curated-catalog", wave: 7 },
