@@ -2,7 +2,7 @@
 title: The factory
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit 2e11da51. Re-attested 2026-11-05 for the page's first write. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at commit d9a33cfa. Re-attested 2026-11-05 for the brake, the administrator's opt-in, the review tool, auto-ship and the land job. -->
 <!-- Re-open when: a step's verb, setting or check changes, an `Issue trigger` row of `CLIENT_CLOUD_FACTS`
      moves, the ready label or a filed item's body changes, or a real run proves or breaks a step.
      `test/docsPages.test.ts` holds this page to the hand-page contract, the order of its steps and the
@@ -95,6 +95,14 @@ npx @zomarit/stamity sync
 
 `run land` now asks Codex to review the exact commit, and waits up to 40 minutes. Silence holds the
 merge. This adds a check, so it loosens nothing. Do not commit yet: Step 4 ends in one pull request.
+
+What a finding does depends on where the run lands. On Cursor's cloud and in a local run, the run is
+meant to fix it and ask the tool again. Neither has been proven by a real run. On Claude's cloud the
+tool holds and no fix round runs: the pull request's body says `merge waits on:`, and it waits for
+you. There, run `/st-pr-resolve` on it from your own machine, which pushes the fix. The tool is then
+asked on the new head. The `codex` word sets `rounds` to 2, and `rounds` counts the heads the tool was
+asked on, so that gives one fix round. `rounds: 1` would give none. [Cloud runs](cloud.md) has the
+rest, under The review tool.
 
 ## Step 4: Choose what to loosen
 
@@ -360,7 +368,12 @@ Go through these in order, and stop at the first one that explains it:
    your GitHub connection still works. On Claude, check the **Issue** category and `labeled`.
 4. **The label.** It must read exactly `stamity:ready`, and sit on an issue, not a pull request.
 5. **The webhook.** On Cursor's webhook branch, open the repository's Actions page. No run means the
-   workflow is not on the default branch. A failed run usually means a wrong secret.
+   workflow is not on the default branch. A failed run usually means a wrong secret. If your rule
+   names no required check, a failed run also holds the lands. GitHub can put this workflow's runs on
+   the default branch's tip, every check run there then counts, and so each land asks a person, with
+   `<branch> is red: start failing on its tip`. That clears when a later run of the workflow passes,
+   so fix the secret and re-run it, or when the next commit lands on the default branch. A land that
+   asked meanwhile does not start itself again: `/st-work --resume <run-id>` retries it.
 6. **The session.** Open the latest run on the vendor's page. The prompt stops, starting nothing, if
    the label came from someone without write access, if the issue is claimed, or if the issue has no
    `Branch:` or `Plan:` line, or one of the wrong shape. File such an item again as in Step 6.

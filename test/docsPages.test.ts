@@ -866,6 +866,9 @@ const RELEASE_CUT_DATE = "2026-10-26";
  *
  * NOT MOVED, 2026-11-05, at integration: the same five moved on to d9a33cfa, after the closing audit's
  * fixes changed the land verb and three of those pages. The date is the same day, so it stays.
+ *
+ * NOT MOVED, 2026-11-05, at the whole-branch round: `docs/factory.md` left its lane base for that same
+ * d9a33cfa and took the five pages' wording, since no code has moved since. The date stays.
  */
 const REATTESTATION_DATE = "2026-11-05";
 
@@ -5901,6 +5904,29 @@ describe("the security pages say one thing about the brake, the lift and the job
       expect(flat, `${page} still names two ends alone`).not.toMatch(/only a run still in progress/i);
     }
     expect(flowed(read(SPEC)), "the criteria still read every hold as a line").not.toContain("GIVEN a hold of any kind");
+  });
+
+  it("says the review tool only holds on Claude's cloud, and what `rounds` counts, on every page", () => {
+    for (const page of [CLOUD, FACTORY, SPEC]) {
+      const flat = flowed(read(page));
+      expect(flat, `${page} promises a fix round on Claude's cloud`).toMatch(/On Claude's cloud the (?:review )?tool holds and no fix round runs/);
+      expect(flat, `${page} does not say how many fix rounds \`rounds\` gives`).toContain("`rounds: 1`");
+    }
+    for (const page of [CLOUD, FACTORY]) {
+      expect(flowed(read(page)), `${page} does not say what a reader does with a held finding`).toContain("from your own machine");
+    }
+    for (const page of [CLOUD, TROUBLESHOOTING, SPEC, "docs/configuration.md"]) {
+      const flat = flowed(read(page));
+      expect(flat, `${page} does not say what \`rounds\` counts`).toContain("`rounds` counts the heads the tool was asked on");
+      expect(flat, `${page} still reads \`rounds\` as fix rounds`).not.toContain("at most `rounds` times");
+    }
+  });
+
+  it("says a failed start workflow holds the lands, and how that clears, on the factory page", () => {
+    const flat = flowed(read(FACTORY));
+    expect(flat).toContain("a failed run also holds the lands");
+    expect(flat).toContain("That clears when a later run of the workflow passes");
+    expect(flat).toContain("or when the next commit lands on the default branch");
   });
 
   it("names the review request beside the door, and the five fixed calls of the land verb, on both pages", () => {

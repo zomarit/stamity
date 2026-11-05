@@ -1274,6 +1274,16 @@ describe("st-unattended — the factory bridge's prose (plan 023 file 1, skills-
     expect(loop).not.toContain("never a workaround:");
   });
 
+  // The land refuses on the thread read there before it reads the tool, so the step above cannot start on that cloud.
+  // Shipped content names no client, so the cloud is named by what it does, the public pages naming it.
+  it("says no fix round runs where a proxy refuses GraphQL, and what rounds counts (REQ-FLOW-154)", async () => {
+    const loop = await cloudSection("The review loop");
+    expect(loop).toContain("Where a cloud's GitHub proxy refuses GraphQL, the review tool holds and no fix round runs:");
+    expect(loop).toContain("The fix rounds belong to a session whose `run land` reads the tool: a local run, or a cloud with no such proxy.");
+    expect(loop).toContain("`rounds` counts the heads the tool was asked on, the first among them, so the fix rounds are one fewer, and `rounds: 1` gives none");
+    expect(actsTold(loop)).toEqual([]);
+  });
+
   it("takes the review tool's findings into /st-pr-resolve with the setting's round count (REQ-FLOW-154)", async () => {
     const text = await flat(PR_RESOLVE_REL_PATH);
     expect(text).toContain("When `autonomy.reviewTool` is set in the default branch's `.stamity/manifest.json`, the cap is its `rounds`, not 3, and the round past it is refused the same way.");

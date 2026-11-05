@@ -448,8 +448,10 @@ flag holds only while the head is still that commit, and an unattended run refus
 - `<n> of <m> review rounds spent with no clean head, so a person decides`: the run stops here.
 
   Both of these last two are refusals, so `--approved` does not pass them. While rounds remain, a new
-  head asks the tool again. Past that a person raises `rounds` or drops the tool, each through `sync
-  --loosen`, or merges by hand.
+  head asks the tool again. `rounds` counts the heads the tool was asked on, the first among them, so
+  the fix rounds are one fewer: `rounds: 2` gives one, and `rounds: 1` gives none, since a finding on
+  its one head reads as spent here and never as findings. Past that a person raises `rounds` or drops
+  the tool, each through `sync --loosen`, or merges by hand.
 - `the ledger at <sha> holds open Critical or Warning rows`, `does not read`, or `the work tree's
   … differs from the commit's: checkpoint first`: close or fix the rows, then run `run checkpoint`,
   so the ledger the head commit holds is the one on disk.

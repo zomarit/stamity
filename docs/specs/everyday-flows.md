@@ -6971,7 +6971,11 @@ carry the marker.
     and `spent` they are plain gaps. A thread that took a comment from anyone but the tool or the run just as it closed
     refuses, naming it, and one the job closed over someone's comment counts as unresolved.
   - **The loop.** On `findings` the run runs `/st-pr-resolve --unattended`, which pushes through its own run verbs, and runs
-    the land line again under its own run id, at most `rounds` times; `/st-pr-resolve`'s cap is the setting's `rounds`.
+    the land line again under its own run id, so the tool runs on at most `rounds` heads; `/st-pr-resolve`'s cap is the
+    setting's `rounds`. `rounds` counts the heads the tool was asked on, the first among them, so the fix rounds are one
+    fewer, and `rounds: 1` gives none, a finding on its one head reading `spent`. The fix rounds are Cursor's cloud's and a
+    local run's. On Claude's cloud the review tool holds and no fix round runs: the session's `run land` refuses on the
+    review threads before it reads the tool, and the land job holds on `findings` and fixes nothing, so a person takes them.
     `silent`, `spent` and a round that pushes nothing are each a `held` row. A `held` row ends the loop, and the run takes
     no other route to the same end: no new commit to restart a wait, no second pull request, no edit or delete of a
     comment.

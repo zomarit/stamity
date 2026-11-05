@@ -435,10 +435,24 @@ so both read `not run` in the [capability matrix](capability-matrix.md)'s cloud 
 With `autonomy.reviewTool` set, `run land` asks the named tool to review the head, once per head, and
 waits for it. Only that bot's own word on the exact head passes. Under a hand-written `clean: reaction` that does not hold: a `+1` names no commit, so one left on an earlier head reads clean on every later head, and no request is sent. Findings, no result within
 `waitMinutes`, spent `rounds` or a block it does not know each hold the merge and say why, and
-silence never passes. On findings the run fixes them through `/st-pr-resolve`, pushes, and lets the
-tool run again, at most `rounds` times. A wait longer than one `run land` call comes back as a pending
+silence never passes. A wait longer than one `run land` call comes back as a pending
 outcome: run the land line again, since no approval passes a wait. Once the tool reads clean on the
 head, `run land` resolves the threads the tool opened and no person joined, never a person's.
+
+The fix rounds are Cursor's cloud's and a local run's. There the session's `run land` is meant to read
+the tool, so on findings the run fixes them through `/st-pr-resolve`, pushes, and lets the tool run on
+the new head. Neither has been proven by a real run. `rounds` counts the heads the tool was asked on,
+the first among them, so the fix rounds are one fewer: the preset's `rounds: 2` gives one, and
+`rounds: 1` gives none, since a finding on its one head reads as spent.
+
+On Claude's cloud the review tool holds and no fix round runs. The session's `run land` refuses on the
+review threads before it reads the tool, and the land job, which does ask the tool, fixes nothing. It
+writes the reason on the pull request's `merge waits on:` line and exits 0, so the pull request waits
+for you. To clear a finding there, run `/st-pr-resolve` on the pull request from your own machine. It
+pushes the fix to the run's branch, and once your CI finishes well on that head the land job asks the
+tool again, if a round is left. Without the job, `/st-work --resume <run-id>` on your machine retries
+the land step. With no round left the reason reads `review rounds spent`, and
+[Troubleshooting](troubleshooting.md) says what a person does.
 
 Limits: the Codex state comment this reads is not in Codex's documentation, so anything unknown reads
 not clean. The state comment is read from real pull requests and proven only in tests: the full loop of request, wait, read and resolve is `not run`. A deleted state comment is not seen. A hand-written `clean: reaction` is the
