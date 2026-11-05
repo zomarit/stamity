@@ -2,7 +2,7 @@
 title: The factory
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit d9a33cfa. Re-attested 2026-11-05 for the brake, the administrator's opt-in, the review tool, auto-ship and the land job. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-05). -->
 <!-- Re-open when: a step's verb, setting or check changes, an `Issue trigger` row of `CLIENT_CLOUD_FACTS`
      moves, the ready label or a filed item's body changes, or a real run proves or breaks a step.
      `test/docsPages.test.ts` holds this page to the hand-page contract, the order of its steps and the
@@ -15,8 +15,8 @@ an issue. A run starts, does the planned work, and merges its own pull request i
 holds. If the evidence does not hold, the pull request waits for you, with the reasons in its body.
 
 `run land` is the stamity step that merges a run's own pull request. The evidence is what it reads
-first: every required check green on the exact commit, no open review thread, and no open Critical
-or Warning row in the run's findings.
+first: every required check green on the exact commit, no open review thread, no open Critical or
+Warning row in the run's findings, and a clean merge state. Step 3 adds the review tool.
 
 It covers Claude's cloud, Cursor's cloud and your own machine. Follow the steps in order. Each one
 says who does it and where. [Cloud runs](cloud.md) holds the detail behind them, and this page links
@@ -128,7 +128,7 @@ what you need.
 - `autonomy.autoShip`, word `low-risk`. You need it only if your default branch is named in
   `autonomy.deployingBranches`, because a push there deploys. Named there, every merge asks a person.
   Not named, `run land` already merges on the evidence. **It loosens:** a change of at most 10 files
-  and 200 lines, all records, docs or tests, merges onto that branch with nobody asked. Those limits
+  and 200 lines, all records, plain-text docs or tests, with no specialist lens asked for, merges onto that branch with nobody asked. Those limits
   count the whole pull request, the plan, the spec and the run's records included, so most runs will
   still ask. That fails safe. If you want more to pass, raise `maxFiles` and `maxLines` under
   `autonomy.autoShip` in `.stamity/manifest.json` by hand, which is a further loosening.
@@ -368,8 +368,8 @@ name, or you require more than one, the entry looks like this, with your own nam
 
 1. Put that entry in `.stamity/manifest.json` by hand, under `autonomy`. List every required workflow,
    since one left out has nothing to wake the job.
-2. Run `npx @zomarit/stamity sync --loosen` yourself. Without it the job still watches the old name,
-   and nothing tells you.
+2. Run `npx @zomarit/stamity sync --loosen` yourself. Without it the job still watches the old name.
+   GitHub says nothing, and only `check`'s drift line shows it.
 3. Run `npx @zomarit/stamity check`, whose `land-job-workflows` row warns on a name no workflow
    carries. Then commit what changed, open a pull request and merge it.
 4. If the plan branch already exists, switch to it and merge the default branch into it.

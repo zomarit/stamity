@@ -2,7 +2,7 @@
 title: Cloud runs
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit d9a33cfa. Re-attested 2026-11-05 for the brake, the administrator's opt-in, the review tool, auto-ship and the land job. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-05). -->
 <!-- Re-open when: a row of `CLIENT_CLOUD_FACTS` moves, a run contract key or a pre-flight check
      changes, or a client's answer to a person-only act moves. `test/docsPages.test.ts` holds this
      page to the hand-page contract, the contract parser and that table; a vendor page that changed
@@ -21,8 +21,9 @@ through to a merge: the label, the review tool, auto-ship and the land job.
 The run is an ordinary touchpoint, usually `/st-work`, in unattended mode.
 [Working with stamity](working-with-stamity.md) covers the touchpoints, and the
 [`st-unattended` skill](../content/skills/st-unattended/SKILL.md) is the text the run follows. The
-vendor facts below are rows of the [capability matrix](capability-matrix.md)'s cloud table, each
-with the vendor page it was read from and the date; this page names no vendor address.
+vendor facts below are mostly rows of the [capability matrix](capability-matrix.md)'s cloud table, each
+with the vendor page it was read from and the date; a fact with no row gives its read date where it
+stands. This page names no vendor address.
 
 ## What asks, and what refuses
 
@@ -56,8 +57,8 @@ set to any value but empty, `false` or `0`. A cloud's own marker means "cloud", 
   `workflow-dispatch` in `autonomy.deployingActs` if a dispatchable workflow releases or deploys. The
   run's own merge goes only through `run land`, which runs on every client. Everything else on the ask list still asks: a raw merge, a
   push of a tag or of the default branch, a release, a publish, a secret or protection write, an
-  `--admin` merge, a write to another repository or a mention of a person, and a loosening of the
-  setting. To tighten back to 1.16.0's asks, set `autonomy.mode` to `ask` and run `sync`. To name
+  `--admin` merge, a write to another repository or a mention of a person, a `learn accept`, and a
+  loosening of the setting. To tighten back to 1.16.0's asks, set `autonomy.mode` to `ask` and run `sync`. To name
   what deploys, set `autonomy.deployingBranches` to the branches a push to which deploys (the
   default branch included, so the land verb asks before it merges there, unless the change fits
   `autonomy.autoShip`) and `autonomy.deployingActs` to the acts that ask in every mode; `stamity
@@ -375,9 +376,10 @@ move: off
 - `scope` lists the paths the run works `in` and keeps `out` of.
 - `prerequisites` are each `done`, or `owned` by a named `owner`.
 - `budget` holds `stop-by`, a day or a time with its offset, and `max-units`.
-- `answerer` is who answers the morning list, as `@login` or `@org/team`. The first `run end` with a
-  pull request also sends them a GitHub review request, with no text, unless they opened that pull
-  request. A request that cannot reach them adds a `Not done:` line, and the run still ends.
+- `answerer` is who answers the morning list, as `@login` or `@org/team`. With the contract at
+  `.stamity/runs/<run-id>/contract.yml`, where `run contract` writes it, the first `run end` with a pull
+  request, `--refused` aside, also sends them a GitHub review request, with no text, unless they opened
+  that pull request. A contract elsewhere sends none. A request that cannot reach them adds a `Not done:` line, and the run still ends.
 - `preview: stop` and `move: off` are fixed, and an absent key reads the same. A run under a
   contract stops at a board write's preview and moves no card: each write it would make is a
   morning-list row.
@@ -511,7 +513,7 @@ By default a default branch named in `autonomy.deployingBranches` asks before ev
 file count, its line count, its classes, its paths where you set them, and no specialist lens. A
 `docs`-class path must also end in `.md` or `.txt`. The `low-risk` preset allows 10 files and 200 lines,
 all records, docs or tests. Any rule that fails, and anything that cannot be read, asks and names each
-reason, except that a change over the file limit by GitHub's count stops there and names that alone. A fast-forward still asks. Stamity never deploys, tags or releases itself, but a merge onto a deploying branch starts that repository's own pipeline, with nobody asked, by the person's opt-in. That is the point of auto-ship. Under the emitted `GITHUB_TOKEN`, a land job's merge starts no Actions `push` workflow. That is all it stops: a webhook or a GitHub App listening to the push still fires, and under any other token the workflow starts too.
+reason, except that a change over the file limit by GitHub's count stops there and names that alone. A fast-forward still asks, and so does an act `autonomy.deployingActs` names. Stamity never deploys, tags or releases itself, but a merge onto a deploying branch starts that repository's own pipeline, with nobody asked, by the person's opt-in. That is the point of auto-ship. Under the emitted `GITHUB_TOKEN`, a land job's merge starts no Actions `push` workflow. That is all it stops: a webhook or a GitHub App listening to the push still fires, and under any other token the workflow starts too.
 
 Limits: the rules read paths, size and class, never content, so a script inside a `.md` file passes
 them. If your site tool passes raw HTML through `.md` files, leave `docs` out of `classes`. The range
@@ -533,8 +535,8 @@ caller of the land evidence, and it merges through the same rules, with no bypas
 - **It gives up two things a session has.** It makes no compare of git's surface with a pre-flight's
   record, since no pre-flight ran, and it reads no local pull-request record. Its proof that a pull request is a run's own is text at the head: the body's marker and the record's `PR:` and `Login:` lines. So anyone who can push a branch and write those lines passes that one test. The evidence gates still hold.
 - **It lands only a run that ended.** The record at the head must read `Status: closed`, with no
-  `(blocked:` and no `## Refused` row. With the setting on, every `run end` commits `PR:` and `Login:`
-  lines at the head so the job can read them, attended or not, and that commit starts CI again. So the
+  `(blocked:` and no `## Refused` row. With the setting on, every `run end` that holds its own pull request, a `--refused` end aside, commits
+  `PR:` and `Login:` lines at the head so the job can read them, attended or not, and that commit starts CI again. So the
   job can land an attended run that ended on `run end`. One closed through `run checkpoint --pr` alone
   has no such lines, so the job leaves it to a person.
 - **A hold is a status line.** A job exits 0 on every normal end, and a hold shows as the pull request's status line, never as a red job. So a pending check, an ask and a refusal

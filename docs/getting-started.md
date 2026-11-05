@@ -2,7 +2,7 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.17.0 release cut (2026-10-26). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-05). -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run line changes, a verb joins
      or leaves the CLI, a probe joins or leaves `check`, or a path joins or leaves `.stamity/`.
      `test/docsPages.test.ts` holds this page to the hand-page contract; the generated
@@ -24,7 +24,7 @@ One prerequisite, and one strong recommendation.
   `worktree` needs a `git` binary on PATH and refuses without one. The hidden verb `gate` reads
   every change from git: without it `gate scan` exits 1, so `/st-quick` and `/st-work` list
   `secret scan: not run` under `Not done:`. The hidden verbs `plan` and `run`, which an unattended
-  run calls, exit 1 with no git work tree. Every other verb runs without git. Setup also writes
+  run calls, exit 1 with no git work tree, `run overview` excepted. Every other verb runs without git. Setup also writes
   dozens of files, and git is your revert path. Run `git init` first if this directory is fresh.
 
 If you skip the second one, an interactive `init` stops and asks before it writes anything. A
@@ -191,14 +191,15 @@ Four things, because each is about how two parts fit together rather than about 
   `gate scan` exits 1, and `gate classify` answers `product` with the failure named. So in a
   repository with no git, `/st-quick` and `/st-work` run the full gates and list
   `secret scan: not run` under `Not done:`. The hidden verbs `plan` and `run` exit 1 with no git
-  work tree, so an unattended run cannot start there. Every other verb runs without git. `init`,
+  work tree, `run overview` excepted, so an unattended run cannot start there. Every other verb runs without git. `init`,
   `sync` and `check` read git where it is, and carry on where it is not. So do `handoff`, which
   records the branch and commit a handoff was made on and checks that branch on resume, and
   `config detect`, which reads the repository's remote to identify its platform: without git, each
   records or reports nothing for that part and carries on.
 - **Run `sync` after any `config` change.** `config` edits state and never regenerates managed
-  output, so no client file moves until a sync runs. The one exception is `config mcp add`,
-  which provisions `.env.mcp` and its `.gitignore` line on the spot.
+  output, so no client file moves until a sync runs. The two exceptions are `config mcp add`,
+  which provisions `.env.mcp` and its `.gitignore` line on the spot, and `config mcp own --remove`,
+  which takes an own server's entries out of the client documents.
 - **Two verbs have subcommands with guides of their own.** `worktree` takes `list`, `setup` and
   `cleanup` — [working with stamity](working-with-stamity.md) covers what each one places,
   records and inverts. `workspace` takes `status`, `init` and `sync`, and reaches past this
@@ -211,7 +212,8 @@ is in [the configuration reference](configuration.md).
 
 There are six more verbs, kept off `stamity --help`. `learn` records a learning through the
 engine's write gates, and `learn read` prints the screened index of learnings for a session no
-hook started. `handoff` prepares, resumes, lists, completes and prunes handoffs through
+hook started. `learn capture --propose` writes a run's note to its own folder, and `learn accept`
+takes that note live, which is a person's act. `handoff` prepares, resumes, lists, completes and prunes handoffs through
 those same gates. `ledger` appends a run's findings to its ledger, closes its rows and prints the
 resume card of a run in progress (or, with none, of the newest closed run dated within the last two
 days, with its closing status), as the one serialized writer. The card also lists the run ids of
@@ -220,7 +222,7 @@ names no run. `ledger inbox` reads the deferral inbox and writes nothing: it pri
 name a change's paths (`--paths`) or a plan (`--plan`), the rows with no path that hold the words
 given (`--area`), and with `--due` the rows whose day has come, which is how a dated row comes
 back. `ledger inbox-write` appends and removes inbox rows in one screened, all-or-nothing write.
-`gate` does three things and writes nothing. `gate classify` names a change's class, the
+`gate` does three things and writes nothing in your work tree: `gate preflight --unattended` keeps one record in the git directory, which the run verbs compare against. `gate classify` names a change's class, the
 checks that class calls for and the review lenses it adds: by its paths and, where it reads the
 change from git, by its changed lines and a changed `package-lock.json` too. `gate scan` reads
 the change's added lines for secrets and exits 1 on a hit, and `gate scan --text` screens one
@@ -232,11 +234,13 @@ own, switching to `stamity/<run-id>` from the default branch, and `run checkpoin
 commit the run's records, push the branch to `origin` and open or update its draft pull request.
 `run land` merges the run's own pull request, or with `--fast-forward` pushes the default branch
 to its head, once every required check run is green on the head, no review thread is open, the
-run's ledger holds no open Critical or Warning row and `mergeable_state` reads `clean`; otherwise
-it asks or refuses ([troubleshooting](troubleshooting.md)). `--ready` marks the draft ready first.
-All six are plumbing an agent calls; the
+run's ledger holds no open Critical or Warning row, `mergeable_state` reads `clean` and, where you
+named one, the review tool gives its clean word; otherwise it asks or refuses, and a red default
+branch asks too ([troubleshooting](troubleshooting.md)). `--ready` marks the draft ready first.
+`run contract` reads a ready issue and writes the run's contract, and `run overview` prints a run's
+short page and writes nothing. All six are plumbing an agent usually calls; the
 session-start hook prints the card after a compaction or on a resume, when the client's payload
-says so. `stamity ledger status` is the one you may run yourself — after a compaction on Cursor or
+says so. `stamity ledger status` is one you may run yourself — after a compaction on Cursor or
 Copilot, whose session-start hooks never print the card then: Cursor sends the hook no `source`, and
 Copilot's `source` is never `compact`. Run it on Codex too when its hooks are not running: Codex
 loads the project's hooks only with the hooks feature on, the project trusted, and each hook
@@ -276,7 +280,10 @@ make network calls of their own.
   cannot be read or no longer has that branch at the commit your clone fetched. `run land`,
   attended or not, reads the pull request, its check runs, review threads and rules through `gh`,
   writes an evidence line into its body, and merges it through GitHub's API, or with
-  `--fast-forward` pushes the default branch to `origin` under your git credentials.
+  `--fast-forward` pushes the default branch to `origin` under your git credentials. It also marks the
+  draft ready, asks a named review tool in a comment and resolves that tool's threads. `run contract`
+  reads the issue, its label events and its author's and labeller's permission, and `run end` asks the
+  contract's answerer for a review.
 
 `init`, `sync` and `upgrade` (`--dry-run` included), `workspace sync` and `check`'s `model-pins` row start each
 selected client's own CLI, Claude Code's excepted, to read its model list. The engine hands each
@@ -300,8 +307,8 @@ writes says what the board may write, where, and on whose text.
 npx @zomarit/stamity check
 ```
 
-`check` is the diagnosis. It runs eighteen environment probes, plus `cloud-install` in a
-repository that targets Cursor and `change-classes` where `.stamity/change-classes.json` exists.
+`check` is the diagnosis. It runs eighteen environment probes, plus `land-job-workflows` with
+`autonomy.landJob` on, `cloud-install` in a repository that targets Cursor and `change-classes` where `.stamity/change-classes.json` exists.
 Then it asks the one question that matters more than the rest: **would a sync change anything?**
 
 If the answer is yes, disk and the engine's output disagree. Something was hand-edited, a
@@ -336,7 +343,7 @@ Everything the setup knows about itself lives under `.stamity/`:
 | `.stamity/policy.json` | the pack source policy `config policy init` writes; `add` evaluates it before any install |
 | `.stamity/overrides/` | agents, rules, commands and skills of your own, merged above the bundled content |
 | `.stamity/hooks/` | hook declarations of your own, which `validate` checks |
-| `.stamity/runs/` | one record per work run — its proof block, with that run's findings ledger beside it and a `reports/` folder of full sub-agent reports that is not committed; an unattended run's folder also holds its plan, its morning list `morning.md`, the `origin.json` pin and any `held/*.patch` |
+| `.stamity/runs/` | one record per work run — its proof block, with that run's findings ledger beside it and a `reports/` folder of full sub-agent reports that is not committed; an unattended run's folder also holds its plan, its morning list `morning.md`, the `origin.json` pin, its `contract.yml`, any `proposals/*.md` and any `held/*.patch` |
 | `.stamity/verify/` | one artifact per quality axis per commit, written by the verify skill |
 | `.stamity/evidence/` | browser and QA evidence bundles, one per commit that captured them |
 | `.stamity/inbox.md` | deferred rows, one dated block per run that filed them; each new row carries a date or a trigger that brings it back, and a row a close dropped or scheduled elsewhere never lands there |
@@ -357,7 +364,7 @@ carries its own `.gitignore`.
 Commit everything `init` writes outside that directory too: `AGENTS.md`, `.agents/`,
 the managed block in `CLAUDE.md`, and the client trees `.claude/`, `.cursor/`, `.github/`
 and `.codex/`. Under `.github/` that means agents, instructions, prompts, hooks and the
-`copilot-setup-steps.yml` workflow. It also means the MCP documents `.mcp.json`,
+`copilot-setup-steps.yml` workflow, with `stamity-land.yml` where `autonomy.landJob` is on. It also means the MCP documents `.mcp.json`,
 `.cursor/mcp.json`, `.vscode/mcp.json` and `.codex/config.toml`, where servers are selected.
 
 Two reasons to commit all of it. A clone then arrives with working commands and skills already

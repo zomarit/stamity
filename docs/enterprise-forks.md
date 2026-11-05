@@ -2,7 +2,7 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.17.0 release cut (2026-10-26). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-05). -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
      `.stamity/upstream.json`, the fork layer's layout or precedence changes in `src/content/catalog.ts`,
      or the jobs or the permissions in `.github/workflows/upstream-update.yml` change. `test/docsPages.test.ts`
@@ -30,7 +30,8 @@ node scripts/upstream.mjs status
 ```
 
 It prints which release your branch already has, which release is next, and what that release
-touches. Nothing is merged and nothing is written.
+touches. Nothing is merged, and no file in your tree is written. It adds the configured remote if it
+is absent, and fetches the release tags into the lane's own refs.
 
 The lane is three things: one plain-Node script, `scripts/upstream.mjs`; one configuration file,
 `.stamity/upstream.json`; and one opt-in GitHub workflow that runs the script. Run the script as
@@ -170,12 +171,15 @@ from `package.json`.
 
 The CLI calls your setup writes follow the same split. `init` and `sync` pin every call they write
 into `AGENTS.md`, the generated bodies, the hook hints, the guard messages and `.codex/hooks.json` to your package at the version that wrote it, and the CLI's own remedies
-do the same. Two places install it rather than call it: Copilot's `copilot-setup-steps.yml` runs
+do the same. Three places install it rather than call it: Copilot's `copilot-setup-steps.yml` runs
 `npm install --global <your package>@<version>`, with `--@<scope>:registry=<url>` ahead of the
 package under `--registry` (under `toolOptions.copilot.setupSteps: managed`, the default; with
 `user` or `off` the workflow is yours to write, and a project Node pin below 22.22.2 gets a comment
-instead of the install), and `check`'s `cloud-install` row prints that line for a Cursor cloud
-environment. Where your registry needs a credential to install from, as GitHub Packages does, the
+instead of the install), `.github/workflows/stamity-land.yml` runs the same line while
+`autonomy.landJob` is on, holding no registry credential, and `check`'s `cloud-install` row prints
+that line for a Cursor cloud environment. Without `--registry` no install line is written: Copilot's
+workflow carries a comment, the `cloud-install` row tells you to install the copy you distribute, and
+no land workflow is written. Where your registry needs a credential to install from, as GitHub Packages does, the
 cloud agent's environment needs one too. A touchpoint body tries `npx --no stamity <verb>` first — the `stamity` bin of a copy
 the project already has installed, whatever package name that copy carries, and never a download —
 and falls back to the pinned call only where npm refuses because no copy is installed. With
@@ -277,7 +281,7 @@ JSON object, and a missing or non-`1` `version` are each a configuration error t
 | `remote` | `upstream` | The remote name. The lane creates it with that URL when it is absent. A remote of that name with a *different* URL refuses the run and names both URLs, rather than being repointed. |
 | `branch` | `main` | Your integration branch. Releases are merged into it, and ancestry is read from it. |
 | `releases` | — | An object holding the two keys below. |
-| `releases.pattern` | `v*` | Which upstream tags count as releases — and the only tags the lane keeps. |
+| `releases.pattern` | `v*` | Which upstream tags count as releases — and the only tags the lane keeps. The GitHub workflow publishes only a `v<major>.<minor>.<patch>[-<prerelease>]` tag. |
 | `releases.prerelease` | `false` | Whether a tag carrying a prerelease suffix may be selected. |
 | `gates` | empty | `[{ "name": ..., "run": ... }]`, run in order in the update worktree. An empty list is reported in words: *no gates configured — a clean merge proves nothing about behaviour*. |
 | `regenerate` | empty | Commands that rebuild the generated tree, run in order before the gates. |
@@ -313,7 +317,7 @@ JSON object, and a missing or non-`1` `version` are each a configuration error t
 `remote`, `branch` and `releases` are left at their defaults here. The `regenerate` list is
 [the regeneration table in CONTRIBUTING.md](../CONTRIBUTING.md) in command form, less two rows:
 the measurements row, whose `merge-ready-rate.mjs --write` freezes a dated snapshot and whose
-second command the plain `generate-docs.mjs` above already covers; and the pack-manifest
+closing `generate-docs.mjs --page measurements` the plain `generate-docs.mjs` above already covers; and the pack-manifest
 `generate-pack-manifests.mjs --write` row, which rewrites each integrity map and sets each pack's
 `version` to `package.json`'s. `generatedPaths` is the
 tracked left column of the rows that remain, plus `.stamity/manifest.json`, which `sync` writes
@@ -356,7 +360,7 @@ worktree instead, as part of the merge:
   upstream's side drops `publisher` and, on a private fork, brings `publishConfig` back, so
   `node scripts/fork-identity.mjs` with your identity arguments and `--check` reports drift and
   exits 1. Run that check once the conflict is resolved; it exits 0. 1.15.0 ignores a
-  `distribution` key that stays behind and names it in a one-line notice for one release.
+  `distribution` key that stays behind and names it in a one-line notice.
 - The release deletes `renovate/plugins.json`. Drop it from any Renovate configuration of yours that
   extends it, in the same worktree.
 
@@ -398,8 +402,8 @@ The other flags:
   the workflow reads results.
 - `--offline` skips the fetch and reads what the last fetch brought.
 - `--config <path>` reads the configuration from somewhere other than `.stamity/upstream.json`.
-- `--no-gates` does not run the gates. The record then says `skipped`, which never counts as
-  integrated.
+- `--no-gates` does not run the gates. With gates configured, the record then says `skipped`, which
+  never counts as integrated.
 - `--recreate` lets `integrate` start a stale update branch over. See `update-branch-stale` below.
 - `--branch <name>` takes another branch as the target, for every verb. Use it to run `status`
   against the update branch itself, or `integrate` from a runner checkout under another name.
@@ -417,7 +421,7 @@ message is `Merge upstream release <tag> into <branch>`, with three trailers:
 `Stamity-Upstream-Release: <tag>`, `Stamity-Upstream-Commit: <sha>` and
 `Stamity-Upstream-Gates: passed | failed | none | skipped`.
 
-`integrate`, `continue` and `validate` run the `regenerate` commands and `gates` your checkout's
+`integrate` and `continue` run the `regenerate` commands and `gates`, and `validate` the `gates`, your checkout's
 `.stamity/upstream.json` lists, inside the merged tree, with your environment. Review the release before you run them on a workstation that holds credentials,
 or run them in CI, where the preparation job holds none. The lane prints that warning itself.
 
@@ -439,7 +443,7 @@ less detailed, because **history is the marker**.
 | `up-to-date` | 0 | The selected release is already in the branch's ancestry, with a record that agrees. |
 | `update-available` | 0 | A newer release exists. `status` and `preview` say so; nothing was merged. |
 | `integrated` | 0 | The merge is committed on the update branch, and the gates passed or none were configured. |
-| `conflict` | 1 | The merge stopped. Nothing is committed. The update worktree holds it, and the report names every conflicted path and its kind. |
+| `conflict` | 1 | The merge stopped. Nothing is committed. After `integrate` or `continue` the update worktree holds it, and `preview` removes its own. The report names every conflicted path and its kind. |
 | `validation-failed` | 1 | The merge is clean and your gates failed. On `status` it carries a second meaning. The release is in the ancestry, but its record says the gates failed or were skipped. So it is in history and still not integrated. |
 | `regenerate-failed` | 1 | A `regenerate` command exited non-zero, or regeneration rewrote a tracked path that no `generatedPaths` glob covers. The sequence stops at the first failure with its output captured, and an unlisted path is named with the fix: list it. Nothing is staged or committed either way. |
 | `conflict-pending` | 1 | An update worktree from an earlier run still holds an in-progress merge. Finish it or run `abort`. Nothing is redone behind your back. |
@@ -1036,8 +1040,8 @@ approved private location.
 
 **The lane guarantees these automatically.** The merge commit carries the upstream release in its
 ancestry, or the run does not claim `integrated`. Everything happens on an isolated update branch in
-its own worktree, so your integration branch and your working tree are never written. No conflict
-marker is ever committed. Every commit reachable from your branch and from the release stays
+its own worktree, so your integration branch and your working tree are never written. The lane refuses to
+commit a conflict marker it finds in a file the merge touched. Every commit reachable from your branch and from the release stays
 reachable from the merge commit. Every verb but `validate` is idempotent: run it twice and there is
 still one branch, one worktree, one record, one pull request, one issue. `validate` keeps those at
 one each too, but every run stamps the record again and commits it, so a second run adds a commit

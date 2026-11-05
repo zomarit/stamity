@@ -470,12 +470,14 @@ here shows it. Stays on the final tree: it measures the guard that ships.
 A further line rides the cut, before the tag, and takes no ordinal: a person's one-minute check, for
 each ask-class client, of the interactive ask the headless run above cannot see. For Claude Code, in
 a scratch checkout (a throwaway clone of this repository at the cut's commit, so its
-`.claude/settings.json` wires the guard), open an interactive Claude Code session in its
+`.claude/settings.json` wires the guard, set to `autonomy.mode: ask` and synced, since the default
+runs this act on the main thread), open an interactive Claude Code session in its
 bypass-permissions mode, ask it to create a lightweight tag, `git tag qa-check` (a person-only act
 that can be undone, and one no settings `ask` row names, so the guard's hook is what asks), and
 see Claude Code's own approve prompt appear; decline it. For Copilot CLI, in a throwaway folder
 outside every checkout holding a git repository with one commit, set up for Copilot by the cut's
-build (`node <the cut's checkout>/dist/cli.js init --tools copilot --yes`), trust the folder when
+build (`node <the cut's checkout>/dist/cli.js init --tools copilot --yes`), set to `autonomy.mode: ask`
+and synced the same way, trust the folder when
 Copilot CLI asks (its repository hooks load only in a trusted folder), open an interactive Copilot
 CLI session with Allow All on (`copilot --yolo`), ask it for the same `git tag qa-check`, and see
 its hook permission request appear; decline it. A prompt appearing keeps that client's one-click

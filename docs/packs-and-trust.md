@@ -2,7 +2,7 @@
 title: Packs and trust
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.17.0 release cut (2026-10-26). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-05). -->
 <!-- Re-open when: a trust tier is added or removed, the signed payload or the `signing.signer`
      grammar changes, the bundle bound changes, the shipped signature verifier is replaced, `add`
      gains or loses a flag, the org trust policy grammar changes, or the published package stops
@@ -199,8 +199,8 @@ repository has an `origin` remote, it runs `git fetch origin <branch>` against y
 own remote (`src/worktree/git.ts::fetchBranch`). A transport failure refuses with `NETWORK_ERROR`,
 and a `--dry-run` never runs the fetch at all.
 
-The third is an unattended run's. `stamity gate preflight --unattended` and `run start`,
-`run checkpoint` and `run end` call GitHub's REST API through `gh api`, under your `gh` login, and
+The third is the run verbs'. `stamity gate preflight --unattended`, `run start`, `run checkpoint`,
+`run end` and `run contract` call GitHub's REST API through `gh api`, under your `gh` login, and
 `run checkpoint` and `run end` read `origin` with `git ls-remote`, push the run's branch to it under
 your git credentials, and open or update its draft pull request. `run start`, attended or not, reads
 `origin` with `git ls-remote` when it continues a run whose branch the clone holds only as
@@ -208,12 +208,15 @@ your git credentials, and open or update its draft pull request. `run start`, at
 commit. `stamity run land` belongs to it too, attended or not: under the same `gh` login it reads
 the run's pull request, its checks and the default branch's rules, merges that pull request at its
 head, marks its draft ready with `--ready`, and with `--fast-forward` pushes the head to the default
-branch under your git credentials. None of it fetches pack content.
+branch under your git credentials. It also writes a status line into that pull request's body, asks and
+answers the named review tool there, reads `origin` with `git ls-remote`, and fetches the default branch
+where the clone lacks its tip. A land job makes the same calls under its workflow's token. None of it
+fetches pack content.
 
 One further path is network-capable and is no part of any command's work. The startup update
 notice asks the npm registry the running package publishes to — the public one for
 `@zomarit/stamity`, and for a fork made with `scripts/fork-identity.mjs --registry` that registry and
-never the public one — whether a version newer than the one this repository pins exists. It is a
+never the public one — whether a version newer than the one this repository pins, or else the running one, exists. It is a
 GET at most once a day, and only when stderr is a terminal and the run is not `--json`.
 `STAMITY_NO_UPDATE_CHECK` set to `1`, `true` or `yes` turns it off, and so do `NO_UPDATE_NOTIFIER`
 and `CI` on any non-empty value.
@@ -444,9 +447,9 @@ because it was edited or the pack's own file has changed since, stays in the cli
 grant, and `sync` names it as kept, so delete it by hand. The generated tool policy drops the agent
 either way.
 
-The ledger is not signed, so someone who changes a receipt and its ledger row together still
-chooses the kind. That writer can edit the policy file as well, so this bound is the same one
-`SECURITY.md` declares for the committed manifest.
+The ledger is not signed, so the kind is only as sound as the committed manifest, and whoever can
+write that can write the policy file too. This bound is the same one `SECURITY.md` declares for the
+committed manifest.
 
 ### Write the policy with `stamity config policy`
 

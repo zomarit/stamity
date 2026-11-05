@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.17.0 release cut (2026-10-26). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-05). -->
 <!-- Re-open when: the corpus counts, the nine-verb surface or a client capability changes, or a
      newer measurement supersedes the proof figures. `test/docsPages.test.ts` catches the first
      three; the figures are re-read against `docs/measurements.md` and the run record they cite. -->
@@ -52,7 +52,7 @@ npx @zomarit/stamity init
 `workspace`, `clean` and `add` work from. `validate` runs with or without one; `learn`, `handoff`
 and `ledger` want only `.stamity/`. Node `>= 22.22.2` is the only prerequisite; nothing installs globally.
 
-Four verbs need git: `worktree` refuses without it, `plan` and `run` exit 1 without it, and `gate` reads every change
+Four verbs need git: `worktree` refuses without it, `plan` and `run` exit 1 without it, `run overview` excepted, which reads only the run folder, and `gate` reads every change
 from it, so without git `gate scan` exits 1 and `/st-quick` and `/st-work` list `secret scan: not run` under
 `Not done:`. The engine reaches the network in four places, all in [`SECURITY.md`'s "Network and data
 handling"](SECURITY.md): `add` fetches the Sigstore trust root for a signed pack, `worktree setup` fetches your own
@@ -84,8 +84,7 @@ Your setup state lives in `.stamity/`: a manifest, a per-file ledger, learnings 
 ## Commands
 
 `init` · `sync` · `upgrade` · `check` · `validate` · `add` · `config` · `workspace` ·
-`worktree` · `clean` — ten verbs. Behind them are six plumbing verbs an agent calls and nobody
-types, `learn`, `handoff`, `ledger`, `gate`, `plan` and `run`. What each verb does, every flag it takes and every
+`worktree` · `clean` — ten verbs. Behind them are six plumbing verbs an agent usually calls, `learn`, `handoff`, `ledger`, `gate`, `plan` and `run`. What each verb does, every flag it takes and every
 status it exits with is [the CLI reference](docs/cli-reference.md)'s to state. That page renders
 from the program itself, so it cannot describe a verb the CLI does not have, or miss one it does.
 

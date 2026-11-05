@@ -2,7 +2,7 @@
 slug: /migration-from-hatch3r
 title: Migrating from hatch3r
 ---
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.17.0 release cut (2026-10-26). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-05). -->
 <!-- Re-open when: hatch3r's own `clean` semantics change, or when what `src/migration/` detects, carries or
      strips changes (`src/migration/detect.ts` and `src/migration/carry.ts` are the code this page describes).
      `test/docsPages.test.ts` holds this page to the hand-page contract, pins two claims no other check can reach —
@@ -205,7 +205,7 @@ npx @zomarit/stamity config mcp add <id>
 npx @zomarit/stamity sync
 ```
 
-`sync` is on that list because the `config` verb edits state and never regenerates output.
+`sync` is on that list because `config set` and `config mcp add` edit state and regenerate no output.
 
 ### Never purge before you migrate
 

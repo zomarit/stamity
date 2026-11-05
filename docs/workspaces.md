@@ -2,7 +2,7 @@
 title: Workspaces
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.17.0 release cut (2026-10-26). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-05). -->
 <!-- Re-open when: a workspace subcommand joins or leaves, the three member-manifest fields the
      cascade patches change, selection deltas or locked content start changing emitted files, or an
      ordinary verb starts reading `workspace.json`. `test/docsPages.test.ts` holds this page to the
@@ -120,7 +120,7 @@ like any other. Noticing that the directory is gone is the job of `workspace sta
 
 ## Let `stamity init` offer you a workspace
 
-`stamity init` can create a workspace for you, and it probes once on every run to decide whether to
+`stamity init` can create a workspace for you. Unless the repository is already initialised, it probes once per run to decide whether to
 offer. It classifies the current directory. If the directory is neither a workspace root nor already
 inside one, it scans for sibling repositories. Two or more arms the offer. Anything else arms
 nothing, and the run is exactly what it was before.

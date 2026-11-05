@@ -2,7 +2,7 @@
 title: Troubleshooting
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at commit d9a33cfa. Re-attested 2026-11-05 for the brake, the administrator's opt-in, the review tool, auto-ship and the land job. -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-05). -->
 <!-- Re-open when: a `check` probe is added or removed, an error code starts or stops being
      thrown, or a remedy below stops working. `test/docsPages.test.ts` holds this page to the
      hand-page contract and reads the probe rows out of `src/cli/commands/check.ts`;
@@ -99,7 +99,7 @@ run at all warns instead, saying `could not be checked:` and why. Every other ro
 | Row | What a bad verdict means, and what to do |
 |---|---|
 | `node-version` | **Can fail.** Your Node is below the range this build declares. Install a Node in that range, or switch to one with your version manager. Then re-run. |
-| `git-available` | Warns when git did not answer, with one of three texts, and none of them names a git command to type. Two open with `git did not answer here`, and the row tells them apart by what the engine itself found. The first says the engine found no git to start. The engine takes git only from a `PATH` entry that is a full path to a folder other than the one the verb runs in: an empty entry, a relative one and an entry that is that folder are skipped. So this text prints where no git is installed, and also where your only git sits behind an entry the engine skips, which a `git` typed at your prompt may still find. Install git, or put the folder that holds it on `PATH` by its full path. The second says the engine found a git binary on `PATH`, which leaves two causes: this is not a repository, or git was only slow to answer this check. Tell them apart by a step that runs no git, as the row says: a `.git` entry in this folder or in a folder above it, found by name, shows whether a repository is. You should run no git here to find out. With a `.git` entry there, git was slow, or that `.git` is one git cannot open and git itself refused a folder with the layout the third text describes: look for that layout by name before you run git by hand. Nothing `check`, `init`, `sync`, `validate` or `config` does needs git. Four verbs do. The `worktree` verbs refuse with `VALIDATION_ERROR` without it, and their refusal tells the first two causes apart as this row does: where the engine found no git to start it says so and which `PATH` entries git is taken from, and otherwise that the folder is in no repository. `init`'s no-git note has the same two texts, and its question, its security line and its refusal when you decline the question follow them. After a guided migration its line on the previous setup's uninstall says to copy your own files out, where it says to commit wherever git answers. None of these names a git command. The hidden verb `gate` reads every change from git: with no git or no repository `gate scan` exits 1, so `/st-quick` and `/st-work` list `secret scan: not run` under `Not done:`. The hidden verbs `plan` and `run`, which an unattended run calls, exit 1 with no git work tree, so an unattended run cannot start there. Where git was only slow, all four may still run. Sync's dirty-tree warning stays silent while git does not answer, and a sync that wrote files closes on a review step that names no git command and points at this row. The third, `git was not started here`, is a fourth cause, and for it too the row names no git command to run. This folder, or a folder above it, has the layout of a bare repository (`HEAD` beside `objects` and `refs`, or beside `commondir`), met before any `.git` that git stops at, so the engine did not hand it to git. Look at the entries of this folder and of each folder above it by name to find that folder, and do not run git in it or in any folder under it, the one you stand in included: git started anywhere under it finds it as the engine did, and only the engine's own git calls are set to refuse such a folder. A flow is no exception: `/st-work` stops the run as `BLOCKED_DEPENDENCY` and `/st-quick` stops the batch, running no later step and no git command in that folder, the commit included, when `gate` says git was not started, but that stop comes at the `gate` call, and the git the flow's session and sub-agents start before it is not set that way, so start no flow there until the folder is moved, as the row itself says; [`SECURITY.md`](../SECURITY.md) names the one git setting that covers git the engine does not start. Then move it off that path, or run the verbs from a checkout that does not keep it there. Until then `worktree` refuses with this cause, `gate scan` exits 1 saying git was not started, which stops either flow as above, and `init`'s no-git note states this cause and says to start no flow there; none of the three names a git command there. `init`'s ready panel, and the `nextSteps` of `init --json`, open with moving the folder before a client or a flow is started, and after a guided migration its line on the previous setup's uninstall says to copy your own files out without git, as it does wherever git did not answer. The row warns only of a folder met on the way up from the folder a verb runs in. A committed folder of that layout elsewhere in the tree, below the setup root, meets no look and no warning: this row says nothing of it and passes where git answers here, and git that anything other than the engine starts in or under that folder reads it where git can open it. The setting `SECURITY.md` names covers that placement too. `sync` stays silent on a dirty tree, and where it wrote files it closes on a review step with no `git diff` in it, which says to read the files it listed and to compare a file with the `.bak` a warning names for it. |
+| `git-available` | Warns when git did not answer, with one of three texts, and none of them names a git command to type. Two open with `git did not answer here`, and the row tells them apart by what the engine itself found. The first says the engine found no git to start. The engine takes git only from a `PATH` entry that is a full path to a folder other than the one the verb runs in: an empty entry, a relative one and an entry that is that folder are skipped. So this text prints where no git is installed, and also where your only git sits behind an entry the engine skips, which a `git` typed at your prompt may still find. Install git, or put the folder that holds it on `PATH` by its full path. The second says the engine found a git binary on `PATH`, which leaves two causes: this is not a repository, or git was only slow to answer this check. Tell them apart by a step that runs no git, as the row says: a `.git` entry in this folder or in a folder above it, found by name, shows whether a repository is. You should run no git here to find out. With a `.git` entry there, git was slow, or that `.git` is one git cannot open and git itself refused a folder with the layout the third text describes: look for that layout by name before you run git by hand. Nothing `check`, `init`, `sync`, `validate` or `config` does needs git. Four verbs do. The `worktree` verbs refuse with `VALIDATION_ERROR` without it, and their refusal tells the first two causes apart as this row does: where the engine found no git to start it says so and which `PATH` entries git is taken from, and otherwise that the folder is in no repository. `init`'s no-git note has the same two texts, and its question, its security line and its refusal when you decline the question follow them. After a guided migration its line on the previous setup's uninstall says to copy your own files out, where it says to commit wherever git answers. None of these names a git command. The hidden verb `gate` reads every change from git: with no git or no repository `gate scan` exits 1, so `/st-quick` and `/st-work` list `secret scan: not run` under `Not done:`. The hidden verbs `plan` and `run`, which an unattended run calls, exit 1 with no git work tree, `run overview` aside, so an unattended run cannot start there. Where git was only slow, all four may still run. Sync's dirty-tree warning stays silent while git does not answer, and a sync that wrote files closes on a review step that names no git command and points at this row. The third, `git was not started here`, is a fourth cause, and for it too the row names no git command to run. This folder, or a folder above it, has the layout of a bare repository (`HEAD` beside `objects` and `refs`, or beside `commondir`), met before any `.git` that git stops at, so the engine did not hand it to git. Look at the entries of this folder and of each folder above it by name to find that folder, and do not run git in it or in any folder under it, the one you stand in included: git started anywhere under it finds it as the engine did, and only the engine's own git calls are set to refuse such a folder. A flow is no exception: `/st-work` stops the run as `BLOCKED_DEPENDENCY` and `/st-quick` stops the batch, running no later step and no git command in that folder, the commit included, when `gate` says git was not started, but that stop comes at the `gate` call, and the git the flow's session and sub-agents start before it is not set that way, so start no flow there until the folder is moved, as the row itself says; [`SECURITY.md`](../SECURITY.md) names the one git setting that covers git the engine does not start. Then move it off that path, or run the verbs from a checkout that does not keep it there. Until then `worktree` refuses with this cause, `gate scan` exits 1 saying git was not started, which stops either flow as above, and `init`'s no-git note states this cause and says to start no flow there; none of the three names a git command there. `init`'s ready panel, and the `nextSteps` of `init --json`, open with moving the folder before a client or a flow is started, and after a guided migration its line on the previous setup's uninstall says to copy your own files out without git, as it does wherever git did not answer. The row warns only of a folder met on the way up from the folder a verb runs in. A committed folder of that layout elsewhere in the tree, below the setup root, meets no look and no warning: this row says nothing of it and passes where git answers here, and git that anything other than the engine starts in or under that folder reads it where git can open it. The setting `SECURITY.md` names covers that placement too. `sync` stays silent on a dirty tree, and where it wrote files it closes on a review step with no `git diff` in it, which says to read the files it listed and to compare a file with the `.bak` a warning names for it. |
 | `manifest` | **Can fail.** Absent means this repository was never set up: run `init`. Defective prints the engine's own field-level message, so fix the field it names. |
 | `state-dirs` | Warns when `.stamity/learnings/` or `.stamity/handoffs/` is missing. Nothing is lost. Both stores recreate their directory on the first write, and `sync` rewrites them now. |
 | `learnings` | Warns when a recorded learning is invalid, or when it sits past the file cap. Neither kind loads. Run `validate` for the per-file detail. |
@@ -175,9 +175,10 @@ same holds at an `AGENTS.md` in any folder, `AGENTS.override.md`, `CLAUDE.md`, t
 workflow, `.github/hooks/stamity.json` and Cursor's two 1.11.0 guard names, where the rendering is
 the guard 1.11.0 rendered for that setup. A managed block that spans the file proves a delete at
 any of them. There a forged row and hash, and an owner's copy of the charter's headings, no longer
-prove a delete. One exception: under `toolOptions.copilot.setupSteps: off`, a recorded hash that
-matches the setup workflow's bytes, with the engine's header line, also proves its delete, so read
-a pull request that sets `off` and touches that row as one that can delete the workflow. A file no
+prove a delete. Two exceptions take less proof: the setup workflow under
+`toolOptions.copilot.setupSteps: off`, and the land job's workflow, which has no rendering once
+`autonomy.landJob` is off. Read a pull request that sets either off and touches that row as one
+that can delete the workflow. A file no
 rendering proves is kept and named, on a line that ends
 `the file is kept; delete it by hand if it is yours to remove`, and a `sync` drops its row from
 the ledger. Such a file is an owner's, or an unedited `stamity-*` or `st-*` copy the running
@@ -189,9 +190,9 @@ could not be built at all, the file is kept with its row, and the next `sync` tr
 again.
 
 **What an overwrite without a backup needs.** At an `AGENTS.md` in any folder,
-`AGENTS.override.md` and the Copilot setup workflow the bytes must also show the engine's own
-shape, and `CLAUDE.md` is proved only by a managed block that spans it. Elsewhere inside those
-paths a whole-file overwrite rests on the matching hash alone. At those four files and at
+`AGENTS.override.md`, the Copilot setup workflow and the land job's workflow the bytes must also
+show the engine's own shape, and `CLAUDE.md` is proved only by a managed block that spans it. Elsewhere inside those
+paths a whole-file overwrite rests on the matching hash alone. At those files, the land job's workflow aside, and at
 `.github/hooks/stamity.json` the hash and the shape do not settle whose bytes they are, because an
 owner's file can carry both. So unless a managed block spans the file, or the bytes on disk
 already equal the new rendering once `\r\n` reads as `\n`, the overwrite keeps the previous
@@ -351,7 +352,7 @@ that pull request's body (not under `--dry-run`), and a flow's close turns each 
 held row. A raw merge and a raw push to the default branch stay the person's:
 the guard asks for them attended and refuses them unattended, as it does for the rest of its ask
 list (a push of a tag, a release, a publish, a secret or protection write, an `--admin` merge, a write
-to another repository or a mention of a person, and a loosening of the setting). To tighten back to
+to another repository or a mention of a person, a `learn accept`, and a loosening of the setting). To tighten back to
 1.16.0's asks, set `autonomy.mode` to `ask` and run `sync`; to name what deploys, set
 `autonomy.deployingBranches` and `autonomy.deployingActs`, and the land verb asks for those. A
 required check failing on the default branch's tip asks too: that is the brake. The land job is the
@@ -373,14 +374,15 @@ it holds for on its `approve with:` line. The reasons, and what each needs:
 - `the diff touches paths that define the evidence: <paths>`: the change edits a CI definition, a
   hook or guard file, a client's settings, the manifest, the MCP configuration, a composite action,
   a `CODEOWNERS` file, `.stamity/change-classes.json`, the files stamity's own CI uses to pick a
-  change's checks (`scripts/ci/records-only.mjs`, `src/change/classify.ts` and
+  change's checks (`scripts/ci/pr-proven.mjs`, `scripts/ci/records-only.mjs`, `src/change/classify.ts` and
   `src/roster/triggers.ts`, asked about in any repository that has a file at one of these paths) or
   a hook script the repository declares. A person reads that diff and decides.
 - `the diff carries a held patch`: an unattended run held a person-only change. A person applies
   the patch or drops it, then decides.
 - `<branch> is named in autonomy.deployingBranches`, or `autonomy.deployingActs names <act>`: the
-  repository says this merge or this ready mark deploys, so it asks in every mode, unless the change
-  fits `autonomy.autoShip`. A fast-forward always asks here.
+  repository says this merge or this ready mark deploys, so it asks in every mode. A change that fits
+  `autonomy.autoShip` lifts the branch line only, never an act `autonomy.deployingActs` names. A
+  fast-forward always asks here.
 - `auto-ship: <rule>`, beside that branch line: the change did not fit, and the land names each rule,
   or only the file limit where GitHub's count is over it, since nothing else is then read.
   They read `<n> files are over autonomy.autoShip.maxFiles`, `<n> lines are over
@@ -392,6 +394,7 @@ it holds for on its `approve with:` line. The reasons, and what each needs:
   or line total, or a shallow clone. Fetch the whole history, or let a person decide. The range read needs git 2.41 or
   newer: on an older git it reads nothing, so the reason says the range and GitHub's file list differ,
   and the fix is a newer git. The rules read paths, size and class, never content.
+- `auto-ship is judged only from the repository's top, and this land started in <folder>`: run it from the top.
 - `<branch> is red: <checks> failing on its tip`: the brake. Fix the default branch first. The land
   that carries the fix goes through on a person's `--approved`, since this is an ask and not a refusal.
   With no required set read, every check run on the tip counts, so any failing run asks. The land
@@ -489,6 +492,8 @@ flag holds only while the head is still that commit, and an unattended run refus
   If `gh` comes from a version manager, see the next section.
 - `no setup found`: the verb found no `.stamity/manifest.json` on the default branch, at `HEAD`
   or in the work tree; it needs a committed setup.
+- `<branch> holds no .stamity/manifest.json at the repository's top`: a setup on the run's branch alone,
+  or only below the top, does not count. A person places one on the default branch first.
 - `config changed: …` or `no pre-flight record`, in an unattended run: the configuration window in
   [`SECURITY.md`](../SECURITY.md). Git's configuration or environment moved since the pre-flight, or
   none ran. On a fresh clone of a cloud run none ran, so `run land` refuses here.

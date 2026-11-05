@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.17.0 release cut (2026-10-26). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-05). -->
 <!-- Re-open when: a check named below is added, renamed or removed in `.github/workflows/`, the
      required-approval count changes, the MAJOR/MINOR/PATCH bump rules change, what the private
      layer holds changes, or a trigger in the EU AI Act section fires. `test/docsPages.test.ts`
@@ -8,7 +8,7 @@
 
 # Governance
 
-> Last updated: 2026-10-26
+> Last updated: 2026-11-05
 
 This page is for a contributor or a reviewer who wants to know who runs stamity and how a change
 gets in. It answers four questions: who decides, the two required checks a change passes to land,
@@ -31,8 +31,8 @@ A run's own pull request, the one `/st-work`'s close or an unattended run opens,
 `stamity run land` under the maintainer's login when its evidence holds: every required check run
 green on its head, no unresolved review thread, no open Critical or Warning row in the run's ledger,
 and a `clean` merge state. This repository's manifest sets no `autonomy` block, so the default mode,
-`autonomous`, applies and the land asks for no read first; a corpus change in that pull request
-lands on the same evidence. The maintainer still merges anything a land asks about, such as a diff
+`autonomous`, applies and the land asks for no read first; a change under `content/` in that
+pull request asks nothing by itself, but the re-sync it needs moves `.stamity/manifest.json`, so that land asks. The maintainer still merges anything a land asks about, such as a diff
 to the CI definitions or the guard's own files.
 
 The branch protection on `main` says the same thing: **0 required approvals**. A rubber stamp from

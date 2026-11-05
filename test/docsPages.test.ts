@@ -646,7 +646,12 @@ const CURRENCY_HEADER =
 // REATTESTATION_DATE below, and each form's newest date is pinned to its own constant. The
 // direction the pin is written for is unchanged — it fails a re-cut that restamps nothing, never
 // one that restamps honestly.
-const RELEASE_CUT_DATE = "2026-10-26";
+//
+// TEST CHANGE, justified: MOVED 2026-11-05, from "2026-10-26" to the 1.18.0 cut. Six read-only readers walked
+// every page of the bucket and GOVERNANCE.md against the candidate, their rows landed in the commit before the
+// restamp, and all sixteen pages moved onto the cut form, so the commit form has no members and the else branch
+// holds REATTESTATION_DATE to this date, which it already reads.
+const RELEASE_CUT_DATE = "2026-11-05";
 
 /**
  * The date the current re-verification pass re-read the hand bucket on.
@@ -5699,7 +5704,9 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
       // REQ-FLOW-145): 1.16.0 refused only the ready mark and a local tag on Cursor and Codex (the dispatch and
       // remote-write rules are this release's), and unattended a tag and a dispatch run only where the payload names
       // the agent, so both pins move to the wording that says so.
-      "while on Cursor and Codex, whose hook payloads name no agent, no call can be shown to be the main thread's, so they are refused in every mode (1.16.0 refused the ready mark and a local tag there too, and the dispatch and remote-write rules are new in this release). `stamity run land` alone on its line runs on every client",
+      // TEST CHANGE, justified, 2026-11-05: the 1.18.0 cut's re-attestation says which release those rules were new in,
+      // 1.17.0, since "this release" stopped being true at this cut. The pin moves with the page.
+      "while on Cursor and Codex, whose hook payloads name no agent, no call can be shown to be the main thread's, so they are refused in every mode (1.16.0 refused the ready mark and a local tag there too, and the dispatch and remote-write rules are new in 1.17.0). `stamity run land` alone on its line runs on every client",
       "Unattended, of these acts only the raw ready mark is refused on Claude Code and Copilot CLI: a local tag and an unnamed workflow dispatch run there too, while Cursor and Codex refuse all three in every mode",
       "is refused for a sub-agent, and on Cursor and Codex in every mode",
       "a local tag and a workflow dispatch the setting does not name run unasked; Cursor and Codex refuse those three in every mode",
@@ -6533,8 +6540,10 @@ describe("file 2's SECURITY.md sentences", () => {
     expect(page).toContain(
       "This repository's own CI runs its classifier from the base commit (the `changes` job in `.github/workflows/ci.yml`), so a pull request cannot narrow its own checks through it. A pull request that edits that workflow runs its own workflow definition, and the workflow is a person-only path, which `run land` asks about. A change to the classifier takes effect from the next change on, which is why `run land` asks about the classifier's files too.",
     );
+    // TEST CHANGE, justified, 2026-11-05: the 1.18.0 cut's re-attestation found a fourth file in the land's ask set,
+    // `scripts/ci/pr-proven.mjs`, so the pin moves with the page. No path it held is dropped.
     expect(page).toContain(
-      "`.stamity/change-classes.json`, this repository's CI classifier and the source it loads (`scripts/ci/records-only.mjs`, `src/change/classify.ts`, `src/roster/triggers.ts`) or a hook script",
+      "`.stamity/change-classes.json`, this repository's CI classifier, the reader that can skip a push's checks and the source they load (`scripts/ci/pr-proven.mjs`, `scripts/ci/records-only.mjs`, `src/change/classify.ts`, `src/roster/triggers.ts`) or a hook script",
     );
     expect(page).not.toContain("so a change here cannot choose its own checks that way");
     const residual =

@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.17.0 release cut (2026-10-26). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-05). -->
 <!-- Re-open when: a step joins or leaves `npm run check`, a generated artifact class gains or loses a
      regeneration command, either Node floor moves, a test lane joins or leaves, a coverage floor in
      `vitest.config.ts` moves, a type-only dependency exception joins or leaves `knip.json`, or the
@@ -28,7 +28,7 @@ npm run check
 | Typecheck | `npm run typecheck` | TypeScript 7, strict: zero errors across `src/`, `test/` and the root `*.config.ts` files |
 | Lint | `npm run lint` | oxlint over the TypeScript surface, ESLint over the JavaScript surface |
 | Test | `npm run test` | The whole suite, all three lanes |
-| Build | `npm run build` | tsdown produces `dist/cli.js`, `dist/index.js` and their shared chunk `dist/src.js`, plus the declarations under `dist/types/` |
+| Build | `npm run build` | tsdown produces `dist/cli.js`, `dist/st.js`, `dist/index.js` and their shared chunk `dist/src.js`, plus the declarations under `dist/types/` |
 | Unused code | `npm run knip` | No orphan file, export or dependency |
 
 CI runs the same six steps on your pull request, with one difference in the test step. `npm run test`
@@ -133,8 +133,8 @@ A record is a path the `records` branch holds instead of `main`, as `scripts/rec
 lists them: run records under `.stamity/runs/`, `.stamity/inbox.md`, handoffs under
 `.stamity/handoffs/`, evidence under `.stamity/evidence/`, plans under `docs/plans/`, and the eval
 runs, measurements and reach snapshots under `evals/runs/`, `evals/measurements/` and
-`evals/reach/`, with two archive notes beside them in `evals/`. No record is tracked on `main`, so
-no record is in a lane; "Keep the records" below says how one reaches the `records` branch, and the
+`evals/reach/`, with two archive notes beside them in `evals/`. No record is tracked on `main`. A plan
+still falls in the `website` lane by its path, and every other record is in no lane; "Keep the records" below says how one reaches the `records` branch, and the
 `records` job checks them there. It runs on every change, beside
 whichever side ran, in this repository only, and it is merge-blocking here. It runs
 `node scripts/records.mjs guard`, which refuses a record tracked on the commit, restores the records
@@ -172,7 +172,7 @@ repository, skipped everywhere else.
 `all-pr-checks` (`.github/workflows/pr-checks.yml`) runs on pull requests only. It carries the three
 gates only a pull request can be asked. They are the DCO trailer on every commit, the
 conventional-commit title, and the dual size budget over the built `dist/`. Bundled logic is capped
-at 2.75 MiB and the staged corpus at 1.5 MiB. Both numbers are read from `tsdown.config.mjs`, so the
+at 3 MiB and the staged corpus at 1.5 MiB. Both numbers are read from `tsdown.config.mjs`, so the
 gate and the build cannot disagree.
 
 `npm run check` does not run that budget separately. `npm run build` already evaluates it in its own
@@ -376,8 +376,9 @@ The branch shares no history with `main` and is never merged into it.
 - Never run `git clean -X` (or `-x`) in a checkout holding unpublished records. The record paths are
   ignored there, so the clean deletes them.
 - A change to `src/cli/docs/**`, `test/records/**`, the ledger grammar, or a file the records suite
-  imports or runs (`scripts/eval/run.mjs`, `scripts/eval/instrument.mjs`, `src/runs/inboxStore.ts`,
-  `src/runs/disposition.ts`, `content/skills/st-verify/scripts/spec-plan-coverage.mjs`) also runs
+  imports or runs (`scripts/eval/run.mjs`, `scripts/eval/instrument.mjs`, `scripts/records-paths.mjs`,
+  `src/runs/inboxStore.ts`, `src/runs/disposition.ts`, `src/shared/paths.ts`, `src/types/errors.ts`,
+  `content/skills/st-verify/scripts/spec-plan-coverage.mjs`) also runs
   `npm run test:records`, after `setup`. `npm run check` does not run that suite; CI's `records` job
   does.
 - The release close publishes its records first, then lands `main`'s pin bump, so `main` never pins
