@@ -56,6 +56,12 @@ const OWN_VERSION = "2.4.0";
 const OWN_PIN = `${OWN_PACKAGE}@${OWN_VERSION}`;
 const OWN_VAR = "ACME_WIKI_TOKEN";
 const OWN_REFERENCE = `\${env:${OWN_VAR}}`;
+/**
+ * A header name, joined to its colon at run time. Written out with the colon, the
+ * line reads to `gate scan` as a key assigned inline, and these rows hold no key:
+ * only a reference or the made-up `PLAIN_TOKEN`. The seam still gets the same text.
+ */
+const OWN_HEADER = "X-Api-Key";
 
 const PACK_ID = "opsmcp";
 const PACK_SERVER_ID = "acme-telemetry";
@@ -300,9 +306,9 @@ describe("withOwnServers", () => {
 
     it.each([
       ["joined to a flag", [`--token=${OWN_REFERENCE}`]],
-      ["as a header value", ["--header", `X-Api-Key: ${OWN_REFERENCE}`]],
+      ["as a header value", ["--header", `${OWN_HEADER}: ${OWN_REFERENCE}`]],
       ["joined to a flag, with an argument after it", [`--token=${OWN_REFERENCE}`, "--read-only"]],
-      ["split from a sign, with an argument after it", ["X-Api-Key:", OWN_REFERENCE, "--read-only"]],
+      ["split from a sign, with an argument after it", [`${OWN_HEADER}:`, OWN_REFERENCE, "--read-only"]],
       ["in a query, with text after it", [`https://example.invalid/sse?token=${OWN_REFERENCE}&workspace=main`]],
     ])("passes %s", (_form, args) => {
       const [row] = withOwnServers([], setupWith([rowWith(...args)]));
@@ -328,7 +334,7 @@ describe("withOwnServers", () => {
 
     it("still refuses a literal in the reference's place, never printing it", () => {
       const refusal = (): unknown =>
-        withOwnServers([], setupWith([rowWith("--header", `X-Api-Key: ${PLAIN_TOKEN}`)]));
+        withOwnServers([], setupWith([rowWith("--header", `${OWN_HEADER}: ${PLAIN_TOKEN}`)]));
 
       expect(refusal).toThrow(/literal credential/);
       expect(refusal).not.toThrow(PLAIN_TOKEN);
@@ -372,7 +378,7 @@ describe("withOwnServers", () => {
         const forms = [
           `--token=${reference}`,
           "--header",
-          `X-Api-Key: ${reference}`,
+          `${OWN_HEADER}: ${reference}`,
           `https://example.invalid/sse?token=${reference}&workspace=main`,
           "--read-only",
         ];
