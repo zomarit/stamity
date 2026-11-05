@@ -97,12 +97,19 @@ npx @zomarit/stamity sync
 merge. This adds a check, so it loosens nothing. Do not commit yet: Step 4 ends in one pull request.
 
 What a finding does depends on where the run lands. On Cursor's cloud and in a local run, the run is
-meant to fix it and ask the tool again. Neither has been proven by a real run. On Claude's cloud the
-tool holds and no fix round runs: the pull request's body says `merge waits on:`, and it waits for
-you. There, run `/st-pr-resolve` on it from your own machine, which pushes the fix. The tool is then
-asked on the new head. The `codex` word sets `rounds` to 2, and `rounds` counts the heads the tool was
-asked on, so that gives one fix round. `rounds: 1` would give none. [Cloud runs](cloud.md) has the
-rest, under The review tool.
+meant to take it through `/st-pr-resolve` and ask the tool again. Neither has been proven by a real
+run. Unattended, `/st-pr-resolve` fixes only the mechanical class: a fix in one file with no change in
+behaviour. It defers any other finding as `needs a planned run`, so while the tool still reports one
+the pull request holds for you.
+
+On Claude's cloud the tool holds and no fix round runs. Only the land job asks the tool there. It
+writes the reason after `merge waits on:` in the pull request's body, and the pull request waits for
+you. There, run `/st-pr-resolve` on it from your own machine. A fix it pushes goes to the run's
+branch, and once your CI finishes well on that head the job asks the tool again, if a round is left.
+
+The `codex` word sets `rounds` to 2, and `rounds` counts the heads the tool was asked on, so that
+gives one fix round. `rounds: 1` would give none. [Cloud runs](cloud.md) has the rest, under The
+review tool.
 
 ## Step 4: Choose what to loosen
 
@@ -373,7 +380,9 @@ Go through these in order, and stop at the first one that explains it:
    the default branch's tip, every check run there then counts, and so each land asks a person, with
    `<branch> is red: start failing on its tip`. That clears when a later run of the workflow passes,
    so fix the secret and re-run it, or when the next commit lands on the default branch. A land that
-   asked meanwhile does not start itself again: `/st-work --resume <run-id>` retries it.
+   asked meanwhile does not start itself again, and your own clone cannot land a cloud run. Read the
+   evidence and merge the pull request on GitHub, or start the land job by hand if it is on.
+   [Cloud runs](cloud.md) has both, under A held pull request from a cloud run.
 6. **The session.** Open the latest run on the vendor's page. The prompt stops, starting nothing, if
    the label came from someone without write access, if the issue is claimed, or if the issue has no
    `Branch:` or `Plan:` line, or one of the wrong shape. File such an item again as in Step 6.
@@ -388,4 +397,6 @@ Go through these in order, and stop at the first one that explains it:
 
 A pull request that opened and did not merge is not this section. Its body names each reason after
 `merge waits on:`, and [Troubleshooting](troubleshooting.md) explains them. If the body names none,
-Step 9 lists the ends that leave no line.
+the land stopped before it could write there, or Step 9 lists the ends that leave no line.
+[Cloud runs](cloud.md) says what you can do with a cloud run's, under A held pull request from a
+cloud run.

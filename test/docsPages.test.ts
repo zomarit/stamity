@@ -5922,6 +5922,33 @@ describe("the security pages say one thing about the brake, the lift and the job
     }
   });
 
+  // ADDED (the whole-branch round, review/133): a record reading `Mode: unattended` makes `run land` unattended on every
+  // machine, and the pre-flight's record sits in the git directory of the machine that ran the run, so no page may send a
+  // person's clone to land a cloud run. The walk's own id is no way round: the body ends with the first run's marker.
+  it("says a person's clone cannot land a cloud run, and what a person can do instead, on every page", () => {
+    const held = flowed(sectionOf(read(CLOUD), "### A held pull request from a cloud run"));
+    expect(held).toContain("but it cannot land a cloud run");
+    expect(held).toContain("so `run land` refuses there with `no pre-flight record`");
+    expect(held).toContain("**Merge it yourself on GitHub.**");
+    expect(held).toContain("**Start the land job by hand,**");
+    expect(held).toContain("It is `not run` so far");
+    for (const page of [CLOUD, FACTORY, TROUBLESHOOTING]) {
+      const flat = flowed(read(page));
+      expect(flat, `${page} names no way forward for a held cloud run`).toContain("A held pull request from a cloud run");
+      expect(flat, `${page} still promises a walk's land`).not.toMatch(/retries (?:the land step|it\b)|next walk retries/);
+    }
+    expect(flowed(read(FACTORY))).toContain("your own clone cannot land a cloud run. Read the evidence and merge the pull request on GitHub");
+  });
+
+  // ADDED (the whole-branch round, review/134): unattended, `/st-pr-resolve` defers everything but the mechanical class.
+  it("says a fix round covers only the mechanical class, on both pages", () => {
+    for (const page of [CLOUD, FACTORY]) {
+      const flat = flowed(read(page));
+      expect(flat, `${page} does not bound the fix round`).toContain("Unattended, `/st-pr-resolve` fixes only the mechanical class");
+      expect(flat, `${page} does not say the rest holds`).toContain("`needs a planned run`, so while the tool still reports one the pull request holds for you");
+    }
+  });
+
   it("says a failed start workflow holds the lands, and how that clears, on the factory page", () => {
     const flat = flowed(read(FACTORY));
     expect(flat).toContain("a failed run also holds the lands");

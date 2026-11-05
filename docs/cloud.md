@@ -41,8 +41,9 @@ set to any value but empty, `false` or `0`. A cloud's own marker means "cloud", 
   `autonomy.reviewTool` names a tool, that tool's clean word on the same head is evidence too, and
   silence holds the merge, a hand-written `clean: reaction` being [the exception](#the-review-tool). A diff to the CI definitions or the guard's own files still asks, a
   required check failing on the default branch's tip asks (the brake), and an asks or refused outcome
-  leaves each reason as a held row on the morning list and in the pull request's body. A raw ready
-  mark, a raw merge and a raw push to the default branch stay refused. `run land` is not the only
+  leaves each reason as a held row on the morning list and in the pull request's body, unless the
+  land stopped before it could write there. A raw ready mark, a raw merge and a raw push to the
+  default branch stay refused. `run land` is not the only
   caller of this evidence: [the land job](#the-land-job) reads it again from GitHub where a cloud cannot
   finish, with limits of its own.
 - **What runs without a click.** In `autonomy.mode: autonomous`, the default, a ready-for-review
@@ -122,9 +123,11 @@ cloud environment. The setup ships a readiness hook for this cloud. Where `CLAUD
 lockfile is there. Locally it does nothing. The GitHub proxy refuses GraphQL, so `gh pr` and
 `gh issue` fail there; the run verbs open and update the draft pull request over REST. `stamity run
 land` reads the review threads and marks a draft ready over GraphQL, so on this cloud it cannot
-land: it ends `refused` with "the review threads could not be read", the pull request stays a
-draft, and the merge waits as a held row. Walk it locally, where `/st-work --resume <run-id>`
-retries the land step, or turn on [the land job](#the-land-job), built to finish it from GitHub and `not run` so far. A machine
+land: it ends `refused` with "the review threads could not be read", and the pull request stays a
+draft. That refusal comes before the land can write on the pull request, so its body gets no
+`merge waits on:` line. [The land job](#the-land-job), built to finish it from GitHub and `not run`
+so far, lands only a run that ended with the job turned on. For any other run, see
+[A held pull request from a cloud run](#a-held-pull-request-from-a-cloud-run). A machine
 that was reclaimed comes back fresh, and the review gate rebuilds its round counter from the run
 record on the branch.
 
@@ -167,7 +170,9 @@ The draft pull request's body is the morning list. A question Claude asks holds 
 until someone answers, and an unattended run asks none. If the session is still open, the run ended
 on `run end --final-round` and asks one final round there. The variable is still set, so each held
 act comes to you as the exact command. Or walk it locally: `/st-work --resume <run-id>` on the run's
-branch, where in Claude Code each held act that can be undone asks for your click.
+branch, where in Claude Code each held act that can be undone asks for your click. A local walk
+answers the list but cannot land the run: see
+[A held pull request from a cloud run](#a-held-pull-request-from-a-cloud-run).
 
 ## Cursor's cloud agents
 
@@ -221,7 +226,8 @@ Read the morning list in the draft pull request's body, and answer the way its
 `## How to answer` section names. Cursor's guard refuses every person-only act rather than asking,
 a ready mark and a local tag included, so each held act comes to you as the exact command, the
 morning walk included. Locally,
-`/st-work --resume <run-id>` on the run's branch walks the same list.
+`/st-work --resume <run-id>` on the run's branch walks the same list. It cannot land the run: see
+[A held pull request from a cloud run](#a-held-pull-request-from-a-cloud-run).
 
 ## Copilot's cloud agent
 
@@ -383,7 +389,8 @@ text, and the draft pull request's diff is where you check them.
   into the base, a person's or the platform's, the run posts the body on it as one comment.
 - The land step's result: where the evidence held, the pull request merged by `stamity run land`
   and a `land:` line in the record, or the body's evidence line alone where the land job merged it; otherwise the pull request left open, its body saying
-  `merge waits on: <reasons>`, and each reason a row of `## Person's calls held`.
+  `merge waits on: <reasons>` unless the land stopped before it could write there, and each reason a
+  row of `## Person's calls held` in the session's own `morning.md`.
 - A change to a held path, such as a CI workflow, the hook configuration or the charter, never
   reaches the pushed tree. It waits in `.stamity/runs/<run-id>/held/person-only.patch` as a row of
   `## Person's calls held`.
@@ -400,6 +407,23 @@ text, and the draft pull request's diff is where you check them.
   `Not done: draft PR not opened`, and is never retried with a raw push or a force.
 - **No CLI.** A run whose CLI stops answering closes its record and ends on
   `Not done: run end not run — CLI unavailable`.
+
+### A held pull request from a cloud run
+
+`/st-work --resume <run-id>` on your own machine answers the morning list, but it cannot land a
+cloud run. The run's record reads `Mode: unattended` on every machine, so `run land` needs the
+pre-flight's record and the pull-request record, and both sit in the git folder of the machine that
+ran the run. A fresh clone holds neither, and the walk runs no pre-flight, so `run land` refuses
+there with `no pre-flight record`.
+
+What you can do instead:
+
+- **Merge it yourself on GitHub.** Read the evidence first: the checks on the head, the review
+  threads, the run's ledger, and any `merge waits on:` line in the body. Mark a draft ready, then
+  merge. Your branch's rules still apply, and stamity does not check this merge.
+- **Start the land job by hand,** if it is on, with the pull request's number. It reads the evidence
+  again and merges only if that holds. It lands only a run that ended with the job turned on, and it
+  takes no approval, so anything that still asks stays held. It is `not run` so far.
 
 ## From a ready item to a merge
 
@@ -432,27 +456,33 @@ so both read `not run` in the [capability matrix](capability-matrix.md)'s cloud 
 
 ### The review tool
 
-With `autonomy.reviewTool` set, `run land` asks the named tool to review the head, once per head, and
-waits for it. Only that bot's own word on the exact head passes. Under a hand-written `clean: reaction` that does not hold: a `+1` names no commit, so one left on an earlier head reads clean on every later head, and no request is sent. Findings, no result within
+With `autonomy.reviewTool` set, `run land` asks the named tool to review the head, once per head and
+only when nothing but a wait stops that head, and waits for it. Only that bot's own word on the exact head passes. Under a hand-written `clean: reaction` that does not hold: a `+1` names no commit, so one left on an earlier head reads clean on every later head, and no request is sent. Findings, no result within
 `waitMinutes`, spent `rounds` or a block it does not know each hold the merge and say why, and
 silence never passes. A wait longer than one `run land` call comes back as a pending
-outcome: run the land line again, since no approval passes a wait. Once the tool reads clean on the
-head, `run land` resolves the threads the tool opened and no person joined, never a person's.
+outcome, and the run calls the land line again, since no approval passes a wait. Once the tool reads
+clean on the head, `run land` resolves the threads the tool opened and no person joined, never a
+person's, and a `clean: reaction` tool resolves none.
 
 The fix rounds are Cursor's cloud's and a local run's. There the session's `run land` is meant to read
-the tool, so on findings the run fixes them through `/st-pr-resolve`, pushes, and lets the tool run on
-the new head. Neither has been proven by a real run. `rounds` counts the heads the tool was asked on,
-the first among them, so the fix rounds are one fewer: the preset's `rounds: 2` gives one, and
-`rounds: 1` gives none, since a finding on its one head reads as spent.
+the tool, so on findings the run takes them through `/st-pr-resolve` and calls the land line again,
+which asks the tool on any new head. Neither has been proven by a real run. Unattended,
+`/st-pr-resolve` fixes only the mechanical class: a fix in one file with no change in behaviour, such
+as a typo, an unused import or a comment's wording. It defers any other finding as
+`needs a planned run`, so while the tool still reports one the pull request holds for you. `rounds`
+counts the heads the tool was asked on, the first among them, so the fix rounds are one fewer: the
+preset's `rounds: 2` gives one, and `rounds: 1` gives none, since a finding on its one head reads as
+spent.
 
 On Claude's cloud the review tool holds and no fix round runs. The session's `run land` refuses on the
-review threads before it reads the tool, and the land job, which does ask the tool, fixes nothing. It
-writes the reason on the pull request's `merge waits on:` line and exits 0, so the pull request waits
-for you. To clear a finding there, run `/st-pr-resolve` on the pull request from your own machine. It
-pushes the fix to the run's branch, and once your CI finishes well on that head the land job asks the
-tool again, if a round is left. Without the job, `/st-work --resume <run-id>` on your machine retries
-the land step. With no round left the reason reads `review rounds spent`, and
-[Troubleshooting](troubleshooting.md) says what a person does.
+review threads before it reads the tool, so with no land job stamity never asks the tool. The land job
+does ask it and fixes nothing: it writes the reason on the pull request's `merge waits on:` line and
+exits 0, so the pull request waits for you. To clear a finding there, run `/st-pr-resolve` on the pull
+request from your own machine. A fix it pushes goes to the run's branch, and once your CI finishes
+well on that head the land job asks the tool again, if a round is left. With no round left the reason
+reads `review rounds spent`, and [Troubleshooting](troubleshooting.md) says what a person does. On
+either cloud, [A held pull request from a cloud run](#a-held-pull-request-from-a-cloud-run) says what
+else you can do.
 
 Limits: the Codex state comment this reads is not in Codex's documentation, so anything unknown reads
 not clean. The state comment is read from real pull requests and proven only in tests: the full loop of request, wait, read and resolve is `not run`. A deleted state comment is not seen. A hand-written `clean: reaction` is the

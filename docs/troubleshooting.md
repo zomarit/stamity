@@ -345,10 +345,10 @@ ledger at that commit, `mergeable_state` reading `clean`, and, where `autonomy.r
 tool, that tool's clean word on that commit. Under a hand-written `clean: reaction` that does not hold: a `+1` names no commit, so one left on an earlier head reads clean on every later head, and no request is sent. The branch's own protection still
 decides any required human review. Exit 0 means `landed` or `already-landed` (or `would-land`
 under `--dry-run`); in a session exit 1 carries
-`outcome` in its `--json` output, `asks` or `refused`, and prints every reason. Once it has found
-the run's own pull request it also writes `merge waits on: <reasons>` into that pull request's body
-(not under `--dry-run`), and a flow's close turns each reason into a
-held row the next walk retries. A raw merge and a raw push to the default branch stay the person's:
+`outcome` in its `--json` output, `asks` or `refused`, and prints every reason. Once it has read
+the run's own pull request and its review threads, it also writes `merge waits on: <reasons>` into
+that pull request's body (not under `--dry-run`), and a flow's close turns each reason into a
+held row. A raw merge and a raw push to the default branch stay the person's:
 the guard asks for them attended and refuses them unattended, as it does for the rest of its ask
 list (a push of a tag, a release, a publish, a secret or protection write, an `--admin` merge, a write
 to another repository or a mention of a person, and a loosening of the setting). To tighten back to
@@ -451,7 +451,8 @@ flag holds only while the head is still that commit, and an unattended run refus
   head asks the tool again. `rounds` counts the heads the tool was asked on, the first among them, so
   the fix rounds are one fewer: `rounds: 2` gives one, and `rounds: 1` gives none, since a finding on
   its one head reads as spent here and never as findings. Past that a person raises `rounds` or drops
-  the tool, each through `sync --loosen`, or merges by hand.
+  the tool, each through `sync --loosen`, or merges by hand. A raise counts only once the run's branch
+  holds it too, since the land reads the lowest `rounds` of every copy of the setting.
 - `the ledger at <sha> holds open Critical or Warning rows`, `does not read`, or `the work tree's
   … differs from the commit's: checkpoint first`: close or fix the rows, then run `run checkpoint`,
   so the ledger the head commit holds is the one on disk.
@@ -481,7 +482,8 @@ flag holds only while the head is still that commit, and an unattended run refus
   or in the work tree; it needs a committed setup.
 - `config changed: …` or `no pre-flight record`, in an unattended run: the configuration window in
   [`SECURITY.md`](../SECURITY.md). Git's configuration or environment moved since the pre-flight, or
-  none ran.
+  none ran. On a fresh clone of a cloud run none ran, so `run land` refuses here.
+  [Cloud runs](cloud.md) says what you can do, under A held pull request from a cloud run.
 
 **The land job.** `stamity run land --job`, off by default, is the second caller of this evidence. It
 merges through the same rules, with no bypass, so it reads the same reasons, and a few of its own.
