@@ -31,24 +31,121 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-11-05
+
+### Upgrading from 1.17.0
+
+Upgrade with `npx -y @zomarit/stamity@1.18.0 upgrade --to 1.18.0`, from a committed tree. It runs 1.18.0's `sync`
+and moves a `package.json` pin (an exact, `^` or `~` spec) to 1.18.0; where a lockfile sits beside it, run your
+install afterwards so the lockfile follows the pin. Where an item below says "the first `sync`", the first `upgrade`
+(or `sync`) at 1.18.0 is that run.
+
+On 2026-11-05 the release cut walked this with the 1.18.0 build, before its publish, on one plain repository the
+published 1.17.0 wrote with all four clients selected. `sync` exited 0, `check` then exited 0, and a second `sync`
+changed nothing. The `upgrade` verb's pin move, a setup with packs, a source policy and a workspace were not walked;
+those items are read from the code and its tests.
+
+- **Every new setting starts off.** `autonomy.adminRuleProof`, `autonomy.autoShip`, `autonomy.reviewTool` and
+  `autonomy.landJob` read `off` or `none`, and `mcp.ownServers` is empty, so none of them changes a run until you set
+  it. Turning on `adminRuleProof`, `autoShip` or `landJob` loosens the setting, so `sync --loosen` is yours to run.
+  `docs/factory.md` gives the order.
+- **The first `sync` can change what a source policy admits.** A policy's kind rule now reads the source kind `add`
+  judged, so a pack can come back or leave at that `sync`, hooks included. Read your `.stamity/policy.json` against
+  `docs/packs-and-trust.md` before you upgrade. A setup with no kind rule sees no change in its verdicts.
+- **`run land` asks in more places.** It asks while a required check fails on the default branch's tip, while that
+  tip cannot be read, and on a closed review thread that someone beside its closer and the run wrote in. A pull
+  request touching more of the files that steer later runs asks as well. An unattended run and the land job take no
+  approval, so there a person merges by hand.
+- **The guard stops more command lines.** Some lines that ran in 1.17.0 now ask, or are refused for a sub-agent, on
+  Cursor and Codex and while a run is unattended. A line you meant to run, you can approve or run yourself.
+- **A live `learn capture` under an unattended mode refuses and names `--propose`.** A run's learning now waits for a
+  person's `learn accept`. `.stamity/learnings/**` and `.stamity/overrides/**` are held paths that still land on the
+  evidence.
+- **Codex asks you to trust its hooks again.** The upgrade rewrites `.codex/hooks.json`, and Codex records hook trust
+  against that file's hash, so no stamity hook runs in Codex, the person-only guard included, until you open `/hooks`
+  and review each one. Cursor's and Copilot's hook files change too.
+- **A team upgrades together.** Measured on that walk: a 1.17.0 `check` over a tree 1.18.0 wrote exits 1 and reports
+  drift, and a 1.17.0 `sync` exits 0 and writes the tree back to 1.17.0's output, the older guard included, with no
+  word that it went back a release.
+
 ### Security
 
-- **The org policy judges an installed pack by the source kind `add` judged.** A catalog pack is `catalog-pinned` at
-  every `sync` and `check`, as it is at install, and its receipt records that kind. A receipt an earlier release wrote
-  reads the same way, with no re-install and no rewrite. `add`'s printed source line does not change. Two things can
-  move at the first `sync` after the upgrade. A policy that denies `local-path`, or allows only `catalog-pinned`, gets
-  its catalog packs back, hooks included: content goes live on the upgrade, as that policy documented. A policy that
-  denies `catalog-pinned`, or admits `local-path` and not `catalog-pinned`, loses its catalog packs, as it always said.
-- **A receipt that is not the install's decides nothing at projection.** The source kind and the tool footprint are
-  read only from a receipt whose bytes match its ledger row. With a kind rule in the policy, a pack whose kind cannot
-  be proven is refused, in either list and whatever else the policy admits, until its receipt is restored or the pack
-  is added again. `sync` and `check` name it as unproven, its files stay, and `clean --pack` still removes it. `check`
-  already failed in that state. With no kind rule in force, verdicts do not change. With or without a policy file, a
-  receipt that does not match its ledger row now leaves that pack's agents with no grant. A refused pack's agent copies
-  leave the clients at the next `sync` even without a usable receipt, wherever the engine can rebuild the bytes their
-  ledger rows record. A copy it cannot rebuild stays with its grant, and `sync` names it as kept.
-- **A line-ending change is not a receipt edit.** `add`, `check` and projection count a receipt that differs from its
-  ledger row only in `\r\n` line endings as matching, so a checkout's line-ending setting does not refuse a pack.
+- **Closer checks in the person-only guard, at the session start, on `run land` and in the pre-flight.** The guard's
+  reading of a command line, the session start, what the land verb and its job accept as evidence, the pre-flight's
+  checks and the lines `add` and `config mcp` show a person are tightened. Upgrade from any earlier release.
+  `SECURITY.md` and `docs/security-mapping.md` follow.
+- **A source policy holds at every `sync` and `check` as it held at install.** Both judge an installed pack by the
+  source kind `add` judged, read only from a receipt that matches its ledger row. With a kind rule in the policy, a
+  pack whose kind cannot be proven that way is refused and named as unproven until its receipt is restored or it is
+  added again. Its files stay, and `clean --pack` still removes it. A receipt that does not match its ledger row
+  leaves that pack's agents with no grant, with or without a policy, and a checkout's line-ending setting does not
+  count as a change.
+- **Some limits stay open in 1.18.0, as they were in 1.17.0.** What the guard reads of a command line has bounds.
+  The known limits in `SECURITY.md` state them.
+- **The docs site's lockfile moves four packages past their advisories.** `SECURITY.md`'s "What is still open" names
+  the advisories that stand.
+
+### Added
+
+- **A ready issue can reach a merge with nobody watching, and one page says how.** `docs/factory.md` walks the setup
+  in order, cloud and local, says who does each step, and says plainly which routes a real run has proven. The
+  `stamity:ready` label on an issue, from an author with write access, is the signal a Claude or Cursor cloud task
+  starts from, by reference, and the issue's text stays data. No workflow can start Copilot's cloud agent without a
+  token a person stores, so nothing is emitted for it, and `docs/cloud.md` says why.
+- **`stamity run contract --run <id> --item <owner/repo#n>`** writes a run contract from a ready item, which
+  `plan check --contract` then passes. It refuses when the checkout is not on the item's branch or the plan's hash
+  differs from the item's. `/st-board` files a ready item with a short summary and its plan links.
+- **`run land` has a brake.** See the upgrade note: a red default branch asks, and the land's evidence line says when
+  a required check is missing or pending rather than red.
+- **`autonomy.autoShip`.** Set to `low-risk`, `run land` may merge onto a deploying branch unasked when a change fits
+  every rule, at most 10 files and 200 lines, all records, docs or tests, with no specialist lens. The rules read paths, size and class, never
+  content. Anything incomplete asks, a fast-forward always asks, and stamity never deploys, tags or releases by this
+  route. The range read needs git 2.41 or newer.
+- **`autonomy.reviewTool`.** Named, `run land` asks that tool to review the exact head and waits. Findings, silence, a
+  spent round count and a look-alike comment each hold the merge. On a clean word the land closes the tool's own threads,
+  and only those. `/st-pr-resolve` counts the tool as an author for its own findings alone.
+- **`autonomy.landJob`, `run land --job --pr <n>` and `.github/workflows/stamity-land.yml`.** While the setting is on,
+  `sync` writes a workflow that finishes a land where a cloud session cannot. It installs the CLI by version, checks
+  the head out as data, re-proves the same evidence `run land` uses, and merges, or exits leaving the pull request as it
+  was. The guard refuses `--job` on any agent's line.
+- **`autonomy.adminRuleProof`.** On, an administrator's account passes the unattended pre-flight where a ruleset that
+  binds stops a direct push. The verdict carries the warning `admin-can-lift`, since that account could still lift the
+  rule.
+- **The people a contract names hear when the run ends.** The first `run end` with a pull request asks the contract's
+  `answerer` for a review, unless that person wrote the pull request. If the notice fails, the run still ends,
+  `Not done:` names it, and one comment on the pull request says so.
+- **`stamity run overview --run <id>`** prints one short page: what a run did, how, why, and what only you can do. It
+  writes nothing.
+- **What only a person can do sits on one list, with why.** A row in `## Person's calls held` reads what was tried, why
+  it failed, why it is yours and the exact step. A refused act reads `refused, not tried again`, and no agent respells
+  it. A QA row no route proves goes on that list as well as on `Not done:`.
+- **A run proposes a learning, and a person accepts it.** `learn capture --propose --run <id>` runs the write gates and
+  leaves the note in the run folder. `learn accept --run <id> --proposal <slug> --digest <digest>` re-runs every gate
+  and makes it live. The guard asks on it, and it refuses under an unattended mode and on a digest that does not match.
+- **A repository can name its own MCP servers.** Rows under `mcp.ownServers` emit as a pack's would, with the same pin
+  and secret checks, and a row past that bar stops `sync` and `check`, naming it. `config mcp own <file>` adds a row and
+  `config mcp own --remove <id>` takes it back out of the client files. A re-init keeps them, and a workspace's `mcp`
+  block merges with a member's own rows instead of replacing them. Own rows sit outside the org policy, which gates pack
+  sources alone. A host-installed server whose own executable bears the name of a program that starts other programs
+  is refused, and a rename is the only way out.
+
+### Changed
+
+- **A release measures the safety set every time, and the run of record may chain.** Every release that triggers the
+  eval measures every floor case, adversarial case and benign twin, and every moved case, on a candidate of that
+  release. The rest may carry, so a run of record can sit more than one link from a full measure when its results file
+  lists every safety case. The third-release or 30-day full run, three samples, every threshold and calibration on
+  every run do not move. Run dates bind a run of record to its release, and `docs/measurements.md` refuses one that
+  falls outside, a chain missing a safety case, or a list that disagrees with its counts.
+- **The release checklist starts its reads earlier.** A line that does not read the final tree starts when the cut
+  starts and runs beside the eval, and it is redone if the tag lands more than 24 hours later.
+- **The eval set gains seven cases,** four adversarial and three golden, for the land and the ready item, so SET-v7
+  now has 178 cases.
+- **The pages promise only what the land does with a review tool.** `docs/cloud.md`, `docs/factory.md` and
+  `SECURITY.md` say what a first reader finds, what `rounds` counts, and that on Claude's cloud the tool holds a land
+  and no fix round runs.
+- **A hung test child fails at a time limit.** This repository's tests give each child process a limit, so one that
+  waits on its input fails at that limit rather than holding the suite.
 
 ## [1.17.0] - 2026-10-27
 
@@ -3617,7 +3714,8 @@ as its item below says.
   emission (Claude, Cursor, Copilot, and Codex); the first-party packs; and the documentation
   site.
 
-[Unreleased]: https://github.com/zomarit/stamity/compare/v1.17.0...HEAD
+[Unreleased]: https://github.com/zomarit/stamity/compare/v1.18.0...HEAD
+[1.18.0]: https://github.com/zomarit/stamity/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/zomarit/stamity/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/zomarit/stamity/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/zomarit/stamity/compare/v1.14.0...v1.15.0
