@@ -49,7 +49,7 @@ clients your own manifest selects.
 | `communicationStyle` | one of plain \| technical | `plain` |
 | `learnings.maxCount` | a positive integer | `150` |
 | `hooks.userHooksDir` | a repo-relative directory path | `none` |
-| `mcp.servers` | a comma-separated list of server ids this repo can resolve — curated, or supplied by an installed pack | `none` |
+| `mcp.servers` | a comma-separated list of server ids this repo can resolve — curated, supplied by an installed pack, or held in a row of mcp.ownServers | `none` |
 | `mcp.protocolVersion` | an MCP protocol revision string | `none` |
 | `model.frontier` | a model id your client accepts, or `none` to clear, for every selected client without a pin of its own (`model.<class>.<client>`) — shape-checked only (non-empty, one line), re-picked on Copilot or Codex when its saved model list lacks it, and written as typed on Cursor | `claude=fable, cursor=(client default), copilot=claude-fable-5.1, codex=gpt-6-astra` |
 | `model.advanced` | a model id your client accepts, or `none` to clear, for every selected client without a pin of its own (`model.<class>.<client>`) — shape-checked only (non-empty, one line), re-picked on Copilot or Codex when its saved model list lacks it, and written as typed on Cursor | `claude=opus, cursor=(client default), copilot=claude-opus-5.5, codex=gpt-6-astra` |
@@ -137,7 +137,7 @@ judge model pins separately.
 in its cell, and [the MCP server reference](reference/mcp-servers.md) is that page: every id this
 repo resolves on its own, with the version each is pinned to, the credentials it needs and the
 blast radius of handing it to an agent. An id absent from that page resolves only when an
-installed pack supplies it.
+installed pack supplies it or a row in `mcp.ownServers` holds it.
 
 ## Changing one
 

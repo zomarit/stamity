@@ -890,7 +890,7 @@ export const KEY_SPECS: readonly ConfigKeySpec[] = [
     key: "mcp.servers",
     hint:
       "a comma-separated list of server ids this repo can resolve — curated, " +
-      "or supplied by an installed pack",
+      "supplied by an installed pack, or held in a row of mcp.ownServers",
     needsPackSupply: true,
     // An empty list reads the same as an absent one: neither selects anything.
     read: (manifest) =>

@@ -439,7 +439,7 @@ A typo in a hand-edited policy refuses every install in the repository until som
 stamity config policy list                    # the standing rules, and the mode they put you in
 stamity config policy init                    # an empty, inert policy to start from
 stamity config policy deny local-path         # no unreviewed directory installs
-stamity config policy allow catalog-pinned    # nothing but the curated catalog
+stamity config policy allow catalog-pinned    # packs from the catalog alone; mcp.ownServers rows stay outside the policy
 stamity config policy remove local-path       # drop a rule from wherever it sits
 ```
 

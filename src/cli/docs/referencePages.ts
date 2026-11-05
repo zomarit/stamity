@@ -266,7 +266,8 @@ const MCP_PAGE: ReferencePageSpec = {
   intro:
     "An MCP server is a tool endpoint a client launches beside the agent. The ids below are what " +
     "`stamity config set mcp.servers` and `stamity config mcp add <id>` accept, and this is the " +
-    "whole curated set — any other id resolves only when an installed pack supplies it. A pack " +
+    "whole curated set — any other id resolves only when an installed pack supplies it or a row " +
+    "in `mcp.ownServers` holds it. A pack " +
     "may ADD a server under a new id and can never redefine one of these: a curated id always " +
     "resolves to its reviewed row, so a pack claiming one is refused at install rather than " +
     "merged.\n\n" +

@@ -301,7 +301,7 @@ export function renderConfigReferenceFrom(specs: readonly ConfigKeySpec[]): stri
     "in its cell, and [the MCP server reference](reference/mcp-servers.md) is that page: every id this",
     "repo resolves on its own, with the version each is pinned to, the credentials it needs and the",
     "blast radius of handing it to an agent. An id absent from that page resolves only when an",
-    "installed pack supplies it.",
+    "installed pack supplies it or a row in `mcp.ownServers` holds it.",
     "",
     "## Changing one",
     "",
