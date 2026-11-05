@@ -1,6 +1,6 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended at the 1.17.0 release cut on 2026-10-27, amended from docs/plans/023-factory-bridge-01.md in run 2026-11-04_factory-bridge on 2026-11-05, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended at the 1.17.0 release cut on 2026-10-27, amended from docs/plans/023-factory-bridge-01.md in run 2026-11-04_factory-bridge on 2026-11-05, amended from docs/plans/023-factory-bridge-02.md in run 2026-11-05_factory-bridge-02 on 2026-11-05, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.17.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
@@ -208,6 +208,17 @@ entry read with the as-built deltas the units' reports declared, merged once by 
 delta entry and the code differ, the text states the code, and a line headed "As built" says what moved. It cites the
 code by file and symbol. Job mode and the land workflow are cited from their own lane, `land-job`, which was still
 closing when this merge ran, so that text states that unit's settled behaviour. None of this text has shipped yet.
+
+REQ-FLOW-160 to REQ-FLOW-164, and the text dated 2026-11-05 under REQ-FLOW-069, REQ-FLOW-081, REQ-FLOW-092, REQ-FLOW-094,
+REQ-FLOW-102, REQ-FLOW-133, REQ-FLOW-154 and REQ-FLOW-156, come from the spec delta of
+`docs/plans/023-factory-bridge-02.md` (plan 023 file 2, run `2026-11-05_factory-bridge-02`), each entry walked to the
+code at `14061df5` and merged once at that run's Prove phase. The same delta amends REQ-PROVE-033 in
+`docs/specs/prove-behavior-and-value.md` and REQ-WS-011 in `docs/specs/workspace-surface.md`. Where a delta entry and the
+code differ, the text states the code, and a line headed "As built" says what moved. It cites the code by file and
+symbol, and a content file by its lines. A ledger id in that text (`review/10`, `build/17`) is that run's own unless a
+run is named beside it. Each amendment is a dated bullet, so the older text it reads over stands as the record. The
+delta's REQ-FLOW-165 and its REQ-FLOW-132 entry belong to the unit `clone-land`, which is held until a real run meets
+it, so neither is merged. None of this text has shipped yet.
 
 ## Intent
 
@@ -3362,6 +3373,16 @@ the row points at that result (`content/skills/st-qa/SKILL.md:38-43`).
   `agent-run` never proves it (`:47-55`). The Auto-prove table and rule 1 now accept the same two forms, a test's
   `file:line` beside the gate result or the prover's `agent-run` (`:96-97`, `:107-112`), which settles the "two
   readings of auto-proven" this spec's `## Concerns` records.
+- **Amended 2026-11-05** (plan 023 file 2, unit `human-only-list` and its fix round; `review/10`, `review/12`; read at
+  `14061df5`). The 2026-10-15 bullet's "goes on `Not done:` as "not proven: <reason>", never to the person" reads: a row
+  outside the five that no route proves goes on the run's `## Person's calls held` list with its why, outside the cap of
+  three, and stays on `Not done:` as "not proven: <reason>" (`content/skills/st-qa/SKILL.md:46-47`). So the person hears
+  of the row, and an unproven row never reads as done because a person now owns it. That bullet's "otherwise goes on
+  `Not done:`" reads the same way: a row outside the five goes on `Not done:` and that list, and a `contradicted` one goes
+  the same way with its excerpt and reads `contradicted`, never `not proven` (`:114-117`). The row's grammar is
+  REQ-FLOW-162's.
+  - Proof: `test/corpus/skills/flow.test.ts` ("keeps a person row for five categories only, proves first, caps at three,
+    and skips the walk by class unless a page renders (REQ-FLOW-069, REQ-FLOW-081, REQ-FLOW-162)").
 - **Proof:** `test/corpus/skills/flow.test.ts`, `test/corpus/commands/work.test.ts`; must-hold
   `qa-bare-signoff-records-unwalked`; QA.
 
@@ -4017,6 +4038,11 @@ unattended run proves the same way (`content/skills/st-qa/SKILL.md:41-46`).
   - Proof: `test/corpus/commands/work.test.ts` (the step-3 and not-applicable pins, the old wording asserted gone),
     `test/corpus/skills/flow.test.ts`; the re-quoted cases `probe-none-work-run-qa-checkpoint` and
     `benign-optional-step-skipped-proceeds`.
+- **Amended 2026-11-05** (plan 023 file 2, unit `human-only-list`; `review/10`; read at `14061df5`). The "Who is asked"
+  bullet's "A row outside the five that no route proves goes on `Not done:` as "not proven: <reason>"" reads as
+  REQ-FLOW-069 now states it: the row reaches the person on the run's `## Person's calls held` list as well as on
+  `Not done:`. It takes none of the three places, since `MORNING_QA_MAX` counts `qa` rows alone (`src/runs/morning.ts`;
+  `content/skills/st-qa/SKILL.md:46-47`).
 - **Proof:** `test/corpus/agents/quality.test.ts` ("test-runner — row proving"), `test/corpus/skills/flow.test.ts`,
   `test/corpus/commands/work.test.ts`; new cases `qa-prove-before-asking`, its benign twin
   `benign-qa-second-account-stays-person-row`, and `qa-contradicted-row-fails-security-row-first`;
@@ -4538,6 +4564,17 @@ the default branch, read by REST; `run start` leaves it for a branch of the run'
   - Proof: `test/runs/pullRequest.test.ts`, `test/cli/commands/runCheckpoint.test.ts` (the attended `--drop-held`, the
     tracked file inside an ignored folder, the branch-name pin), `test/cli/commands/runEnd.test.ts` ("names run end,
     not run checkpoint, where git fails to list …").
+- **Amended 2026-11-05** (plan 023 file 2, unit `propose-learning` and its fix rounds; `review/72`; read at `14061df5`).
+  An unattended close proposes and captures nothing live (REQ-FLOW-163), so the 2026-10-19 bullet's sentence on what
+  `--paths` names reads without its last clause: `run end`'s `--paths` no longer names a learning file the close
+  captured, and names only the files the run changed. The verb stages the run's proposals itself: `run checkpoint` and
+  `run end` add each regular `.md` file directly in the run's `proposals/` folder beside the run folder's own files, as
+  `held/` is staged by its folder (`PROPOSALS_DIR` and `listFiles`, `src/cli/commands/run.ts`;
+  `content/skills/st-unattended/SKILL.md:93-94`, `:99`). The walk names each accepted learning file in its own `--paths`
+  (`:143`), since `learn accept` commits nothing.
+  - Proof: `test/corpus/skills/unattended.test.ts` ("has the close propose its learnings and copy each printed row,
+    before run end", "says what run end's --paths names and what the verb stages itself", "has the walk take a
+    proposal's 2 to learn accept with the row's digest, and name the accepted file").
 - **Proof:** `test/runs/pullRequest.test.ts`, `test/cli/commands/run.test.ts`, `test/cli/commands/runCheckpoint.test.ts`,
   `test/cli/commands/runEnd.test.ts`, `test/cli/surface.e2e.test.ts`, `test/corpus/skills/unattended.test.ts`
   ("st-unattended — checkpoints and the ending").
@@ -4693,6 +4730,14 @@ calls held; `Not done:`. A section with no rows reads `none` (`content/skills/st
   - Proof: `test/runs/morning.test.ts` (`blastRadiusSection`, `prBodyFrom` with the section, `withBlastRadius`),
     `test/cli/commands/runEnd.test.ts` (the walk's four cases, the exact-body pins of a record without the section
     unchanged), `test/cli/commands/runCheckpoint.test.ts` (the unattended order).
+- **Amended 2026-11-05** (plan 023 file 2, unit `human-only-list` and its fix round; `review/8`, `review/9`, `review/11`,
+  `review/13`; read at `14061df5`). The list's held section carries the row grammar of REQ-FLOW-162, `merge waits on:` rows
+  aside. The section keeps its name, so an older list still parses, and the parser gains no rule (`MORNING_SECTIONS` and
+  `parseMorning`, `src/runs/morning.ts`; `content/skills/st-unattended/SKILL.md:137`). A `held` question takes none of
+  `MORNING_QA_MAX`'s three places. Past `question`'s 500-character cap the list stops parsing, so the run shortens
+  `failed:`, or `yours because:` on a refused act's row, and keeps `do:` and the act whole.
+  - Proof: `test/corpus/skills/unattended.test.ts` ("parses list rows in that grammar as held, outside the QA cap, and
+    refuses one past the question cap (REQ-FLOW-094, REQ-FLOW-162)").
 - **Proof:** `test/runs/morning.test.ts`, `test/runs/prerequisites.test.ts`, `test/corpus/skills/unattended.test.ts`
   ("st-unattended — the morning list and the walk").
 
@@ -5036,7 +5081,8 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
     which is no person-only act, and that is the flows' rule, not the guard's: attended in mode `autonomous` the guard
     runs a raw ready mark (`gh pr ready`) on the main thread, the allow verdict naming `pr-ready` in `runs`
     (`src/hooks/personOnly.ts:21-23`, `:230-235`); and the new rules hold: `status-write` and `line-too-long` refused in every mode, and
-    `admin-merge`, `push-deploying`, a named `workflow-dispatch`, `autonomy-loosen`, `land-approved` and
+    `admin-merge`, `push-deploying`, a named `workflow-dispatch`, `autonomy-loosen`, `land-approved`, `learn-accept`
+    (added 2026-11-05, REQ-FLOW-163) and
     `outside-write` asking, while `remote-write` runs on the main thread alone (REQ-FLOW-134, REQ-FLOW-138,
     REQ-FLOW-140, REQ-FLOW-141; `PERSON_ONLY_RULES`, `:107-203`). So the 2026-10-18 bullet's list of acts that ask reads, for the ready mark and a local tag, by the
     setting, and its `gh repo edit` with no flag, under `protection`, reads as `repo-irreversible`, refused everywhere
@@ -6408,6 +6454,16 @@ refuses.
   REQ-FLOW-152 are met. Four more reasons ask: a red default branch, or a tip that did not read (REQ-FLOW-153); legs that
   disagree on `autonomy.reviewTool` (REQ-FLOW-138); and a head whose manifest loosens a key against the default branch's,
   named by key, where the pull request's file list holds the manifest.
+- **Amended 2026-11-05** (plan 023 file 2, unit `propose-learning`; read at `14061df5`). `.stamity/learnings/**` and
+  `.stamity/overrides/**` become held paths that still land on the evidence. Both join `PERSON_ONLY_PATHS`
+  (`src/change/personOnlyPaths.ts`) and `LANDS_ON_EVIDENCE` (`src/runs/landEvidence.ts`), so neither is in the ask set, and
+  an attended run with a learning does not ask at land. An unattended run's change under either folder reaches the diff
+  only in a held patch, and that patch asks. A run's own `proposals/` folder matches neither glob. The review loop is the
+  only reader of what lands this way (`SECURITY.md`, the land verb's residuals).
+  - Proof: `test/runs/landEvidence.test.ts` ("lands the learnings and overrides on the evidence, so an attended run with
+    a learning does not ask (REQ-FLOW-133)", "asks on the held patch of a run that still captured live: its learning
+    reaches the diff only in that patch (REQ-FLOW-133)"), `test/change/personOnlyPaths.test.ts` ("holds what later runs
+    read as knowledge and as content, and not a run's own proposal (REQ-FLOW-133)").
 - **Proof:** `test/runs/landEvidence.test.ts` (each class of the ask set matched), `test/cli/commands/runLand.test.ts`.
 - **Source:** `src/runs/landEvidence.ts`, `src/runs/hookPaths.ts`, `src/cli/commands/runLand.ts`.
 
@@ -6979,6 +7035,14 @@ carry the marker.
     `silent`, `spent` and a round that pushes nothing are each a `held` row. A `held` row ends the loop, and the run takes
     no other route to the same end: no new commit to restart a wait, no second pull request, no edit or delete of a
     comment.
+- **Amended 2026-11-05** (plan 023 file 2, unit `land-wording`; read at `14061df5`). `rounds` counts the heads that carry
+  the run's review marker, the first among them. A head the tool already finished with findings takes a round with no
+  ask, since the land posts the marker alone there, and on a pull request already merged at the head it posts nothing
+  (`askTool`, `src/cli/commands/runLand.ts`; `requestTimes`, `src/runs/reviewTool.ts`). The unit moved the two sentences
+  above to say so, in place: "so no request goes on a head that cannot land", and the sentence on what `rounds` counts.
+  - Proof: `test/cli/commands/runLand.test.ts` ("posts nothing on a pull request already merged at the head", "names a
+    marker that did not post, and the findings stand with no round spent", "ends the wait and refuses where the marker
+    alone did not post, with no pending ask"), `test/docsPages.test.ts`, `test/corpus/skills/unattended.test.ts`.
 - **Limits** (`SECURITY.md`): The state comment is read from real pull requests and proven only in tests: the full loop of request, wait, read and resolve is `not run`. A deleted comment leaves no last editor to read, so a state comment deleted by
   a token that can do so is not seen. The state block is undocumented, so anything unrecognised reads not clean. On a single-account
   repository a person's reply reads as the run's, so a thread that person joined can still be resolved.
@@ -7034,6 +7098,17 @@ later `run end` sends nothing. Given `--refused`, Then nothing is sent.
   - On a chain the notice goes at the first file's `end`, so the person may be asked while later files still run. The
     line is written after the push, so a run's last `end` leaves it uncommitted.
   - No free text goes with the request, and no `@` mention is written anywhere.
+- **Amended 2026-11-05** (plan 023 file 2, unit `run-overview` and its fix rounds; ledger row `review/73` of run
+  `2026-11-04_factory-bridge`, and this run's `review/48`, `review/53` and `review/60`; read at `14061df5`). Given a notice
+  that fails on an exit-0 `run end`, Then one comment on the pull request says so, naming the class of failure and no text
+  from GitHub. Its text is the `notice not sent:` line and the run's marker, and that marker is what `/st-pr-resolve`
+  skips a body a run wrote by (`noticeOrSayIt`, `src/cli/commands/run.ts`; `content/commands/st-pr-resolve.md`). It is a
+  comment since a status line in the body would be replaced at land. Where the land job's second pass is still to come,
+  the comment waits for that pass, which runs the notice again, so one `end` says a failure once. A notice that pass sends
+  leaves no comment and takes the first pass's line out of `notDone`. A comment the outbound screen matches, or that does
+  not post, adds one `notDone` line and moves no exit code. A second `end` that fails again posts a second comment, since
+  the record holds no `notice:` line. A sent notice, no contract and a `--refused` end post nothing.
+  - Proof: `test/cli/commands/runEnd.test.ts` (the describe "said on the pull request when it fails (review/73)").
 - **Limits:** the contract and the record are files the run can edit, so a run could point the notice at another
   collaborator, or silence it. The only effect of the first is one review request with no text.
 - **Proof:** `test/cli/engine/ghRunner.test.ts`, `test/cli/commands/runEnd.test.ts`.
@@ -7114,6 +7189,163 @@ order, Then each step names who does it and where, and the page links to `docs/c
 
 - **Proof:** `test/docsPages.test.ts`.
 - **Source:** `docs/factory.md`.
+
+### REQ-FLOW-160 — A repository names its own knowledge server
+
+Added 2026-11-05 (plan 023 file 2, units `own-server-core`, `own-server-verb` and `own-server-workspace`, with their fix
+rounds).
+
+Given a valid `mcp.ownServers` row that `mcp.servers` selects, When `sync` runs, Then the server emits as a pack's would,
+with its pin and secret checks (`withOwnServers`, `src/mcp/ownServers.ts`; `validatePackMcpServer`,
+`src/pack/manifest.ts`). Given a row whose fetch launcher carries no exact pin, or a row with a literal secret, Then
+`sync` refuses and names the row. A launcher that fetches nothing is a program you installed, and its version is yours
+to keep. Given a workspace `mcp` block, Then a member's own server survives by the merge rule, not by replacement
+(REQ-WS-011 in `docs/specs/workspace-surface.md`).
+
+- **As built, where the delta differed:**
+  - A row alone launches nothing. It makes an id resolvable and `mcp.servers` selects it, so the delta's "a valid row"
+    reads as a selected one (`McpConfig`, `src/types/manifest.ts`).
+  - The delta's "the manifest is refused" reads: the manifest reader holds `mcp.ownServers` to an array of objects and
+    reads on, since a setup with a bad row must still open (`collectMcpErrors`, `src/manifest/manifest.ts`). The bar runs
+    at the seam, so every lane that emits or resolves a selection refuses, naming each such row by its place and its id.
+    `clean`, `config mcp own --remove` and the rendering proof read through `provableOwnServers` and `provableOwnSetup`
+    instead, where a row past the bar proves nothing and its entries are judged the person's.
+- **As built, beyond the delta:**
+  - The bar has more than the pack's validator in it. It refuses a `${env:` that never closes, a host-installed launcher
+    whose `packageNameLock` is not its `command`, a credential typed into a link in `packageNameLock`, `args` or
+    `docsUrl`, the one check stricter than a pack's, and an id a pack or an earlier row holds; the validator already
+    refuses a curated id. The pack's deny patterns run at the pack's windows over each free text a row holds
+    (`assertReferencesClose`, `assertHostLock`, `assertLinksHoldNoCredential`, `assertCleanText` and `resolveOwnRows`,
+    `src/mcp/ownServers.ts`). No refusal repeats a typed value (`printableRefusal`).
+  - A row's `sourcePackId` is `:own`, which no pack name can take, so `clean --pack` leaves own rows, and a full `clean`
+    proves and removes their entries as it does a pack's (`OWN_SERVER_SOURCE`; `installedPackMcpSupply`,
+    `src/cli/commands/clean.ts`).
+  - **The verb.** `config mcp own <file>` reads one row from a JSON file, adds it through the seam, prints its launcher
+    and selects nothing; `config mcp add <id>` selects it (`runMcpOwnAdd`, `src/cli/commands/config/mcp.ts`).
+    `config mcp own --remove <id>` deselects the id, takes its proven entries out of the client documents, then deletes
+    the row, since a row deleted in the same edit as its deselection leaves the server launching. A document it cannot
+    change stops it with the row kept; `.env.mcp` is left alone; and it warns of a copy `sync` cannot reach (`runMcpOwnRemove`
+    and `warnOfCopiesLeft`). An id the curated catalog or a pack also holds loses its row alone.
+  - **A re-init.** `init --force` carries each row that clears the bar and each selected id one of them holds. A row past
+    the bar stays behind, named in a warning (`carryOwnServers`, `src/cli/commands/init/apply.ts`).
+  - **A workspace** selects ids and supplies no rows (`WorkspaceMcpConfig`, `src/workspace/model.ts`). A row typed as
+    `defaults.mcp.ownServers` is not read, and `workspace sync` warns, naming the key (`warnOfBlockRows`,
+    `src/cli/commands/workspace.ts`).
+- **Limits** (`SECURITY.md`, "Where content comes from"): `.stamity/policy.json` gates pack sources, not these rows. A
+  pack's file is read whole, and a row's texts one at a time, its arguments joined as well. The link bar reads no path
+  segment and no parameter under another name, so a credential typed there clears it (`review/58`). The manifest is a
+  person-only path, and that hold is on an unattended run's push: an agent on the machine can still run the verb. An older
+  CLI refuses a selected own id, so a downgrade fails safe.
+- **Proof:** `test/mcp/ownServers.test.ts`, `test/cli/commands/configMcp.test.ts`, `test/workspace/ownServers.test.ts`.
+- **Source:** `src/mcp/ownServers.ts`, `src/cli/commands/config/mcp.ts`, `src/cli/commands/init/apply.ts`,
+  `src/cli/commands/workspace.ts`, `src/workspace/resolve.ts`.
+
+### REQ-FLOW-161 — One short page says what a run did
+
+Added 2026-11-05 (plan 023 file 2, unit `run-overview` and its fix rounds).
+
+Given a run folder, When `stamity run overview --run <id>` runs, Then it prints what happened, how, why and the
+human-only list, and writes nothing (`runOverview`, `src/cli/commands/run.ts`; `overviewFrom`, `src/runs/overview.ts`).
+
+- **As built, beyond the delta:**
+  - The page's sections are `## What happened`, `## How`, `## Why` and `## Only you can do`, in that order, read from the
+    record, `ledger.jsonl` and `morning.md`. `--json` gives `{ subcommand, run, overview }`.
+  - It reads neither git nor GitHub, so with no `land:` line it says none is recorded in this folder and to check the
+    pull request. It never says a run did not land.
+  - Exit 0 where the record reads whole, and a ledger or a morning list that does not read is named on the page. Exit 1
+    for a record missing or over its cap, since a land line past the cap could not be seen.
+  - Every value is the run's own text. Each line goes through `sanitizeLabel`, each value sits behind a label, a list
+    mark or `> `, and a land prints as what the record says, only in the form `noteLanded` writes.
+  - `## Only you can do` prints `## Refused` rows first, then held rows, as written, under a line saying the run wrote
+    them and a `do:` is a step to read, not to paste. A proposed learning is a question and no such row, so a line says
+    one waits. A list titled for another run shows no row.
+- **Limits:** units and rounds come from report names on ledger rows, so a unit or a round with no findings leaves no
+  row, and the page says "named in the ledger" and "with findings" (`build/17`). A line in the exact `land:` form still
+  prints, labelled as the record's word.
+- **Proof:** `test/runs/overview.test.ts`, `test/cli/docs/cliReference.test.ts`.
+- **Source:** `src/runs/overview.ts`, `src/cli/commands/run.ts`.
+
+### REQ-FLOW-162 — What only a person can do lands on one list, with why
+
+Added 2026-11-05 (plan 023 file 2, unit `human-only-list` and its fix round).
+
+Given an act an agent tried and failed, or one truly only a person can do, When a run ends, Then one row on
+`## Person's calls held` reads `tried: <act> · failed: <why> · yours because: <reason> · do: <exact step>`. Given a
+refused act, Then the row reads `refused, not tried again: <act> · yours because: <reason> · do: <exact step>`, and no
+agent respells the act (`content/skills/st-unattended/SKILL.md:137`).
+
+- **As built, beyond the delta:**
+  - The grammar holds in every mode: an attended close that writes a `held` row is pointed at that paragraph (`:14`).
+  - A `merge waits on:` row keeps its words, since `run land` writes that opening into the pull request's body.
+  - A row `st-qa` sends here sits outside the three person QA rows and keeps its `Not done:` line (REQ-FLOW-069).
+  - A refused act's row is no `## Refused` row, so it stops no land.
+  - At the walk a `do:` is data shown word for word, never a line the walk runs as written. The command is the plain one
+    for the act the row names (`:144`).
+- **Limits:** this is text a model follows. No parser reads the grammar: `parseMorning` reads a row as a `question` of at
+  most 500 characters (REQ-FLOW-094), and `run overview` prints it as written.
+- **Proof:** `test/corpus/skills/unattended.test.ts` ("states the human-only list's row grammar in the held section, and
+  keeps merge waits on as it is (REQ-FLOW-094, REQ-FLOW-162)", "puts the row grammar and the no-respell clause where an
+  attended run reads them (REQ-FLOW-162)"), `test/corpus/skills/flow.test.ts`.
+- **Source:** `content/skills/st-unattended/SKILL.md`, `content/skills/st-qa/SKILL.md`.
+
+### REQ-FLOW-163 — A run proposes a learning; a person accepts it
+
+Added 2026-11-05 (plan 023 file 2, unit `propose-learning` and its fix rounds; the sign-offs on `review/61`, `review/62`
+and `review/67`).
+
+Given `learn capture --propose --run <id>`, Then every gate runs and the proposal lands in
+`.stamity/runs/<id>/proposals/<slug>.md`, not in `.stamity/learnings/` (`proposeCapture`, `src/cli/commands/learn.ts`).
+Given `learn accept --run <id> --proposal <slug> --digest <digest>` from a person, Then every gate runs again and the
+learning goes live. Under an unattended mode the verb refuses, the guard asks on it, and a digest that does not match the
+file refuses. `learn accept` takes learnings only: a proposal of any class but a learning is refused, and an override is
+not proposed in this release. Given a live `learn capture` under an unattended mode, Then it refuses and names
+`--propose`.
+
+- **As built, beyond the delta:**
+  - The capture prints one row for the run to copy into the morning list: kind `decision`, `1 leave it out · 2 accept`,
+    default `1`, its source `proposals/<slug>.md`, its question naming `learn accept` and the digest. So no answer leaves
+    it out. A slug already live or already proposed in this run refuses, and so do a run with no record here and a link
+    at the run folder or its `proposals/`.
+  - The digest is the sha-256 of the proposal's whole text. `accept` reads the mode first, then the file, the digest, the
+    head, which must carry no `type` key, and the morning row, which must be the one capture printed, so a default of
+    accept refuses (`runAccept` and `proposalRowProblem`). The bytes go through `persistLearning`, and the proposal stays
+    in the run folder as the record of what was asked. A second accept meets the store's append-only refusal.
+  - An unattended mode is read as the guard reads it: a run in progress reading `Mode: unattended`, else
+    `STAMITY_UNATTENDED` set with no run in progress reading `Mode: attended`, and a read that fails refuses. A closed
+    run's own `Mode:` does not count, so the walk can accept on it (`unattendedSession`).
+  - The guard's rule is `learn-accept`, which asks in every mode, so it is refused unattended and for a sub-agent. A line
+    that may hide the verb reads the same (`landApprovedVerdict` and `acceptHiddenVerdict`, `src/hooks/personOnly.ts`).
+  - A `--dry-run` capture writes nothing, so it stays open under an unattended mode.
+  - At the walk a row sourced in `proposals/` shows that file's text with its question, its `2` runs the verb alone on its
+    line, and the accepted file rides the walk's `--paths` (`content/skills/st-unattended/SKILL.md:143-144`).
+- **Limits** (`SECURITY.md`): the digest proves that the file, the row and the line agree when the verb runs, and no more.
+  All three are work-tree text, so any writer before the accept can rewrite them together, and nothing shows a person read
+  them. `learn accept` has no settings row, so where no hook runs only the verb's own refusal stands, and that reads
+  records a run can write. The ask holds the proposal route, not the folder: a live `learn capture` on an attended session
+  asks nobody. A file a local unattended run writes by hand under the learnings or overrides stays in the work tree, where
+  a later session can read it, and the hold stops it reaching a push. The store's gates read shape and denied patterns,
+  not meaning.
+- **Proof:** `test/cli/commands/learn.test.ts` (the describes "learn capture --propose — a run proposes (REQ-FLOW-163)"
+  and "learn accept — a person accepts (REQ-FLOW-163)"), `test/hooks/personOnly.test.ts`,
+  `test/hooks/personOnlyGuard.test.ts`, `test/corpus/skills/flow.test.ts` ("says an unattended run proposes, no answer
+  leaves it out, and a person accepts (REQ-FLOW-163)"), `test/corpus/skills/unattended.test.ts`.
+- **Source:** `src/cli/commands/learn.ts`, `src/hooks/personOnly.ts`, `src/cli/commands/run.ts`,
+  `content/skills/st-learn/SKILL.md`, `content/skills/st-unattended/SKILL.md`.
+
+### REQ-FLOW-164 — Copilot's trigger, where its limits allow
+
+Added 2026-11-05 (plan 023 file 2, unit `copilot-trigger`; GitHub's pages read that day).
+
+Given `docs/cloud.md`'s section `### Copilot's limits`, Then it says that GitHub documents starting the agent by API,
+that those calls take a user's token, so a workflow needs a token a person creates and stores, and that Stamity emits no
+workflow for it. The route reads `not run`, and no release waits on it.
+
+- **As built, where the delta differed:** the delta's first branch, a ready label that starts a run by reference, is not
+  built. The unit took the second: a page section and no code, so `src/adapters/copilot.ts` emits no second workflow and
+  no setting turns one on.
+- **Limits:** the section rests on a read of GitHub's pages, which disagree on which repositories qualify, and on weak
+  reports that an assigned agent does not always start. No test pins it.
+- **Source:** `docs/cloud.md`.
 
 ## Acceptance criteria
 
@@ -7906,6 +8138,10 @@ above.
   its citation `:45-49` added). `judgment: reviewer` (Amended 2026-10-15, plan 020 file 3: "the three kinds" reads "the
   five categories", and a row whose check is missing, cannot run or fails is the person's only within them; the
   citations above read at `5cd61743`.)
+- GIVEN the qa skill THEN a row outside the five that no route proves goes on the run's `## Person's calls held` list with
+  its why, outside the cap, and stays on `Not done:`, and a `contradicted` row outside the five goes the same way and
+  reads `contradicted` (added 2026-11-05; it supersedes the first criterion's "otherwise to `Not done:`";
+  `test/corpus/skills/flow.test.ts`).
 
 **REQ-FLOW-070**
 
@@ -8085,6 +8321,8 @@ above.
 - GIVEN a row that needs a second real account THEN it stays the person's and the pass proceeds; GIVEN a contradicted
   `H` row and a walked reply THEN `Shippable` reads `NO` naming it. `judgment: reviewer` *(eval:
   `benign-qa-second-account-stays-person-row`, `qa-prove-before-asking`, `qa-contradicted-row-fails-security-row-first`)*
+- GIVEN a row outside the five that no route proves THEN it reaches the person on the list as well as on `Not done:`, and
+  takes none of the three places (added 2026-11-05). *(test: `test/corpus/skills/flow.test.ts`)*
 
 **REQ-FLOW-082** (added 2026-10-15)
 
@@ -8240,6 +8478,9 @@ above.
   file inside an ignored folder THEN it stages and pushes; GIVEN a git failure inside `run end` THEN the line names
   `run end could not` (added 2026-10-26; *test: `test/runs/pullRequest.test.ts`,
   `test/cli/commands/runCheckpoint.test.ts`, `test/cli/commands/runEnd.test.ts`*).
+- GIVEN the unattended ending THEN the close proposes each learning, `run end`'s `--paths` names no learning file, and the
+  verb stages the run's `proposals/`; GIVEN a learning captured live and named in `--paths` THEN it is held, not pushed
+  (added 2026-11-05; *corpus: `test/corpus/skills/unattended.test.ts`; test: `test/cli/commands/runCheckpoint.test.ts`*).
 
 **REQ-FLOW-093** (added 2026-10-16)
 
@@ -8261,6 +8502,8 @@ above.
 - GIVEN a morning list THEN the body keeps its section order, `none` for an empty section, at most three QA rows and the
   closing marker; GIVEN a diff naming a variable THEN an `inferred` row names it and carries no value.
   *(test: `test/runs/morning.test.ts`, `test/runs/prerequisites.test.ts`)*
+- GIVEN a `held` row in REQ-FLOW-162's grammar THEN it parses as `held`, outside the QA cap (added 2026-11-05). *(corpus:
+  `test/corpus/skills/unattended.test.ts`)*
 
 **REQ-FLOW-095** (added 2026-10-16)
 
@@ -8627,6 +8870,9 @@ above.
 - GIVEN a diff touching `scripts/ci/records-only.mjs`, `src/change/classify.ts` or `src/roster/triggers.ts` beside
   `src/a.ts` THEN `asks` naming that file alone; GIVEN the probe script, a sibling module under `src/change/` or the
   classifier's test THEN no ask (added 2026-10-26, on `p20/b1`). *(test: `test/runs/landEvidence.test.ts`)*
+- GIVEN a diff touching only `.stamity/learnings/` or `.stamity/overrides/` THEN no ask; GIVEN the held patch of a run that
+  captured live THEN `asks` (added 2026-11-05). *(test: `test/runs/landEvidence.test.ts`,
+  `test/change/personOnlyPaths.test.ts`)*
 
 **REQ-FLOW-134** (added 2026-10-25)
 
@@ -8769,6 +9015,9 @@ above.
   merges; GIVEN a failed resolve THEN it refuses, naming the thread; GIVEN `findings` on a head with no marker THEN the
   land posts the marker alone; GIVEN a request that does not post THEN a session refuses with no `asks.pending`.
   *(test: `test/cli/commands/runLand.test.ts`)*
+- GIVEN `findings` on a pull request already merged at the head THEN nothing posts; GIVEN a marker alone that does not post
+  THEN `notDone` names the status, the wait ends, and a session refuses with no `asks.pending` (plan 023 file 2).
+  *(test: `test/cli/commands/runLand.test.ts`)*
 
 **REQ-FLOW-155** (added 2026-11-05)
 
@@ -8785,6 +9034,9 @@ above.
   line and the run still ends 0; GIVEN a free-text answerer THEN nothing is sent; GIVEN no contract THEN nothing is sent
   and no line is written; GIVEN a record holding the `notice:` line, or `--refused`, THEN nothing is sent. *(test:
   `test/cli/engine/ghRunner.test.ts`, `test/cli/commands/runEnd.test.ts`)*
+- GIVEN a notice that fails on an exit-0 `run end` THEN one comment holds the `notice not sent:` line and the run's marker;
+  GIVEN a sent notice, no contract or `--refused` THEN none; GIVEN a comment that fails THEN one more `notDone` line and the
+  same exit code (plan 023 file 2). *(test: `test/cli/commands/runEnd.test.ts`)*
 
 **REQ-FLOW-157** (added 2026-11-05)
 
@@ -8810,6 +9062,53 @@ above.
 - GIVEN `docs/factory.md` THEN every step names who acts, it links to `docs/cloud.md`, it says a Claude event over the
   cap is dropped, and it names a CI workflow that reports check runs as a need before Step 2.
   *(test: `test/docsPages.test.ts`)*
+
+**REQ-FLOW-160** (added 2026-11-05)
+
+- GIVEN a valid row that `mcp.servers` selects WHEN `sync` runs THEN the server emits with its pin; GIVEN a fetch launcher
+  with no exact pin, a literal secret, or a credential typed before a link's `@` or under a credential-named parameter
+  THEN `sync` refuses naming the row and printing no typed value; GIVEN an id the curated catalog, a pack or an earlier
+  row holds THEN it refuses; GIVEN a full `clean` THEN the row's entries leave the client documents; GIVEN `clean --pack`
+  THEN the rows stay; GIVEN a deselected row THEN it stops launching. *(test: `test/mcp/ownServers.test.ts`)*
+- GIVEN `config mcp own <file>` and a valid row THEN it is added and nothing is selected; GIVEN an invalid row or a file
+  that does not parse THEN it refuses and writes nothing; GIVEN `config mcp own --remove <id>` THEN no client entry
+  launches and the row is gone; GIVEN `init --force` THEN a selected own id keeps its row. *(test:
+  `test/cli/commands/configMcp.test.ts`)*
+- GIVEN a workspace `mcp` block THEN a member keeps its rows and its selected own ids; GIVEN two members holding different
+  rows under one id THEN `workspace sync` refuses naming both. *(test: `test/workspace/ownServers.test.ts`)*
+
+**REQ-FLOW-161** (added 2026-11-05)
+
+- GIVEN a run folder WHEN `run overview --run <id>` runs THEN it prints the four sections in order and writes no file;
+  GIVEN no `morning.md` THEN a line says so; GIVEN a ledger that does not read THEN the record's facts print and the
+  failure is named; GIVEN no land line THEN the page names none recorded in this folder and never says the run did not
+  land; GIVEN refused and held rows THEN refused rows print first, behind `> `, under the run's-words line; GIVEN no
+  record THEN exit 1. *(test: `test/runs/overview.test.ts`)*
+
+**REQ-FLOW-162** (added 2026-11-05)
+
+- GIVEN the skill's held section THEN it states both row forms, `merge waits on:` kept apart, and that no agent respells
+  the act; GIVEN the walk THEN it says a `do:` is data, before the held-act sentence; GIVEN three `qa` rows and two held
+  rows in the grammar THEN the list parses; GIVEN a row past the 500-character cap THEN it does not. *(corpus:
+  `test/corpus/skills/unattended.test.ts`)*
+
+**REQ-FLOW-163** (added 2026-11-05)
+
+- GIVEN `capture --propose` THEN the proposal is in the run folder, nothing is under `.stamity/learnings/`, and one
+  `decision` row prints with default `1`; GIVEN a slug already live or already proposed, a run with no record, or a link
+  at `proposals/` THEN it refuses and writes no proposal. *(test: `test/cli/commands/learn.test.ts`)*
+- GIVEN `accept` on the digest and row capture printed THEN every gate runs and the learning loads; GIVEN a file that no
+  longer reads the digest, a head with a `type` key, or a morning row other than the one printed, a default of accept among
+  them, THEN it refuses and nothing goes live; GIVEN an unattended mode THEN `accept` and a live `capture` refuse, the
+  capture naming `--propose`. *(test: `test/cli/commands/learn.test.ts`)*
+- GIVEN a `learn accept` line THEN the guard asks attended and refuses unattended and for a sub-agent; GIVEN a line that
+  may hide the verb THEN it reads the same. *(test: `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`)*
+
+**REQ-FLOW-164** (added 2026-11-05)
+
+- `judgment: reviewer` · GIVEN `docs/cloud.md`'s `### Copilot's limits` THEN it names the read's date, the user's token, that
+  Stamity emits no workflow, that the route reads `not run`, and that it holds no release; GIVEN `src/adapters/copilot.ts`
+  THEN it emits no workflow that starts the agent.
 
 ## References
 
@@ -8963,6 +9262,17 @@ above.
   `test/runs/hookPaths.test.ts`, `test/change/personOnlyPaths.test.ts`, `test/cli/commands/runCheckpoint.test.ts`,
   `test/cli/commands/runLand.test.ts`, `test/runs/landEvidence.test.ts`, as each requirement's bullet of that date
   names them.
+- `docs/plans/023-factory-bridge-02.md`, with `.stamity/runs/2026-11-05_factory-bridge-02/` (its record, ledger and units'
+  reports) — the spec delta the text dated 2026-11-05 merges (REQ-FLOW-160 to REQ-FLOW-164; REQ-FLOW-069, REQ-FLOW-081,
+  REQ-FLOW-092, REQ-FLOW-094, REQ-FLOW-102, REQ-FLOW-133, REQ-FLOW-154 and REQ-FLOW-156 amended), added 2026-11-05; its
+  REQ-PROVE and REQ-WS ids in the specs that own them.
+- `source` (added 2026-11-05): `src/mcp/ownServers.ts`, `src/cli/commands/config/mcp.ts` (`runMcpOwnAdd`,
+  `runMcpOwnRemove`), `src/runs/overview.ts`, `src/cli/commands/run.ts` (`runOverview`, `noticeOrSayIt`),
+  `src/cli/commands/learn.ts` (`proposeCapture`, `runAccept`, `unattendedSession`), `src/hooks/personOnly.ts`
+  (`acceptHiddenVerdict`), `content/skills/st-learn/SKILL.md`.
+- `test` (added 2026-11-05): `test/mcp/ownServers.test.ts`, `test/workspace/ownServers.test.ts`,
+  `test/cli/commands/configMcp.test.ts`, `test/runs/overview.test.ts`, `test/cli/commands/learn.test.ts`, and the suites
+  each requirement names.
 
 ## Risks
 

@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended from docs/plans/023-factory-bridge-02.md in run 2026-11-05_factory-bridge-02 on 2026-11-05, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023).
 status: shipped-with-1.17.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
@@ -2015,6 +2015,27 @@ of the rule: `evals/SET-v7.md`, the checklist, `evals/README.md`'s hard trigger 
   and states no first run and no release count. Test evidence: `test/docsPages.test.ts`, its describe "the release eval
   follows what changed", "states %s in the checklist and in SET-v7", "says one rule: no older wording stands beside it"
   and "keeps three samples, every threshold and calibration on every run beside the chain rule".
+
+Amended 2026-11-05 (plan 023 file 2, unit `safety-measure`; rows `build/5` and `review/9` of run
+`2026-11-04_factory-bridge`; read at `14061df5`). Given a chained run of record whose § 6 safety rows disagree with the
+counts its § 5 states, Then the measurements page refuses it, naming both counts (`holdSafetyCounts` and `safetyCounts`,
+`src/cli/docs/measurements.ts`). § 6 alone decides the safety set, so a mark dropped there would take a case out of every
+check while the page's count read whole. § 5 states the floors on the golden row and the guardrails and twins as the
+denominators of their rows, so a miss moves no count. A case in two counts counts once in each. As built: the check runs
+on every run of record the page names a safety list for, a longer chain and one link from an earlier release's full
+measure alike, and a § 5 that does not read refuses too, naming § 6's counts. One link from this release's own full
+measure shows no safety count, so it is not checked. The eval skill's run artifact list says a composed run whose prior
+complete run is itself composed carries a `## 0a. Safety measure` section, written by the route of record's driver, and
+that a section typed by hand does not count (`.stamity/overrides/skills/st-eval-run/SKILL.md`). Limits: the check compares
+counts. A file forged in both sections passes it, and so does a mark moved to another case, or a dropped mark beside a
+duplicate row, since the counts stay equal (`review/14` of run `2026-11-05_factory-bridge-02`).
+
+- GIVEN a chained run whose § 6 dropped a floor mark THEN the page refuses naming both counts; GIVEN a guardrail or twin
+  count that differs THEN it names every count that differs; GIVEN § 5 with no readable count THEN it refuses naming § 6's
+  counts; GIVEN one link from this release's own full measure THEN it renders with no count and no refusal. Test evidence:
+  `test/cli/docs/measurements.test.ts`, "refuses a chain whose § 6 dropped a floor mark, naming both counts", "refuses a
+  chain whose § 5 does not read, naming § 6's counts" and "leaves a one-link run of its own release unchecked: no count on
+  the page, no refusal".
 
 ### REQ-PROVE-034 — A patch takes the patch lane
 

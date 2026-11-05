@@ -1,6 +1,6 @@
 ---
 id: workspace-surface
-# A design document, authored outside the spec command and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/023-factory-bridge-02.md in run 2026-11-05_factory-bridge-02 on 2026-11-05, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.1.0
 obsolete_when: the workspace door ships and the CLI reference plus the workspace guide carry its behaviour, or a decision cuts the surface
@@ -648,14 +648,25 @@ supplies then does, per member, in order:
 1. `readManifest(memberDir)` (`src/manifest/manifest.ts:782`). `null` fails the
    row (REQ-WS-012).
 2. Compute the patch: `tools` from `resolved.tools`, `maturityTier` from
-   `resolved.maturityTier` when the workspace declares one, `mcp` from
-   `resolved.mcp` when the workspace declares one
-   (`src/workspace/resolve.ts:30-48`). A field the workspace does not declare is
+   `resolved.maturityTier` when the workspace declares one, `mcp` when the
+   workspace declares one, from `resolved.mcp` merged with the member's own: the
+   workspace's selection and protocol, then each id the member selects that one
+   of its own `mcp.ownServers` rows holds, and every one of those rows, selected
+   or not (`src/workspace/resolve.ts:30-48`; `mergedMcp`,
+   `src/cli/commands/workspace.ts`; REQ-FLOW-160 in
+   `docs/specs/everyday-flows.md`). A field the workspace does not declare is
    left exactly as the member has it.
-3. If the patch changes nothing, write nothing.
+3. If the patch names `mcp`, check it before anything else: every id the
+   patched selection names must resolve for this member, through the curated
+   catalog, a pack installed in it, or a row of its own. An id that does not
+   fails the row by name, and a row past the pack bar fails it with the bar's own
+   message (`refuseUnresolvedSelection`, `src/cli/commands/workspace.ts`). This
+   runs before the write and before the dry-run branch, so a real run and a
+   preview give one answer and the member's bytes do not move. If the patch
+   changes nothing, write nothing.
 4. Otherwise apply the patch to the manifest READ FROM DISK and write it back
-   with `writeManifest` (`src/manifest/manifest.ts:827-841`), which validates
-   before persisting and writes atomically.
+   with `writeManifest` (`src/manifest/manifest.ts:827-841`), which validates the
+   shape before persisting and writes atomically.
 5. `planSync(memberDir, engineVersion)` then `applySync(memberDir, plan, …)`
    (`src/cli/commands/sync/engine.ts:455,653`), passing this run's `force`,
    `dryRun` and clock through.
@@ -694,6 +705,15 @@ so the divergence an author would hit is the volume's, not this check's, and
 the refusal on a case-insensitive volume is the correct answer to "do these
 two entries name one directory" on that volume.
 
+Beside the alias refusal stands a second, before any member is attempted and on
+a preview too: two members holding different rows under one own id
+(`refuseOwnRowClashes`, `src/cli/commands/workspace.ts`; `findOwnRowClashes`,
+`src/workspace/resolve.ts`). One id across a workspace reads as one server, so
+two programs behind it are a person's to settle, and it refuses with
+`VALIDATION_ERROR`, naming both members and the id. A row counts whether or not
+its member selects it, rows compare as canonical JSON, and a member the check
+cannot read has no row to compare, so the cascade reports it on its own row.
+
 Step 4 patches the manifest read in step 1. It never composes a fresh one.
 
 Step 3's "write nothing" is a claim about THIS layer's write alone. Step 5's `applySync` persists
@@ -718,7 +738,17 @@ defensive: `SetupManifest` carries `ledger`, `importChoice`, `createdAt` and
 `hooks` (`src/types/manifest.ts:191-219`), and a composed manifest missing the
 ledger would make every emitted path unowned — after which the reclaim sweep and
 the collision gate would both act on that emptiness. `writeManifest`'s own
-validation is what keeps a bad patch from persisting at all.
+validation keeps a malformed patch from persisting, and it reads shape alone:
+whether a patched selection resolves is step 3's check, settled before the write.
+
+Amended 2026-11-05 (plan 023 file 2, units `own-server-core` and
+`own-server-workspace`; `review/15`, `review/36`; read at `14061df5`). Step 2
+read "`mcp` from `resolved.mcp` when the workspace declares one", step 3 read
+"If the patch changes nothing, write nothing.", step 4 read "which validates
+before persisting", and the sentence above read "`writeManifest`'s own
+validation is what keeps a bad patch from persisting at all." A workspace
+replaces what it can supply, and a member's own server is not that, so the merge
+keeps one launching. A workspace selects ids and supplies no rows.
 
 **Dropped.** In-memory overrides through a widened `planSync` signature. It is
 smaller in the diff and wrong in the outcome: every member drifts back the moment
@@ -914,10 +944,11 @@ what that suite asserts about every verb, not just this one.
 
 ## Acceptance criteria
 
-One set per requirement. Seventy-eight criteria; each is machine-checkable unless
+One set per requirement. Eighty-one criteria; each is machine-checkable unless
 tagged otherwise. (The count read "forty-three" while the list held sixty-two, then "seventy-two"
 while a later round's rider grew the list to seventy-three, then seventy-eight once a fix round
-added the multi-flight, pre-flight-ordering, `--force` and symlink-alias cases: a hand-kept number
+added the multi-flight, pre-flight-ordering, `--force` and symlink-alias cases, then eighty-one
+when REQ-WS-011 gained three on 2026-11-05: a hand-kept number
 over a list several rounds have appended to. Restated here against the current list —
 `grep -c "^- GIVEN"` under this heading is how it was derived, and is the check worth running the
 next time this section grows rather than counting by eye.)
@@ -1113,6 +1144,18 @@ next time this section grows rather than counting by eye.)
 - GIVEN two `repos[]` entries where the second is a symlink to the first's
   directory WHEN `workspace sync` runs THEN it exits 1 with a `VALIDATION_ERROR`
   naming both declared paths, and neither member's manifest is touched.
+- GIVEN a workspace `mcp` block and a member holding a row in `mcp.ownServers`
+  that it selects WHEN `workspace sync` runs THEN the member keeps the row and its
+  id, listed after the workspace's (added 2026-11-05;
+  `test/workspace/ownServers.test.ts`).
+- GIVEN two members holding different rows under one own id WHEN `workspace sync`
+  runs, with or without `--dry-run`, THEN it refuses with a `VALIDATION_ERROR`
+  naming both members and the id, and neither member's manifest is touched (added
+  2026-11-05; `test/workspace/ownServers.test.ts`).
+- GIVEN a workspace `mcp` block naming an id a member cannot resolve WHEN
+  `workspace sync` runs, with or without `--dry-run`, THEN that member's row fails
+  by name and its manifest bytes do not move (added 2026-11-05;
+  `test/workspace/ownServers.test.ts`).
 
 **REQ-WS-012**
 
