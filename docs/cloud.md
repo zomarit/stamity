@@ -283,6 +283,17 @@ agent: ask it for the command and run it yourself. Where the guard refuses inste
 call, or a session Copilot's session start did not record), the refusal tells the agent to give you
 the exact command.
 
+### Copilot's limits
+
+- **Starting the agent from a workflow, read 2026-11-05.** GitHub documents starting the agent by
+  API, through the Agent tasks API and through issue assignment, both in public preview, and those
+  calls take a user's token. `GITHUB_TOKEN` is an installation token, so a workflow needs a token a
+  person creates and stores, and Stamity emits no workflow for it. Reports say an assigned agent
+  does not always start: weak evidence, one person each, the newest from 2026-06-22. GitHub's
+  Copilot Automations list an issue `labeled` trigger as of 2026-10-28, and GitHub's pages disagree
+  on which repositories qualify: a reading, not a run. The route reads `not run`, and it holds no
+  release.
+
 ## Codex Cloud
 
 Its page documents no project hooks, so assume none run there. No guard writes the pre-flight's
