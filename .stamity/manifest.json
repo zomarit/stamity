@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.17.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-11-05T00:18:52.666Z",
+  "updatedAt": "2026-11-05T07:08:50.130Z",
   "tools": [
     "claude"
   ],
@@ -141,7 +141,7 @@
       "adapter": "claude",
       "artifactId": "cmd-board",
       "artifactType": "command",
-      "contentHash": "53e449352253bbe87008b9cb05de9ee1373d4e81deadeebc011c95a94c4754a1",
+      "contentHash": "d5393debd2a0f271c6f65ea3dbd5b379ac631c7043fadb512dac223c89bb8ba7",
       "path": ".claude/commands/st-board.md"
     },
     {

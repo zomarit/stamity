@@ -172,7 +172,8 @@ or a major included, because its trigger list is `evals/SET-v7.md`'s (REQ-PROVE-
 **When each line starts** (REQ-PROVE-034, added 2026-11-04). A line that does not read the final tree
 does not wait for it. The admin roster and metadata review, the image digest, the vendor pages and the
 hand pages' re-attestation on the candidate tree start when the cut starts and run beside the eval;
-each such read is redone if the tag lands more than 24 hours after it. Hook latency, the two ask
+each such read is redone if the tag lands more than 24 hours after it, and a hand page's
+re-attestation also if a later commit touches that page or a surface it states. Hook latency, the two ask
 checks and the label re-date read the final tree, so they stay on it: after every other line has
 landed, before the tag. Each line below says which it is.
 

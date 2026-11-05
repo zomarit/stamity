@@ -357,7 +357,10 @@ to another repository or a mention of a person, and a loosening of the setting).
 required check failing on the default branch's tip asks too: that is the brake. The land job is the
 verb's second caller, and its own reasons are in the last list below. Under
 `autonomy.adminRuleProof` an administrator can start a run, and the account could still lift the
-rule: only the guard stops that.
+rule: only the guard stops that. That key counts only once every leg holds it, so until the default
+branch does the pre-flight gives its plain `direct-push` refusal and fix, `run as an account or token
+without admin on this repository`. The setting did not fail: the refusal's evidence names the leg. Land
+the manifest and the guard copies `sync --loosen` wrote on the default branch, then run it again.
 
 **`asks`: the act is the person's.** The verb merged nothing, and the outcome names the head commit
 it holds for on its `approve with:` line. The reasons, and what each needs:
@@ -395,7 +398,9 @@ it holds for on its `approve with:` line. The reasons, and what each needs:
 - `<branch>'s tip could not be read (…), so whether it is red is not known`: fix the read the reason
   names, then run it again.
 - `the head's manifest loosens <keys> against <branch>'s`: the pull request loosens an `autonomy` key
-  in `.stamity/manifest.json`. A person lands that.
+  in `.stamity/manifest.json`. A person lands that. The head is compared with the tip, so a key the
+  default branch gained after the run forked is named too, though the merge keeps that key: this land
+  already asks, over the manifest's path, and the extra name costs nothing but a line.
 - `the legs disagree on autonomy.reviewTool, and no leg wins: …`: the places the setting is read name
   different tools, so the tool's word was not read. A person decides, then makes them agree.
 - For `--fast-forward`, a rule that requires a pull request, branch protection that may require one,

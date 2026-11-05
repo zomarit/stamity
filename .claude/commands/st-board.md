@@ -85,7 +85,7 @@ When neither form runs, or the installed copy has no `ledger inbox` query, `fill
    linked board, each `ready` item is filed after the run's preview: an issue in the linked
    repository, added to the linked project when one is linked, its body carrying the acceptance
    criteria, a `Ref:` when the item names a spec, and the filed-item marker, per `### Filed items converge`.
-   An unready item, or a row the preview did not apply, stays a proposal in the run report.
+   An unready item, or a row the preview did not apply, stays a proposal in the run report. An item whose source is a plan under `docs/plans/` is an item with a plan: `Plan:` names that file, and `Branch:` the pushed branch that holds it committed, read from git and never from the item's text. A plan not committed on a pushed branch is a named gap, so that item stays a proposal.
 
 Labels follow the board's taxonomy: an item files with the labels the repository already has; a
 label it lacks is never created, never withholds the item, and stays a proposal in the report. Before a New item or a label edit the run reads the linked repository's labels (`gh label list -R <owner>/<repo> --limit <above the count> --json name`, or the MCP server's label listing; in a REST-only session, `gh api 'repos/<owner>/<repo>/labels?per_page=100' --paginate --jq '.[].name'`) and passes only labels on that list; a label not on it is never sent.

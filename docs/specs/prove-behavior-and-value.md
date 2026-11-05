@@ -2030,10 +2030,12 @@ window.
 
 Amended 2026-11-04 (plan 023 file 1, unit `release-speed`). Lines that do not read the final tree start when the cut
 starts and run beside the eval: the admin roster and metadata review, the image digest, the vendor pages and the
-re-attestation on the candidate tree. Each such read is redone if the tag lands more than 24 hours after it. Hook latency,
+re-attestation on the candidate tree. Each such read is redone if the tag lands more than 24 hours after it, and a hand
+page's re-attestation also if a later commit touches that page or a surface it states. Hook latency,
 the two ask checks and the label re-date stay on the final tree. The ordinals do not move; the tag stays the seventh line.
 
-- GIVEN the checklist THEN each of those lines says when it starts, and its section says a read is redone past 24 hours.
+- GIVEN the checklist THEN each of those lines says when it starts, and its section says a read is redone past 24 hours,
+  and a hand page's re-attestation after a later commit touches it.
   Test evidence: `test/docsPages.test.ts`, "says when %s starts" and "redoes a read taken beside the eval when the tag
   lands more than 24 hours later".
 

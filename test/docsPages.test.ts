@@ -1877,6 +1877,7 @@ describe("the release eval follows what changed", () => {
     const section = collapsed(fileSection(RELEASE_CHECKLIST, "## Per-release record currency"));
     expect(section).toContain("**When each line starts**");
     expect(section).toMatch(/redone if the tag lands more than 24 hours after it/);
+    expect(section, "a commit inside the 24 hours can leave a hand page stale under a fresh stamp").toContain("re-attestation also if a later commit touches that page");
   });
 
   it("gives every per-release line of the checklist its trigger, and states the patch lane", () => {
@@ -5933,6 +5934,14 @@ describe("the factory's cloud facts (REQ-FLOW-158)", () => {
     const matrixRow = read(CAPABILITY_MATRIX).split("\n").find((line) => line.includes("Issue trigger") && line.includes(row?.citation.url ?? "?"));
     expect(matrixRow, `the capability matrix has no ${tool} issue-trigger row`).toBeDefined();
     expect(matrixRow).toContain("not run");
+  });
+
+  it.each([
+    ["claude", "does not mean the App is installed"],
+    ["cursor", "A saved webhook trigger shows a webhook address and an API key"],
+  ])("%s's row carries the fact the factory page states, and so does the matrix (build/42)", (tool, fact) => {
+    expect(CLIENT_CLOUD_FACTS.find((row) => row.tool === tool && row.subject === "Issue trigger")?.fact).toContain(fact);
+    expect(read(CAPABILITY_MATRIX)).toContain(fact);
   });
 
   it("the cloud page has dropped the old claims and names no vendor address", () => {

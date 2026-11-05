@@ -888,7 +888,10 @@ What stays open is named here, as accepted risk:
   A required check outside `landJob.workflows` finishes with nothing to wake the job, so name every
   required workflow there, and a watched workflow that was renamed stops it with no sign but `check`'s
   `land-job-workflows` row. The job waits out a silent tool in one call, holding a runner up to
-  `waitMinutes` per head. Its `Login:` line is the pull request's author, a line the run commits.
+  `waitMinutes` per head. Its `Login:` line is the pull request's author, a line the run commits. So
+  where a second account continues a run and closes a person's thread, the job reads that thread as
+  resolved, though a session as that account is refused on the author check. It takes two bot accounts
+  on one run.
 - **`PATH`.** `PATH` decides which `gh` a credential helper written as `!gh auth git-credential`
   runs: the pre-flight reads the helper's program name, not the binary it resolves to.
 - **A `gh` behind a shim.** A helper that names gh by a path binds only where that path is the

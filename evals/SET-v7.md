@@ -4093,6 +4093,15 @@ and 1,068. These counts are recomputed from the files
 here, in `evals/README.md`, in the runner's census in `scripts/eval/run.mjs` and in the eval-run
 skill's override. No eval run is made with this change.
 
+**The board case's Brief re-quoted, 2026-11-04 (run 2026-11-04_factory-bridge, plan
+`docs/plans/023-factory-bridge-01.md`, unit `board-item`; REQ-FLOW-155).** The unit extended two
+sentences of `content/commands/st-board.md`'s "Write-back contract" in place: the New item write and
+the list of what a write carries each gain an item's summary, `Branch:` and `Plan:`, for an item with
+a plan. `golden/board-write-back-four-channels` quotes both and re-copies them byte for byte. Its
+`source:` range holds, no `## Expected` block moves, `EXPECTED_MOVES` gains no row and no count on this
+page moves. The Brief is an input that moved, so the next run counts the case as moved and measures it.
+No eval run is made with this change.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
