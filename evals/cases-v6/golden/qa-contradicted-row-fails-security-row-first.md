@@ -58,7 +58,7 @@ Three rules make the pass honest:
    whose output contradicts `Expected` records `contradicted`, its excerpt going with
    the row to the person or to `Not done:`. Missing evidence is never scored as a pass —
    an unproven row is the person's when it is in one of the five categories, and
-   otherwise goes on `Not done:` and the run's `## Person's calls held` list.
+   otherwise goes on `Not done:` and the run's `## Person's calls held` list. A `contradicted` row outside the five goes the same way, with its excerpt, and reads `contradicted`, never `not proven`.
 3. Proven rows, `auto-proven` and `agent-run`, fold into one line with their
    pointers. The table carries the remainder, so nobody re-walks what a machine proved.
 

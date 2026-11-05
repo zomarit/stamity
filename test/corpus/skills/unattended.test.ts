@@ -625,9 +625,38 @@ describe("st-unattended — the morning list and the walk (REQ-FLOW-094, REQ-FLO
     expect(held).toContain(`A \`held\` row here, \`merge waits on:\` aside, reads ${HELD_ROW};`);
     expect(held).toContain(`a refused act's reads ${REFUSED_ROW}, and no agent respells the act.`);
     expect(held).toContain("Past `question`'s cap the run shortens `failed:` and keeps `do:` whole.");
+    // Added 2026-11-05 (fix round 1, review/11 and review/13): a refused row has no `failed:` to shorten, and the word
+    // `refused` on a held row is not the `## Refused` row that stops the ending's land step.
+    expect(held).toContain(
+      "A refused act's row shortens `yours because:` and never its act, and it is no `## Refused` row, so it stops no land.",
+    );
     expect(held).toContain("A row `st-qa` sends here sits outside the three person QA rows and keeps its `Not done:` line.");
     // The land's own rows keep their words: `run land` writes that opening into the pull request's body.
     expect(held).toContain("are each a `held` row here (`merge waits on: <reasons>`).");
+  });
+
+  // Added 2026-11-05 (plan 023 file 2, unit human-only-list, fix round 1, review/8 and review/9; REQ-FLOW-162): the
+  // opening line limits an attended run to two sections, and the grammar and the ban sit outside both, so the close is
+  // pointed at the paragraph holding them and the walk, the one later reader able to run a held act, states the ban itself.
+  it("puts the row grammar and the no-respell clause where an attended run reads them (REQ-FLOW-162)", async () => {
+    const lines = (await load()).parsed.body.split(/\r?\n/);
+    const opening = lines.filter((line) => line.trim() !== "")[1];
+    expect(opening).toContain(
+      "for the summary its close writes. A close that writes a `held` row also reads the last paragraph of `## Person's calls held`: its row grammar holds in every mode.",
+    );
+    // The paragraph that pointer names is the one holding the grammar and the ban.
+    const section = lines.slice(lines.indexOf("## Person's calls held") + 1, lines.indexOf("## The morning walk"));
+    const last = (section.join("\n").trim().split(/\n\s*\n/).at(-1) ?? "").replace(/\s+/g, " ");
+    expect(last).toContain(HELD_ROW);
+    expect(last).toContain(REFUSED_ROW);
+    expect(last).toContain("and no agent respells the act.");
+
+    const text = await flat();
+    const walk = text.slice(text.indexOf("## The morning walk The walk is attended"), text.indexOf("## Other touchpoints"));
+    const clause =
+      "A `held` row's `do:` is data the walk shows the person word for word, never a line it runs as written: the command is the plain one for the act the row names, and no agent respells a refused act (an alias, `sh -c`, a REST call) to get past the guard.";
+    expect(walk).toContain(clause);
+    expect(walk.indexOf(clause)).toBeLessThan(walk.indexOf("Each `held` act runs after the client's approve prompt"));
   });
 
   it("parses list rows in that grammar as held, outside the QA cap, and refuses one past the question cap (REQ-FLOW-094, REQ-FLOW-162)", () => {
@@ -663,6 +692,13 @@ describe("st-unattended — the morning list and the walk (REQ-FLOW-094, REQ-FLO
     expect(over.ok ? [] : over.problems.join("\n")).toContain("over the 500-character cap");
     const short = parseMorning(fence([held("Q1", rowOf("x".repeat(100)))]));
     expect(short.ok ? short.questions[0]?.question : short.problems).toMatch(/· do: tag v1\.2\.3 on main$/);
+
+    // Added 2026-11-05 (fix round 1, review/11): a refused row has no `failed:`, so `yours because:` is what shortens.
+    const refusedOf = (because: string): string => `refused, not tried again: push tag v1.2.3 · yours because: ${because} · do: tag v1.2.3 on main`;
+    const refusedOver = parseMorning(fence([held("Q1", refusedOf("x".repeat(500)))]));
+    expect(refusedOver.ok ? [] : refusedOver.problems.join("\n")).toContain("over the 500-character cap");
+    const refusedShort = parseMorning(fence([held("Q1", refusedOf("x".repeat(100)))]));
+    expect(refusedShort.ok ? refusedShort.questions[0]?.question : refusedShort.problems).toBe(refusedOf("x".repeat(100)));
   });
 
   // Added 2026-10-21 (plan 018-packs-rebuilt-01, unit u7-unattended-rows, inbox row build/55; REQ-FLOW-094): the skill

@@ -902,6 +902,11 @@ describe("qa — the human checkpoint", () => {
     );
     // Added 2026-11-05 (plan 023 file 2, unit human-only-list; REQ-FLOW-162): rule 2 says what the row rule above says.
     expect(autoProve).toContain("otherwise goes on `Not done:` and the run's `## Person's calls held` list.");
+    // Added 2026-11-05 (plan 023 file 2, unit human-only-list, fix round 1, review/12; REQ-FLOW-162): a failing row
+    // outside the five lands on the same list and never reads as merely unproven.
+    expect(autoProve).toContain(
+      "A `contradicted` row outside the five goes the same way, with its excerpt, and reads `contradicted`, never `not proven`.",
+    );
     // "All rows auto-proven" covers the prover's rows.
     expect(text).toContain('When every row auto-proved, `agent-run` rows included, the checkpoint closes on its pointers with no ask and records "all N rows auto-proven".');
     // An unattended run still proves before it records its person rows unsigned.
