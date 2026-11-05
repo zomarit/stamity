@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { link, readFile, writeFile } from "node:fs/promises";
+import { link, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { configCommand } from "../../../src/cli/commands/config.ts";
@@ -521,6 +521,63 @@ describe("config mcp own <file> — adding a row (REQ-FLOW-160)", () => {
     expect(await manifestBytes(handle)).toBe(before);
   });
 
+  describe("never prints what the refused row holds, on stderr or in the --json error", () => {
+    // No secret pattern knows this shape, so only withholding the value keeps it out.
+    const PLAIN = "Zq7vKp2mXw9Lr4";
+    const PIN = `${OWN_PACKAGE}@${OWN_VERSION}`;
+    const hostRow = (args: readonly string[]): Record<string, unknown> =>
+      ownRow({ command: "acme-mcp", packageNameLock: "acme-mcp", args, requiresEnv: [] });
+    const fetchRow = (args: readonly string[]): Record<string, unknown> => ownRow({ args, requiresEnv: [] });
+
+    it.each<[string, Record<string, unknown>, string]>([
+      ["a whole argument on a host launcher", hostRow(["serve", `--token=${PLAIN}`]), "<args[1]>"],
+      ["a recognised credential as a whole argument", hostRow(["serve", `--token=${TOKEN_LITERAL}`]), "<args[1]>"],
+      ["a whole argument before the package token", fetchRow(["-y", `--auth=${PLAIN}`, PIN]), "<args[1]>"],
+      ["a whole argument in a floating spec", fetchRow(["-y", PIN, `x@latest-${PLAIN}`]), "<args[2]>"],
+      ["a shell line in `command`", ownRow({ command: `TOKEN=${PLAIN} npx` }), "`command` <value withheld>"],
+      ["a password in `docsUrl`", ownRow({ docsUrl: `http://acme:${PLAIN}@wiki.invalid/` }), "`docsUrl` <value withheld>"],
+      ["a value in `pinnedVersion`", ownRow({ pinnedVersion: PLAIN }), "`pinnedVersion` <value withheld>"],
+      [
+        "an assignment in a variable's `name`",
+        ownRow({ requiresEnv: [{ name: `ACME_TOKEN=${PLAIN}`, description: "A token" }] }),
+        "`name` <value withheld>",
+      ],
+      ["a value in `transport`", ownRow({ transport: PLAIN }), "got string <value withheld>"],
+      ["a long value in `transport`", ownRow({ transport: PLAIN.repeat(4) }), "got string <value withheld>"],
+    ])("%s", async (_shape, row, shown) => {
+      const handle = tempDir();
+      await seedManifest(handle);
+      await seedRowFile(handle, row);
+      const before = await manifestBytes(handle);
+
+      const human = await run(handle, ["mcp", "own", OWN_FILE]);
+      const json = await run(handle, ["mcp", "own", OWN_FILE, "--json"]);
+
+      expect(human.code).toBe(1);
+      expect(json.code).toBe(1);
+      // The positive half: a refusal that printed nothing would pass the rest.
+      expect(human.stderr).toContain(shown);
+      expect(json.stdout + json.stderr).toContain(shown);
+      for (const output of [human.stdout, human.stderr, json.stdout, json.stderr]) {
+        expect(output).not.toContain(PLAIN.slice(0, 8));
+        expect(output).not.toContain(TOKEN_LITERAL);
+      }
+      expect(await manifestBytes(handle)).toBe(before);
+    });
+
+    it("withholds a value on a row already in the manifest, which the same refusal reads", async () => {
+      const handle = tempDir();
+      await seedManifest(handle, { mcp: { servers: [], ownServers: asRows(ownRow({ id: "acme-old", command: `TOKEN=${PLAIN} npx` })) } });
+      await seedRowFile(handle);
+
+      const result = await run(handle, ["mcp", "own", OWN_FILE]);
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain(`("acme-old")`);
+      expect(result.stderr).not.toContain(PLAIN);
+    });
+  });
+
   it("refuses a file that does not parse, quoting none of it, and writes nothing", async () => {
     const handle = tempDir();
     await seedManifest(handle);
@@ -717,6 +774,9 @@ const CHARTER_FIXTURE = [
 const ALL_CLIENTS = "claude,cursor,copilot,codex";
 const CLAUDE_DOC = ".mcp.json";
 const CODEX_DOC = ".codex/config.toml";
+const COPILOT_ENV_DOC = `${STATE_DIR}/mcp/copilot-repo-settings.env`;
+const COPILOT_OWN_ENTRY = "COPILOT_MCP_ACME_WIKI=";
+const PASTED_COPY_LINE = "that copy is yours to delete";
 const MERGED_DOCS: readonly string[] = [CLAUDE_DOC, ".cursor/mcp.json", ".vscode/mcp.json"];
 
 const USER_SERVER_ID = "internal-tools";
@@ -949,6 +1009,151 @@ describe("config mcp own --remove — no client entry left launching (REQ-FLOW-1
     expect((await readSetup(root)).mcp?.ownServers?.map((row) => row.id)).toEqual([OWN_ID]);
   });
 
+  it("carries a stop in the --json preview, which drops the line that says it", async () => {
+    const handle = tempDir();
+    const root = await repoWithOwnServer(handle);
+    await link(join(root, ".cursor/mcp.json"), handle.path("second-name.json"));
+
+    const preview = await cliOk(root, ["config", "mcp", "own", "--remove", OWN_ID, "--dry-run", "--json"]);
+
+    const { stops } = JSON.parse(preview.stdout) as { stops: { path: string; note: string }[] };
+    expect(stops.map((stop) => stop.path)).toEqual([".cursor/mcp.json"]);
+    expect(stops[0]?.note).not.toBe("");
+  });
+
+  it("says the Copilot file waits for sync, and a pasted copy is the person's to delete", async () => {
+    const root = await repoWithOwnServer(tempDir());
+    // The premise, and the pin on the entry's spelling: `sync` wrote this line.
+    expect(await readDoc(root, COPILOT_ENV_DOC)).toContain(COPILOT_OWN_ENTRY);
+
+    const result = await cliOk(root, ["config", "mcp", "own", "--remove", OWN_ID, "--json"]);
+
+    // On stderr: `--json` drops stdout, and this is what must not go unsaid.
+    expect(result.stderr).toContain(`${COPILOT_ENV_DOC} lists ${OWN_ID} until the next stamity sync`);
+    expect(result.stderr).toContain("Settings → Copilot → MCP servers");
+    expect(result.stderr).toContain(PASTED_COPY_LINE);
+    expect((JSON.parse(result.stdout) as { untilSync: string[] }).untilSync).toEqual([COPILOT_ENV_DOC]);
+
+    await cliOk(root, ["sync"]);
+
+    const env = await readDoc(root, COPILOT_ENV_DOC);
+    expect(env).not.toContain(COPILOT_OWN_ENTRY);
+    expect(env).toContain("COPILOT_MCP_GITHUB=");
+  });
+
+  it("says the same in the preview, and writes nothing", async () => {
+    const root = await repoWithOwnServer(tempDir());
+    const before = await readDoc(root, COPILOT_ENV_DOC);
+
+    const result = await cliOk(root, ["config", "mcp", "own", "--remove", OWN_ID, "--dry-run"]);
+
+    expect(result.stderr).toContain(`${COPILOT_ENV_DOC} lists ${OWN_ID}`);
+    expect(result.stderr).toContain(PASTED_COPY_LINE);
+    expect(await readDoc(root, COPILOT_ENV_DOC)).toBe(before);
+  });
+
+  it("claims nothing of a Copilot file that no longer lists the server, and still names a pasted copy", async () => {
+    const root = await repoWithOwnServer(tempDir());
+    await cliOk(root, ["config", "mcp", "remove", OWN_ID]);
+    await cliOk(root, ["sync"]);
+
+    const result = await cliOk(root, ["config", "mcp", "own", "--remove", OWN_ID, "--json"]);
+
+    expect(result.stderr).not.toContain(COPILOT_ENV_DOC);
+    expect(result.stderr).toContain(PASTED_COPY_LINE);
+    expect((JSON.parse(result.stdout) as { untilSync: string[] }).untilSync).toEqual([]);
+  });
+
+  it("names a pasted copy on a setup without Copilot too, since a past setup may have made one", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { mcp: { servers: [], ownServers: asRows(ownRow()) } });
+
+    const result = await run(handle, ["mcp", "own", "--remove", OWN_ID]);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stderr).toContain(PASTED_COPY_LINE);
+  });
+
+  it("starts no server a person selected and has not synced yet", async () => {
+    const root = await repoWithOwnServer(tempDir());
+    await cliOk(root, ["config", "mcp", "add", "context7"]);
+
+    await cliOk(root, ["config", "mcp", "own", "--remove", OWN_ID]);
+
+    const codex = await readDoc(root, CODEX_DOC);
+    expect(codex).not.toContain(OWN_ID);
+    expect(codex).not.toContain("context7");
+    expect(codex).toContain("[mcp_servers.github]");
+    // Selecting it was the person's act, and writing it is still `sync`'s.
+    await cliOk(root, ["sync"]);
+    expect(await readDoc(root, CODEX_DOC)).toContain("[mcp_servers.context7]");
+  });
+
+  it("takes only the row when the curated catalog holds its id, and leaves that server running", async () => {
+    const root = await repoWithOwnServer(tempDir());
+    const setup = await readSetup(root);
+    const rows = asRows(ownRow(), ownRow({ id: "github" }));
+    await writeFile(
+      join(root, STATE_DIR, MANIFEST_FILE),
+      `${JSON.stringify({ ...setup, mcp: { ...setup.mcp, ownServers: rows } }, null, 2)}\n`,
+      "utf8",
+    );
+    const before = await Promise.all([...MERGED_DOCS, CODEX_DOC].map((path) => readDoc(root, path)));
+
+    const result = await cliOk(root, ["config", "mcp", "own", "--remove", "github"]);
+
+    const { mcp } = await readSetup(root);
+    expect(mcp?.ownServers?.map((row) => row.id)).toEqual([OWN_ID]);
+    expect(mcp?.servers).toEqual(["github", OWN_ID]);
+    expect(await Promise.all([...MERGED_DOCS, CODEX_DOC].map((path) => readDoc(root, path)))).toEqual(before);
+    expect(result.stdout).toContain("its selection and its entries stay");
+    expect(result.stdout).toContain("from mcp.ownServers");
+    expect(result.stdout).not.toContain("mcp.servers and");
+  });
+
+  it("takes only the row when a pack supplies its id, and the preview says so", async () => {
+    const handle = tempDir();
+    await seedInstalledPack(handle, PACK_ARGS, {
+      mcp: { servers: [PACK_SERVER_ID], ownServers: asRows(ownRow({ id: PACK_SERVER_ID })) },
+    });
+
+    const preview = await run(handle, ["mcp", "own", "--remove", PACK_SERVER_ID, "--dry-run"]);
+    const result = await run(handle, ["mcp", "own", "--remove", PACK_SERVER_ID]);
+
+    expect(preview.stdout).toContain("its selection and its entries stay");
+    expect(result.code, result.stderr).toBe(0);
+    const { mcp } = await readSetup(handle.dir);
+    expect(mcp?.servers).toEqual([PACK_SERVER_ID]);
+    expect(mcp?.ownServers).toEqual([]);
+  });
+
+  it("is not stopped by a pack whose folder was deleted by hand", async () => {
+    const handle = tempDir();
+    await seedInstalledPack(handle, PACK_ARGS, { mcp: { servers: [OWN_ID], ownServers: asRows(ownRow()) } });
+    await rm(handle.path(PACK_DIR), { recursive: true, force: true });
+    // The premise: every verb about to use the pack still refuses it.
+    expect((await run(handle, ["mcp", "list"])).code).toBe(1);
+
+    const result = await run(handle, ["mcp", "own", "--remove", OWN_ID]);
+
+    expect(result.code, result.stderr).toBe(0);
+    const { mcp } = await readSetup(handle.dir);
+    expect(mcp?.servers).toEqual([]);
+    expect(mcp?.ownServers).toEqual([]);
+  });
+
+  it("prints a bad row's id with nothing in it that could repaint the line", async () => {
+    const handle = tempDir();
+    await seedManifest(handle, { mcp: { servers: [], ownServers: asRows(ownRow({ id: "acme\u001b[2K\u009b2Kwiki" })) } });
+
+    const result = await run(handle, ["mcp", "own", "--remove", "nope"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("own servers: acme");
+    expect(controlCharsIn(result.stderr)).toEqual([]);
+    expect(result.stderr).not.toContain("\u009b");
+  });
+
   it("leaves Codex alone when another selected id renders nothing, rather than take that table too", async () => {
     const handle = tempDir();
     const root = await repoWithOwnServer(handle);
@@ -1059,20 +1264,56 @@ describe("a re-init keeps an own server (REQ-FLOW-160)", () => {
     expect(result.stdout + result.stderr).toContain("acme-bad");
   });
 
-  it("a migration carries the row with the id it lifts, so the id still resolves", async () => {
+  it("names a row it left behind with nothing in its id that could repaint the line", async () => {
+    const root = await repoWithOwnServer(tempDir());
+    const setup = await readSetup(root);
+    const rows = asRows(ownRow({ id: "acme\u001b[2K\u009b2Kbad", command: "bash" }));
+    await writeFile(
+      join(root, STATE_DIR, MANIFEST_FILE),
+      `${JSON.stringify({ ...setup, mcp: { servers: [], ownServers: rows } }, null, 2)}\n`,
+      "utf8",
+    );
+
+    const result = await cliOk(root, ["init", "-y", "--force"]);
+
+    const printed = result.stdout + result.stderr;
+    expect(printed).toContain("did not clear the pack bar");
+    expect(controlCharsIn(printed)).toEqual([]);
+    expect(printed).not.toContain("\u009b");
+  });
+
+  /** Assembled from fragments, as `./init.test.ts` does: the leak gate allows the predecessor's name only under `src/migration/` and `test/migration/`. */
+  const predecessorManifest = (handle: TempDirHandle, servers: readonly string[]): Promise<void> =>
+    handle.seedFiles({
+      [`repo/.${["hat", "ch3r"].join("")}/hatch.json`]: `${JSON.stringify(
+        { version: "3.0.0", tools: ["claude"], mcp: { servers, ownServers: [ownRow()] } },
+        null,
+        2,
+      )}\n`,
+    });
+
+  it("a migration lifts no row: a file in the repository cannot add a launcher, and no predecessor wrote one", async () => {
     const handle = tempDir();
     const root = await emptyRepo(handle);
-    // Assembled from fragments, as `./init.test.ts` does: the leak gate allows the
-    // predecessor's name only under `src/migration/` and `test/migration/`.
-    const predecessorDir = `.${["hat", "ch3r"].join("")}`;
-    const predecessor = { version: "3.0.0", tools: ["claude"], mcp: { servers: [OWN_ID], ownServers: [ownRow()] } };
-    await handle.seedFiles({ [`repo/${predecessorDir}/hatch.json`]: `${JSON.stringify(predecessor, null, 2)}\n` });
+    await predecessorManifest(handle, ["context7"]);
 
     await cliOk(root, ["init", "-y", "--migrate", "full"]);
 
     const { mcp } = await readSetup(root);
-    expect(mcp?.servers).toEqual([OWN_ID]);
-    expect(mcp?.ownServers).toEqual([ownRow()]);
-    expect(await idsIn(root, CLAUDE_DOC)).toEqual([OWN_ID]);
+    expect(mcp?.servers).toEqual(["context7"]);
+    expect(mcp?.ownServers).toBeUndefined();
+    expect(await idsIn(root, CLAUDE_DOC)).toEqual(["context7"]);
+  });
+
+  it("a migration refuses an id only such a row could resolve, so nothing launches from it", async () => {
+    const handle = tempDir();
+    const root = await emptyRepo(handle);
+    await predecessorManifest(handle, [OWN_ID]);
+
+    const result = await cli(root, ["init", "-y", "--migrate", "full"]);
+
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain(OWN_ID);
+    expect(result.stdout + result.stderr).not.toContain(OWN_PACKAGE);
   });
 });

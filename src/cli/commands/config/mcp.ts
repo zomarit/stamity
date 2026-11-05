@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { CliFailure } from "../../kit/output.ts";
 import type { CliContext, CommandResult } from "../../kit/program.ts";
+import { sanitizeLabel } from "../../kit/prompts.ts";
 import type { McpServerMeta, PackSuppliedServer } from "../../../mcp/catalog.ts";
 import { keepSavedModelLists } from "../../engine/clientModels.ts";
 import { coOwnedDocumentLanes, coOwnedOwnershipOf, readIfExists, sha256 } from "../../engine/emissionWrite.ts";
@@ -114,6 +115,22 @@ function catalogIds(ctx: CliContext): string[] {
 /** Every MCP server the installed packs supply, sorted by id, with no own row among them. */
 async function packRows(rootDir: string, manifest: SetupManifest): Promise<PackSuppliedServer[]> {
   return packMcpServers(await discoverInstalledPacks(rootDir, manifest), rootDir);
+}
+
+/**
+ * {@link packRows} for the verb that clears a setup: a pack whose folder was
+ * deleted by hand must not stop it, as it does not stop `clean`
+ * (`../clean.ts::installedPackMcpSupply`). A pack read as empty proves nothing, so
+ * an entry it supplied is judged the person's and kept, never deleted unproven.
+ */
+async function packRowsOrNone(rootDir: string, manifest: SetupManifest): Promise<PackSuppliedServer[]> {
+  try {
+    return await packRows(rootDir, manifest);
+  } catch {
+    // reason: not silent — a kept entry still prints as launching, and a Codex
+    // table only a lost pack could render stops the verb by name.
+    return [];
+  }
 }
 
 /**
@@ -652,6 +669,28 @@ async function readOwnRow(rootDir: string, file: string): Promise<McpOwnServer> 
   return parsed as McpOwnServer;
 }
 
+/** Every string under `value`, however deep, with the 40-character form a type refusal cuts a string to. */
+function stringsUnder(value: unknown): string[] {
+  if (typeof value === "string") return [value, `${value.slice(0, 40)}…`];
+  return typeof value === "object" && value !== null ? Object.values(value).flatMap(stringsUnder) : [];
+}
+
+/**
+ * `message` with no quoted field value of `rows` left in it. The seam names each
+ * argument by its place, and the validator also quotes a `command`, a `docsUrl`,
+ * a variable `name` or a `transport` it refuses. Those are where a pasted shell
+ * line, or a link with its password in it, lands, and this text reaches logs and
+ * transcripts. The field stays named beside the gap, and `id` stays because it
+ * is how the person finds the row.
+ */
+function withoutRowValues(message: string, rows: readonly McpOwnServer[]): string {
+  const fields = rows.flatMap((row) => Object.entries(row).filter(([key]) => key !== "id" && key !== "args"));
+  return stringsUnder(fields.map(([, value]) => value as unknown)).reduce(
+    (text, value) => text.replaceAll(JSON.stringify(value), "<value withheld>"),
+    message,
+  );
+}
+
 /**
  * Add the row in `file` to `mcp.ownServers` (REQ-FLOW-160). Every row goes
  * through the seam with the rows it joins, so the verb adds no trust of its own:
@@ -682,7 +721,7 @@ export async function runMcpOwnAdd(
     throw new CliFailure({
       code: "VALIDATION_ERROR",
       message: `the row in ${file} was not added, and nothing was written`,
-      why: cause.message,
+      why: withoutRowValues(cause.message, mcp.ownServers),
       next: "fix what the refusal names and run the command again",
     });
   }
@@ -770,6 +809,10 @@ async function takeOutOfJsonDocument(
  * names are every table the lane accepts, and a plan would refuse over a row or
  * a pack with nothing to do with this removal. A selected id that renders nothing
  * would read as gone, so that refuses instead of taking its table with it.
+ *
+ * The rendering names only the tables the document already holds, since the lane
+ * writes each one it does not find: a server selected and not yet synced is
+ * `sync`'s to write, and a person can still change their mind about it.
  */
 async function takeOutOfCodexConfig(
   ctx: CliContext,
@@ -784,9 +827,9 @@ async function takeOutOfCodexConfig(
   const { segmentTomlTables, tomlTableName } = ctx.engine.manifest.tomlTables;
   const absPath = join(rootDir, ...path.split("/"));
   const serverTable = (server: string): string => tomlTableName(["mcp_servers", server]);
-  const holdsTable = (text: string): boolean => {
+  const holdsTable = (text: string, server: string = id): boolean => {
     const cut = segmentTomlTables(text);
-    return cut.ok && cut.segments.some((segment) => segment.key !== null && tomlTableName(segment.key) === serverTable(id));
+    return cut.ok && cut.segments.some((segment) => segment.key !== null && tomlTableName(segment.key) === serverTable(server));
   };
   try {
     const raw = await readIfExists(absPath);
@@ -802,7 +845,8 @@ async function takeOutOfCodexConfig(
     if (lane === undefined || !ownership.owned) return { path, result: "kept" };
 
     const render = codexConfigTableRendering(supply);
-    const names = ["features", ...(servers.length === 0 ? ["mcp_servers"] : servers.map(serverTable))];
+    const written = segmentTomlTables(raw).ok ? servers.filter((server) => holdsTable(raw, server)) : servers;
+    const names = ["features", ...(written.length === 0 ? ["mcp_servers"] : written.map(serverTable))];
     const unrendered = names.filter((name) => render(name) === null);
     if (unrendered.length > 0) {
       return {
@@ -847,6 +891,30 @@ function withWrittenRows(ledger: readonly LedgerEntry[], outcomes: readonly Entr
 }
 
 /**
+ * The copies of `id` no client document holds, said on stderr so `--json` keeps
+ * them, and the paths still listing it. The Copilot env file is whole and the
+ * engine's, so `sync` rewrites it and this verb leaves it to that. A copy pasted
+ * from it into repository settings is out of every verb's reach and goes on
+ * starting in Copilot's cloud agent, with its secrets. So that line prints on
+ * every removal: only the person knows whether they ever pasted one.
+ */
+async function warnOfCopiesLeft(ctx: CliContext, rootDir: string, id: string): Promise<string[]> {
+  const { planMcpEmissions } = ctx.engine.mcp.emit;
+  const path = planMcpEmissions([], ["copilot"]).find((emission) => emission.dialect === "copilot-env")?.path;
+  // `upperSnake` in `../../../mcp/emit.ts` spells the entry; a pinned test reads a real one.
+  const entry = `COPILOT_MCP_${id.replaceAll(/[^A-Za-z0-9]+/g, "_").toUpperCase()}=`;
+  const raw = path === undefined ? null : await readIfExists(join(rootDir, ...path.split("/")));
+  const listed = raw !== null && raw.split("\n").some((line) => line.startsWith(entry));
+  const warning = ctx.palette.yellow("warning:");
+  if (listed) ctx.io.err(`${warning} ${path} lists ${id} until the next stamity sync.\n`);
+  ctx.io.err(
+    `${warning} a copy of ${id} pasted into a repository's Settings → Copilot → MCP servers goes on launching in ` +
+      `Copilot's cloud agent. No stamity command reaches it, so that copy is yours to delete.\n`,
+  );
+  return listed && path !== undefined ? [path] : [];
+}
+
+/**
  * Remove an own row and leave nothing launching from it (REQ-FLOW-160).
  *
  * The order is the point. The ownership proof re-renders an entry from its row
@@ -865,6 +933,10 @@ function withWrittenRows(ledger: readonly LedgerEntry[], outcomes: readonly Entr
  * nothing, so its entries come back `kept`. A document that cannot be changed
  * stops the verb before the row goes, so the row can still prove it on a re-run.
  * `.env.mcp` is left alone: the value in it is the operator's.
+ *
+ * An id the curated catalog or a pack also holds is that supplier's, since the
+ * bar refuses a row that claims one. Only the row goes: the selection and the
+ * entries stay, and a selected id's entries are `sync`'s to refresh.
  */
 export async function runMcpOwnRemove(
   ctx: CliContext,
@@ -877,14 +949,22 @@ export async function runMcpOwnRemove(
     throw new CliFailure({
       code: "VALIDATION_ERROR",
       message: `no row in mcp.ownServers holds ${JSON.stringify(id)}`,
-      why: rows.length === 0 ? "this repository has no own server" : `own servers: ${rows.map((row) => row.id).join(", ")}`,
+      why:
+        rows.length === 0
+          ? "this repository has no own server"
+          : `own servers: ${rows.map((row) => sanitizeLabel(String(row.id))).join(", ")}`,
       next: "run stamity config mcp remove <id> to deselect a curated or pack server",
     });
   }
 
-  const supply = provableOwnServers(await packRows(rootDir, manifest), manifest);
-  const servers = selectedServers(manifest).filter((server) => server !== id);
+  const packs = await packRowsOrNone(rootDir, manifest);
+  const supply = provableOwnServers(packs, manifest);
+  const foreign = catalogIds(ctx).includes(id) || packs.some((server) => server.id === id);
+  const servers = selectedServers(manifest).filter((server) => foreign || server !== id);
+  const where = foreign ? "mcp.ownServers" : "mcp.servers and mcp.ownServers";
+  const foreignLine = `  the curated catalog or an installed pack also holds ${id}, so its selection and its entries stay as they are\n`;
   const takeOut = async (apply: boolean): Promise<EntryOutcome[]> => {
+    if (foreign) return [];
     const outcomes = await Promise.all([
       ...[...ctx.engine.mcp.emit.MERGED_MCP_JSON_PATHS].map((path) => takeOutOfJsonDocument(ctx, rootDir, path, id, supply, apply)),
       takeOutOfCodexConfig(ctx, rootDir, manifest, id, servers, supply, apply),
@@ -896,16 +976,19 @@ export async function runMcpOwnRemove(
 
   if (ctx.dryRun) {
     const outcomes = await takeOut(false);
-    ctx.io.out(`would remove ${ctx.palette.bold(id)} from mcp.servers and mcp.ownServers\n`);
+    ctx.io.out(`would remove ${ctx.palette.bold(id)} from ${where}\n`);
+    if (foreign) ctx.io.out(foreignLine);
     const removed = pathsWhere(outcomes, "removed");
     if (removed.length > 0) ctx.io.out(`  would take its entry out of ${removed.join(", ")}\n`);
     const kept = pathsWhere(outcomes, "kept");
     if (kept.length > 0) ctx.io.out(`  would keep your own entry in ${kept.join(", ")}, which goes on launching\n`);
-    for (const outcome of outcomes) {
-      if (outcome.result === "refused") ctx.io.out(`  would stop here: ${outcome.note ?? outcome.path}\n`);
-    }
+    const stops = outcomes
+      .filter((outcome) => outcome.result === "refused")
+      .map((outcome) => ({ path: outcome.path, note: outcome.note ?? outcome.path }));
+    for (const stop of stops) ctx.io.out(`  would stop here: ${stop.note}\n`);
+    const untilSync = foreign ? [] : await warnOfCopiesLeft(ctx, rootDir, id);
     ctx.io.out("next: re-run without --dry-run to apply\n");
-    return { exitCode: 0, json: { id, removed: false, dryRun: true, servers, documents: removed, kept } };
+    return { exitCode: 0, json: { id, removed: false, dryRun: true, servers, documents: removed, kept, stops, untilSync } };
   }
 
   const mcp = { ...manifest.mcp, servers };
@@ -935,7 +1018,8 @@ export async function runMcpOwnRemove(
 
   const removed = pathsWhere(outcomes, "removed");
   const kept = pathsWhere(outcomes, "kept");
-  ctx.io.out(`removed ${ctx.palette.bold(id)} from mcp.servers and mcp.ownServers\n`);
+  ctx.io.out(`removed ${ctx.palette.bold(id)} from ${where}\n`);
+  if (foreign) ctx.io.out(foreignLine);
   if (removed.length > 0) ctx.io.out(`  took its entry out of ${removed.join(", ")}\n`);
   if (kept.length > 0) {
     // On stderr, so it survives `--json`: the one thing this verb exists to
@@ -945,10 +1029,11 @@ export async function runMcpOwnRemove(
         `wrote those entries, so they are yours. Remove them by hand if you meant to.\n`,
     );
   }
+  const untilSync = foreign ? [] : await warnOfCopiesLeft(ctx, rootDir, id);
   ctx.io.out(
     `  ${ctx.palette.dim(`${ctx.engine.mcp.env.ENV_MCP_FILE} left untouched — the values in it are yours`)}\n`,
   );
   ctx.io.out(`${NEXT_SYNC_LINE}\n`);
 
-  return { exitCode: 0, json: { id, removed: true, servers, documents: removed, kept } };
+  return { exitCode: 0, json: { id, removed: true, servers, documents: removed, kept, untilSync } };
 }

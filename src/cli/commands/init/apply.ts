@@ -72,6 +72,7 @@ import {
 import { getEmissionPlanner } from "../../engine/emission.ts";
 import { gateGuardCopies, strictGuardGate, type GuardGate } from "../../engine/autonomyGate.ts";
 import { hasNpmChannel, packageCommand, packageName, registryOption } from "../../kit/packageName.ts";
+import { sanitizeLabel } from "../../kit/prompts.ts";
 import {
   coOwnedDocumentLanes,
   coOwnedOwnershipOf,
@@ -922,11 +923,9 @@ async function composeManifest(
     decisions.maturitySource === "flag"
       ? decisions.maturityTier
       : defaults?.maturityTier ?? decisions.maturityTier;
-  const carriedServers = defaults?.mcpServers ?? [];
-  const carriedRows = defaults?.ownServers ?? [];
   const mcp: McpConfig | undefined =
-    carriedServers.length > 0 || carriedRows.length > 0
-      ? { servers: [...carriedServers], ...(carriedRows.length === 0 ? {} : { ownServers: [...carriedRows] }) }
+    defaults?.mcpServers !== undefined && defaults.mcpServers.length > 0
+      ? { servers: [...defaults.mcpServers] }
       : undefined;
 
   const fresh = createManifest({
@@ -1015,7 +1014,7 @@ async function carryOwnServers(rootDir: string, manifest: SetupManifest, previou
   for (const row of rows) {
     const proven = provableOwnServers(held, { mcp: { servers: [], ownServers: [...kept, row] } });
     if (proven.length > held.length + kept.length) kept.push(row);
-    else left.push(String(row.id));
+    else left.push(sanitizeLabel(String(row.id)));
   }
   const keptIds = new Set(kept.map((row) => row.id));
   const selected = (previous?.mcp?.servers ?? []).filter((id) => keptIds.has(id));

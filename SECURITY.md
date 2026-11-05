@@ -86,7 +86,11 @@ policy file, every route is open.
 The policy gates pack sources and nothing else. A row a person adds to `mcp.ownServers`, by hand or
 through `stamity config mcp own <file>`, is not a pack source, so `.stamity/policy.json` does not
 reach it: a server a policy denies as a pack can still launch from such a row. The row clears the
-same pin, secret and text checks a pack server clears (`src/mcp/ownServers.ts::withOwnServers`). The
+pin and secret checks a pack server clears, and the pack's deny patterns run at the pack's windows
+over each free text it holds: its description, blast-radius note, command, package name, docs link,
+arguments and variable descriptions (`src/mcp/ownServers.ts::withOwnServers`). A pack's file is read
+whole. A row's texts are read one at a time, and its arguments joined as well, so words split
+across two other fields are not matched. The
 manifest that holds it is a person-only path, and that hold is on an unattended run's push: an
 agent on your machine can still run the verb, as it can edit the manifest or a client's MCP file by
 hand, and a selected row launches after the next `sync`.
