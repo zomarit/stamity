@@ -2,7 +2,7 @@
 title: The factory
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-05). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-06). -->
 <!-- Re-open when: a step's verb, setting or check changes, an `Issue trigger` row of `CLIENT_CLOUD_FACTS`
      moves, the ready label or a filed item's body changes, or a real run proves or breaks a step.
      `test/docsPages.test.ts` holds this page to the hand-page contract, the order of its steps and the

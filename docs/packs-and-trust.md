@@ -2,7 +2,7 @@
 title: Packs and trust
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-05). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-06). -->
 <!-- Re-open when: a trust tier is added or removed, the signed payload or the `signing.signer`
      grammar changes, the bundle bound changes, the shipped signature verifier is replaced, `add`
      gains or loses a flag, the org trust policy grammar changes, or the published package stops

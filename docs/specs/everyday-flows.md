@@ -6369,8 +6369,9 @@ whole number from 0 to 9, polls pending check runs every 30 s. Exit 0 for `lande
     refuses as "not computed yet, run it again" (`LAND_BUDGET_MS` and `READY_MERGEABLE_MS`,
     `src/cli/commands/runLand.ts:83-94`).
   - **`gh`** (`review/75`, `review/91`, `review/95`, `review/96`, `build/18`): the `PATH` entry and the program it
-    names are each checked outside the work tree and the temp folders (`os.tmpdir()`, `/tmp`, and on win32 `%TEMP%`,
-    `%TMP%` and the local `AppData\Temp`), compared as real, normalised paths with a separator boundary; every later
+    names are each checked outside the work tree and the temp folders (`os.tmpdir()`; `/tmp` and `/var/tmp` on POSIX;
+    on macOS also `/var/folders`; on win32 also `%TEMP%`, `%TMP%` and the local `AppData\Temp`), compared as real,
+    normalised paths with a separator boundary; every later
     call starts that same absolute entry, from the filesystem's root (the system drive's root on Windows), with the
     version managers' version-choosing variables dropped (`filesystemRoot` and `tempRoots`, `:197-215`;
     `withoutVersionChoice`, `src/cli/engine/ghRunner.ts`). So a `gh` pinned only in the repository's own

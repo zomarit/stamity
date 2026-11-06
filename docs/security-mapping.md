@@ -2,7 +2,7 @@
 title: Security mapping
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-05). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-06). -->
 <!-- Re-open when: a catalogue edition below moves, a control's implementing symbol moves, or a
      surface is added to or removed from the engine. `test/docsPages.test.ts` resolves every
      `file::symbol` address and pins the surface count, so it catches the last two, not the first. -->

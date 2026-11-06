@@ -651,7 +651,10 @@ const CURRENCY_HEADER =
 // every page of the bucket and GOVERNANCE.md against the candidate, their rows landed in the commit before the
 // restamp, and all sixteen pages moved onto the cut form, so the commit form has no members and the else branch
 // holds REATTESTATION_DATE to this date, which it already reads.
-const RELEASE_CUT_DATE = "2026-11-05";
+//
+// TEST CHANGE, justified: MOVED 2026-11-06, from "2026-11-05". The cut lands a day after that walk, so the release
+// date, the stamps and this pin move together. The move read no page again; the walk stays the one above.
+const RELEASE_CUT_DATE = "2026-11-06";
 
 /**
  * The date the current re-verification pass re-read the hand bucket on.
@@ -875,8 +878,11 @@ const RELEASE_CUT_DATE = "2026-11-05";
  *
  * NOT MOVED, 2026-11-05, at the whole-branch round: `docs/factory.md` left its lane base for that same
  * d9a33cfa and took the five pages' wording, since no code has moved since. The date stays.
+ *
+ * TEST CHANGE, justified: MOVED 2026-11-06, from 2026-11-05, with RELEASE_CUT_DATE: the commit form has no members, so
+ * the else branch holds this constant to that one.
  */
-const REATTESTATION_DATE = "2026-11-05";
+const REATTESTATION_DATE = "2026-11-06";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");

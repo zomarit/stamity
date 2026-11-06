@@ -40,10 +40,10 @@ and moves a `package.json` pin (an exact, `^` or `~` spec) to 1.18.0; where a lo
 install afterwards so the lockfile follows the pin. Where an item below says "the first `sync`", the first `upgrade`
 (or `sync`) at 1.18.0 is that run.
 
-On 2026-11-05 the release cut walked this with the 1.18.0 build, before its publish, on one plain repository the
-published 1.17.0 wrote with all four clients selected. `sync` exited 0, `check` then exited 0, and a second `sync`
-changed nothing. The `upgrade` verb's pin move, a setup with packs, a source policy and a workspace were not walked;
-those items are read from the code and its tests.
+On 2026-11-05, ahead of the 2026-11-06 cut, this was walked with the 1.18.0 build, before its publish, on one plain
+repository the published 1.17.0 wrote with all four clients selected. `sync` exited 0, `check` then exited 0, and a
+second `sync` changed nothing. The `upgrade` verb's pin move, a setup with packs, a source policy and a workspace were
+not walked; those items are read from the code and its tests.
 
 - **Every new setting starts off.** `autonomy.adminRuleProof`, `autonomy.autoShip`, `autonomy.reviewTool` and
   `autonomy.landJob` read `off` or `none`, and `mcp.ownServers` is empty, so none of them changes a run until you set
@@ -74,6 +74,8 @@ those items are read from the code and its tests.
   reading of a command line, the session start, what the land verb and its job accept as evidence, the pre-flight's
   checks and the lines `add` and `config mcp` show a person are tightened. Upgrade from any earlier release.
   `SECURITY.md` and `docs/security-mapping.md` follow.
+- **`run land` and the pre-flight refuse a `gh` in more temp folders.** The list of folders the check treats as temp
+  is broader on Linux and macOS.
 - **A source policy holds at every `sync` and `check` as it held at install.** Both judge an installed pack by the
   source kind `add` judged, read only from a receipt that matches its ledger row. With a kind rule in the policy, a
   pack whose kind cannot be proven that way is refused and named as unproven until its receipt is restored or it is
