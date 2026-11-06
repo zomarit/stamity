@@ -6270,7 +6270,9 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     // review/89: the prompt's step 2 stops rather than moves on, so filing again leaves every later session stopped.
     const session = flowed(section("When nothing fired"));
     expect(session).toContain("stops at that issue, not moving on to the next, and filing again leaves that label in place");
-    expect(session).toContain("Take that person's label off, then have the task owner add it.");
+    // TEST CHANGE, justified (review/92): the step 3 read comes before the author check, so the owner relabels only their own issue.
+    expect(session).toContain("Take that person's label off. The task owner adds it again only on an issue they wrote and mean to run.");
+    expect(session).toContain("On any other issue, taking the label off is the whole remedy");
     expect(step).toContain("Pick one repository for the task, and do not make the task inside a Claude Project.");
     expect(step).not.toContain("outside any project");
     expect(step, "the read a real session settled").not.toContain("whether the proxy answers every read");

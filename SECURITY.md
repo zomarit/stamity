@@ -890,8 +890,9 @@ What stays open is named here, as accepted risk:
   the person and the repository's `permissions` read admin true, and Claude's cloud environments
   page, read 2026-11-05, says the proxy puts your own credentials on `gh api` calls. So the `user`
   read spoke for the person, not for a shared app. That is what one session read, not a promise from
-  Claude, and those reads do not show which account a push goes out as. Code:
-  `src/runs/preflight.ts::pushIdentityCheck`.
+  Claude, and those reads do not show which account a push goes out as. The wall reads each ruleset's
+  bypass for the REST account, so a bypass held only by a different pushing account would go unseen.
+  Code: `src/runs/preflight.ts::pushIdentityCheck`, `src/runs/preflight.ts::inspectDirectPush`.
 - **The 403 fallback.** Where the permission read answers 403, the fallback takes the repository's
   `permissions` as the account's own. This was read only for an account holding admin, where a
   person's rights and an app's would read alike, and a task owner under write has not been measured.

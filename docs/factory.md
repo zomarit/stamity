@@ -444,8 +444,11 @@ Go through these in order, and stop at the first one that explains it:
    wrong shape. File such an item again as in Step 6, unless the label is the cause. On Claude's
    cloud a label from anyone but the task's owner stops every later session too, your own labels
    included: the prompt goes oldest first and stops at that issue, not moving on to the next, and
-   filing again leaves that label in place. Take that person's label off, then have the task owner
-   add it. An issue with a missing or wrong `Branch:` or `Plan:` line stops every later session too,
+   filing again leaves that label in place. Take that person's label off. The task owner adds it
+   again only on an issue they wrote and mean to run. On any other issue, taking the label off is the
+   whole remedy: the prompt's step 3 reads the body with the owner's credentials before the run checks
+   who wrote the issue, so the owner's label would put outside text in front of an unattended session.
+   An issue with a missing or wrong `Branch:` or `Plan:` line stops every later session too,
    on either cloud: it keeps its label, so each session stops at it in the prompt's step 3, and filing
    again leaves the old label in place. Take the label off the wrong issue.
 7. **A `Refused:` draft.** The run started and refused. Read `## Refused` in the body and fix what it
