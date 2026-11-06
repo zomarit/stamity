@@ -95,10 +95,23 @@ A claim about behaviour is worth what its instrument is worth.
 - The corpus is prose executed by a model, so a test suite cannot decide it. The
   [eval set](../evals/README.md) decides it instead. Thresholds are declared before the run, and
   a red run is published rather than re-scored. The run of record is
-  [run 57](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-27-run-57/RESULTS.md),
-  the 1.17.0 release run, and its PASS is a composed one: the full run behind it was FAIL. It is
-  composed rather than measured end to end, under the set's incremental rule. Run 56 measured
-  every case in full.
+  [run 61](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-11-06-run-61/RESULTS.md),
+  the 1.18.0 release run, and its PASS is a composed one: two runs behind it, run 59 and the full
+  run 56, were FAIL. It is composed rather than measured end to end, under the set's incremental
+  rule. Run 56 measured every case in full; run 61 reaches it through runs 59 and 57.
+  [Run 59](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-11-05-run-59/RESULTS.md)
+  alone was FAIL on one floor case, `unattended-item-says-merge-refused`, and the adversarial
+  guardrail hold rate not met; run 61 re-measured four cases, composed with run 59, and carried
+  the other 174 with their hashes. No case failed on behaviour: in runs 58, 59 and 60 a judge wrote
+  a deleted advisory row back into its grade, the grade reader rejected the output, and each run
+  ended one sample short on a floor case, and a sample with no grade counts as failing. The route
+  of record's driver now takes such a row out before the reader reads the output. The reader, the
+  rubric and the thresholds did not move, and this change came after those three runs' scores were
+  known. Two advisory rows that repeated in run 59 were deleted, each with a note carrying its
+  hash, and one Brief was given the text its row grades: those are the three moved cases run 61
+  re-measured beside the short one. Run 57 alone was PASS; run 59 re-measured 88 cases, the whole
+  safety set, every moved case and the seven new ones, composed with run 57, and carried the other
+  90.
   [Run 56](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-27-run-56/RESULTS.md)
   alone was FAIL with the adversarial guardrail hold rate not met; run 57 re-measured eight cases,
   composed with run 56, and carried the other 163 with their hashes. Run 56 held 38 of 39: one
@@ -111,10 +124,10 @@ A claim about behaviour is worth what its instrument is worth.
   deleted, each with a note carrying its hash. The eight re-measured are the cases whose files
   moved. The dated paragraphs of [the set](../evals/SET-v7.md) say what moved and why, and a pass
   on a moved case is a change in the case as much as in the model. The composed run reads golden
-  1.000 (91/91) with floors 48/48, guardrail hold 39/39, benign-twin false refusals 0/10 and
-  trigger probes 31/31, and judge calibration matched 5 of 5 in each run. Runs 53 to 55 were
-  earlier increments toward 1.17.0 and are published; none is the run of record. No threshold
-  moved, and run 56 stays published as the red run.
+  1.000 (94/94) with floors 54/54, guardrail hold 43/43, benign-twin false refusals 0/10 and
+  trigger probes 31/31, and judge calibration matched 5 of 5 in each run. Runs 58 and 60 were
+  earlier tries toward 1.18.0 and are published; neither is the run of record. No threshold
+  moved, and runs 59 and 56 stay published as red runs.
   [The measurements page](measurements.md) rolls an eval run of record up beside the verified
   merge-ready rate.
 - Every work run closes on a proof block that names the gates it ran and what it did not do.

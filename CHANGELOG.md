@@ -143,6 +143,38 @@ not walked; those items are read from the code and its tests.
   starts and runs beside the eval, and it is redone if the tag lands more than 24 hours later.
 - **The eval set gains seven cases,** four adversarial and three golden, for the land and the ready item, so SET-v7
   now has 178 cases.
+- **Run 61 is the 1.18.0 release run, composed back through runs 59 and 57 to run 56 on the `claude` profile: a
+  composed PASS with two FAIL runs behind it.** The release rule called for a measure: cases moved, seven were added,
+  and the model-facing text and the files the engine emits for each client moved too. Run 59, at candidate `4cfa3eee`,
+  re-measured 88 cases, the whole safety set, every moved case and the seven new ones, and carried the other 90 from
+  run 57. Alone it was FAIL: floors 53 of 54 and guardrail hold 0.977 (42 of 43), both on
+  `unattended-item-says-merge-refused`, one graded sample short, with golden 1.000 (94 of 94), benign-twin false
+  refusals 0 of 10 and trigger probes 31 of 31 met. No case failed on behaviour. In runs 58, 59 and 60 a judge wrote a
+  deleted advisory row back into its grade, the grade reader rejected the output, and each run ended one sample short
+  on a floor case, and a sample with no grade counts as failing. Runs 58 and 60, on `rework-persistence-guard-holds`
+  and `production-review-gatherer-not-grader`, are published and neither is the run of record. The route of record's
+  driver now takes such a row out before the reader reads the output, and `RESULTS.md` § 10a counts each one: run 61
+  dropped 5 across 5 judge attempts. The reader, the rubric, the thresholds, the scoring rule and the judge's input
+  did not move. That change came after those three runs' scores were known; replayed on every judge attempt of the
+  three, it changes no admitted grade, though their three short samples would grade PASS under it, and those runs are
+  not re-read. The three advisory repeats runs 58 and 59 named were each deleted with a note
+  carrying the row's hash, and one Brief was given the description its row grades. The dated paragraphs of
+  `evals/SET-v7.md` say what moved and why, and that a pass on a moved case is a change in the case as much as in the
+  model. Run 61, at candidate `8ac5210e`, re-measured four cases under SET-v7's incremental rule, the short floor case
+  and the three whose files moved, each passing 3 of 3, and carried the other 174 from run 59. Run 57 alone was PASS
+  and run 56, the full measure, alone was FAIL; this file's 1.17.0 section tells that link. The composed result: PASS.
+  On the Claude profile (scenario `claude-opus-5-5` at `high` effort, judge `claude-fable-5-1`, client 2.1.286, baseline
+  `stamity-claude-cli-v2`) and rubric v7, against the thresholds declared before the run: golden 1.000 (94 of 94) with
+  floors 54 of 54, guardrail hold 1.000 (43 of 43), benign-twin false refusals 0.000 (0 of 10), and trigger-probe
+  accuracy 1.000 (31 of 31). Calibration matched 5 of 5 in each run, and run 61 found no advisory repeat. No golden case
+  fails; six pass at two samples of three, each carried, one of them the floor case `charter-touchpoints-delegate`.
+  Run 59 retained thirteen invalid judge attempts, one call exhausting its attempts, and run 61 one, redone. No
+  threshold or floor tag moved, the advisory count moved from 152 to 149 with the deletions, and no exception is
+  recorded for this release. When these files were published the `records` branch stood at
+  `6d2348e9b14b08d7eed84925e8f00d7765ff6f30`, and the evidence is linked at that commit: the run's results at
+  [`evals/runs/2026-11-06-run-61/RESULTS.md`](https://github.com/zomarit/stamity/blob/6d2348e9b14b08d7eed84925e8f00d7765ff6f30/evals/runs/2026-11-06-run-61/RESULTS.md)
+  and run 59's at
+  [`evals/runs/2026-11-05-run-59/RESULTS.md`](https://github.com/zomarit/stamity/blob/6d2348e9b14b08d7eed84925e8f00d7765ff6f30/evals/runs/2026-11-05-run-59/RESULTS.md).
 - **The pages promise only what the land does with a review tool.** `docs/cloud.md`, `docs/factory.md` and
   `SECURITY.md` say what a first reader finds, what `rounds` counts, and that on Claude's cloud the tool holds a land
   and no fix round runs.

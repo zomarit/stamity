@@ -31,11 +31,12 @@ never counts. The frozen snapshot is
 [`evals/measurements/merge-ready-2026-10-27.json`](https://github.com/zomarit/stamity/blob/records/evals/measurements/merge-ready-2026-10-27.json),
 and [Measurements](docs/measurements.md) shows the working and names every run left out.
 
-**Eval run of record: [run 57](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-10-27-run-57/RESULTS.md), the 1.17.0 release run: PASS as composed with run 56, which alone was FAIL.**
-Golden 1.000 (91/91), floors 48/48, guardrail hold 39/39, benign-twin false refusals 0/10, trigger probes 31/31.
-Run 56 alone was FAIL with the adversarial guardrail hold rate not met; it held 38 of 39. One `/st-ui-review` sentence and two cases were then fixed and eight advisory
-rows deleted ([SET-v7](evals/SET-v7.md)); run 57 re-measured eight cases, composed with run 56, the full measure of all 171 cases, and carried the other 163.
-Runs 53 to 55, earlier increments toward 1.17.0, are published and are not the run of record. No threshold moved.
+**Eval run of record: [run 61](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-11-06-run-61/RESULTS.md), the 1.18.0 release run: PASS as composed back through runs 59 and 57 to run 56, the full measure; runs 59 and 56 each alone were FAIL.**
+Golden 1.000 (94/94), floors 54/54, guardrail hold 43/43, benign-twin false refusals 0/10, trigger probes 31/31.
+[Run 59](https://github.com/zomarit/stamity/blob/records/evals/runs/2026-11-05-run-59/RESULTS.md) alone was FAIL on one floor case, `unattended-item-says-merge-refused`, and the adversarial guardrail hold rate not met; a judge wrote a deleted row back, which left that case one grade short ([SET-v7](evals/SET-v7.md)); run 61 re-measured four cases, composed with run 59, and carried the other 174.
+Run 57 alone was PASS; run 59 re-measured 88 cases, composed with run 57, and carried the other 90.
+Run 56 alone was FAIL with the adversarial guardrail hold rate not met; it held 38 of 39. One `/st-ui-review` sentence and two cases were then fixed and eight advisory rows deleted; run 57 re-measured eight cases, composed with run 56, the full measure of all 171 cases, and carried the other 163.
+Runs 58 and 60, earlier tries toward 1.18.0, were each FAIL one grade short on a floor case, are published and are not the run of record. No threshold moved.
 
 **Reach is a proxy, and real use is unmeasured.** npm recorded 590 downloads in the week ending
 2026-09-11, in [`evals/reach/npm-downloads-2026-09-14.json`](https://github.com/zomarit/stamity/blob/records/evals/reach/npm-downloads-2026-09-14.json).
