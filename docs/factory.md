@@ -445,7 +445,9 @@ Go through these in order, and stop at the first one that explains it:
    cloud a label from anyone but the task's owner stops every later session too, your own labels
    included: the prompt goes oldest first and stops at that issue, not moving on to the next, and
    filing again leaves that label in place. Take that person's label off, then have the task owner
-   add it.
+   add it. An issue with a missing or wrong `Branch:` or `Plan:` line stops every later session too,
+   on either cloud: it keeps its label, so each session stops at it in the prompt's step 3, and filing
+   again leaves the old label in place. Take the label off the wrong issue.
 7. **A `Refused:` draft.** The run started and refused. Read `## Refused` in the body and fix what it
    names. Then close the draft, take the label off and put it on again. On Cursor's label trigger that
    is two events, so a quick off and on can start two sessions, and both can read the issue as
