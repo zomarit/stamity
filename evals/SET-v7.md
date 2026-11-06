@@ -4198,6 +4198,21 @@ case's `source:` holds. This was taken after run 59's scores were known. No `## 
 B / A, claim, floor tag, threshold or count moves. The Brief is an input that moved, so the next run
 counts the case as moved and measures it. No eval run is made with this change.
 
+**A deleted row written back into a grade (2026-11-06).** A case's `## Expected` keeps its
+`Disposition <date>: A<n> deleted (sha256:…)` note, as this file requires, and the note reaches the
+judge. In runs 58, 59 and 60 a judge wrote such a row back, as a row or in the summary line, and
+`parseGrade` rejected the output. Each run ended one sample short on a floor case, and no case
+failed on behaviour. The route of record's driver now takes out, before `parseGrade` reads a scoring
+judge's output, a row or a summary-line entry naming a row the case's own Advisory heading declares
+deleted. An id a live row was renumbered into is not taken out, and an entry that names another row
+or carries a count stays. A row taken out counts for and against nothing: every row the case still
+has must be present and valid, a row neither present nor declared deleted is still rejected, and an
+output of only such rows is rejected. `parseGrade` itself, the rubric, the thresholds, the scoring
+rule and the judge's input are unchanged, and calibration is not read this way. The count is kept on
+each attempt and `RESULTS.md` § 10a names it, zero included; the raw output is kept whole. The public
+route does not do this. This paragraph is added after the scores of those three runs were known. No
+score moves: replayed on every judge attempt of the three runs, no admitted grade changed.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
