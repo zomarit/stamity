@@ -4204,14 +4204,19 @@ judge. In runs 58, 59 and 60 a judge wrote such a row back, as a row or in the s
 `parseGrade` rejected the output. Each run ended one sample short on a floor case, and no case
 failed on behaviour. The route of record's driver now takes out, before `parseGrade` reads a scoring
 judge's output, a row or a summary-line entry naming a row the case's own Advisory heading declares
-deleted. An id a live row was renumbered into is not taken out, and an entry that names another row
-or carries a count stays. A row taken out counts for and against nothing: every row the case still
-has must be present and valid, a row neither present nor declared deleted is still rejected, and an
-output of only such rows is rejected. `parseGrade` itself, the rubric, the thresholds, the scoring
-rule and the judge's input are unchanged, and calibration is not read this way. The count is kept on
-each attempt and `RESULTS.md` § 10a names it, zero included; the raw output is kept whole. The public
-route does not do this. This paragraph is added after the scores of those three runs were known. No
-score moves: replayed on every judge attempt of the three runs, no admitted grade changed.
+deleted and carrying no pass or fail. A row or entry carrying a pass or fail is still read: it
+reaches `parseGrade`, which rejects it, and the attempt is retried. An id a live row was renumbered
+into is not taken out, and an entry that names another row or carries a count stays. A row taken out
+counts for and against nothing: every row the case still has must be present and valid, a row
+neither present nor declared deleted is still rejected, and an output of only such rows is rejected.
+`parseGrade` itself, the rubric, the thresholds, the scoring rule and the judge's input are
+unchanged, and calibration is not read this way. The count is kept on each attempt and `RESULTS.md`
+§ 10a names it, zero included; the raw output is kept whole. The public route does not do this. This
+paragraph is added after the scores of those three runs were known. Replayed on every judge attempt
+of the three runs, no admitted grade changes. A score can move: a sample with no admitted grade
+counts as failing, so a sample a judge's stray line left ungraded can now grade. The three short
+samples of runs 58 to 60 would grade PASS under this reading. The row's own verdict is untouched,
+and those three runs are not re-read.
 
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
