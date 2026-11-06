@@ -161,7 +161,10 @@ not walked; those items are read from the code and its tests.
   carrying the row's hash, and one Brief was given the description its row grades. The dated paragraphs of
   `evals/SET-v7.md` say what moved and why, and that a pass on a moved case is a change in the case as much as in the
   model. Run 61, at candidate `8ac5210e`, re-measured four cases under SET-v7's incremental rule, the short floor case
-  and the three whose files moved, each passing 3 of 3, and carried the other 174 from run 59. Run 57 alone was PASS
+  and the three whose files moved, each passing 3 of 3, and carried the other 174 from run 59. Run 61's PASS rests on
+  the driver's change: five of its twelve judge grades were read after a drop, the unchanged driver would have sent
+  four of those five back to be rejected and retried, with an outcome no run measured, and three of the four are all
+  the samples of the floor case `production-review-gatherer-not-grader`. Run 57 alone was PASS
   and run 56, the full measure, alone was FAIL; this file's 1.17.0 section tells that link. The composed result: PASS.
   On the Claude profile (scenario `claude-opus-5-5` at `high` effort, judge `claude-fable-5-1`, client 2.1.286, baseline
   `stamity-claude-cli-v2`) and rubric v7, against the thresholds declared before the run: golden 1.000 (94 of 94) with
