@@ -15,8 +15,8 @@
  * origin, or `GH_REPO` or `GH_HOST` naming another repository or host all
  * refuse. The proof holds only where every URL `git` pushes origin to goes
  * out as the identity the REST reads describe (`gh`'s credential alone over
- * https with no Authorization header, or the cloud proxy, whose platform app is
- * both — a named residual), and for an account without admin on the repository
+ * https with no Authorization header, or the cloud proxy, one connection for the
+ * push and the REST reads — a named residual), and for an account without admin on the repository
  * unless an organization ruleset blocks that no repository-level act can take
  * the default branch out of, the account not an organization owner, since a
  * repository admin can lift a repository rule or classic protection, repoint
@@ -753,7 +753,7 @@ function pushIdentityCheck(deps: PreflightDeps, repo: RepoRef): { bound: boolean
   const ways = [
     ...(kinds.has("https") ? ["over https with gh's credential, the REST reads' identity"] : []),
     ...(kinds.has("proxy")
-      ? ["through the cloud proxy, whose platform app is both the push and the REST identity (a named residual)"]
+      ? ["through the cloud proxy, one connection for the push and the REST reads (a named residual)"]
       : []),
   ];
   return { bound: true, evidence: `git pushes to ${count} on origin's repository ${ways.join(", or ")}`, fix: "" };
@@ -830,8 +830,8 @@ async function directPush(deps: PreflightDeps): Promise<DirectPushCheck> {
   );
 }
 
-/** A person's right on a repository: its word, with `note` set where the account's own rights supplied it, or why none was read. */
-type PersonRight = { permission: string; note: string } | { permission: undefined; cause: string };
+/** A person's right on a repository: its word, with `note` set where the account's own rights supplied it, or why none was read, with `otherAccount` set where that person is not the account the run acts as. */
+type PersonRight = { permission: string; note: string } | { permission: undefined; cause: string; otherAccount?: true };
 
 /** One REST read for {@link personRight}: a path with no leading `/`, answered `null` where the read failed. */
 type RightRead = (path: string) => Promise<{ status: number; json: unknown } | null>;
@@ -845,7 +845,7 @@ async function ownRight(reader: RightRead, repo: string, login: string): Promise
   const account = me?.status === 200 && isRecord(me.json) ? me.json["login"] : undefined;
   if (typeof account !== "string") return { permission: undefined, cause: `HTTP 403, and the account's own login is unreadable (${statusText(me)})` };
   // GitHub's names ignore case.
-  if (account.toLowerCase() !== login.toLowerCase()) return { permission: undefined, cause: `HTTP 403, and ${login} is not the account the run acts as` };
+  if (account.toLowerCase() !== login.toLowerCase()) return { permission: undefined, cause: `HTTP 403, and ${login} is not the account the run acts as`, otherAccount: true };
   const about = await settled(`repos/${repo}`);
   const rights = about?.status === 200 && isRecord(about.json) ? about.json["permissions"] : undefined;
   if (isRecord(rights)) {
@@ -861,9 +861,10 @@ async function ownRight(reader: RightRead, repo: string, login: string): Promise
  *
  * Any answer to the permission read but an exact 403 stands as it is. Claude's cloud proxy answered 403 on every
  * `collaborators` path in a real session on 2026-11-06, so on 403 alone the person may still be proven: where `user`
- * names `login`, the repository's `permissions` block is that account's own, `admin` true reading admin, else `push`
- * true write, else `push` false read. Anything else stays unreadable, a different login included: no read here shows
- * another person's right, and no value comes from the environment, a config or issue text.
+ * names `login`, the repository's `permissions` block is taken as that account's own (a named residual, read only for
+ * an account holding admin), `admin` true reading admin, else `push` true write, else `push` false read. Anything
+ * else stays unreadable, a different login included: no read here shows another person's right, and no value comes
+ * from the environment, a config or issue text.
  */
 export async function personRight(reader: RightRead, repo: string, login: string): Promise<PersonRight> {
   const reply = await reader(`repos/${repo}/collaborators/${encodeURIComponent(login)}/permission`);
@@ -871,6 +872,10 @@ export async function personRight(reader: RightRead, repo: string, login: string
   const permission = reply?.status === 200 && isRecord(reply.json) ? reply.json["permission"] : undefined;
   return typeof permission === "string" ? { permission, note: "" } : { permission: undefined, cause: statusText(reply) };
 }
+
+/** Another writer's restatement refuses the same way, so this names the one account that can be proven. */
+const OWN_ACCOUNT_FIX =
+  "only the account the run acts as can be proven here, which on Claude's cloud is the task owner: start from an open issue that account opened, or have it restate this one";
 
 async function inputAuthor(deps: PreflightDeps): Promise<CheckResult> {
   const fix = "start from an open issue an admin or write author opened, or have one restate it";
@@ -901,7 +906,7 @@ async function inputAuthor(deps: PreflightDeps): Promise<CheckResult> {
   const right = await personRight((path) => read(rest, `/${path}`), origin, login);
   if (right.permission === undefined) {
     const evidence = `${ref}: ${login}'s permission on ${origin} is unreadable (${right.cause})`;
-    return { state: "unknown", evidence, fix };
+    return { state: "unknown", evidence, fix: right.otherAccount === true ? OWN_ACCOUNT_FIX : fix };
   }
   if (right.permission === "admin" || right.permission === "write") {
     return { state: "pass", evidence: `${ref}: ${login} has ${right.permission} on ${origin}${right.note}`, fix };

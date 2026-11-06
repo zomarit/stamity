@@ -246,7 +246,8 @@ one branch, and nothing warns you. That is a reading of these steps, not somethi
 On Claude's cloud only the task owner's label can start a run. Anyone else's label stops it, and so
 does an issue someone else wrote. In one real session on 2026-11-06, Claude's GitHub proxy answered
 403 on every `collaborators` path, so the run can prove only the rights of the account it acts as,
-which is yours. That is what one session read, not a promise from Claude.
+which is yours. That is what one session read, not a promise from Claude. Such a label also stops
+every later session at that issue, and When nothing fired says what clears it, under The session.
 
 1. Install the Claude GitHub App on the repository. The page offers it when it is missing. Claude
    being able to clone the repository does not mean the App is there.
@@ -440,7 +441,11 @@ Go through these in order, and stop at the first one that explains it:
 6. **The session.** Open the latest run on the vendor's page. The prompt stops, starting nothing, if
    the label came from someone without write access, on Claude's cloud from anyone but the task's
    owner, if the issue is claimed, or if the issue has no `Branch:` or `Plan:` line, or one of the
-   wrong shape. File such an item again as in Step 6.
+   wrong shape. File such an item again as in Step 6, unless the label is the cause. On Claude's
+   cloud a label from anyone but the task's owner stops every later session too, your own labels
+   included: the prompt goes oldest first and stops at that issue, not moving on to the next, and
+   filing again leaves that label in place. Take that person's label off, then have the task owner
+   add it.
 7. **A `Refused:` draft.** The run started and refused. Read `## Refused` in the body and fix what it
    names. Then close the draft, take the label off and put it on again. On Cursor's label trigger that
    is two events, so a quick off and on can start two sessions, and both can read the issue as

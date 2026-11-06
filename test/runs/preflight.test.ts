@@ -810,6 +810,8 @@ describe("runPreflight — the push identity (review/36)", () => {
     const verdict = await runPreflight(greenDeps({ pushIdentity: { fetchUrl: PROXY_URL, pushUrls: [pushTo(PROXY_URL, null)] } }));
     expect(check(verdict, "direct-push").state).toBe("pass");
     expect(check(verdict, "direct-push").evidence).toContain("residual");
+    expect(check(verdict, "direct-push").evidence).toContain("one connection for the push and the REST reads");
+    expect(check(verdict, "direct-push").evidence, "the identity a real session contradicted for the REST reads").not.toContain("platform app");
   });
 
   it.each([
@@ -1241,6 +1243,10 @@ describe("runPreflight — input-author where the permission read answers 403", 
       state: "unknown",
       evidence: "o/r#12: alice's permission on o/r is unreadable (HTTP 403, and alice is not the account the run acts as)",
     });
+    // review/91: another writer's restatement refuses the same way, so the fix names the one account that passes.
+    expect(refusal(verdict, "input-author")?.fix).toBe(
+      "only the account the run acts as can be proven here, which on Claude's cloud is the task owner: start from an open issue that account opened, or have it restate this one",
+    );
     expect(verdict.ok).toBe(false);
     expect(calls).toContain("/user");
     expect(repositoryReads(calls)).toBe(1);
@@ -1248,6 +1254,9 @@ describe("runPreflight — input-author where the permission read answers 403", 
 
   it.each<[string, Record<string, Reply>, string]>([
     ["`user` answering 500", { "/user": { status: 500, json: null } }, "HTTP 403, and the account's own login is unreadable (HTTP 500)"],
+    // review/90: an error reply's body proves nobody, so these two hold the `status === 200` guards in `ownRight`.
+    ["`user` answering 500 with a body naming the person", { "/user": { status: 500, json: { login: "alice" } } }, "HTTP 403, and the account's own login is unreadable (HTTP 500)"],
+    ["the repository answering 500 with a body reading `push` true", { [REPOSITORY]: { ...repoReply(WRITER), status: 500 } }, "HTTP 403, and the account's rights on the repository are unreadable (HTTP 500)"],
     ["`user` holding no login", { "/user": { status: 200, json: { id: 1 } } }, "HTTP 403, and the account's own login is unreadable (HTTP 200)"],
     ["the repository answering 500", { [REPOSITORY]: { status: 500, json: null } }, "HTTP 403, and the account's rights on the repository are unreadable (HTTP 500)"],
     ["no `permissions` field", { [REPOSITORY]: repoReply(undefined) }, "HTTP 403, and the account's rights on the repository are unreadable (HTTP 200)"],
@@ -1258,6 +1267,8 @@ describe("runPreflight — input-author where the permission read answers 403", 
     const { rest } = restTable(routes(overrides));
     const verdict = await runPreflight(greenDeps({ rest, item: ITEM }));
     expect(check(verdict, "input-author")).toMatchObject({ state: "unknown", evidence: `o/r#12: alice's permission on o/r is unreadable (${cause})` });
+    // review/91: only a different login moves the fix; an unreadable read keeps the text every other case gives.
+    expect(refusal(verdict, "input-author")?.fix).toBe("start from an open issue an admin or write author opened, or have one restate it");
     expect(verdict.ok).toBe(false);
   });
 

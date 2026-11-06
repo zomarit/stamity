@@ -2426,6 +2426,7 @@ describe("SECURITY.md", () => {
       const residuals = section("### Cloud and unattended runs", "## Standards mapping");
       expect(flat.indexOf("### Cloud and unattended runs")).toBeGreaterThan(flat.indexOf("## What it does not defend"));
       expect(flat, "the retired bullet is back").not.toContain("Runs nobody watches");
+      expect(flat, "the page says again that the REST reads run as a shared app").not.toContain("shared app identity");
       for (const risk of [
         "screened by the model, not enforced",
         "a Copilot hook that times out fails open",
@@ -2437,7 +2438,14 @@ describe("SECURITY.md", () => {
         "Codex's non-interactive mode was seen running no project hooks",
         "a repository's own push configuration",
         "a GraphQL mutation read from a file",
-        "the platform's shared app identity",
+        // TEST CHANGE, justified: a real session on 2026-11-06 read `user` naming the person, so the page no longer says
+        // the REST reads run as a shared app. What the pre-flight relies on, and the residual the fallback leaves, stand here.
+        "takes the push and the REST reads behind Claude Code's cloud proxy as one proxy connection",
+        "those reads do not show which account a push goes out as",
+        "the fallback takes the repository's `permissions` as the account's own",
+        "read only for an account holding admin",
+        "a task owner under write has not been measured",
+        "that owner alone, in their own session",
         "a custom repository role that can edit rules",
         "a custom organization role that manages rulesets",
         "an administrator's repository-level acts",
@@ -6258,6 +6266,11 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     const step = flowed(section("Step 7: Claude"));
     expect(step).toContain("On Claude's cloud only the task owner's label can start a run. Anyone else's label stops it");
     expect(step).toContain("In one real session on 2026-11-06");
+    expect(step).toContain("Such a label also stops every later session at that issue");
+    // review/89: the prompt's step 2 stops rather than moves on, so filing again leaves every later session stopped.
+    const session = flowed(section("When nothing fired"));
+    expect(session).toContain("stops at that issue, not moving on to the next, and filing again leaves that label in place");
+    expect(session).toContain("Take that person's label off, then have the task owner add it.");
     expect(step).toContain("Pick one repository for the task, and do not make the task inside a Claude Project.");
     expect(step).not.toContain("outside any project");
     expect(step, "the read a real session settled").not.toContain("whether the proxy answers every read");

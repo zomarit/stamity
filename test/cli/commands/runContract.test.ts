@@ -799,6 +799,9 @@ describe("stamity run contract", () => {
 
     it.each([
       ["`user` unreadable", { status: 500, json: null }, rights(WRITER), "the account's own login is unreadable (HTTP 500)"],
+      // review/90: an error reply's body proves nobody, so these two hold the `status === 200` guards in `ownRight`.
+      ["`user` answering 500 with a body naming the person", { status: 500, json: { login: AUTHOR } }, rights(WRITER), "the account's own login is unreadable (HTTP 500)"],
+      ["the repository answering 500 with a body reading `push` true", account(AUTHOR), { ...rights(WRITER), status: 500 }, "the account's rights on the repository are unreadable (HTTP 500)"],
       ["`user` holding no login", { status: 200, json: {} }, rights(WRITER), "the account's own login is unreadable (HTTP 200)"],
       ["the repository unreadable", account(AUTHOR), { status: 500, json: null }, "the account's rights on the repository are unreadable (HTTP 500)"],
       ["`permissions` missing", account(AUTHOR), rights(), "the account's rights on the repository are unreadable (HTTP 200)"],

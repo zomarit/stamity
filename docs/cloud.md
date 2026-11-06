@@ -168,6 +168,13 @@ account. On this cloud only the task owner's label can start a run: anyone else'
 so does an issue someone else wrote. A first run may also refuse on `direct-push` where the block
 rests on classic protection, or for an administrator on an organization ruleset.
 
+In that session `user` named the person and the repository's `permissions` read admin true. So the
+`user` read spoke for the person, but a person's rights and an app's would read alike for an account
+holding admin. The 403 fallback was read only for such an account, and a task owner under write has
+not been measured. Its reach is that owner alone, in their own session. The pre-flight takes the push
+and the REST reads as one proxy connection, and those reads do not show which account a push goes
+out as. `SECURITY.md` names both as residuals.
+
 An MCP server's
 credential is read as `${VAR}` from the session's environment. `.env.mcp` is git-ignored, so set the
 variable in the cloud environment, never in a committed file. The pre-flight warns `token-env`,
