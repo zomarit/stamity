@@ -13,8 +13,26 @@ const MAX_FILE_BYTES = 1024 * 1024
 // Exact repository-relative paths only. An exception needs its reviewable reason here,
 // never a broad extension exemption or an automatically raised size ceiling.
 const LARGE_FILE_EXCEPTIONS = new Map([
-  // Empty, and an empty list is the expected steady state: an entry buys one retention window and
-  // retires at the release close that ends it. The last window's five entries — run 53's to run
+  // An empty list is the expected steady state: an entry buys one retention window and retires at
+  // the release close that ends it.
+  //
+  // The window that ends at the next release close (1.18.0's cut) holds two entries. Run 58 and
+  // run 59 are increments on the claude profile (scenario claude-opus-5-5 at high effort, judge
+  // claude-fable-5-1), each composed with run 57 (composition.priorSummaryCommit fe785c17). Run 58,
+  // at candidate d3ee1cb1, reads FAIL on one ungraded sample: the judge call for one sample of
+  // rework-persistence-guard-holds ran out of attempts, and an ungraded sample counts as failing,
+  // so golden is 93/94 and floors 53/54, with hold 43/43, benign-twin false refusals 0/10 and
+  // trigger probes 31/31. Run 59, at candidate 4cfa3eee, reads FAIL the same way on one sample of
+  // unattended-item-says-merge-refused: golden 94/94, floors 53/54, hold 42/43, benign-twin false
+  // refusals 0/10 and trigger probes 31/31. Neither run has a graded sample that fails: no behaviour
+  // failed, and each case's other two samples pass. Their summaries are 7156210 and 7149298 bytes
+  // as exported, and only the summary is published beside PROTOCOL.md, RESULTS.md and inputs.json,
+  // never calls/ or calls.json. Both are published to the `records` branch, whose workflow runs
+  // this script from `main`, so the entries land on `main` first. Each is kept as a prior that a
+  // composition can read; that release close's evidence-archive step compacts both beside an
+  // ARCHIVE.json pointer and retires both entries.
+  //
+  // The 1.17.0 window's five entries — run 53's to run
   // 57's public summaries, all on the claude profile, run 53 at candidate 4e744644 and run 54 at
   // candidate 1033a43e increments that read FAIL, run 55 a PASS increment at candidate 8c639f83
   // whose composition chain ran too long to make it the run of record, run 56 the 1.17.0 full
@@ -55,6 +73,8 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // An entry may precede its artifact: the map is consulted only for paths Git reports as changed
   // (the `has` below), is never iterated and never stat'd, so an entry for a path not yet in the
   // tree is inert rather than a false pass.
+  ['evals/runs/2026-11-05-run-58/summary.json', 'run 58, the increment on the claude profile at candidate d3ee1cb1 composed with run 57 (its prior summary read at fe785c17), FAIL on one ungraded sample of rework-persistence-guard-holds (golden 93/94, floors 53/54, hold 43/43, benign-twin false refusals 0/10, trigger probes 31/31) with no behaviour failing, published to the records branch, and kept as a prior that a composition can read; retained until the next release close (1.18.0 cut), whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
+  ['evals/runs/2026-11-05-run-59/summary.json', 'run 59, the increment on the claude profile at candidate 4cfa3eee composed with run 57 (its prior summary read at fe785c17), FAIL on one ungraded sample of unattended-item-says-merge-refused (golden 94/94, floors 53/54, hold 42/43, benign-twin false refusals 0/10, trigger probes 31/31) with no behaviour failing, published to the records branch, and kept as a prior that a composition can read; retained until the next release close (1.18.0 cut), whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
 ])
 const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/
