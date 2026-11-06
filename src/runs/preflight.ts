@@ -830,6 +830,48 @@ async function directPush(deps: PreflightDeps): Promise<DirectPushCheck> {
   );
 }
 
+/** A person's right on a repository: its word, with `note` set where the account's own rights supplied it, or why none was read. */
+type PersonRight = { permission: string; note: string } | { permission: undefined; cause: string };
+
+/** One REST read for {@link personRight}: a path with no leading `/`, answered `null` where the read failed. */
+type RightRead = (path: string) => Promise<{ status: number; json: unknown } | null>;
+
+const OWN_RIGHTS_NOTE = "; these are the account's own rights, read from the repository, because the permission read answered HTTP 403";
+
+/** The 403 fallback of {@link personRight}: only the REST replies speak here, and a read that rejects counts as unreadable. */
+async function ownRight(reader: RightRead, repo: string, login: string): Promise<PersonRight> {
+  const settled: RightRead = (path) => reader(path).catch(() => null);
+  const me = await settled("user");
+  const account = me?.status === 200 && isRecord(me.json) ? me.json["login"] : undefined;
+  if (typeof account !== "string") return { permission: undefined, cause: `HTTP 403, and the account's own login is unreadable (${statusText(me)})` };
+  // GitHub's names ignore case.
+  if (account.toLowerCase() !== login.toLowerCase()) return { permission: undefined, cause: `HTTP 403, and ${login} is not the account the run acts as` };
+  const about = await settled(`repos/${repo}`);
+  const rights = about?.status === 200 && isRecord(about.json) ? about.json["permissions"] : undefined;
+  if (isRecord(rights)) {
+    if (rights["admin"] === true) return { permission: "admin", note: OWN_RIGHTS_NOTE };
+    if (rights["push"] === true) return { permission: "write", note: OWN_RIGHTS_NOTE };
+    if (rights["push"] === false) return { permission: "read", note: OWN_RIGHTS_NOTE };
+  }
+  return { permission: undefined, cause: `HTTP 403, and the account's rights on the repository are unreadable (${statusText(about)})` };
+}
+
+/**
+ * `login`'s right on `repo` (`owner/name`), for `input-author` and `run contract`'s `rightGap`, each adapting its own read.
+ *
+ * Any answer to the permission read but an exact 403 stands as it is. Claude's cloud proxy answered 403 on every
+ * `collaborators` path in a real session on 2026-11-06, so on 403 alone the person may still be proven: where `user`
+ * names `login`, the repository's `permissions` block is that account's own, `admin` true reading admin, else `push`
+ * true write, else `push` false read. Anything else stays unreadable, a different login included: no read here shows
+ * another person's right, and no value comes from the environment, a config or issue text.
+ */
+export async function personRight(reader: RightRead, repo: string, login: string): Promise<PersonRight> {
+  const reply = await reader(`repos/${repo}/collaborators/${encodeURIComponent(login)}/permission`);
+  if (reply?.status === 403) return ownRight(reader, repo, login);
+  const permission = reply?.status === 200 && isRecord(reply.json) ? reply.json["permission"] : undefined;
+  return typeof permission === "string" ? { permission, note: "" } : { permission: undefined, cause: statusText(reply) };
+}
+
 async function inputAuthor(deps: PreflightDeps): Promise<CheckResult> {
   const fix = "start from an open issue an admin or write author opened, or have one restate it";
   const item = deps.item;
@@ -837,7 +879,8 @@ async function inputAuthor(deps: PreflightDeps): Promise<CheckResult> {
   if (!safeRepo(item.owner, item.repo) || !Number.isSafeInteger(item.number) || item.number <= 0) {
     return { state: "refuse", evidence: "the item reference is not a GitHub issue reference", fix };
   }
-  if (deps.rest === null || deps.repo === null || !safeRepo(deps.repo.owner, deps.repo.repo)) {
+  const { rest } = deps;
+  if (rest === null || deps.repo === null || !safeRepo(deps.repo.owner, deps.repo.repo)) {
     return { state: "unknown", evidence: "the item's author cannot be read without REST and a GitHub origin", fix };
   }
   const ref = `${item.owner}/${item.repo}#${item.number}`;
@@ -846,7 +889,7 @@ async function inputAuthor(deps: PreflightDeps): Promise<CheckResult> {
   if (`${item.owner}/${item.repo}`.toLowerCase() !== origin.toLowerCase()) {
     return { state: "refuse", evidence: `${ref} is not in origin's repository, ${origin}`, fix: `start from an item in ${origin}, or have an admin or write author restate it there` };
   }
-  const issue = await read(deps.rest, `/repos/${origin}/issues/${item.number}`);
+  const issue = await read(rest, `/repos/${origin}/issues/${item.number}`);
   const about = issue !== null && issue.status === 200 && isRecord(issue.json) ? issue.json : undefined;
   const user = about?.["user"];
   const login = isRecord(user) ? user["login"] : undefined;
@@ -855,17 +898,16 @@ async function inputAuthor(deps: PreflightDeps): Promise<CheckResult> {
   }
   if (about["pull_request"] !== undefined) return { state: "refuse", evidence: `${ref} is a pull request`, fix };
   if (about["state"] !== "open") return { state: "refuse", evidence: `${ref} is not open`, fix };
-  const reply = await read(deps.rest, `/repos/${origin}/collaborators/${encodeURIComponent(login)}/permission`);
-  const permission = reply !== null && reply.status === 200 && isRecord(reply.json) ? reply.json["permission"] : undefined;
-  if (typeof permission !== "string") {
-    const evidence = `${ref}: ${login}'s permission on ${origin} is unreadable (${statusText(reply)})`;
+  const right = await personRight((path) => read(rest, `/${path}`), origin, login);
+  if (right.permission === undefined) {
+    const evidence = `${ref}: ${login}'s permission on ${origin} is unreadable (${right.cause})`;
     return { state: "unknown", evidence, fix };
   }
-  if (permission === "admin" || permission === "write") {
-    return { state: "pass", evidence: `${ref}: ${login} has ${permission} on ${origin}`, fix };
+  if (right.permission === "admin" || right.permission === "write") {
+    return { state: "pass", evidence: `${ref}: ${login} has ${right.permission} on ${origin}${right.note}`, fix };
   }
-  const level = permission === "read" ? "read" : "no write";
-  return { state: "refuse", evidence: `${ref}: ${login} has ${level} permission on ${origin}`, fix };
+  const level = right.permission === "read" ? "read" : "no write";
+  return { state: "refuse", evidence: `${ref}: ${login} has ${level} permission on ${origin}${right.note}`, fix };
 }
 
 /**

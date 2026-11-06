@@ -3,7 +3,7 @@ import { InvalidArgumentError } from "commander";
 import { isPlainObject } from "../../config/parse.ts";
 import { printableText } from "../../learnings/validation.ts";
 import { contractFromItem, CRITERIA_MAX_BYTES, criteriaHits, ITEM_BODY_MAX_BYTES, parseItemBody, planFiles, planHash } from "../../runs/itemContract.ts";
-import { ITEM_REF_SHAPE } from "../../runs/preflight.ts";
+import { ITEM_REF_SHAPE, personRight } from "../../runs/preflight.ts";
 import { resolveRepo } from "../../runs/pullRequest.ts";
 import { ghApi, type GhResponse } from "../engine/ghRunner.ts";
 import { gitWrite } from "../engine/gitWrite.ts";
@@ -19,8 +19,9 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * The body is data anyone with issue access could shape, so the verb proves for itself who stands
  * behind it, by REST reads alone, before it reads a word of the body: the item is in origin's
  * repository, the issue is open, `stamity:ready` is on it, and the issue's author and the last
- * actor to apply that label each hold write or admin on origin. Anything unread refuses. Only then
- * are `Plan:`, `Branch:` and the criteria trusted, as that person's word.
+ * actor to apply that label each hold write or admin on origin, read through `personRight`, whose
+ * one fallback is a person proven to be the account the run acts as. Anything unread refuses. Only
+ * then are `Plan:`, `Branch:` and the criteria trusted, as that person's word.
  *
  * The plan must be committed on the current branch: its text is read at `HEAD`, never from the work
  * tree, and the checkout must be on the item's branch. The hash is drift detection only. The body
@@ -94,11 +95,10 @@ async function gitRead(cwd: string, args: readonly string[]): Promise<string | n
 /** Why `login` cannot stand behind an item on `repo`, or `null` where it holds write or admin there. */
 async function rightGap(read: RestRead, repo: string, who: string, login: unknown): Promise<string | null> {
   if (typeof login !== "string") return `${who} is unreadable`;
-  const reply = await read(`repos/${repo}/collaborators/${encodeURIComponent(login)}/permission`);
-  const permission = reply.status === 200 && isPlainObject(reply.json) ? reply.json["permission"] : undefined;
-  if (permission === "admin" || permission === "write") return null;
-  if (typeof permission !== "string") return `${who} ${login}: the permission on ${repo} is unreadable (HTTP ${reply.status})`;
-  return `${who} ${login} has ${permission === "read" ? "read" : "no write"} permission on ${repo}`;
+  const right = await personRight(read, repo, login);
+  if (right.permission === "admin" || right.permission === "write") return null;
+  if (right.permission === undefined) return `${who} ${login}: the permission on ${repo} is unreadable (${right.cause})`;
+  return `${who} ${login} has ${right.permission === "read" ? "read" : "no write"} permission on ${repo}${right.note}`;
 }
 
 /** The login that last applied the ready label, `undefined` where any page of the events did not read. The oldest come first, so every page is read. */

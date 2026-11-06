@@ -651,6 +651,93 @@ describe("stamity gate preflight and scan --text", () => {
       expect(evidenceOf(write.doc, "input-author")).toBe("o/r#4: writer has write on o/r");
     });
 
+    describe("--item where the permission read answers 403", () => {
+      const OWN = "; these are the account's own rights, read from the repository, because the permission read answered HTTP 403";
+      const WRITER = { admin: false, push: true };
+      /** An open issue by `writer`, whose permission read answers `status`, with `user` and the repository as given. */
+      function cloudReads(status: number, user: { status: number; json: unknown }, repository: { status: number; json: unknown }): void {
+        protectedRepo();
+        rest.routes.set("repos/o/r/issues/4", { status: 200, json: { state: "open", user: { login: "writer" } } });
+        rest.routes.set("repos/o/r/collaborators/writer/permission", { status, json: status === 200 ? { permission: "write" } : { message: "no" } });
+        rest.routes.set("user", user);
+        rest.routes.set("repos/o/r", repository);
+      }
+      const account = (login: string): { status: number; json: unknown } => ({ status: 200, json: { login } });
+      const rights = (permissions?: unknown): { status: number; json: unknown } => ({ status: 200, json: { default_branch: "main", id: 1, ...(permissions === undefined ? {} : { permissions }) } });
+      const reads = (path: string): number => rest.calls.filter((call) => call.path === path).length;
+
+      it.each([
+        ["admin true", "writer", { admin: true, push: true }, "pass", `o/r#4: writer has admin on o/r${OWN}`],
+        ["push true and admin false", "writer", WRITER, "pass", `o/r#4: writer has write on o/r${OWN}`],
+        ["a login differing only by case", "WRITER", WRITER, "pass", `o/r#4: writer has write on o/r${OWN}`],
+        ["push false", "writer", { admin: false, push: false }, "refuse", `o/r#4: writer has read permission on o/r${OWN}`],
+      ])("reads the account's own right through the verb: %s", async (_label, login, permissions, state, evidence) => {
+        const repo = await seedRepo();
+        cloudReads(403, account(login), rights(permissions));
+
+        const { doc } = await gate(repo, [...PREFLIGHT, "--item", "o/r#4"]);
+
+        expect(stateOf(doc, "input-author")).toBe(state);
+        expect(evidenceOf(doc, "input-author")).toBe(evidence);
+      });
+
+      it("fails closed through the verb for a different login, reading nothing past `user`", async () => {
+        const repo = await seedRepo();
+        cloudReads(403, account("someone-else"), rights(WRITER));
+
+        const { code, doc } = await gate(repo, [...PREFLIGHT, "--item", "o/r#4"]);
+
+        expect(code).toBe(1);
+        expect(stateOf(doc, "input-author")).toBe("unknown");
+        expect(evidenceOf(doc, "input-author")).toBe("o/r#4: writer's permission on o/r is unreadable (HTTP 403, and writer is not the account the run acts as)");
+        expect(reads("user")).toBe(1);
+        // `direct-push`'s own read: the fallback made no second one.
+        expect(reads("repos/o/r")).toBe(1);
+      });
+
+      it.each([
+        ["`user` unreadable", { status: 500, json: null }, rights(WRITER), "the account's own login is unreadable (HTTP 500)"],
+        ["the repository unreadable", account("writer"), { status: 500, json: null }, "the account's rights on the repository are unreadable (HTTP 500)"],
+        ["`permissions` missing", account("writer"), rights(), "the account's rights on the repository are unreadable (HTTP 200)"],
+      ])("fails closed through the verb: %s", async (_label, user, repository, cause) => {
+        const repo = await seedRepo();
+        cloudReads(403, user, repository);
+
+        const { code, doc } = await gate(repo, [...PREFLIGHT, "--item", "o/r#4"]);
+
+        expect(code).toBe(1);
+        expect(stateOf(doc, "input-author")).toBe("unknown");
+        expect(evidenceOf(doc, "input-author")).toBe(`o/r#4: writer's permission on o/r is unreadable (HTTP 403, and ${cause})`);
+      });
+
+      it("fails closed through the verb where gh fails on the `user` read", async () => {
+        const repo = await seedRepo();
+        cloudReads(403, account("writer"), rights(WRITER));
+        rest.once.set("user", new Error("gh api answered no HTTP status"));
+
+        const { doc } = await gate(repo, [...PREFLIGHT, "--item", "o/r#4"]);
+
+        expect(stateOf(doc, "input-author")).toBe("unknown");
+        expect(evidenceOf(doc, "input-author")).toBe("o/r#4: writer's permission on o/r is unreadable (HTTP 403, and the account's own login is unreadable (a failed read))");
+      });
+
+      it.each([
+        [404, "unknown", "o/r#4: writer's permission on o/r is unreadable (HTTP 404)"],
+        [500, "unknown", "o/r#4: writer's permission on o/r is unreadable (HTTP 500)"],
+        [200, "pass", "o/r#4: writer has write on o/r"],
+      ])("leaves HTTP %i on the permission read as it was, with no fallback read", async (status, state, evidence) => {
+        const repo = await seedRepo();
+        cloudReads(status, account("writer"), rights(WRITER));
+
+        const { doc } = await gate(repo, [...PREFLIGHT, "--item", "o/r#4"]);
+
+        expect(stateOf(doc, "input-author")).toBe(state);
+        expect(evidenceOf(doc, "input-author")).toBe(evidence);
+        expect(reads("user")).toBe(0);
+        expect(reads("repos/o/r")).toBe(1);
+      });
+    });
+
     it("refuses --item outside origin's repository through the verb, whatever its author's right on origin", async () => {
       const repo = await seedRepo();
       protectedRepo();

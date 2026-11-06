@@ -43,6 +43,8 @@ const rest = vi.hoisted(() => ({
   calls: [] as { path: string; hostname: string; method: string }[],
   routes: new Map<string, { status: number; json: unknown }>(),
   failure: null as Error | null,
+  /** One path whose read rejects, as `gh` failing before GitHub answered does; every other path answers. */
+  failing: new Map<string, Error>(),
 }));
 
 // Mocked: the real `ghApi` starts `gh`, which calls GitHub over the network under the machine's
@@ -53,6 +55,8 @@ vi.mock("../../../src/cli/engine/ghRunner.ts", () => ({
     const path = request.path.replace(/^\//, "");
     rest.calls.push({ path, hostname: request.hostname, method: request.method });
     if (rest.failure !== null) return Promise.reject(rest.failure);
+    const failing = rest.failing.get(path);
+    if (failing !== undefined) return Promise.reject(failing);
     return Promise.resolve(rest.routes.get(path) ?? { status: 404, json: { message: "Not Found" } });
   },
 }));
@@ -204,6 +208,7 @@ beforeEach(() => {
   rest.calls.length = 0;
   rest.routes.clear();
   rest.failure = null;
+  rest.failing.clear();
   gitFault.error = null;
   rest.routes.set(permission(AUTHOR), { status: 200, json: { permission: "write" } });
   rest.routes.set(events(), { status: 200, json: [labeled(AUTHOR)] });
@@ -731,6 +736,110 @@ describe("stamity run contract", () => {
 
     expect(doc.notDone.join("\n")).toContain("feat/other");
     expect(doc.notDone.join("\n")).not.toContain(hidden);
+  });
+
+  describe("where the permission read answers 403", () => {
+    const REPOSITORY = "repos/o/r";
+    const WRITER = { admin: false, push: true };
+    const account = (login: string): { status: number; json: unknown } => ({ status: 200, json: { login } });
+    const rights = (permissions?: unknown): { status: number; json: unknown } => ({ status: 200, json: { default_branch: "main", ...(permissions === undefined ? {} : { permissions }) } });
+    /** A ready item by {@link AUTHOR}, who also applied the label; the permission read answers 403. */
+    const forbidden = async (user: { status: number; json: unknown }, repository: { status: number; json: unknown }): Promise<string> => {
+      const { cwd, hash } = await seeded();
+      rest.routes.set(ISSUE, issue(plannedBody(hash)));
+      rest.routes.set(permission(AUTHOR), { status: 403, json: { message: "Access to this GitHub API path is not permitted through this proxy" } });
+      rest.routes.set("user", user);
+      rest.routes.set(REPOSITORY, repository);
+      return cwd;
+    };
+    const paths = (): string[] => rest.calls.map((call) => call.path);
+    const refusesNaming = async (cwd: string, reason: string): Promise<void> => {
+      const { code, doc } = await contract(cwd);
+      expect(doc.outcome).toBe("refused");
+      expect(code).toBe(1);
+      expect(doc.notDone).toContain(reason);
+      expect(existsSync(join(cwd, CONTRACT))).toBe(false);
+    };
+    const author = `${ITEM}'s author ${AUTHOR}`;
+    const unreadable = (cause: string): string => `${author}: the permission on o/r is unreadable (HTTP 403, and ${cause})`;
+
+    it.each([
+      ["admin true", AUTHOR, { admin: true, push: true }],
+      ["push true and admin false", AUTHOR, WRITER],
+      ["a login differing only by case", AUTHOR.toUpperCase(), WRITER],
+    ])("takes the account's own right: %s", async (_label, login, permissions) => {
+      const cwd = await forbidden(account(login), rights(permissions));
+
+      const { code, doc, stdout } = await contract(cwd);
+
+      expect(doc).toMatchObject({ outcome: "written", notDone: [] });
+      expect(code, stdout).toBe(0);
+      expect(paths()).toEqual([ISSUE, permission(AUTHOR), "user", REPOSITORY, events(), permission(AUTHOR), "user", REPOSITORY]);
+      expect(existsSync(join(cwd, CONTRACT))).toBe(true);
+    });
+
+    it("refuses the account's own right where push reads false, saying whose rights it read", async () => {
+      const cwd = await forbidden(account(AUTHOR), rights({ admin: false, push: false }));
+      await refusesNaming(cwd, `${author} has read permission on o/r; these are the account's own rights, read from the repository, because the permission read answered HTTP 403`);
+    });
+
+    it("fails closed for a different login, with `user` the only further read", async () => {
+      const cwd = await forbidden(account("someone-else"), rights(WRITER));
+      await refusesNaming(cwd, unreadable(`${AUTHOR} is not the account the run acts as`));
+      expect(paths()).toContain("user");
+      expect(paths()).not.toContain(REPOSITORY);
+    });
+
+    it("holds the last to apply the label to the same proof as the author", async () => {
+      const cwd = await forbidden(account(AUTHOR), rights(WRITER));
+      rest.routes.set(events(), { status: 200, json: [labeled(AUTHOR), labeled(OUTSIDER)] });
+      rest.routes.set(permission(OUTSIDER), { status: 403, json: {} });
+      await refusesNaming(cwd, `the last to apply \`${READY}\` to ${ITEM} ${OUTSIDER}: the permission on o/r is unreadable (HTTP 403, and ${OUTSIDER} is not the account the run acts as)`);
+    });
+
+    it.each([
+      ["`user` unreadable", { status: 500, json: null }, rights(WRITER), "the account's own login is unreadable (HTTP 500)"],
+      ["`user` holding no login", { status: 200, json: {} }, rights(WRITER), "the account's own login is unreadable (HTTP 200)"],
+      ["the repository unreadable", account(AUTHOR), { status: 500, json: null }, "the account's rights on the repository are unreadable (HTTP 500)"],
+      ["`permissions` missing", account(AUTHOR), rights(), "the account's rights on the repository are unreadable (HTTP 200)"],
+      ["`permissions` of the wrong shape", account(AUTHOR), rights({ admin: "true", push: "true" }), "the account's rights on the repository are unreadable (HTTP 200)"],
+    ])("fails closed: %s", async (_label, user, repository, cause) => {
+      const cwd = await forbidden(user, repository);
+      await refusesNaming(cwd, unreadable(cause));
+    });
+
+    it.each([
+      ["`user`", "user", "the account's own login is unreadable (a failed read)"],
+      ["the repository", REPOSITORY, "the account's rights on the repository are unreadable (a failed read)"],
+    ])("fails closed where gh fails on the read of %s, naming the 403 and none of gh's words", async (_label, path, cause) => {
+      const cwd = await forbidden(account(AUTHOR), rights(WRITER));
+      rest.failing.set(path, Object.assign(new Error("gh api answered no HTTP status: a line of stderr"), { code: "GH_NO_STATUS" }));
+      await refusesNaming(cwd, unreadable(cause));
+    });
+
+    it.each([404, 500])("leaves HTTP %i on the permission read as it was, with no fallback read", async (status) => {
+      const cwd = await forbidden(account(AUTHOR), rights(WRITER));
+      rest.routes.set(permission(AUTHOR), { status, json: { message: "no" } });
+      await refusesNaming(cwd, `${author}: the permission on o/r is unreadable (HTTP ${status})`);
+      expect(paths()).not.toContain("user");
+      expect(paths()).not.toContain(REPOSITORY);
+    });
+
+    it("leaves a 200 on the permission read as it was, with no fallback read", async () => {
+      const cwd = await forbidden(account(AUTHOR), rights({ admin: false, push: false }));
+      rest.routes.set(permission(AUTHOR), { status: 200, json: { permission: "write" } });
+      const { code, doc, stdout } = await contract(cwd);
+      expect(doc.outcome).toBe("written");
+      expect(code, stdout).toBe(0);
+      expect(paths()).toEqual([ISSUE, permission(AUTHOR), events(), permission(AUTHOR)]);
+    });
+
+    it("a permission read that gh could not make stays the refusal it was, naming its class", async () => {
+      const cwd = await forbidden(account(AUTHOR), rights(WRITER));
+      rest.failing.set(permission(AUTHOR), Object.assign(new Error("no status"), { code: "GH_NO_STATUS" }));
+      await refusesNaming(cwd, `${ITEM}: a read failed (GH_NO_STATUS)`);
+      expect(paths()).not.toContain("user");
+    });
   });
 
   describe("usage", () => {

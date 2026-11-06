@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CANARY_MAX_AGE_MS } from "../../src/mcp/env.ts";
 import {
   directPushVerdict,
+  personRight,
   REQUIRED_FLOORS,
   runPreflight,
   type PreflightDeps,
@@ -1185,6 +1186,175 @@ describe("runPreflight — input-author", () => {
     expect(check(noRest, "input-author").state).toBe("unknown");
     const noOrigin = await runPreflight(greenDeps({ repo: null, item: { owner: "o", repo: "r", number: 12 } }));
     expect(check(noOrigin, "input-author").state).toBe("unknown");
+  });
+});
+
+describe("runPreflight — input-author where the permission read answers 403", () => {
+  const ITEM = { owner: "o", repo: "r", number: 12 };
+  const REPOSITORY = "/repos/o/r";
+  const PERMISSION = "/repos/o/r/collaborators/alice/permission";
+  const FORBIDDEN: Reply = { status: 403, json: { message: "Access to this GitHub API path is not permitted through this proxy" } };
+  const OWN = "; these are the account's own rights, read from the repository, because the permission read answered HTTP 403";
+  const account = (login: string): Reply => ({ status: 200, json: { login, id: 1 } });
+  /** Every read the fallback makes answers, for an account that is the author and writes; a case overrides one. */
+  const routes = (overrides: Record<string, Reply> = {}): Record<string, Reply> => ({
+    [REPOSITORY]: repoReply(WRITER),
+    "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(7)] },
+    "/repos/o/r/rulesets/7": ruleset(7, "active", "never"),
+    "/repos/o/r/issues/12": { status: 200, json: { number: 12, state: "open", user: { login: "alice", type: "User" } } },
+    [PERMISSION]: FORBIDDEN,
+    "/user": account("alice"),
+    ...overrides,
+  });
+  /** `direct-push` reads the repository once of its own, so the fallback's read is the second. */
+  const repositoryReads = (calls: readonly string[]): number => calls.filter((path) => path === REPOSITORY).length;
+
+  it.each([
+    ["admin true", ADMIN, "admin"],
+    ["push true and admin false", WRITER, "write"],
+  ])("passes the account's own right where it reads %s", async (_label, permissions, level) => {
+    const { rest, calls } = restTable(routes({ [REPOSITORY]: repoReply(permissions) }));
+    const verdict = await runPreflight(greenDeps({ rest, item: ITEM, adminRuleProof: true }));
+    expect(check(verdict, "input-author")).toMatchObject({ state: "pass", evidence: `o/r#12: alice has ${level} on o/r${OWN}` });
+    expect(verdict.ok).toBe(true);
+    expect(calls).toContain("/user");
+    expect(repositoryReads(calls)).toBe(2);
+  });
+
+  it("refuses the account's own right where push reads false: no right", async () => {
+    const { rest } = restTable(routes({ [REPOSITORY]: repoReply({ admin: false, push: false, pull: true }) }));
+    const verdict = await runPreflight(greenDeps({ rest, item: ITEM }));
+    expect(check(verdict, "input-author")).toMatchObject({ state: "refuse", evidence: `o/r#12: alice has read permission on o/r${OWN}` });
+    expect(verdict.ok).toBe(false);
+  });
+
+  it("treats a login differing only by case as the same person, since GitHub's names ignore case", async () => {
+    const { rest } = restTable(routes({ "/user": account("ALICE") }));
+    const verdict = await runPreflight(greenDeps({ rest, item: ITEM }));
+    expect(check(verdict, "input-author")).toMatchObject({ state: "pass", evidence: `o/r#12: alice has write on o/r${OWN}` });
+  });
+
+  it("fails closed for a different login, and reads nothing past `user`", async () => {
+    const { rest, calls } = restTable(routes({ "/user": account("bob") }));
+    const verdict = await runPreflight(greenDeps({ rest, item: ITEM }));
+    expect(check(verdict, "input-author")).toMatchObject({
+      state: "unknown",
+      evidence: "o/r#12: alice's permission on o/r is unreadable (HTTP 403, and alice is not the account the run acts as)",
+    });
+    expect(verdict.ok).toBe(false);
+    expect(calls).toContain("/user");
+    expect(repositoryReads(calls)).toBe(1);
+  });
+
+  it.each<[string, Record<string, Reply>, string]>([
+    ["`user` answering 500", { "/user": { status: 500, json: null } }, "HTTP 403, and the account's own login is unreadable (HTTP 500)"],
+    ["`user` holding no login", { "/user": { status: 200, json: { id: 1 } } }, "HTTP 403, and the account's own login is unreadable (HTTP 200)"],
+    ["the repository answering 500", { [REPOSITORY]: { status: 500, json: null } }, "HTTP 403, and the account's rights on the repository are unreadable (HTTP 500)"],
+    ["no `permissions` field", { [REPOSITORY]: repoReply(undefined) }, "HTTP 403, and the account's rights on the repository are unreadable (HTTP 200)"],
+    ["`permissions` that is a list", { [REPOSITORY]: { status: 200, json: { default_branch: "main", permissions: [] } } }, "HTTP 403, and the account's rights on the repository are unreadable (HTTP 200)"],
+    ["no `push` or `admin` in it", { [REPOSITORY]: repoReply({ pull: true }) }, "HTTP 403, and the account's rights on the repository are unreadable (HTTP 200)"],
+    ["`push` that is no boolean", { [REPOSITORY]: { status: 200, json: { default_branch: "main", permissions: { admin: "true", push: "true" } } } }, "HTTP 403, and the account's rights on the repository are unreadable (HTTP 200)"],
+  ])("fails closed on %s", async (_label, overrides, cause) => {
+    const { rest } = restTable(routes(overrides));
+    const verdict = await runPreflight(greenDeps({ rest, item: ITEM }));
+    expect(check(verdict, "input-author")).toMatchObject({ state: "unknown", evidence: `o/r#12: alice's permission on o/r is unreadable (${cause})` });
+    expect(verdict.ok).toBe(false);
+  });
+
+  it("fails closed on a `user` read that failed before GitHub answered", async () => {
+    const { rest: table } = restTable(routes());
+    const rest: RestRead = (path) => (path === "/user" ? Promise.reject(new Error("gh did not answer")) : table(path));
+    const verdict = await runPreflight(greenDeps({ rest, item: ITEM }));
+    expect(check(verdict, "input-author")).toMatchObject({
+      state: "unknown",
+      evidence: "o/r#12: alice's permission on o/r is unreadable (HTTP 403, and the account's own login is unreadable (a failed read))",
+    });
+  });
+
+  it.each([404, 500])("leaves an HTTP %i on the permission read as it was: unknown, with no fallback read", async (status) => {
+    const { rest, calls } = restTable(routes({ [PERMISSION]: { status, json: { message: "no" } } }));
+    const verdict = await runPreflight(greenDeps({ rest, item: ITEM }));
+    expect(check(verdict, "input-author")).toMatchObject({ state: "unknown", evidence: `o/r#12: alice's permission on o/r is unreadable (HTTP ${status})` });
+    expect(calls).not.toContain("/user");
+    expect(repositoryReads(calls)).toBe(1);
+  });
+
+  it.each([
+    ["write", "pass", "o/r#12: alice has write on o/r"],
+    ["read", "refuse", "o/r#12: alice has read permission on o/r"],
+  ])("leaves a 200 reading %s as it was, with no fallback read and no word of one", async (permission, state, evidence) => {
+    const { rest, calls } = restTable(routes({ [PERMISSION]: { status: 200, json: { permission } } }));
+    const verdict = await runPreflight(greenDeps({ rest, item: ITEM }));
+    expect(check(verdict, "input-author")).toMatchObject({ state, evidence });
+    expect(calls).not.toContain("/user");
+    expect(repositoryReads(calls)).toBe(1);
+  });
+});
+
+describe("personRight", () => {
+  const PATH = "repos/o/r/collaborators/alice/permission";
+
+  it("makes the reads in order, and only on an exact 403", async () => {
+    const forbidden = restTable({ [PATH]: { status: 403, json: null }, user: { status: 200, json: { login: "alice" } }, "repos/o/r": repoReply(WRITER) });
+    await expect(personRight(forbidden.rest, "o/r", "alice")).resolves.toMatchObject({ permission: "write" });
+    expect(forbidden.calls).toEqual([PATH, "user", "repos/o/r"]);
+
+    const refused = restTable({ [PATH]: { status: 401, json: null } });
+    await expect(personRight(refused.rest, "o/r", "alice")).resolves.toEqual({ permission: undefined, cause: "HTTP 401" });
+    expect(refused.calls).toEqual([PATH]);
+  });
+
+  it("stops at `user` for another login, and keeps a person's login whole in the path", async () => {
+    const path = "repos/o/r/collaborators/app%5Bbot%5D/permission";
+    const other = restTable({ [path]: { status: 403, json: null }, user: { status: 200, json: { login: "alice" } } });
+    await expect(personRight(other.rest, "o/r", "app[bot]")).resolves.toMatchObject({ permission: undefined });
+    expect(other.calls).toEqual([path, "user"]);
+  });
+
+  it("names a read that answered nothing as a failed read, past the 403 too", async () => {
+    await expect(personRight(() => Promise.resolve(null), "o/r", "alice")).resolves.toEqual({ permission: undefined, cause: "a failed read" });
+    const answers: Record<string, Reply> = { [PATH]: { status: 403, json: null }, user: { status: 200, json: { login: "alice" } } };
+    const read = (path: string): Promise<Reply | null> => Promise.resolve(answers[path] ?? null);
+    await expect(personRight(read, "o/r", "alice")).resolves.toEqual({ permission: undefined, cause: "HTTP 403, and the account's rights on the repository are unreadable (a failed read)" });
+  });
+});
+
+describe("runPreflight — the replies a real Claude cloud session gave on 2026-11-06", () => {
+  it("passes input-author and direct-push on a repository-level ruleset under adminRuleProof", async () => {
+    const forbidden: Reply = { status: 403, json: { message: "Access to this GitHub API path is not permitted through this proxy" } };
+    const owner = "Task-Owner";
+    const { rest, calls } = restTable({
+      "/user": { status: 200, json: { login: owner } },
+      "/repos/o/r": repoReply({ admin: true, maintain: true, pull: true, push: true, triage: true }),
+      "/repos/o/r/rules/branches/main": { status: 200, json: [pullRequestRule(7)] },
+      "/repos/o/r/rulesets/7": ruleset(7, "active", "never"),
+      "/repos/o/r/issues/2": { status: 200, json: { number: 2, state: "open", user: { login: owner, type: "User" } } },
+      "/repos/o/r/issues/2/events": { status: 200, json: [] },
+      [`/repos/o/r/assignees/${owner}`]: { status: 204, json: null },
+      "/repos/o/r/branches/main/protection": NOT_FOUND,
+      "/user/memberships/orgs/o": forbidden,
+      "/repos/o/r/collaborators": forbidden,
+      [`/repos/o/r/collaborators/${owner}`]: forbidden,
+      [`/repos/o/r/collaborators/${owner}/permission`]: forbidden,
+    });
+    const verdict = await runPreflight(
+      greenDeps({
+        rest,
+        adminRuleProof: true,
+        item: { owner: "o", repo: "r", number: 2 },
+        env: { CLAUDE_CODE_REMOTE: "true", [HOOKS_ACTIVE_ENV]: "1" },
+        pushIdentity: { fetchUrl: PROXY_URL, pushUrls: [pushTo(PROXY_URL, null)] },
+      }),
+    );
+    expect(verdict.refusals).toEqual([]);
+    expect(check(verdict, "direct-push").state).toBe("pass");
+    expect(check(verdict, "input-author")).toMatchObject({
+      state: "pass",
+      evidence: `o/r#2: ${owner} has admin on o/r; these are the account's own rights, read from the repository, because the permission read answered HTTP 403`,
+    });
+    expect(verdict.warnings.map((warning) => warning.id)).toContain("admin-can-lift");
+    expect(calls).toContain(`/repos/o/r/collaborators/${owner}/permission`);
+    expect(verdict.ok).toBe(true);
   });
 });
 

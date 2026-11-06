@@ -183,6 +183,9 @@ not walked; those items are read from the code and its tests.
   and no fix round runs.
 - **A hung test child fails at a time limit.** This repository's tests give each child process a limit, so one that
   waits on its input fails at that limit rather than holding the suite.
+- **A run can start on Claude's cloud, for the task owner alone.** Where the permission read answers 403, as Claude's
+  proxy did in one real session on 2026-11-06, the pre-flight and `run contract` take the repository's rights for the
+  account the run acts as, and only for a person who is that account. Anyone else stays unproven and stops the run.
 
 ## [1.17.0] - 2026-10-27
 

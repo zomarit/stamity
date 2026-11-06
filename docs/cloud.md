@@ -156,8 +156,19 @@ sign-in from you. Claude's cloud environments page, read 2026-11-05, says `gh` i
 and that with `GH_TOKEN` and `GITHUB_TOKEN` both unset the proxy puts your own credentials on `gh api`
 calls for the session's repositories. Leave both unset, since a token you set goes to `gh` as it is,
 and the run's reads then speak for that token's account. The page does not say whether `gh` is signed
-in while the setup script runs, or whether the proxy answers every read the pre-flight makes, so both
-are unknown until a real run. An MCP server's
+in while the setup script runs, so that is unknown until a real run.
+
+The proxy does not answer every read the pre-flight makes. In one real session on 2026-11-06 it answered
+403 on every `collaborators` path and on `user/memberships/orgs/<org>`, and 404 on
+`branches/main/protection`. It answered 200 on `user`, the repository, its branch rules, a ruleset, an
+issue and that issue's events, and 204 on `assignees/<login>`. That is what one session read, not a
+promise from Claude. So where the permission read answers 403, the pre-flight and `run contract` take
+the repository's `permissions` for the account the run acts as, and only for a person who is that
+account. On this cloud only the task owner's label can start a run: anyone else's label stops it, and
+so does an issue someone else wrote. A first run may also refuse on `direct-push` where the block
+rests on classic protection, or for an administrator on an organization ruleset.
+
+An MCP server's
 credential is read as `${VAR}` from the session's environment. `.env.mcp` is git-ignored, so set the
 variable in the cloud environment, never in a committed file. The pre-flight warns `token-env`,
 naming each credential-shaped variable it sees, by name only.
