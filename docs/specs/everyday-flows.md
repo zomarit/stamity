@@ -4921,6 +4921,16 @@ egress, token-shaped variable names (names only) and missing review state; with 
     read").
 - **Amended 2026-11-05** (plan 023 file 1, unit `preflight-admin`). The refusal of an administrator gains the opt-in of
   REQ-FLOW-151; with the setting off it stands as before.
+- **Amended 2026-11-06** (commit `0bcc7a6d`, after a real Claude Code cloud session that day). `input-author` now reads the
+  item's author through `personRight` (`src/runs/preflight.ts`), the helper `run contract` shares (REQ-FLOW-155). Any answer
+  to the collaborator permission read but exactly 403 stands as before. On exactly 403, the author is proven only if
+  `user` names them, ignoring case, and the repository's `permissions` reads `admin` true or `push` true. Anything else
+  refuses: `push` false as `refuse`, every other case as `unknown`. Where the check rests on this read, its evidence says
+  the rights are the account's own. That session showed Claude's GitHub proxy answering 403 on every `collaborators` path.
+  That is what one session read, not a promise from Claude.
+  - Proof: `test/runs/preflight.test.ts` (the describes "runPreflight — input-author where the permission read answers
+    403", "personRight" and "runPreflight — the replies a real Claude cloud session gave on 2026-11-06"),
+    `test/cli/commands/gatePreflight.test.ts` (the describe "--item where the permission read answers 403").
 - **Proof:** `test/runs/preflight.test.ts`, `test/cli/commands/gatePreflight.test.ts`,
   `test/hooks/personOnlyGuard.test.ts` (the canary), `test/mcp/env.test.ts`, `test/cli/commands/init.test.ts` and
   `test/cli/commands/initPanel.test.ts` (the canary's ignore entry).
@@ -7077,7 +7087,12 @@ item's, Then the verb refuses and names which (`runContract`, `src/cli/commands/
 - **As built, beyond the delta:**
   - The verb proves who stands behind the issue with its own REST reads, never `gh issue`: the item is in origin's
     repository, it is an open issue carrying `stamity:ready`, and its author and the last to apply that label each hold
-    `write` or `admin`. Anything unread refuses.
+    `write` or `admin`. Anything unread refuses, with one exception (amended 2026-11-06 at `0bcc7a6d`; it read "Anything
+    unread refuses."). Where the collaborator permission read answers exactly 403, a person is proven only if `user`
+    names them, ignoring case, and the repository's `permissions` reads `admin` true or `push` true. Anything else after
+    that 403 refuses (`personRight`, `src/runs/preflight.ts`, called from `rightGap`, `src/cli/commands/runContract.ts`).
+    A real Claude Code cloud session on 2026-11-06 showed Claude's GitHub proxy answering 403 on every `collaborators`
+    path. That is what one session read, not a promise from Claude.
   - The criteria are stripped of control and invisible characters, HTML comments dropped, cut at the next heading or the
     closing links, held to 16,384 bytes and deny-scanned before anything is written, a hit refusing by pattern id. Item
     text never enters the contract except the criteria.
@@ -7089,8 +7104,10 @@ item's, Then the verb refuses and names which (`runContract`, `src/cli/commands/
   - `contract.yml` joins the files the run verbs stage themselves (`RUN_FILES`, `src/cli/commands/run.ts`). The contract
     stays at version 1.
 - **Limits:** the plan's hash detects drift only. A person with write access may name any plan committed on the branch.
-- **Proof:** `test/runs/itemContract.test.ts`, `test/cli/commands/runContract.test.ts`, `test/runs/runContract.test.ts`.
-- **Source:** `src/cli/commands/runContract.ts`, `src/runs/itemContract.ts`, `content/skills/st-unattended/references/cloud.md`.
+- **Proof:** `test/runs/itemContract.test.ts`, `test/cli/commands/runContract.test.ts` (the describe "where the permission
+  read answers 403"), `test/runs/runContract.test.ts`, `test/runs/preflight.test.ts` (the describe "personRight").
+- **Source:** `src/cli/commands/runContract.ts`, `src/runs/itemContract.ts`, `src/runs/preflight.ts`,
+  `content/skills/st-unattended/references/cloud.md`.
 
 ### REQ-FLOW-156 — The people a run contract names hear when the run ends
 
@@ -7189,8 +7206,13 @@ the run refuses to start.
   command: it holds only letters, digits, `.`, `_`, `/` and `-`, and passes `git check-ref-format --branch`.
 - **Limits:** the triggers are the vendors'. Their rows in `CLIENT_CLOUD_FACTS` carry the page and the date read, and each
   reads `not run` until a person check has run it on a scratch repository. Claude's page says events over its hourly caps
-  are dropped.
-- **Proof:** `test/corpus/skills/unattended.test.ts`; the eval cases are written and not run.
+  are dropped. On Claude's cloud, "from a write or admin author, Then a cloud run starts" holds for the task owner alone
+  (amended 2026-11-06 at `0bcc7a6d`). In one real Claude Code cloud session that day, Claude's GitHub proxy answered 403 on
+  every `collaborators` path, so a run there can prove only the account it acts as (REQ-FLOW-155), which is the task
+  owner's while `GH_TOKEN` and `GITHUB_TOKEN` stay unset (`docs/cloud.md`). Anyone else's label stops the run, and so does
+  an issue someone else wrote. That is what one session read, not a promise from Claude.
+- **Proof:** `test/corpus/skills/unattended.test.ts`, `test/docsPages.test.ts` ("states the task owner's limit on Claude's
+  cloud, dated to the session that read it"); the eval cases are written and not run.
 - **Source:** `content/skills/st-unattended/references/cloud.md`, `src/hooks/model.ts`.
 
 ### REQ-FLOW-159 — One page states how to set up the factory, cloud and local
