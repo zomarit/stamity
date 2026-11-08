@@ -5430,9 +5430,14 @@ describe("docs/cloud.md", () => {
     expect(claude).toContain(
       "on 2026-10-19 the cloud's own Node was 22.22.0, and the pre-flight's `node-engine` check refused it",
     );
+    // TEST CHANGE, justified: the real run of 2026-11-06 showed a setup script's `gh auth setup-git || true` left the
+    // session with no credential helper, and the same call inside the session passed `direct-push`. The page now sends
+    // the call into the session, before the pre-flight, so the pin moves from "the cloud environment" to there.
     expect(claude).toContain(
-      "run `gh auth setup-git` in the cloud environment before the run starts, so that `gh` is origin's credential helper",
+      "run `gh auth setup-git` inside the session, before the pre-flight, so that `gh` is origin's credential helper",
     );
+    expect(claude).toContain("a setup script's `gh auth setup-git || true` left the session with no credential helper");
+    expect(claude).toContain("On 2026-11-06 it was 22.23.4, which passes");
     expect(claude).toContain("by default git pushed origin over https with no credential helper, and `direct-push` refused");
     const cursor = flowed(sectionOf(sectionOf(cloudPage(), "## Cursor's cloud agents"), "### Set it up"));
     expect(cursor).toContain("The saved environment's origin URL must not carry credentials");
@@ -5442,6 +5447,10 @@ describe("docs/cloud.md", () => {
     expect(cursor).toContain(
       "on 2026-10-19 Cursor's origin push URL carried its own credentials, which cannot be tied to `gh`'s identity, and `direct-push` refused",
     );
+    // ADDED: the real run of 2026-11-08 showed the plain origin was not enough, and no setup is known that passes.
+    expect(cursor).toContain("That was not enough on 2026-11-08");
+    expect(cursor).toContain("the URL rewrites in `~/.gitconfig` carried Cursor's own login");
+    expect(cursor).toContain("No setup is known that passes.");
   });
 
   // ADDED 2026-10-26 (plan 022 file 2, unit b18-vendor-claims; ledger build/38, review/78, review/79; REQ-FLOW-111).
@@ -6156,6 +6165,14 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
       expect(prompt).toContain("Never use gh issue");
     });
 
+    // ADDED: on 2026-11-06 a setup script's `gh auth setup-git || true` left Claude's session with no credential helper,
+    // and the same call inside the session passed `direct-push`. So the prompt runs it before anything else, and stops on
+    // a failure, ahead of the numbered steps, so step 3's number, which When nothing fired cites, does not move.
+    it("runs gh auth setup-git first, and stops if it fails", () => {
+      expect(prompt.split("\n")[0]).toBe("First run gh auth setup-git. If it fails, stop and start nothing.");
+      expect(prompt.indexOf("gh auth setup-git")).toBeLessThan(prompt.indexOf("gh api"));
+    });
+
     // TEST CHANGE, justified: round 1's review (W-1) showed the old case compared word positions while
     // the prompt's first call returned every body. This reads what each call can return.
     it("brings no issue text into the session before the labeller is proved", () => {
@@ -6253,13 +6270,17 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     expect(step).toContain("any label on any issue may start a session");
     expect(step).toContain("two sessions can take one issue and its branch");
     expect(step).toContain("fires only on `labeled`, for this label alone");
+    // TEST CHANGE, justified: on 2026-11-08 Cursor's automation screen offered **Label Added** with a one-label filter,
+    // while its page still names **Issue label changed**. The two-events warning now names the page's trigger, and the
+    // screen's trigger gets its own sentence, so the pins move to the trigger each sentence names.
     const walk = flowed(section("Step 10: Add the label"));
     expect(walk).toContain("before you add or take off another label, on any issue");
-    expect(walk).toContain("on Cursor's label trigger any label added or taken off can");
+    expect(walk).toContain("On Cursor each `stamity:ready` added can, on any issue, and under **Issue label changed** any label added or taken off can");
     const nothing = flowed(section("When nothing fired"));
-    expect(nothing).toContain("On Cursor's label trigger that is two events");
+    expect(nothing).toContain("On Cursor's **Issue label changed** trigger that is two events");
     expect(nothing).toContain("take the label off, wait for the session that starts to end on Cursor's page, and only then put the label on");
-    expect(flowed(read(CLOUD)), "the twin on the cloud page").toContain("On Cursor's label trigger a quick label off and on is two events");
+    expect(nothing).toContain("On **Label Added**, whether a label taken off starts a session was not tried");
+    expect(flowed(read(CLOUD)), "the twin on the cloud page").toContain("On Cursor's **Issue label changed** trigger a quick label off and on is two events");
   });
 
   it("states the task owner's limit on Claude's cloud, dated to the session that read it", () => {
@@ -6284,17 +6305,34 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
   });
 
   it("says how each cloud's `gh` is signed in, and names what is unknown (review/129)", () => {
+    // TEST CHANGE, justified: the real runs of 2026-11-06 (Claude) and 2026-11-08 (Cursor) answered what these pins
+    // called unknown until a real run. Claude's setup script left no credential helper, and Cursor's run refused on
+    // `direct-push` with `gh auth setup-git` passing, so each "unknown" pin moves to the dated result that replaced it.
     const claude = flowed(section("Step 7: Claude"));
     expect(claude).toContain("`gh` needs no sign-in from you");
     expect(claude).toContain("leave both unset");
-    expect(claude).toContain("unknown until a real run");
+    expect(claude).not.toContain("unknown until a real run");
+    expect(claude).toContain("Do not count on the setup script for `gh auth setup-git`");
+    expect(claude).toContain("says the setup script runs before the session sets the environment's variables");
     expect(claude).toContain("may refuse on `direct-push`");
     const cursor = flowed(section("Step 8: Cursor"));
-    expect(cursor).toContain("do not say how to get one, so that part is unknown until a real run");
-    expect(cursor).toContain("may refuse on `direct-push`");
+    expect(cursor).not.toContain("unknown until a real run");
+    expect(cursor).toContain("`npm ci` and `gh auth setup-git` both passed in that environment, and the pre-flight still refused on `direct-push`");
+    expect(cursor).toContain("No setup is known that passes.");
+    expect(cursor).toContain("That is its own report, not checked.");
     const cloud = flowed(read(CLOUD));
     expect(cloud).toContain("Leave both unset, since a token you set goes to `gh` as it is");
-    expect(cloud).toContain("do not say how `gh` gets signed in there, so that is unknown until a real run");
+    expect(cloud).not.toContain("so that is unknown until a real run");
+  });
+
+  // ADDED: the land job's one real run, on Claude's cloud on 2026-11-06, answered `not-a-run` because the cloud's footer
+  // followed the run's marker. Both pages state it, and neither calls the job unproven by a run it reached.
+  it("states the land job's real answer on Claude's cloud, dated, on both pages", () => {
+    expect(flowed(section("Step 9: Check the land job"))).toContain("In the run of 2026-11-06 it did not land there either. It answered `not-a-run`");
+    const cloud = flowed(read(CLOUD));
+    expect(cloud).toContain("On 2026-11-06 it did not: it answered `not-a-run`");
+    expect(cloud).toContain("One real run reached the job, on Claude's cloud on 2026-11-06");
+    expect(cloud).not.toContain("built to finish it from GitHub and `not run` so far");
   });
 
   it("states how a job ends and where its merge method comes from", () => {
@@ -6326,6 +6364,9 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
   it("gives Cursor a webhook branch whose workflow starts on the label and carries no issue text", () => {
     const step = section("Step 8: Cursor");
     expect(flowed(step)).toContain("Issue label changed");
+    // ADDED: the page (read 2026-11-08) and the automation's screen on that date differ, and the step names both.
+    expect(flowed(step)).toContain("Choose the trigger **Label Added** under Issues, and set its filter to the one label `stamity:ready`");
+    expect(flowed(step)).toContain("The automation's own screen offered **Label Added** with a filter on that date, and the run used it");
     const workflow = parseYaml(fenced(step, "yaml")) as {
       on: { issues: { types: string[] } };
       permissions: Record<string, string>;
@@ -6345,12 +6386,24 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     expect(paragraph.match(/\.(?: |$)/g)?.length).toBe(2);
   });
 
-  it("states each unproven route as not run, with the date", () => {
-    const proof = flowed(section("What is not proven yet"));
-    expect(proof).toContain("as of 2026-11-05");
-    for (const route of ["Claude's scheduled task", "Cursor's automation", "Cursor's webhook", "The land job", "Cursor's cloud finishing", "A local run"]) {
+  // TEST CHANGE, justified: real runs on 2026-11-06 (Claude's cloud) and 2026-11-08 (Cursor's cloud) moved two routes
+  // off `not run`. The section is renamed for what it now holds, each run route reads its date and its result, and the
+  // four routes no run reached still read `not run`.
+  it("states each route's real result, or not run, with the date", () => {
+    const proof = flowed(section("What real runs have shown"));
+    expect(proof).toContain("As of 2026-11-08");
+    expect(proof).toContain("no route on this page has merged a change in a real run yet");
+    expect(proof).toMatch(/Claude's scheduled task starting on the label: run on 2026-11-06\.[^.]*draft pull request with green CI\. It did not land\./);
+    expect(proof).toMatch(/Cursor's automation starting on the label: run on 2026-11-08\.[^.]*refused at the pre-flight's `direct-push` check/);
+    for (const route of ["Cursor's webhook", "The land job", "Cursor's cloud finishing", "A local run"]) {
       expect(proof).toMatch(new RegExp(`${route}[^.]*\`not run\``));
     }
+    // The three faults that stopped Claude's run before landing, each named.
+    expect(proof).toContain("The test-runner sub-agent returned no result in three tries");
+    expect(proof).toContain("The run's `morning.md` held a summary line before its first section");
+    expect(proof).toContain("It reads the run from a marker that must end the pull request's body");
+    expect(read("src/cli/commands/runLand.ts"), "the page names a body rule the job does not hold").toContain("const BODY_MARKER = /<!-- stamity:run (\\S+) -->$/;");
+    expect(proof).toContain("No setup is known that passes.");
   });
 
   it("puts the App install first when nothing fired, and the dropped event next", () => {
