@@ -9139,7 +9139,8 @@ above.
   any command; GIVEN a label from an author without write access THEN `run contract` refuses, so the run does not start.
   *(corpus: `test/corpus/skills/unattended.test.ts`; test: `test/cli/commands/runContract.test.ts`)*
 - judgment: one real run per cloud on a scratch repository goes from a ready item to a merged pull request. Run on both
-  clouds, one session each, and neither reached a merged pull request (amended 2026-11-08; it read "Not run.").
+  clouds, several sessions on Claude's and three on Cursor's, and neither reached a merged pull request (amended
+  2026-11-08; it read "Not run."; amended 2026-11-09; it read "Run on both clouds, one session each".)
 
 **REQ-FLOW-159** (added 2026-11-05)
 
