@@ -2,7 +2,7 @@
 title: The factory
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-06). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-08). -->
 <!-- Re-open when: a step's verb, setting or check changes, an `Issue trigger` row of `CLIENT_CLOUD_FACTS`
      moves, the ready label or a filed item's body changes, or a real run proves or breaks a step.
      `test/docsPages.test.ts` holds this page to the hand-page contract, the order of its steps and the
@@ -36,7 +36,9 @@ session each, and no route on this page has merged a change in a real run yet. A
   run refused at the pre-flight's `direct-push` check.
 - Cursor's webhook starting on the label: `not run`.
 - The land job merging a real pull request: `not run`. On 2026-11-06 the job was started by hand
-  on Claude's pull request. Every step ran, and it answered `not-a-run` and merged nothing.
+  on Claude's pull request. The workflow's steps all ran, but `stamity run land --job` stopped at its
+  first read, of the pull request's body, with `not-a-run`. So the job's evidence reads and its merge
+  were not exercised, and it merged nothing.
 - Cursor's cloud finishing a merge with `run land`: `not run`.
 - A local run going from a ready item to a merge: `not run`.
 

@@ -654,7 +654,10 @@ const CURRENCY_HEADER =
 //
 // TEST CHANGE, justified: MOVED 2026-11-06, from "2026-11-05". The cut lands a day after that walk, so the release
 // date, the stamps and this pin move together. The move read no page again; the walk stays the one above.
-const RELEASE_CUT_DATE = "2026-11-06";
+//
+// TEST CHANGE, justified: MOVED 2026-11-08, from "2026-11-06". The cut moved to 2026-11-08, so the CHANGELOG's
+// release date, the cut-form stamps and this pin move together again. This move read no page again either.
+const RELEASE_CUT_DATE = "2026-11-08";
 
 /**
  * The date the current re-verification pass re-read the hand bucket on.
@@ -881,8 +884,11 @@ const RELEASE_CUT_DATE = "2026-11-06";
  *
  * TEST CHANGE, justified: MOVED 2026-11-06, from 2026-11-05, with RELEASE_CUT_DATE: the commit form has no members, so
  * the else branch holds this constant to that one.
+ *
+ * TEST CHANGE, justified: MOVED 2026-11-08, from 2026-11-06, with RELEASE_CUT_DATE, for the same reason: the commit
+ * form still has no members.
  */
-const REATTESTATION_DATE = "2026-11-06";
+const REATTESTATION_DATE = "2026-11-08";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");
@@ -6001,6 +6007,14 @@ describe("the security pages say one thing about the brake, the lift and the job
     expect(held).toContain("On 2026-11-06 it was started by hand");
     expect(held).toContain("So a hand start has run, but it has not landed.");
     expect(held).not.toContain("It is `not run` so far");
+    // ADDED: the job stopped at its first read, of the body, so "Every step ran" overstated it against the Limits line,
+    // which keeps the evidence reads and the merge `not run`. Both pages now say where it stopped.
+    expect(held).toContain("stopped at its first read, of the pull request's body, with `not-a-run`");
+    expect(held).toContain("So the job's evidence reads and its merge were not exercised.");
+    const handStart = flowed(read(FACTORY));
+    expect(handStart).toContain("stopped at its first read, of the pull request's body, with `not-a-run`");
+    expect(handStart).toContain("So the job's evidence reads and its merge were not exercised, and it merged nothing.");
+    for (const page of [CLOUD, FACTORY]) expect(flowed(read(page)), page).not.toContain("Every step ran");
     for (const page of [CLOUD, FACTORY, TROUBLESHOOTING]) {
       const flat = flowed(read(page));
       expect(flat, `${page} names no way forward for a held cloud run`).toContain("A held pull request from a cloud run");

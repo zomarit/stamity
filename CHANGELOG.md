@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.18.0] - 2026-11-06
+## [1.18.0] - 2026-11-08
 
 ### Upgrading from 1.17.0
 
@@ -40,7 +40,7 @@ and moves a `package.json` pin (an exact, `^` or `~` spec) to 1.18.0; where a lo
 install afterwards so the lockfile follows the pin. Where an item below says "the first `sync`", the first `upgrade`
 (or `sync`) at 1.18.0 is that run.
 
-On 2026-11-05, ahead of the 2026-11-06 cut, this was walked with the 1.18.0 build, before its publish, on one plain
+On 2026-11-05, ahead of the 2026-11-08 cut, this was walked with the 1.18.0 build, before its publish, on one plain
 repository the published 1.17.0 wrote with all four clients selected. `sync` exited 0, `check` then exited 0, and a
 second `sync` changed nothing. The `upgrade` verb's pin move, a setup with packs, a source policy and a workspace were
 not walked; those items are read from the code and its tests.

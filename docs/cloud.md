@@ -2,7 +2,7 @@
 title: Cloud runs
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-06). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-08). -->
 <!-- Re-open when: a row of `CLIENT_CLOUD_FACTS` moves, a run contract key or a pre-flight check
      changes, or a client's answer to a person-only act moves. `test/docsPages.test.ts` holds this
      page to the hand-page contract, the contract parser and that table; a vendor page that changed
@@ -489,9 +489,10 @@ What you can do instead:
 - **Start the land job by hand,** if it is on, with the pull request's number. It reads the evidence
   again and merges only if that holds. It lands only a run that ended with the job turned on, and it
   takes no approval, so anything that still asks stays held. On 2026-11-06 it was started by hand on
-  a draft pull request from Claude's cloud. Every step ran, and it answered `not-a-run`, since Claude's
-  cloud adds its footer after the run's marker in the body. So a hand start has run, but it has not
-  landed.
+  a draft pull request from Claude's cloud. The workflow's steps all ran, but `stamity run land --job`
+  stopped at its first read, of the pull request's body, with `not-a-run`, since Claude's cloud adds
+  its footer after the run's marker in the body. So the job's evidence reads and its merge were not
+  exercised. So a hand start has run, but it has not landed.
 
 ## From a ready item to a merge
 
