@@ -1,6 +1,6 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended at the 1.17.0 release cut on 2026-10-27, amended from docs/plans/023-factory-bridge-01.md in run 2026-11-04_factory-bridge on 2026-11-05, amended from docs/plans/023-factory-bridge-02.md in run 2026-11-05_factory-bridge-02 on 2026-11-05 and 2026-11-06, amended from the real cloud runs of 2026-11-06 and 2026-11-08 on 2026-11-08, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended at the 1.17.0 release cut on 2026-10-27, amended from docs/plans/023-factory-bridge-01.md in run 2026-11-04_factory-bridge on 2026-11-05, amended from docs/plans/023-factory-bridge-02.md in run 2026-11-05_factory-bridge-02 on 2026-11-05 and 2026-11-06, amended from the real cloud runs of 2026-11-06 and 2026-11-08 on 2026-11-08, amended on 2026-11-09 to correct the count of real-run sessions on each cloud and the cloud proxy wording `SECURITY.md` now holds, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.18.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
@@ -5358,6 +5358,12 @@ named network exceptions, and the run verbs on the git-hardening row.
   `user` and stays unreadable.
   - Proof: `test/docsPages.test.ts` ("cloud and unattended runs (REQ-FLOW-104)": the risk list's pins on both bullets,
     and the page no longer holding "shared app identity").
+- **Amended 2026-11-09** (read against `SECURITY.md`'s "The cloud proxy." and `src/runs/preflight.ts::pushIdentityCheck`).
+  The 2026-11-06 bullet above stays as the record, but `SECURITY.md` no longer says the pre-flight takes the push and
+  the REST reads behind the proxy "as one proxy connection". It now says the pre-flight binds the push to gh's
+  credential over https, or to the proxy connection where origin is the proxy's own URL, and that what it proves is
+  what that credential or connection can do on the repository. The old wording fit only the second case, and the
+  2026-11-06 session pushed over https. The page also says neither binding shows which account a push goes out as.
 - **Proof:** `test/docsPages.test.ts` ("cloud and unattended runs (REQ-FLOW-104)": the section's place, every risk
   and gap named above, the retired bullet gone, the control table's pointers, the settings row and the network
   exception); `judgment: reviewer` for the wording around them.
@@ -7235,6 +7241,14 @@ the run refuses to start.
   pre-flight's `direct-push` check: the origin URL and git's URL rewrites there carried Cursor's own login, so the push
   could not be tied to `gh`'s identity. No setup is known that passes. That is what one session on each cloud showed, not
   a promise from either vendor.
+- **Amended 2026-11-09** (read against `docs/factory.md`, its section "What real runs have shown"). The 2026-11-08
+  bullet above stays as the record, but its count does not stand for Claude's route: "one session each" and "one
+  session on each cloud" undercount it. On 2026-11-06 the label started Claude's task in several sessions, not one. The
+  first stopped at the start prompt's permission read, which answered 403, and the prompt then gained its 403 branch. A
+  later session passed that branch and the pre-flight, and one session reached the draft pull request with green CI
+  that the bullet above describes. Cursor's count is wrong too: on 2026-11-08 the label started three Cursor sessions.
+  Two ran the pre-flight and refused at `direct-push`. In the third, the run's own guard refused the git clean-up lines
+  before the pre-flight. None of the three pushed. Neither route has merged a pull request in a real run.
 - **Proof:** `test/corpus/skills/unattended.test.ts`, `test/docsPages.test.ts` ("states the task owner's limit on Claude's
   cloud, dated to the session that read it"); the eval cases are written and not run.
 - **Source:** `content/skills/st-unattended/references/cloud.md`, `src/hooks/model.ts`.
