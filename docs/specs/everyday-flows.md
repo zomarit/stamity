@@ -1,6 +1,6 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended at the 1.17.0 release cut on 2026-10-27, amended from docs/plans/023-factory-bridge-01.md in run 2026-11-04_factory-bridge on 2026-11-05, amended from docs/plans/023-factory-bridge-02.md in run 2026-11-05_factory-bridge-02 on 2026-11-05 and 2026-11-06, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended at the 1.17.0 release cut on 2026-10-27, amended from docs/plans/023-factory-bridge-01.md in run 2026-11-04_factory-bridge on 2026-11-05, amended from docs/plans/023-factory-bridge-02.md in run 2026-11-05_factory-bridge-02 on 2026-11-05 and 2026-11-06, amended from the real cloud runs of 2026-11-06 and 2026-11-08 on 2026-11-08, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.18.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
@@ -7226,6 +7226,15 @@ the run refuses to start.
   every `collaborators` path, so a run there can prove only the account it acts as (REQ-FLOW-155), which is the task
   owner's while `GH_TOKEN` and `GITHUB_TOKEN` stay unset (`docs/cloud.md`). Anyone else's label stops the run, and so does
   an issue someone else wrote. That is what one session read, not a promise from Claude.
+- **Amended 2026-11-08** (the real runs of 2026-11-06 and 2026-11-08; read against `docs/factory.md`, its section "What
+  real runs have shown" and Steps 8 and 9). A label has now started a run on each cloud, on a scratch repository, one
+  session each, and neither run reached a merged pull request. On Claude's cloud, on 2026-11-06, the label started the
+  task and the run reached a draft pull request with green CI. A hand start of the land job then answered `not-a-run`:
+  job mode reads the run from a marker that must end the pull request's body (REQ-FLOW-157), and Claude's cloud adds its
+  own footer after that marker. On Cursor's cloud, on 2026-11-08, the label started the agent and the run refused at the
+  pre-flight's `direct-push` check: the origin URL and git's URL rewrites there carried Cursor's own login, so the push
+  could not be tied to `gh`'s identity. No setup is known that passes. That is what one session on each cloud showed, not
+  a promise from either vendor.
 - **Proof:** `test/corpus/skills/unattended.test.ts`, `test/docsPages.test.ts` ("states the task owner's limit on Claude's
   cloud, dated to the session that read it"); the eval cases are written and not run.
 - **Source:** `content/skills/st-unattended/references/cloud.md`, `src/hooks/model.ts`.
@@ -9115,7 +9124,8 @@ above.
 - GIVEN the unattended reference THEN a start from a ready item reads only `Branch:`, over REST, and checks the name before
   any command; GIVEN a label from an author without write access THEN `run contract` refuses, so the run does not start.
   *(corpus: `test/corpus/skills/unattended.test.ts`; test: `test/cli/commands/runContract.test.ts`)*
-- judgment: one real run per cloud on a scratch repository goes from a ready item to a merged pull request. Not run.
+- judgment: one real run per cloud on a scratch repository goes from a ready item to a merged pull request. Run on both
+  clouds, one session each, and neither reached a merged pull request (amended 2026-11-08; it read "Not run.").
 
 **REQ-FLOW-159** (added 2026-11-05)
 
