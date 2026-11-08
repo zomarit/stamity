@@ -35,8 +35,8 @@ session each, and no route on this page has merged a change in a real run yet. A
 - Cursor's automation starting on the label: run on 2026-11-08. The label started the agent, and the
   run refused at the pre-flight's `direct-push` check.
 - Cursor's webhook starting on the label: `not run`.
-- The land job merging a real pull request: `not run`. On 2026-11-06 the job ran on Claude's pull
-  request, answered `not-a-run` and merged nothing.
+- The land job merging a real pull request: `not run`. On 2026-11-06 the job was started by hand
+  on Claude's pull request. Every step ran, and it answered `not-a-run` and merged nothing.
 - Cursor's cloud finishing a merge with `run land`: `not run`.
 - A local run going from a ready item to a merge: `not run`.
 

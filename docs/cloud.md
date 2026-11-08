@@ -488,7 +488,10 @@ What you can do instead:
   merge. Your branch's rules still apply, and stamity does not check this merge.
 - **Start the land job by hand,** if it is on, with the pull request's number. It reads the evidence
   again and merges only if that holds. It lands only a run that ended with the job turned on, and it
-  takes no approval, so anything that still asks stays held. It is `not run` so far.
+  takes no approval, so anything that still asks stays held. On 2026-11-06 it was started by hand on
+  a draft pull request from Claude's cloud. Every step ran, and it answered `not-a-run`, since Claude's
+  cloud adds its footer after the run's marker in the body. So a hand start has run, but it has not
+  landed.
 
 ## From a ready item to a merge
 
@@ -522,8 +525,8 @@ Cursor's automations page, read 2026-11-08, names an **Issue label changed** tri
 added to or taken off an issue, with no label filter, and a webhook trigger. On that date the
 automation's own screen offered **Label Added** under Issues, with a filter for one label, and in one
 session the label started the agent through it. Neither run has merged, as
-[The factory](factory.md) says. The table's rows are not updated from these sessions, so both
-read `not run` in the [capability matrix](capability-matrix.md)'s cloud table.
+[The factory](factory.md) says. Both rows of the [capability matrix](capability-matrix.md)'s cloud
+table now name these sessions as their person check, with their dates.
 
 ### The review tool
 

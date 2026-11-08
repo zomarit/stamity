@@ -760,11 +760,20 @@ describe("the cloud column and the Cloud sessions section", () => {
 
   it("names each fact's person check, reading \"not run\" where a fact carries none (REQ-PROVE-044)", () => {
     expect(tableRows(section(page, "## Cloud sessions")).length).toBeGreaterThan(1);
-    // No person check has run against a cloud yet: every live row reads "not run".
+    // TEST CHANGE, justified: real runs on 2026-11-06 and 2026-11-08 started on the label on Claude's and Cursor's
+    // clouds, so their issue-trigger rows name that check; every other live row still reads "not run".
+    const checked = new Set(["claude:Issue trigger", "cursor:Issue trigger"]);
     for (const fact of CLIENT_CLOUD_FACTS) {
-      expect(fact.run, `${fact.tool} ${fact.subject}`).toBeUndefined();
-      expect(personCheck(page, fact.tool, fact.subject), `${fact.tool} ${fact.subject}`).toBe("not run");
+      const key = `${fact.tool}:${fact.subject}`;
+      if (checked.has(key)) {
+        expect(fact.run, key).toBeDefined();
+        expect(personCheck(page, fact.tool, fact.subject), key).toBe(`${fact.run?.record}, run ${fact.run?.date}`);
+        continue;
+      }
+      expect(fact.run, key).toBeUndefined();
+      expect(personCheck(page, fact.tool, fact.subject), key).toBe("not run");
     }
+    expect(CLIENT_CLOUD_FACTS.filter((fact) => fact.run !== undefined).length).toBe(checked.size);
     // Activated: one fact carrying a run names its check and date, and only that row moves.
     const ran = cloudFact("claude", "Draft pull request");
     const withRun = renderCapabilityMatrixFrom(

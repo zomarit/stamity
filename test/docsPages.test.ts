@@ -5996,7 +5996,11 @@ describe("the security pages say one thing about the brake, the lift and the job
     expect(held).toContain("so `run land` refuses there with `no pre-flight record`");
     expect(held).toContain("**Merge it yourself on GitHub.**");
     expect(held).toContain("**Start the land job by hand,**");
-    expect(held).toContain("It is `not run` so far");
+    // TEST CHANGE, justified: on 2026-11-06 the job was started by hand on a real pull request and answered
+    // `not-a-run`, so the hand start is no longer `not run`; the line now says it ran and did not land.
+    expect(held).toContain("On 2026-11-06 it was started by hand");
+    expect(held).toContain("So a hand start has run, but it has not landed.");
+    expect(held).not.toContain("It is `not run` so far");
     for (const page of [CLOUD, FACTORY, TROUBLESHOOTING]) {
       const flat = flowed(read(page));
       expect(flat, `${page} names no way forward for a held cloud run`).toContain("A held pull request from a cloud run");
@@ -6046,15 +6050,22 @@ describe("the security pages say one thing about the brake, the lift and the job
 });
 
 describe("the factory's cloud facts (REQ-FLOW-158)", () => {
-  it.each(["claude", "cursor"])("%s's issue trigger is dated and reads not run", (tool) => {
+  // TEST CHANGE, justified: real runs on 2026-11-06 (Claude's cloud) and 2026-11-08 (Cursor's cloud) started on the
+  // label, so both rows now carry their dated person check, and the matrix names it instead of "not run". Cursor's page
+  // was read again on 2026-11-08.
+  it.each([
+    ["claude", "2026-11-05", "2026-11-06", "its run reached a draft pull request"],
+    ["cursor", "2026-11-08", "2026-11-08", "That run refused at the pre-flight's `direct-push` check"],
+  ])("%s's issue trigger is dated and names its real run", (tool, accessDate, runDate, result) => {
     const row = CLIENT_CLOUD_FACTS.find((fact) => fact.tool === tool && fact.subject === "Issue trigger");
     expect(row, `CLIENT_CLOUD_FACTS has no ${tool} issue trigger`).toBeDefined();
-    expect(row?.citation.accessDate).toBe("2026-11-05");
-    // Absent until a person check ran it: the matrix then reads "not run".
-    expect(row?.run).toBeUndefined();
+    expect(row?.citation.accessDate).toBe(accessDate);
+    expect(row?.run).toEqual({ record: "a session on a private scratch repository", date: runDate });
+    expect(row?.fact).toContain(result);
     const matrixRow = read(CAPABILITY_MATRIX).split("\n").find((line) => line.includes("Issue trigger") && line.includes(row?.citation.url ?? "?"));
     expect(matrixRow, `the capability matrix has no ${tool} issue-trigger row`).toBeDefined();
-    expect(matrixRow).toContain("not run");
+    expect(matrixRow).toContain(`a session on a private scratch repository, run ${runDate}`);
+    expect(matrixRow).not.toContain("not run");
   });
 
   it.each([
@@ -6068,7 +6079,8 @@ describe("the factory's cloud facts (REQ-FLOW-158)", () => {
   it("the cloud page has dropped the old claims and names no vendor address", () => {
     const page = read(CLOUD);
     expect(page).not.toContain("No trigger reads it yet");
-    expect(flowed(page)).toContain("both read `not run` in the [capability matrix](capability-matrix.md)'s cloud table");
+    expect(flowed(page)).toContain("Both rows of the [capability matrix](capability-matrix.md)'s cloud table now name these sessions");
+    expect(flowed(page)).not.toContain("both read `not run` in the [capability matrix](capability-matrix.md)'s cloud table");
     expect(flowed(page)).toContain("events over its hourly caps are dropped");
     expect(page, "the page names a vendor address").not.toMatch(/https?:\/\/(?:code\.claude\.com|cursor\.com)/);
   });

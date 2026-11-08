@@ -136,7 +136,7 @@ Each entry below is the one home for its subject. This page links; it does not r
 | [`docs/enterprise-forks.md`](docs/enterprise-forks.md) | Taking the next upstream release into a customized fork — the lane's config and verbs, conflicts, landing, the fork layer, and releasing the fork through its own workflow. |
 | [`docs/security-mapping.md`](docs/security-mapping.md) | The version-pinned crosswalk from this repository's controls to the OWASP, joint-guidance and NIST AI RMF catalogues — seven surfaces, their residuals, and the gaps. |
 | [`docs/cloud.md`](docs/cloud.md) | Running a planned change in a vendor's cloud with nobody watching — each cloud's setup, branch protection, secrets, contract start and morning walk, the GitHub Action's limits, and the run contract. |
-| [`docs/factory.md`](docs/factory.md) | Setting up a ready issue to merge with nobody watching, in order, on Claude's cloud, Cursor's cloud and your own machine — who does each step and where, what is not proven yet, and what to do when nothing fired. |
+| [`docs/factory.md`](docs/factory.md) | Setting up a ready issue to merge with nobody watching, in order, on Claude's cloud, Cursor's cloud and your own machine — who does each step and where, what real runs have shown, and what to do when nothing fired. |
 
 Hook scripts are not in that corpus row, because they are not corpus content. The four portable bodies, the
 person-only shell guard among them, are generated from `src/hooks/scripts.ts` for every selected client. Claude Code

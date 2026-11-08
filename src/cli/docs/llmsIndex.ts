@@ -230,7 +230,7 @@ export const LLMS_INDEX_SECTIONS: readonly IndexSection[] = [
         path: "docs/factory.md",
         title: "The factory",
         description:
-          "setting up a ready issue to merge with nobody watching, in order, on Claude's cloud, Cursor's cloud and your own machine — who does each step and where, what each optional setting loosens, what is not proven yet, and what to do when nothing fired.",
+          "setting up a ready issue to merge with nobody watching, in order, on Claude's cloud, Cursor's cloud and your own machine — who does each step and where, what each optional setting loosens, what real runs have shown, and what to do when nothing fired.",
         regenerateCommand: null,
       },
       {

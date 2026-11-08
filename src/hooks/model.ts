@@ -259,9 +259,11 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
       "among them, once the Claude GitHub App is installed on the repository. The page lists filters for " +
       "pull requests only, and says events over its per-task and per-account hourly caps are dropped " +
       "until the window resets. Being able to clone the repository does not mean the App is installed. " +
-      "The feature is in research preview.",
+      "The feature is in research preview. In a session on 2026-11-06 the `labeled` action started a " +
+      "task, and its run reached a draft pull request.",
     status: "documented",
     citation: { url: "https://code.claude.com/docs/en/routines", accessDate: "2026-11-05" },
+    run: { record: "a session on a private scratch repository", date: "2026-11-06" },
   },
   {
     tool: "claude",
@@ -437,9 +439,13 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     fact:
       "An automation can start on GitHub's \"Issue label changed\" trigger, when a label is added to or " +
       "removed from an issue that is not a pull request, or on a webhook trigger, a private endpoint " +
-      "an outside caller posts to. A saved webhook trigger shows a webhook address and an API key.",
+      "an outside caller posts to. A saved webhook trigger shows a webhook address and an API key. The " +
+      "page names no label filter. In a session on 2026-11-08 the automation's own screen offered " +
+      "\"Label Added\" under Issues instead, with a filter for one label, and the label started the " +
+      "agent through it. That run refused at the pre-flight's `direct-push` check.",
     status: "documented",
-    citation: { url: "https://cursor.com/docs/cloud-agent/automations", accessDate: "2026-11-05" },
+    citation: { url: "https://cursor.com/docs/cloud-agent/automations", accessDate: "2026-11-08" },
+    run: { record: "a session on a private scratch repository", date: "2026-11-08" },
   },
   {
     tool: "cursor",
