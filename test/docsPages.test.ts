@@ -5946,6 +5946,10 @@ describe("the security pages say one thing about the brake, the lift and the job
       expect(security, `SECURITY.md says again: ${overstated}`).not.toContain(overstated);
       expect(flowed(read(CLOUD)), `docs/cloud.md says again: ${overstated}`).not.toContain(overstated);
     }
+    // The marker is read on GitHub, not at the head, so the crosswalk must not say the proof is text at the head.
+    const mapping = flowed(read(SECURITY_MAPPING));
+    expect(mapping, "docs/security-mapping.md says again: text at the head").not.toContain("text at the head");
+    expect(mapping).toContain("the marker that ends the pull request's body, read on GitHub, and the `PR:` and `Login:` lines of the record at the head");
     expect(flowed(read(CLOUD))).toContain("so an Actions deploy on push must not rely on this path, and a webhook or a GitHub App on the push still fires");
     expect(flowed(read(CLOUD))).toContain("A deleted state comment is not seen");
   });
