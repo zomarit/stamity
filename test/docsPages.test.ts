@@ -5935,7 +5935,9 @@ describe("the security pages say one thing about the brake, the lift and the job
       "`GITHUB_TOKEN` starts no Actions `push` workflow after its merge",
       "`GITHUB_TOKEN` is the emitted workflow's configuration, not an engine check",
       "a `workflow_dispatch` runs the file at the ref the dispatch names",
-      "Its proof that a pull request is a run's own is text at the head",
+      // TEST CHANGE, justified: the marker is read from the pull request body on GitHub (runLand.ts), and only the
+      // record's `PR:` and `Login:` lines are read at the head, so the pin moves to the wording docs/cloud.md uses.
+      "Its proof that a pull request is a run's own is text: the marker that ends the pull request's body, read on GitHub, and the `PR:` and `Login:` lines of the record at the head",
       "A job that merges nothing can still leave the pull request marked ready, the tool's threads resolved and an evidence line in the body",
     ]) {
       expect(security, `SECURITY.md does not state: ${limit}`).toContain(limit);
