@@ -13,8 +13,8 @@ title: Cloud runs
 This page is for you if you want a planned change to run in a vendor's cloud. On Claude Code on the
 web and Cursor's cloud agents it can run through a night with nobody there. Copilot's cloud agent
 runs it as a chain of sessions, stopped at 59 minutes when they run on GitHub Actions, and a person
-continues each one, so it is no night with nobody there. In real runs so far, one on each cloud,
-neither Claude's nor Cursor's has merged: Claude's reached a draft pull request with green CI on
+continues each one, so it is no night with nobody there. In real runs so far, several sessions on
+Claude's cloud and one on Cursor's, neither Claude's nor Cursor's has merged: Claude's reached a draft pull request with green CI on
 2026-11-06, and Cursor's refused at the pre-flight on 2026-11-08, as each cloud's section says. For each cloud it gives the setup, the branch protection the run needs before it starts, the secrets, how to start a run under
 a run contract, and the morning walk. Then it covers Claude Code's GitHub Action, which is a short
 surface rather than an overnight one, the run contract itself, and the parts that take a ready item
@@ -522,7 +522,7 @@ so follow check 7 under When nothing fired in [The factory](factory.md).
 
 What starts the run is the vendor's. As read on 2026-11-05, Claude Code's scheduled tasks can start
 on an issue's `labeled` action once the Claude GitHub App is installed. Claude's page shows filters
-for pull requests only, and says events over its hourly caps are dropped. In one session on
+for pull requests only, and says events over its hourly caps are dropped. In several sessions on
 2026-11-06 the label started a task that way, and the page showed no label filter for issues.
 Cursor's automations page, read 2026-11-08, names an **Issue label changed** trigger, for a label
 added to or taken off an issue, with no label filter, and a webhook trigger. On that date the

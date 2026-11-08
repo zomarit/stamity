@@ -184,11 +184,12 @@ not walked; those items are read from the code and its tests.
 - **A hung test child fails at a time limit.** This repository's tests give each child process a limit, so one that
   waits on its input fails at that limit rather than holding the suite.
 - **A run can start on Claude's cloud, for the task owner alone.** Where the permission read answers 403, as Claude's
-  proxy did in one real session on 2026-11-06, the pre-flight and `run contract` take the repository's rights for the
+  proxy did in its real sessions on 2026-11-06, the pre-flight and `run contract` take the repository's rights for the
   account the run acts as, and only for a person who is that account. Anyone else stays unproven and stops the run.
-- **`docs/factory.md` and `docs/cloud.md` say what two real runs showed, and neither merged.** On Claude's cloud, on
-  2026-11-06, a label took a run to a draft pull request with green CI, but it did not land: the land job needs the
-  run's marker at the end of the pull request's body, and Claude's cloud adds a footer after it. On Cursor's cloud, on
+- **`docs/factory.md` and `docs/cloud.md` say what real runs showed, and none merged.** On Claude's cloud, on
+  2026-11-06, a label started several sessions, and one reached a draft pull request with green CI, but it did not
+  land: the land job needs the run's marker at the end of the pull request's body, and Claude's cloud adds a footer
+  after it. On Cursor's cloud, on
   2026-11-08, the run refused at the pre-flight's `direct-push` check, since git's settings there carry Cursor's own
   login, and no setup that passes is known. The start prompt now runs `gh auth setup-git` first, since a setup
   script's run of it left Claude's session with no credential helper.
