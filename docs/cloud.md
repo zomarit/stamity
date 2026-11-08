@@ -14,8 +14,8 @@ This page is for you if you want a planned change to run in a vendor's cloud. On
 web and Cursor's cloud agents it can run through a night with nobody there. Copilot's cloud agent
 runs it as a chain of sessions, stopped at 59 minutes when they run on GitHub Actions, and a person
 continues each one, so it is no night with nobody there. In real runs so far, several sessions on
-Claude's cloud and one on Cursor's, neither Claude's nor Cursor's has merged: Claude's reached a draft pull request with green CI on
-2026-11-06, and Cursor's refused at the pre-flight on 2026-11-08, as each cloud's section says. For each cloud it gives the setup, the branch protection the run needs before it starts, the secrets, how to start a run under
+Claude's cloud and three on Cursor's, neither Claude's nor Cursor's has merged: Claude's reached a draft
+pull request with green CI on 2026-11-06, and Cursor's stopped at or before the pre-flight on 2026-11-08, as each cloud's section says. For each cloud it gives the setup, the branch protection the run needs before it starts, the secrets, how to start a run under
 a run contract, and the morning walk. Then it covers Claude Code's GitHub Action, which is a short
 surface rather than an overnight one, the run contract itself, and the parts that take a ready item
 through to a merge: the label, the review tool, auto-ship and the land job.
@@ -526,8 +526,8 @@ for pull requests only, and says events over its hourly caps are dropped. In sev
 2026-11-06 the label started a task that way, and the page showed no label filter for issues.
 Cursor's automations page, read 2026-11-08, names an **Issue label changed** trigger, for a label
 added to or taken off an issue, with no label filter, and a webhook trigger. On that date the
-automation's own screen offered **Label Added** under Issues, with a filter for one label, and in one
-session the label started the agent through it. Neither run has merged, as
+automation's own screen offered **Label Added** under Issues, with a filter for one label, and in three
+sessions the label started the agent through it. None of these runs has merged, as
 [The factory](factory.md) says. Both rows of the [capability matrix](capability-matrix.md)'s cloud
 table now name these sessions as their person check, with their dates.
 

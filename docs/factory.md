@@ -28,15 +28,16 @@ Start at [Cloud runs](cloud.md) instead.
 ## What real runs have shown
 
 The code and its tests exist. Real runs on a private scratch repository have tried two routes, Claude's
-in several sessions and Cursor's in one, and no route on this page has merged a change in a real run
+in several sessions and Cursor's in three, and no route on this page has merged a change in a real run
 yet. As of 2026-11-08:
 
 - Claude's scheduled task starting on the label: run on 2026-11-06. The label started the task in
   several sessions, and one of them reached a draft pull request with green CI. It did not land. The
   first session stopped at the start prompt's permission read, which answered 403, and the prompt
   then gained its 403 branch. A later session passed that branch and the pre-flight.
-- Cursor's automation starting on the label: run on 2026-11-08. The label started the agent, and the
-  run refused at the pre-flight's `direct-push` check.
+- Cursor's automation starting on the label: run on 2026-11-08. The label started the agent in three
+  sessions, and none pushed. Two refused at the pre-flight's `direct-push` check. In the third, the run's
+  own guard refused the git clean-up lines before the pre-flight.
 - Cursor's webhook starting on the label: `not run`.
 - The land job merging a real pull request: `not run`. On 2026-11-06 the job was started by hand
   on Claude's pull request. The workflow's steps all ran, but `stamity run land --job` stopped at its
@@ -61,8 +62,9 @@ on three faults, and each one failed closed:
 All three are planned for the next release. Until then, on Claude's cloud this route goes from the
 label to a draft pull request with green CI, and the pull request waits for you.
 
-On Cursor's cloud, on 2026-11-08, the run reached the pre-flight and refused at `direct-push`, and no
-push has been seen there. No setup is known that passes. Step 8 says what was seen.
+On Cursor's cloud, on 2026-11-08, two sessions reached the pre-flight and refused at `direct-push`, and
+the run's own guard stopped a third earlier. No push has been seen there. No setup is known that passes.
+Step 8 says what was seen.
 
 Claude's steps were read from its pages on 2026-11-05 and 2026-11-08, and Cursor's on 2026-11-08, and checked
 against their screens in the runs above. Where a page and a screen differed, the step says both.
@@ -348,17 +350,17 @@ task and per account, so a lost event is likely when many labels land in one hou
 
 Use one cloud per label, as Step 7 says. If you set up Step 7's task, turn it off first.
 
-As seen on 2026-11-08, this route stops at the run's pre-flight on Cursor's cloud, and no setup is
+As seen on 2026-11-08, this route stops at or before the run's pre-flight on Cursor's cloud, and no setup is
 known that gets it past. The paragraphs after the list say what refused.
 
 1. Save a cloud environment as [Cloud runs](cloud.md) says, under Cursor's cloud agents. Cloud runs
-   asks for a signed-in `gh` there. In the session of 2026-11-08, `npm ci` and `gh auth setup-git`
+   asks for a signed-in `gh` there. In a session of 2026-11-08, `npm ci` and `gh auth setup-git`
    both passed in that environment, and the pre-flight still refused on `direct-push`.
 2. Add a new automation on this one repository, using that environment.
 3. Choose the trigger **Label Added** under Issues, and set its filter to the one label
    `stamity:ready`. Cursor's automations page, read on 2026-11-08, names another trigger, **Issue
    label changed**, with no label filter. The automation's own screen offered **Label Added** with a
-   filter on that date, and the run used it. If neither is offered to you, take the webhook branch
+   filter on that date, and the sessions used it. If neither is offered to you, take the webhook branch
    below.
 4. Paste the start prompt from Step 7 as the automation's prompt, and save it.
 
@@ -370,17 +372,17 @@ start can take it, so two sessions can take one issue and its branch. Step 10 sa
 that window, and check 7 under When nothing fired says how to start again. The webhook branch below
 fires only on `labeled`, for this label alone, so a label taken off starts nothing there.
 
-What the run of 2026-11-08 showed: the label started the agent, and `npm ci` and `gh auth setup-git`
-passed. Every pre-flight check passed but `direct-push`. The origin URL and the URL rewrites in
-`~/.gitconfig` carried Cursor's own login, so the push could not be tied to `gh`'s identity. The agent
-also reported `gh` as read-only, even with a `GH_TOKEN` runtime secret set. That is its own report,
-not checked.
+What the sessions of 2026-11-08 showed: the label started the agent three times. In a session that
+reached the pre-flight, `npm ci` and `gh auth setup-git` passed, and every check passed but `direct-push`.
+The origin URL and the URL rewrites in `~/.gitconfig` carried Cursor's own login, so the push could not
+be tied to `gh`'s identity. The agent also reported `gh` as read-only, even with a `GH_TOKEN` runtime
+secret set. That is its own report, not checked.
 
 A start prompt that cleared those rewrites was refused by the run's own person-only guard, which
-refuses a remote write while a run is unattended. That is the guard working. The same lines in the
-environment's start script did not hold: the rewrites were still there when the run started. So on
-Cursor's cloud the route reaches the pre-flight and refuses at `direct-push`, and no push has been
-seen there. No setup is known that passes.
+refuses a remote write while a run is unattended, so that session stopped before the pre-flight. That
+is the guard working. The same lines in the environment's start script did not hold: the rewrites were
+still there when the run started. So on Cursor's cloud the route stops at or before the pre-flight, and
+no push has been seen there. No setup is known that passes.
 
 ### Where the issue trigger is not offered
 

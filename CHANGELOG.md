@@ -189,9 +189,9 @@ not walked; those items are read from the code and its tests.
 - **`docs/factory.md` and `docs/cloud.md` say what real runs showed, and none merged.** On Claude's cloud, on
   2026-11-06, a label started several sessions, and one reached a draft pull request with green CI, but it did not
   land: the land job needs the run's marker at the end of the pull request's body, and Claude's cloud adds a footer
-  after it. On Cursor's cloud, on
-  2026-11-08, the run refused at the pre-flight's `direct-push` check, since git's settings there carry Cursor's own
-  login, and no setup that passes is known. The start prompt now runs `gh auth setup-git` first, since a setup
+  after it. On Cursor's cloud, on 2026-11-08, a label started three sessions: two refused at the pre-flight's
+  `direct-push` check, since git's settings there carry Cursor's own login, and one was stopped earlier by the run's
+  own guard. No setup that passes is known. The start prompt now runs `gh auth setup-git` first, since a setup
   script's run of it left Claude's session with no credential helper.
 
 ## [1.17.0] - 2026-10-27

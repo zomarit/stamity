@@ -6425,7 +6425,9 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     expect(flowed(step)).toContain("Issue label changed");
     // ADDED: the page (read 2026-11-08) and the automation's screen on that date differ, and the step names both.
     expect(flowed(step)).toContain("Choose the trigger **Label Added** under Issues, and set its filter to the one label `stamity:ready`");
-    expect(flowed(step)).toContain("The automation's own screen offered **Label Added** with a filter on that date, and the run used it");
+    // TEST CHANGE, justified: the label started three Cursor sessions on 2026-11-08, not one, so the pin moves from
+    // "the run used it" to the page's "the sessions used it".
+    expect(flowed(step)).toContain("The automation's own screen offered **Label Added** with a filter on that date, and the sessions used it");
     const workflow = parseYaml(fenced(step, "yaml")) as {
       on: { issues: { types: string[] } };
       permissions: Record<string, string>;
@@ -6453,7 +6455,9 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     expect(proof).toContain("As of 2026-11-08");
     expect(proof).toContain("no route on this page has merged a change in a real run yet");
     expect(proof).toMatch(/Claude's scheduled task starting on the label: run on 2026-11-06\.[^.]*draft pull request with green CI\. It did not land\./);
-    expect(proof).toMatch(/Cursor's automation starting on the label: run on 2026-11-08\.[^.]*refused at the pre-flight's `direct-push` check/);
+    // TEST CHANGE, justified: the label started three Cursor sessions on 2026-11-08, two refused at `direct-push` and
+    // the run's own guard stopped the third earlier, so the pin reads the count and both outcomes.
+    expect(proof).toMatch(/Cursor's automation starting on the label: run on 2026-11-08\.[^.]*three sessions[^.]*\. Two refused at the pre-flight's `direct-push` check\. In the third, the run's own guard/);
     for (const route of ["Cursor's webhook", "The land job", "Cursor's cloud finishing", "A local run"]) {
       expect(proof).toMatch(new RegExp(`${route}[^.]*\`not run\``));
     }
