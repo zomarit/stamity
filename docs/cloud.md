@@ -2,7 +2,7 @@
 title: Cloud runs
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-08). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-09). -->
 <!-- Re-open when: a row of `CLIENT_CLOUD_FACTS` moves, a run contract key or a pre-flight check
      changes, or a client's answer to a person-only act moves. `test/docsPages.test.ts` holds this
      page to the hand-page contract, the contract parser and that table; a vendor page that changed
@@ -130,8 +130,9 @@ cloud environment. The setup ships a readiness hook for this cloud. Where `CLAUD
 lockfile is there. Locally it does nothing. The GitHub proxy refuses GraphQL, so `gh pr` and
 `gh issue` fail there; the run verbs open and update the draft pull request over REST. `stamity run
 land` reads the review threads and marks a draft ready over GraphQL, so on this cloud it cannot
-land: it ends `refused` with "the review threads could not be read", and the pull request stays a
-draft. That refusal comes before the land can write on the pull request, so its body gets no
+land. It refuses first with `no pull request from <branch> into <default> ends with the run's
+marker`, since this cloud's footer follows the marker in the body, and past that it could not read
+the review threads. The pull request stays a draft. That refusal comes before the land can write on the pull request, so its body gets no
 `merge waits on:` line. [The land job](#the-land-job) is built to finish it from GitHub, and lands
 only a run that ended with the job turned on. On 2026-11-06 it did not: it answered `not-a-run`,
 since it reads the run from a marker that must end the pull request's body, and this cloud added a
@@ -190,9 +191,10 @@ rests on classic protection, or for an administrator on an organization ruleset.
 In that session `user` named the person and the repository's `permissions` read admin true. So the
 `user` read spoke for the person, but a person's rights and an app's would read alike for an account
 holding admin. The 403 fallback was read only for such an account, and a task owner under write has
-not been measured. Its reach is that owner alone, in their own session. The pre-flight takes the push
-and the REST reads as one proxy connection, and those reads do not show which account a push goes
-out as. `SECURITY.md` names both as residuals.
+not been measured. Its reach is that owner alone, in their own session. Behind Claude's proxy the
+pre-flight binds the push to gh's credential over https, or to the proxy connection where origin is
+the proxy's own URL, and neither shows which account a push goes out as. `SECURITY.md` names both
+as residuals.
 
 An MCP server's
 credential is read as `${VAR}` from the session's environment. `.env.mcp` is git-ignored, so set the
@@ -549,9 +551,10 @@ counts the heads that carry the run's review marker, the first among them, so at
 fix, and `rounds: 1` gives none, since a finding on its one head reads as spent.
 
 On Claude's cloud the review tool holds and no fix round runs. The session's `run land` refuses on the
-review threads before it reads the tool, so with no land job stamity never asks the tool. The land job
-does ask it and fixes nothing: it writes the reason on the pull request's `merge waits on:` line and
-exits 0, so the pull request waits for you. To clear a finding there, run `/st-pr-resolve` on the pull
+run's marker first, and past that on the review threads, both before it reads the tool, so with no
+land job stamity never asks the tool. The land job is built to ask it and fix nothing: it writes the
+reason on the pull request's `merge waits on:` line and exits 0, so the pull request waits for you.
+On this cloud it now answers `not-a-run` first, since the footer follows the marker. To clear a finding there, run `/st-pr-resolve` on the pull
 request from your own machine. A fix it pushes goes to the run's branch, and once your CI finishes
 well on that head the land job can ask the tool again, if a round is left. With no round left the reason
 reads `review rounds spent`, and [Troubleshooting](troubleshooting.md) says what a person does. On
@@ -591,7 +594,7 @@ caller of the land evidence, and it merges through the same rules, with no bypas
 - **The evidence gates hold.** It reads the checks, the threads, the ledger, the merge state, the review
   tool and every ask as `run land` does, and merges only when they pass.
 - **It gives up two things a session has.** It makes no compare of git's surface with a pre-flight's
-  record, since no pre-flight ran, and it reads no local pull-request record. Its proof that a pull request is a run's own is text at the head: the body's marker and the record's `PR:` and `Login:` lines. So anyone who can push a branch and write those lines passes that one test. The evidence gates still hold.
+  record, since no pre-flight ran, and it reads no local pull-request record. Its proof that a pull request is a run's own is text: the marker that ends the pull request's body, read on GitHub, and the `PR:` and `Login:` lines of the record at the head. So anyone who can push a branch and write those lines passes that one test. The evidence gates still hold.
 - **It lands only a run that ended.** The record at the head must read `Status: closed`, with no
   `(blocked:` and no `## Refused` row. With the setting on, every `run end` that holds its own pull request, a `--refused` end aside, commits
   `PR:` and `Login:` lines at the head so the job can read them, attended or not, and that commit starts CI again. So the
@@ -613,19 +616,21 @@ caller of the land evidence, and it merges through the same rules, with no bypas
 - **It asks the review tool itself**, since a cloud that cannot run `run land` cannot post the request.
   It then waits out the tool's silence in the one call, since a silent tool sends no event to wake it,
   so it holds a runner up to `waitMinutes` per head.
-- **It picks the merge method at run time.** The merge method comes from the ruleset or the repository at run time, and nothing allowed reads as a hold. It takes merge before squash
-  before rebase, and `--method` is refused in job mode.
+- **It picks the merge method at run time.** The merge method comes from the ruleset or the repository at run time: the job takes the first of merge,
+  squash and rebase that both the rulesets and the repository's settings allow, and a linear-history rule takes out
+  merge. With none allowed, it holds. `--method` is refused in job mode.
 - **It takes no approval.** `--approved` is refused in job mode, and the guard refuses that mode on any
   agent's line.
 
-Limits: No real run has proven the land job, so the whole job is `not run` until one does. That covers the ready mark, the thread reads and the thread resolve under `GITHUB_TOKEN`, the merge call under that token, the review request and the status line the job writes, the `issue_comment` wake, and the checkout of `refs/pull/<n>/head`. One real run reached the job, on Claude's cloud on 2026-11-06: it answered `not-a-run` at its read of the pull request's body, as Claude Code on the web says, so it made no read or write after that one. `GITHUB_TOKEN` is the emitted workflow's
+Limits: No real run has proven the land job, so the whole job is `not run` until one does. That covers the ready mark, the thread reads and the thread resolve under `GITHUB_TOKEN`, the merge call under that token, the review request and the status line the job writes, and the `issue_comment` wake. One real run reached the job, on Claude's cloud on 2026-11-06: it answered `not-a-run` at its read of the pull request's body, as Claude Code on the web says, so it made no read or write after that one. `GITHUB_TOKEN` is the emitted workflow's
 configuration, not an engine check. A dispatch runs the file at the ref it names, not the default
 branch's copy, and an unnamed dispatch runs unasked, so name `workflow-dispatch` in
 `autonomy.deployingActs` to make it ask. `GITHUB_TOKEN` starts no Actions `push` workflow after the merge, so an
 Actions deploy on push must not rely on this path, and a webhook or a GitHub App on the push still fires. Under the emitted token a job's merge starts no Actions `push` workflow, so the brake has no such run to read on that tip. A "Restrict updates" rule refuses the job,
 and it is never given a bypass. List every required workflow in `landJob.workflows`: one left out
-finishes with nothing to wake the job. The `land-job-workflows` row of `stamity check` warns on a name
-no workflow carries, which is the only sign a renamed workflow gives.
+finishes with nothing to wake the job. The `land-job-workflows` row of `stamity check`, and the same
+warning from `sync`, name a watched name no workflow carries, which is the only sign a renamed
+workflow gives.
 
 ## How this page stays current
 

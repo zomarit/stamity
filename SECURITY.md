@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-08). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-09). -->
 <!-- Re-open when: a `file::symbol` address below stops resolving, a control in the table loses its
      last caller under `src/`, a new install route or execution surface ships, a control named under
      "Publishing this package" changes in `.github/workflows/release.yml`, or the crosswalk in
@@ -194,7 +194,7 @@ started from a board item, that item's author and the author's permission, where
 start`, `run checkpoint` and `run end` read the repository's default branch the same way, and the
 pull-request step of `checkpoint --pr` and of `end` looks up the run's open pull request, opens a
 draft, replaces its body or comments on it. `stamity run contract` reads the item it is given: the issue, its label events, and
-its author's and last label applier's permission, with the same two reads where a permission read answers 403. On a 403 only the account the run acts as can be proven, and Claude's cloud proxy answered 403 on every `collaborators` path in one real session on 2026-11-06, so on that cloud only the task owner can start a run. Every one of those calls goes through one door: `gh api`,
+its author's and last label applier's permission, with the same two reads where a permission read answers 403. On a 403 only the account the run acts as can be proven, and Claude's cloud proxy answered 403 on every `collaborators` path in one real session on 2026-11-06, so on that cloud a run started from an item starts only on an item the task owner opened, and for `run contract` labelled last. Every one of those calls goes through one door: `gh api`,
 under the operator's own `gh` login (`src/cli/engine/ghRunner.ts::ghApi`). The methods are `GET`,
 `POST` and `PATCH`. The path is a REST path in a closed alphabet, never `graphql` and never a URL of
 its own, and a write reaches only the pull-request list, one pull request or a comment on one, never
@@ -884,13 +884,13 @@ What stays open is named here, as accepted risk:
   rewrite (`insteadOf`, `pushInsteadOf`) changed alone. While a run is unattended, the shell guard refuses a `git remote` write
   and a `git config` write of a `remote.*` or `url.*` key, and the pin is the second check: a rewrite
   the guard misses meets it at the next `run checkpoint` or `run end`, which refuses the push.
-- **The cloud proxy.** The pre-flight takes the push and the REST reads behind Claude Code's cloud
-  proxy as one proxy connection, so it binds the push to that connection, and what it proves is what
-  that connection can do on the repository. In one real session on 2026-11-06, `gh api user` named
+- **The cloud proxy.** Behind Claude Code's cloud proxy the pre-flight binds the push to gh's
+  credential over https, or to the proxy connection where origin is the proxy's own URL, and what it
+  proves is what that credential or connection can do on the repository. In one real session on 2026-11-06, `gh api user` named
   the person and the repository's `permissions` read admin true, and Claude's cloud environments
   page, read 2026-11-05, says the proxy puts your own credentials on `gh api` calls. So the `user`
   read spoke for the person, not for a shared app. That is what one session read, not a promise from
-  Claude, and those reads do not show which account a push goes out as. The wall reads each ruleset's
+  Claude, and neither binding shows which account a push goes out as. The wall reads each ruleset's
   bypass for the REST account, so a bypass held only by a different pushing account would go unseen.
   Code: `src/runs/preflight.ts::pushIdentityCheck`, `src/runs/preflight.ts::inspectDirectPush`.
 - **The 403 fallback.** Where the permission read answers 403, the fallback takes the repository's
@@ -928,7 +928,7 @@ What stays open is named here, as accepted risk:
   copy. So its text can reach a fix with no person's comment behind it. Its text stays data, and a fix
   stays inside the files the pull request already changes and the plan's `files`. Every other author
   without write access, any other bot included, stays deferred and is never fixed.
-- **The land job.** No real run has proven the land job, so the whole job is `not run` until one does. That covers the ready mark, the thread reads and the thread resolve under `GITHUB_TOKEN`, the merge call under that token, the review request and the status line the job writes, the `issue_comment` wake, and the checkout of `refs/pull/<n>/head`. `GITHUB_TOKEN` is the emitted workflow's configuration, not an engine
+- **The land job.** No real run has proven the land job, so the whole job is `not run` until one does. That covers the ready mark, the thread reads and the thread resolve under `GITHUB_TOKEN`, the merge call under that token, the review request and the status line the job writes, and the `issue_comment` wake. `GITHUB_TOKEN` is the emitted workflow's configuration, not an engine
   check: the verb takes any `gh` login. The `workflow_run` and `issue_comment` triggers run the default
   branch's copy of that workflow, but a `workflow_dispatch` runs the file at the ref the dispatch names,
   so it is only as safe as that ref's copy. An unnamed dispatch runs unasked, so that route reaches job

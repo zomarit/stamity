@@ -2,7 +2,7 @@
 title: Troubleshooting
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-08). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-09). -->
 <!-- Re-open when: a `check` probe is added or removed, an error code starts or stops being
      thrown, or a remedy below stops working. `test/docsPages.test.ts` holds this page to the
      hand-page contract and reads the probe rows out of `src/cli/commands/check.ts`;
@@ -511,7 +511,8 @@ request's body names no run, where it is closed, and where an attended run close
 checkpoint --pr` alone left no `PR:` line. It waits out a review tool's silence in one call, holding a
 runner up to `waitMinutes` per head, since a silent tool sends no event to wake it. A job that merges
 nothing can still leave the pull request marked ready, the tool's threads resolved and an evidence
-line in the body. No real run has proven the land job, so the whole job is `not run` until one does. That covers the ready mark, the thread reads and the thread resolve under `GITHUB_TOKEN`, the merge call under that token, the review request and the status line the job writes, the `issue_comment` wake, and the checkout of `refs/pull/<n>/head`. Its own reasons:
+line in the body. No real run has proven the land job, so the whole job is `not run` until one does. That covers the ready mark, the thread reads and the thread resolve under `GITHUB_TOKEN`, the merge call under that token, the review request and the status line the job writes, and the `issue_comment` wake. One real run reached the job, and
+[Cloud runs](cloud.md) says where it stopped, under The land job. Its own reasons:
 
 - `autonomy.landJob is not on in every leg of the setting, so the job does not land here`: turn it on
   through a person's `sync --loosen`, on the default branch too.

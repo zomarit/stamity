@@ -2,7 +2,7 @@
 title: Security mapping
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-08). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-09). -->
 <!-- Re-open when: a catalogue edition below moves, a control's implementing symbol moves, or a
      surface is added to or removed from the engine. `test/docsPages.test.ts` resolves every
      `file::symbol` address and pins the surface count, so it catches the last two, not the first. -->
@@ -459,7 +459,7 @@ The gaps named in the rows above, all but five that stand in their rows alone, c
     asks, and `autonomy.deployingBranches` and `autonomy.deployingActs` name what deploys. `stamity
     run land --job` is the second caller of the evidence and merges through the same rules, with no
     bypass, though its proof that a pull request is a run's own is text at the head. A job exits 0 on every normal end, and a hold shows as the pull request's status line, never as a red job. Three ends leave no line: a run still in progress, a head a newer job speaks for, and a pull request that does not read as the run's own, such as one whose base someone changed. That last one is no wait: nothing lands it until a person puts it right, and its reason is only in the job's log. Auto-ship reads
-    paths, size and class, never content; a deleted state comment is not seen. Under the emitted token a job's merge starts no Actions `push` workflow, so the brake has no such run to read on that tip. No real run has proven the land job, so the whole job is `not run` until one does. That covers the ready mark, the thread reads and the thread resolve under `GITHUB_TOKEN`, the merge call under that token, the review request and the status line the job writes, the `issue_comment` wake, and the checkout of `refs/pull/<n>/head`. On a single-account
+    paths, size and class, never content; a deleted state comment is not seen. Under the emitted token a job's merge starts no Actions `push` workflow, so the brake has no such run to read on that tip. No real run has proven the land job, so the whole job is `not run` until one does. That covers the ready mark, the thread reads and the thread resolve under `GITHUB_TOKEN`, the merge call under that token, the review request and the status line the job writes, and the `issue_comment` wake. On a single-account
     repository the run's login is the person's, so the review loop is the evidence of record; a
     repository's CI may choose its checks with code the change edits; this repository's own CI runs
     its classifier from the base commit, so a pull request cannot narrow its own checks through it, a

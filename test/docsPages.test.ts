@@ -657,7 +657,11 @@ const CURRENCY_HEADER =
 //
 // TEST CHANGE, justified: MOVED 2026-11-08, from "2026-11-06". The cut moved to 2026-11-08, so the CHANGELOG's
 // release date, the cut-form stamps and this pin move together again. This move read no page again either.
-const RELEASE_CUT_DATE = "2026-11-08";
+//
+// TEST CHANGE, justified: MOVED 2026-11-09, from "2026-11-08". The cut moved to 2026-11-09, so the release date,
+// the stamps and this pin move together once more. A second read-only pass re-read the pages touched since the
+// 2026-11-05 walk, and its rows landed in the same commit as this move.
+const RELEASE_CUT_DATE = "2026-11-09";
 
 /**
  * The date the current re-verification pass re-read the hand bucket on.
@@ -887,8 +891,11 @@ const RELEASE_CUT_DATE = "2026-11-08";
  *
  * TEST CHANGE, justified: MOVED 2026-11-08, from 2026-11-06, with RELEASE_CUT_DATE, for the same reason: the commit
  * form still has no members.
+ *
+ * TEST CHANGE, justified: MOVED 2026-11-09, from 2026-11-08, with RELEASE_CUT_DATE: the commit form still has no
+ * members.
  */
-const REATTESTATION_DATE = "2026-11-08";
+const REATTESTATION_DATE = "2026-11-09";
 
 /** Absolute URLs removed, so the domain and link rules read only what is left. */
 const withoutAllowedUrls = (text: string): string => text.replace(ABSOLUTE_URLS, " ");
@@ -2446,8 +2453,11 @@ describe("SECURITY.md", () => {
         "a GraphQL mutation read from a file",
         // TEST CHANGE, justified: a real session on 2026-11-06 read `user` naming the person, so the page no longer says
         // the REST reads run as a shared app. What the pre-flight relies on, and the residual the fallback leaves, stand here.
-        "takes the push and the REST reads behind Claude Code's cloud proxy as one proxy connection",
-        "those reads do not show which account a push goes out as",
+        // TEST CHANGE, justified: the pre-flight binds the push to gh's credential over https, or to the proxy connection
+        // only where origin is the proxy's own URL (`pushIdentityCheck` in src/runs/preflight.ts), and the 2026-11-06 run
+        // pushed over https. So "one proxy connection" overstated it, and both pins move to the two bindings.
+        "binds the push to gh's credential over https, or to the proxy connection where origin is the proxy's own URL",
+        "neither binding shows which account a push goes out as",
         "the fallback takes the repository's `permissions` as the account's own",
         "read only for an account holding admin",
         "a task owner under write has not been measured",
@@ -5897,9 +5907,13 @@ describe("the security pages say one thing about the brake, the lift and the job
     expect(flat, `${page} does not say a hold is no red job`).toContain("A job exits 0 on every normal end, and a hold shows as the pull request's status line, never as a red job.");
     expect(flat, `${page} does not name the ends that leave no line`).toContain(NO_LINE_ENDS);
     expect(flat, `${page} does not name the merge method's source`).toContain("merge method comes from the ruleset or the repository at run time");
+    // TEST CHANGE, justified: the hand start of 2026-11-06 ran every step of the workflow, the checkout of
+    // `refs/pull/<n>/head` among them, before `run land --job` stopped at the body. So the checkout leaves the never-run
+    // list on all four pages, which keep one list.
     expect(flat, `${page} does not carry the one not-run list`).toContain(
-      "No real run has proven the land job, so the whole job is `not run` until one does. That covers the ready mark, the thread reads and the thread resolve under `GITHUB_TOKEN`, the merge call under that token, the review request and the status line the job writes, the `issue_comment` wake, and the checkout of `refs/pull/<n>/head`.",
+      "No real run has proven the land job, so the whole job is `not run` until one does. That covers the ready mark, the thread reads and the thread resolve under `GITHUB_TOKEN`, the merge call under that token, the review request and the status line the job writes, and the `issue_comment` wake.",
     );
+    expect(flat, `${page} lists a step the hand start ran as never run`).not.toContain("and the checkout of `refs/pull/<n>/head`");
     // Wherever the exact-head claim stands, the one mode it does not hold for stands beside it.
     expect(flat, `${page} does not name clean: reaction's limit`).toMatch(/`clean: reaction`[^.]*`\+1` names no commit/);
   });
@@ -6154,7 +6168,9 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
 
   it("names what each optional setting loosens, and that the person alone applies it", () => {
     const step = flowed(section("Step 4: Choose what to loosen"));
-    expect(step).toContain("An agent cannot do this");
+    // TEST CHANGE, justified: on Claude Code the guard asks the person for an agent's `--loosen` (`autonomy-loosen` is an
+    // ask rule in src/hooks/personOnly.ts), and Cursor and Codex refuse an ask, so "An agent cannot do this" overstated it.
+    expect(step).toContain("On Claude Code the guard asks you first when the agent runs `--loosen`; on Cursor and Codex, or while a run is unattended, it refuses.");
     // Each bullet read alone, so one setting's words cannot stand in for another's.
     const bullets = section("Step 4: Choose what to loosen").split(/^- /m).slice(1);
     for (const key of ["adminRuleProof", "autoShip", "landJob"]) {
@@ -6224,7 +6240,12 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
       expect(body).toContain("only letters, digits");
       // PLAN_LINK in src/runs/itemContract.ts, in words.
       expect(flowed(body)).toContain("docs/plans/, then one file name that starts with a letter or digit, holds only letters, digits, dots, underscores and dashes, and ends in .md");
-      expect(flowed(body)).toContain("twelve hex digits");
+      // TEST CHANGE, justified: PLAN_LINK takes lowercase hex only, and a body holding either line twice gives no link, so
+      // the prompt now says both, and the branch rule names a leading dash and two dots in a row.
+      expect(flowed(body)).toContain("twelve lowercase hex digits");
+      expect(flowed(body)).toContain("If either line appears twice, stop and start nothing.");
+      expect(flowed(body)).toContain("must not start with a dash, and must hold no two dots in a row");
+      expect(calls(labeller)[1]).toContain("gh api 'repos/<owner>/<repo>/collaborators/<login>/permission' --jq .permission");
       expect(calls(claim)[0]).toContain("head=<owner>:<branch>");
       expect(projection(calls(claim)[0] ?? "")).toBe('.[] | select(.state == "open" or .merged_at != null) | .number');
     });
@@ -6283,7 +6304,9 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
 
   it("places Step 4's hand edits among its lines, so neither undoes the other (review/126)", () => {
     const step = flowed(section("Step 4: Choose what to loosen"));
-    expect(step).toContain("a `config set` line replaces its whole key and says nothing");
+    // TEST CHANGE, justified: `config set` prints `set <key>: custom -> <word>` when it drops a hand value
+    // (src/cli/commands/config.ts), so "says nothing" overstated it, and the pin moves to the line that does show it.
+    expect(step).toContain("a `config set` line replaces its whole key, and only its `custom ->` line shows that a hand value went");
     expect(step).toContain("after the `config set` lines and before `sync --loosen`");
     expect(step).toContain("A raise made after `sync --loosen` needs `sync --loosen` again");
     expect(step).toContain("asks with no `auto-ship:` reason");
@@ -6365,7 +6388,11 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     const step = flowed(section("Step 9: Check the land job"));
     expect(step).toContain("exits 0 on every normal end");
     expect(step).toContain("a hold shows as the pull request's status line, never a red job");
-    expect(step).toContain("The merge method comes from the ruleset, else the repository's settings, at run time");
+    // TEST CHANGE, justified: `allowedMethod` in src/cli/commands/runLand.ts takes a method only where every ruleset and
+    // the repository's flags both allow it, and a linear-history rule takes out merge, so "the ruleset, else the
+    // repository's settings" was wrong. The pin moves to the rule the code holds.
+    expect(step).toContain("The job takes the first of merge, squash and rebase that both the rulesets and the repository's settings allow, read at run time, and a linear-history rule takes out merge.");
+    expect(step).toContain("With no method allowed, the job holds.");
   });
 
   it("keeps the smaller promises the review asked for", () => {
