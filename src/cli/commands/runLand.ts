@@ -1304,8 +1304,13 @@ async function cleanUpRun(
   result: LandResult,
   lines: string[],
 ): Promise<void> {
-  const git: WorktreeGitRunner = async ({ args, cwd, stdin }) => {
-    const read = await gitWrite(cwd, args, { ...(at.unattended ? { unattended: true } : {}), ...(stdin === undefined ? {} : { input: stdin }) });
+  // review/39: a call's own wall time (origin's `ls-remote`) reaches `gitWrite`, which rejects past it.
+  const git: WorktreeGitRunner = async ({ args, cwd, stdin, timeoutMs }) => {
+    const read = await gitWrite(cwd, args, {
+      ...(at.unattended ? { unattended: true } : {}),
+      ...(stdin === undefined ? {} : { input: stdin }),
+      ...(timeoutMs === undefined ? {} : { timeoutMs }),
+    });
     return { status: read.code, stdout: read.stdout, stderr: read.stderr, ...(read.keptFromGit === true ? { keptFromGit: true as const } : {}) };
   };
   try {

@@ -4,6 +4,7 @@ import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyRunCleanup, closingRef, planRunCleanup } from "../../src/runs/runCleanup.ts";
+import { runGit, type WorktreeGitRunner } from "../../src/worktree/git.ts";
 import { createWorktreeReceipt, sha256Hex, writeWorktreeReceipt, type WorktreeReceiptEntry } from "../../src/worktree/receipt.ts";
 import { NO_GIT_CONFIG } from "../support/repoFixtures.ts";
 import { useTempDir } from "../support/tempDir.ts";
@@ -213,6 +214,64 @@ describe("a landed run's clean-up", () => {
     expect(hasRef(at.repo, `refs/heads/${BRANCH}`)).toBe(true);
   });
 
+  // review/43: `git worktree remove` takes a detached HEAD's reflog with the lane, so commits only it holds would be lost.
+  it("keeps a detached lane, its commit on no ref, and names why", async () => {
+    const at = await seed();
+    const path = await lane(at, "p-detached", RUN);
+    git(path, ["switch", "-q", "--detach"]);
+    await writeFile(join(path, "d.txt"), "d\n");
+    git(path, ["add", "-A"]);
+    git(path, ["commit", "-q", "-m", "on no branch"]);
+    const tip = git(path, ["rev-parse", "HEAD"]);
+
+    const plan = await planRunCleanup(at.repo, RUN);
+    expect(plan.lanes).toEqual([{ path, ignored: [], dirty: false, head: "detached" }]);
+    const done = await applyRunCleanup(plan, { dryRun: false, rootDir: at.repo });
+
+    expect(done.kept).toEqual([{ path, reason: "its HEAD is detached, so commits only it holds would drop off every ref" }]);
+    expect(done.acts).toEqual([`deleted branch ${BRANCH}`]);
+    expect(existsSync(path)).toBe(true);
+    expect(git(path, ["rev-parse", "HEAD"])).toBe(tip);
+  });
+
+  // review/39: past its wall time the runner rejects; the tracking ref stays and the local clean-up still runs.
+  it("keeps the tracking ref when origin's read never finishes, and still removes the lane and the branch", async () => {
+    const at = await seed();
+    const path = await lane(at, "p-slow", RUN);
+    git(at.remote, ["branch", "-q", "-D", BRANCH]);
+    const timeouts: (number | undefined)[] = [];
+    // Mock reason: a network read that hangs past its wall time cannot be brought about against a local bare origin.
+    const slow: WorktreeGitRunner = (invocation) => {
+      if (invocation.args[0] !== "ls-remote") return runGit(invocation);
+      timeouts.push(invocation.timeoutMs);
+      return Promise.reject(new Error("git did not finish within its wall time"));
+    };
+
+    const plan = await planRunCleanup(at.repo, RUN, slow);
+    expect(timeouts).toEqual([60_000]);
+    expect(plan.staleTracking).toEqual([]);
+    const done = await applyRunCleanup(plan, { dryRun: false, rootDir: at.repo, git: slow });
+
+    expect(done.removed).toEqual([path, BRANCH]);
+    expect(hasRef(at.repo, TRACKING)).toBe(true);
+  });
+
+  // review/40: an act that throws after a lane went is a kept row, so the lane's act still reaches the record.
+  it("keeps the acts already done when a later step throws", async () => {
+    const at = await seed();
+    const path = await lane(at, "p-first", RUN);
+    // Mock reason: the runner rejecting on one call (git not finishing) cannot be brought about with a real git.
+    const failing: WorktreeGitRunner = (invocation) =>
+      invocation.args[0] === "branch" && invocation.args[1] === "-d" ? Promise.reject(new Error("git did not finish within its wall time")) : runGit(invocation);
+
+    const done = await applyRunCleanup(await planRunCleanup(at.repo, RUN), { dryRun: false, rootDir: at.repo, git: failing });
+
+    expect(done.acts).toEqual(["removed lane p-first"]);
+    expect(done.removed).toEqual([path]);
+    expect(done.kept).toEqual([{ path: BRANCH, reason: "the branch was not deleted: git did not finish within its wall time" }]);
+    expect(hasRef(at.repo, `refs/heads/${BRANCH}`)).toBe(true);
+  });
+
   it("reads no branch and no lane for a run that started none", async () => {
     const at = await seed();
 
@@ -226,6 +285,8 @@ describe("closingRef", () => {
 
   it("names an item in origin's repository, its case as written", () => {
     expect(closingRef("octo/repo#42", origin)).toBe("octo/repo#42");
+    // review/38: an owner with `_`, as every Enterprise Managed Users login carries.
+    expect(closingRef("jdoe_acme/app#5", { owner: "jdoe_acme", repo: "app" })).toBe("jdoe_acme/app#5");
   });
 
   it("names nothing for no item, an item elsewhere, or a value of another shape", () => {

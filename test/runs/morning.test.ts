@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   blastRadiusSection,
+  isClosingRef,
   MORNING_FENCE,
   OUTBOUND_LINE_PAST_CAP,
   parseAnswers,
@@ -584,6 +585,13 @@ describe("the closing line (d-run-cleanup, REQ-FLOW-176)", () => {
     expect(withBlastRadius(lead, RUN, "## Blast radius\n\n- contained", { closes: "o/r#42" })).toBe(
       `${lead}\n\n## Blast radius\n\n- contained\n\nCloses o/r#42\n\n${runMarker(RUN)}`,
     );
+  });
+
+  // review/38: the pre-flight's item check takes `_` in an owner (every Enterprise Managed Users login has one).
+  it("writes an owner with `_`, as every owner the item check takes", () => {
+    expect(isClosingRef("jdoe_acme/app#5")).toBe(true);
+    expect(prBodyFrom(morning(), RUN, { closes: "jdoe_acme/app#5" }).split("\n").slice(-3)).toEqual(["Closes jdoe_acme/app#5", "", runMarker(RUN)]);
+    expect(withBlastRadius(lead, RUN, null, { closes: "jdoe_acme/app#5" })).toBe(`${lead}\n\nCloses jdoe_acme/app#5`);
   });
 
   it("refuses a value that is not one owner/repo#<number>, so no other text reaches the body", () => {

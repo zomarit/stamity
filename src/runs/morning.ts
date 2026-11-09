@@ -64,8 +64,17 @@ export const OUTBOUND_LINE_PAST_CAP = "line-past-cap";
 export const MORNING_QA_MAX = 3;
 /** The run record's section a pull request body carries after the list (REQ-FLOW-127), as its heading names it. */
 export const BLAST_RADIUS = "Blast radius";
-/** An issue a body may close (REQ-FLOW-176): `owner/repo#n`, nothing that could open or close a comment or a line. */
-const CLOSES_REF = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+#[1-9][0-9]{0,8}$/;
+/**
+ * An issue a body may close (REQ-FLOW-176): `owner/repo#n`, nothing that could open or close a comment or a line. The
+ * alphabets are the pre-flight's `ITEM_REF_SHAPE` (`./preflight.ts`), `_` in the owner included (review/38): an item
+ * that check takes, an Enterprise Managed Users login's among them, is one this line writes.
+ */
+const CLOSES_REF = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}\/[A-Za-z0-9._-]{1,100}#[1-9][0-9]{0,8}$/;
+
+/** Whether `ref` is an `owner/repo#<n>` the closing line writes, so a caller can skip one with a note rather than throw. */
+export function isClosingRef(ref: string): boolean {
+  return CLOSES_REF.test(ref);
+}
 
 export type MorningKind = "qa" | "decision" | "prerequisite" | "held";
 
@@ -424,7 +433,7 @@ export function withBlastRadius(lead: string, runId: string, section: string | n
  */
 function closingLine(closes: string | undefined): string | null {
   if (closes === undefined) return null;
-  if (!CLOSES_REF.test(closes)) {
+  if (!isClosingRef(closes)) {
     throw new EngineError(`${JSON.stringify(closes)} is not an owner/repo#<number> item`, {
       code: "VALIDATION_ERROR",
       why: "the closing line names one issue, and no other text reaches the body through it",

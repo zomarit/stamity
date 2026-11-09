@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
+import type * as GhRunnerModule from "../../../src/cli/engine/ghRunner.ts";
 import { GIT_PROGRAM_VARIABLES } from "../../../src/cli/engine/gitWrite.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
 import { PERSON_ONLY_GUARD_FILE, planCoreHookScripts } from "../../../src/hooks/scripts.ts";
@@ -24,25 +25,33 @@ import { useTempDir } from "../../support/tempDir.ts";
  * replaced, below.
  */
 
-/** Every REST call the verb made, and the answer each path gets. */
+/** Every REST call the verb made, and the answer each path gets (or each `METHOD path`, without its query, first). */
 const rest = vi.hoisted(() => ({
-  calls: [] as { path: string; hostname: string; method: string }[],
+  calls: [] as { path: string; hostname: string; method: string; body?: unknown }[],
   routes: new Map<string, { status: number; json: unknown }>(),
 }));
 
 // Mocked: the real `ghApi` starts `gh`, which calls GitHub over the network
 // under the machine's login; a unit test can reach neither. The verb's own
 // work (which host, which path, what it does with the answer) is unchanged.
-vi.mock("../../../src/cli/engine/ghRunner.ts", () => ({
-  ghApi: (request: { path: string; hostname: string; method: string }) => {
+// TEST CHANGE, justified (build/21): `run end` reads the module's other exports (the answerer's shapes), so the real
+// module is spread under the stand-in; a call's body is recorded where it has one, and a `METHOD path` route answers
+// before a bare path's, so a case can tell the pull request list from its create. A path-only route answers as before.
+vi.mock("../../../src/cli/engine/ghRunner.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof GhRunnerModule>()),
+  ghApi: (request: { path: string; hostname: string; method: string; body?: unknown }) => {
     const path = request.path.replace(/^\//, "");
-    rest.calls.push({ path, hostname: request.hostname, method: request.method });
-    return Promise.resolve(rest.routes.get(path) ?? { status: 404, json: { message: "Not Found" } });
+    rest.calls.push({ path, hostname: request.hostname, method: request.method, ...(request.body === undefined ? {} : { body: request.body }) });
+    return Promise.resolve(rest.routes.get(`${request.method} ${path.replace(/\?.*$/, "")}`) ?? rest.routes.get(path) ?? { status: 404, json: { message: "Not Found" } });
   },
 }));
 
 /** n14 (P2): the bare remote a clone's `git ls-remote origin` reads, by the clone's folder, where a case's origin names GitHub. */
-const lsRemote = vi.hoisted(() => ({ to: new Map<string, { url: string; remote: string }>() }));
+const lsRemote = vi.hoisted(() => ({
+  to: new Map<string, { url: string; remote: string }>(),
+  /** build/21: the clones whose `git push` goes to the same bare remote, by the same mapping; empty in every other case. */
+  push: new Set<string>(),
+}));
 
 // A spy, not a stand-in: every call goes to the real write runner. Mock reason (n14 P2): a case whose origin names a
 // GitHub URL, so the pin and the REST read have one to match, cannot let `git ls-remote origin` reach GitHub, and an
@@ -53,7 +62,7 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
   return {
     ...real,
     gitWrite: (cwd: string, args: readonly string[], opts?: Parameters<typeof real.gitWrite>[2]) => {
-      const mapped = args[0] === "ls-remote" ? lsRemote.to.get(cwd) : undefined;
+      const mapped = args[0] === "ls-remote" || (args[0] === "push" && lsRemote.push.has(cwd)) ? lsRemote.to.get(cwd) : undefined;
       if (mapped === undefined) return real.gitWrite(cwd, args, opts);
       const mapping = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: `url.${mapped.remote}.insteadOf`, GIT_CONFIG_VALUE_0: mapped.url };
       const previous = Object.fromEntries(Object.keys(mapping).map((key) => [key, process.env[key]]));
@@ -1024,5 +1033,120 @@ describe("stamity run start", () => {
     expect(ok).toBe(false);
     expect(JSON.stringify(doc["error"])).toContain(RUN_BRANCH);
     expect(current(repo)).toBe("main");
+  });
+});
+
+/**
+ * build/21, review/38, review/41 (REQ-FLOW-176): `stamity run end` writes `Closes <owner>/<repo>#<n>` into the draft
+ * pull request's body when the run's `contract.yml` names an issue in origin's repository, an owner with `_` among
+ * them, and none for another repository's or a bare `#<n>`, which a `notDone` note names. Git runs for real, pushing
+ * to a bare remote through the spy's mapping; only `gh api` is replaced.
+ */
+describe("stamity run end's closing line", () => {
+  const getRoot = useTempDir("run-end-closes");
+  const RUN_DIR = `.stamity/runs/${RUN}`;
+  const MARKER = `<!-- stamity:run ${RUN} -->`;
+
+  beforeEach(() => {
+    rest.calls.length = 0;
+    rest.routes.clear();
+    lsRemote.to.clear();
+    lsRemote.push.clear();
+  });
+
+  /**
+   * A repository whose origin names `https://github.com/<owner>/<repo>.git`, pushing to a bare remote, its base holding
+   * the origin pin and a contract naming `item`, then on the run's branch with an attended record and a.txt changed.
+   */
+  async function seed(owner: string, repoName: string, item: string): Promise<string> {
+    const dir = getRoot().path(`case-${Math.random().toString(36).slice(2, 8)}`);
+    const repo = join(dir, "repo");
+    const remote = join(dir, "remote.git");
+    await mkdir(join(repo, RUN_DIR), { recursive: true });
+    git(dir, ["init", "-q", "--bare", remote]);
+    git(repo, ["-c", "init.defaultBranch=main", "init", "-q"]);
+    git(repo, ["config", "user.name", "Alice Example"]);
+    git(repo, ["config", "user.email", "alice@example.com"]);
+    await writeFile(join(repo, "a.txt"), "a.txt\n");
+    await writeFile(join(repo, RUN_DIR, "origin.json"), `${JSON.stringify({ host: "github.com", owner, repo: repoName })}\n`);
+    // The answerer is a team outside origin's owner, so the review request reaches nobody and no `gh` is started.
+    const contract = ["run-contract: 1", "plan: docs/plans/x.md", `item: "${item}"`, "base: 02e040eb", "acceptance: done", "scope: { in: [src] }", 'answerer: "@elsewhere/team"', ""];
+    await writeFile(join(repo, RUN_DIR, "contract.yml"), contract.join("\n"));
+    git(repo, ["add", "-A"]);
+    git(repo, ["commit", "-q", "-m", "seed"]);
+    const url = `https://github.com/${owner}/${repoName}.git`;
+    git(repo, ["remote", "add", "origin", url]);
+    const base = git(repo, ["rev-parse", "HEAD"]);
+    git(repo, ["switch", "-q", "-c", RUN_BRANCH]);
+    await writeFile(join(repo, RUN_DIR, "record.md"), `# Run ${RUN}\n\nStatus: in progress\nMode: attended\nBranch: ${RUN_BRANCH}\nBase: ${base}\n`);
+    await writeFile(join(repo, "a.txt"), "changed\n");
+    lsRemote.to.set(repo, { url, remote });
+    lsRemote.push.add(repo);
+    const at = `repos/${owner}/${repoName}`;
+    rest.routes.set(`GET ${at}`, { status: 200, json: { default_branch: "main" } });
+    rest.routes.set(`GET ${at}/pulls`, { status: 200, json: [] });
+    rest.routes.set(`POST ${at}/pulls`, { status: 201, json: { number: 7, html_url: `https://github.com/${owner}/${repoName}/pull/7` } });
+    return repo;
+  }
+
+  /** Runs the verb with `HOME` at an empty folder and git's system config off, as the cases above do. */
+  async function run(cwd: string, argv: readonly string[]) {
+    const home = getRoot().path("home");
+    await mkdir(home, { recursive: true });
+    const overrides = { HOME: home, XDG_CONFIG_HOME: home, GIT_CONFIG_NOSYSTEM: "1" };
+    const previous = Object.fromEntries(Object.keys(overrides).map((key) => [key, process.env[key]]));
+    Object.assign(process.env, overrides);
+    try {
+      const result = await runInProcess([runCommand], ["run", ...argv], { cwd });
+      // The funnel's envelope keys stay beside the verb's own; the cases read `pr` and `notDone` alone.
+      return { code: result.code, doc: JSON.parse(result.stdout) as Record<string, unknown> };
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  }
+
+  const END = ["end", "--run", RUN, "--title", "feat: the change", "--paths", "a.txt", "--json"];
+  /** The body of the one pull request the verb created. */
+  const createdBody = (): string => {
+    const posts = rest.calls.filter((call) => call.method === "POST" && call.path.endsWith("/pulls"));
+    expect(posts).toHaveLength(1);
+    const sent = posts[0]?.body as { body?: unknown } | undefined;
+    if (typeof sent?.body !== "string") throw new Error("the pull request was created with no body");
+    return sent.body;
+  };
+  const closesNotes = (doc: Record<string, unknown>): string[] => (doc["notDone"] as string[]).filter((line) => line.startsWith("no Closes line"));
+
+  it("writes `Closes` for an issue in origin's repository whose owner carries `_`, just before the marker", async () => {
+    const repo = await seed("jdoe_acme", "app", "jdoe_acme/app#5");
+
+    const { code, doc } = await run(repo, END);
+
+    expect(code).toBe(0);
+    expect(doc["pr"]).toMatchObject({ number: 7, how: "created" });
+    expect(createdBody()).toBe(`Run \`${RUN}\`, attended. Its record: \`${RUN_DIR}/record.md\`.\n\nCloses jdoe_acme/app#5\n\n${MARKER}`);
+    expect(closesNotes(doc)).toEqual([]);
+  });
+
+  it("writes none for an issue in another repository", async () => {
+    const repo = await seed("o", "r", "elsewhere/r#5");
+
+    const { code, doc } = await run(repo, END);
+
+    expect(code).toBe(0);
+    expect(createdBody()).toBe(`Run \`${RUN}\`, attended. Its record: \`${RUN_DIR}/record.md\`.\n\n${MARKER}`);
+    expect(closesNotes(doc)).toEqual([]);
+  });
+
+  it("writes none for a bare #<n> item, and a note says why", async () => {
+    const repo = await seed("o", "r", "#412");
+
+    const { code, doc } = await run(repo, END);
+
+    expect(code).toBe(0);
+    expect(createdBody()).not.toContain("Closes ");
+    expect(closesNotes(doc)).toEqual(["no Closes line: the contract's item #412 names no repository, so the merge closes no issue; write it as owner/repo#412 to close it"]);
   });
 });

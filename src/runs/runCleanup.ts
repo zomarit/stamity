@@ -32,6 +32,12 @@ interface RunCleanupLane {
   /** Ignored entries in the lane, repository-relative, less the ones its setup placed and nobody changed. */
   readonly ignored: string[];
   readonly dirty: boolean;
+  /**
+   * Present only where the lane's HEAD keeps it (review/43): `detached` where it names no branch, `unreachable` where
+   * no branch and no origin ref holds its commit, or git could not say. `git worktree remove` takes the lane's HEAD
+   * reflog with it, so commits only that HEAD holds would drop off every ref.
+   */
+  readonly head?: "detached" | "unreachable";
 }
 
 /** What a run's clean-up would act on, read and not yet acted on. */
@@ -54,6 +60,9 @@ export interface RunCleanupResult {
 
 /** The most ignored entries a kept lane's reason names. */
 const REASON_NAMES = 5;
+
+/** The wall time on origin's read, a network call: past it the tracking ref is kept and the rest still runs. */
+const LS_REMOTE_TIMEOUT_MS = 60_000;
 
 /**
  * `<owner>/<repo>#<n>` where the run's `item` is an issue in origin's repository, else `null` (REQ-FLOW-176): an item
@@ -105,11 +114,26 @@ async function laneIgnored(git: WorktreeGitRunner, path: string, receipt: Worktr
     .filter((entry) => !placed.has(entry.replace(/\/$/, "")));
 }
 
-/** The lane's facts read now: still the run's, dirty, its ignored entries; `null` where its receipt no longer names the run. */
+/**
+ * Why the lane's HEAD keeps it (review/43), or `null` where a branch holds it: `detached` where `HEAD` names no
+ * branch; `unreachable` where no local branch and no origin ref contains its commit, or git could not read either.
+ */
+async function laneHead(git: WorktreeGitRunner, path: string): Promise<"detached" | "unreachable" | null> {
+  const attached = await git({ args: ["symbolic-ref", "--quiet", "HEAD"], cwd: path });
+  if (attached.status === 1) return "detached";
+  if (attached.status !== 0) return "unreachable";
+  const tip = await gitLine(git, path, ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]);
+  if (tip === null) return "unreachable";
+  const holder = await gitLine(git, path, ["for-each-ref", "--count=1", "--format=%(refname)", "--contains", tip, "refs/heads", "refs/remotes/origin"]);
+  return holder === null || holder === "" ? "unreachable" : null;
+}
+
+/** The lane's facts read now: still the run's, dirty, its ignored entries, its HEAD; `null` where its receipt no longer names the run. */
 async function laneFacts(git: WorktreeGitRunner, path: string, run: string): Promise<RunCleanupLane | null> {
   const read = await readWorktreeReceipt(await resolveWorktreeGitDir(git, path));
   if (read.receipt?.run !== run) return null;
-  return { path, ignored: await laneIgnored(git, path, read.receipt), dirty: isDirty(await readDirtyCounts(git, path)) };
+  const head = await laneHead(git, path);
+  return { path, ignored: await laneIgnored(git, path, read.receipt), dirty: isDirty(await readDirtyCounts(git, path)), ...(head === null ? {} : { head }) };
 }
 
 /**
@@ -141,9 +165,10 @@ export async function planRunCleanup(rootDir: string, run: string, git: Worktree
   const tracking = `refs/remotes/origin/${name}`;
   const staleTracking: string[] = [];
   if ((await git({ args: ["show-ref", "--verify", "--quiet", tracking], cwd: rootDir })).status === 0) {
-    const remote = await git({ args: ["ls-remote", "origin", `refs/heads/${name}`], cwd: rootDir, timeoutMs: 60_000 });
-    // Only a read origin answered, naming no such branch, makes the ref stale; a failed read keeps it.
-    if (remote.status === 0 && remote.stdout.trim() === "") staleTracking.push(tracking);
+    // Only a read origin answered, naming no such branch, makes the ref stale; a failed read keeps it, and so does one
+    // that never finished (review/39: past the wall time the runner rejects), so the local clean-up still runs.
+    const remote = await git({ args: ["ls-remote", "origin", `refs/heads/${name}`], cwd: rootDir, timeoutMs: LS_REMOTE_TIMEOUT_MS }).catch(() => null);
+    if (remote !== null && remote.status === 0 && remote.stdout.trim() === "") staleTracking.push(tracking);
   }
   return { run, lanes, branch, staleTracking };
 }
@@ -152,6 +177,8 @@ export async function planRunCleanup(rootDir: string, run: string, git: Worktree
 function laneKeeps(facts: RunCleanupLane, rootDir: string): string | null {
   if (isInside(rootDir, facts.path)) return "the verb runs inside it";
   if (facts.dirty) return "it holds uncommitted changes";
+  if (facts.head === "detached") return "its HEAD is detached, so commits only it holds would drop off every ref";
+  if (facts.head === "unreachable") return "its HEAD commit is on no branch and no origin ref";
   if (facts.ignored.length > 0) {
     const more = facts.ignored.length > REASON_NAMES ? ` and ${facts.ignored.length - REASON_NAMES} more` : "";
     return `it holds ignored files: ${facts.ignored.slice(0, REASON_NAMES).join(", ")}${more}`;
@@ -218,18 +245,24 @@ export async function applyRunCleanup(plan: RunCleanupPlan, opts: { readonly dry
     }
   }
 
+  // review/40: past the lanes, a read or an act that throws is a kept row, never a throw, so the acts already done
+  // still reach the record as their `cleanup:` lines.
   if (plan.branch !== null) {
     const { name, merged } = plan.branch;
-    const holder = merged ? (await listWorktrees(git, rootDir)).find((entry) => entry.branch === name) : undefined;
-    if (!merged) keep(name, "not merged into its upstream or HEAD, so git branch -d would refuse it");
-    else if (holder !== undefined) keep(name, `checked out at ${holder.path}`);
-    else if (opts.dryRun) removed.push(name);
-    else {
-      const deleted = await git({ args: ["branch", "-d", name], cwd: rootDir });
-      if (deleted.status === 0) {
-        removed.push(name);
-        acts.push(`deleted branch ${name}`);
-      } else keep(name, `git branch -d refused it (git exited ${deleted.status})`);
+    try {
+      const holder = merged ? (await listWorktrees(git, rootDir)).find((entry) => entry.branch === name) : undefined;
+      if (!merged) keep(name, "not merged into its upstream or HEAD, so git branch -d would refuse it");
+      else if (holder !== undefined) keep(name, `checked out at ${holder.path}`);
+      else if (opts.dryRun) removed.push(name);
+      else {
+        const deleted = await git({ args: ["branch", "-d", name], cwd: rootDir });
+        if (deleted.status === 0) {
+          removed.push(name);
+          acts.push(`deleted branch ${name}`);
+        } else keep(name, `git branch -d refused it (git exited ${deleted.status})`);
+      }
+    } catch (error) {
+      keep(name, `the branch was not deleted: ${firstLine(error)}`);
     }
   }
 
@@ -238,12 +271,16 @@ export async function applyRunCleanup(plan: RunCleanupPlan, opts: { readonly dry
       removed.push(ref);
       continue;
     }
-    // oxlint-disable-next-line no-await-in-loop -- one ref a run
-    const dropped = await git({ args: ["update-ref", "-d", ref], cwd: rootDir });
-    if (dropped.status === 0) {
-      removed.push(ref);
-      acts.push(`dropped ${ref.replace(/^refs\/remotes\//, "")}, which origin no longer has`);
-    } else keep(ref, `git update-ref -d failed (git exited ${dropped.status})`);
+    try {
+      // oxlint-disable-next-line no-await-in-loop -- one ref a run
+      const dropped = await git({ args: ["update-ref", "-d", ref], cwd: rootDir });
+      if (dropped.status === 0) {
+        removed.push(ref);
+        acts.push(`dropped ${ref.replace(/^refs\/remotes\//, "")}, which origin no longer has`);
+      } else keep(ref, `git update-ref -d failed (git exited ${dropped.status})`);
+    } catch (error) {
+      keep(ref, `the ref was not dropped: ${firstLine(error)}`);
+    }
   }
   return { removed, kept, acts };
 }

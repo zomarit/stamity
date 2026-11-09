@@ -10,7 +10,7 @@ import { RUN_ENDED_MARKER_FILE } from "../../mcp/env.ts";
 import { checkSurfaceRecord, type RecordFileReads, type RecordUse, type SurfaceCheck } from "../../runs/gitSurface.ts";
 import { hookPathsAt, setupRootOf, setupRootsAt, type HookScratch } from "../../runs/hookPaths.ts";
 import { parseLedgerText, type LedgerRow } from "../../runs/ledgerStore.ts";
-import { blastRadiusSection, MORNING_FILE, prBodyFrom, screenOutbound, withBlastRadius } from "../../runs/morning.ts";
+import { blastRadiusSection, isClosingRef, MORNING_FILE, prBodyFrom, screenOutbound, withBlastRadius } from "../../runs/morning.ts";
 import { overviewFrom } from "../../runs/overview.ts";
 import { inferPrerequisites, type PrereqRow } from "../../runs/prerequisites.ts";
 import { ensureDraftPr, HOST_NAME, PR_RECORD_FILE, prRecordText, resolveRepo, runMarker, type PrOutcome } from "../../runs/pullRequest.ts";
@@ -2744,7 +2744,7 @@ async function draftPr(ctx: CliContext, at: PrInputs): Promise<PrStep> {
     } else {
       marked = source.run;
       inferred = inferredFrom(at.top, source.base);
-      const closes = closesFor(ctx, at.cwd, source.run, repo);
+      const closes = closesFor(ctx, at.cwd, source.run, repo, notDone);
       const made = prBodyFrom(morning.text, source.run, { inferred, ...(blastRadius === null ? {} : { blastRadius }), ...(closes === null ? {} : { closes }) });
       const screen = screenOutbound(made, "pr-body");
       body = made;
@@ -2758,7 +2758,7 @@ async function draftPr(ctx: CliContext, at: PrInputs): Promise<PrStep> {
     }
   }
   if (!listed) {
-    const closes = closesFor(ctx, at.cwd, marked, repo);
+    const closes = closesFor(ctx, at.cwd, marked, repo, notDone);
     body = withBlastRadius(body, marked, blastRadius, closes === null ? {} : { closes });
   }
   const gh = (request: Parameters<typeof ghApi>[0]) => ghApi(request, { cwd: at.top, env });
@@ -2773,16 +2773,34 @@ async function draftPr(ctx: CliContext, at: PrInputs): Promise<PrStep> {
   return { pr: { number: outcome.number, url: outcome.url, how: outcome.how }, inferred, notDone, repo };
 }
 
+/** A bare `#<n>` item, the contract parser's own example shape: it names no repository, so it closes no issue. */
+const BARE_ITEM = /^#[1-9][0-9]{0,8}$/;
+
 /**
  * REQ-FLOW-176: the issue `run`'s `contract.yml` names as its item, where that issue is in origin's repository, so the
- * body closes it on the merge; `null` with no contract, one that does not read, or an item elsewhere.
+ * body closes it on the merge; `null` with no contract, one that does not read, or an item elsewhere. Never throws
+ * (review/38): an item the closing line cannot write is skipped with a `notDone` note, so the pull request still
+ * opens after the push. A bare `#<n>` gets no line by design, and a note says so (review/41).
  */
-function closesFor(ctx: CliContext, cwd: string, run: string, repo: { owner: string; repo: string }): string | null {
+function closesFor(ctx: CliContext, cwd: string, run: string, repo: { owner: string; repo: string }, notDone: string[]): string | null {
   const rel = `${ctx.engine.runs.layout.runRelPath(run)}/${CONTRACT_FILE}`;
   const read = readCapped(join(cwd, rel), CONTRACT_READ_MAX_BYTES);
   if (read === null || read.truncated) return null;
   const parsed = parseRunContract(read.text, rel);
-  return parsed.ok ? closingRef(parsed.contract.item, repo) : null;
+  if (!parsed.ok) return null;
+  const { item } = parsed.contract;
+  const ref = closingRef(item, repo);
+  if (ref === null) {
+    if (item !== undefined && BARE_ITEM.test(item)) {
+      notDone.push(`no Closes line: the contract's item ${item} names no repository, so the merge closes no issue; write it as owner/repo${item} to close it`);
+    }
+    return null;
+  }
+  if (!isClosingRef(ref)) {
+    notDone.push("no Closes line: the contract's item is not an owner/repo#<number> the closing line writes, so the merge closes no issue");
+    return null;
+  }
+  return ref;
 }
 
 /**
