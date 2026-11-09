@@ -26,32 +26,34 @@ that survives a prompt edit.
    with a version in its name, and expected outputs change through a reviewed
    diff that states why the expectation moved. Overwriting a case in place
    erases the regression it encoded.
-3. **Everything that shapes the output is a versioned input.** Prompt text,
+3. **A failing case is repaired at the rule it tests:** the fix restates the
+   general behaviour the case measures, never only the sentence, value or
+   example the case quotes; a repair whose new words appear in the case's Brief
+   or transcript is fitted to the case, so rewrite it as the rule and check it
+   against a sibling case; the Expected block does not move to meet the fix.
+4. **Everything that shapes the output is a versioned input.** Prompt text,
    model identifier, decoding settings, tool schemas, and the retrieval corpus.
    Changing any one of them re-runs the set: a prompt edit is a behaviour
    change, and a model swap is a rewrite of every case at once.
-4. **Thresholds are declared before the run.** One per metric, recorded next to
+5. **Thresholds are declared before the run.** One per metric, recorded next to
    the set. A threshold picked after the score is known measures nothing but the
    author's tolerance.
-5. **Offline before online.** A change clears the set before traffic reaches it.
+6. **Offline before online.** A change clears the set before traffic reaches it.
    A staged rollout then measures what offline cannot — real inputs, latency,
    spend — and confirms the result; it never stands in for the set.
-6. **The judge is an instrument, not a participant.** When a model grades output,
+7. **The judge is an instrument, not a participant.** When a model grades output,
    it is not the model under test, its rubric is written down, and it is
-   calibrated against a human-labelled sample before its scores gate anything. An
-   answer proposing a judge names all three: that it is not the model under test,
-   that its rubric is written down, and that it is calibrated against a
-   human-labelled sample — two of them is not three. Pairwise comparisons score
-   both orders and average, because position preference alone can flip a verdict.
-7. **Match the metric to the task class.** Classification: accuracy plus per-class
+   calibrated against a human-labelled sample before its scores gate anything.
+   Pairwise comparisons score both orders and average, because position
+   preference alone can flip a verdict.
+8. **Match the metric to the task class.** Classification: accuracy plus per-class
    precision and recall. Open-ended generation: rubric score against the written
    rubric. Retrieval-grounded answers: groundedness plus citation precision, each
    claim traced to the span that supports it. Refusal behaviour: refusal rate on
    prohibited inputs tracked separately from false refusals on benign ones.
-8. **Results are artifacts, not chat.** A run records the set version, item 3's
+9. **Results are artifacts, not chat.** A run records the set version, item 4's
    versioned inputs, the run count, the per-metric scores, and the threshold
-   each was measured against, committed with the change that caused the run. An
-   answer that requires the run names the artifact and what it records.
+   each was measured against, committed with the change that caused the run.
 
 ## Gates
 
@@ -68,3 +70,6 @@ that survives a prompt edit.
   sample from a sampling model is an anecdote with a decimal point.
 - Adversarial cases are re-run on every model change, not only on prompt
   changes: guardrail behaviour is a property of the pair, not of the prompt.
+- A repair whose new words echo the failing case's Brief or transcript, and
+  that no sibling case was checked against, is fitted to the case and does not
+  close the failure; neither does an Expected block moved to meet the fix.

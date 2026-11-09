@@ -85,7 +85,7 @@ judgement about the change and leaves nothing to check against.
 
 The security-sensitive row has no size floor. A one-character edit under an authentication or
 credential path is refused regardless of line count: what that surface needs is the review loop quick does not run,
-and small diffs are exactly where authorization defects hide. When the item is small (one character, one file, a few lines), the refusal itself states that the row has no size floor.
+and small diffs are exactly where authorization defects hide.
 Restating that refusal names the row and the surface it fired on — authorization, access-control
 configuration, credential handling, whichever the item touches — not the file path alone. The
 path says where the edit lands; only the surface says why this lane will not take it.
@@ -203,8 +203,8 @@ The narrower gates rest on one condition: the repository's CI runs the full matr
 
 - Commit when the user asks for it. Quick does not push on its own and creates no branch and
   no PR.
-- Message prefix is fixed: `quick:` — one item is `quick: <description>`; a batch is
-  `quick: <N> small changes` with one body line per item.
+- The message follows the repository's commit style, read from its contributing guide or recent
+  history (a conventional subject where none is found); a batch carries one body line per item.
 - One commit per batch, after the gates are green.
 
 ## Escalation

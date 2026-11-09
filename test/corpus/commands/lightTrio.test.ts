@@ -1134,15 +1134,19 @@ describe("quick — the guardrails are the command", () => {
   });
 
   // Added 2026-10-20 (plan 021 file 2, unit n9-eval-run-50; REQ-FLOW-065): eval run 50's no-size-floor case missed B3
-  // where two answers gave the refusal template and never said the row has no size floor, so the paragraph says the
-  // refusal itself states it for a small item, right after the reason the row has none.
-  it("has the refusal of a small security-sensitive item state that the row has no size floor", async () => {
+  // where two answers gave the refusal template and never said the row has no size floor.
+  // TEST CHANGE, justified (2026-11-09, plan 024 k-multipart-quick, REQ-FLOW-173): this pinned the sentence "When the
+  // item is small (one character, one file, a few lines), the refusal itself states that the row has no size floor",
+  // a repair fitted to that one case's scenario. The sentence is deleted; the general rule (a rule with several parts
+  // holds when every part that applies holds) carries it, so the pin moves to the floor text it leaves in place.
+  it("keeps the no-size-floor paragraph's floor text and drops the case-shaped sentence", async () => {
     const text = flow(await load("commands/st-quick.md"));
-    const sentence =
-      "When the item is small (one character, one file, a few lines), the refusal itself states that the row has no size floor.";
-    expect(text).toContain(sentence);
-    expect(text.indexOf("small diffs are exactly where authorization defects hide.")).toBeLessThan(text.indexOf(sentence));
-    expect(text.indexOf(sentence)).toBeLessThan(text.indexOf("Restating that refusal names the row"));
+    const floor = "The security-sensitive row has no size floor.";
+    const reason = "small diffs are exactly where authorization defects hide.";
+    expect(text).toContain(floor);
+    expect(text.indexOf(floor)).toBeLessThan(text.indexOf(reason));
+    expect(text.indexOf(reason)).toBeLessThan(text.indexOf("Restating that refusal names the row"));
+    expect(text).not.toMatch(/when the item is small \(one character, one file, a few lines\)/i);
   });
 
   it("lets a test that follows the change ride along without moving any other row", async () => {
@@ -1326,15 +1330,76 @@ describe("quick — the guardrails are the command", () => {
     expect(gates).not.toMatch(/npm run|node scripts\/|scripts\/ci|\.mjs\b|vitest/);
   });
 
-  it("fixes the commit prefix and differs from work by contract", async () => {
-    const text = flow(await load("commands/st-quick.md"));
+  // TEST CHANGE, justified (2026-11-09, plan 024 k-multipart-quick, REQ-FLOW-173): this pinned a fixed `quick:`
+  // prefix ("message prefix is fixed", "`quick: <N> small changes`"), which wrote a subject the repository's own
+  // commit style may refuse. The message now follows the repository's style, and the per-item body line stays.
+  it("follows the repository's commit style and differs from work by contract", async () => {
+    const file = await load("commands/st-quick.md");
+    const text = flow(file);
+    const commit = section(file, "Commit").replace(/\s+/g, " ");
 
-    expect(text).toMatch(/message prefix is fixed: `quick:`/i);
-    expect(text).toMatch(/`quick: <N> small changes`/);
+    expect(commit).toContain(
+      "The message follows the repository's commit style, read from its contributing guide or recent history",
+    );
+    // Edge case: a repository with no contributing guide and no history gets a conventional subject.
+    expect(commit).toContain("(a conventional subject where none is found)");
+    expect(commit).toContain("a batch carries one body line per item.");
+    expect(text).not.toMatch(/message prefix is fixed/i);
+    expect(text).not.toMatch(/`quick: <N> small changes`/);
     expect(text).toMatch(/differs from `\/st-work` by contract/i);
     expect(text).toMatch(/no board source, no issue or PR state, no phase state/i);
     // Tier-1 inline edits are the declared carve-out; verification still delegates.
     expect(text).toMatch(/tier-1 edits apply inline\. verification does not/i);
+  });
+});
+
+// Added 2026-11-09 (plan 024 k-multipart-quick, REQ-FLOW-173): the case-shaped sentences this unit deletes sat in
+// st-quick and two rules, so their removal and the repair rule that replaces them are pinned beside quick's.
+describe("rules — repairs restate the rule, not the case (REQ-FLOW-173)", () => {
+  const AI_EVALS = "rules/stamity-ai-evals.md";
+  const API_VERSIONING = "rules/stamity-api-versioning.md";
+
+  it("states in the ai-evals floor that a failing case is repaired at the rule it tests", async () => {
+    const file = await load(AI_EVALS);
+    const floor = section(file, "Floor").replace(/\s+/g, " ");
+
+    expect(floor).toContain(
+      "3. **A failing case is repaired at the rule it tests:** the fix restates the general behaviour the case " +
+        "measures, never only the sentence, value or example the case quotes; a repair whose new words appear in " +
+        "the case's Brief or transcript is fitted to the case, so rewrite it as the rule and check it against a " +
+        "sibling case; the Expected block does not move to meet the fix.",
+    );
+    // The new item sits after item 2, and item 9 still points at the versioned-inputs item, now item 4.
+    expect(floor.indexOf("2. **Cases are versioned in-repo artifacts.**")).toBeLessThan(
+      floor.indexOf("3. **A failing case is repaired"),
+    );
+    expect(floor).toContain("4. **Everything that shapes the output is a versioned input.**");
+    expect(floor).toContain("9. **Results are artifacts, not chat.** A run records the set version, item 4's");
+  });
+
+  it("gates a repair fitted to its case, and an Expected block moved to meet the fix", async () => {
+    const gates = section(await load(AI_EVALS), "Gates").replace(/\s+/g, " ");
+
+    expect(gates).toContain(
+      "A repair whose new words echo the failing case's Brief or transcript, and that no sibling case was checked " +
+        "against, is fitted to the case and does not close the failure; neither does an Expected block moved to " +
+        "meet the fix.",
+    );
+  });
+
+  it("drops the case-shaped sentences and keeps the floor text around them", async () => {
+    const evals = flow(await load(AI_EVALS));
+    const api = flow(await load(API_VERSIONING));
+
+    expect(evals).not.toMatch(/two of them is not three/i);
+    expect(evals).not.toMatch(/an answer that requires the run names the artifact/i);
+    expect(evals).toMatch(/calibrated against a human-labelled sample before its scores gate anything\. Pairwise/);
+    expect(evals).toMatch(/committed with the change that caused the run\./);
+
+    expect(api).not.toMatch(/one branch alone is half the mechanism/i);
+    expect(api).not.toMatch(/describing the conflict response names its shape/i);
+    expect(api).toMatch(/a repeat whose fingerprint differs is refused as a conflict/i);
+    expect(api).toMatch(/rather than a second effect\. Retention is stated in the spec/);
   });
 });
 
