@@ -344,7 +344,8 @@ describe("config mcp add — the .gitignore lines it records (REQ-FLOW-016)", ()
   const readLedger = async (handle: TempDirHandle): Promise<SetupManifest["ledger"]> =>
     (JSON.parse(await readFile(handle.path(STATE_DIR, MANIFEST_FILE), "utf8")) as SetupManifest).ledger;
 
-  it("appends and records .env.mcp's line for a server that needs a credential, beside the other seven", async () => {
+  // TEST CHANGE, justified (n-switch-guard, REQ-FLOW-166): init now also records the away marker and the held list
+  it("appends and records .env.mcp's line for a server that needs a credential, beside the other nine", async () => {
     const handle = tempDir();
     await seedManifest(handle);
 
@@ -356,7 +357,8 @@ describe("config mcp add — the .gitignore lines it records (REQ-FLOW-016)", ()
     const rows = (await readLedger(handle)).filter((row) => row.path === ".gitignore");
     expect(rows.map((row) => row.adapter)).toEqual(["claude"]);
     expect(rows[0]?.coOwned?.lines).toContain(".env.mcp");
-    expect(rows[0]?.coOwned?.lines).toHaveLength(8);
+    // TEST CHANGE, justified (n-switch-guard, REQ-FLOW-166): init now also records the away marker and the held list
+    expect(rows[0]?.coOwned?.lines).toHaveLength(10);
   });
 
   it("writes no .env.mcp line for a server that needs none", async () => {
@@ -367,7 +369,8 @@ describe("config mcp add — the .gitignore lines it records (REQ-FLOW-016)", ()
 
     expect(result.code, result.stderr).toBe(0);
     expect((await readFile(handle.path(".gitignore"), "utf8")).split("\n")).not.toContain(".env.mcp");
-    expect((await readLedger(handle)).find((row) => row.path === ".gitignore")?.coOwned?.lines).toHaveLength(7);
+    // TEST CHANGE, justified (n-switch-guard, REQ-FLOW-166): init now also records the away marker and the held list
+    expect((await readLedger(handle)).find((row) => row.path === ".gitignore")?.coOwned?.lines).toHaveLength(9);
   });
 });
 
