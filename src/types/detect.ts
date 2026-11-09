@@ -75,6 +75,28 @@ export interface RepoInfo {
   hasExistingAgents: boolean;
   /** Names of AI coding tools with existing config dirs — free-form, not limited to adapted tools. */
   existingTools: string[];
+  /**
+   * Older stacks found at the root that carry no charter gate (`cobol`,
+   * `abap`). Kept out of `languages` on purpose: neither has an honest local
+   * gate command, and every name in `languages` resolves to one.
+   */
+  legacyStacks: string[];
+  /**
+   * Language versions the root files state, one entry per file and field read;
+   * absent when no file states one. Live only — the persisted
+   * {@link DetectedSummary} does not carry it, so the manifest schema does not move.
+   */
+  languageVersions?: LanguageVersion[];
+}
+
+/** One language version as a root file states it. */
+export interface LanguageVersion {
+  /** The runtime the version is for (`node`, `python`, `ruby`, `go`, `java`, `rust`, `php`, `dotnet`, or an asdf tool name). */
+  language: string;
+  /** The version or range exactly as written (`20.11.0`, `>=3.10`, `lts/iron`). */
+  version: string;
+  /** The file, and the field inside it where there is one (`.nvmrc`, `package.json engines.node`). */
+  source: string;
 }
 
 /**

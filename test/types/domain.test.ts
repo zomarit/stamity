@@ -404,6 +404,7 @@ describe("detect shapes", () => {
       hasDataArtifacts: false,
       hasExistingAgents: true,
       existingTools: ["claude", "windsurf"],
+      legacyStacks: [], // FIXTURE SHAPE (x-lang-table): RepoInfo gained a required legacyStacks; empty = none.
     };
     const withPm: RepoInfo = { ...withoutPm, packageManager: "pnpm" };
     expect(withoutPm.packageManager).toBeUndefined();

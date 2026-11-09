@@ -80,6 +80,7 @@ function decisionsFixture(overrides: Partial<InitDecisions> = {}): InitDecisions
       hasDataArtifacts: false,
       hasExistingAgents: false,
       existingTools: [],
+      legacyStacks: [], // FIXTURE SHAPE (x-lang-table): RepoInfo gained a required legacyStacks; empty = none.
     },
     // FIXTURE RECONCILIATION (workspace init hook): `InitDecisions` gained the
     // workspace probe's result. The panel reads neither field — the offer's
@@ -151,6 +152,7 @@ function repoInfoFixture(overrides: Partial<RepoInfo> = {}): RepoInfo {
     hasDataArtifacts: false,
     hasExistingAgents: false,
     existingTools: [],
+    legacyStacks: [], // FIXTURE SHAPE (x-lang-table): RepoInfo gained a required legacyStacks; empty = none.
     ...overrides,
   };
 }

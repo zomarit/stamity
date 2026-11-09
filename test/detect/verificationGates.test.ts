@@ -33,6 +33,9 @@ function detection(over: PersistedDetection = {}): PersistedDetection {
   return { ...over };
 }
 
+/** Languages whose gate row deliberately names no lint command (REQ-FLOW-182). */
+const LINTLESS_LANGUAGES: ReadonlySet<string> = new Set(["cpp"]);
+
 /** The four managers with their run and exec spellings — the whole table, enumerated. */
 const MANAGERS = [
   { name: "npm", run: "npm run", exec: "npx --no" },
@@ -281,7 +284,14 @@ describe("verificationCommandsFor — language ranking", () => {
       const behindNoise = verificationCommandsFor(detection({ languages: ["klingon", language] }));
 
       expect(alone.test, language).toBeTypeOf("string");
-      expect(alone.lint, language).toBeTypeOf("string");
+      // TEST CHANGE (x-lang-table, REQ-FLOW-182): `cpp` is the first row with
+      // no lint command — C and C++ have no one linter a repository can be
+      // assumed to run, so the row leaves it absent and the charter says
+      // `unknown` rather than inventing one. Every other row still must carry a
+      // lint string, and `cpp` must carry NONE: the check is exact both ways,
+      // not loosened.
+      if (LINTLESS_LANGUAGES.has(language)) expect(alone.lint, language).toBeUndefined();
+      else expect(alone.lint, language).toBeTypeOf("string");
       expect(alone.all, language).toBeTypeOf("string");
       // An unrecognised name is skipped, not treated as the answer.
       expect(behindNoise, language).toEqual(alone);
@@ -335,6 +345,36 @@ describe("verificationCommandsFor — language ranking", () => {
       typecheck: "go vet ./...",
       all: "golangci-lint run && go vet ./... && go test ./...",
     });
+  });
+
+  it("resolves Perl from its own row (REQ-FLOW-182)", () => {
+    expect(verificationCommandsFor(detection({ languages: ["perl"] }))).toEqual({
+      test: "prove -lr t",
+      lint: "perlcritic .",
+      typecheck: "perlcritic .",
+      all: "perlcritic . && prove -lr t",
+    });
+  });
+
+  it("resolves C/C++ to its test command alone and leaves lint unresolved (REQ-FLOW-182)", () => {
+    expect(verificationCommandsFor(detection({ languages: ["cpp"] }))).toEqual({
+      test: "ctest --test-dir build",
+      all: "ctest --test-dir build",
+    });
+
+    const gates = verificationGatesFor(detection({ languages: ["cpp"] }));
+    expect(gates.lint).toBe(unresolvedGate("lint"));
+    expect(gates.typecheck).toBe(unresolvedGate("typecheck"));
+    expect(gates.all).toBe("ctest --test-dir build");
+  });
+
+  it("puts C/C++ ahead of a companion Python binding, and Perl behind Rust", () => {
+    expect(verificationCommandsFor(detection({ languages: ["python", "cpp"] })).test).toBe(
+      "ctest --test-dir build",
+    );
+    expect(verificationCommandsFor(detection({ languages: ["perl", "rust"] })).test).toBe(
+      "cargo test",
+    );
   });
 
   it("reports the linter as the static-analysis gate for a stack with no type check", () => {

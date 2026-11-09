@@ -66,10 +66,14 @@ export interface VerificationCommands {
   readonly all?: string;
 }
 
-/** One language's native commands. `typecheck` is absent when the stack has no such step. */
+/**
+ * One language's native commands. `typecheck` is absent when the stack has no
+ * such step; `lint` is absent when the stack has no one linter a repository
+ * can be assumed to run (C and C++), so that gate stays `unknown`.
+ */
 interface LanguageGate {
   test: string;
-  lint: string;
+  lint?: string;
   typecheck?: string;
 }
 
@@ -128,6 +132,10 @@ const LANGUAGE_GATES: Record<string, LanguageGate> = {
   haskell: { test: "stack test", lint: "hlint .", typecheck: "stack build" },
   clojure: { test: "lein test", lint: "clj-kondo --lint src" },
   lua: { test: "busted", lint: "luacheck ." },
+  perl: { test: "prove -lr t", lint: "perlcritic ." },
+  // CTest against the conventional out-of-tree build directory. No lint row:
+  // clang-tidy, cppcheck and cpplint each need setup a repo may not have.
+  cpp: { test: "ctest --test-dir build" },
 };
 
 /**
@@ -165,7 +173,7 @@ function runnerGate(language: string, gate: LanguageGate, packageManager: unknow
   const prefix = PYTHON_RUN_PREFIX[packageManager as string];
   return {
     test: `${prefix} ${gate.test}`,
-    lint: `${prefix} ${gate.lint}`,
+    ...(gate.lint === undefined ? {} : { lint: `${prefix} ${gate.lint}` }),
     ...(gate.typecheck === undefined ? {} : { typecheck: `${prefix} ${gate.typecheck}` }),
   };
 }
@@ -209,7 +217,9 @@ const GATE_LANGUAGE_PRECEDENCE: readonly string[] = [
   "ocaml",
   "clojure",
   "zig",
+  "cpp",
   "lua",
+  "perl",
   "ruby",
   "php",
   "python",

@@ -163,6 +163,7 @@ function emptyInfo(rootDir: string): RepoInfo {
     hasDataArtifacts: false,
     hasExistingAgents: false,
     existingTools: [],
+    legacyStacks: [], // FIXTURE SHAPE (x-lang-table): RepoInfo gained a required legacyStacks; empty = none.
   };
 }
 

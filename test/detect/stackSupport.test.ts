@@ -48,6 +48,9 @@ function repoInfo(facts: Partial<Omit<RepoInfo, "packageManager">> = {}): RepoIn
     hasDataArtifacts: false,
     hasExistingAgents: false,
     existingTools: [],
+    // FIXTURE SHAPE (x-lang-table): `RepoInfo` gained the required
+    // `legacyStacks`; empty reads as nothing detected. No expectation moved.
+    legacyStacks: [],
     ...facts,
   };
 }
@@ -122,6 +125,13 @@ describe("the shipped support tables", () => {
     );
 
     expect(unmapped).toEqual([]);
+  });
+
+  it("classifies Perl and C/C++ under their own subjects (REQ-FLOW-182)", () => {
+    expect(classifyLanguage("perl")).toMatchObject({ tier: "partial" });
+    expect(classifyLanguage("perl").notes).toMatch(/Perl/);
+    expect(classifyLanguage("cpp")).toMatchObject({ tier: "partial" });
+    expect(classifyLanguage("cpp").notes).toMatch(/C and C\+\+/);
   });
 
   it("keys the framework table by the whole Framework union", () => {

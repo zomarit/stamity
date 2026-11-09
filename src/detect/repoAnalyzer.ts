@@ -2,7 +2,7 @@ import type { Dirent } from "node:fs";
 import { readFile, readdir, realpath, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { isPlainObject, parseYamlStrict } from "../config/parse.ts";
-import type { Framework, PackageEntry, RepoInfo } from "../types/detect.ts";
+import type { Framework, LanguageVersion, PackageEntry, RepoInfo } from "../types/detect.ts";
 import { EngineError } from "../types/errors.ts";
 import { STATE_DIR } from "../types/markers.ts";
 import type { DetectedSummary } from "../types/detect.ts";
@@ -60,7 +60,21 @@ export const LANGUAGE_INDICATORS: Record<string, string[]> = {
   haskell: ["stack.yaml", "cabal.project"],
   clojure: ["deps.edn", "project.clj"],
   lua: [".luacheckrc", "rockspec"],
+  perl: ["cpanfile", "Makefile.PL", "Build.PL", "dist.ini"],
+  // Build files only C and C++ use. A plain `Makefile` is absent on purpose:
+  // it drives builds in every language, so on its own it names none.
+  cpp: ["CMakeLists.txt", "meson.build", "conanfile.txt", "vcpkg.json", "configure.ac"],
 };
+
+/**
+ * Older stacks, reported in `legacyStacks` and never in `languages`: neither
+ * has an honest local gate command to put in a charter, and every name in
+ * `languages` resolves to one (`./verificationGates.ts`, `LANGUAGE_GATES`).
+ * COBOL is found by a root source file's extension, as `csharp` is; ABAP by
+ * the abapGit or abaplint config at the root.
+ */
+const COBOL_EXTENSIONS: readonly string[] = [".cbl", ".cob", ".cpy"];
+const ABAP_INDICATORS: readonly string[] = [".abapgit.xml", "abaplint.json"];
 
 /**
  * Every language name {@link detectLanguages} can return. Content selection maps
@@ -421,6 +435,8 @@ export async function analyzeRepo(rootDir: string): Promise<RepoInfo> {
     existingTools,
     hasOwnState,
     pythonRunner,
+    legacyStacks,
+    languageVersions,
   ] = await Promise.all([
     detectLanguages(rootDir),
     detectPackageManager(rootDir),
@@ -435,6 +451,8 @@ export async function analyzeRepo(rootDir: string): Promise<RepoInfo> {
     presentIndicators(rootDir, AGENT_TOOL_INDICATORS),
     dirExists(join(rootDir, STATE_DIR)),
     detectPythonRunner(rootDir),
+    detectLegacyStacks(rootDir),
+    detectLanguageVersions(rootDir),
   ]);
 
   const observed = packageManager.lockfile !== null || packageManager.fromPackageJsonField;
@@ -457,6 +475,8 @@ export async function analyzeRepo(rootDir: string): Promise<RepoInfo> {
     hasDataArtifacts,
     hasExistingAgents: hasOwnState || existingTools.length > 0,
     existingTools,
+    legacyStacks,
+    ...(languageVersions.length === 0 ? {} : { languageVersions }),
   };
 }
 
@@ -571,6 +591,182 @@ function nodeLanguage(
     dependencyNames(manifest).has("typescript") ||
     TYPESCRIPT_EXTENSIONS.some((extension) => extensions.has(extension));
   return typescript ? "typescript" : "javascript";
+}
+
+/**
+ * Older stacks at the root, per {@link COBOL_EXTENSIONS} and
+ * {@link ABAP_INDICATORS}, in that fixed order. The COBOL extension match
+ * ignores case: mainframe exports commonly arrive as `PAYROLL.CBL`.
+ */
+async function detectLegacyStacks(rootDir: string): Promise<string[]> {
+  const [entries, abap] = await Promise.all([
+    readDirEntries(rootDir),
+    anyExists(rootDir, ABAP_INDICATORS),
+  ]);
+  const stacks: string[] = [];
+  const cobol = entries.some(
+    (entry) =>
+      entry.isFile() &&
+      COBOL_EXTENSIONS.some((extension) => entry.name.toLowerCase().endsWith(extension)),
+  );
+  if (cobol) stacks.push("cobol");
+  if (abap) stacks.push("abap");
+  return stacks;
+}
+
+/**
+ * The language versions root files state, one entry per file and field, in the
+ * fixed order below; several files naming one runtime each keep their entry,
+ * since a disagreement between them is itself worth reporting.
+ *
+ * Every read is one file at the root and trusts nothing it reads: an absent,
+ * unreadable or malformed file, a field of the wrong type, and a value
+ * {@link versionValue} refuses each give no entry rather than an error.
+ */
+async function detectLanguageVersions(rootDir: string): Promise<LanguageVersion[]> {
+  const found = await Promise.all([
+    firstLineVersion(rootDir, ".nvmrc", "node"),
+    firstLineVersion(rootDir, ".node-version", "node"),
+    jsonVersion(rootDir, "package.json", "engines", "node", "node"),
+    firstLineVersion(rootDir, ".python-version", "python"),
+    lineVersion(rootDir, "pyproject.toml", "requires-python", REQUIRES_PYTHON, "python"),
+    firstLineVersion(rootDir, ".ruby-version", "ruby"),
+    lineVersion(rootDir, "Gemfile", "ruby", GEMFILE_RUBY, "ruby"),
+    lineVersion(rootDir, "go.mod", "go", GO_DIRECTIVE, "go"),
+    pomVersion(rootDir),
+    firstLineVersion(rootDir, ".java-version", "java"),
+    toolVersions(rootDir),
+    rustToolchainVersion(rootDir),
+    lineVersion(rootDir, "rust-toolchain.toml", "channel", TOOLCHAIN_CHANNEL, "rust"),
+    lineVersion(rootDir, "Cargo.toml", "rust-version", CARGO_RUST_VERSION, "rust"),
+    jsonVersion(rootDir, "composer.json", "require", "php", "php"),
+    jsonVersion(rootDir, "global.json", "sdk", "version", "dotnet"),
+  ]);
+  return found.flat();
+}
+
+/**
+ * The characters a version or range is written with (`20.11.0`, `>=3.10,<4`,
+ * `~> 3.2`, `lts/iron`, `temurin-17`), at most 64 of them. A value outside it
+ * — a control character, a `${property}` a build tool would expand — is no
+ * value: these strings are printed back to a terminal, and a crafted file must
+ * not be able to put an escape sequence there.
+ */
+const VERSION_VALUE = /^[\w.+\-<>=!~^*,|@:/ ]{1,64}$/;
+
+const REQUIRES_PYTHON = /^requires-python\s*=\s*["']([^"']*)["']/;
+const GEMFILE_RUBY = /^ruby\s+["']([^"']*)["']/;
+const GO_DIRECTIVE = /^go\s+(\S+)$/;
+const TOOLCHAIN_CHANNEL = /^channel\s*=\s*["']([^"']*)["']/;
+const CARGO_RUST_VERSION = /^rust-version\s*=\s*["']([^"']*)["']/;
+
+/** `pom.xml` properties naming the Java version, strongest first; the first usable one wins. */
+const POM_JAVA_PROPERTIES: readonly { field: string; pattern: RegExp }[] = [
+  { field: "maven.compiler.release", pattern: /<maven\.compiler\.release>([^<]*)</ },
+  { field: "maven.compiler.source", pattern: /<maven\.compiler\.source>([^<]*)</ },
+  { field: "java.version", pattern: /<java\.version>([^<]*)</ },
+];
+
+/** asdf plugin names that spell a runtime differently from the rest of this list. */
+const ASDF_RUNTIME_NAMES: Readonly<Record<string, string>> = { nodejs: "node", golang: "go" };
+
+/** An asdf tool name: a plugin id, never free text. */
+const ASDF_TOOL = /^[a-z0-9][a-z0-9_-]{0,31}$/i;
+
+/** One entry when `raw` is a usable version, none otherwise. */
+function versionEntry(language: string, raw: unknown, source: string): LanguageVersion[] {
+  const version = versionValue(raw);
+  return version === null ? [] : [{ language, version, source }];
+}
+
+/** `raw` trimmed, when it is a string {@link VERSION_VALUE} accepts; otherwise `null`. */
+function versionValue(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const value = raw.trim();
+  return VERSION_VALUE.test(value) ? value : null;
+}
+
+/** Non-empty trimmed lines, `#` comment lines dropped. */
+function contentLines(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
+}
+
+/** A one-value version file (`.nvmrc`, `.python-version`): its first content line. */
+async function firstLineVersion(
+  rootDir: string,
+  file: string,
+  language: string,
+): Promise<LanguageVersion[]> {
+  const text = await readText(join(rootDir, file));
+  if (text === null) return [];
+  return versionEntry(language, contentLines(text)[0], file);
+}
+
+/** The first content line of `file` matching `pattern`, its first group as the version. */
+async function lineVersion(
+  rootDir: string,
+  file: string,
+  field: string,
+  pattern: RegExp,
+  language: string,
+): Promise<LanguageVersion[]> {
+  const text = await readText(join(rootDir, file));
+  if (text === null) return [];
+  const match = contentLines(text)
+    .map((line) => pattern.exec(line))
+    .find((hit) => hit !== null);
+  return versionEntry(language, match?.[1], `${file} ${field}`);
+}
+
+/** `object[outer][inner]` of a root JSON file, as the version. */
+async function jsonVersion(
+  rootDir: string,
+  file: string,
+  outer: string,
+  inner: string,
+  language: string,
+): Promise<LanguageVersion[]> {
+  const document = await readJsonObject(join(rootDir, file));
+  const block = document?.[outer];
+  return isPlainObject(block) ? versionEntry(language, block[inner], `${file} ${outer}.${inner}`) : [];
+}
+
+/** The Java version a root `pom.xml` states, per {@link POM_JAVA_PROPERTIES}. */
+async function pomVersion(rootDir: string): Promise<LanguageVersion[]> {
+  const text = await readText(join(rootDir, "pom.xml"));
+  if (text === null) return [];
+  for (const { field, pattern } of POM_JAVA_PROPERTIES) {
+    const entry = versionEntry("java", pattern.exec(text)?.[1], `pom.xml ${field}`);
+    if (entry.length > 0) return entry;
+  }
+  return [];
+}
+
+/** Every `<tool> <version>` line of a root `.tool-versions`; the first version of each line. */
+async function toolVersions(rootDir: string): Promise<LanguageVersion[]> {
+  const text = await readText(join(rootDir, ".tool-versions"));
+  if (text === null) return [];
+  return contentLines(text).flatMap((line) => {
+    const [tool, version] = line.split(/\s+/);
+    if (tool === undefined || !ASDF_TOOL.test(tool)) return [];
+    return versionEntry(ASDF_RUNTIME_NAMES[tool] ?? tool, version, ".tool-versions");
+  });
+}
+
+/**
+ * A root `rust-toolchain`: the older plain form holds the channel as its only
+ * line, the newer one is TOML with a `channel` key; either is read.
+ */
+async function rustToolchainVersion(rootDir: string): Promise<LanguageVersion[]> {
+  const text = await readText(join(rootDir, "rust-toolchain"));
+  if (text === null) return [];
+  const lines = contentLines(text);
+  const channel = lines.map((line) => TOOLCHAIN_CHANNEL.exec(line)).find((hit) => hit !== null);
+  if (channel !== undefined) return versionEntry("rust", channel[1], "rust-toolchain channel");
+  return lines.some((line) => line.startsWith("[")) ? [] : versionEntry("rust", lines[0], "rust-toolchain");
 }
 
 /**
@@ -810,6 +1006,11 @@ export function formatRepoSummary(info: RepoInfo): string {
   };
 
   add("Languages", info.languages);
+  add(
+    "Language versions",
+    (info.languageVersions ?? []).map((entry) => `${entry.language} ${entry.version} (${entry.source})`),
+  );
+  add("Legacy stacks", info.legacyStacks);
   if (info.packageManager !== undefined) rows.push(`Package manager: ${info.packageManager}`);
   add("Frameworks", info.frameworks);
   add("Linters", info.linters);

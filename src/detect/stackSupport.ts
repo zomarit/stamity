@@ -223,6 +223,8 @@ const LANGUAGE_SUBJECTS: Record<string, string> = {
   haskell: "Haskell",
   clojure: "Clojure",
   lua: "Lua",
+  perl: "Perl",
+  cpp: "C and C++",
 };
 
 /** Both coverage tables as one value, so a caller classifies against a single consistent pair. */

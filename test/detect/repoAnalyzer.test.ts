@@ -73,6 +73,10 @@ function emptyInfo(rootDir: string, overrides: Partial<RepoInfo> = {}): RepoInfo
     hasDataArtifacts: false,
     hasExistingAgents: false,
     existingTools: [],
+    // FIXTURE SHAPE (x-lang-table): `RepoInfo` gained the required
+    // `legacyStacks`; an empty list is "nothing detected", like every other
+    // list here. No case's expectation moved.
+    legacyStacks: [],
     ...overrides,
   };
 }
@@ -327,6 +331,202 @@ describe("detectLanguages", () => {
 
     const decoy = await seedRepo({ "App.sln/notes.txt": "" });
     await expect(detectLanguages(decoy)).resolves.toEqual([]);
+  });
+
+  // REQ-FLOW-182: Perl and C/C++ join the table; every file of each row,
+  // seeded alone, reports that row and nothing else.
+  it.each([
+    ["perl", ["cpanfile", "Makefile.PL", "Build.PL", "dist.ini"]],
+    ["cpp", ["CMakeLists.txt", "meson.build", "conanfile.txt", "vcpkg.json", "configure.ac"]],
+  ] as const)("identifies %s from each of its files, alone", async (language, files) => {
+    const detected = await Promise.all(
+      files.map(async (file) => ({ file, languages: await detectLanguages(await seedRepo({ [file]: "" })) })),
+    );
+    for (const { file, languages } of detected) expect(languages, file).toEqual([language]);
+  });
+
+  it("reads nothing off a Makefile alone", async () => {
+    // A plain Makefile drives builds in every language, so it names none.
+    const info = await analyze({ Makefile: "all:\n\techo hi\n" });
+
+    expect(info.languages).toEqual([]);
+    expect(info.legacyStacks).toEqual([]);
+  });
+});
+
+describe("REQ-FLOW-182 legacy stacks", () => {
+  it("reports cobol from a root source file, outside languages and with no charter gate", async () => {
+    const info = await analyze({ "PAYROLL.cbl": "       IDENTIFICATION DIVISION.\n" });
+
+    expect(info.legacyStacks).toEqual(["cobol"]);
+    expect(info.languages).toEqual([]);
+    const gates = verificationGatesFor(summarizeDetection(info));
+    expect(gates.test.startsWith("unknown")).toBe(true);
+    expect(gates.all.startsWith("unknown")).toBe(true);
+  });
+
+  it.each([".cob", ".cpy", ".CBL"])("reports cobol from a root %s file", async (extension) => {
+    const info = await analyze({ [`MAIN${extension}`]: "" });
+
+    expect(info.legacyStacks).toEqual(["cobol"]);
+  });
+
+  it("does not read cobol off a directory named like a source file", async () => {
+    const info = await analyze({ "MAIN.cbl/readme.txt": "" });
+
+    expect(info.legacyStacks).toEqual([]);
+  });
+
+  it.each([".abapgit.xml", "abaplint.json"])("reports abap from %s", async (file) => {
+    const info = await analyze({ [file]: "" });
+
+    expect(info.legacyStacks).toEqual(["abap"]);
+    expect(info.languages).toEqual([]);
+  });
+
+  it("reports both, in a fixed order, beside a gated language", async () => {
+    const info = await analyze({
+      "abaplint.json": "{}",
+      "LEGACY.cob": "",
+      "pom.xml": "<project/>\n",
+    });
+
+    expect(info.legacyStacks).toEqual(["cobol", "abap"]);
+    expect(info.languages).toEqual(["java"]);
+    // The charter's gates stay the gated language's.
+    expect(verificationGatesFor(summarizeDetection(info)).test).toBe("mvn test");
+  });
+});
+
+describe("REQ-FLOW-182 language versions", () => {
+  // One fixture per source the cell names, each the only file in its repo.
+  it.each([
+    [".nvmrc", "v20.11.0\n", { language: "node", version: "v20.11.0", source: ".nvmrc" }],
+    [".node-version", "22\n", { language: "node", version: "22", source: ".node-version" }],
+    [
+      "package.json",
+      json({ name: "app", engines: { node: ">=20" } }),
+      { language: "node", version: ">=20", source: "package.json engines.node" },
+    ],
+    [".python-version", "3.12.1\n", { language: "python", version: "3.12.1", source: ".python-version" }],
+    [
+      "pyproject.toml",
+      '[project]\nname = "app"\nrequires-python = ">=3.10"\n',
+      { language: "python", version: ">=3.10", source: "pyproject.toml requires-python" },
+    ],
+    [".ruby-version", "3.3.0\n", { language: "ruby", version: "3.3.0", source: ".ruby-version" }],
+    [
+      "Gemfile",
+      'source "https://rubygems.org"\nruby "3.2.2"\ngem "rails"\n',
+      { language: "ruby", version: "3.2.2", source: "Gemfile ruby" },
+    ],
+    [
+      "go.mod",
+      "module example.com/app\n\ngo 1.22\n",
+      { language: "go", version: "1.22", source: "go.mod go" },
+    ],
+    [
+      "pom.xml",
+      "<project><properties><maven.compiler.release>17</maven.compiler.release></properties></project>\n",
+      { language: "java", version: "17", source: "pom.xml maven.compiler.release" },
+    ],
+    [
+      "pom.xml",
+      "<project><properties><maven.compiler.source>1.8</maven.compiler.source></properties></project>\n",
+      { language: "java", version: "1.8", source: "pom.xml maven.compiler.source" },
+    ],
+    [
+      "pom.xml",
+      "<project><properties><java.version>21</java.version></properties></project>\n",
+      { language: "java", version: "21", source: "pom.xml java.version" },
+    ],
+    [".java-version", "17.0\n", { language: "java", version: "17.0", source: ".java-version" }],
+    ["rust-toolchain", "1.75.0\n", { language: "rust", version: "1.75.0", source: "rust-toolchain" }],
+    [
+      "rust-toolchain.toml",
+      '[toolchain]\nchannel = "1.78"\n',
+      { language: "rust", version: "1.78", source: "rust-toolchain.toml channel" },
+    ],
+    [
+      "Cargo.toml",
+      '[package]\nname = "app"\nrust-version = "1.70"\n',
+      { language: "rust", version: "1.70", source: "Cargo.toml rust-version" },
+    ],
+    [
+      "composer.json",
+      json({ require: { php: "^8.1" } }),
+      { language: "php", version: "^8.1", source: "composer.json require.php" },
+    ],
+    [
+      "global.json",
+      json({ sdk: { version: "8.0.100" } }),
+      { language: "dotnet", version: "8.0.100", source: "global.json sdk.version" },
+    ],
+  ])("reads the version a root %s states (row %#)", async (file, body, expected) => {
+    const info = await analyze({ [file]: body });
+
+    expect(info.languageVersions).toEqual([expected]);
+  });
+
+  it("reads every tool line of .tool-versions, naming asdf's node and go plugins as the runtimes", async () => {
+    const info = await analyze({
+      ".tool-versions": "# pinned\nnodejs 20.11.0\npython 3.12.1 3.11.7\ngolang 1.22.0\n\nerlang 26.2\n",
+    });
+
+    expect(info.languageVersions).toEqual([
+      { language: "node", version: "20.11.0", source: ".tool-versions" },
+      { language: "python", version: "3.12.1", source: ".tool-versions" },
+      { language: "go", version: "1.22.0", source: ".tool-versions" },
+      { language: "erlang", version: "26.2", source: ".tool-versions" },
+    ]);
+  });
+
+  it("keeps every source that states a version, in a fixed order", async () => {
+    const info = await analyze({
+      ".nvmrc": "20\n",
+      "package.json": json({ name: "app", engines: { node: ">=18" } }),
+      ".python-version": "3.12\n",
+    });
+
+    expect(info.languageVersions).toEqual([
+      { language: "node", version: "20", source: ".nvmrc" },
+      { language: "node", version: ">=18", source: "package.json engines.node" },
+      { language: "python", version: "3.12", source: ".python-version" },
+    ]);
+  });
+
+  it("gives no version and no throw for a malformed package.json", async () => {
+    const info = await analyze({ "package.json": "{ \"engines\": { \"node\": \">=20\" " });
+
+    expect(info.languageVersions).toBeUndefined();
+  });
+
+  it("drops a value with a control character, an over-long value and a non-string field", async () => {
+    const info = await analyze({
+      ".nvmrc": "20\u001b[31m\n",
+      ".python-version": `${"9".repeat(200)}\n`,
+      "composer.json": json({ require: { php: ["^8.1"] } }),
+      "global.json": json({ sdk: "8.0.100" }),
+    });
+
+    // A version is printed back to a terminal; a crafted file must not be able
+    // to put an escape sequence there, so a doubtful value is no value.
+    expect(info.languageVersions).toBeUndefined();
+  });
+
+  it("reads none off a directory where a version file should be", async () => {
+    const info = await analyze({ ".nvmrc/x": "", ".ruby-version/y": "" });
+
+    expect(info.languageVersions).toBeUndefined();
+  });
+
+  it("skips a commented ruby line and a commented go directive", async () => {
+    const info = await analyze({
+      Gemfile: '# ruby "2.7.0"\ngem "rack"\n',
+      "go.mod": "module m\n// go 1.10\n",
+    });
+
+    expect(info.languageVersions).toBeUndefined();
   });
 });
 
@@ -703,6 +903,27 @@ describe("formatRepoSummary", () => {
         "CI: github-actions",
         "Workspace packages: 4 (apps/a, apps/b, packages/c, +1 more)",
         "Container build: yes",
+      ].join("\n"),
+    );
+  });
+
+  it("prints the language versions with their sources and the legacy stacks", () => {
+    const summary = formatRepoSummary(
+      emptyInfo("/repo", {
+        languages: ["java"],
+        legacyStacks: ["cobol", "abap"],
+        languageVersions: [
+          { language: "java", version: "17", source: "pom.xml maven.compiler.release" },
+          { language: "node", version: "20", source: ".nvmrc" },
+        ],
+      }),
+    );
+
+    expect(summary).toBe(
+      [
+        "Languages: java",
+        "Language versions: java 17 (pom.xml maven.compiler.release), node 20 (.nvmrc)",
+        "Legacy stacks: cobol, abap",
       ].join("\n"),
     );
   });
