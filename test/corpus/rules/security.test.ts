@@ -408,13 +408,22 @@ describe("security-patterns — the pattern-level floor", () => {
     expect(gate).toMatch(/A repository with no such capability says so in one line instead\.$/);
   });
 
-  it("fires the reviewer's production-only row on a capability the change adds or exposes, not on a script", async () => {
+  it("fires the reviewer's production-only row on a capability the change adds or exposes, a shipped seed or reset command included", async () => {
     const file = await load("agents/stamity-reviewer.md");
     const row = bulletContaining(section(file, "Critical rows"), "non-production environments");
 
     expect(row).toMatch(/^A capability the change adds or exposes that must stay out of production \(/);
-    expect(row).toMatch(/a debug route, a seed endpoint, a destructive admin verb, or the like/);
-    expect(row).toMatch(/not a script run against an environment/);
+    // Re-pinned in round 1 (review/5, review/8, review/6): the carve-out exempted every "script run
+    // against an environment", which is the very form floor item 5's seed and reset commands take, and
+    // the examples had lost the mock mode. A seed or reset command shipped with the code is now named
+    // as gated, and only a one-off operator script that does not ship with the code is carved out.
+    expect(row).toMatch(
+      /a debug route, a mock mode, a seed or reset command shipped with the code, a destructive admin verb, or the like/,
+    );
+    expect(row).toMatch(
+      /not a one-off script an operator runs on purpose against a named environment, such as a deploy or a migration, that does not ship with the code\)/,
+    );
+    expect(row).not.toMatch(/not a script run against an environment/);
     expect(row).toMatch(/is gated by an allowlist of named non-production environments/);
     expect(row).toMatch(/an unset or unknown value denies\.$/);
     // The old row fired on any "dangerous capability" the reviewer could name, script or not.
