@@ -61,18 +61,28 @@ export interface ReadinessFiles {
   coverage: CoverageRead;
 }
 
-/** The pure assessment's whole input: the file reads plus what the caller resolves. */
+/**
+ * The pure assessment's whole input: the file reads plus what the caller resolves.
+ *
+ * `gates` and `landJob` each take `"not-checked"` from a caller that does not run that check at all
+ * (the pre-flight, which cannot import the CLI layer): the row reads `not-checked`, says so, and keeps
+ * `ready` false, since the report cannot call ready what it did not look at. `null` stays a check that
+ * was tried and gave no answer, which reads `unknown`.
+ */
 export interface ReadinessReads extends ReadinessFiles {
-  /** `resolveCharterGates`'s report (its `unresolved` rows); `null` when it was not resolved. */
-  gates: { unresolved: readonly { kind: string; value: string }[] } | null;
-  /** `checkLandJobWorkflows`'s row; `"off"` where it returns none (the land job is off); `null` when not read. */
-  landJob: { status: "pass" | "warn" | "fail"; detail: string } | "off" | null;
+  /** `resolveCharterGates`'s report (its `unresolved` rows); `null` when it was not resolved; `"not-checked"` when not run. */
+  gates: { unresolved: readonly { kind: string; value: string }[] } | "not-checked" | null;
+  /**
+   * `checkLandJobWorkflows`'s row; `"off"` where it returns none (the land job is off); `null` when not read;
+   * `"not-checked"` when this caller does not run the check.
+   */
+  landJob: { status: "pass" | "warn" | "fail"; detail: string } | "off" | "not-checked" | null;
   /** The setup manifest: whether it reads, the CLI version it pins, and whether it is committed (`null`: not known). */
   setup: { manifest: "present" | "absent" | "unreadable"; pinnedVersion: string | null; committed: boolean | null };
 }
 
 export interface ReadinessReport {
-  /** True when no row is a `gap` or `unknown`. */
+  /** True when no row is a `gap` or `unknown`, and the caller ran every check it can skip (`gates`, `landJob`). */
   ready: boolean;
   checks: ReadinessCheck[];
   stack: {
@@ -90,14 +100,16 @@ export interface ReadinessReport {
 /**
  * Workflows this engine writes, which prove nothing about the repository's own
  * pipeline. The same two names as `ENGINE_EMITTED_WORKFLOWS` in
- * `./repoAnalyzer.ts`, which does not export its set.
+ * `./repoAnalyzer.ts`, which does not export its set; a test holds the two equal.
  */
-const ENGINE_WORKFLOWS: ReadonlySet<string> = new Set(["copilot-setup-steps.yml", "stamity-land.yml"]);
+export const ENGINE_WORKFLOWS: ReadonlySet<string> = new Set(["copilot-setup-steps.yml", "stamity-land.yml"]);
 const WORKFLOWS_DIR = ".github/workflows";
 const WORKFLOW_EXTENSIONS: readonly string[] = [".yml", ".yaml"];
 /** Bounds on the workflow read: files per folder and bytes per file. */
 const WORKFLOW_MAX_FILES = 200;
 const WORKFLOW_MAX_BYTES = 1024 * 1024;
+/** The bytes read across all workflows together; a file past what is left reads as `triggers: null`. */
+const WORKFLOW_TOTAL_BYTES = 16 * 1024 * 1024;
 const CLASS_FILE_MAX_BYTES = 1024 * 1024;
 /** Above this a coverage report is read only where its totals sit (head or tail), else `unknown`. */
 const COVERAGE_MAX_BYTES = 5 * 1024 * 1024;
@@ -157,8 +169,9 @@ export function assessReadiness(info: RepoInfo, reads: ReadinessReads): Readines
       fix: BRANCH_RULE_FIX,
     },
   ];
+  const callerSkipped = reads.gates === "not-checked" || reads.landJob === "not-checked";
   return {
-    ready: checks.every((row) => row.state === "ready" || row.state === "not-checked"),
+    ready: !callerSkipped && checks.every((row) => row.state === "ready" || row.state === "not-checked"),
     checks,
     stack: {
       languages: [...info.languages],
@@ -190,6 +203,9 @@ function testFramework(info: RepoInfo): ReadinessCheck {
 function gatesResolve(gates: ReadinessReads["gates"]): ReadinessCheck {
   const id = "gates-resolve";
   const fix = "pin each gate in the setup manifest (stamity config), or install the tool it names";
+  if (gates === "not-checked") {
+    return { id, state: "not-checked", evidence: "not checked by this caller", fix: "run stamity ready" };
+  }
   if (gates === null) {
     return { id, state: "unknown", evidence: "the charter gates were not resolved (no readable setup manifest)", fix };
   }
@@ -249,6 +265,9 @@ function landJob(row: ReadinessReads["landJob"]): ReadinessCheck {
       evidence: "the land job is off (autonomy.landJob not set)",
       fix: "set autonomy.landJob with the workflow names it waits on, if runs should land themselves",
     };
+  }
+  if (row === "not-checked") {
+    return { id, state: "not-checked", evidence: "not checked by this caller", fix: "run stamity ready" };
   }
   if (row === null) {
     return { id, state: "unknown", evidence: "the land job's workflow names were not read", fix: "run stamity check" };
@@ -375,10 +394,20 @@ async function readWorkflows(rootDir: string): Promise<ReadinessFiles["workflows
     .map((entry) => entry.name)
     .toSorted()
     .slice(0, WORKFLOW_MAX_FILES);
+  // Sizes first, then each file a share of one total budget in name order, so the reads below hold at
+  // most that budget at once; a file that grew after its size was taken reads past its share as truncated.
+  const sizes = await Promise.all(names.map((name) => regularSize(join(rootDir, WORKFLOWS_DIR, name))));
+  let left = WORKFLOW_TOTAL_BYTES;
+  const shares = sizes.map((size) => {
+    if (size === null || size > WORKFLOW_MAX_BYTES || size > left) return null;
+    left -= size;
+    return size;
+  });
   return Promise.all(
-    names.map(async (name) => {
+    names.map(async (name, index) => {
       const file = `${WORKFLOWS_DIR}/${name}`;
-      const read = await readHead(join(rootDir, file), WORKFLOW_MAX_BYTES);
+      const share = shares[index] ?? null;
+      const read = share === null ? null : await readHead(join(rootDir, file), share);
       return { file, triggers: read === null || read.truncated ? null : workflowTriggers(read.text, file) };
     }),
   );
@@ -491,6 +520,16 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
+/** A regular file's size, or `null` when the path is not one. */
+async function regularSize(path: string): Promise<number | null> {
+  try {
+    const stats = await lstat(path);
+    return stats.isFile() ? stats.size : null;
+  } catch {
+    return null;
+  }
+}
+
 async function isRegularFile(path: string): Promise<boolean> {
   try {
     return (await lstat(path)).isFile();
@@ -502,13 +541,15 @@ async function isRegularFile(path: string): Promise<boolean> {
 /**
  * Up to `maxBytes` from the start of a regular file (a link, a FIFO or a device
  * is refused before it is opened, and re-checked on the handle), `truncated`
- * when more was there; `null` when it is not one or does not read.
+ * when more was there; `null` when it is not one or does not read. The buffer
+ * is the file's size, at most `maxBytes`, plus the one byte that shows more.
  */
 async function readHead(path: string, maxBytes: number): Promise<{ text: string; truncated: boolean } | null> {
-  const handle = await openRegular(path);
-  if (handle === null) return null;
+  const opened = await openRegular(path);
+  if (opened === null) return null;
+  const { handle, size } = opened;
   try {
-    const buffer = Buffer.alloc(maxBytes + 1);
+    const buffer = Buffer.alloc(Math.min(size, maxBytes) + 1);
     let filled = 0;
     while (filled < buffer.length) {
       // eslint-disable-next-line no-await-in-loop -- one descriptor read in order: each read starts where the last one ended
@@ -516,7 +557,8 @@ async function readHead(path: string, maxBytes: number): Promise<{ text: string;
       if (bytesRead === 0) break;
       filled += bytesRead;
     }
-    return { text: buffer.toString("utf8", 0, Math.min(filled, maxBytes)), truncated: filled > maxBytes };
+    // A full buffer is one byte past the handle's size or past `maxBytes`: more was there than was read.
+    return { text: buffer.toString("utf8", 0, Math.min(filled, maxBytes)), truncated: filled === buffer.length };
   } catch {
     return null;
   } finally {
@@ -526,10 +568,10 @@ async function readHead(path: string, maxBytes: number): Promise<{ text: string;
 
 /** The last `maxBytes` of a regular file, or `null` as {@link readHead}. */
 async function readTail(path: string, maxBytes: number): Promise<string | null> {
-  const handle = await openRegular(path);
-  if (handle === null) return null;
+  const opened = await openRegular(path);
+  if (opened === null) return null;
+  const { handle, size } = opened;
   try {
-    const { size } = await handle.stat();
     const start = Math.max(0, size - maxBytes);
     const buffer = Buffer.alloc(Math.min(size, maxBytes));
     let filled = 0;
@@ -547,11 +589,13 @@ async function readTail(path: string, maxBytes: number): Promise<string | null> 
   }
 }
 
-async function openRegular(path: string): Promise<Awaited<ReturnType<typeof open>> | null> {
+/** A read handle on a regular file and the size its own `stat` gave, or `null`. */
+async function openRegular(path: string): Promise<{ handle: Awaited<ReturnType<typeof open>>; size: number } | null> {
   try {
     if (!(await lstat(path)).isFile()) return null;
     const handle = await open(path, "r");
-    if ((await handle.stat()).isFile()) return handle;
+    const stats = await handle.stat().catch(() => null);
+    if (stats?.isFile() === true) return { handle, size: stats.size };
     await handle.close().catch(() => undefined);
     return null;
   } catch {

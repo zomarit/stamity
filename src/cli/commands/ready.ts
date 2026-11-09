@@ -17,9 +17,10 @@ import { checkLandJobWorkflows, resolveCharterGates } from "./check.ts";
  * `stamity ready [--path <dir>]` — whether a repository is ready for unattended runs (REQ-FLOW-182).
  *
  * A report, not a gate: exit 0 on any verdict, 1 when the root cannot be read, 2 on a usage error (a
- * `--path` that is a file). It reads files and runs none of the repository's commands. The one process
- * it starts is `git ls-files`, through `runGit` (which pins `core.fsmonitor=false`), to learn whether
- * the setup manifest is committed; outside a clone that answer is `unknown`.
+ * `--path` that is a file). It reads files and runs none of the repository's commands. The only processes
+ * it starts are `git ls-files` and, for a tracked manifest, `git ls-tree HEAD`, through `runGit` (which
+ * pins `core.fsmonitor=false`), to learn whether the setup manifest is in `HEAD`; outside a clone that
+ * answer is `unknown`.
  *
  * The checks and the file reads are `../../detect/readiness.ts`'s. This verb fills the half that module
  * may not reach from the engine layer: the charter gates (`resolveCharterGates`), the land job's
@@ -48,8 +49,15 @@ async function readSetup(rootDir: string): Promise<{ manifest: SetupManifest | n
     return { manifest: null, setup: { manifest: "unreadable", pinnedVersion: null, committed: null } };
   }
   if (manifest === null) return { manifest, setup: { manifest: "absent", pinnedVersion: null, committed: null } };
-  const tracked = await runGit({ args: ["ls-files", "--", `${STATE_DIR}/${MANIFEST_FILE}`], cwd: rootDir });
-  const committed = tracked.status === 0 ? tracked.stdout.trim().length > 0 : null;
+  const path = `${STATE_DIR}/${MANIFEST_FILE}`;
+  const tracked = await runGit({ args: ["ls-files", "--", path], cwd: rootDir });
+  let committed: boolean | null = tracked.status === 0 ? tracked.stdout.trim().length > 0 : null;
+  if (committed === true) {
+    // Tracked is not committed: a staged manifest is not in a fresh clone. Inside a clone (the read
+    // above passed) a failed HEAD read is a branch with no commit yet, so nothing is committed.
+    const inHead = await runGit({ args: ["ls-tree", "--name-only", "HEAD", "--", path], cwd: rootDir });
+    committed = inHead.status === 0 && inHead.stdout.trim().length > 0;
+  }
   const pinnedVersion = manifest.generatedBy.length > 0 ? manifest.generatedBy : null;
   return { manifest, setup: { manifest: "present", pinnedVersion, committed } };
 }

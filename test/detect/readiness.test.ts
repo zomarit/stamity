@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import {
   COVERAGE_REPORTS,
+  ENGINE_WORKFLOWS,
   assessReadiness,
   readReadinessFiles,
   type ReadinessCheckId,
@@ -10,6 +11,7 @@ import {
   type ReadinessReads,
   type ReadinessReport,
 } from "../../src/detect/readiness.ts";
+import { detectCIProviders } from "../../src/detect/repoAnalyzer.ts";
 import type { RepoInfo } from "../../src/types/detect.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
@@ -208,6 +210,24 @@ describe("assessReadiness", () => {
       expect(gap.evidence).toContain("no workflow file carries ci");
       const off = check(assessReadiness(readyInfo(), { ...readyReads(), landJob: "off" }), "land-job-workflows");
       expect(off.state).toBe("not-checked");
+    });
+
+    it("gates and the land job: a caller that does not run them reads not-checked and is never ready", () => {
+      // The pre-flight's shape (S61): it cannot import the CLI layer, so it runs neither check.
+      const report = assessReadiness(readyInfo(), { ...readyReads(), gates: "not-checked", landJob: "not-checked" });
+      for (const id of ["gates-resolve", "land-job-workflows"] as const) {
+        expect(check(report, id), id).toMatchObject({ state: "not-checked", evidence: "not checked by this caller" });
+      }
+      expect(report.checks.filter((row) => row.state === "gap" || row.state === "unknown")).toEqual([]);
+      expect(report.notChecked).toEqual(["gates-resolve", "land-job-workflows", "branch-rule"]);
+      expect(report.ready).toBe(false);
+      // Either one alone keeps ready false as well.
+      expect(assessReadiness(readyInfo(), { ...readyReads(), gates: "not-checked" }).ready).toBe(false);
+      expect(assessReadiness(readyInfo(), { ...readyReads(), landJob: "not-checked" }).ready).toBe(false);
+      // null keeps meaning a read that was tried and gave no answer.
+      const failed = assessReadiness(readyInfo(), { ...readyReads(), gates: null, landJob: null });
+      expect(check(failed, "gates-resolve").state).toBe("unknown");
+      expect(check(failed, "land-job-workflows").state).toBe("unknown");
     });
 
     it("lockfile", () => {
@@ -477,6 +497,30 @@ describe("readReadinessFiles", () => {
     await mkdir(join(root, ".github/workflows"), { recursive: true });
     await writeFile(join(root, ".github/workflows/huge.yml"), `on: pull_request\n# ${"x".repeat(1024 * 1024 + 10)}\n`);
     expect((await readReadinessFiles(root)).workflows).toEqual([{ file: ".github/workflows/huge.yml", triggers: null }]);
+  });
+
+  it("reads workflows within one total budget: past 16 MiB together, the rest read as triggers null", async () => {
+    const root = await seedRepo({});
+    await mkdir(join(root, ".github/workflows"), { recursive: true });
+    // Each file is under the 1 MiB per-file cap; sixteen fit the 16 MiB budget, the seventeenth does not.
+    const body = `on: pull_request\n# ${"x".repeat(1_000_000 - 21)}\n`;
+    const names = Array.from({ length: 17 }, (_, index) => `w${String(index).padStart(2, "0")}.yml`);
+    await Promise.all(names.map((name) => writeFile(join(root, ".github/workflows", name), body)));
+    const workflows = (await readReadinessFiles(root)).workflows;
+    expect(workflows.slice(0, 16).every((entry) => entry.triggers?.[0] === "pull_request")).toBe(true);
+    expect(workflows[16]).toEqual({ file: ".github/workflows/w16.yml", triggers: null });
+  });
+
+  it("holds its engine-workflow set equal to repoAnalyzer's, which it cannot import", async () => {
+    const source = await readFile(join(import.meta.dirname, "../../src/detect/repoAnalyzer.ts"), "utf8");
+    const listed = /const ENGINE_EMITTED_WORKFLOWS\b[^=]*=\s*new Set\(\[([^\]]*)\]\)/.exec(source)?.[1];
+    expect(listed, "ENGINE_EMITTED_WORKFLOWS not found in repoAnalyzer.ts").toBeDefined();
+    const theirs = [...(listed ?? "").matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+    expect([...ENGINE_WORKFLOWS].toSorted()).toEqual(theirs.toSorted());
+    // And by behaviour: a folder holding only those files gives detection no provider and this read no workflow.
+    const root = await seedRepo(Object.fromEntries(theirs.map((name) => [`.github/workflows/${name}`, "on: pull_request\n"])));
+    expect(await detectCIProviders(root)).toEqual([]);
+    expect((await readReadinessFiles(root)).workflows).toEqual([]);
   });
 
   it("imports no process-spawning module", async () => {

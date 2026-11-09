@@ -128,6 +128,34 @@ describe("stamity ready", () => {
     expect(doc.checks.find((row) => row.id === "gates-resolve")?.state).not.toBe("unknown");
   }, 120_000);
 
+  it.skipIf(!gitAvailable)(
+    "reads a staged but uncommitted setup as a setup-pinned gap, before and after a first commit",
+    async () => {
+      const commit = ["-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-m"];
+      // A clone with commits, the manifest staged on top: tracked, yet not in HEAD.
+      const root = await seed(READY_FILES);
+      await mustGit(root, "init", "-q", "-b", "main");
+      await mustGit(root, "add", "package.json");
+      await mustGit(root, ...commit, "first");
+      const init = await runInProcess(COMMANDS, ["init", "-y"], { cwd: root });
+      expect(init.code, init.stderr).toBe(0);
+      await mustGit(root, "add", "-A");
+      const staged = payload((await ready(root, "--json")).stdout).checks.find((row) => row.id === "setup-pinned");
+      expect(staged).toMatchObject({ state: "gap" });
+      expect(staged?.evidence).toContain("not committed");
+
+      // A branch with no commit yet, the manifest staged: nothing is committed either.
+      const unborn = await seed(READY_FILES);
+      await mustGit(unborn, "init", "-q", "-b", "main");
+      const setup = await runInProcess(COMMANDS, ["init", "-y"], { cwd: unborn });
+      expect(setup.code, setup.stderr).toBe(0);
+      await mustGit(unborn, "add", "-A");
+      const doc = payload((await ready(unborn, "--json")).stdout);
+      expect(doc.checks.find((row) => row.id === "setup-pinned")).toMatchObject({ state: "gap" });
+    },
+    120_000,
+  );
+
   it("reads the folder --path names, relative to the current folder", async () => {
     const root = await seed({ "sub/notes.txt": "x\n", "sub/legacy.cob": "x\n" });
     const doc = payload((await ready(root, "--path", "sub", "--json")).stdout);
