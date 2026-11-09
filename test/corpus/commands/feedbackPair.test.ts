@@ -803,6 +803,27 @@ describe("rework — validation and handoff", () => {
     expect(planGate, "`/st-plan`'s gate table carries no L6 row for rework to cite").toContain("Named skills copied");
   });
 
+  // Added2026-11-09 (s-skills-content fix round 3, sign-off S68; REQ-FLOW-180): a person who refreshes a
+  // skill (`skill remove`, then `skill add`) leaves every client's copy stale, and rework's re-run reads
+  // L6 clean with nothing to copy. Rework syncs on any L6 pass with a named skill, as the plan run does
+  // (S60), and names what sync wrote at its one ask: on `execute now` `/st-work` starts right after the
+  // proof block, so the ask is the last point a person can commit those held paths before a lane.
+  it("syncs whenever L6 passes with a named skill and names what sync wrote at the ask, before /st-work cuts a lane (REQ-FLOW-180)", () => {
+    const handoff = clause(artifact(REWORK).parsed.body, "## 6. Plan handoff");
+
+    expect(handoff).toContain(
+      "Whenever `L6` passes with any skill named, rework then runs `npx --no stamity sync` (`${STAMITY:CLI} sync` where npm refuses) so every client's copy is regenerated.",
+    );
+    expect(handoff).toContain(
+      "What `sync` wrote lands on held paths: the handoff's ask names those paths, and a person commits them before answering, so they are in before `/st-work` cuts any lane.",
+    );
+    // The sync runs at the gate, so its paths exist when the one ask is put.
+    expect(handoff.indexOf("rework then runs `npx --no stamity sync`")).toBeLessThan(handoff.indexOf("Then ask once, execute-now default"));
+    // Rework still copies no skill: the sync regenerates what is already there.
+    expect(handoff).toContain("Rework copies no skill: a unit whose entry fails `L6` returns `BLOCKED_DEPENDENCY` naming the steps a person runs.");
+    expect(handoff).not.toContain("skill add");
+  });
+
   it("names L5 as `/st-plan`'s advisory plan-size check, one that never blocks the handoff (REQ-FLOW-070)", () => {
     const handoff = clause(artifact(REWORK).parsed.body, "## 6. Plan handoff");
 

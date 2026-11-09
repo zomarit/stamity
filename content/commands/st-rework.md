@@ -255,7 +255,11 @@ Rework copies no skill: a unit whose entry fails `L6` returns `BLOCKED_DEPENDENC
 steps a person runs. One rework-only check runs beside it, labelled so the difference is visible:
 `R1`, every unit cites validated `file:line` evidence or is explicitly marked `unvalidated`. Apply
 `/st-plan`'s structural coverage pass and semantic coverage review at the same handoff; a
-structural pass alone does not resolve incompatible requirement and unit meanings.
+structural pass alone does not resolve incompatible requirement and unit meanings. Whenever `L6`
+passes with any skill named, rework then runs `npx --no stamity sync` (`${STAMITY:CLI} sync` where
+npm refuses) so every client's copy is regenerated. What `sync` wrote lands on held paths: the
+handoff's ask names those paths, and a person commits them before answering, so they are in before
+`/st-work` cuts any lane.
 
 A unit that fails a check goes back to the user to sharpen or defer. It never enters the plan
 in a state where the implementer would have to guess what "done" means.
