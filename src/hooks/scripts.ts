@@ -395,7 +395,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // Moved again 2026-11-09 by that unit's first fix round (review/18, sign-off S25), by what was measured: 333,878
   // bytes / 6,915 lines (copilot, generated), past both rows, because the held refusal now names the held list and says
   // so only when its line was written. 333,505 + 373 = 333,878 bytes; 6,910 + 5 = 6,915 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 333_878, lines: 6_915 },
+  // Moved again 2026-11-09 by plan 024's d-npm-ci-guard (REQ-FLOW-178, base 2b2cdb55), by what was measured: 338,691
+  // bytes / 7,014 lines (copilot, generated), past both rows, because the guard now reads a line's install verbs and
+  // refuses one whose node_modules is a link. 333,878 + 4,813 = 338,691 bytes; 6,915 + 99 = 7,014 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 338_691, lines: 7_014 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -4598,6 +4601,12 @@ export { AWAY_HELD_FILE, AWAY_MARKER_FILE } from "../mcp/env.ts";
  * switch is read for an ask alone. A marker the guard cannot look for (a fault
  * other than its absence) refuses the call.
  *
+ * An install verb (`npm ci`, `pnpm install`, a bare `yarn`, `bun add`, …) whose
+ * folder, read through the places and a `--prefix`, `-C`, `--dir` or `--cwd`,
+ * holds a `node_modules` that is a symbolic link is refused in every mode, never
+ * asked, naming the link's target (REQ-FLOW-178); that check catches its own
+ * faults, so none reaches the fail-closed refusal.
+ *
  * A command naming `gate preflight` that the guard allows writes
  * `{ "at": <ISO> }` to {@link PREFLIGHT_CANARY_FILE}, the pre-flight's proof
  * that hooks loaded. A call that is neither a shell call nor a GitHub MCP row's
@@ -4666,7 +4675,8 @@ export function buildPersonOnlyGuardScript(opts: {
       "",
       "The autonomy setting this copy was written for is the marker line below the",
       "banner: the acts it names in `runs` run unasked, and a deploying branch or act",
-      "asks (REQ-FLOW-137). A commit status or check run write is refused in every mode.",
+      "asks (REQ-FLOW-137). A commit status or check run write is refused in every mode,",
+      "and so is an install where node_modules is a link (REQ-FLOW-178).",
       `While nobody is watching (${NOBODY_WATCHING_VARIABLE} or ${AWAY_MARKER_FILE}),`,
       `an act it would ask about is refused and noted in ${AWAY_HELD_FILE}.`,
     ],
@@ -4681,7 +4691,7 @@ export function buildPersonOnlyGuardScript(opts: {
   )}
 ${AUTONOMY_MARKER}${json(baked)}
 
-${namedImport(["closeSync", "lstatSync", "mkdirSync", "openSync", "readFileSync", "readSync", "readdirSync", "readlinkSync", "statSync", "writeFileSync"], "node:fs")}
+${namedImport(["closeSync", "lstatSync", "mkdirSync", "openSync", "readFileSync", "readSync", "readdirSync", "readlinkSync", "realpathSync", "statSync", "writeFileSync"], "node:fs")}
 ${namedImport(["dirname", "isAbsolute", "join", "resolve", "sep", ...extra.path], "node:path")}
 ${extra.url}
 const STATE_SEGMENTS = ${json([RUNS_SEGMENTS[0]])};
@@ -5194,6 +5204,101 @@ function linesOf(name, tail) {
   return lines;
 }
 
+/** Each manager's verbs that write its node_modules, npm's own spellings among them; a bare yarn installs (REQ-FLOW-178). */
+const INSTALLS = new Map([
+  ["npm", "ci clean-install ic install-clean isntall-clean install i in ins inst insta instal isnt isnta isntal isntall add install-test it install-ci-test cit update up upgrade udpate uninstall un unlink remove rm r"],
+  ["pnpm", "install i add"],
+  ["yarn", " install add"],
+  ["bun", "install i add a"],
+].map(([name, verbs]) => [name, verbs.split(" ")]));
+
+/**
+ * The folders a line's install verbs write node_modules in (REQ-FLOW-178): an install read where a command runs, as
+ * the place reader reads one (a line's start, after an operator, an assignment or a wrapper with its options, and the
+ * lines a command runs), writes in the folder its --prefix, -C, --dir or --cwd names against each base, else in each
+ * base; a global install writes none here.
+ */
+function installFolders(line, bases, depth = 0) {
+  const { words, nested, docs } = shellWords(line);
+  const folders = [];
+  const inner = (text) => {
+    if (depth < 4 && typeof text === "string") folders.push(...installFolders(text, bases, depth + 1));
+  };
+  let shell = false;
+  for (let k = 0, at = true; k < words.length; k += 1) {
+    const word = words[k];
+    if (word === null) at = true;
+    if (word === null || !at || ASSIGNMENT.test(word) || KEYWORDS.has(word)) continue;
+    const name = programName(word);
+    const tail = [];
+    for (let j = k + 1; typeof words[j] === "string"; j += 1) tail.push(words[j]);
+    if (/\s/.test(word)) inner([word, ...tail].join(" "));
+    if (WRAPPERS.has(name)) {
+      const [short = "", long = "", lines = ""] = WRAPPERS.get(name);
+      while (typeof words[k + 1] === "string" && words[k + 1].startsWith("-")) {
+        const option = words[(k += 1)];
+        const key = option.split("=")[0];
+        if (option === "--") break;
+        if (lines.split(" ").includes(key)) inner(option.includes("=") ? option.slice(key.length + 1) : words[(k += 1)]);
+        else if (option.startsWith("--") ? !option.includes("=") && long.split(" ").includes(option) : short.includes(option.at(-1))) k += 1;
+      }
+      continue;
+    }
+    at = false;
+    if (SHELLS.has(name) || POWERSHELLS.has(name)) shell = true;
+    for (const text of linesOf(name, tail)) inner(text);
+    const verbs = INSTALLS.get(name);
+    if (verbs === undefined || !managerSubs(name, words, k + 1).some((sub) => verbs.includes(typeof words[sub] === "string" ? words[sub] : ""))) continue;
+    if (tail.some((option) => /^(?:-g|--global|--location=global)$/.test(option))) continue;
+    const named = [];
+    for (let j = 0; j < tail.length; j += 1) {
+      const hit = /^(?:--prefix|--dir|--cwd|-C)(?:=([\s\S]*))?$/.exec(tail[j]);
+      if (hit !== null) named.push(hit[1] ?? tail[(j += 1)]);
+    }
+    for (const base of bases) {
+      if (named.length === 0) folders.push(base);
+      for (const path of named) if (typeof path === "string") folders.push(resolve(base, path));
+    }
+  }
+  for (const text of nested) inner(text);
+  if (shell) for (const text of docs) inner(text);
+  return folders;
+}
+
+/**
+ * The refusal an install through a linked node_modules earns, in every mode (REQ-FLOW-178): it would write into the
+ * checkout the link points at. Null when no install folder's node_modules is a link; a fault of its own is null too,
+ * so this check never sends a call to the fail-closed refusal. A place the line cannot show (cd "$x") is not read.
+ */
+function linkedInstall(command, cwd) {
+  try {
+    if (!/npm|yarn|bun/i.test(command)) return null;
+    const bases = placesOf(command, cwd).flatMap((place) => (place !== null && place.work !== undefined ? [place.work] : []));
+    for (const folder of new Set(installFolders(command, bases))) {
+      const link = join(folder, "node_modules");
+      try {
+        if (!lstatSync(link).isSymbolicLink()) continue;
+      } catch {
+        continue;
+      }
+      let target = link;
+      try {
+        target = realpathSync(link);
+      } catch {
+        try {
+          target = resolve(folder, readlinkSync(link));
+        } catch {
+          // Unreadable: the link's own path names it.
+        }
+      }
+      return "This install would write through node_modules here, which is a link to " + target + ", another checkout's install. Run it in that checkout, or remove the link (the link only) and install here.";
+    }
+  } catch {
+    // The check's own fault: the call goes on to the verdicts.
+  }
+  return null;
+}
+
 /** The configuration files git merges for a git dir: see GUARD_GIT_INCLUDE_DEPTH_MAX in the engine. */
 function configFiles(dirs) {
   const env = process.env;
@@ -5702,6 +5807,9 @@ function decide() {
   const contexts = contextsOf(command, cwd, pwsh, root);
   // A place is a full verdict of each text: past 8 lines' worth the call is refused, not left to a timeout.
   if (command.length <= 65536 && contexts.length * texts.join("").length > 8 * 65536) throw Object.assign(new Error("readings"), { code: "MANAGER_READINGS_OVER_16" });
+  // An install through a linked node_modules, refused in every mode and never asked (REQ-FLOW-178).
+  const linked = linkedInstall(command, cwd);
+  if (linked !== null) return { ask: false, reason: linked };
   for (const ctx of contexts) {
     // Set, not spread: the context's getters read git only when the verdict asks.
     ctx.readings = readings;
