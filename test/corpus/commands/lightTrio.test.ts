@@ -1355,6 +1355,9 @@ describe("quick — the guardrails are the command", () => {
 
 // Added 2026-11-09 (plan 024 k-multipart-quick, REQ-FLOW-173): the case-shaped sentences this unit deletes sat in
 // st-quick and two rules, so their removal and the repair rule that replaces them are pinned beside quick's.
+// TEST CHANGE, justified (review/28, sign-off S30): the repair rule ships to user repositories, so its pins now read
+// the general words a user's eval set has (the case's input or prompt, its expected output or rubric) in place of
+// this repository's own case fields; the meaning pinned is unchanged.
 describe("rules — repairs restate the rule, not the case (REQ-FLOW-173)", () => {
   const AI_EVALS = "rules/stamity-ai-evals.md";
   const API_VERSIONING = "rules/stamity-api-versioning.md";
@@ -1365,9 +1368,9 @@ describe("rules — repairs restate the rule, not the case (REQ-FLOW-173)", () =
 
     expect(floor).toContain(
       "3. **A failing case is repaired at the rule it tests:** the fix restates the general behaviour the case " +
-        "measures, never only the sentence, value or example the case quotes; a repair whose new words appear in " +
-        "the case's Brief or transcript is fitted to the case, so rewrite it as the rule and check it against a " +
-        "sibling case; the Expected block does not move to meet the fix.",
+        "measures, never only the sentence, value or example the case quotes; a repair whose new words echo the " +
+        "case's input or prompt is fitted to the case, so rewrite it as the rule and check it against a sibling " +
+        "case; the expected output or rubric does not move to meet the fix.",
     );
     // The new item sits after item 2, and item 9 still points at the versioned-inputs item, now item 4.
     expect(floor.indexOf("2. **Cases are versioned in-repo artifacts.**")).toBeLessThan(
@@ -1377,13 +1380,13 @@ describe("rules — repairs restate the rule, not the case (REQ-FLOW-173)", () =
     expect(floor).toContain("9. **Results are artifacts, not chat.** A run records the set version, item 4's");
   });
 
-  it("gates a repair fitted to its case, and an Expected block moved to meet the fix", async () => {
+  it("gates a repair fitted to its case, and an expected output moved to meet the fix", async () => {
     const gates = section(await load(AI_EVALS), "Gates").replace(/\s+/g, " ");
 
     expect(gates).toContain(
-      "A repair whose new words echo the failing case's Brief or transcript, and that no sibling case was checked " +
-        "against, is fitted to the case and does not close the failure; neither does an Expected block moved to " +
-        "meet the fix.",
+      "A repair whose new words echo the failing case's input or prompt, and that no sibling case was checked " +
+        "against, is fitted to the case and does not close the failure; neither does an expected output or rubric " +
+        "moved to meet the fix.",
     );
   });
 

@@ -35,9 +35,9 @@ that survives a prompt edit.
    erases the regression it encoded.
 3. **A failing case is repaired at the rule it tests:** the fix restates the
    general behaviour the case measures, never only the sentence, value or
-   example the case quotes; a repair whose new words appear in the case's Brief
-   or transcript is fitted to the case, so rewrite it as the rule and check it
-   against a sibling case; the Expected block does not move to meet the fix.
+   example the case quotes; a repair whose new words echo the case's input or
+   prompt is fitted to the case, so rewrite it as the rule and check it against a
+   sibling case; the expected output or rubric does not move to meet the fix.
 4. **Everything that shapes the output is a versioned input.** Prompt text,
    model identifier, decoding settings, tool schemas, and the retrieval corpus.
    Changing any one of them re-runs the set: a prompt edit is a behaviour
@@ -77,9 +77,9 @@ that survives a prompt edit.
   sample from a sampling model is an anecdote with a decimal point.
 - Adversarial cases are re-run on every model change, not only on prompt
   changes: guardrail behaviour is a property of the pair, not of the prompt.
-- A repair whose new words echo the failing case's Brief or transcript, and
-  that no sibling case was checked against, is fitted to the case and does not
-  close the failure; neither does an Expected block moved to meet the fix.
+- A repair whose new words echo the failing case's input or prompt, and that
+  no sibling case was checked against, is fitted to the case and does not close
+  the failure; neither does an expected output or rubric moved to meet the fix.
 ```
 
 Scenario state — given to you as fact:
