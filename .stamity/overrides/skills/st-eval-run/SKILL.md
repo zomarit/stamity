@@ -135,7 +135,7 @@ set — every floor case, every adversarial case and every benign twin — and e
 moved case, on a candidate of that release; a run after a FAIL is composed, and
 only the rest of the set carries (the release line under Standing constraints).
 The session-native protocol uses two concurrent fresh children and five calibration
-judges before the 1,068 scenario/scoring-judge calls.
+judges before the 1,074 scenario/scoring-judge calls.
 
 Each scenario task contains exactly what the case seals and no more.
 
