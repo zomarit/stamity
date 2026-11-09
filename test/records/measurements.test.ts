@@ -505,19 +505,29 @@ describe("the restated figures are held to the artifacts they come from", () => 
   // a recorded exception is now refused, so the next passing release must reset the exception or the
   // page does not render. The PASS page is rendered with `null`, the one shape a PASS accepts, and
   // the refusal of a PASS beside the exception is asserted below. Every other assertion is unchanged.
+  //
+  // TEST CHANGE, justified: 2026-11-09, the 1.18.0 cut. The render placed run 39's and run 43's
+  // results at the tree's run-of-record path, so each was proved under that run's date: once
+  // `evals/run-of-record.json` named run 61 (2026-11-06), run 39 sat 36 days after its full measure,
+  // run 38, and the 30-day backstop refused it, which is the product rule working. The case aged
+  // with the tree. Each file is now placed at its own run's path, under the release that run was
+  // cut for, and its exception is keyed to that path, so its own chain decides the render whatever
+  // run the tree names. The 30-day rule is untouched and every assertion is unchanged.
   it("renders the status and the floor line a PASS or a FAIL results file states", () => {
-    const exception: RunOfRecordException = {
-      run: RUN_OF_RECORD_PATH,
-      text: "A test exception for the run of record.",
+    const text = "A test exception for the run of record.";
+    const releaseOf = {
+      "2026-10-01-run-39": "1.11.0",
+      "2026-10-08-run-43": "1.12.0",
     };
-    const render = (results: string, recorded: RunOfRecordException | null = exception): string => {
+    const pathOf = (id: string): string => `evals/runs/${id}/RESULTS.md`;
+    const render = (id: keyof typeof releaseOf, recorded: RunOfRecordException | null = { run: pathOf(id), text }): string => {
       const root = fixture({
         "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
       });
       // TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases): the page reads the pinned
       // snapshot, not the newest file, so the scratch root writes its snapshot at the pinned date.
       writeMeasurementSnapshot(root, PINNED_DATE);
-      placeRenderInputs(root, results);
+      placeRenderInputs(root, readResults(id), { path: pathOf(id), release: releaseOf[id] });
       try {
         return renderMeasurements(root, recorded);
       } finally {
@@ -527,19 +537,17 @@ describe("the restated figures are held to the artifacts they come from", () => 
     const golden = (page: string): string =>
       page.split("\n").find((line) => line.startsWith("- Golden rubric pass rate")) ?? "";
 
-    expect(() => render(readResults("2026-10-01-run-39"))).toThrow(
-      /PASS and an exception is still recorded/,
-    );
+    expect(() => render("2026-10-01-run-39")).toThrow(/PASS and an exception is still recorded/);
     // TEST CHANGE, justified: 2026-10-11, the 1.14.0 cut, the review of unit c7-run-of-record (W-1).
     // Run 39 is composed with run 38, so its PASS now reads "PASS as composed"; this pinned the bare
     // "PASS, three samples per case.", which is refused beside it. A full run's bare PASS is held
     // on run 24 in "says PASS as composed of a composed PASS, and the bare status otherwise".
-    const passPage = render(readResults("2026-10-01-run-39"), null);
+    const passPage = render("2026-10-01-run-39", null);
     expect(passPage).toContain("PASS as composed, three samples per case.");
     expect(passPage).not.toContain("PASS, three samples per case.");
     expect(golden(passPage)).toContain("; every floor case passed, 23/23.");
 
-    const failPage = render(readResults("2026-10-08-run-43"));
+    const failPage = render("2026-10-08-run-43");
     expect(failPage).toContain("FAIL, three samples per case.");
     expect(failPage).not.toContain("PASS, three samples per case.");
     expect(failPage).not.toContain("PASS as composed");
@@ -547,8 +555,8 @@ describe("the restated figures are held to the artifacts they come from", () => 
     expect(golden(failPage)).not.toContain("every floor case passed");
 
     // The exception paragraph follows a FAIL only, and a FAIL with no exception is refused.
-    expect(failPage).toContain(`FAIL, three samples per case.\n\n${exception.text}\n`);
-    expect(passPage).not.toContain(exception.text);
+    expect(failPage).toContain(`FAIL, three samples per case.\n\n${text}\n`);
+    expect(passPage).not.toContain(text);
     const failResults = readResults("2026-10-08-run-43");
     const passResults = readResults("2026-10-01-run-39");
     expect(() => runOfRecordVerdict(failResults, null)).toThrow(EngineError);
@@ -582,18 +590,28 @@ describe("the restated figures are held to the artifacts they come from", () => 
   // TEST CHANGE, justified: 2026-10-08, unit c2-run-of-record. A PASS beside a recorded exception is
   // now refused (the case above), so the render passes the exception beside the FAIL file only and
   // `null` beside the PASS one. Every assertion is unchanged.
+  //
+  // TEST CHANGE, justified: 2026-11-09, the 1.18.0 cut, as in the case above: each results file is
+  // placed at its own run's path, under the release that run was cut for, with the exception keyed
+  // to that path, so run 39 is no longer proved under run 61's date, 36 days after its full measure,
+  // which the 30-day backstop refuses. The rule is untouched and every assertion is unchanged.
   it("says on each metric line whether that metric missed its declared threshold", () => {
-    const exception: RunOfRecordException = { run: RUN_OF_RECORD_PATH, text: "A test exception." };
-    const render = (results: string): string => {
+    const releaseOf = {
+      "2026-10-01-run-39": "1.11.0",
+      "2026-10-08-run-43": "1.12.0",
+    };
+    const render = (id: keyof typeof releaseOf): string => {
+      const path = `evals/runs/${id}/RESULTS.md`;
+      const results = readResults(id);
       const root = fixture({
         "2026-01-02_release-2.0.0": { "record.md": record({}), "ledger.jsonl": CLOSED_LEDGER },
       });
       // TEST CHANGE, justified (2026-10-14, unit r2b-measurements-cases): the page reads the pinned
       // snapshot, not the newest file, so the scratch root writes its snapshot at the pinned date.
       writeMeasurementSnapshot(root, PINNED_DATE);
-      placeRenderInputs(root, results);
+      placeRenderInputs(root, results, { path, release: releaseOf[id] });
       try {
-        return renderMeasurements(root, runStatus(results) === "PASS" ? null : exception);
+        return renderMeasurements(root, runStatus(results) === "PASS" ? null : { run: path, text: "A test exception." });
       } finally {
         rmSync(root, { recursive: true, force: true });
       }
@@ -601,7 +619,7 @@ describe("the restated figures are held to the artifacts they come from", () => 
     const metricLine = (page: string, metric: string): string =>
       page.split("\n").find((line) => line.startsWith(`- ${metric} `)) ?? "";
 
-    const failPage = render(readResults("2026-10-08-run-43"));
+    const failPage = render("2026-10-08-run-43");
     expect(metricLine(failPage, "Adversarial guardrail hold rate")).toBe(
       "- Adversarial guardrail hold rate **0.944** (17/18); NOT met (threshold = 1.0, zero break).",
     );
@@ -614,7 +632,7 @@ describe("the restated figures are held to the artifacts they come from", () => 
     // run 43's four figures whatever results file it rendered, and the pin recorded that output. The
     // figures are now read off the rendered file's § 5 rows, so the pin states run 39's own figure.
     // The assertion it makes, a met row's line carries no "NOT met", is unchanged.
-    const passPage = render(readResults("2026-10-01-run-39"));
+    const passPage = render("2026-10-01-run-39");
     expect(metricLine(passPage, "Adversarial guardrail hold rate")).toBe(
       "- Adversarial guardrail hold rate **1.000** (18/18).",
     );
@@ -1234,10 +1252,26 @@ describe("the page says why its run of record happened", () => {
       expect(page).toContain(`\n${quoted(run, results).join("\n")}\n`);
     }
 
-    const composition = compositionOf(results);
-    const moved = composition?.remeasured.some(({ why }) => why === "case file bytes moved") ?? false;
-    if (composition !== null && moved) {
-      expect(page).toContain(`\n${changed(runNumber(composition.prior), run).join("\n")}\n`);
+    // TEST CHANGE, justified: 2026-11-09, the 1.18.0 cut. This read the run of record's own
+    // composition only and expected its one sentence on the two lines `changed` builds, the shape a
+    // one-link chain renders. Since plan 023 file 1 (unit release-speed, W-3) the page states one
+    // sentence for every link on the chain that moved a case file, newest first, each ending in a
+    // full stop but the last, which carries the dated-paragraphs line; run 61, composed back through
+    // runs 59 and 57 to run 56, is the first tree run of record of that shape, so the case refused a
+    // true page. The links are now walked off the chain's own results files, and a one-link chain
+    // expects exactly the lines it did before.
+    const chain = compositionChain(runId(RUN_OF_RECORD_PATH));
+    const movedLinks = chain.slice(0, -1).flatMap((id, at) =>
+      compositionOf(readResults(id))?.remeasured.some(({ why }) => why === "case file bytes moved") === true
+        ? [[runNumber(chain[at + 1] ?? ""), runNumber(id)] as const]
+        : [],
+    );
+    const last = movedLinks.at(-1);
+    if (last !== undefined) {
+      const earlier = movedLinks
+        .slice(0, -1)
+        .map(([prior, later]) => `A case file that moved between run ${prior} and run ${later} was changed after run ${prior}'s scores were known.`);
+      expect(page).toContain(`\n${[...earlier, ...changed(...last)].join("\n")}\n`);
     } else {
       expect(page).not.toContain("was changed after");
     }
