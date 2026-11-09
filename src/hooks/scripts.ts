@@ -398,7 +398,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // Moved again 2026-11-09 by plan 024's d-npm-ci-guard (REQ-FLOW-178, base 2b2cdb55), by what was measured: 338,691
   // bytes / 7,014 lines (copilot, generated), past both rows, because the guard now reads a line's install verbs and
   // refuses one whose node_modules is a link. 333,878 + 4,813 = 338,691 bytes; 6,915 + 99 = 7,014 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 338_691, lines: 7_014 },
+  // Moved again 2026-11-09 by that unit's widening (sign-off S47), by what was measured: 339,154 bytes / 7,021 lines
+  // (copilot, generated), past both rows, because every package-manager verb that writes into node_modules is now
+  // read. 338,691 + 463 = 339,154 bytes; 7,014 + 7 = 7,021 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 339_154, lines: 7_021 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -5204,12 +5207,15 @@ function linesOf(name, tail) {
   return lines;
 }
 
-/** Each manager's verbs that write its node_modules, npm's own spellings among them; a bare yarn installs (REQ-FLOW-178). */
+/**
+ * Each manager's verbs that write into its node_modules, each manager's own spellings among them; a bare yarn
+ * installs, and npm's audit writes with fix (REQ-FLOW-178, sign-off S47).
+ */
 const INSTALLS = new Map([
-  ["npm", "ci clean-install ic install-clean isntall-clean install i in ins inst insta instal isnt isnta isntal isntall add install-test it install-ci-test cit update up upgrade udpate uninstall un unlink remove rm r"],
-  ["pnpm", "install i add"],
-  ["yarn", " install add"],
-  ["bun", "install i add a"],
+  ["npm", "ci clean-install ic install-clean isntall-clean install i in ins inst insta instal isnt isnta isntal isntall add install-test it install-ci-test cit update up upgrade udpate uninstall un unlink remove rm r link ln dedupe ddp prune rebuild rb"],
+  ["pnpm", "install i add install-test it remove rm uninstall un update up upgrade link ln unlink dedupe prune rebuild rb fetch"],
+  ["yarn", " install add remove upgrade up upgrade-interactive link unlink dedupe rebuild autoclean"],
+  ["bun", "install i add a remove rm update link unlink"],
 ].map(([name, verbs]) => [name, verbs.split(" ")]));
 
 /**
@@ -5248,7 +5254,11 @@ function installFolders(line, bases, depth = 0) {
     if (SHELLS.has(name) || POWERSHELLS.has(name)) shell = true;
     for (const text of linesOf(name, tail)) inner(text);
     const verbs = INSTALLS.get(name);
-    if (verbs === undefined || !managerSubs(name, words, k + 1).some((sub) => verbs.includes(typeof words[sub] === "string" ? words[sub] : ""))) continue;
+    const writes = (sub) => {
+      const verb = typeof words[sub] === "string" ? words[sub] : "";
+      return verbs.includes(verb) || (name === "npm" && verb === "audit" && tail.slice(sub - k).includes("fix"));
+    };
+    if (verbs === undefined || !managerSubs(name, words, k + 1).some(writes)) continue;
     if (tail.some((option) => /^(?:-g|--global|--location=global)$/.test(option))) continue;
     const named = [];
     for (let j = 0; j < tail.length; j += 1) {
