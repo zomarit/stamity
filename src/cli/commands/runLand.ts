@@ -46,10 +46,12 @@ import {
 } from "../../runs/landEvidence.ts";
 import { MORNING_EMPTY, MORNING_FILE, MORNING_REFUSED, screenOutbound } from "../../runs/morning.ts";
 import { bodyRun, endsWithRunMarker, PR_RECORD_FILE, prRecordRefusal, resolveRepo, runMarker } from "../../runs/pullRequest.ts";
+import { applyRunCleanup, planRunCleanup } from "../../runs/runCleanup.ts";
 import { parseStateBlock, requestMarker, reviewToolVerdict, UNREAD_EDITOR, withoutRequestMarkers, type ReviewToolFacts, type ReviewToolVerdict } from "../../runs/reviewTool.ts";
 import { gitProgramFor } from "../../shared/programPath.ts";
 import { EngineError } from "../../types/errors.ts";
 import type { ReviewToolConfig } from "../../types/manifest.ts";
+import type { WorktreeGitRunner } from "../../worktree/git.ts";
 import { classifyRange, namePaths, type RangeFacts } from "../engine/changeRange.ts";
 import {
   ghApi,
@@ -72,7 +74,9 @@ import { sanitizeLabel } from "../kit/prompts.ts";
 
 /**
  * `stamity run land` (REQ-FLOW-132, REQ-FLOW-133): merge the run's own pull request, or fast-forward the default
- * branch to its head, when the evidence holds; else ask, or refuse naming every reason. Registered by `./run.ts`,
+ * branch to its head, when the evidence holds; else ask, or refuse naming every reason. A session's land that ends
+ * `landed` or `already-landed` then cleans up what the run started ({@link cleanUpRun}, REQ-FLOW-176); a job cleans
+ * up nothing. Registered by `./run.ts`,
  * from which it imports nothing (a runtime cycle otherwise): the git surface re-check, the record reads and the
  * capped read are its own, over the same modules `run.ts` uses.
  *
@@ -204,6 +208,8 @@ interface LandResult {
   asks?: { reason: string; reasons: string[]; act: string; head: string; pending?: true };
   /** review/103, review/110: the asks outcome the person approved with --approved <sha>, where the verb landed over one. */
   approved?: { sha: string; reason: string; reasons: string[]; act: string };
+  /** REQ-FLOW-176: a session's clean-up after `landed` or `already-landed`; with `--dry-run`, `removed` is what would go. */
+  cleanup?: { removed: string[]; kept: { path: string; reason: string }[] };
   notDone: string[];
 }
 
@@ -793,6 +799,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     if (decision.outcome === "already-landed") {
       result.outcome = "already-landed";
       if (!ctx.dryRun && job === null) await noteLanded(ctx, cwd, recordRel, number, sha, fastForward && !pr.merged ? "fast-forwarded" : "merged", result);
+      if (job === null) await cleanUpRun(ctx, { top, cwd, recordRel, run, unattended }, result, lines);
       return finish();
     }
     if (decision.outcome === "refused" && decision.pending && job !== null) {
@@ -925,6 +932,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
     result.outcome = "landed";
     const how = fastForward ? "fast-forwarded" : "merged";
     if (job === null) await noteLanded(ctx, cwd, recordRel, number, sha, approval === null ? how : `${how} (approved by the person for ${approval.sha})`, result);
+    if (job === null) await cleanUpRun(ctx, { top, cwd, recordRel, run, unattended }, result, lines);
     if (approval !== null) result.approved = approval;
     return finish();
   } catch (error) {
@@ -1280,5 +1288,47 @@ async function noteLanded(ctx: CliContext, cwd: string, recordRel: string, numbe
     await ctx.engine.merge.atomicWrite.atomicWriteFile(path, text, { boundaryDir: cwd });
   } catch (cause) {
     result.notDone.push(`record line not written: ${recordRel} (${cause instanceof Error ? cause.message : "the write failed"})`);
+  }
+}
+
+/**
+ * REQ-FLOW-176: a session's land, once the run is landed, cleans up what the run started (`../../runs/runCleanup.ts`):
+ * its tagged clean lanes, its `stamity/<run-id>` branch through `git branch -d`, a tracking ref origin no longer has.
+ * Git runs as the verb's other writes do, unattended's narrower environment included. The JSON's `cleanup` names what
+ * went and what stayed and why; each act is one `- <UTC> cleanup: <act>` record line; with `--dry-run` nothing is
+ * acted on. A clean-up that does not read is one `notDone` line, and the landing stands.
+ */
+async function cleanUpRun(
+  ctx: CliContext,
+  at: { top: string; cwd: string; recordRel: string; run: string; unattended: boolean },
+  result: LandResult,
+  lines: string[],
+): Promise<void> {
+  const git: WorktreeGitRunner = async ({ args, cwd, stdin }) => {
+    const read = await gitWrite(cwd, args, { ...(at.unattended ? { unattended: true } : {}), ...(stdin === undefined ? {} : { input: stdin }) });
+    return { status: read.code, stdout: read.stdout, stderr: read.stderr, ...(read.keptFromGit === true ? { keptFromGit: true as const } : {}) };
+  };
+  try {
+    const plan = await planRunCleanup(at.top, at.run, git);
+    const done = await applyRunCleanup(plan, { dryRun: ctx.dryRun, rootDir: at.top, git });
+    const kept = done.kept.map((entry) => ({ path: entry.path, reason: sanitizeLabel(entry.reason) }));
+    result.cleanup = { removed: done.removed, kept };
+    lines.push(...done.removed.map((entry) => `cleanup: ${ctx.dryRun ? "would remove" : "removed"} ${entry}`), ...kept.map((entry) => `cleanup: kept ${entry.path} (${entry.reason})`));
+    if (ctx.dryRun || done.acts.length === 0) return;
+    const path = join(at.cwd, at.recordRel);
+    const read = readCapped(path, READ_MAX_BYTES);
+    if (read === null || read.truncated) {
+      result.notDone.push(`cleanup lines not written: ${at.recordRel} could not be read whole`);
+      return;
+    }
+    const stamp = new Date().toISOString();
+    const added = done.acts.map((act) => `- ${stamp} cleanup: ${act}\n`).join("");
+    try {
+      await ctx.engine.merge.atomicWrite.atomicWriteFile(path, `${read.text}${read.text === "" || read.text.endsWith("\n") ? "" : "\n"}${added}`, { boundaryDir: at.cwd });
+    } catch (cause) {
+      result.notDone.push(`cleanup lines not written: ${at.recordRel} (${cause instanceof Error ? cause.message : "the write failed"})`);
+    }
+  } catch (cause) {
+    result.notDone.push(`clean-up not done: ${cause instanceof Error ? cause.message.split(/\r?\n/)[0] : "it did not run"}`);
   }
 }

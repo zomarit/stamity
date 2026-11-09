@@ -21,6 +21,7 @@ import { surfaceRecord } from "../../../src/runs/gitSurface.ts";
 import { insideAny } from "../../../src/runs/landEvidence.ts";
 import { prRecordText } from "../../../src/runs/pullRequest.ts";
 import { requestMarker } from "../../../src/runs/reviewTool.ts";
+import { createWorktreeReceipt, writeWorktreeReceipt } from "../../../src/worktree/receipt.ts";
 import { EngineError } from "../../../src/types/errors.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { NO_GIT_CONFIG } from "../../support/repoFixtures.ts";
@@ -422,6 +423,68 @@ describe("stamity run land", () => {
     const patched = gh.calls.find((call) => call.method === "PATCH")?.body as { body: string };
     expect(patched.body).toMatch(new RegExp(`^The list\\.\\n\\nevidence checked at [^\\n]+\\n\\n${MARKER}$`));
   });
+
+  describe("a landed run's clean-up (d-run-cleanup, REQ-FLOW-176)", () => {
+    it("removes the run's tagged clean lane, keeps its branch the checkout has, and records the act", async () => {
+      const { repo } = await seed({ files: { ".gitignore": "captures/\n" } });
+      const kept = await taggedLane(repo, "p-kept", RUN);
+      await mkdir(join(kept, "captures"), { recursive: true });
+      await writeFile(join(kept, "captures", "run.log"), "a capture\n");
+      const gone = await taggedLane(repo, "p-gone", RUN);
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.code).toBe(0);
+      expect(result.doc).toMatchObject({
+        outcome: "landed",
+        notDone: [],
+        cleanup: {
+          removed: [gone],
+          kept: [
+            { path: kept, reason: "it holds ignored files: captures/" },
+            { path: RUN_BRANCH, reason: `checked out at ${repo}` },
+          ],
+        },
+      });
+      expect(existsSync(gone)).toBe(false);
+      expect(existsSync(join(kept, "captures", "run.log"))).toBe(true);
+      expect((await record(repo)).split("\n").filter((line) => line.includes(" cleanup: "))).toEqual([expect.stringMatching(/^- \S+Z cleanup: removed lane p-gone$/)]);
+    });
+
+    it("cleans up on a pull request already merged at the head too", async () => {
+      const { repo, head } = await seed();
+      const gone = await taggedLane(repo, "p-after", RUN);
+      route("GET repos/o/r/pulls/7", pull(head, { state: "closed", merged: true }));
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "already-landed", cleanup: { removed: [gone] } });
+      expect(existsSync(gone)).toBe(false);
+    });
+
+    it("cleans up nothing on a land that refuses", async () => {
+      const { repo } = await seed();
+      const lane = await taggedLane(repo, "p-stays", RUN);
+      gh.threads = [threadsPage([thread(false, null, ["Bot", "codex"])])];
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.doc).toMatchObject({ outcome: "refused" });
+      expect(result.doc).not.toHaveProperty("cleanup");
+      expect(existsSync(lane)).toBe(true);
+    });
+  });
+
+  /** A lane in the seed's farm on its own branch, its receipt tagged with `run`, as `worktree setup --run` leaves one. */
+  async function taggedLane(repo: string, name: string, tag: string): Promise<string> {
+    const path = join(dirname(repo), ".stamity-worktrees", "repo", name);
+    git(repo, ["worktree", "add", "-q", "-b", `lane/${name}`, path]);
+    await writeWorktreeReceipt(
+      git(path, ["rev-parse", "--absolute-git-dir"]),
+      createWorktreeReceipt({ createdAt: "2026-11-09T00:00:00.000Z", engineVersion: "0.0.0-test", run: tag, worktree: { path, branch: `lane/${name}`, head: git(path, ["rev-parse", "HEAD"]) }, entries: [] }),
+    );
+    return path;
+  }
 
   it("refuses a required context only a commit status carries, naming that statuses do not count", async () => {
     const { repo, head } = await seed();
@@ -2910,6 +2973,19 @@ describe("stamity run land", () => {
     const lastBody = (): string | undefined => (gh.calls.findLast((call) => call.method === "PATCH")?.body as { body: string } | undefined)?.body;
     const PATCHED = "PATCH repos/o/r/pulls/7";
     const writes = (): string[] => gh.calls.filter((call) => call.kind !== "api" ? !["threads", "editors"].includes(call.kind) : call.method !== "GET").map((call) => (call.kind === "api" ? `${call.method ?? ""} ${call.path ?? ""}` : call.kind));
+
+    // d-run-cleanup (REQ-FLOW-176): the clean-up is a session's; a job's fresh checkout started nothing to remove.
+    it("cleans up nothing when it lands, a lane the run's receipt tags included", async () => {
+      const { repo } = await seedJob();
+      const lane = await taggedLane(repo, "p-job", RUN);
+
+      const result = await run(repo, LANDS);
+
+      expect(result.doc).toMatchObject({ outcome: "landed" });
+      expect(result.doc).not.toHaveProperty("cleanup");
+      expect(existsSync(lane)).toBe(true);
+      expect(git(repo, ["branch", "--list", RUN_BRANCH])).toContain(RUN_BRANCH);
+    });
 
     it("merges on the evidence with the job's token as viewer, reading nothing a session left under the git directory", async () => {
       const { repo, head } = await seedJob();

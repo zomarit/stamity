@@ -530,6 +530,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // TEST CHANGE, justified (plan 024 file 2, unit d-gc, REQ-FLOW-177): `stamity gc`'s engine, over the wave-1 run
   // layout and the wave-5 worktree inventory and git seam, reached by the wave-14 `gc` verb. A new row, no wave moved.
   "src/runs/gc.ts": { unit: "d-gc", wave: 6 },
+  // A landed run's clean-up (REQ-FLOW-176): over the wave-5 worktree lane's inventory, git seam and name lock, the
+  // wave-4 receipt and policy, and the wave-4 pre-flight's item shape; reached by the wave-14 land verb and the wave-15
+  // run verb.
+  "src/runs/runCleanup.ts": { unit: "d-run-cleanup", wave: 6 },
   // Key-level ownership of `.claude/settings.json`: pure planning plus the
   // merge writer and the reclaim reducer, over the MCP merge lane (wave 4,
   // whose read and serialise helpers it shares) and the safe-write lane (wave

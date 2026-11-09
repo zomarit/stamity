@@ -561,6 +561,39 @@ describe("withBlastRadius (u9, REQ-FLOW-127)", () => {
   });
 });
 
+describe("the closing line (d-run-cleanup, REQ-FLOW-176)", () => {
+  const lead = `Run \`${RUN}\`, attended. Its record: \`.stamity/runs/${RUN}/record.md\`.`;
+
+  it("puts `Closes <owner>/<repo>#<n>` just before the marker of a body made from the list", () => {
+    const lines = prBodyFrom(morning(), RUN, { closes: "o/r#42" }).split("\n");
+
+    expect(lines.slice(-3)).toEqual(["Closes o/r#42", "", runMarker(RUN)]);
+    expect(prBodyFrom(morning(), RUN)).not.toContain("Closes ");
+  });
+
+  it("keeps the closing line and the marker when the body is cut", () => {
+    const rows = Array.from({ length: 4_000 }, (_, at) => `- decision row ${at} ${"x".repeat(40)}`).join("\n");
+    const body = prBodyFrom(morning({ sections: { Decisions: rows } }), RUN, { maxChars: 5_000, closes: "o/r#42" });
+
+    expect(body.length).toBeLessThanOrEqual(5_000);
+    expect(body.split("\n").slice(-3)).toEqual(["Closes o/r#42", "", runMarker(RUN)]);
+  });
+
+  it("puts it last in a fixed body with no section, and before the marker with one", () => {
+    expect(withBlastRadius(lead, RUN, null, { closes: "o/r#42" })).toBe(`${lead}\n\nCloses o/r#42`);
+    expect(withBlastRadius(lead, RUN, "## Blast radius\n\n- contained", { closes: "o/r#42" })).toBe(
+      `${lead}\n\n## Blast radius\n\n- contained\n\nCloses o/r#42\n\n${runMarker(RUN)}`,
+    );
+  });
+
+  it("refuses a value that is not one owner/repo#<number>, so no other text reaches the body", () => {
+    for (const closes of ["o/r#42 -->", "o/r#0", "o/r", "o/r#42\nmore", "#42"]) {
+      expect(() => prBodyFrom(morning(), RUN, { closes })).toThrow(/is not an owner\/repo#<number> item/);
+      expect(() => withBlastRadius(lead, RUN, null, { closes })).toThrow(/is not an owner\/repo#<number> item/);
+    }
+  });
+});
+
 describe("parseAnswers", () => {
   const questions: MorningQuestion[] = [
     { id: "Q1", kind: "qa", question: "a?", options: ["yes", "no"], default: 1, source: "s" },

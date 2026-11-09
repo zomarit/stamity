@@ -64,6 +64,8 @@ export const OUTBOUND_LINE_PAST_CAP = "line-past-cap";
 export const MORNING_QA_MAX = 3;
 /** The run record's section a pull request body carries after the list (REQ-FLOW-127), as its heading names it. */
 export const BLAST_RADIUS = "Blast radius";
+/** An issue a body may close (REQ-FLOW-176): `owner/repo#n`, nothing that could open or close a comment or a line. */
+const CLOSES_REF = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+#[1-9][0-9]{0,8}$/;
 
 export type MorningKind = "qa" | "decision" | "prerequisite" | "held";
 
@@ -399,16 +401,41 @@ const RECORD_POINTER = "the whole `## Blast radius` section is the run's `record
  * `## Blast radius` section, then `<!-- stamity:run <run-id> -->` last: inside
  * `maxChars` ({@link PR_BODY_MAX_CHARS} by default), the section cut to its
  * first rows as {@link prBodyFrom} cuts one, so the marker stays last. With no
- * section, `lead` is returned unchanged. Not screened here, as `prBodyFrom` is not.
+ * section, `lead` is returned unchanged. `opts.closes` puts `Closes <owner>/<repo>#<n>`
+ * last before the marker, or last in `lead` when there is no section (REQ-FLOW-176).
+ * Not screened here, as `prBodyFrom` is not.
  *
- * Throws when `runId` is not a run id or `maxChars` is under {@link PR_BODY_MIN_CHARS}.
+ * Throws when `runId` is not a run id, `opts.closes` is not an `owner/repo#<n>`, or `maxChars` is under
+ * {@link PR_BODY_MIN_CHARS}.
  */
-export function withBlastRadius(lead: string, runId: string, section: string | null, opts: { maxChars?: number } = {}): string {
+export function withBlastRadius(lead: string, runId: string, section: string | null, opts: { maxChars?: number; closes?: string } = {}): string {
   runRelPath(runId); // throws on a value that is not a run id, so no text can close the marker early
   const maxChars = checkedMaxChars(opts.maxChars);
+  const closing = closingLine(opts.closes);
   const rows = blastRadiusRows(section);
-  if (rows === null) return lead;
-  return fitBody(lead, [rows], runMarker(runId), `_Cut to fit ${maxChars} characters: ${RECORD_POINTER}._`, maxChars, 1);
+  if (rows === null) return closing === null ? lead : `${lead.trimEnd()}\n\n${closing}`;
+  return fitBody(lead, [rows], withClosing(closing, runMarker(runId)), `_Cut to fit ${maxChars} characters: ${RECORD_POINTER}._`, maxChars, 1);
+}
+
+/**
+ * `Closes <owner>/<repo>#<n>` for `closes` (REQ-FLOW-176), the closing keyword GitHub reads when the pull request merges
+ * into the default branch; `null` with none. The caller has already held the item against origin's repository; this
+ * only refuses a value of any other shape, so no other text reaches the body through it.
+ */
+function closingLine(closes: string | undefined): string | null {
+  if (closes === undefined) return null;
+  if (!CLOSES_REF.test(closes)) {
+    throw new EngineError(`${JSON.stringify(closes)} is not an owner/repo#<number> item`, {
+      code: "VALIDATION_ERROR",
+      why: "the closing line names one issue, and no other text reaches the body through it",
+    });
+  }
+  return `Closes ${closes}`;
+}
+
+/** The closing line, then the marker, so the marker stays last; the marker alone with none. */
+function withClosing(closing: string | null, marker: string): string {
+  return closing === null ? marker : `${closing}\n\n${marker}`;
 }
 
 /** `maxChars` as given, else {@link PR_BODY_MAX_CHARS}; throws when it is under {@link PR_BODY_MIN_CHARS}. */
@@ -429,7 +456,8 @@ function checkedMaxChars(given: number | undefined): number {
  * section with no rows reading `none`), the inferred prerequisite rows the
  * section does not already name, the questions with their option numbers,
  * the run record's `## Blast radius` section when `opts.blastRadius` carries
- * one ({@link blastRadiusSection}'s text), and
+ * one ({@link blastRadiusSection}'s text), `Closes <owner>/<repo>#<n>` when
+ * `opts.closes` names the run's item (REQ-FLOW-176), and
  * `<!-- stamity:run <run-id> -->` as the last line, so a later run recognises
  * its own body (u4's marker rule, u4's {@link runMarker}). Control and bidi
  * characters and the Unicode tag block are dropped.
@@ -444,11 +472,12 @@ function checkedMaxChars(given: number | undefined): number {
  * `## Not done:` body naming its problems, so a run still hands off. The body
  * is not screened here: the caller runs {@link screenOutbound} on it.
  *
- * Throws when `runId` is not a run id or `maxChars` is under {@link PR_BODY_MIN_CHARS}.
+ * Throws when `runId` is not a run id, `opts.closes` is not an `owner/repo#<n>`, or `maxChars` is under
+ * {@link PR_BODY_MIN_CHARS}.
  */
-export function prBodyFrom(text: string, runId: string, opts: { inferred?: readonly PrereqRow[]; maxChars?: number; blastRadius?: string } = {}): string {
+export function prBodyFrom(text: string, runId: string, opts: { inferred?: readonly PrereqRow[]; maxChars?: number; blastRadius?: string; closes?: string } = {}): string {
   const path = runRelPath(runId, MORNING_FILE); // throws on a value that is not a run id, so no text can close the marker early
-  const marker = runMarker(runId);
+  const marker = withClosing(closingLine(opts.closes), runMarker(runId));
   const maxChars = checkedMaxChars(opts.maxChars);
   const parsed = parseMorning(text);
   const problems = !parsed.ok

@@ -14,6 +14,7 @@ import { blastRadiusSection, MORNING_FILE, prBodyFrom, screenOutbound, withBlast
 import { overviewFrom } from "../../runs/overview.ts";
 import { inferPrerequisites, type PrereqRow } from "../../runs/prerequisites.ts";
 import { ensureDraftPr, HOST_NAME, PR_RECORD_FILE, prRecordText, resolveRepo, runMarker, type PrOutcome } from "../../runs/pullRequest.ts";
+import { closingRef } from "../../runs/runCleanup.ts";
 import { parseRunContract } from "../../runs/runContract.ts";
 import { parseGitDefaultBranch } from "../../workspace/git.ts";
 import { ghApi, ghRequestReview, REVIEWER_LOGIN, TEAM_SLUG } from "../engine/ghRunner.ts";
@@ -2705,7 +2706,9 @@ interface ListSource {
  * `prBodyFrom`, else appended to the fixed body by `withBlastRadius`; on the
  * walk it is the walk's own record's, else the resumed run's, so a walk with
  * no new approval keeps the overnight one. A record with none keeps the
- * body as it was.
+ * body as it was. Where the marked run's `contract.yml` names an issue in
+ * origin's repository, `Closes <owner>/<repo>#<n>` stands just before the
+ * marker, so the merge closes it (REQ-FLOW-176, {@link closesFor}).
  */
 async function draftPr(ctx: CliContext, at: PrInputs): Promise<PrStep> {
   const env: NodeJS.ProcessEnv = { ...ctx.app.runtime.env };
@@ -2741,7 +2744,8 @@ async function draftPr(ctx: CliContext, at: PrInputs): Promise<PrStep> {
     } else {
       marked = source.run;
       inferred = inferredFrom(at.top, source.base);
-      const made = prBodyFrom(morning.text, source.run, { inferred, ...(blastRadius === null ? {} : { blastRadius }) });
+      const closes = closesFor(ctx, at.cwd, source.run, repo);
+      const made = prBodyFrom(morning.text, source.run, { inferred, ...(blastRadius === null ? {} : { blastRadius }), ...(closes === null ? {} : { closes }) });
       const screen = screenOutbound(made, "pr-body");
       body = made;
       listed = true;
@@ -2753,7 +2757,10 @@ async function draftPr(ctx: CliContext, at: PrInputs): Promise<PrStep> {
       }
     }
   }
-  if (!listed) body = withBlastRadius(body, marked, blastRadius);
+  if (!listed) {
+    const closes = closesFor(ctx, at.cwd, marked, repo);
+    body = withBlastRadius(body, marked, blastRadius, closes === null ? {} : { closes });
+  }
   const gh = (request: Parameters<typeof ghApi>[0]) => ghApi(request, { cwd: at.top, env });
   const outcome: PrOutcome = await ensureDraftPr(gh, { host: repo.host, owner: repo.owner, repo: repo.repo, head: at.branch, base: target, title, body, runId: marked });
   if ("notDone" in outcome) return { pr: null, inferred, notDone: [...notDone, outcome.notDone] };
@@ -2764,6 +2771,18 @@ async function draftPr(ctx: CliContext, at: PrInputs): Promise<PrStep> {
     if (unrecorded !== null) notDone.push(unrecorded);
   }
   return { pr: { number: outcome.number, url: outcome.url, how: outcome.how }, inferred, notDone, repo };
+}
+
+/**
+ * REQ-FLOW-176: the issue `run`'s `contract.yml` names as its item, where that issue is in origin's repository, so the
+ * body closes it on the merge; `null` with no contract, one that does not read, or an item elsewhere.
+ */
+function closesFor(ctx: CliContext, cwd: string, run: string, repo: { owner: string; repo: string }): string | null {
+  const rel = `${ctx.engine.runs.layout.runRelPath(run)}/${CONTRACT_FILE}`;
+  const read = readCapped(join(cwd, rel), CONTRACT_READ_MAX_BYTES);
+  if (read === null || read.truncated) return null;
+  const parsed = parseRunContract(read.text, rel);
+  return parsed.ok ? closingRef(parsed.contract.item, repo) : null;
 }
 
 /**
