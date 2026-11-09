@@ -262,6 +262,19 @@ describe("heldPaths", () => {
     expect(heldPaths(["apps/web/.stamity/learnings/cache-warmup.md"], "apps/web/")).toEqual(["apps/web/.stamity/learnings/cache-warmup.md"]);
   });
 
+  it("holds the trusted skill sources file at the top and under a setup root, and not its look-alikes (REQ-FLOW-180)", () => {
+    expect(heldPaths(["docs/skill-sources.json", ".stamity/skill-sources.json", ".stamity/skill-sources.json.bak"])).toEqual([
+      ".stamity/skill-sources.json",
+    ]);
+    expect(heldPaths(["apps/web/.stamity/skill-sources.json"], "apps/web/")).toEqual(["apps/web/.stamity/skill-sources.json"]);
+  });
+
+  it("holds a copied skill's origin record, and not a run's own files beside it (REQ-FLOW-180)", () => {
+    const record = ".stamity/skills/house-style.origin.json";
+
+    expect(heldPaths([".stamity/runs/2026-11-09_night/skills.md", record, "docs/skills/house-style.origin.json"])).toEqual([record]);
+  });
+
   it("names every glob the plan's table lists", () => {
     expect(PERSON_ONLY_PATHS).toEqual([
       ".github/workflows/**",
@@ -295,6 +308,12 @@ describe("heldPaths", () => {
       ".stamity/manifest.json",
       ".stamity/change-classes.json",
       ".stamity/policy.json",
+      // TEST CHANGE, justified (plan 024 file 2, unit s-sources-detect, REQ-FLOW-180): the trusted skill sources decide
+      // what text later runs may copy in, so the file is held beside the org trust policy; the pinned list gains it.
+      ".stamity/skill-sources.json",
+      // Same unit, folded with s-skill-verb (sign-off S24): a copied skill's origin record is what drift is read
+      // against, so its folder is held too. Built at run time, as the folder globs below are.
+      [".stamity/skills", "**"].join("/"),
 // TEST CHANGE, justified (plan 023 file 2, unit propose-learning, REQ-FLOW-133): the folders later runs read as
       // knowledge and as content are held now, so a run proposes and a person accepts; the pinned list gains both globs.
       // Built at run time: written as a literal, a folder glob makes this file a declared reader of every tracked file

@@ -330,7 +330,13 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // Plan 021 file 2: the one session detector, zero imports, read by the wave-4
   // hook scripts and pre-flight and the wave-14 gate verb (v8-detect-translator).
   "src/session/detect.ts": { unit: "v8-detect-translator", wave: 1 },
+  // Plan 024 file 2 (REQ-FLOW-180): the script signals of a fetched skill, pure, zero internal imports, read by the
+  // skill verb's fetch above it.
+  "src/skills/scriptDetect.ts": { unit: "s-sources-detect", wave: 1 },
   // wave 2
+  // Plan 024 file 2 (REQ-FLOW-180): the trusted skill sources file, over the wave-1 config parser and repository key
+  // and the wave-0 markers; read by the skill verb.
+  "src/skills/sources.ts": { unit: "s-sources-detect", wave: 2 },
   // Plan 022 file 1: the autonomy setting resolved, pure, over src/types/manifest.ts
   // alone; read by the wave-14 `config` and wave-15 `check` verbs.
   "src/config/autonomy.ts": { unit: "a3-autonomy-config", wave: 2 },

@@ -4,7 +4,7 @@
  * CI definitions (GitHub Actions' workflows and actions, and the pipeline files
  * of GitLab, CircleCI, Azure Pipelines, Jenkins, Buildkite, Travis and
  * Bitbucket), hook and guard configuration (the emitted hooks, the manifest,
- * the clients' settings, the editor's workspace and tasks files), the class file, the org trust policy, CODEOWNERS, the charter files with
+ * the clients' settings, the editor's workspace and tasks files), the class file, the org trust policy, the trusted skill sources, CODEOWNERS, the charter files with
  * Codex's override, each client's rule and instruction files, the agent,
  * command, skill and MCP-server definitions the four clients read, the learnings,
  * overrides and handoffs under `.stamity/`, and the cloud agents' environment files decide what every later run is
@@ -63,6 +63,10 @@ export const PERSON_ONLY_PATHS: readonly string[] = [
   ".stamity/change-classes.json",
   // The org trust policy: what a later sync projects from the installed packs, whose bytes are held above.
   ".stamity/policy.json",
+  // The trusted skill sources (REQ-FLOW-180): which repositories a skill may be copied in from, and which may carry scripts.
+  ".stamity/skill-sources.json",
+  // A copied skill's origin record: what `stamity skill list` and `check` compare the held copy against.
+  ".stamity/skills/**",
   // What later runs read as knowledge and as content (REQ-FLOW-133): a run proposes into its own folder, a person accepts.
   ".stamity/learnings/**",
   ".stamity/overrides/**",

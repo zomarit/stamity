@@ -83,6 +83,7 @@
                   "**/runs/**",
                   "**/session/**",
                   "**/shared/**",
+                  "**/skills/**",
                   "**/tools/**",
                   "**/workspace/**",
                   "**/worktree/**"
@@ -133,6 +134,7 @@
                   "**/runs/**",
                   "**/session/**",
                   "**/shared/**",
+                  "**/skills/**",
                   "**/tools/**",
                   "**/workspace/**",
                   "**/worktree/**"
