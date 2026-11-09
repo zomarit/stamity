@@ -10,12 +10,15 @@
  * so a gate that denied every question, or none, fails.
  */
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync } from "node:fs";
+import { chmodSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  AWAY_MARKER_FILE,
   buildUnattendedAskGate,
   type HookScriptLayout,
+  NOBODY_WATCHING_VARIABLE,
   planCoreHookScripts,
+  UNATTENDED_ASK_GATE_AWAY_SOURCE,
   UNATTENDED_ASK_GATE_FAULT_NOTE,
   UNATTENDED_ASK_GATE_FILE,
   UNATTENDED_ASK_GATE_REASON,
@@ -58,6 +61,9 @@ function run(gate: string, input: string, env: Record<string, string> = {}, cwd?
   const base = { ...process.env };
   delete base.STAMITY_UNATTENDED;
   delete base.STAMITY_REPO_ROOT;
+  // TEST CHANGE, justified (n-switch-guard, REQ-FLOW-166): the gate now also reads the nobody-watching variable, so a
+  // shell that has it on cannot move a case here; a case that needs it passes it. No expected value moved.
+  delete base[NOBODY_WATCHING_VARIABLE];
   const result = spawnSync(process.execPath, [gate], { input, encoding: "utf8", timeout: CHILD_TIMEOUT_MS, env: { ...base, ...env }, cwd });
   return { status: result.status, stdout: String(result.stdout), stderr: String(result.stderr) };
 }
@@ -363,6 +369,70 @@ describe("what the gate leaves alone", () => {
         expect(run(gate, payload(), ON)).toEqual({ status: 0, stdout: "", stderr: faultNote(runsDir, "EACCES") });
       } finally {
         chmodSync(runsDir, 0o755);
+      }
+    },
+  );
+});
+
+/** The refusal's stderr when the nobody-watching switch decided (REQ-FLOW-166). */
+const BY_SWITCH = `${UNATTENDED_ASK_GATE_REASON}${UNATTENDED_ASK_GATE_AWAY_SOURCE}\n`;
+const AWAY = { [NOBODY_WATCHING_VARIABLE]: "1" };
+
+describe("the gate while nobody is watching (REQ-FLOW-166)", () => {
+  it("refuses a question under the variable where the records would let it through, naming the switch", async () => {
+    // An attended walk in progress and a fresh final round: each lets the question through without the switch.
+    const gate = await placeGate({
+      ".stamity/runs/2026-10-17_walk/record.md": record("in progress", "attended"),
+    });
+    expect(denies(gate)).toBe(false);
+    expect(refusal(gate, AWAY)).toBe(BY_SWITCH);
+    for (const on of ["true", "yes", " 1 "]) expect(refusal(gate, { [NOBODY_WATCHING_VARIABLE]: on }), on).toBe(BY_SWITCH);
+    // One fact away: a value that reads as off leaves the records to decide.
+    for (const off of ["", "0", "false", " FALSE "]) expect(denies(gate, { [NOBODY_WATCHING_VARIABLE]: off }), JSON.stringify(off)).toBe(false);
+  });
+
+  it("refuses Claude Code's final round too, which the records alone would exempt", async () => {
+    const gate = await placeGate({
+      ".stamity/runs/2026-10-16_night/record.md": record("handed off", "unattended", "stamity/night"),
+      ...ended("2026-10-16_night"),
+      ...onBranch("stamity/night"),
+    });
+    expect(denies(gate, ON)).toBe(false);
+    expect(refusal(gate, { ...ON, ...AWAY })).toBe(BY_SWITCH);
+  });
+
+  it("reads the away marker as the switch, a link to nothing among it", async () => {
+    const gate = await placeGate({ [AWAY_MARKER_FILE]: "{}\n" });
+    expect(refusal(gate)).toBe(BY_SWITCH);
+    if (process.platform !== "win32") {
+      rmSync(getRepo().path(".stamity", "away.json"));
+      expect(denies(gate)).toBe(false);
+      symlinkSync(getRepo().path("nowhere.json"), getRepo().path(".stamity", "away.json"));
+      expect(refusal(gate)).toBe(BY_SWITCH);
+    }
+  });
+
+  it("refuses a payload it cannot read, and still lets another tool through", async () => {
+    const gate = await placeGate();
+    for (const input of ["", "null", "[]", "{not json"]) {
+      // Without the switch each of these lets the question through, as the fail-open cases above pin.
+      expect(run(gate, input, AWAY), JSON.stringify(input)).toEqual({ status: 2, stdout: "", stderr: BY_SWITCH });
+    }
+    for (const tool of ["Bash", "Read"]) expect(denies(gate, AWAY, payload(tool)), tool).toBe(false);
+  });
+
+  // A permission bit is the real failure here; Windows and root ignore it, so the case runs where it holds.
+  it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+    "refuses when a record cannot be read, where without the switch it fails open",
+    async () => {
+      const gate = await placeGate({ ".stamity/runs/2026-10-16_night/record.md": record("in progress", "attended") });
+      const recordPath = getRepo().path(".stamity", "runs", "2026-10-16_night", "record.md");
+      chmodSync(recordPath, 0o000);
+      try {
+        expect(run(gate, payload())).toEqual({ status: 0, stdout: "", stderr: faultNote(recordPath, "EACCES") });
+        expect(run(gate, payload(), AWAY)).toEqual({ status: 2, stdout: "", stderr: BY_SWITCH });
+      } finally {
+        chmodSync(recordPath, 0o644);
       }
     },
   );

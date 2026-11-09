@@ -85,3 +85,5 @@ Desktop.ini
 .stamity/run-ended.json
 .stamity/context-once/
 .stamity/client-models.json
+/.stamity/away.json
+/.stamity/away-held.jsonl

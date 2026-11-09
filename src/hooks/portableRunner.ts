@@ -1,7 +1,17 @@
 import type { HookInterchange } from "./model.ts";
 import type { Tool } from "../types/core.ts";
-import { GENERATED_SCRIPT_LINT_DIRECTIVE } from "../types/markers.ts";
+import { GENERATED_SCRIPT_LINT_DIRECTIVE, STATE_DIR } from "../types/markers.ts";
 import { EngineError } from "../types/errors.ts";
+
+/**
+ * The nobody-watching switch's variable and away marker (REQ-FLOW-166), the
+ * values `./scripts.ts` exports as `NOBODY_WATCHING_VARIABLE` and
+ * `AWAY_MARKER_FILE`. Kept here, not imported: the two modules share a wave,
+ * and the layering admits no import between them.
+ * `test/hooks/nobodyWatching.test.ts` runs this runner against that marker.
+ */
+const NOBODY_WATCHING_VARIABLE = "STAMITY_NOBODY_WATCHING";
+const AWAY_MARKER_FILE = `${STATE_DIR}/away.json`;
 
 /** Repository-owned launcher; the interchange remains exec-form argv. */
 export const PORTABLE_RUNNER_FILE = "stamity-portable-hook.mjs";
@@ -252,11 +262,17 @@ export function portableHookCommand(
  * `PATH` entries that are full paths, never one whose real path is the folder
  * the child runs in, and on Windows the name with `.com`, then `.exe`. A name
  * that walk does not find starts nothing, and the hook fails naming it.
+ *
+ * On Copilot, while nobody is watching (REQ-FLOW-166: the variable
+ * {@link NOBODY_WATCHING_VARIABLE} on, or {@link AWAY_MARKER_FILE} present in
+ * the folder the child runs in), a child's `ask` is written as `deny`, since
+ * nobody is there to answer it. Every other decision, and every other client's
+ * runner, is as before.
  */
 export function buildPortableHookRunner(tool: Tool): string {
   return `#!/usr/bin/env node
 ${GENERATED_SCRIPT_LINT_DIRECTIVE}
-import { accessSync, constants, readFileSync, realpathSync, statSync } from "node:fs";
+import { accessSync, constants, ${tool === "copilot" ? "lstatSync, " : ""}readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -314,7 +330,17 @@ function launcherPath(name, cwd) {
   }
   throw safeError("Hook process failed (launcher " + JSON.stringify(name) + " not found on PATH outside the folder the hook runs in)");
 }
-
+${tool === "copilot" ? `
+// Whether nobody is watching (REQ-FLOW-166, src/hooks/scripts.ts in the engine
+// that wrote this file): ${NOBODY_WATCHING_VARIABLE} set to anything but "", "0"
+// or "false", or the away marker present under the repository, a link among it.
+// A marker that cannot be looked for counts as present: it only tightens.
+function nobodyWatching(root) {
+  const flag = (process.env.${NOBODY_WATCHING_VARIABLE} ?? "").trim().toLowerCase();
+  if (!["", "false", "0"].includes(flag)) return true;
+  try { lstatSync(join(root, ...${JSON.stringify(AWAY_MARKER_FILE.split("/"))})); return true; } catch (error) { return !(error && ["ENOENT", "ENOTDIR"].includes(error.code)); }
+}
+` : ""}
 function main() {
   const row = parse(Buffer.from(process.argv[2] ?? "", "base64url").toString(), "Invalid hook registration");
   if (!object(row) || !Object.hasOwn(NAMES, row.event)) throw safeError("Invalid hook registration");
@@ -514,8 +540,13 @@ function main() {
         out.permission = decision === "allow" ? "allow" : "deny";
         if (decision === "ask") warn("Cursor has no ask decision; denied pending manual permission review");
         out.user_message = reason;
-      } else {
-        out.permissionDecision = decision;
+      } else {${tool === "copilot" ? `
+        // Nobody is watching (REQ-FLOW-166): an ask would wait for nobody, so
+        // it becomes a denial held for the morning.
+        const away = decision === "ask" && nobodyWatching(cwd);
+        if (away) warn("nobody is watching; an ask is denied and waits for the morning list");
+        out.permissionDecision = away ? "deny" : decision;` : `
+        out.permissionDecision = decision;`}
         out.permissionDecisionReason = reason;
       }
     } else if (TOOL === "cursor") {

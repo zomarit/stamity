@@ -334,7 +334,10 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     // stand in one guard.
     // TEST CHANGE, justified (REQ-CTX-016, 2026-11-05): both rows moved, bytes from 330,110 to 331,435 and lines from 6,826
     // to 6,863, the measured size of the largest copy (copilot), since main's guard lines now stand beside them.
-    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 331_435, lines: 6_863 });
+    // TEST CHANGE, justified (n-switch-guard, REQ-FLOW-166, 2026-11-09): both rows moved, bytes from 331,435 to 333,505
+    // and lines from 6,863 to 6,910, the measured size of the largest copy (copilot), since the guard now reads the
+    // nobody-watching switch for an ask and holds the act on the morning list.
+    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 333_505, lines: 6_910 });
     const guards = renders.filter((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
     expect(guards).toHaveLength(TOOLS.length);
     for (const script of guards) expect(budgetViolation(script), script.tool).toBeUndefined();
@@ -367,6 +370,10 @@ describe("hook script budgets (REQ-CTX-016)", () => {
   });
 
   it("renders the unattended ask gate on Claude Code only, within its ceilings", () => {
+    // TEST CHANGE, justified (n-switch-guard, REQ-FLOW-166, REQ-CTX-016): the row moved from 10,752 / 260 to
+    // 14,336 / 330, the gate's measured 11,218 bytes / 263 lines × 1.25 rounded up as its row's earlier moves were,
+    // since it now reads the nobody-watching switch first; the literal pins the row so its next move is a visible edit.
+    expect(HOOK_SCRIPT_BUDGETS[UNATTENDED_ASK_GATE_FILE]).toEqual({ bytes: 14_336, lines: 330 });
     const gated = renders.filter((script) => script.fileName === UNATTENDED_ASK_GATE_FILE);
     expect(gated.map((script) => script.tool)).toEqual(["claude"]);
     for (const script of gated) expect(budgetViolation(script)).toBeUndefined();

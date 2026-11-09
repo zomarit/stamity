@@ -250,8 +250,12 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // the final round (review/100), names what it read in a refusal (review/104)
   // and writes one note on a fail-open (review/105): 8,501 bytes / 201 lines
   // (a plugin root renders 7,773 / 180). × 1.25 = 10,626.25 / 251.25, rounded
-  // up to 10,752 / 260.
-  [UNATTENDED_ASK_GATE_FILE]: { bytes: 10_752, lines: 260 },
+  // up to 10,752 / 260. Moved 2026-11-09 by plan 024's n-switch-guard (base
+  // 4f945a3a), which reads the nobody-watching switch first (REQ-FLOW-166):
+  // 10,042 / 234 before, 11,218 / 263 after (claude, generated layout; a plugin
+  // root renders 10,490 / 242). × 1.25 = 14,022.5 / 328.75, rounded up to
+  // 14,336 / 330.
+  [UNATTENDED_ASK_GATE_FILE]: { bytes: 14_336, lines: 330 },
   // Measured 2026-10-18 on plan 021 file 2's v4-cursor-continue lane (base 3519efee), with the stop payload's
   // status read (build/31): 9,043 bytes / 209 lines (cursor, generated layout; a plugin root renders 8,315 / 188).
   // × 1.25 = 11,303.75 / 261.25, rounded up as the review gate's is to 12,288 / 270. Moved 2026-10-18 by the
@@ -378,7 +382,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // 325,941 + 4,169 = 330,110 bytes; 6,764 + 62 = 6,826 lines.
   // Moved again 2026-11-05 on merging main, by what was measured: 331,435 bytes / 6,863 lines (copilot, generated), past
   // both rows, because main's guard lines now stand beside them. 330,110 + 1,325 = 331,435 bytes; 6,826 + 37 = 6,863 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 331_435, lines: 6_863 },
+  // Moved again 2026-11-09 by plan 024's n-switch-guard (REQ-FLOW-166, base 4f945a3a), by what was measured: 333,505
+  // bytes / 6,910 lines (copilot, generated), past both rows, because the guard now reads the nobody-watching switch for
+  // an ask and holds the act on the morning list. 331,435 + 2,070 = 333,505 bytes; 6,863 + 47 = 6,910 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 333_505, lines: 6_910 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -4493,6 +4500,28 @@ if (told !== null) {
 }
 
 /**
+ * The nobody-watching switch (REQ-FLOW-166): set to anything but "", "0" or
+ * "false" (any case, any spacing, as `readsUnattended` reads its variable), it
+ * turns every ask the guard would put to the person into a refusal held for the
+ * morning, and the question gate refuses.
+ */
+export const NOBODY_WATCHING_VARIABLE = "STAMITY_NOBODY_WATCHING";
+
+/**
+ * The away marker (REQ-FLOW-166): present, a link among it, it turns the switch
+ * on as {@link NOBODY_WATCHING_VARIABLE} does. Machine-local: a committed copy
+ * would refuse every ask in every checkout of the branch.
+ */
+export const AWAY_MARKER_FILE = `${STATE_DIR}/away.json`;
+
+/**
+ * The held list (REQ-FLOW-166): one JSON line, `{"at","rule","act","client"}`,
+ * per ask the guard refused while nobody was watching, never the command text.
+ * Machine-local, like the marker.
+ */
+export const AWAY_HELD_FILE = `${STATE_DIR}/away-held.jsonl`;
+
+/**
  * The person-only shell guard (REQ-FLOW-102, REQ-FLOW-120, REQ-FLOW-123,
  * REQ-FLOW-124): attended, it asks the person for one click on a person-only
  * act that can be undone on Claude Code, and on Copilot CLI for its main
@@ -4555,6 +4584,16 @@ if (told !== null) {
  * factory keys are baked only when on, so a default copy's bytes do not move, and
  * the guard decides nothing on them, but for one: a named review tool makes the
  * setting stricter than the default, written into `STRICTER` only then.
+ *
+ * While nobody is watching (REQ-FLOW-166: {@link NOBODY_WATCHING_VARIABLE} on,
+ * or {@link AWAY_MARKER_FILE} present), a call that would reach the person's
+ * ask is refused instead, its reason the unattended sentence and the morning
+ * list, and one line naming its rule, act and client is appended to
+ * {@link AWAY_HELD_FILE}, a link at that path not followed; a failed append
+ * leaves the refusal as it is. Only an ask moves: every allow, every refusal
+ * and a sub-agent's or `auto` mode's refused ask stay as they were, and the
+ * switch is read for an ask alone. A marker the guard cannot look for (a fault
+ * other than its absence) refuses the call.
  *
  * A command naming `gate preflight` that the guard allows writes
  * `{ "at": <ISO> }` to {@link PREFLIGHT_CANARY_FILE}, the pre-flight's proof
@@ -4625,12 +4664,15 @@ export function buildPersonOnlyGuardScript(opts: {
       "The autonomy setting this copy was written for is the marker line below the",
       "banner: the acts it names in `runs` run unasked, and a deploying branch or act",
       "asks (REQ-FLOW-137). A commit status or check run write is refused in every mode.",
+      `While nobody is watching (${NOBODY_WATCHING_VARIABLE} or ${AWAY_MARKER_FILE}),`,
+      `an act it would ask about is refused and noted in ${AWAY_HELD_FILE}.`,
     ],
     [
       "Reads outside repo state: the pending call's payload on stdin and the",
-      "STAMITY_UNATTENDED, STAMITY_REPO_ROOT, GH_REPO and GH_HOST variables. Reads the",
-      "git metadata, the remotes in the git config, and the run records' heads;",
-      "writes only the pre-flight canary.",
+      `STAMITY_UNATTENDED, ${NOBODY_WATCHING_VARIABLE}, STAMITY_REPO_ROOT, GH_REPO and GH_HOST`,
+      "variables. Reads the git metadata, the remotes in the git config, the away",
+      "marker and the run records' heads; writes only the pre-flight canary and the",
+      "held list.",
       ...(opts.tool === "copilot" ? ["On Copilot CLI it reads the session start's main-session record under the", "common git directory before it asks."] : []),
     ],
   )}
@@ -4660,6 +4702,9 @@ const INCLUDE_FILES_MAX = ${GUARD_GIT_INCLUDE_FILES_MAX};
 const INCLUDE_BYTES_MAX = ${GUARD_GIT_INCLUDE_BYTES_MAX};
 const PLACES_MAX = ${GUARD_PLACES_MAX};
 const CANARY_SEGMENTS = ${json(PREFLIGHT_CANARY_FILE.split("/"))};
+const AWAY_SEGMENTS = ${json(AWAY_MARKER_FILE.split("/"))};
+const HELD_SEGMENTS = ${json(AWAY_HELD_FILE.split("/"))};
+const CLIENT = ${json(opts.tool)};
 const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Shell", "bash", "powershell", "shell"]);
 // The GitHub MCP server's person-only tools and whether each is ask-class (personOnly.ts, GITHUB_MCP_ROWS).
 const MCP_ROWS = new Map(${json(GITHUB_MCP_ROWS.map((entry) => [entry.row, entry.ask]))});
@@ -5567,6 +5612,47 @@ function unattendedSentence(act, rule) {
   return act + " is a person-only act (\`" + rule + "\`) and this run is unattended: list it on the run's summary list (\`morning.md\`), whose walk runs it after one click.";
 }
 
+/**
+ * Whether nobody is watching (REQ-FLOW-166): the variable set to anything but "", "0" or "false", or the away marker
+ * present, a link among it. A marker this guard cannot look for throws, so the call is refused.
+ */
+function nobodyWatching(root) {
+  const flag = (process.env.STAMITY_NOBODY_WATCHING ?? "").trim().toLowerCase();
+  if (!["", "false", "0"].includes(flag)) return true;
+  try {
+    lstatSync(join(root, ...AWAY_SEGMENTS));
+    return true;
+  } catch (error) {
+    if (error && (error.code === "ENOENT" || error.code === "ENOTDIR")) return false;
+    throw error;
+  }
+}
+
+/**
+ * An attended ask's decision while nobody is watching (REQ-FLOW-166): refused and noted on the held list, never the
+ * command text; any other decision, a sub-agent's refused ask among them, is returned as it is. The note is the
+ * canary's write, a link at its path not followed, and a failed one leaves the refusal as it is.
+ */
+function heldForMorning(decision, root, act, rule) {
+  if (!decision.ask || !nobodyWatching(root)) return decision;
+  const path = join(root, ...HELD_SEGMENTS);
+  try {
+    let other = false;
+    try {
+      other = !lstatSync(path).isFile();
+    } catch {
+      // Absent: written below.
+    }
+    if (!other) {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, JSON.stringify({ at: new Date().toISOString(), rule, act, client: CLIENT }) + "\n", { flag: "a" });
+    }
+  } catch {
+    // Not written: the refusal stands, and the morning list misses this line.
+  }
+  return { ask: false, reason: unattendedSentence(act, rule) + " Nobody is watching, so it waits for the morning list." };
+}
+
 `}${attendedAskSource(opts.tool)}${String.raw`
 /**
  * A GitHub MCP row's tool, classed by its row: the refused one refuses, and an ask-class one asks only while the mode
@@ -5576,7 +5662,7 @@ function mcpDecision(tool, ask, root, payload) {
   const act = "A call to the GitHub MCP server";
   if (!ask) return { ask: false, reason: refuseSentence(act, tool) };
   const why = unattendedBy(root);
-  return why === null ? attendedAsk(payload, act, tool) : { ask: false, reason: unattendedSentence(act, tool) + " " + why };
+  return why === null ? heldForMorning(attendedAsk(payload, act, tool), root, act, tool) : { ask: false, reason: unattendedSentence(act, tool) + " " + why };
 }
 
 /** The decision this call earns: null to allow it, else whether the client asks the person and the reason. */
@@ -5632,7 +5718,7 @@ function decide() {
     // A loosening read in one place or reading names itself only where no other act was found (REQ-FLOW-138).
     const named = found.find((verdict) => verdict.rule !== "autonomy-loosen") ?? found[0];
     const why = unattendedBy(root);
-    if (why === null) return attendedAsk(payload, named.act, named.rule);
+    if (why === null) return heldForMorning(attendedAsk(payload, named.act, named.rule), root, named.act, named.rule);
     // Unattended, a push keeps the push rule's own reason; any other act goes on the morning list.
     const push = run();
     return { ask: false, reason: (push !== undefined ? push.reason : unattendedSentence(named.act, named.rule)) + " " + why };
@@ -5808,6 +5894,9 @@ export const UNATTENDED_ASK_GATE_RECORD_SOURCE = " (<record> is in progress and 
 export const UNATTENDED_ASK_GATE_VARIABLE_SOURCE =
   " (STAMITY_UNATTENDED is set, and no in-progress record reads `Mode: attended`.)";
 
+/** The same, when the nobody-watching switch decided (REQ-FLOW-166): no record is read then. */
+export const UNATTENDED_ASK_GATE_AWAY_SOURCE = ` (nobody is watching: ${NOBODY_WATCHING_VARIABLE} is set or ${AWAY_MARKER_FILE} is present.)`;
+
 /**
  * The one stderr line a fail-open allow writes: `<read>` names what could not
  * be read, `<cause>` the error code (or `not JSON`, or the fault's own name).
@@ -5909,7 +5998,14 @@ function recordHeads(root) {
  * it: a later session on that branch before its own record opens, past the window
  * (pr/17, pr/36). A refusal names the record or the variable it read (review/104).
  *
- * Fail-open by design: a question is the safe failure, so a payload it cannot
+ * Before all of that it reads the nobody-watching switch (REQ-FLOW-166):
+ * {@link NOBODY_WATCHING_VARIABLE} on, or {@link AWAY_MARKER_FILE} present (a
+ * link among it), refuses the question, naming the switch, with no record or
+ * git file read; a payload it cannot read refuses too, so no read fault lets a
+ * question through then, and a payload naming another tool still passes. A
+ * marker the gate cannot look for reads as absent.
+ *
+ * Without the switch it is fail-open by design: a question is the safe failure, so a payload it cannot
  * read, a records folder, record or git file it cannot read, or any fault while
  * deciding lets the question through, with one stderr line naming the read
  * that failed (review/105). Every other tool passes at once.
@@ -5929,8 +6025,9 @@ export function buildUnattendedAskGate(opts: { layout?: HookScriptLayout } = {})
     ],
     [
       "Reads outside repo state: the pending call's payload on stdin and the",
-      "STAMITY_UNATTENDED and STAMITY_REPO_ROOT variables. Reads the run records'",
-      "heads and the run-ended marker; writes nothing.",
+      `STAMITY_UNATTENDED, ${NOBODY_WATCHING_VARIABLE} and STAMITY_REPO_ROOT variables.`,
+      "Reads the away marker, the run records' heads and the run-ended marker;",
+      "writes nothing. While nobody is watching it reads no record and refuses.",
     ],
   )}
 
@@ -5955,6 +6052,8 @@ const ASK_TOOL = ${json(ASK_TOOL_NAME)};
 const REASON = ${json(UNATTENDED_ASK_GATE_REASON)};
 const RECORD_SOURCE = ${json(UNATTENDED_ASK_GATE_RECORD_SOURCE)};
 const VARIABLE_SOURCE = ${json(UNATTENDED_ASK_GATE_VARIABLE_SOURCE)};
+const AWAY_SOURCE = ${json(UNATTENDED_ASK_GATE_AWAY_SOURCE)};
+const AWAY_SEGMENTS = ${json(AWAY_MARKER_FILE.split("/"))};
 const FAULT_NOTE = ${json(UNATTENDED_ASK_GATE_FAULT_NOTE)};
 const BLOCK_EXIT = ${BLOCKING_EXIT_CODE};
 
@@ -6012,10 +6111,36 @@ function unattendedSource(root) {
   return VARIABLE_SOURCE;
 }
 
-/** The source of the refusal this call earns, or null when the call goes through. */
+/**
+ * Whether nobody is watching (REQ-FLOW-166): the variable set to anything but "", "0" or "false", or the away marker
+ * present, a link among it; a marker the gate cannot look for reads as absent, so the question stays the safe failure.
+ */
+function nobodyWatching() {
+  const flag = (process.env.STAMITY_NOBODY_WATCHING ?? "").trim().toLowerCase();
+  if (!["", "false", "0"].includes(flag)) return true;
+  try {
+    lstatSync(join(repoRoot(), ...AWAY_SEGMENTS));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The source of the refusal this call earns, or null when the call goes through. The switch is read first: on, only a
+ * payload naming another tool goes through, and one that cannot be read refuses; no record is read.
+ */
 function decide() {
-  const raw = readFileSync(0, "utf8");
-  const payload = raw.trim() === "" ? null : JSON.parse(raw);
+  const away = nobodyWatching();
+  let payload = null;
+  try {
+    const raw = readFileSync(0, "utf8");
+    payload = raw.trim() === "" ? null : JSON.parse(raw);
+  } catch (error) {
+    if (away) return AWAY_SOURCE;
+    throw error;
+  }
+  if (away) return typeof payload?.tool_name === "string" && payload.tool_name !== ASK_TOOL ? null : AWAY_SOURCE;
   if (payload === null || typeof payload !== "object" || payload.tool_name !== ASK_TOOL) return null;
   return unattendedSource(repoRoot());
 }
