@@ -20,6 +20,7 @@ import { matchGlob } from "../change/classify.ts";
 import { fromProjectRoot, PERSON_ONLY_PATHS } from "../change/personOnlyPaths.ts";
 import { matchesDeployingBranch, type ResolvedAutonomy } from "../config/autonomy.ts";
 import { parseLedgerText } from "./ledgerStore.ts";
+import { bodyRun, endsWithRunMarker, EVIDENCE_OPENING, runMarker, WAITS_OPENING } from "./pullRequest.ts";
 import { UNREAD_EDITOR, type ReviewToolFacts, type ReviewToolVerdict } from "./reviewTool.ts";
 
 /**
@@ -541,7 +542,7 @@ export function ownPr(pr: LandPr, own: OwnPrFacts): { already: boolean; refusals
   if (pr.headRef !== own.runBranch) refusals.push(`pull request #${pr.number} is from ${pr.headRef}, not the run's branch ${own.runBranch}`);
   if (pr.headRepo === null || pr.headRepo.toLowerCase() !== own.repo.toLowerCase()) refusals.push(`pull request #${pr.number} comes from a fork, not ${own.repo}`);
   if (pr.baseRef !== own.defaultBranch) refusals.push(`pull request #${pr.number} targets ${pr.baseRef}, not the default branch ${own.defaultBranch}`);
-  if (!pr.body.trimEnd().endsWith(own.marker)) refusals.push(`pull request #${pr.number}'s body does not end with the run's marker`);
+  if (!endsWithRunMarker(pr.body, own.marker)) refusals.push(`pull request #${pr.number}'s body does not end with the run's marker`);
   if (pr.headSha !== own.head) refusals.push(`pull request #${pr.number}'s head ${pr.headSha} is not HEAD ${own.head}`);
   if (pr.author === null || pr.author.toLowerCase() !== own.viewer.toLowerCase()) {
     refusals.push(`pull request #${pr.number} was opened by ${pr.author ?? "an account GitHub no longer names"}, not by the run's login ${own.viewer}`);
@@ -723,12 +724,6 @@ export function decideLand(input: LandInput): LandDecision {
   return { outcome: "asks", reason: first.reason, reasons: asks.map((entry) => entry.reason), act: first.act };
 }
 
-/** The line that opens the evidence the pull request's body carries before a merge. */
-const EVIDENCE_OPENING = "evidence checked at ";
-
-/** build/6: the line that opens why the run's merge waits, on an `asks` or a `refused` outcome. */
-const WAITS_OPENING = "merge waits on: ";
-
 /**
  * The evidence line: what was checked, when and for which head, with each of `notes` (the review tool's word, the rules
  * an auto-ship met, a tip not read as red), never that it landed; with `approval`, the head the person approved and every
@@ -758,16 +753,20 @@ export function waitsLine(reasons: readonly string[]): string {
 
 /**
  * `body` with `line` as its one status line, just before the run's `marker`, which still ends it: an earlier evidence
- * line or "merge waits on" line goes, so the evidence written before a merge replaces why it waited (build/6).
+ * line or "merge waits on" line goes, so the evidence written before a merge replaces why it waited (build/6). Where a
+ * client's short footer follows the run's marker ({@link bodyRun}, REQ-FLOW-168), the footer goes too, so the marker
+ * is last and appears once.
  */
 export function withStatusLine(body: string, marker: string, line: string): string {
-  const kept = body
+  const found = bodyRun(body);
+  const own = found !== null && runMarker(found.run) === marker;
+  const kept = (own ? body.slice(0, found.markerAt) : body)
     .trimEnd()
     .split(/\r?\n/)
     .filter((text) => !text.startsWith(EVIDENCE_OPENING) && !text.startsWith(WAITS_OPENING))
     .join("\n")
     .trimEnd();
-  const before = kept.endsWith(marker) ? kept.slice(0, -marker.length).trimEnd() : kept;
+  const before = !own && kept.endsWith(marker) ? kept.slice(0, -marker.length).trimEnd() : kept;
   return `${before === "" ? "" : `${before}\n\n`}${line}\n\n${marker}`;
 }
 

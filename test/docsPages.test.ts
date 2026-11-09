@@ -6465,7 +6465,10 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     expect(proof).toContain("The test-runner sub-agent returned no result in three tries");
     expect(proof).toContain("The run's `morning.md` held a summary line before its first section");
     expect(proof).toContain("It reads the run from a marker that must end the pull request's body");
-    expect(read("src/cli/commands/runLand.ts"), "the page names a body rule the job does not hold").toContain("const BODY_MARKER = /<!-- stamity:run (\\S+) -->$/;");
+    // TEST CHANGE, justified (REQ-FLOW-168): the sentence above is the 2026-11-06 run's fault, and the job no longer
+    // holds that rule: it reads the run through `bodyRun`, which finds the marker before a client's short footer.
+    expect(read("src/cli/commands/runLand.ts"), "the job's first read is not the shared finder").toContain("const run = bodyRun(pr.body)?.run ?? \"\";");
+    expect(read("src/cli/commands/runLand.ts"), "the job still holds the end-anchored rule the run met").not.toContain("const BODY_MARKER");
     expect(proof).toContain("No setup is known that passes.");
   });
 

@@ -45,7 +45,7 @@ import {
   type ThreadRead,
 } from "../../runs/landEvidence.ts";
 import { MORNING_EMPTY, MORNING_FILE, MORNING_REFUSED, screenOutbound } from "../../runs/morning.ts";
-import { PR_RECORD_FILE, prRecordRefusal, resolveRepo, runMarker } from "../../runs/pullRequest.ts";
+import { bodyRun, endsWithRunMarker, PR_RECORD_FILE, prRecordRefusal, resolveRepo, runMarker } from "../../runs/pullRequest.ts";
 import { parseStateBlock, requestMarker, reviewToolVerdict, UNREAD_EDITOR, withoutRequestMarkers, type ReviewToolFacts, type ReviewToolVerdict } from "../../runs/reviewTool.ts";
 import { gitProgramFor } from "../../shared/programPath.ts";
 import { EngineError } from "../../types/errors.ts";
@@ -266,9 +266,6 @@ async function originRepoOf(gitLine: (args: readonly string[]) => Promise<string
   return repo;
 }
 
-/** The run a pull request's body ends by naming, as job mode reads it (REQ-FLOW-157). */
-const BODY_MARKER = /<!-- stamity:run (\S+) -->$/;
-
 /**
  * Job mode's first read (REQ-FLOW-157): the run `number`'s body names, or the result that ends the call. The workflow starts
  * on every pull request a watched workflow passes on, so one no run opened is no failure: it exits 0 as `not-a-run`.
@@ -290,7 +287,8 @@ async function jobTarget(ctx: CliContext, number: number): Promise<{ run: string
     const reply = await answered(ghApi({ method: "GET", path: `repos/${repo.owner}/${repo.repo}/pulls/${number}`, hostname: repo.host }, ghOpts), "a read");
     const pr = reply.status === 200 ? parsePr(reply.json) : null;
     if (pr === null) throw new Refused(`the read of #${number} answered HTTP ${reply.status}`);
-    const run = BODY_MARKER.exec(pr.body.trimEnd())?.[1] ?? "";
+    // REQ-FLOW-168: the run the body ends by naming, before at most a client's short footer (REQ-FLOW-157).
+    const run = bodyRun(pr.body)?.run ?? "";
     if (!ctx.engine.runs.layout.isRunId(run)) return stop("not-a-run", [`#${number}'s body names no run, so the job leaves it as it is`]);
     // Read first, since a repository may delete the head branch on the merge, and a later event still starts a job.
     if (pr.merged) return stop("already-landed", []);
@@ -447,7 +445,7 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       const listed = await json(`${repoPath}/pulls?head=${encodeQuery(`${repo.owner}:${runBranch}`)}&base=${encodeQuery(defaultBranch)}&state=all&per_page=100`, "the pull request lookup");
       const numbers = (Array.isArray(listed) ? listed : [])
         .map((entry) => parsePrSummary(entry))
-        .filter((entry) => entry !== null && entry.headRef === runBranch && entry.body.trimEnd().endsWith(marker))
+        .filter((entry) => entry !== null && entry.headRef === runBranch && endsWithRunMarker(entry.body, marker))
         .map((entry) => (entry as { number: number }).number);
       if (numbers.length === 0) throw new Refused(`no pull request from ${runBranch} into ${defaultBranch} ends with the run's marker`);
       const newest = Math.max(...numbers);
