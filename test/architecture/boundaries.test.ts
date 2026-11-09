@@ -319,6 +319,11 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // Plan 022 file 1 (review/97): the git surface the pre-flight records and the run verbs compare against, pure,
   // zero internal imports, read by the wave-14 gate verb and the wave-15 run verb.
   "src/runs/gitSurface.ts": { unit: "a2-run-verb-config-recheck", wave: 1 },
+  // TEST CHANGE, justified (plan 024 file 3, unit x-run-metrics, REQ-FLOW-183): the bundled price table and the
+  // transcript's usage reader, zero internal imports, read by the wave-5 metrics below and the wave-15 run verb. New
+  // rows, no wave moved.
+  "src/runs/prices.ts": { unit: "x-run-metrics", wave: 1 },
+  "src/runs/transcriptUsage.ts": { unit: "x-run-metrics", wave: 1 },
   // Plan 021 file 1, the unattended run. Each row sits at the depth its own
   // imports put it, under the wave-12 root that wires it and the wave-14 verbs
   // that call it. Zero internal imports: the plan's structural coverage check,
@@ -527,6 +532,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // module's session-start screen (so a card the hook withholds is withheld
   // here too), and is reached by the wave-14 `stamity ledger status` verb.
   "src/runs/resumeCard.ts": { unit: "ctx-ledger-status", wave: 5 },
+  // TEST CHANGE, justified (plan 024 file 3, unit x-run-metrics, REQ-FLOW-183): a run's first numbers, pure, over the
+  // wave-1 run layout, price table and transcript reader and the wave-4 ledger parse, reached by the wave-15 run verb.
+  // A new row, no wave moved.
+  "src/runs/metrics.ts": { unit: "x-run-metrics", wave: 5 },
   // The one short page a run leaves a person: pure text over the wave-1 run layout, the wave-4 morning list and the
   // wave-5 record head, reached by the `run overview` verb.
   "src/runs/overview.ts": { unit: "run-overview", wave: 6 },

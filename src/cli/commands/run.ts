@@ -10,12 +10,14 @@ import { RUN_ENDED_MARKER_FILE } from "../../mcp/env.ts";
 import { checkSurfaceRecord, type RecordFileReads, type RecordUse, type SurfaceCheck } from "../../runs/gitSurface.ts";
 import { hookPathsAt, setupRootOf, setupRootsAt, type HookScratch } from "../../runs/hookPaths.ts";
 import { parseLedgerText, type LedgerRow } from "../../runs/ledgerStore.ts";
+import { metricsFrom, metricsText } from "../../runs/metrics.ts";
 import { blastRadiusSection, isClosingRef, MORNING_FILE, prBodyFrom, screenOutbound, withBlastRadius } from "../../runs/morning.ts";
 import { overviewFrom } from "../../runs/overview.ts";
 import { inferPrerequisites, type PrereqRow } from "../../runs/prerequisites.ts";
 import { ensureDraftPr, HOST_NAME, PR_RECORD_FILE, prRecordText, resolveRepo, runMarker, type PrOutcome } from "../../runs/pullRequest.ts";
 import { closingRef } from "../../runs/runCleanup.ts";
 import { parseRunContract } from "../../runs/runContract.ts";
+import { readTranscriptUsage } from "../../runs/transcriptUsage.ts";
 import { parseGitDefaultBranch } from "../../workspace/git.ts";
 import { ghApi, ghRequestReview, REVIEWER_LOGIN, TEAM_SLUG } from "../engine/ghRunner.ts";
 import { gitCheckRunner, revisionLines } from "../engine/gitStatus.ts";
@@ -182,6 +184,13 @@ import { runLand } from "./runLand.ts";
  * and calling neither git nor GitHub; the page is `../../runs/overview.ts`, each line cleaned here as it prints. Exit 0
  * where the record reads whole, a ledger or morning list that does not read named on the page; 1 for a record missing or over its cap,
  * since a land line past the cap could not be seen. The JSON is `{ subcommand, run, overview }`, `overview` the page.
+ *
+ * **`metrics`** (REQ-FLOW-183) prints the run's first numbers from its record and ledger, and tokens and cost only from
+ * the transcript `--transcript` names, read for its usage counts alone (`../../runs/transcriptUsage.ts`); the numbers are
+ * `../../runs/metrics.ts`'s, each line cleaned here as it prints, the last the proof block's `metrics:` line. Read-only:
+ * it writes nothing and calls neither git nor GitHub. Every read that fails is named under `unread` and its numbers read
+ * `unreported`, so it exits 0 on any record, ledger or transcript; only a refused run id exits 1. The JSON is
+ * `{ subcommand, run, wall, agentMinutes, person, rework, tokens, cost, unread }`.
  */
 
 const START = "start";
@@ -190,6 +199,7 @@ const END = "end";
 const LAND = "land";
 const CONTRACT = "contract";
 const OVERVIEW = "overview";
+const METRICS = "metrics";
 
 /** Every option beyond `--run`, by its key in commander's parsed options. */
 const OPTION_FLAGS: Readonly<Record<string, string>> = {
@@ -207,6 +217,7 @@ const OPTION_FLAGS: Readonly<Record<string, string>> = {
   approved: "--approved",
   job: "--job",
   item: "--item",
+  transcript: "--transcript",
 };
 
 /** The options each subcommand takes beyond `--run`; any other one given is a usage error. */
@@ -219,6 +230,7 @@ const SUBCOMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> = {
   [LAND]: ["fastForward", "method", "ready", "wait", "approved", "job", "pr"],
   [CONTRACT]: ["item"],
   [OVERVIEW]: [],
+  [METRICS]: ["transcript"],
 };
 
 /** `--wait`'s most minutes: under a client's ten-minute shell-call limit (decision D17). */
@@ -317,7 +329,7 @@ export const runCommand: CommandModule = {
 
   configure(cmd: Command): void {
     cmd
-      .addArgument(new Argument("<subcommand>", "which run action to run").choices([START, CHECKPOINT, END, LAND, CONTRACT, OVERVIEW]))
+      .addArgument(new Argument("<subcommand>", "which run action to run").choices([START, CHECKPOINT, END, LAND, CONTRACT, OVERVIEW, METRICS]))
       .option("--run <run-id>", "the run folder's name under .stamity/runs/", parseRun)
       .option("--paths <path...>", "checkpoint and end: also stage these paths, relative to the project root")
       .option("--pr [number]", "checkpoint: open or update the run's draft pull request after the push (with --title); land --job: the pull request to land")
@@ -333,6 +345,7 @@ export const runCommand: CommandModule = {
       .option("--approved <sha>", "land: the head commit the person approved over an asks outcome; land it if the head is still that commit and nothing refuses (never in an unattended run)", parseApproved)
       .option("--job", "land: run as the land workflow's job, which alone may use it: the run comes from the pull request's marker, and pending evidence exits 0")
       .addOption(new Option("--item <owner/repo#n>", "contract: the GitHub issue the run takes as its input").argParser(parseItemRef))
+      .option("--transcript <path>", "metrics: a Claude Code session transcript (JSONL) to take tokens and cost from; only its usage counts are read")
       // Usage errors, so exit 2 before the action and before git runs.
       .hook("preAction", (command) => {
         const subcommand = String(command.processedArgs[0]);
@@ -358,6 +371,7 @@ export const runCommand: CommandModule = {
         if (paths.some((path) => path.trim() === "")) command.error("error: --paths takes no empty path", { exitCode: 2 });
         const dropped = (given["dropHeld"] ?? []) as string[];
         if (dropped.some((path) => path.trim() === "")) command.error("error: --drop-held takes no empty path", { exitCode: 2 });
+        if (typeof given["transcript"] === "string" && given["transcript"].trim() === "") command.error("error: --transcript takes a path", { exitCode: 2 });
         if (given["fastForward"] === true && given["method"] !== undefined) command.error("error: --method does not apply to --fast-forward", { exitCode: 2 });
       });
   },
@@ -372,6 +386,7 @@ export const runCommand: CommandModule = {
       return runContract(ctx, opts);
     }
     if (args[0] === OVERVIEW) return Promise.resolve(runOverview(ctx, String(opts["run"])));
+    if (args[0] === METRICS) return Promise.resolve(runMetrics(ctx, String(opts["run"]), opts["transcript"] as string | undefined));
     return runStart(ctx, String(opts["run"]));
   },
 };
@@ -421,6 +436,40 @@ function runOverview(ctx: CliContext, run: string): CommandResult {
     .join("\n");
   ctx.io.out(`run: ${run}\n\n${page}`);
   return { exitCode: 0, json: { subcommand: OVERVIEW, run, overview: page } };
+}
+
+/**
+ * REQ-FLOW-183: the run's first numbers. Reads the record, the ledger and the named transcript, writes nothing, and
+ * names each read that fails instead of refusing, so a run with no record still prints its transcript's tokens.
+ */
+function runMetrics(ctx: CliContext, run: string, transcript: string | undefined): CommandResult {
+  checkRunId(ctx, METRICS, run);
+  const { layout } = ctx.engine.runs;
+  const cwd = ctx.app.runtime.cwd;
+  const runDir = layout.runRelPath(run);
+  const recordRel = `${runDir}/${layout.RECORD_FILE}`;
+  const record = readCapped(join(cwd, recordRel), RECORD_READ_MAX_BYTES);
+  const recordFailure =
+    record === null
+      ? exists(join(cwd, recordRel))
+        ? `${recordRel} could not be read`
+        : `no record at ${recordRel}`
+      : record.truncated
+        ? `${recordRel} is over ${RECORD_READ_MAX_BYTES} bytes`
+        : undefined;
+  const { ledger, ledgerFailure } = overviewLedger(ctx, runDir);
+  // The path is the caller's own, printed as given once cleaned; the reader returns numbers and model ids alone.
+  const named = transcript === undefined ? null : { path: sanitizeLabel(transcript), read: readTranscriptUsage(resolve(cwd, transcript)) };
+  const metrics = metricsFrom({
+    run,
+    record: recordFailure === undefined ? (record?.text ?? null) : null,
+    ...(recordFailure === undefined ? {} : { recordFailure }),
+    ledger: ledgerFailure === undefined ? ledger : null,
+    ...(ledgerFailure === undefined ? {} : { ledgerFailure }),
+    transcript: named,
+  });
+  ctx.io.out(`${metricsText(metrics).map((line) => sanitizeLabel(line)).join("\n")}\n`);
+  return { exitCode: 0, json: { subcommand: METRICS, ...metrics } };
 }
 
 /** `run` checked against the run folder's grammar; anything else is refused before git runs. */
