@@ -40,8 +40,10 @@ const REQUIRED_FIELDS = [
  * - `decision_needed`, present only as `true` (C3): a row whose fix changes a
  *   shared contract or needs a product choice. Absent is the "no" — a `false`
  *   would be a second spelling of the same answer.
+ * - `reopens`, a non-negative integer (REQ-FLOW-183): how many re-review
+ *   closures left the row `open`, counted by `ledger close`. Absent reads 0.
  */
-const OPTIONAL_FIELDS = ["retired", "report", "decision_needed"] as const;
+const OPTIONAL_FIELDS = ["retired", "report", "decision_needed", "reopens"] as const;
 
 /** A ledger's file name; the run folder is its path minus `/<this>`. */
 export const LEDGER_SUFFIX = "ledger.jsonl";
@@ -126,7 +128,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 /**
  * Parse one ledger's text. Blank lines are skipped; every other line must be a
  * JSON object carrying exactly the seven required fields, optionally `retired`,
- * `report` and `decision_needed`.
+ * `report`, `decision_needed` and `reopens`.
  * Rows that fail to parse are reported and dropped, so a later check never
  * reasons about a row whose shape it could not read.
  */
@@ -171,6 +173,11 @@ export const parseLedger = (ledgerPath: string, text: string): LedgerParse => {
     }
     if (parsed["decision_needed"] !== undefined && parsed["decision_needed"] !== true) {
       problems.push(`${at}: \`decision_needed\` is present only as true`);
+      return;
+    }
+    const reopens = parsed["reopens"];
+    if (reopens !== undefined && !(typeof reopens === "number" && Number.isInteger(reopens) && reopens >= 0)) {
+      problems.push(`${at}: \`reopens\` is a non-negative integer when present`);
       return;
     }
 

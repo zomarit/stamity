@@ -79,6 +79,18 @@ export interface LedgerRow {
   readonly retired?: string;
   readonly report?: string;
   readonly decision_needed?: true;
+  /**
+   * How many closures left this row `open` (`not-fixed`, `regressed`,
+   * `rejection-overturned`), written by {@link applyClosures}; absent until the
+   * first one. Read through {@link reopenCount}, so an older row reads 0.
+   */
+  readonly reopens?: number;
+}
+
+/** A row's reopen count: its `reopens` when that is a non-negative integer, else 0 (an older row, or a hand edit). */
+export function reopenCount(row: LedgerRow): number {
+  const value: unknown = row.reopens;
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : 0;
 }
 
 export interface ParsedLedger {
@@ -860,7 +872,9 @@ export async function applyClosures(req: {
       const reasonText = reason?.text.trim() ?? "";
       if (reason?.tagged === true) tagsStripped.push(ledgerId);
       const recorded = reasonText === "" ? note : `${note} — ${reasonText}`;
-      rewrites.set(index, { ...row, state: to, rationale: extendRationale(prior, recorded) });
+      const rationale = extendRationale(prior, recorded);
+      // A closure that leaves the row open reopens it, and is counted; every other move keeps the count as it is.
+      rewrites.set(index, to === "open" ? { ...row, state: to, rationale, reopens: reopenCount(row) + 1 } : { ...row, state: to, rationale });
       changes.push({ ledgerId, from, to, status, unchanged: false });
     }
     if (problems.length > 0) throw new ClosuresRefused(req.report, problems);
