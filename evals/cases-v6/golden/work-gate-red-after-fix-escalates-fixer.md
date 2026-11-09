@@ -2,7 +2,7 @@
 id: work-gate-red-after-fix-escalates-fixer
 class: golden
 claim: "A gate red after a fix is an escalation trigger on its own, before any not-fixed note: the work goes to a fresh fixer spawn on the same model at one effort level above the declared one, with the round history and the test-runner's failing excerpt attached, never back to the resumed fixer, and the fixer's own green claim is not gate evidence."
-source: content/agents/stamity-fixer.md:70-94,96-99
+source: content/agents/stamity-fixer.md:74-98,100-103
 metric: rubric
 ---
 

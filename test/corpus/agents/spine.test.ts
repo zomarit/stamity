@@ -743,6 +743,31 @@ describe("reviewer — multi-lens verdict", () => {
     expect(edges).toMatch(/idempotent/i);
   });
 
+  // Added with the held tests (REQ-FLOW-171, t-fixer-reviewer): the reviewer sets down what would
+  // prove each criterion before it reads the diff, and the test row maps criteria to held tests,
+  // which the digest check shows unchanged; a unit with no held tests skips the mapping in one line.
+  it("reads the criteria before the diff and maps each one to an unchanged held test", async () => {
+    const file = await load("agents/stamity-reviewer.md");
+    const reading = section(file, "Reading the change").replace(/\s+/g, " ");
+    const critical = section(file, "Critical rows").replace(/\s+/g, " ");
+
+    expect(reading).toMatch(
+      /before the diff, from the unit's criteria alone, the reviewer writes what would prove each one, then reads the diff against that list/i,
+    );
+    // The criteria-first step sits before the diff is read, not after.
+    expect(reading.indexOf("from the unit's criteria alone")).toBeLessThan(
+      reading.indexOf("The change is read from the range itself"),
+    );
+    expect(critical).toMatch(
+      /each of the unit's criteria maps to a held test, and every held test is unchanged per the Prove pass's `gate held --expect` result/i,
+    );
+    // The reviewer runs no gate (Reading the change): it reads the digest check's result.
+    expect(critical).toMatch(/which this role reads and never runs/i);
+    expect(critical).toMatch(
+      /a unit with no held tests \(a `docs`, `config` or `records` unit\) says so in one line and skips this mapping/i,
+    );
+  });
+
   it("gates posting on locators, severity floor, and ranked evidence classes", async () => {
     const gates = section(await load("agents/stamity-reviewer.md"), "Evidence and posting gates");
     const text = gates.replace(/\s+/g, " ");
@@ -806,6 +831,21 @@ describe("fixer — bounded scope, escalating rounds", () => {
     expect(scope).toMatch(/minimal change at the cause/i);
     expect(scope).toMatch(/no opportunistic edits/i);
     expect(scope).toContain("BLOCKED_DEPENDENCY");
+  });
+
+  // Added with the held tests (REQ-FLOW-171, t-fixer-reviewer): a fix round never weakens a held
+  // test; a finding that needs one changed goes back as a dispute, and the digest check reads any
+  // change as red.
+  it("leaves held tests as written and returns a dispute instead", async () => {
+    const scope = section(await load("agents/stamity-fixer.md"), "Scope rule").replace(/\s+/g, " ");
+
+    expect(scope).toMatch(/\*\*held tests are off-limits\.\*\*/i);
+    expect(scope).toMatch(/a held test, one a tests-only dispatch wrote for the unit, is never edited, deleted or skipped in a fix round/i);
+    expect(scope).toMatch(
+      /A finding whose fix needs one changed returns as unresolved with `BLOCKED_DEPENDENCY` naming that test/,
+    );
+    expect(scope).toMatch(/a fresh tests-only spawn answers the dispute/i);
+    expect(scope).toMatch(/`gate held --expect` reads any change to it as a red gate/);
   });
 
   it("answers a finding it judges wrong instead of skipping it", async () => {

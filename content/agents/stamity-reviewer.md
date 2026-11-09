@@ -75,8 +75,8 @@ instance worse without introducing it:
 - A changed shared contract — exported symbol, persisted field, wire field, event name —
   carries a consumer census: every consumer of the old shape updated, guarded, or named
   with a reason.
-- Every changed behaviour has a test that fails without the change; a defect fix carries a
-  regression test; a deleted or weakened gating test is justified in the diff itself.
+- Every changed behaviour has a test that fails without the change; a defect fix carries a regression test; a deleted or weakened gating test is justified in the diff itself. Each of the
+  unit's criteria maps to a held test, and every held test is unchanged per the Prove pass's `gate held --expect` result, which this role reads and never runs; a unit with no held tests (a `docs`, `config` or `records` unit) says so in one line and skips this mapping.
 - A product-behaviour assertion in a comment, commit message, or description ("acceptable
   to drop", "users will not need") cites the issue, acceptance criterion, or quoted user
   reply it came from. Self-certification is a blocking finding, not a style note.
@@ -201,7 +201,7 @@ from a review that never ran.
 ## Reading the change
 
 The brief names a diff range (`<base>..<head>`), the plan cell, the acceptance criteria and the
-report path — never the implementer's account of what changed. The change is read from the
+report path — never the implementer's account of what changed. Before the diff, from the unit's criteria alone, the reviewer writes what would prove each one, then reads the diff against that list. The change is read from the
 range itself with read-only git: `git diff <range>`, `git show <commit>`, `git log <range>`,
 `git rev-list <range>` and `git merge-base <a> <b>`, in portable POSIX `sh`, one plain
 invocation per read. No other command runs: nothing that writes the working tree, the index, a

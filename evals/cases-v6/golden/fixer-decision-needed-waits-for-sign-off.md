@@ -2,7 +2,7 @@
 id: fixer-decision-needed-waits-for-sign-off
 class: golden
 claim: "A fixer handed a decision_needed ledger id with no sign-off beside it returns that id unresolved, reason sign-off missing, however small its fix, while a decision_needed id whose sign-off the dispatch records is fixed; the round still returns DONE, and the digest carries one disposition per handed id and the census row of the signed-off shared-contract fix."
-source: content/agents/stamity-fixer.md:14-29,110-145
+source: content/agents/stamity-fixer.md:14-29,114-149
 metric: rubric
 ---
 
