@@ -1,15 +1,16 @@
-import type { Stats } from "node:fs";
-import { lstat, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { closeSync, fstatSync, lstatSync, openSync, readSync, type Stats } from "node:fs";
+import { lstat, stat, unlink, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import type { Command } from "commander";
 import { NOBODY_WATCHING_VARIABLE } from "../../hooks/scripts.ts";
 import { AWAY_HELD_FILE, AWAY_MARKER_FILE } from "../../mcp/env.ts";
-import { parseHeldList, type HeldLine } from "../../runs/overview.ts";
+import { heldUnreadLine, parseHeldList, type HeldLine } from "../../runs/overview.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import { readCapped } from "../engine/landSetting.ts";
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
+import { runGit } from "../../worktree/git.ts";
 
 /**
  * `stamity away` — the "nobody watching" switch's marker (REQ-FLOW-166).
@@ -19,19 +20,28 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  *   away status   whether the switch is on, from the variable, the marker or both, and the acts held while it was on
  *
  * The guard reads the switch from `STAMITY_NOBODY_WATCHING` (set at launch, so this verb cannot unset it) or from the
- * marker at its own project root; this verb writes the marker under the folder it runs in, as `run overview` and
- * `skill add` read it, and `on` refuses where that folder holds no `.stamity/`, since a marker there turns nothing on.
+ * marker at its own project root, the folder its hook was installed into, which is the repository's top (the linked
+ * worktree's own top inside one). So all three subcommands act on the marker at git's top level, wherever under it the
+ * verb runs, and on the folder it runs in only where git names no top (build/53). `on` refuses where that root holds no
+ * `.stamity/` folder, since a marker there turns nothing on. A `.stamity` that is a link to a folder counts: the guard
+ * reads `<root>/.stamity/away.json` through it, so the marker written through it is the one the guard reads (M-2).
  * The marker counts as present by `lstat`, a link among it, as the guard reads it: a link only tightens. `off` removes
  * a file or a link, never a link's target, and refuses anything else at that name, which the guard still reads as on.
  *
  * Both directions are safe by design: `on` only turns asks into refusals, and `off` only turns them back into asks.
- * The held list is the guard's to write; this verb reads it, counted and printed, each line cleaned for the terminal.
+ * The held list is the guard's to write; this verb reads it, counted and printed, each field cleaned for the terminal.
  */
 
 const SUBCOMMANDS = ["on", "off", "status"] as const;
 
-/** The most of the held list read: past it, the lines read are shown and a cut last line is skipped as no entry. */
+/**
+ * The most of the held list read, from its end: the guard only appends, so past it the newest entries are kept and the
+ * count of older lines left unread is said (review/91). A cut last line is skipped as no entry.
+ */
 const HELD_READ_MAX_BYTES = 1_048_576;
+
+/** The chunk the older lines are counted in, so a list of any size is counted in bounded memory. */
+const COUNT_CHUNK_BYTES = 65_536;
 
 /** The most of the marker read for its `since`: it is one short line. */
 const MARKER_READ_MAX_BYTES = 4096;
@@ -39,10 +49,79 @@ const MARKER_READ_MAX_BYTES = 4096;
 /** Where the switch is on from: the launch variable, the marker, both, or neither. */
 type Source = "env" | "marker" | "both" | "none";
 
-/** The held list under `root`; a missing, unreadable or damaged list holds no entry it cannot read, and never fails. */
-export function readHeldList(root: string): HeldLine[] {
-  const read = readCapped(join(root, ...AWAY_HELD_FILE.split("/")), HELD_READ_MAX_BYTES);
-  return read === null ? [] : parseHeldList(read.text);
+/** The held list as read: its entries, each field cleaned, and how many older lines past the read cap were not read. */
+export interface HeldRead {
+  readonly entries: HeldLine[];
+  readonly olderUnread: number;
+}
+
+/** The count of newline bytes in `[0, end)` of `fd`, read in bounded chunks. */
+function newlinesBefore(fd: number, end: number): number {
+  const chunk = Buffer.alloc(Math.min(COUNT_CHUNK_BYTES, Math.max(end, 1)));
+  let count = 0;
+  for (let at = 0; at < end; ) {
+    const read = readSync(fd, chunk, 0, Math.min(chunk.length, end - at), at);
+    if (read === 0) break;
+    for (let index = 0; index < read; index++) if (chunk[index] === 0x0a) count++;
+    at += read;
+  }
+  return count;
+}
+
+/**
+ * The last `maxBytes` of the regular file at `path`, from the first whole line in them, and how many lines before that
+ * were left out; `null` where nothing readable is there or the name is a link, as `readCapped` reads.
+ */
+function readTail(path: string, maxBytes: number): { text: string; olderLines: number } | null {
+  try {
+    if (!lstatSync(path).isFile()) return null;
+    const fd = openSync(path, "r");
+    try {
+      const stats = fstatSync(fd);
+      if (!stats.isFile()) return null;
+      // One byte before the window too, to tell whether the window starts on a line's first byte.
+      const from = stats.size > maxBytes ? stats.size - maxBytes - 1 : 0;
+      const buffer = Buffer.alloc(stats.size - from);
+      let filled = 0;
+      while (filled < buffer.length) {
+        const read = readSync(fd, buffer, filled, buffer.length - filled, from + filled);
+        if (read === 0) break;
+        filled += read;
+      }
+      if (from === 0) return { text: buffer.toString("utf8", 0, filled), olderLines: 0 };
+      // Everything up to the first line end in the read bytes is the cut line (or the end of the line before the window).
+      const newline = buffer.subarray(0, filled).indexOf(0x0a);
+      const skip = newline === -1 ? filled : newline + 1;
+      const cutLast = newline === -1 && filled > 0 ? 1 : 0;
+      return { text: buffer.toString("utf8", skip, filled), olderLines: newlinesBefore(fd, from + skip) + cutLast };
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return null;
+  }
+}
+
+/** One held entry, each field cleaned, so an escaped newline or a terminal sequence in it cannot forge a line (review/90). */
+const cleaned = ({ rule, act, at }: HeldLine): HeldLine => ({ rule: sanitizeLabel(rule), act: sanitizeLabel(act), at: sanitizeLabel(at) });
+
+/**
+ * The held list under `root`, the newest kept past the read cap; a missing, unreadable or damaged list holds no entry
+ * it cannot read, and never fails. Every sink prints these fields, so they are cleaned here, before a line is built.
+ */
+export function readHeldList(root: string): HeldRead {
+  const read = readTail(join(root, ...AWAY_HELD_FILE.split("/")), HELD_READ_MAX_BYTES);
+  return read === null ? { entries: [], olderUnread: 0 } : { entries: parseHeldList(read.text).map(cleaned), olderUnread: read.olderLines };
+}
+
+/**
+ * The project root the guard reads the marker under: git's top level for the folder the verb runs in (a linked
+ * worktree's own top inside one), else that folder itself, as the guard falls back to its working folder (build/53).
+ */
+async function projectRoot(cwd: string): Promise<string> {
+  const outcome = await runGit({ args: ["rev-parse", "--show-toplevel"], cwd });
+  const top = outcome.stdout.replace(/\r?\n$/, "");
+  return outcome.status !== 0 || outcome.keptFromGit === true || top === "" ? cwd : resolve(top);
 }
 
 /** The marker's own entry, without following a link; `null` when nothing is at its name. */
@@ -88,13 +167,14 @@ function envOn(ctx: CliContext): boolean {
 const ENV_HOLDS = `${NOBODY_WATCHING_VARIABLE} is set, so the switch stays on until it is unset where the session was launched.`;
 
 async function runOn(ctx: CliContext, root: string): Promise<CommandResult> {
-  const state = await lstat(join(root, STATE_DIR)).catch(() => null);
+  // `stat`, not `lstat`: a `.stamity` link to a folder is one the guard reads the marker through (M-2).
+  const state = await stat(join(root, STATE_DIR)).catch(() => null);
   if (state === null || !state.isDirectory()) {
     throw new CliFailure({
       code: "VALIDATION_ERROR",
-      message: `away on found no ${STATE_DIR}/ folder in ${sanitizeLabel(root)}`,
-      why: `the guard reads the marker at the project root's ${AWAY_MARKER_FILE}, so a marker anywhere else turns nothing on`,
-      next: "run it from the project root, the folder where stamity init ran",
+      message: `away on found no ${STATE_DIR}/ folder in ${sanitizeLabel(root)}, the project root it reads`,
+      why: `the guard reads the marker at the project root's ${AWAY_MARKER_FILE}, the repository's top, so a marker anywhere else turns nothing on`,
+      next: "run stamity init at the repository's top first; stamity away then works from anywhere in it",
     });
   }
   const env = envOn(ctx);
@@ -171,19 +251,20 @@ async function runStatus(ctx: CliContext, root: string): Promise<CommandResult> 
   const env = envOn(ctx);
   const marker = (await markerStats(root)) !== null;
   const since = marker ? markerSince(root) : null;
-  const held = readHeldList(root);
+  const { entries: held, olderUnread } = readHeldList(root);
   const source = sourceOf(env, marker);
   const lines = [
     `away: ${source === "none" ? "off" : "on"}`,
     `source: ${source}`,
     ...(since === null ? [] : [`since: ${since}`]),
     `held: ${String(held.length)}`,
-    ...held.map(({ act, rule, at }) => sanitizeLabel(`- ${act} (${rule}, ${at})`)),
+    ...(olderUnread > 0 ? [heldUnreadLine(olderUnread)] : []),
+    ...held.map(({ act, rule, at }) => `- ${act} (${rule}, ${at})`),
   ];
   ctx.io.out(`${lines.join("\n")}\n`);
   return {
     exitCode: 0,
-    json: { subcommand: "status", away: source !== "none", source, since, held: held.length, heldList: held },
+    json: { subcommand: "status", away: source !== "none", source, since, held: held.length, heldOlderUnread: olderUnread, heldList: held },
   };
 }
 
@@ -208,7 +289,7 @@ export const awayCommand: CommandModule = {
   },
 
   async run(ctx, _opts, args): Promise<CommandResult> {
-    const root = ctx.app.runtime.cwd;
+    const root = await projectRoot(ctx.app.runtime.cwd);
     const [subcommand] = args;
     if (subcommand === "on") return runOn(ctx, root);
     if (subcommand === "off") return runOff(ctx, root);

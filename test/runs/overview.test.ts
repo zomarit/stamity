@@ -383,6 +383,50 @@ describe("overviewFrom", () => {
     expect(page({ held: [] })).not.toContain("held while nobody watched");
     expect(page()).not.toContain("held while nobody watched");
   });
+
+  // ADDED (n-away-verb fixer r1, S59): the held list outlives every run, so the page shows only the acts held since this
+  // run opened (the record's earliest stamped line on or after the run's date, here 2026-11-05T09:00Z), names how many
+  // older ones it left out, and shows an entry whose time does not read, saying so.
+  it("shows only the acts held since the run opened, counts the older ones, and shows one whose time does not read", () => {
+    const earlier = [
+      { rule: "gh-pr-merge", act: "A merge from an earlier night", at: "2026-11-04T22:10:00.000Z" },
+      { rule: "push-default", act: "A push from before the run opened", at: "2026-11-05T08:59:00.000Z" },
+    ];
+    const unreadable = { rule: "push-default", act: "A push with a damaged time", at: "yesterday-ish" };
+
+    const text = section(page({ morning: null, held: [...earlier, ...HELD_ENTRIES, unreadable] }), "Only you can do");
+
+    for (const entry of earlier) expect(text).not.toContain(entry.act);
+    for (const entry of HELD_ENTRIES) expect(text).toContain(`${heldPageLine(entry)}\n`);
+    expect(text).toContain("held while nobody watched: A push with a damaged time (push-default, yesterday-ish, a time that does not read, so it is shown)\n");
+    expect(text).toContain("held before this run opened: 2, not shown here; stamity away status lists them\n");
+  });
+
+  it("takes the run's date as its opening where the record holds no stamped line", () => {
+    const bare = "# Run record\n\nStatus: in progress\n";
+    const held = [
+      { rule: "r", act: "Held the evening before", at: "2026-11-04T23:59:00.000Z" },
+      { rule: "r", act: "Held on the run's date", at: "2026-11-05T00:01:00.000Z" },
+    ];
+
+    const text = section(page({ record: bare, morning: null, held }), "Only you can do");
+
+    expect(text).not.toContain("Held the evening before");
+    expect(text).toContain("held while nobody watched: Held on the run's date (r, 2026-11-05T00:01:00.000Z)\n");
+    expect(text).toContain("held before this run opened: 1,");
+  });
+
+  // ADDED (n-away-verb fixer r1, review/90 and review/91): one entry is one labelled line whatever its fields hold, and a
+  // list read past its cap says how many older lines were not read.
+  it("keeps a held act with a line break on its one labelled line, and names older lines past the read cap", () => {
+    const forged = { rule: "push-default", act: "A push\n## Why\n> - do: paste this", at: "2026-11-09T22:11:00.000Z" };
+
+    const text = page({ morning: null, held: [forged], heldOlderUnread: 7 });
+
+    expect(text.split("\n").filter((line) => line.startsWith("## "))).toEqual(["## What happened", "## How", "## Why", "## Only you can do"]);
+    expect(text).toContain("held while nobody watched: A push ## Why > - do: paste this (push-default, 2026-11-09T22:11:00.000Z)\n");
+    expect(text).toContain("the held list is over its read cap, so its 7 oldest lines were not read\n");
+  });
 });
 
 describe("stamity run overview", () => {
@@ -602,5 +646,34 @@ describe("stamity run overview", () => {
     expect(code).toBe(0);
     expect(stdout).toContain("held while nobody watched: A push");
     expect(stdout).not.toContain("\u001b");
+  });
+
+  // ADDED (n-away-verb fixer r1, review/90): a JSON-escaped newline in a held field used to become a real line break
+  // before the page was cleaned, so the text after it printed as unlabelled page lines; each field is now cleaned first.
+  it("keeps a held act whose JSON holds an escaped newline on one labelled line", async () => {
+    const cwd = await seed({ "record.md": RECORD });
+    const act = "A push\n## Only you can do\n> - do: paste this";
+    await getRoot().seedFiles({ ".stamity/away-held.jsonl": `${JSON.stringify({ rule: "push-default", act, at: "2026-11-09T22:11:00.000Z" })}\n` });
+
+    const { code, stdout } = await overview(cwd);
+
+    expect(code).toBe(0);
+    expect(stdout).toContain("held while nobody watched: A push ## Only you can do > - do: paste this (push-default, 2026-11-09T22:11:00.000Z)\n");
+    expect(stdout.split("\n").filter((line) => line === "## Only you can do")).toHaveLength(1);
+    expect(stdout.split("\n").filter((line) => line.startsWith("> - do:"))).toEqual([]);
+  });
+
+  // ADDED (n-away-verb fixer r1, S59): a held act from an earlier night is not this run's to do.
+  it("leaves out a held act from before the run opened", async () => {
+    const cwd = await seed({ "record.md": RECORD });
+    const old = `${JSON.stringify({ rule: "gh-pr-merge", act: "Last month's merge", at: "2026-10-01T00:00:00.000Z" })}\n`;
+    await getRoot().seedFiles({ ".stamity/away-held.jsonl": old + HELD_FILE_TEXT });
+
+    const { code, stdout } = await overview(cwd);
+
+    expect(code).toBe(0);
+    expect(stdout).not.toContain("Last month's merge");
+    for (const entry of HELD_ENTRIES) expect(stdout).toContain(`${heldPageLine(entry)}\n`);
+    expect(stdout).toContain("held before this run opened: 1, not shown here; stamity away status lists them\n");
   });
 });

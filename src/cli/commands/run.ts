@@ -433,8 +433,8 @@ function runOverview(ctx: CliContext, run: string): CommandResult {
   }
   const morning = readCapped(join(cwd, runDir, MORNING_FILE), MORNING_READ_MAX_BYTES);
   const morningFailure = morning?.truncated === true ? { morningFailure: `${MORNING_FILE} is over ${MORNING_READ_MAX_BYTES} bytes` } : {};
-  const held = readHeldList(cwd);
-  const page = overviewFrom({ run, record: record.text, ...overviewLedger(ctx, runDir), morning: morning?.text ?? null, ...morningFailure, held })
+  const { entries: held, olderUnread: heldOlderUnread } = readHeldList(cwd);
+  const page = overviewFrom({ run, record: record.text, ...overviewLedger(ctx, runDir), morning: morning?.text ?? null, ...morningFailure, held, heldOlderUnread })
     .split("\n")
     .map((line) => sanitizeLabel(line))
     .join("\n");

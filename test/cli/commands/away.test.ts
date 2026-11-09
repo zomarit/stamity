@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { awayCommand } from "../../../src/cli/commands/away.ts";
 import { runInProcess } from "../../support/inProcess.ts";
+import { seedGitRepo } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
 /**
@@ -217,5 +218,87 @@ describe("stamity away", () => {
     expect(unknown.stderr).toContain("on, off, status");
     expect(unknown.stdout).toBe("");
     expect((await away(cwd, [])).code).toBe(2);
+  });
+
+  // ADDED (n-away-verb fixer r1, review/90): each held field is cleaned before it joins a line, so an escaped newline in
+  // one becomes a space, in the printed list and in the JSON list alike.
+  it("keeps a held act with an escaped newline on one line, in the list and in the JSON", async () => {
+    const forged = "A push\n## Only you can do\n> - do: run this";
+    const cwd = await project({ [HELD]: heldLine(forged, "push-default", "2026-11-09T22:11:00.000Z") });
+
+    const status = await away(cwd, ["status"]);
+
+    expect(status.code, status.stderr).toBe(0);
+    expect(status.stdout).toContain("- A push ## Only you can do > - do: run this (push-default, 2026-11-09T22:11:00.000Z)\n");
+    expect(status.stdout.split("\n").filter((line) => line.startsWith("## ") || line.startsWith("> "))).toEqual([]);
+    const doc = await json(cwd, ["status"]);
+    expect(doc["heldList"]).toEqual([{ rule: "push-default", act: "A push ## Only you can do > - do: run this", at: "2026-11-09T22:11:00.000Z" }]);
+  });
+
+  // ADDED (n-away-verb fixer r1, review/91): the guard only appends, so past the read cap the newest entries are the
+  // ones read, and the count of older lines left unread is said.
+  it("keeps the newest held acts past the read cap and says how many older lines were not read", async () => {
+    const old = heldLine("An old act", "old-rule", "2026-10-01T00:00:00.000Z");
+    const total = Math.ceil(1_048_576 / Buffer.byteLength(old)) + 50;
+    const newest = heldLine("The newest act", "push-default", "2026-11-09T22:11:00.000Z");
+    const cwd = await project({ [HELD]: old.repeat(total - 1) + newest });
+
+    const status = await away(cwd, ["status"]);
+    const doc = await json(cwd, ["status"]);
+
+    expect(status.code, status.stderr).toBe(0);
+    expect(status.stdout).toContain("- The newest act (push-default, 2026-11-09T22:11:00.000Z)\n");
+    const unread = Number(doc["heldOlderUnread"]);
+    expect(unread).toBeGreaterThan(0);
+    expect(Number(doc["held"]) + unread).toBe(total);
+    expect(status.stdout).toContain(`its ${String(unread)} oldest lines were not read\n`);
+    expect((doc["heldList"] as unknown[]).at(-1)).toEqual({ rule: "push-default", act: "The newest act", at: "2026-11-09T22:11:00.000Z" });
+  });
+
+  // ADDED (n-away-verb fixer r1, S59): `away status` lists every held act with its time, however old, and `off` keeps
+  // the list; only `run overview` keeps to the acts of its run.
+  it("status lists every held act however old, and off keeps the held list", async () => {
+    const cwd = await project({ [HELD]: heldLine("A month-old act", "gh-pr-merge", "2026-10-01T00:00:00.000Z") + THREE_HELD });
+    expect((await away(cwd, ["on"])).code).toBe(0);
+
+    expect((await away(cwd, ["off"])).code).toBe(0);
+    const status = await away(cwd, ["status"]);
+
+    expect(existsSync(join(cwd, HELD))).toBe(true);
+    expect(status.stdout).toContain("held: 4\n");
+    expect(status.stdout).toContain("- A month-old act (gh-pr-merge, 2026-10-01T00:00:00.000Z)\n");
+  });
+
+  // ADDED (n-away-verb fixer r1, build/53 and review M-2): the verb acts on the marker at the repository's top, where the
+  // guard reads it, from any folder under it, and a `.stamity` that is a link to a folder is followed, as the guard does.
+  it("acts on the marker at the repository's top from a folder under it", async ({ skip }) => {
+    const cwd = await project({ "packages/web/README.md": "a package\n" });
+    try {
+      await seedGitRepo(cwd);
+    } catch (error) {
+      if ((error as Error).name === "GitUnavailableError") skip("git is not installed here");
+      throw error;
+    }
+    const below = join(cwd, "packages", "web");
+
+    expect((await away(below, ["on"])).code).toBe(0);
+    expect(existsSync(join(cwd, MARKER))).toBe(true);
+    expect(existsSync(join(below, ".stamity"))).toBe(false);
+    expect(await json(below, ["status"])).toMatchObject({ away: true, source: "marker" });
+    expect((await away(below, ["off"])).code).toBe(0);
+    expect(existsSync(join(cwd, MARKER))).toBe(false);
+  });
+
+  it.skipIf(process.platform === "win32")("on follows a .stamity that is a link to a folder, as the guard reads through it", async () => {
+    const root = getRoot();
+    await root.seedFiles({ "main/.stamity/manifest.json": "{}\n", "lane/README.md": "a lane\n" });
+    symlinkSync(join(root.dir, "main", ".stamity"), join(root.dir, "lane", ".stamity"));
+    const lane = join(root.dir, "lane");
+
+    const on = await away(lane, ["on"]);
+
+    expect(on.code, on.stderr).toBe(0);
+    expect(existsSync(join(root.dir, "main", MARKER))).toBe(true);
+    expect(await json(lane, ["status"])).toMatchObject({ away: true, source: "marker" });
   });
 });

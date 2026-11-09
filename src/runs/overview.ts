@@ -24,8 +24,13 @@ export interface OverviewInput {
   readonly ledgerFailure?: string;
   /** Why `morning` is not the whole list, where it is not: nothing is then read from it. */
   readonly morningFailure?: string;
-  /** The acts the guard held while nobody watched (REQ-FLOW-166), from the held list beside the run folders. */
+  /**
+   * The acts the guard held while nobody watched (REQ-FLOW-166), from the held list beside the run folders. Only those
+   * held since the run opened are shown (S59): the list outlives every run, and `stamity away status` lists them all.
+   */
   readonly held?: readonly HeldLine[];
+  /** How many older lines of the held list were past its read cap and not read (review/91). */
+  readonly heldOlderUnread?: number;
 }
 
 /** One entry of the held list, `.stamity/away-held.jsonl`, as the person-only guard writes it, never a command's text. */
@@ -54,8 +59,56 @@ export function parseHeldList(text: string): HeldLine[] {
   });
 }
 
-/** A held act as the page prints it, behind its own label so the act reads as the guard's words and no row of the page. */
-const heldLine = ({ rule, act, at }: HeldLine): string => `held while nobody watched: ${act} (${rule}, ${at})`;
+/**
+ * A held act as the page prints it, behind its own label so the act reads as the guard's words and no row of the page.
+ * A line break in a field becomes a space, so one entry is always one labelled line (review/90); the reader cleans the
+ * rest. An entry whose time does not read is shown, and says so.
+ */
+const heldLine = ({ rule, act, at }: HeldLine, timeReads = true): string =>
+  `held while nobody watched: ${act} (${rule}, ${at}${timeReads ? "" : ", a time that does not read, so it is shown"})`.replace(/[\r\n]+/g, " ");
+
+/** The line `run overview` and `away status` print where older lines of the held list were past its read cap. */
+export function heldUnreadLine(olderUnread: number): string {
+  return `the held list is over its read cap, so its ${String(olderUnread)} oldest lines were not read`;
+}
+
+/** A record line that opens with a UTC stamp to the minute at least, as the run's own log lines do. */
+const STAMP_LINE = /^\s*[-*]\s+(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?Z)/;
+
+/**
+ * When the run opened, in milliseconds: the earliest stamped record line on or after the run id's UTC date, else the
+ * start of that date, the one time the record head always carries; `null` where the run id names no date.
+ */
+function openedAt(run: string, lines: readonly string[]): number | null {
+  const day = Date.parse(`${run.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(day)) return null;
+  const earliest = captured(lines, STAMP_LINE).reduce((first, stamp) => {
+    const at = Date.parse(stamp);
+    return !Number.isNaN(at) && at >= day && at < first ? at : first;
+  }, Number.POSITIVE_INFINITY);
+  return earliest === Number.POSITIVE_INFINITY ? day : earliest;
+}
+
+/**
+ * The held acts the page shows: each held since the run opened, and each whose time does not read (shown, not hidden);
+ * then one line for those held before, which `stamity away status` still lists, and one for lines past the read cap.
+ */
+function heldRows({ run, held = [], heldOlderUnread = 0 }: OverviewInput, lines: readonly string[]): string[] {
+  const opened = openedAt(run, lines);
+  const shown: string[] = [];
+  let before = 0;
+  for (const entry of held) {
+    const at = Date.parse(entry.at);
+    if (Number.isNaN(at)) shown.push(heldLine(entry, false));
+    else if (opened !== null && at < opened) before += 1;
+    else shown.push(heldLine(entry));
+  }
+  return [
+    ...shown,
+    ...(before > 0 ? [`held before this run opened: ${String(before)}, not shown here; stamity away status lists them`] : []),
+    ...(heldOlderUnread > 0 ? [heldUnreadLine(heldOlderUnread)] : []),
+  ];
+}
 
 /** The most rows of one list the page prints; the person's own list is never cut. */
 const LIST_MAX = 12;
@@ -207,8 +260,8 @@ function humanOnly({ run, morning, morningFailure }: OverviewInput): string[] {
 }
 
 /**
- * The page: `## What happened`, `## How`, `## Why` and `## Only you can do`, in that order. The held acts follow the
- * morning list's rows uncut, as the person's own list is never cut.
+ * The page: `## What happened`, `## How`, `## Why` and `## Only you can do`, in that order. The held acts since the run
+ * opened follow the morning list's rows uncut, as the person's own list is never cut.
  */
 export function overviewFrom(input: OverviewInput): string {
   const lines = input.record.split(/\r?\n/);
@@ -229,7 +282,7 @@ export function overviewFrom(input: OverviewInput): string {
     ],
     ["How", [...gatesLines(lines), fromLedger("rounds", roundsLine), fromLedger("findings", findingsLine), usageLine(lines)]],
     ["Why", [...listed("defaults", captured(lines, DEFAULT_LINE)), ...listed("choices", captured(lines, CHOICE_LINE))]],
-    ["Only you can do", [...humanOnly(input), ...(input.held ?? []).map(heldLine)]],
+    ["Only you can do", [...humanOnly(input), ...heldRows(input, lines)]],
   ];
   return `${sections.map(([name, rows]) => [`## ${name}`, "", ...rows].join("\n")).join("\n\n")}\n`;
 }
