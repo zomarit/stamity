@@ -2,7 +2,7 @@
 id: agent-implementer-return-contract
 class: golden
 claim: "A finished unit returns status DONE carrying files changed, tests, gate results, the spec delta and deferrals; every gate is reported as its exact command plus pass or fail with the verbatim failing excerpt, a failure that predates the unit is reported as pre-existing rather than adopted, fixed, or hidden behind a green claim, and the spec delta is returned as a proposal naming the spec file and the requirement id rather than written into the spec tree; an adjacent improvement larger than one line is counted as a note left out, never a deferral or an edit, and an inline result carries the notes count, never the note."
-source: content/agents/stamity-implementer.md:14-16,36-40,78-148
+source: content/agents/stamity-implementer.md:14-16,36-40,85-155
 metric: rubric
 ---
 

@@ -538,8 +538,21 @@ describe("implementer — single unit, single writer", () => {
     expect(testing).toMatch(/inline justification comment/i);
     // Added with the tests-only mode (REQ-FLOW-171, REQ-FLOW-172): the lead phrase above stays,
     // and the rule now turns on the class `gate classify` prints, never one the unit states.
-    expect(testing).toMatch(/`stamity gate classify --base HEAD --paths <its files>` prints/);
+    // The call runs in the documented npx setup (REQ-FLOW-002): the installed form first, the pinned
+    // token where npm refuses, and with no class read the unit fails closed to `product` (REQ-FLOW-003;
+    // t-tests-only fix round 1, W-1).
+    expect(testing).toMatch(/`npx --no stamity gate classify --base HEAD --paths <its files>` prints/);
+    expect(testing).toContain(
+      "where npm refuses because no copy is installed, `${STAMITY:CLI} gate classify --base HEAD --paths <its files>`",
+    );
     expect(testing).toMatch(/never one the unit states/i);
+    expect(testing).toMatch(
+      /when neither form runs, the classify exits non-zero, or its `reason` names a failed read, the unit counts as `product`/i,
+    );
+    // A held test is shown red on an assertion once the interfaces typecheck (fix round 1, M-1).
+    expect(testing).toMatch(
+      /once its interfaces typecheck, and before the behavior lands, it shows at least one held test failing on an assertion, not only on a missing type/i,
+    );
     expect(testing).toMatch(/a unit mixing a code file and a doc takes the strongest class/i);
     expect(testing).toMatch(
       /`product`, `public-contract` or `security-sensitive` unit builds against the held tests a tests-only dispatch wrote, and never edits, deletes or skips one/,
@@ -563,6 +576,12 @@ describe("implementer — single unit, single writer", () => {
     // A dispute never reopens the held test to the builder that disputes it.
     expect(mode).toMatch(/returns `BLOCKED_DEPENDENCY` naming it/);
     expect(mode).toMatch(/a fresh tests-only spawn answers the dispute/i);
+    // The role, not only the dispatch, is barred from the build: the first pass and the dispute pass
+    // both read no file the builder wrote (t-tests-only fix round 1, W-2).
+    expect(mode).toMatch(/the pass reads no file the unit's builder wrote/i);
+    expect(mode).toMatch(
+      /that spawn too reads no file the builder wrote: it decides from the criteria, the interfaces, the disputed test and the builder's stated reason alone/i,
+    );
   });
 
   it("proposes a spec delta rather than writing the spec", async () => {
