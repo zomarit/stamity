@@ -237,8 +237,9 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
     fact:
       "In a real session on 2026-11-06 the GitHub proxy answered 403 on " +
       "`collaborators/<login>/permission`, `collaborators` and `user/memberships/orgs/<org>`, " +
-      "and 404 on `branches/<default>/protection`; the page says nothing on these reads, so " +
-      "stamity reads the account's own rights instead.",
+      "and 404 on `branches/<default>/protection`; the page says nothing on these reads. " +
+      "Where the permission read answers 403, stamity reads the account's own rights instead; " +
+      "that covers the permission read only, and the other refused reads may stop a first run at `direct-push`.",
     status: "not documented",
     citation: { url: "https://code.claude.com/docs/en/cloud-environments", accessDate: "2026-11-09" },
     run: { record: "`docs/factory.md`, What real runs have shown and Step 7", date: "2026-11-06" },

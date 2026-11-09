@@ -846,6 +846,20 @@ describe("runPreflight — the push identity (review/36)", () => {
     for (const helper of facts.helpers ?? []) expect(text).not.toContain(helper);
   });
 
+  // ADDED (c-cloud-docs, REQ-FLOW-170): the pages say Cursor's cloud refuses at `direct-push` by design, since its push
+  // URL carries its own login. This pins that design: a token in the push URL settles `unknown` with the evidence the
+  // pages paraphrase, while the same URL with no credentials and gh's helper passes. The URL is split at its `@` and
+  // joined at run time, as the row above does (REQ-PLUGIN-033), so the source holds no user:password pair.
+  it("a push URL carrying an access token is unknown with the credentials evidence, the plain URL passes (Cursor's cloud)", async () => {
+    const carried = ["https://x-access-token:s3cr3tvalue", "@github.com/o/r"].join("");
+    const withToken = await runPreflight(greenDeps({ pushIdentity: { fetchUrl: FETCH_URL, pushUrls: [pushTo(carried, [GH_HELPER])] } }));
+    expect(check(withToken, "direct-push").state).toBe("unknown");
+    expect(check(withToken, "direct-push").evidence).toContain("the push URL carries its own credentials");
+    expect(JSON.stringify(withToken)).not.toContain("s3cr3tvalue");
+    const plain = await runPreflight(greenDeps({ pushIdentity: { fetchUrl: FETCH_URL, pushUrls: [pushTo(FETCH_URL, [GH_HELPER])] } }));
+    expect(check(plain, "direct-push").state).toBe("pass");
+  });
+
   it("an Authorization http.extraHeader on the push URL is unknown and reads nothing, the same URL without it passes (review/63)", async () => {
     const { rest, calls } = restTable({});
     const headed = await runPreflight(

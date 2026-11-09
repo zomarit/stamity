@@ -751,6 +751,10 @@ describe("the cloud column and the Cloud sessions section", () => {
     expect(row.fact).toContain("403");
     expect(row.fact).toContain("404 on `branches/<default>/protection`");
     expect(row.fact).toContain("reads the account's own rights instead");
+    // ADDED (c-cloud-docs; ledger build/1, review/4): the own-rights fallback stands in for the permission read alone, so
+    // the row must not read as if it covered the other refused reads, which can still stop a first run's pre-flight.
+    expect(row.fact).toContain("that covers the permission read only");
+    expect(row.fact).toContain("the other refused reads may stop a first run at `direct-push`");
     // The page is silent, so the session start tells an agent nothing on it (sessionStart rows stay `documented`).
     expect(row.sessionStart).toBeUndefined();
     expect(row.run?.date).toBe("2026-11-06");

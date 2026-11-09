@@ -181,6 +181,13 @@ const WORKSPACES = "docs/workspaces.md";
 // Declared apart from the path-order block above, so the ordinals its comment names stay true.
 const CLOUD = "docs/cloud.md";
 const FACTORY = "docs/factory.md";
+/**
+ * Why Cursor's cloud refuses at `direct-push` (REQ-FLOW-170), the one sentence the factory's proof, its Step 8 and the
+ * cloud page's Cursor section each carry.
+ */
+const CURSOR_REFUSAL =
+  "Cursor's cloud pushes with its own login, written into origin's URL and `~/.gitconfig`, and the pre-flight never " +
+  "ties a login carried in a URL to `gh`'s account, by design, so on Cursor's cloud it refuses `direct-push`.";
 
 /**
  * The thirteen hand-written guides under `docs/`.
@@ -5466,7 +5473,10 @@ describe("docs/cloud.md", () => {
     // ADDED: the real run of 2026-11-08 showed the plain origin was not enough, and no setup is known that passes.
     expect(cursor).toContain("That was not enough on 2026-11-08");
     expect(cursor).toContain("the URL rewrites in `~/.gitconfig` carried Cursor's own login");
-    expect(cursor).toContain("No setup is known that passes.");
+    // TEST CHANGE, justified (c-cloud-docs, REQ-FLOW-170): "No setup is known that passes" left open that one might; the
+    // refusal is the pre-flight's design, which never ties a login carried in a URL to gh's account, so the pin reads why.
+    expect(cursor).toContain(CURSOR_REFUSAL);
+    expect(cursor).not.toContain("No setup is known that passes.");
   });
 
   // ADDED 2026-10-26 (plan 022 file 2, unit b18-vendor-claims; ledger build/38, review/78, review/79; REQ-FLOW-111).
@@ -6373,7 +6383,10 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     const cursor = flowed(section("Step 8: Cursor"));
     expect(cursor).not.toContain("unknown until a real run");
     expect(cursor).toContain("`npm ci` and `gh auth setup-git` both passed in that environment, and the pre-flight still refused on `direct-push`");
-    expect(cursor).toContain("No setup is known that passes.");
+    // TEST CHANGE, justified (c-cloud-docs, REQ-FLOW-170): the step now says why Cursor's cloud refuses, by design, in
+    // place of "No setup is known that passes".
+    expect(cursor).toContain(CURSOR_REFUSAL);
+    expect(cursor).not.toContain("No setup is known that passes.");
     expect(cursor).toContain("That is its own report, not checked.");
     const cloud = flowed(read(CLOUD));
     expect(cloud).toContain("Leave both unset, since a token you set goes to `gh` as it is");
@@ -6464,12 +6477,43 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     // The three faults that stopped Claude's run before landing, each named.
     expect(proof).toContain("The test-runner sub-agent returned no result in three tries");
     expect(proof).toContain("The run's `morning.md` held a summary line before its first section");
-    expect(proof).toContain("It reads the run from a marker that must end the pull request's body");
+    // TEST CHANGE, justified (c-cloud-docs, REQ-FLOW-168): the fault stays the 2026-11-06 run's, now in the past tense,
+    // and the page says the job finds the marker before a footer-shaped tail, unproven by a real run.
+    expect(proof).toContain("It then read the run from a marker that had to end the pull request's body");
+    expect(proof).toContain("The job now finds the marker when only a footer follows it");
+    expect(proof).toContain("Any other text after the marker still reads as no run. No real run has shown this yet.");
+    expect(proof).not.toContain("It reads the run from a marker that must end the pull request's body");
     // TEST CHANGE, justified (REQ-FLOW-168): the sentence above is the 2026-11-06 run's fault, and the job no longer
     // holds that rule: it reads the run through `bodyRun`, which finds the marker before a client's short footer.
     expect(read("src/cli/commands/runLand.ts"), "the job's first read is not the shared finder").toContain("const run = bodyRun(pr.body)?.run ?? \"\";");
     expect(read("src/cli/commands/runLand.ts"), "the job still holds the end-anchored rule the run met").not.toContain("const BODY_MARKER");
-    expect(proof).toContain("No setup is known that passes.");
+    // TEST CHANGE, justified (c-cloud-docs, REQ-FLOW-170): the Cursor line now says why that cloud refuses, by design.
+    expect(proof).toContain(CURSOR_REFUSAL);
+    expect(proof).not.toContain("No setup is known that passes.");
+  });
+
+  // ADDED (c-cloud-docs, REQ-FLOW-170): what GitHub's webhooks and Claude's cloud provide, and what the pre-flight counts
+  // as binding for an administrator, each said once where a person meets it, with the unmeasured part named.
+  it("says why the webhook branch needs a workflow, what Claude's cloud needs no line for, and what binds an administrator", () => {
+    const webhook = flowed(section("Step 8: Cursor").split("### Where the issue trigger is not offered")[1] ?? "");
+    expect(webhook).toContain("GitHub signs each webhook delivery with its secret, in the `X-Hub-Signature-256` header, and never sends the secret itself");
+    expect(webhook).toContain("So a repository webhook cannot carry Cursor's key");
+    const claude = flowed(section("Step 7: Claude"));
+    expect(claude).toContain("`gh` needs no setup line");
+    expect(claude).toContain("For Node, no setup line is documented. If `node-engine` refuses, put a newer Node first on PATH in the setup script.");
+    const rule = flowed(section("Step 2: Block direct pushes to the default branch"));
+    expect(rule).toContain("`current_user_can_bypass`");
+    expect(rule).toContain("only where that field reads `never` or `pull_requests_only`");
+    expect(rule).toContain("What the field answers for an administrator has not been measured in a real run yet.");
+    // The two values the page names are the two the pre-flight counts.
+    expect(read("src/runs/preflight.ts")).toContain('if (bypass === "never" || bypass === "pull_requests_only") {');
+    const cloud = flowed(read(CLOUD));
+    expect(cloud).toContain(CURSOR_REFUSAL);
+    // REQ-FLOW-168: the session's land no longer refuses on the marker, and the job's 2026-11-06 answer stays dated.
+    expect(cloud).not.toContain("It refuses first with `no pull request from");
+    expect(cloud).toContain("It refuses with `the review threads could not be read`.");
+    expect(cloud).toContain("Every reader of the marker now finds it when only a footer follows it");
+    expect(cloud).not.toContain("since the footer follows the marker");
   });
 
   it("puts the App install first when nothing fired, and the dropped event next", () => {
