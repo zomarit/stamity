@@ -536,6 +536,33 @@ describe("implementer — single unit, single writer", () => {
     expect(testing).toMatch(/gating tests are not weakened/i);
     expect(testing).toMatch(/not edited, deleted, skipped, or special-cased/i);
     expect(testing).toMatch(/inline justification comment/i);
+    // Added with the tests-only mode (REQ-FLOW-171, REQ-FLOW-172): the lead phrase above stays,
+    // and the rule now turns on the class `gate classify` prints, never one the unit states.
+    expect(testing).toMatch(/`stamity gate classify --base HEAD --paths <its files>` prints/);
+    expect(testing).toMatch(/never one the unit states/i);
+    expect(testing).toMatch(/a unit mixing a code file and a doc takes the strongest class/i);
+    expect(testing).toMatch(
+      /`product`, `public-contract` or `security-sensitive` unit builds against the held tests a tests-only dispatch wrote, and never edits, deletes or skips one/,
+    );
+    expect(testing).toMatch(/with no held tests, a result with no test delta and no stated reason is incomplete/i);
+    expect(testing).toMatch(/a `docs`, `config` or `records` unit adds no test and says `no new test: <class>`/i);
+  });
+
+  it("writes held tests from the criteria alone in a tests-only dispatch", async () => {
+    const mode = section(await load("agents/stamity-implementer.md"), "Tests-only dispatch").replace(
+      /\s+/g,
+      " ",
+    );
+
+    // The builder's code is never an input: the tests come from the criteria and interfaces.
+    expect(mode).toMatch(/the unit's criteria and interfaces, never another builder's code/i);
+    expect(mode).toMatch(/runs them, and shows each one fails for the expected reason/i);
+    expect(mode).toMatch(/a typecheck failure on an interface not yet built is an expected reason/i);
+    expect(mode).toMatch(/returns the test paths and writes no product code/i);
+    expect(mode).toContain("`<unit>-tests-implementer-r<N>.md`");
+    // A dispute never reopens the held test to the builder that disputes it.
+    expect(mode).toMatch(/returns `BLOCKED_DEPENDENCY` naming it/);
+    expect(mode).toMatch(/a fresh tests-only spawn answers the dispute/i);
   });
 
   it("proposes a spec delta rather than writing the spec", async () => {

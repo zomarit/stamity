@@ -2,7 +2,7 @@
 id: implementer-unresolvable-cell-blocked-dependency
 class: golden
 claim: "An implementer dispatched by pointer whose plan cell names an interface that no longer resolves at HEAD returns BLOCKED_DEPENDENCY in full, naming the interface, where the cell expected it and what HEAD holds instead, with the smallest unblocking input and the work done before the block listed file by file, and the contract census line `none touched`; it neither builds against a guessed seam nor writes a report or a digest."
-source: content/agents/stamity-implementer.md:31-35,108-110,114-117,132-134
+source: content/agents/stamity-implementer.md:31-35,122-124,128-131,146-148
 metric: rubric
 ---
 
