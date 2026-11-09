@@ -140,8 +140,17 @@ import { defineConfig } from "tsdown";
  * 13,720 bytes over the old ceiling. That code is the feature, not something
  * bundled in by accident; the pre-strip figure above stays under this ceiling
  * too, so the JSDoc test is still the strip's guard.
+ *
+ * Raised 2026-11-09 from 3 MiB to 3.25 MiB (3,407,872 bytes), with its own
+ * reason: 1.19.0 adds the `gc`, `skill`, `away`, `ready` and `run metrics`
+ * verbs plus the linked-install guard. The build before this change printed
+ * 3,173,877 bytes (the `[size]` line of a fresh `npm run build` on `dce995b3`,
+ * after `gc` and `skill`), 28,149 bytes over the old ceiling with more of that
+ * work still to land. That code is the feature, not something bundled in by
+ * accident; the ceiling still catches a category error, and the pre-strip
+ * figure above stays under it too, so the JSDoc test is still the strip's guard.
  */
-export const LOGIC_BUDGET_BYTES = 3 * 1024 * 1024;
+export const LOGIC_BUDGET_BYTES = 3.25 * 1024 * 1024;
 
 /**
  * The staged corpus half — `dist/content` plus `dist/packs`, plus `dist/fork` in
