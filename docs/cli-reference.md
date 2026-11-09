@@ -232,6 +232,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--track` | worktree setup: track the remote branch of that name | — |
 | `--no-track` | worktree setup: create a new local branch off HEAD instead of tracking | — |
 | `--copy-secrets` | worktree setup: copy entries marked `secret` in the policy — without it they are skipped and the report says so | — |
+| `--run <run-id>` | worktree setup: name the run this lane belongs to in its receipt | — |
 | `--all` | worktree cleanup: sweep every worktree this lane manages | — |
 | `--files-only` | worktree cleanup: invert the receipt's files and leave the checkout in place | — |
 | `--force` | worktree cleanup: proceed on a worktree carrying uncommitted changes | — |

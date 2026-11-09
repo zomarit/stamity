@@ -439,6 +439,47 @@ describe.skipIf(!gitAvailable)("worktree setup", () => {
     expect(await mustGit(root, "status", "--porcelain")).toBe(before);
   });
 
+  it("names the run in the receipt under --run, and writes no run without it (REQ-WORKTREE-019)", async () => {
+    const { root, farm } = await seedRepo(getTemp().dir);
+    const runId = "2026-11-09_last-before-2-0";
+
+    const tagged = await runWorktree(root, ["setup", "feat", "--run", runId, "--copy-secrets", "-y", "--json"]);
+    const untagged = await runWorktree(root, ["setup", "other", "--copy-secrets", "-y", "--json"]);
+
+    expect(tagged.code).toBe(0);
+    expect(untagged.code).toBe(0);
+    const readReceipt = async (path: string): Promise<Record<string, unknown>> => {
+      const gitDir = (await mustGit(path, "rev-parse", "--git-dir")).trim();
+      return JSON.parse(await readFile(join(gitDir, "stamity", "worktree-receipt.json"), "utf8")) as Record<
+        string,
+        unknown
+      >;
+    };
+    const taggedReceipt = await readReceipt(join(farm, "feat"));
+    const untaggedReceipt = await readReceipt(join(farm, "other"));
+    expect(taggedReceipt["run"]).toBe(runId);
+    expect(taggedReceipt["version"]).toBe(1);
+    expect("run" in untaggedReceipt).toBe(false);
+  });
+
+  it("refuses a --run that is not a run id before it creates anything, on a dry run too", async () => {
+    const { root, farm } = await seedRepo(getTemp().dir);
+
+    for (const args of [
+      ["setup", "feat", "--run", "../2026-11-09_x", "-y", "--json"],
+      ["setup", "feat", "--run", "not-a-run", "--dry-run", "--json"],
+    ]) {
+      // oxlint-disable-next-line no-await-in-loop -- the two invocations share one fixture and must not race
+      const result = await runWorktree(root, args);
+      expect(result.code).toBe(1);
+      const doc = singleDoc(result);
+      expect(doc).toMatchObject({ ok: false });
+      expect(JSON.stringify(doc)).toContain("--run");
+    }
+    expect(await exists(join(farm, "feat"))).toBe(false);
+    expect(await mustGit(root, "branch", "--list", "feat")).toBe("");
+  });
+
   it("withholds a secret entry non-interactively: exit 0, the row says skipped, a notice names the flag", async () => {
     const { root, farm } = await seedRepo(getTemp().dir);
 
@@ -617,6 +658,20 @@ describe.skipIf(!gitAvailable)("worktree cleanup", () => {
     });
     expect(await exists(join(farm, "feat"))).toBe(false);
     // Invariant 4: a branch is never deleted by this lane.
+    expect(await mustGit(root, "branch", "--list", "feat")).toContain("feat");
+  });
+
+  it("cleans a lane whose receipt names its run exactly as an untagged one (REQ-WORKTREE-019)", async () => {
+    const { root, farm } = await seedRepo(getTemp().dir);
+    await runWorktree(root, ["setup", "feat", "--run", "2026-11-09_last-before-2-0", "--copy-secrets", "-y"]);
+    expect(await exists(join(farm, "feat", ".env.mcp"))).toBe(true);
+
+    const result = await runWorktree(root, ["cleanup", "feat", "--json"]);
+
+    expect(result.code).toBe(0);
+    const report = (singleDoc(result)["worktrees"] as Record<string, unknown>[])[0];
+    expect(report).toMatchObject({ removed: true, branchCommand: "git branch -d feat" });
+    expect(await exists(join(farm, "feat"))).toBe(false);
     expect(await mustGit(root, "branch", "--list", "feat")).toContain("feat");
   });
 

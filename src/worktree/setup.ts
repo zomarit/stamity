@@ -1,6 +1,7 @@
 import { chmod, lstat, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { acquireWriteLock, isCrossProcessLockingEnabled } from "../merge/atomicWrite.ts";
+import { isRunId } from "../runs/layout.ts";
 import { EngineError } from "../types/errors.ts";
 import {
   addWorktree,
@@ -184,6 +185,11 @@ export interface WorktreeSetupPlanOptions {
   readonly run?: WorktreeGitRunner;
   /** Pre-read policy, so one invocation reads the file once. */
   readonly policy?: WorktreePolicy;
+  /**
+   * The run folder's name the receipt is tagged with (REQ-WORKTREE-019).
+   * `runId`, not `run`: `run` is the git runner above.
+   */
+  readonly runId?: string;
 }
 
 /** Whether the new checkout is usable by a session right now. */
@@ -324,6 +330,15 @@ export async function planWorktreeSetup(
 ): Promise<WorktreeSetupPlan> {
   const run = opts.run ?? runGit;
   const consent = opts.consent ?? UNANSWERED_CONSENT;
+
+  // First, before git is asked anything: a dry run refuses the same tag the
+  // real run would, and the real run refuses it before any tree exists.
+  if (opts.runId !== undefined && !isRunId(opts.runId)) {
+    refuse(
+      `--run ${JSON.stringify(opts.runId)} is not a run id, so the receipt cannot name it.`,
+      "Pass the run folder's name as it stands under .stamity/runs/ (YYYY-MM-DD_<slug>), or leave --run out.",
+    );
+  }
 
   await assertWorktreeName(run, opts.repoRoot, opts.name);
 
@@ -636,6 +651,7 @@ async function setupUnderLock(
       createWorktreeReceipt({
         createdAt: (opts.now?.() ?? new Date()).toISOString(),
         engineVersion: opts.engineVersion,
+        ...(opts.runId === undefined ? {} : { run: opts.runId }),
         worktree: { path: plan.worktreePath, branch: branchPlan.branch, head },
         entries: receiptEntries,
       }),

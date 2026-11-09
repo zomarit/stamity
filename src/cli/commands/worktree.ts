@@ -214,6 +214,7 @@ function rerunLine(subcommand: string, name: string | null, opts: Record<string,
     if (opts[key] === true) parts.push(positive);
     if (opts[key] === false) parts.push(negative);
   }
+  if (typeof opts["run"] === "string") parts.push("--run", opts["run"]);
   return parts.join(" ");
 }
 
@@ -619,6 +620,9 @@ async function runSetup(
     // REQ-WORKTREE-009: a preview never contacts the remote. A preview that
     // mutates remote-tracking refs is a preview that changed something.
     fetch: !ctx.dryRun,
+    // REQ-WORKTREE-019: the planner refuses a value that is not a run id, on a
+    // dry run as on a real one, before anything is created.
+    ...(typeof opts["run"] === "string" ? { runId: opts["run"] } : {}),
   };
 
   // A DRY RUN NEVER ASKS. "Touches nothing" includes the operator's attention:
@@ -964,8 +968,8 @@ export const worktreeCommand: CommandModule = {
   ],
 
   /**
-   * Commander registers flags per COMMAND, not per subcommand, so all seven are
-   * visible everywhere and are inert wherever the subcommand does not read them.
+   * Commander registers flags per COMMAND, not per subcommand, so every flag is
+   * visible everywhere and is inert wherever the subcommand does not read it.
    * Each description names the subcommand that reads it rather than leaving a
    * reader of `--help` — and of the generated reference page, which copies these
    * strings verbatim — to find out by trying.
@@ -987,6 +991,7 @@ export const worktreeCommand: CommandModule = {
       "--copy-secrets",
       "worktree setup: copy entries marked `secret` in the policy — without it they are skipped and the report says so",
     );
+    cmd.option("--run <run-id>", "worktree setup: name the run this lane belongs to in its receipt");
     cmd.option("--all", "worktree cleanup: sweep every worktree this lane manages");
     cmd.option(
       "--files-only",

@@ -89,6 +89,69 @@ describe("worktree receipt — placement and round trip (REQ-WORKTREE-006)", () 
   });
 });
 
+describe("worktree receipt — the run a lane belongs to (REQ-WORKTREE-019)", () => {
+  const RUN_ID = "2026-11-09_last-before-2-0";
+
+  function tagged(run: unknown): Record<string, unknown> {
+    return {
+      version: 1,
+      createdAt: "2026-11-09T10:00:00.000Z",
+      engineVersion: "1.19.0",
+      run,
+      worktree: { path: "/farm/feat", branch: "feat", head: "abc1234" },
+      entries: [receiptEntry()],
+    };
+  }
+
+  it("round-trips a receipt tagged with its run, at the same version", async () => {
+    const gitDir = getRoot().dir;
+    const receipt = createWorktreeReceipt({
+      createdAt: "2026-11-09T10:00:00.000Z",
+      engineVersion: "1.19.0",
+      run: RUN_ID,
+      worktree: { path: "/farm/feat", branch: "feat", head: "abc1234" },
+      entries: [receiptEntry()],
+    });
+
+    await writeWorktreeReceipt(gitDir, receipt);
+    const read = await readWorktreeReceipt(gitDir);
+
+    expect(read.unreadable).toBeNull();
+    expect(read.receipt).toEqual(receipt);
+    expect(read.receipt?.run).toBe(RUN_ID);
+    expect(read.receipt?.version).toBe(WORKTREE_RECEIPT_VERSION);
+    expect(await readFile(worktreeReceiptPath(gitDir), "utf8")).toContain(`"run": "${RUN_ID}"`);
+  });
+
+  it("reads a receipt with no run as before, carrying no run key", async () => {
+    const gitDir = getRoot().dir;
+    const { run: _omitted, ...untagged } = tagged(RUN_ID);
+    await seedReceipt(gitDir, untagged);
+
+    const read = await readWorktreeReceipt(gitDir);
+
+    expect(read.unreadable).toBeNull();
+    expect(read.receipt?.entries).toEqual([receiptEntry()]);
+    expect(read.receipt === null ? true : "run" in read.receipt).toBe(false);
+  });
+
+  it("reads a run that is not a run id as no run, keeping the receipt's rows", async () => {
+    // A hand-edited tag must never tie a lane to a run: the safe reading is
+    // untagged, which no run-scoped clean-up claims, while the rows keep their
+    // teardown authority exactly as an untagged receipt's do.
+    for (const bad of ["../2026-11-09_x", "2026-11-09_Last", "", 42]) {
+      const gitDir = join(getRoot().dir, `case-${String(bad).length}-${typeof bad}`);
+      // oxlint-disable-next-line no-await-in-loop -- each case seeds and reads its own directory, in order
+      await seedReceipt(gitDir, tagged(bad));
+      // oxlint-disable-next-line no-await-in-loop -- see above
+      const read = await readWorktreeReceipt(gitDir);
+      expect(read.unreadable).toBeNull();
+      expect(read.receipt?.entries).toEqual([receiptEntry()]);
+      expect(read.receipt === null ? true : "run" in read.receipt).toBe(false);
+    }
+  });
+});
+
 describe("worktree receipt — an unreadable receipt reads as null (REQ-WORKTREE-006)", () => {
   it("reports an absent receipt as null rather than throwing", async () => {
     const read = await readWorktreeReceipt(getRoot().dir);

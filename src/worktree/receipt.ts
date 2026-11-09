@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { lstat, readFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { atomicWriteFile } from "../merge/atomicWrite.ts";
+import { isRunId } from "../runs/layout.ts";
 
 /**
  * The worktree receipt: what `setup` placed, so `cleanup` can invert exactly
@@ -72,6 +73,13 @@ export interface WorktreeReceipt {
   readonly version: number;
   readonly createdAt: string;
   readonly engineVersion: string;
+  /**
+   * The run folder's name this lane was set up for (`setup --run`), absent for
+   * a lane set up by hand. Optional and additive, so the version stays 1: the
+   * reader has always ignored keys it does not know, which means an older
+   * engine reads a tagged receipt as an untagged one rather than refusing it.
+   */
+  readonly run?: string;
   readonly worktree: WorktreeReceiptTarget;
   readonly entries: readonly WorktreeReceiptEntry[];
 }
@@ -192,11 +200,17 @@ export async function readWorktreeReceipt(gitDir: string): Promise<WorktreeRecei
     else entries.push(parsed);
   });
 
+  // A tag that is not a run id reads as NO tag, never as a refusal: the rows
+  // keep the teardown authority an untagged receipt's rows have, and a
+  // hand-edited tag cannot tie this lane to any run's clean-up.
+  const run = record["run"];
+
   return {
     receipt: {
       version: WORKTREE_RECEIPT_VERSION,
       createdAt: stringOr(record["createdAt"], ""),
       engineVersion: stringOr(record["engineVersion"], ""),
+      ...(typeof run === "string" && isRunId(run) ? { run } : {}),
       worktree: parseTarget(record["worktree"]),
       entries,
     },
