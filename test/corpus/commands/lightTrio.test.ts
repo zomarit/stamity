@@ -475,8 +475,11 @@ describe("light trio — the close walk (REQ-FLOW-080)", () => {
     const protocol = await load("rules/stamity-question-protocol.md");
 
     expect(protocol.parsed.body).toMatch(/^## Close walk$/m);
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 1 unit k-protocol, REQ-FLOW-174): the close
+    // speaks in chat, so the walk's last print is the summary alone; the proof block goes to the
+    // record and the pull request. The pointer still resolves to the summary-last sentence.
     expect(protocol.parsed.body.replace(/\s+/g, " ")).toContain(
-      "The summary or proof block prints after the last answer, and nothing prints after it.",
+      "The summary prints after the last answer, and nothing prints after it.",
     );
   });
 

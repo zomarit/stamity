@@ -239,10 +239,13 @@ describe("question-protocol — the five triggers and the ask shape", () => {
     // Items 1-5 are the trigger set; later numbered items carry the ask shape,
     // the sub-agent contract, and the unattended-run degradation.
     const triggers = numbered.slice(0, 5).map((match) => match[2]);
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 1 unit k-protocol, REQ-FLOW-128): trigger 3
+    // now covers an act that reaches people outside the repository as well as one that cannot be
+    // undone, so its name reads "Irreversible or outward action". Still five triggers, same order.
     expect(triggers).toEqual([
       "Ambiguous scope",
       "Multiple valid interpretations",
-      "Irreversible action",
+      "Irreversible or outward action",
       "Missing acceptance criteria",
       "Unattested product decision",
     ]);
@@ -321,16 +324,27 @@ describe("question-protocol — the five triggers and the ask shape", () => {
   // Added 2026-10-21 (REQ-FLOW-128, plan 018 file 1 unit u8, build/13): trigger 3 names a deploy
   // and a message sent outside the repository, the run's own pull request aside. Item 3 sits on
   // :26-27, outside the ranges the eval cases quote, so the range hash below does not hold it.
-  it("names a deploy and an outside message, the run's own pull request aside, in trigger 3 (REQ-FLOW-128)", async () => {
+  // TEST CHANGE, justified (2026-11-09, plan 024 file 1 unit k-protocol, REQ-FLOW-128): the
+  // trigger is now the general rule, an act that cannot be undone or that reaches people outside
+  // the repository. "A deploy" no longer stands alone, so a deploy the repository can undo is not
+  // the trigger, while a release users receive is named. The pull-request carve-out and the force
+  // push sentence hold, and the item stays on :26-27.
+  it("asks for an act that cannot be undone or reaches people outside, a release named, a bare deploy not (REQ-FLOW-128)", async () => {
     const floor = section(await load("rules/stamity-question-protocol.md"), "Floor");
-    const start = floor.indexOf("3. **Irreversible action**");
+    const start = floor.indexOf("3. **Irreversible or outward action**");
     expect(start, "trigger 3 is missing from Floor").toBeGreaterThanOrEqual(0);
     const item3 = flatten(floor.slice(start, floor.indexOf("4. **", start)));
 
-    expect(item3).toContain("renaming a public identifier, a deploy,");
+    expect(item3).toContain("an act that cannot be undone or that reaches people outside the repository:");
+    expect(item3).toContain("a release users receive, a message sent outside it (the run's own pull request aside),");
     expect(item3).toContain(
-      "a message sent outside the repository (the run's own pull request aside), rewriting shared history.",
+      "deleting data, dropping a column, renaming a public identifier, rewriting shared history. A force push stays the person's, even on a yes.",
     );
+    expect(item3).not.toMatch(/\bdeploy/i);
+
+    const lines = (await load("rules/stamity-question-protocol.md")).raw.split("\n");
+    expect(lines[25]?.startsWith("3. **Irreversible or outward action**")).toBe(true);
+    expect(lines[27]?.startsWith("4. **Missing acceptance criteria**")).toBe(true);
   });
 
   it("blocks writes while a trigger is unresolved and refuses manufactured questions", async () => {
@@ -512,11 +526,35 @@ describe("question-protocol — the close walk (REQ-FLOW-080)", () => {
     expect(walk).toMatch(/Critical, Warning and `decision-waiting` items first, the recommended option first/);
     expect(walk).toMatch(/up to the tool's per-call limit/);
     expect(walk).toMatch(/further rounds, one ask per turn, until none is undecided/);
-    expect(walk).toMatch(/The summary or proof block prints after the last answer, and nothing prints after it\./);
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 1 unit k-protocol, REQ-FLOW-174): the close
+    // speaks in chat, so the walk's last print is the summary alone; the proof block goes to the
+    // record and the pull request, not to the person after the last answer.
+    expect(walk).toMatch(/The summary prints after the last answer, and nothing prints after it\./);
+    expect(walk).not.toMatch(/proof block/);
     expect(walk).toMatch(/each leftover takes its declared default/);
     expect(walk).toContain("Default applied:");
     expect(walk).toMatch(/A real defect is never defaulted to dropped: it waits as `decision-waiting`\./);
     expect(walk).toMatch(/A question a headless client skipped reads as no answer\./);
+  });
+
+  // Added 2026-11-09 (plan 024 file 1 unit k-protocol, REQ-FLOW-174, REQ-FLOW-175): the review
+  // tool's unfixed comments on the run's pull request are a leftover source of their own, the walk
+  // opens with two plain lines saying what it holds (not "summary", the word the walk keeps for the
+  // closing print it holds back until the last answer), and each leftover carries its reason in one
+  // plain line. The walk keeps :77-98 so the two cases citing it keep their ranges.
+  it("walks the review tool's unfixed comments too, opening with two plain lines and a one-line reason each (REQ-FLOW-174, REQ-FLOW-175)", async () => {
+    const file = await load(RELPATH);
+    const walk = flatten(section(file, "Close walk"));
+
+    expect(walk).toContain(
+      "A run that ends with leftovers (open findings, deferred items, questions still undecided, the review tool's unfixed comments on the run's pull request) walks them before it reports.",
+    );
+    expect(walk).toContain("The walk opens with two plain lines saying what it holds.");
+    expect(walk).toContain("Each leftover is one question in the client's own question tool, its reason one plain line:");
+
+    const lines = file.raw.split("\n");
+    expect(lines[76]).toBe("## Close walk");
+    expect(lines[97]).toBe("the answer.");
   });
 
   it("names no client and no tool, and renders each client's line through the marker", async () => {

@@ -20,16 +20,16 @@ note on its own question tool, is left out here):
 ```text
 ## Close walk
 
-A run that ends with leftovers (open findings, deferred items, questions still
-undecided) walks them before it reports. No leftovers, no walk.
+A run that ends with leftovers (open findings, deferred items, questions still undecided, the review
+tool's unfixed comments on the run's pull request) walks them before it reports. No leftovers, no walk.
 
-- Each leftover is one question in the client's own question tool: Critical,
-  Warning and `decision-waiting` items first, the recommended option first, every
-  option with its one-line trade-off, and a declared default (item 6).
+- The walk opens with two plain lines saying what it holds. Each leftover is one question in the
+  client's own question tool, its reason one plain line: Critical, Warning and `decision-waiting` items
+  first, the recommended option first, every option with its one-line trade-off, and a declared default (item 6).
 - Related questions bundle into one call up to the tool's per-call limit; the
   rest follow in further rounds, one ask per turn, until none is undecided.
-- The summary or proof block prints after the last answer, and nothing prints
-  after it. A summary printed while a leftover is still open is the defect.
+- The summary prints after the last answer, and nothing prints after it. A
+  summary printed while a leftover is still open is the defect.
 - With nobody to answer (item 8), each leftover takes its declared default and
   the run writes its `Default applied:` line. A real defect is never defaulted
   to dropped: it waits as `decision-waiting`. A question a headless client
