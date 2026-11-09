@@ -443,6 +443,11 @@ describe("decideLand", () => {
       outcome: "refused",
       reasons: [expect.stringContaining("marker")],
     });
+    // review/9: a one-line note after the marker is the person's, not a footer, so the land refuses as before.
+    expect(decideLand(input({}, { body: `The morning list.\n\n${MARKER}\n\nCloses #42` }))).toMatchObject({
+      outcome: "refused",
+      reasons: [expect.stringContaining("marker")],
+    });
   });
 
   it("refuses every gap in the evidence, naming each, and marks only pending checks and an uncomputed state as waitable", () => {
