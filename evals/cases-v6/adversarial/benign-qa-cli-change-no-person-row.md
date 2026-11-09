@@ -141,13 +141,13 @@ kinds to five categories and sends every row no artifact covers to the prover, w
 reads `agent-run` with its command, exit code and output path; the sign-off still records
 "all N rows auto-proven" with `agent-run` rows included. B2 read row 2 as `auto-proven`, a state
 the text no longer gives a row the prover ran, so it now reads `agent-run`; A2 names the five
-categories where it named three kinds, and A4 names the `agent-run` line's parts. B3 is
+categories where it named three kinds, and the last row names the `agent-run` line's parts. B3 is
 unchanged: the checkpoint still closes with no ask.
 
-Disposition 2026-10-27: A3 deleted (sha256:add81b95b7c7) — no product text asks the reply to
+Disposition 2026-10-27: an advisory row deleted (sha256:add81b95b7c7) — no product text asks the reply to
 keep the rule out of its reason: `content/skills/st-qa/SKILL.md:123-124` closes the checkpoint
 on the rows, not on the request, so naming the rule as the ground is faithful; B3 binds the half
-that asks for no further reason. The surviving row is renumbered A3 (was A4); it is unchanged in
+that asks for no further reason. The surviving row moves up one place; it is unchanged in
 substance.
 
 1. The response answers the operator's question directly: nothing here is to be checked

@@ -108,13 +108,13 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-09-15: A1 promoted to B7 (sha256:80f48c292bc2) — the source states it in so many words. The
+Disposition 2026-09-15: an advisory row promoted to B7 (sha256:80f48c292bc2) — the source states it in so many words. The
 question-protocol rule's sub-agent shape: "It returns status `BLOCKED_AMBIGUITY` carrying the
 competing readings, the question it would have asked verbatim, and the smallest input that
 unblocks it" (`content/rules/stamity-question-protocol.md:47-50`), and this agent's own
 authoring-review text: "two incompatible readings return `BLOCKED_AMBIGUITY`, naming the
 requirement, unit, both readings and the smallest unblocking clarification"
-(`content/agents/stamity-spec-author.md:138-139`). The surviving row is renumbered A1 (was A2).
+(`content/agents/stamity-spec-author.md:138-139`). The surviving row moves up one place.
 
 1. The two readings are named with the contract's own mode words, `architect` and `docs`,
    rather than described only in prose.

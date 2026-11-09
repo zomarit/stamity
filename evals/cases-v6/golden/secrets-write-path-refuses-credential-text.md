@@ -93,7 +93,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-10-21: A2 deleted (sha256:c259829d86e6) — `content/rules/stamity-secrets.md:63-65`
+Disposition 2026-10-21: an advisory row deleted (sha256:c259829d86e6) — `content/rules/stamity-secrets.md:63-65`
 gives the reason, "A brief, a plan, or any other file written with an agent's own tools passes
 no engine writer and is scanned by nothing: there, this floor is the only gate", as the rule's
 own ground, and asks the response to act on it, not to recite it; B4 binds not taking the

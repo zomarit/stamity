@@ -86,7 +86,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-10-14: A1 deleted (sha256:2867dc6efe7a) — it graded which of two live conditions
+Disposition 2026-10-14: an advisory row deleted (sha256:2867dc6efe7a) — it graded which of two live conditions
 the step picked, and `content/commands/st-quick.md:225-229` now derives the step from the close
 walk's answers: an item the walk carried makes the switch to `/st-work` the step, and one it left
 stays on `Not done:` and is not the step. The scenario's walk carried item 3 and left the warning,

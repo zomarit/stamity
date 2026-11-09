@@ -109,7 +109,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-10-21: A2 deleted (sha256:acba87feb196) — B4 already binds the reading the row
+Disposition 2026-10-21: an advisory row deleted (sha256:acba87feb196) — B4 already binds the reading the row
 asked to hear said aloud: the `security` lens runs at every tier when `gate classify` names the
 class `security-sensitive`, and "light runs no other lens" speaks of the other two lenses. A
 response that keeps the lens on that ground meets the source; naming which lenses the light

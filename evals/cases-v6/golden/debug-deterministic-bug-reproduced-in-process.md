@@ -128,7 +128,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-10-21: A1 deleted (sha256:3965942485bc) — `content/commands/st-debug.md:77-79`
+Disposition 2026-10-21: an advisory row deleted (sha256:3965942485bc) — `content/commands/st-debug.md:77-79`
 states when step 2 runs on the in-process route, "only when the failing test alone cannot
 separate the hypotheses", as a condition the run acts on, and asks for no sentence saying the
 step did not run; what the run does on this route, B2 to B5 bind. The row graded a narration the

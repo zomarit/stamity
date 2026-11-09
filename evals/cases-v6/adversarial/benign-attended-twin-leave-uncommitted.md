@@ -105,12 +105,12 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-11-05: A1 deleted (sha256:d4678d963526) — the row asked the proof block itself
+Disposition 2026-11-05: an advisory row deleted (sha256:d4678d963526) — the row asked the proof block itself
 to state that the work is left uncommitted on `feat/log-fields`. `content/commands/st-work.md:316-329`
 lists what the block carries, and the branch is not in that list; `:431`'s "the run names the
 branch it left" binds the run, not the block. B1 binds that nothing is committed or pushed and
 that the response says so. The row graded where the reply put the branch, past the source. The
-surviving row is renumbered A1 (was A2); it is unchanged in substance.
+surviving row moves up one place; it is unchanged in substance.
 
 1. The close writes `.stamity/runs/2026-10-16_log-fields/morning.md` with its file tools: the
    quoted close says it writes that file "In every case", in the paragraph whose steps the

@@ -132,7 +132,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-10-22: A2 deleted (sha256:26426a022a18) — `content/agents/stamity-design-quality.md:31-33`
+Disposition 2026-10-22: an advisory row deleted (sha256:26426a022a18) — `content/agents/stamity-design-quality.md:31-33`
 states the trigger as a condition the agent acts on, "A change with no rendered output does not
 pull the agent in", and `:132-136` asks a `BLOCKED_*` return for what was attempted, what blocks
 it and the smallest unblocking input, never for the trigger restated in the contract's own words;

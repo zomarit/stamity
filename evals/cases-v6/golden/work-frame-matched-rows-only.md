@@ -126,11 +126,11 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-10-21: A2 deleted (sha256:59d06a1b8c65) — `content/commands/st-work.md:21-30`
+Disposition 2026-10-21: an advisory row deleted (sha256:59d06a1b8c65) — `content/commands/st-work.md:21-30`
 has Frame surface the rows the query returns, "the rows it always shows" among them, and asks
 for no account of why the query showed each; B2 binds naming the tagged row. The row graded an
 explanation of the query's selection the source does not ask Frame to give. A1 is unchanged;
-the surviving third row is renumbered A2 (was A3), unchanged in substance.
+the surviving third row moves up one place, unchanged in substance.
 
 1. Frame asks no question of its own about the row at line 8: it rides the plan gate's
    question and is left in the inbox by default.

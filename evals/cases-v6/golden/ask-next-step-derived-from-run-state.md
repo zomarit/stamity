@@ -97,7 +97,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-09-15: A2 deleted (sha256:06153084ae0b) — `content/commands/st-ask.md` states what evidence carries on
+Disposition 2026-09-15: an advisory row deleted (sha256:06153084ae0b) — `content/commands/st-ask.md` states what evidence carries on
 a switch in the escalation table's third column, and then states what the answer owes: "When the
 destination is implementation, state the line verbatim: **switch to `/st-work` to apply**. Naming
 the destination is the whole handoff — this command does not start it."
@@ -105,7 +105,7 @@ the destination is the whole handoff — this command does not start it."
 required more than the source does, of a sentence that says naming the destination is the whole
 of it; B4 already binds the destination line.
 
-Disposition 2026-10-22: A1 deleted (sha256:acc7126176d0) — `content/commands/st-ask.md:158-160`
+Disposition 2026-10-22: an advisory row deleted (sha256:acc7126176d0) — `content/commands/st-ask.md:158-160`
 says "a Blocked row makes what unblocks it the step", and B2 binds exactly that: the step names
 what unblocks `staging-env`, read access to `infra/staging` or the rendered manifest pasted in.
 The row graded the same requirement a second time, as the order of the step's words.

@@ -138,7 +138,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-10-27: A2 deleted (sha256:a366dbce1c0f) — `packs/frontend/commands/st-ui-review.md:92-93`
+Disposition 2026-10-27: an advisory row deleted (sha256:a366dbce1c0f) — `packs/frontend/commands/st-ui-review.md:92-93`
 is the command's rationale, not a line of the reply: `:104` gives the refusal as one line,
 which B2 binds. A1 is unchanged and still declared.
 

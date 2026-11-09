@@ -178,7 +178,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-10-21: A2 deleted (sha256:5c76dbdf73b5) — the qa skill states that a row over
+Disposition 2026-10-21: an advisory row deleted (sha256:5c76dbdf73b5) — the qa skill states that a row over
 the cap "blocks nothing by itself" as a property of the listing, and the case grades that
 property where it shows: B2 binds rows 4 and 5 listed over the cap, not asked, each with its
 reason, and B6 binds a `Shippable` that reads NO naming row 2 as the row that blocks it. A

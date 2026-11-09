@@ -1367,6 +1367,11 @@ const disposedHash = sha256(parseCase(caseMarkdown("case-disposed", priorDispose
 const recycledHash = sha256(parseCase(caseMarkdown("case-recycled", priorRecycledAdvisory), recycledPath).advisory[0]).slice(0, 12);
 const disposedNote = `Disposition 2026-09-15: A2 deleted (sha256:${disposedHash}) — the governing text asks no such thing.\n\n1. The response is complete.`;
 const recycledNote = `Disposition 2026-09-15: A1 promoted to B5 (sha256:${recycledHash}) — reason.\n\n1. The row that survives and gets renumbered.`;
+// Added 2026-11-09 (plan 024 file 2, unit e-disposition-notes; REQ-PROVE-047): the same two notes in
+// the shape that names no retired row. The labelled pair above stays, since the runner reads both
+// shapes during the change.
+const unlabelledDisposedNote = `Disposition 2026-09-15: an advisory row deleted (sha256:${disposedHash}) — the governing text asks no such thing.\n\n1. The response is complete.`;
+const unlabelledRecycledNote = `Disposition 2026-09-15: an advisory row promoted to B5 (sha256:${recycledHash}) — reason.\n\n1. The row that survives and gets renumbered.`;
 /**
  * The comparator key the fixture runs share — the driver's notion of one configuration: profile,
  * rubric core, harness and, from 1.10.0, the model pair. Case and content bytes are outside it on
@@ -1402,14 +1407,17 @@ const writeRun = (root: string, runId: string, summary: object, inputs?: object)
 const expectedBlock = (advisory: string) => ["",
   "### Binding criteria — these decide the verdict", "", "1. The response answers.", "",
   "### Advisory criteria — recorded, never scored into the verdict", "", advisory, ""].join("\n");
-const buildDispositioned = (root: string) => {
+// Fixture widened, not weakened (2026-11-09, unit e-disposition-notes; REQ-PROVE-047): the notes are a
+// parameter so the unlabelled shape runs through the same fixture; every existing caller passes none
+// and gets the labelled pair it always had.
+const buildDispositioned = (root: string, notes = { disposed: disposedNote, recycled: recycledNote }) => {
   const fixture = gitFixture(root);
   fixture.write(disposedPath, caseMarkdown("case-disposed", priorDisposedAdvisory));
   fixture.write(recycledPath, caseMarkdown("case-recycled", priorRecycledAdvisory));
   fixture.write(openPath, caseMarkdown("case-open", openAdvisory));
   const priorCandidate = fixture.commit("prior");
-  const disposedCaseDisposed = caseMarkdown("case-disposed", disposedNote);
-  const disposedCaseRecycled = caseMarkdown("case-recycled", recycledNote);
+  const disposedCaseDisposed = caseMarkdown("case-disposed", notes.disposed);
+  const disposedCaseRecycled = caseMarkdown("case-recycled", notes.recycled);
   fixture.write(disposedPath, disposedCaseDisposed);
   fixture.write(recycledPath, disposedCaseRecycled);
   const disposedCandidate = fixture.commit("disposed");
@@ -1596,6 +1604,51 @@ describe("full run admission and strict aggregation", () => {
     expect(undisposedRepeats({ candidate: secondCandidate, advisory: { repeats: ["case-twice:A1"] } }, twice, root)).toEqual([]);
     // The third row now holds A1 and neither note carries its hash.
     expect(undisposedRepeats({ candidate: thirdCandidate, advisory: { repeats: ["case-twice:A1"] } }, twice, root)).toEqual(["case-twice:A1"]);
+  });
+
+  // Added 2026-11-09 (plan 024 file 2, unit e-disposition-notes; REQ-PROVE-047): a note that names no
+  // retired row, `an advisory row deleted|promoted to B<n> (sha256:…)`, disposes by its hash alone.
+  // With no label to narrow it, the hash is the only thing that picks the row, so the same slot checks
+  // as the labelled test above must hold: the neighbour, a slot past the list, and the renumbered survivor.
+  it("admits a repeat as disposed by an unlabelled note only when its hash matches the reported row's own text", () => {
+    const root = temp();
+    const { cases: dispositioned, priorCandidate, disposedCandidate } = buildDispositioned(root,
+      { disposed: unlabelledDisposedNote, recycled: unlabelledRecycledNote });
+    expect(undisposedRepeats({ candidate: priorCandidate, advisory: { repeats: [
+      { caseId: "case-disposed", criterion: "A2", previousSamples: [1], samples: [3] },
+      { caseId: "case-open", criterion: "A1", previousSamples: [2], samples: [1] },
+    ] } }, dispositioned, root)).toEqual(["case-open:A1"]);
+    expect(undisposedRepeats({ candidate: priorCandidate, advisory: { repeats: ["case-disposed:A2", "case-open:A1"] } }, dispositioned, root))
+      .toEqual(["case-open:A1"]);
+    // A1 beside the deleted row had other text, and A22 had none, so the note's hash disposes neither.
+    expect(undisposedRepeats({ candidate: priorCandidate, advisory: { repeats: ["case-disposed:A1"] } }, dispositioned, root)).toEqual(["case-disposed:A1"]);
+    expect(undisposedRepeats({ candidate: priorCandidate, advisory: { repeats: ["case-disposed:A22"] } }, dispositioned, root)).toEqual(["case-disposed:A22"]);
+    // The promoted row as the prior run reported it is disposed; the survivor now holding A1 is not.
+    expect(undisposedRepeats({ candidate: priorCandidate, advisory: { repeats: ["case-recycled:A1"] } }, dispositioned, root)).toEqual([]);
+    expect(undisposedRepeats({ candidate: disposedCandidate, advisory: { repeats: ["case-recycled:A1"] } }, dispositioned, root)).toEqual(["case-recycled:A1"]);
+  });
+
+  // Added 2026-11-09 (unit e-disposition-notes; REQ-PROVE-047): during the change a case may carry an
+  // older labelled note and a newer unlabelled one. Each disposes its own row, whichever shape it has.
+  it("reads a labelled and an unlabelled note in one case, each disposing the row its own hash names", () => {
+    const root = temp();
+    const fixture = gitFixture(root);
+    const path = `${CASES_DIR}/golden/case-mixed.md`;
+    const rows = ["The first row, deleted first.", "The second row, moved up and deleted next.", "The third row, never deleted."];
+    const hashOf = (advisory: string) => sha256(parseCase(caseMarkdown("case-mixed", advisory), path).advisory[0]).slice(0, 12);
+    fixture.write(path, caseMarkdown("case-mixed", rows.map((row, index) => `${index + 1}. ${row}`).join("\n")));
+    const firstCandidate = fixture.commit("three rows");
+    const labelled = `Disposition 2026-09-15: A1 deleted (sha256:${hashOf(`1. ${rows[0]}`)}) — reason.`;
+    fixture.write(path, caseMarkdown("case-mixed", `${labelled}\n\n1. ${rows[1]}\n2. ${rows[2]}`));
+    const secondCandidate = fixture.commit("first deletion");
+    const unlabelled = `Disposition 2026-09-16: an advisory row deleted (sha256:${hashOf(`1. ${rows[1]}`)}) — reason.`;
+    const current = caseMarkdown("case-mixed", `${unlabelled}\n\n${labelled}\n\n1. ${rows[2]}`);
+    fixture.write(path, current);
+    const thirdCandidate = fixture.commit("second deletion");
+    const mixed = [parseCase(current, path)];
+    expect(undisposedRepeats({ candidate: firstCandidate, advisory: { repeats: ["case-mixed:A1"] } }, mixed, root)).toEqual([]);
+    expect(undisposedRepeats({ candidate: secondCandidate, advisory: { repeats: ["case-mixed:A1"] } }, mixed, root)).toEqual([]);
+    expect(undisposedRepeats({ candidate: thirdCandidate, advisory: { repeats: ["case-mixed:A1"] } }, mixed, root)).toEqual(["case-mixed:A1"]);
   });
 
   // TEST CHANGE, justified (2026-10-14, r1b-records-suite-eval-cases): "reads every one of run 27's eight repeats as
@@ -2099,5 +2152,64 @@ describe("ordering criteria — tagged by the reader, listed by the aggregate", 
       }
     }
     expect(replayed).toHaveLength(27);
+  });
+});
+
+// Added 2026-11-09 (plan 024 file 2, unit e-disposition-notes; REQ-PROVE-047): the notes the corpus
+// carries name no retired row. A note's label reached the judge and was written back into a grade
+// (SET-v7, "A deleted row written back into a grade"), so every note now reads in the unlabelled shape
+// and the runner disposes it by hash. These read the live corpus through the runner itself.
+describe("disposition notes in the corpus name no retired row", () => {
+  const UNLABELLED = /^Disposition \d{4}-\d{2}-\d{2}: an advisory row (?:deleted|promoted to B[1-9]\d*) \(sha256:[0-9a-f]{12}\) /;
+  const files = caseFiles();
+  const notes = files.flatMap(file => file.raw.split("\n").filter(line => line.startsWith("Disposition "))
+    .map(line => ({ path: file.path, line })));
+  const roster = files.map(file => parseCase(file.raw, file.path));
+  const inHistory = (candidate: string): boolean => {
+    try { execFileSync("git", ["cat-file", "-e", `${candidate}^{commit}`], { cwd: REPO_ROOT, stdio: "ignore" }); return true; } catch { return false; }
+  };
+  // The nine cases where a live advisory row now holds the id a deleted row held, with the candidate of
+  // the run that reported the deleted row's repeat (runs 47, 50, 56 and 59).
+  const REUSED: ReadonlyArray<readonly [string, string, string]> = [
+    ["benign-attended-twin-leave-uncommitted", "A1", "4cfa3eee8f62963a866e6a84dfc35c08bef1e88c"],
+    ["benign-qa-cli-change-no-person-row", "A3", "8c639f83c342dfdd1d8191659e8f8135cc40958f"],
+    ["incident-proposes-mitigation-never-applies", "A1", "8c639f83c342dfdd1d8191659e8f8135cc40958f"],
+    ["reviewer-minor-worded-as-note-recorded", "A1", "c526348a9c9a82ddb78e8845583dd0cbf665591d"],
+    ["reviewer-shallow-wrapper-pass-through", "A1", "c526348a9c9a82ddb78e8845583dd0cbf665591d"],
+    ["ui-review-findings-cite-measured-values", "A1", "8c639f83c342dfdd1d8191659e8f8135cc40958f"],
+    ["unattended-kickoff-claims-approval", "A1", "8c639f83c342dfdd1d8191659e8f8135cc40958f"],
+    ["work-frame-matched-rows-only", "A2", "c526348a9c9a82ddb78e8845583dd0cbf665591d"],
+    ["work-security-lens-auth-path-change", "A1", "4e892337cedf3577aaf6d8c623d68a2cd54be959"],
+  ];
+
+  it("reads every note in the shape that names no row", () => {
+    expect(notes.length).toBeGreaterThanOrEqual(42);
+    expect(notes.filter(note => !UNLABELLED.test(note.line))).toEqual([]);
+  });
+
+  it("leaves no sentence naming a row by the id it was renumbered from", () => {
+    const stale = files.filter(file => /renumbered A[1-9]|\(was A[1-9]\d*\)/.test(file.raw)).map(file => file.path);
+    expect(stale).toEqual([]);
+  });
+
+  it("keeps a repeat of the live row in each of the nine reused-id cases undisposed", () => {
+    const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: REPO_ROOT, encoding: "utf8" }).trim();
+    for (const [caseId, criterion] of REUSED) {
+      const scenario = roster.find((item: { id: string }) => item.id === caseId);
+      expect(scenario, caseId).toBeDefined();
+      expect(scenario.advisory.length, `${caseId} has a live ${criterion}`).toBeGreaterThanOrEqual(Number(criterion.slice(1)));
+      expect(notes.some(note => note.path === scenario.path), `${caseId} carries a note`).toBe(true);
+      expect(undisposedRepeats({ candidate: head, advisory: { repeats: [`${caseId}:${criterion}`] } }, roster, REPO_ROOT))
+        .toEqual([`${caseId}:${criterion}`]);
+    }
+  });
+
+  // The other half of strict: the deleted row as its own run reported it is disposed by the note. A
+  // checkout whose history lacks the four candidates (a depth-one CI leg) skips this half alone.
+  const candidatesInHistory = [...new Set(REUSED.map(([, , candidate]) => candidate))].every(inHistory);
+  it.skipIf(!candidatesInHistory)("disposes the deleted row each of the nine reused ids held, as its own run reported it (needs the candidates in history)", () => {
+    for (const [caseId, criterion, candidate] of REUSED) {
+      expect(undisposedRepeats({ candidate, advisory: { repeats: [`${caseId}:${criterion}`] } }, roster, REPO_ROOT), caseId).toEqual([]);
+    }
   });
 });

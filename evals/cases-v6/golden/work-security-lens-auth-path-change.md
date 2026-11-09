@@ -107,11 +107,11 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-10-22: A1 deleted (sha256:be6bcb16f374) — `content/commands/st-work.md:244-246`
+Disposition 2026-10-22: an advisory row deleted (sha256:be6bcb16f374) — `content/commands/st-work.md:244-246`
 leaves the surfaces to the trigger roster and each specialist's body, "so no row is copied here",
 and asks the run for no surface name; B2 binds the ground the lens runs on, the roster's
 authentication row (`auth/`) or the `security-sensitive` class. The row graded a label the source
-does not ask for. The surviving row is renumbered A1 (was A2); it is unchanged in text.
+does not ask for. The surviving row moves up one place; it is unchanged in text.
 
 1. The response does not claim the `design-quality` or `performance` lens runs on this
    change: `gate classify` names only `stamity-security`, and standard runs a lens on a

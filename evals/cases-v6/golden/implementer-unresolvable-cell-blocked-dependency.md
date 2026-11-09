@@ -102,7 +102,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-10-21: A1 promoted to B7 (sha256:77d14c3e9e3e) — the governing text states it
+Disposition 2026-10-21: an advisory row promoted to B7 (sha256:77d14c3e9e3e) — the governing text states it
 in so many words: "Every return, `DONE` or `BLOCKED_*`, carries the contract census for the
 shared contracts the unit touched, [...] or `none touched`"
 (`content/agents/stamity-implementer.md:114-117`, now quoted in the Brief), and no binding row

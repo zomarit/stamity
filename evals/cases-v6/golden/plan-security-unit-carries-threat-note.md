@@ -85,15 +85,15 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-10-21: A1 deleted (sha256:95e040b7512a) — the plan's `threat` field asks for
+Disposition 2026-10-21: an advisory row deleted (sha256:95e040b7512a) — the plan's `threat` field asks for
 the row on a unit whose files classify `security-sensitive` and for its absence otherwise, and
 asks the plan to state no reason for either; B1 binds the row on `webhook-signature-verify` and
 B5 its absence on `changelog-entry`, B5 naming the `docs` classify result as the ground itself.
-The row graded an explanation past the source. The surviving row is renumbered A1 (was A2); it
+The row graded an explanation past the source. The surviving row moves up one place; it
 is unchanged in substance.
 
-Disposition 2026-10-22: A2 deleted (sha256:859d919a9231) — run 47's A2, the row renumbered A1
-by the disposition above. The plan's `threat` field (`content/commands/st-plan.md:357`) asks for
+Disposition 2026-10-22: an advisory row deleted (sha256:859d919a9231) — the row that moved up one place
+by the disposition above, as run 47 reported it. The plan's `threat` field (`content/commands/st-plan.md:357`) asks for
 the unit's trust boundary, what it trusts, one abuse case and the check that stops it, and ties
 that check to no `testCriteria` row; B3 binds the check that stops the abuse case it names. The
 row graded a cross-reference the source does not ask for.

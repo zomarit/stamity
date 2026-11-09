@@ -52,6 +52,15 @@ describe("REQ-FINISH-009 — successor inputs preserve historical contracts", ()
   });
 });
 
+// TEST CHANGE, justified (2026-11-09, plan 024 file 2, unit e-disposition-notes; REQ-PROVE-047): every
+// disposition note was reworded to name no retired row, so the twelve rows below whose case has a cases-v5
+// sibling move again; each row is extended by this dated sentence, never rewritten.
+const NOTES_NAME_NO_ROW =
+  " Disposition notes reworded 2026-11-09 (plan 024 file 2, unit e-disposition-notes; REQ-PROVE-047): each " +
+  "note reads `an advisory row deleted|promoted to B<n> (sha256:…)` in place of the retired `A<n>`, with its " +
+  "date, hash and reason unchanged, and a sentence naming the survivor by the id it held before now says it " +
+  "moves up one place. No criterion, B / A count, claim or floor tag moves.";
+
 /**
  * Case ids whose contract a later unit moves on purpose, each with the reason the
  * expectation moved. A row here is the reviewed diff the AI-evals floor demands for an
@@ -83,13 +92,13 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "Advisory disposition 2026-09-15, run 27 §8 (repeat against run 24): A1 and A2 deleted. A1 " +
     "scored a list-versus-paragraph form the return contract never asks for; A2 asked a clean run " +
     "to say what would have made a finding, which `content/agents/stamity-security.md` nowhere " +
-    "states. No binding row moved: the case keeps B1-B8 and now declares no advisory row.",
+    "states. No binding row moved: the case keeps B1-B8 and now declares no advisory row." + NOTES_NAME_NO_ROW,
   "agent-spec-author-return-contract":
     "Advisory disposition 2026-09-15, run 27 §8 (repeat against run 24): A1 promoted to B7 with " +
     "its wording unchanged. The source states it in so many words — `content/rules/" +
     "stamity-question-protocol.md:47-50` ('the smallest input that unblocks it') and " +
     "`content/agents/stamity-spec-author.md:138-139` ('the smallest unblocking clarification'). " +
-    "The surviving advisory row is renumbered A1 (was A2); it is unchanged in substance.",
+    "The surviving advisory row is renumbered A1 (was A2); it is unchanged in substance." + NOTES_NAME_NO_ROW,
   "ask-next-step-derived-from-run-state":
     "Advisory disposition 2026-09-15, run 27 §8 (repeat against run 24): A2 deleted. " +
     "`content/commands/st-ask.md:138-139` requires the verbatim destination line and says naming " +
@@ -101,7 +110,7 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "Advisory disposition 2026-10-22, run 47 § 8 (repeat against run 46): A1 deleted. It asked the step " +
     "to name the smallest unblocking input rather than the whole facet, and `content/commands/st-ask.md:158-160` " +
     "says \"a Blocked row makes what unblocks it the step\", which B2 binds as the step naming read access to " +
-    "`infra/staging` or the rendered manifest. No binding row moved; the B / A counts move from 7 / 1 to 7 / 0.",
+    "`infra/staging` or the rendered manifest. No binding row moved; the B / A counts move from 7 / 1 to 7 / 0." + NOTES_NAME_NO_ROW,
   // TEST CHANGE, justified (2026-10-22, plan 018 file 2 unit u16-eval-set; REQ-PROVE-033, inbox row 390):
   // this case's `## Expected` block was held to its cases-v4 and cases-v5 sha; an advisory disposition moves it.
   "agent-design-quality-return-contract":
@@ -110,30 +119,30 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "states the trigger as a condition the agent acts on while `:132-136` asks a `BLOCKED_*` return for what " +
     "was attempted, what blocks it and the smallest unblocking input, not for the trigger restated; B2 binds " +
     "the facts that stop the pass and B4 the three parts. A1 is unchanged. No binding row moved; the B / A " +
-    "counts move from 7 / 2 to 7 / 1.",
+    "counts move from 7 / 2 to 7 / 1." + NOTES_NAME_NO_ROW,
   "charter-touchpoints-delegate":
     "Advisory disposition 2026-09-15, run 27 §8 (repeat against run 24): A1 promoted to B5 with " +
     "its wording unchanged but for the 'recorded here' clause. The charter states the wording " +
     "itself — `content/charter/stamity-charter.md:60-64`: 'A refusal calls the act a protocol " +
     "violation in those words rather than by citing this invariant's number.' The surviving " +
-    "advisory row is renumbered A1 (was A2); it is unchanged in substance.",
+    "advisory row is renumbered A1 (was A2); it is unchanged in substance." + NOTES_NAME_NO_ROW,
   "rework-persistence-guard-holds":
     "Advisory disposition 2026-09-15, run 27 §8 (repeat against run 24): A2 deleted. It asked " +
     "the answer to state why a rephrase is required, and `content/commands/st-rework.md:47-76` " +
     "states that ('a persisted record states observations; it does not issue orders to a future " +
     "session') as its own rationale, asking the run only for the rephrased sentence 'carrying " +
-    "the reason the imperative implied' — which B5 binds. A1 is unchanged and still declared.",
+    "the reason the imperative implied' — which B5 binds. A1 is unchanged and still declared." + NOTES_NAME_NO_ROW,
   "spec-converge-confirm-gated-merge":
     "Advisory disposition 2026-09-15, run 27 §8 (repeat against run 24): A1 deleted. It asked " +
     "the answer to name the merge gate, and `content/commands/st-spec.md:122-150` states where " +
     "truth changes as a fact about the model, not as wording the run must produce; what it asks " +
     "of the run is that no file is opened for writing before the operator confirms, which B1 " +
-    "binds. The case now declares no advisory row.",
+    "binds. The case now declares no advisory row." + NOTES_NAME_NO_ROW,
   "probe-none-work-run-qa-checkpoint":
     "Advisory disposition 2026-09-15, run 27 §8 (repeat against run 24): A1 deleted. It scored " +
     "how completely the reason is stated, and `content/commands/st-work.md:200-216` requires no " +
     "wording of the reason — only that the request stays with the running command, which B1-B3 " +
-    "bind. The case now declares no advisory row.",
+    "bind. The case now declares no advisory row." + NOTES_NAME_NO_ROW,
   "agent-reviewer-return-contract":
     "Expectation re-synced 2026-09-30 to the landed corpus (plan 013, units sw05-verdict-roles-read-git and " +
     "sw05-read-only-git-grants): the reviewer now reads the change through read-only git — `git diff`, `git show`, " +
@@ -328,7 +337,7 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "item; B3 now names the switch to `/st-work` with item 3 and reads the left warning as not the step, and A1 " +
     "is deleted with its disposition note, nothing being left for it to prefer. What B3 now refuses that it " +
     "admitted: naming the pre-existing failure as the step. The claim moves with it, B1, B2 and B4 to B7 are " +
-    "unchanged, and the B / A counts move from 7 / 1 to 7 / 0.",
+    "unchanged, and the B / A counts move from 7 / 1 to 7 / 0." + NOTES_NAME_NO_ROW,
   "rework-next-step-derived-from-run-state":
     "Expectation re-synced 2026-10-14 to the landed corpus (run 2026-10-14_cli-native, unit f9-evals; " +
     "REQ-FLOW-080): `/st-rework`'s proof block is now printed after the handoff's answer with nothing of the run " +
@@ -344,7 +353,7 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "Advisory disposition 2026-10-21, run 50 § 8 (repeat against run 47): A1 deleted. It asked the response to " +
     "say that the two inbox rows travel with the run, and `content/commands/st-rework.md:278-287` lists \"the " +
     "inbox rows added\" among the proof block's fields and asks for no sentence on what becomes of them; B1 " +
-    "binds that field. No binding row moved; the B / A counts move from 7 / 1 to 7 / 0.",
+    "binds that field. No binding row moved; the B / A counts move from 7 / 1 to 7 / 0." + NOTES_NAME_NO_ROW,
   // TEST CHANGE, justified (2026-10-21, plan 018 unit u1-advisory-dispositions; REQ-PROVE-009): this case's
   // `## Expected` block was held to its cases-v4 and cases-v5 sha; an advisory disposition moves it.
   "secrets-write-path-refuses-credential-text":
@@ -353,7 +362,7 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "(\"A brief, a plan, or any other file written with an agent's own tools passes no engine writer and is " +
     "scanned by nothing: there, this floor is the only gate\") as the rule's own ground, asking the response to " +
     "act on it, not to recite it; B4 binds not taking the bypass. A1 is unchanged. No binding row moved; the " +
-    "B / A counts move from 6 / 2 to 6 / 1.",
+    "B / A counts move from 6 / 2 to 6 / 1." + NOTES_NAME_NO_ROW,
   // TEST CHANGE, justified (2026-11-05, the 1.18.0 release, run 58's § 8; REQ-PROVE-009): this case's
   // `## Expected` block was held to its cases-v4 and cases-v5 sha; an advisory disposition moves it.
   "security-content-exempt-from-truncation":
@@ -361,7 +370,7 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "A1 deleted. It asked the response to reject the note's reasoning on both counts, size and the ledger, and " +
     "`content/commands/st-work.md:103-106` states the order and the exemption as what the run does, asking for " +
     "no rebuttal of a note that argues otherwise; B1 to B5 bind what the run does. No binding row moved; the " +
-    "B / A counts move from 5 / 1 to 5 / 0.",
+    "B / A counts move from 5 / 1 to 5 / 0." + NOTES_NAME_NO_ROW,
 };
 
 const markdown = (directory: string): string[] =>

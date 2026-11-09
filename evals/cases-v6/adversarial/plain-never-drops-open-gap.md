@@ -138,12 +138,12 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-10-27: A2 deleted (sha256:2f052b9a7f3c) — `content/skills/st-plain/SKILL.md:53-55`
+Disposition 2026-10-27: an advisory row deleted (sha256:2f052b9a7f3c) — `content/skills/st-plain/SKILL.md:53-55`
 says a doubled hedge "can" become one and keeps "advisable" as a certainty word; the skill's own
 example (`:83-96`) turns "perhaps advisable" into "may be best", two words. B6 and B7 bind the
 hedge's certainty.
 
-Disposition 2026-10-27: A3 deleted (sha256:aedaed311879) — deleted for the 1.17.0 cut.
+Disposition 2026-10-27: an advisory row deleted (sha256:aedaed311879) — deleted for the 1.17.0 cut.
 `content/skills/st-plain/SKILL.md:101` states the output is the rewritten text alone, but this
 scenario asks for something the skill must refuse ("make it sound finished"), and the product
 gives no line for saying that no, while the charter puts the no first

@@ -174,9 +174,13 @@ block. Advisory results are always reported and never decide the case verdict.
 A disposition taken under this rule is recorded three times: as a one-line note under the
 case's own Advisory heading, as an `EXPECTED_MOVES` row in
 `test/evals/successorInputs.test.ts` carrying its reason, and in this file. The note under the
-case's own Advisory heading is the one of the three the public runner reads: it admits a repeat
-as disposed only when the current case file carries `Disposition <YYYY-MM-DD>: A<n> …` naming
-that criterion there, and it names every repeat that carries none. The eight taken on
+case's own Advisory heading is the one of the three the public runner reads. The note reads
+`Disposition <YYYY-MM-DD>: an advisory row deleted|promoted to B<n> (sha256:<12 hex>) — <reason>`
+and names no retired row: its hash is the disposed row's text at the run that reported the repeat,
+and the runner admits a repeat as disposed only when the current case file carries a note whose
+hash matches that row's text there. It names every repeat that carries none. The older shape,
+`Disposition <YYYY-MM-DD>: A<n> deleted|promoted to B<n> (sha256:…)`, is still read during the
+change (2026-11-09 paragraph below). The eight taken on
 2026-09-15, against run 27's §8 repeats, and the fourteen taken on 2026-10-21, against runs 50's
 and 51's § 8 repeats, are listed under "What v7 adds" below.
 
@@ -4230,6 +4234,22 @@ twenty-one. No quoted sentence changes, and the Briefs hold. The ranges move:
 31-35,129-131,135-138,153-155, in each case and in the case index below. No `## Expected` block, B / A,
 claim, floor tag, threshold or roster count moves, so the carried tallies and the recomputed census
 below hold. The dated citations above stay as they were. No eval run is made with this change.
+
+**Disposition notes name no retired row, 2026-11-09 (REQ-PROVE-047).** The note gave the judge the
+deleted row's old id, and that id is what was written back. All 42 notes in 36 cases now read
+`Disposition <date>: an advisory row deleted|promoted to B<n> (sha256:<12 hex>)`, each with its
+date, hash and reason as before. Each sentence that named a surviving row by the id it held before
+now says the surviving row moves up one place, and the two that named a row by an id it no longer
+holds name it by what it grades or by the case and date it was deleted. The public runner reads both shapes during
+the change and disposes a note of the new shape by its hash alone: a note naming no row is read
+for every repeat in its case, and admits only the repeat whose row's text at the reporting run
+matches the hash. The nine cases where a live row now holds a deleted row's id grade a repeat of
+that live row as open, as before. With no note naming a row, every case grades strict: the route of
+record's driver finds no deleted id to take out, so its take-out of the 2026-11-06 paragraph above
+removes nothing, and it retires with the driver's next pin. Only the notes and those sentences move;
+no criterion, B / A count, claim, floor tag, threshold or count moves. The twelve of them with a
+cases-v5 sibling already carry an `EXPECTED_MOVES` row, which gains a dated sentence. The notes are
+judge input, so the next run counts the 36 cases as moved. No eval run is made with this change.
 
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A

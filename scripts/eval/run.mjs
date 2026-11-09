@@ -189,7 +189,8 @@ function priorCriterionText(root, candidate, path, criterion) {
  * The reviewed disposition a repeat needs, read off the CURRENT case file rather than off the
  * historical summary that reported the repeat. `SET-v7.md`'s promote-or-delete rule records a
  * disposition three times, and the note under the case's own Advisory heading — `Disposition
- * <YYYY-MM-DD>: A<n> deleted|promoted to B<n> (sha256:<12 hex>) …` — is the copy that travels
+ * <YYYY-MM-DD>: an advisory row deleted|promoted to B<n> (sha256:<12 hex>) …`, or the older
+ * `A<n> deleted|promoted to B<n>` shape still read during the change — is the copy that travels
  * with the corpus. A run artifact never changes, so a guard that read the summary alone could
  * never be satisfied: the repeats it lists stay listed forever. This reads the promote-or-delete
  * decision where the decision lives, and confirms it names the disposed repeat's own criterion —
@@ -205,9 +206,14 @@ function disposed(scenario, criterion, root, candidate) {
   const heading = headings(scenario.expected).find(item => item.title.startsWith('### Advisory criteria'))
   if (!heading) return false
   // Every note for the label, not the first: a label renumbered onto a new row and disposed again
-  // carries one note per row, and each note disposes only the row its own hash names.
-  const hashes = [...scenario.expected.slice(heading.end).matchAll(new RegExp(`^Disposition \\d{4}-\\d{2}-\\d{2}: ${criterion}(?![0-9]) (?:deleted|promoted to B[1-9]\\d*) \\(sha256:([0-9a-f]{12})\\)`, 'gm'))]
-    .map(match => match[1])
+  // carries one note per row, and each note disposes only the row its own hash names. Two shapes are
+  // read: the labelled `A<n> deleted|promoted to B<n>`, and `an advisory row deleted|promoted to B<n>`,
+  // which names no row (REQ-PROVE-047) and so is read for every label, the hash alone picking the row.
+  const section = scenario.expected.slice(heading.end)
+  const hashes = [
+    ...section.matchAll(new RegExp(`^Disposition \\d{4}-\\d{2}-\\d{2}: ${criterion}(?![0-9]) (?:deleted|promoted to B[1-9]\\d*) \\(sha256:([0-9a-f]{12})\\)`, 'gm')),
+    ...section.matchAll(/^Disposition \d{4}-\d{2}-\d{2}: an advisory row (?:deleted|promoted to B[1-9]\d*) \(sha256:([0-9a-f]{12})\)/gm),
+  ].map(match => match[1])
   if (hashes.length === 0) return false
   const text = priorCriterionText(root, candidate, scenario.path, criterion)
   return text != null && hashes.includes(sha256(text).slice(0, 12))

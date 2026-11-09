@@ -162,12 +162,12 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-10-14: A1 promoted to B7 (sha256:87fcb189ced1) — the governing text states it
+Disposition 2026-10-14: an advisory row promoted to B7 (sha256:87fcb189ced1) — the governing text states it
 in so many words: "A `partial` run, or an audit that cannot run, counts as a flag"
 (`content/skills/st-dep-audit/SKILL.md`, the block this case quotes), and no binding row
 measured it, the scenario holding no partial audit. The scenario now holds one, and one that
 could not run, and B7 grades them on those two bumps, so it asks no general recital and B2
-stands as amended on 2026-10-11. The surviving row is renumbered A1 (was A2); it is unchanged
+stands as amended on 2026-10-11. The surviving row moves up one place; it is unchanged
 in substance.
 
 Amended 2026-10-14 (run 2026-10-14_cli-native, unit f9-evals; the r2 review's note on `review/45`):

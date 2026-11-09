@@ -94,7 +94,7 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-Disposition 2026-10-21: A1 deleted (sha256:96d67b75e72c) — `content/commands/st-work.md:134-143`
+Disposition 2026-10-21: an advisory row deleted (sha256:96d67b75e72c) — `content/commands/st-work.md:134-143`
 names what a pointer dispatch carries and caps it at 15 lines, and states no order for its
 fields; B1 to B6 bind the cap and each field. The row graded an ordering the source does not
 require.
