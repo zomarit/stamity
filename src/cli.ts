@@ -6,6 +6,7 @@ import { addCommand } from "./cli/commands/add.ts";
 import { checkCommand } from "./cli/commands/check.ts";
 import { cleanCommand } from "./cli/commands/clean.ts";
 import { configCommand } from "./cli/commands/config.ts";
+import { gcCommand } from "./cli/commands/gc.ts";
 import { gateCommand } from "./cli/commands/gate.ts";
 import { handoffCommand } from "./cli/commands/handoff.ts";
 import { initCommand } from "./cli/commands/init.ts";
@@ -26,7 +27,7 @@ import { noticeCacheDir, resolveOwnPackageFacts, startupNotice } from "./cli/not
  *
  * Everything else is owned elsewhere: the exit-code contract, flag matrix and
  * JSON funnel live in `./cli/kit/program.ts`; each verb's behavior lives in its
- * own module under `./cli/commands/`. This file only (1) enumerates the sixteen
+ * own module under `./cli/commands/`. This file only (1) enumerates the seventeen
  * CommandModules in help order, (2) fires the update-notice probe early, where
  * its banner can show, and settles it non-blockingly after the run, and (3)
  * records the exit code.
@@ -43,9 +44,12 @@ import { noticeCacheDir, resolveOwnPackageFacts, startupNotice } from "./cli/not
 
 /**
  * The advertised surface in help order — init, sync, upgrade, check, validate,
- * add, config, workspace, worktree, clean — plus `learn`, `handoff`, `ledger`,
- * `gate`, `plan` and `run`, the six hidden plumbing verbs. Ten advertised,
- * sixteen registered.
+ * add, config, workspace, worktree, clean — plus `gc`, `learn`, `handoff`,
+ * `ledger`, `gate`, `plan` and `run`, the seven hidden plumbing verbs. Ten
+ * advertised, seventeen registered.
+ *
+ * `gc` sits directly after `clean`, first of the hidden verbs: both free what
+ * the others wrote, and `clean` stays the last ADVERTISED verb.
  *
  * `upgrade` sits directly after `sync`: it runs the running release's sync and
  * moves the repository's pin, so a reader meets the two together.
@@ -74,6 +78,7 @@ export const COMMANDS: readonly CommandModule[] = [
   workspaceCommand,
   worktreeCommand,
   cleanCommand,
+  gcCommand,
   learnCommand,
   handoffCommand,
   ledgerCommand,

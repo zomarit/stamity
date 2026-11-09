@@ -1,0 +1,389 @@
+import { lstat, mkdir, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { formatBytes, gcCommand } from "../../../src/cli/commands/gc.ts";
+import { applyGc, planGc, type GcOptions, type HandoffSweep } from "../../../src/runs/gc.ts";
+import { runGit } from "../../../src/worktree/git.ts";
+import { WORKTREE_FARM_DIR_NAME } from "../../../src/worktree/policy.ts";
+import { runInProcess } from "../../support/inProcess.ts";
+import { useTempDir } from "../../support/tempDir.ts";
+
+/**
+ * d-gc (REQ-FLOW-177): `stamity gc` reports what local runs left and frees only what `--apply` names, over REAL git
+ * repositories in temp folders outside this checkout.
+ *
+ * No git runner is stubbed: every bound gc keeps — tracked, merged, gone on origin, dirty — is git's answer, and a
+ * stub would assert this file's belief about git instead. The one substitute is the handoff sweep in the engine
+ * cases, injected at the seam the engine already has (`HandoffSweep`): the store's own prune is proven in its suite,
+ * and a fake lets a case hold a tracked handoff without writing the store's file format here.
+ *
+ * Fixtures are non-degenerate: two runs of different ages, old and new reports beside a tracked one, a link inside
+ * a run and a run whose `reports/` is a link, three `stamity/*` branches (merged, unmerged, checked out), two
+ * tracking refs (one origin dropped), and three worktrees (dirty in the farm, gone in the farm, outside it).
+ */
+
+const gitAvailable = (await runGit({ args: ["--version"], cwd: process.cwd() })).status === 0;
+
+const getTemp = useTempDir("gc-verb");
+
+const IDENTITY = ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false"];
+
+const NOW = new Date("2026-11-09T12:00:00Z");
+const DAY = 86_400_000;
+
+async function mustGit(cwd: string, ...args: string[]): Promise<string> {
+  const outcome = await runGit({ args, cwd });
+  if (outcome.status !== 0) {
+    throw new Error(`git ${args.join(" ")} in ${cwd} failed (${String(outcome.status)}): ${outcome.stderr}`);
+  }
+  return outcome.stdout;
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await lstat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function writeAged(path: string, body: string, at: Date): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, body, "utf8");
+  await utimes(path, at, at);
+}
+
+interface Fixture {
+  readonly root: string;
+  readonly farm: string;
+  readonly outsideDir: string;
+  readonly oldRun: string;
+  readonly newRun: string;
+  readonly linkedRun: string;
+}
+
+/**
+ * A clone of a bare origin with run folders, branches, tracking refs and worktrees, every one placed so gc has a
+ * reason to free it or a reason to keep it.
+ */
+async function seed(base: string, now: Date): Promise<Fixture> {
+  const origin = join(base, "origin.git");
+  const root = join(base, "repo");
+  const farm = join(base, WORKTREE_FARM_DIR_NAME, basename(root));
+  const outsideDir = join(base, "elsewhere");
+  await mkdir(root, { recursive: true });
+  await mustGit(base, "init", "--bare", "--quiet", origin);
+  await mustGit(root, "-c", "init.defaultBranch=main", "init", "--quiet");
+  await mustGit(root, "remote", "add", "origin", origin);
+  await writeFile(join(root, ".gitignore"), ".stamity/runs/\n", "utf8");
+  await writeFile(join(root, "README.md"), "# fixture\n", "utf8");
+
+  const oldRun = join(root, ".stamity", "runs", "2026-09-01_old");
+  const newRun = join(root, ".stamity", "runs", "2026-11-08_new");
+  const linkedRun = join(root, ".stamity", "runs", "2026-09-02_linked");
+  const old = new Date(now.getTime() - 60 * DAY);
+  const fresh = new Date(now.getTime() - 1 * DAY);
+  // A tracked report, force-added past the ignore rule: old enough to be eligible, and never removed.
+  await writeAged(join(oldRun, "reports", "tracked-r1.md"), "tracked report\n", old);
+  await mustGit(root, "add", ".gitignore", "README.md");
+  await mustGit(root, "add", "-f", join(".stamity", "runs", "2026-09-01_old", "reports", "tracked-r1.md"));
+  await mustGit(root, ...IDENTITY, "commit", "--quiet", "-m", "base");
+  await utimes(join(oldRun, "reports", "tracked-r1.md"), old, old);
+
+  await writeAged(join(oldRun, "reports", "old-r1.md"), "x".repeat(4000), old);
+  await writeAged(join(oldRun, "record.md"), "record of the old run\n", old);
+  await writeAged(join(oldRun, "notes", "scratch.txt"), "scratch\n", old);
+  await writeAged(join(newRun, "reports", "new-r1.md"), "y".repeat(500), fresh);
+  await writeAged(join(newRun, "reports", "aged-r1.md"), "z".repeat(700), old);
+
+  // Links: one inside a run, and one run whose whole reports folder is a link to a folder outside the root.
+  await writeAged(join(outsideDir, "precious.md"), "outside the root\n", old);
+  await symlink(join(outsideDir, "precious.md"), join(oldRun, "reports", "link-r1.md"));
+  await mkdir(linkedRun, { recursive: true });
+  await symlink(outsideDir, join(linkedRun, "reports"));
+
+  // Branches: merged (an ancestor of HEAD), open (a commit HEAD lacks), checked out in a farm worktree.
+  await mustGit(root, "branch", "stamity/2026-09-01_old");
+  await mustGit(root, "branch", "stamity/out");
+  await mustGit(root, "checkout", "--quiet", "-b", "stamity/open");
+  await writeFile(join(root, "open.txt"), "unmerged\n", "utf8");
+  await mustGit(root, "add", "open.txt");
+  await mustGit(root, ...IDENTITY, "commit", "--quiet", "-m", "open work");
+  await mustGit(root, "checkout", "--quiet", "main");
+
+  // Tracking refs: both pushed; origin then drops one.
+  await mustGit(root, "push", "--quiet", "origin", "stamity/2026-09-01_old", "stamity/out");
+  await mustGit(root, "fetch", "--quiet", "origin");
+  // Deleted on origin's side, so the clone's tracking ref outlives it (a push --delete would drop both).
+  await mustGit(base, `--git-dir=${origin}`, "branch", "-D", "stamity/out");
+
+  // Worktrees: dirty in the farm (on stamity/out), gone in the farm, and one outside it.
+  await mkdir(farm, { recursive: true });
+  await mustGit(root, "worktree", "add", "--quiet", join(farm, "dirty"), "stamity/out");
+  await writeFile(join(farm, "dirty", "README.md"), "edited\n", "utf8");
+  await mustGit(root, "worktree", "add", "--quiet", "--detach", join(farm, "gone"));
+  await rm(join(farm, "gone"), { recursive: true, force: true });
+  await mustGit(root, "worktree", "add", "--quiet", "--detach", join(base, "outside-lane"));
+
+  return { root, farm, outsideDir, oldRun, newRun, linkedRun };
+}
+
+/** The store's sweep stand-in; see the header for why the engine cases inject it. */
+function fakeSweep(
+  targets: { archive?: { id: string; path: string }[]; remove?: { id: string; path: string }[] } = {},
+): HandoffSweep & { applied: number } {
+  const sweep = {
+    applied: 0,
+    async preview() {
+      return { archive: targets.archive ?? [], remove: targets.remove ?? [] };
+    },
+    async apply() {
+      sweep.applied += 1;
+      await Promise.all((targets.remove ?? []).map((target) => rm(target.path, { force: true })));
+      return {
+        archivedExpired: (targets.archive ?? []).map((target) => target.id),
+        deleted: (targets.remove ?? []).map((target) => target.id),
+      };
+    },
+  };
+  return sweep;
+}
+
+function optionsFor(fixture: Fixture, patch: Partial<GcOptions> = {}): GcOptions {
+  return {
+    repoRoot: fixture.root,
+    farmDir: fixture.farm,
+    now: NOW,
+    reportsOlderThanDays: 30,
+    runsOlderThanDays: null,
+    branches: false,
+    handoffs: fakeSweep(),
+    ...patch,
+  };
+}
+
+describe.skipIf(!gitAvailable)("gc engine — the preview writes nothing and reports sizes", () => {
+  it("reports runs, reports, branches, stale tracking refs and worktrees, and removes nothing", async () => {
+    const fixture = await seed(getTemp().dir, NOW);
+    const before = await mustGit(fixture.root, "for-each-ref", "--format=%(refname)");
+    const plan = await planGc(optionsFor(fixture));
+    const report = plan.report;
+
+    expect(report.dryRun).toBe(true);
+    const old = report.runs.find((row) => row.run === "2026-09-01_old");
+    expect(old?.tracked).toBe(true);
+    expect(old?.ageDays).toBe(69);
+    expect(old?.reportsBytes).toBe("tracked report\n".length + 4000);
+    expect(old?.bytes).toBe("tracked report\n".length + 4000 + "record of the old run\n".length + "scratch\n".length);
+    expect(report.runs.find((row) => row.run === "2026-11-08_new")?.tracked).toBe(false);
+    // Three regular report files are counted; the link and the linked folder are not walked.
+    expect(report.reports).toEqual({ files: 4, bytes: "tracked report\n".length + 4000 + 500 + 700, eligible: 2 });
+    expect(report.freed.paths).toEqual([
+      ".stamity/runs/2026-09-01_old/reports/old-r1.md",
+      ".stamity/runs/2026-11-08_new/reports/aged-r1.md",
+      join(fixture.farm, "gone"),
+      "refs/remotes/origin/stamity/out",
+    ]);
+    expect(report.freed.bytes).toBe(4700);
+    expect(report.staleTracking).toEqual(["refs/remotes/origin/stamity/out"]);
+    expect(report.branches).toEqual([
+      { name: "stamity/2026-09-01_old", merged: true, eligible: false },
+      { name: "stamity/open", merged: false, eligible: false },
+      { name: "stamity/out", merged: true, eligible: false },
+    ]);
+    const classes = Object.fromEntries(report.worktrees.map((row) => [basename(row.path), row.class]));
+    expect(classes).toEqual({ dirty: "dirty", gone: "prunable", "outside-lane": "outside" });
+    expect(report.kept).toEqual(
+      expect.arrayContaining([
+        { path: ".stamity/runs/2026-09-01_old/reports/link-r1.md", reason: "a link, not followed" },
+        { path: ".stamity/runs/2026-09-02_linked/reports", reason: "a link, not followed" },
+        { path: ".stamity/runs/2026-09-01_old/reports/tracked-r1.md", reason: "tracked by git" },
+        { path: join(fixture.farm, "dirty"), reason: "uncommitted changes; gc never removes a tree" },
+      ]),
+    );
+
+    // Nothing moved: every file, ref and registration is where the fixture put it.
+    expect(await exists(join(fixture.oldRun, "reports", "old-r1.md"))).toBe(true);
+    expect(await exists(join(fixture.newRun, "reports", "aged-r1.md"))).toBe(true);
+    expect(await mustGit(fixture.root, "for-each-ref", "--format=%(refname)")).toBe(before);
+    expect(await mustGit(fixture.root, "worktree", "list", "--porcelain")).toContain(join(fixture.farm, "gone"));
+  });
+
+  it("reads an absent .stamity/runs as no runs, not as a failure", async () => {
+    const base = getTemp().dir;
+    const root = join(base, "bare-repo");
+    await mkdir(root, { recursive: true });
+    await mustGit(root, "-c", "init.defaultBranch=main", "init", "--quiet");
+    await writeFile(join(root, "a.txt"), "a\n", "utf8");
+    await mustGit(root, "add", "a.txt");
+    await mustGit(root, ...IDENTITY, "commit", "--quiet", "-m", "a");
+    const plan = await planGc({
+      repoRoot: root,
+      farmDir: join(base, WORKTREE_FARM_DIR_NAME, "bare-repo"),
+      now: NOW,
+      reportsOlderThanDays: 30,
+      runsOlderThanDays: null,
+      branches: false,
+      handoffs: fakeSweep(),
+    });
+    expect(plan.report.runs).toEqual([]);
+    expect(plan.report.reports).toEqual({ files: 0, bytes: 0, eligible: 0 });
+    expect(plan.report.freed).toEqual({ bytes: 0, paths: [] });
+  });
+});
+
+describe.skipIf(!gitAvailable)("gc engine — apply frees the default set and keeps every bound", () => {
+  it("frees the old reports, the gone registration and the stale tracking ref, and nothing else", async () => {
+    const fixture = await seed(getTemp().dir, NOW);
+    const options = optionsFor(fixture);
+    const report = await applyGc(await planGc(options), options);
+
+    expect(report.dryRun).toBe(false);
+    expect(report.failed).toEqual([]);
+    expect(report.freed.bytes).toBe(4700);
+    expect(await exists(join(fixture.oldRun, "reports", "old-r1.md"))).toBe(false);
+    expect(await exists(join(fixture.newRun, "reports", "aged-r1.md"))).toBe(false);
+    // The new report, the tracked report, the run's other files and the link all stay.
+    expect(await exists(join(fixture.newRun, "reports", "new-r1.md"))).toBe(true);
+    expect(await readFile(join(fixture.oldRun, "reports", "tracked-r1.md"), "utf8")).toBe("tracked report\n");
+    expect(await exists(join(fixture.oldRun, "record.md"))).toBe(true);
+    expect((await lstat(join(fixture.oldRun, "reports", "link-r1.md"))).isSymbolicLink()).toBe(true);
+    // Through the linked reports folder nothing was touched.
+    expect(await readFile(join(fixture.outsideDir, "precious.md"), "utf8")).toBe("outside the root\n");
+    // The dirty tree stands with its edit; the gone registration is pruned; the outside lane stays registered.
+    expect(await readFile(join(fixture.farm, "dirty", "README.md"), "utf8")).toBe("edited\n");
+    const list = await mustGit(fixture.root, "worktree", "list", "--porcelain");
+    expect(list).not.toContain(join(fixture.farm, "gone"));
+    expect(list).toContain("outside-lane");
+    // The stale tracking ref is gone, the live one stays, origin's branch stays, and no local branch moved.
+    const refs = await mustGit(fixture.root, "for-each-ref", "--format=%(refname)");
+    expect(refs).not.toContain("refs/remotes/origin/stamity/out");
+    expect(refs).toContain("refs/remotes/origin/stamity/2026-09-01_old");
+    expect(refs).toContain("refs/heads/stamity/2026-09-01_old");
+    const originDir = join(dirname(fixture.root), "origin.git");
+    const originRefs = await mustGit(dirname(fixture.root), `--git-dir=${originDir}`, "for-each-ref", "--format=%(refname)");
+    expect(originRefs).toContain("refs/heads/stamity/2026-09-01_old");
+  });
+
+  it("with --branches deletes only the merged branch no worktree holds, with -d", async () => {
+    const fixture = await seed(getTemp().dir, NOW);
+    const options = optionsFor(fixture, { branches: true });
+    const plan = await planGc(options);
+    expect(plan.report.branches.filter((row) => row.eligible).map((row) => row.name)).toEqual([
+      "stamity/2026-09-01_old",
+    ]);
+    expect(plan.report.kept).toContainEqual({ path: "refs/heads/stamity/out", reason: "checked out in a worktree" });
+    const report = await applyGc(plan, options);
+    expect(report.failed).toEqual([]);
+    const heads = await mustGit(fixture.root, "for-each-ref", "--format=%(refname)", "refs/heads/");
+    expect(heads).not.toContain("refs/heads/stamity/2026-09-01_old\n");
+    expect(heads).toContain("refs/heads/stamity/open");
+    expect(heads).toContain("refs/heads/stamity/out");
+  });
+
+  it("with --runs-older-than frees an old run's untracked files and keeps its tracked one", async () => {
+    const fixture = await seed(getTemp().dir, NOW);
+    const options = optionsFor(fixture, { runsOlderThanDays: 30 });
+    const report = await applyGc(await planGc(options), options);
+    expect(report.failed).toEqual([]);
+    expect(await exists(join(fixture.oldRun, "record.md"))).toBe(false);
+    expect(await exists(join(fixture.oldRun, "notes"))).toBe(false);
+    expect(await readFile(join(fixture.oldRun, "reports", "tracked-r1.md"), "utf8")).toBe("tracked report\n");
+    expect(await readFile(join(fixture.outsideDir, "precious.md"), "utf8")).toBe("outside the root\n");
+    // The run inside the age keeps everything but its aged report.
+    expect(await exists(join(fixture.newRun, "reports", "new-r1.md"))).toBe(true);
+  });
+
+  it("keeps a file swapped for a link between the preview and the sweep", async () => {
+    const fixture = await seed(getTemp().dir, NOW);
+    const options = optionsFor(fixture);
+    const plan = await planGc(options);
+    const target = join(fixture.oldRun, "reports", "old-r1.md");
+    await rm(target);
+    await symlink(join(fixture.outsideDir, "precious.md"), target);
+    const report = await applyGc(plan, options);
+    expect(report.kept).toContainEqual({
+      path: ".stamity/runs/2026-09-01_old/reports/old-r1.md",
+      reason: "no longer a regular file",
+    });
+    expect(await readFile(join(fixture.outsideDir, "precious.md"), "utf8")).toBe("outside the root\n");
+  });
+
+  it("runs the handoff sweep when its files are untracked and skips it whole when one is tracked", async () => {
+    const fixture = await seed(getTemp().dir, NOW);
+    const archived = join(fixture.root, ".stamity", "handoffs", "archive", "h-1.md");
+    await writeAged(archived, "handoff body\n", NOW);
+    const free = fakeSweep({ remove: [{ id: "h-1", path: archived }] });
+    const options = optionsFor(fixture, { handoffs: free });
+    const plan = await planGc(options);
+    expect(plan.report.handoffs).toEqual({ archived: [], eligible: ["h-1"] });
+    const report = await applyGc(plan, options);
+    expect(free.applied).toBe(1);
+    expect(report.freed.paths).toContain(".stamity/handoffs/archive/h-1.md");
+    expect(await exists(archived)).toBe(false);
+
+    await writeAged(archived, "handoff body\n", NOW);
+    await mustGit(fixture.root, "add", "-f", ".stamity/handoffs/archive/h-1.md");
+    const held = fakeSweep({ remove: [{ id: "h-1", path: archived }] });
+    const heldOptions = optionsFor(fixture, { handoffs: held });
+    const heldReport = await applyGc(await planGc(heldOptions), heldOptions);
+    expect(held.applied).toBe(0);
+    expect(heldReport.kept).toContainEqual({
+      path: ".stamity/handoffs/archive/h-1.md",
+      reason: "tracked by git, so the handoff sweep did not run",
+    });
+    expect(await exists(archived)).toBe(true);
+  });
+});
+
+describe.skipIf(!gitAvailable)("stamity gc — the verb", () => {
+  async function runGc(cwd: string, args: readonly string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+    return await runInProcess([gcCommand], ["gc", ...args], { cwd, env: { NO_COLOR: "1" } });
+  }
+
+  it("previews by default: one JSON document with the cell's keys, and no file removed", async () => {
+    const fixture = await seed(getTemp().dir, new Date());
+    const result = await runGc(fixture.root, ["--json"]);
+    expect(result.code).toBe(0);
+    const doc = JSON.parse(result.stdout) as Record<string, unknown>;
+    for (const key of ["dryRun", "runs", "reports", "branches", "staleTracking", "worktrees", "handoffs", "freed"]) {
+      expect(doc, `missing ${key}`).toHaveProperty(key);
+    }
+    expect(doc["dryRun"]).toBe(true);
+    expect((doc["freed"] as { bytes: number }).bytes).toBe(4700);
+    expect(await exists(join(fixture.oldRun, "reports", "old-r1.md"))).toBe(true);
+  });
+
+  it("frees an old report and keeps a new one with --apply, from inside a lane too", async () => {
+    const fixture = await seed(getTemp().dir, new Date());
+    const result = await runGc(join(fixture.farm, "dirty"), ["--apply"]);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("stamity gc: applied.");
+    expect(result.stdout).toContain("Freed 4.6 KiB");
+    expect(await exists(join(fixture.oldRun, "reports", "old-r1.md"))).toBe(false);
+    expect(await exists(join(fixture.newRun, "reports", "new-r1.md"))).toBe(true);
+  });
+
+  it("holds --apply to a preview under --dry-run", async () => {
+    const fixture = await seed(getTemp().dir, new Date());
+    const result = await runGc(fixture.root, ["--apply", "--dry-run"]);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("Nothing was removed");
+    expect(await exists(join(fixture.oldRun, "reports", "old-r1.md"))).toBe(true);
+  });
+
+  it("refuses a day count that is not a whole number", async () => {
+    const fixture = await seed(getTemp().dir, new Date());
+    const result = await runGc(fixture.root, ["--apply", "--reports-older-than", "3.5"]);
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("--reports-older-than takes a whole number of days");
+    expect(await exists(join(fixture.oldRun, "reports", "old-r1.md"))).toBe(true);
+  });
+
+  it("formats sizes in binary units", () => {
+    expect(formatBytes(512)).toBe("512 B");
+    expect(formatBytes(4700)).toBe("4.6 KiB");
+    expect(formatBytes(3 * 1024 * 1024)).toBe("3.0 MiB");
+  });
+});

@@ -28,6 +28,7 @@ mistake.
 | `stamity workspace` | yes | writes | one policy across several repositories: status, guided creation, and the cascade |
 | `stamity worktree` | yes | writes | parallel checkouts of this repository: the inventory, guided setup, and receipt-based teardown |
 | `stamity clean` | yes | writes | remove every generated file and the setup's own state, keeping yours under .stamity/ |
+| `stamity gc` | plumbing | writes | report the disk local runs, branches, worktrees and handoffs hold, and free it with --apply (plumbing) |
 | `stamity learn` | plumbing | writes | capture a learning through the engine's write gates, or read them through its screen (plumbing) |
 | `stamity handoff` | plumbing | writes | prepare, resume, list, complete and prune handoffs through the engine's gates (plumbing) |
 | `stamity ledger` | plumbing | writes | append findings to a run's ledger, close its rows, print its resume card, and read and write the deferral inbox (plumbing) |
@@ -52,7 +53,7 @@ identically everywhere they apply.
 ### JSON output
 
 `--json` produces exactly one JSON document on stdout, and nothing else, for every
-run that reaches a command — all 16 of the commands above, success and
+run that reaches a command — all 17 of the commands above, success and
 failure alike. Human output is suppressed in the same run, so a reader never has to
 separate prose from payload. Every document carries `ok`, `command` and `version`;
 a success adds the command's own fields, and a failure adds `error` with `code` and
@@ -247,6 +248,24 @@ May write when it runs, so `--dry-run` previews any change without making it.
 |---|---|---|
 | `--pack <id>` | remove one installed pack — its files and ledger rows — and keep everything else | — |
 | `--purge` | also delete the whole .stamity/ directory: learnings, handoffs, overrides, installed packs and run records | — |
+
+## `stamity gc`
+
+report the disk local runs, branches, worktrees and handoffs hold, and free it with --apply (plumbing)
+
+Plumbing. This verb is not listed in `stamity --help` because its caller is generated
+agent content rather than a person. Hidden is not secret — `stamity gc --help` prints
+in full — and it is documented here because a verb that exists and is undocumented is
+worse than one that is merely unadvertised.
+
+May write when it runs, so `--dry-run` previews any change without making it.
+
+| Flag | What it does | Default |
+|---|---|---|
+| `--apply` | free the default set; without it the run is a preview | — |
+| `--reports-older-than <days>` | free run reports older than this many days | `30` |
+| `--runs-older-than <days>` | also free the untracked files of run folders older than this many days | — |
+| `--branches` | also delete merged local stamity/* branches, with git branch -d | — |
 
 ## `stamity learn`
 

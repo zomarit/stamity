@@ -176,6 +176,21 @@ describe("command coverage", () => {
     );
   });
 
+  // ADDED (plan 024 file 2, unit d-gc, REQ-FLOW-177): the page counts and documents `gc` from its place after
+  // `clean`, with every flag that widens or applies the sweep and the 30-day report default.
+  it("documents `gc` after `clean`, with its preview default and every widening flag", () => {
+    const names = COMMANDS.map((command) => command.name);
+    expect(names.indexOf("gc")).toBe(names.indexOf("clean") + 1);
+    expect(page).toContain(`all ${String(COMMANDS.length)} of the commands above`);
+    const section = sectionOf("gc");
+    // `--dry-run` is the shared matrix's, rendered once in the global table; the posture line below names it here.
+    for (const flag of ["--apply", "--reports-older-than <days>", "--runs-older-than <days>", "--branches"]) {
+      expect(section, `gc's section is missing ${flag}`).toContain(`| \`${flag}\` |`);
+    }
+    expect(section).toContain("`30`");
+    expect(section).toContain("May write when it runs");
+  });
+
   it("documents `learn` as plumbing — neither omitted nor advertised as a user verb", () => {
     const learn = COMMANDS.find((command) => command.name === "learn");
     expect(learn?.hidden).toBe(true);

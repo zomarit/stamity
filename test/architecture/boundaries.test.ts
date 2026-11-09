@@ -521,6 +521,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // The one short page a run leaves a person: pure text over the wave-1 run layout, the wave-4 morning list and the
   // wave-5 record head, reached by the `run overview` verb.
   "src/runs/overview.ts": { unit: "run-overview", wave: 6 },
+  // TEST CHANGE, justified (plan 024 file 2, unit d-gc, REQ-FLOW-177): `stamity gc`'s engine, over the wave-1 run
+  // layout and the wave-5 worktree inventory and git seam, reached by the wave-14 `gc` verb. A new row, no wave moved.
+  "src/runs/gc.ts": { unit: "d-gc", wave: 6 },
   // Key-level ownership of `.claude/settings.json`: pure planning plus the
   // merge writer and the reclaim reducer, over the MCP merge lane (wave 4,
   // whose read and serialise helpers it shares) and the safe-write lane (wave
@@ -700,6 +703,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // registry-only ratchet below: the composition root wired them, and until
   // this file existed nothing called them.
   "src/cli/commands/worktree.ts": { unit: "wt-u2", wave: 14 },
+  // TEST CHANGE, justified (plan 024 file 2, unit d-gc, REQ-FLOW-177): the `gc` verb, a leaf command shaped after
+  // `worktree.ts`: the wave-6 gc engine, the wave-4/5 worktree policy and git seam and the wave-13 kit.
+  "src/cli/commands/gc.ts": { unit: "d-gc", wave: 14 },
   // wave 15 (P2 wave 2) — commands composed over a wave-14 engine
   "src/cli/commands/init.ts": { unit: "p2-13", wave: 15 },
   "src/cli/commands/init/panel.ts": { unit: "p2-13", wave: 15 },
