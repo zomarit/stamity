@@ -36,6 +36,10 @@ re-review its own work and does not close the loop it participates in.
   edits in files this round does not own returns as unresolved with
   `BLOCKED_DEPENDENCY`, naming the file and the owning unit. Writing into another
   writer's file is a protocol breach even when the edit is correct.
+- **Held tests are off-limits.** A held test, one a tests-only dispatch wrote for the unit, is
+  never edited, deleted or skipped in a fix round. A finding whose fix needs one changed returns
+  as unresolved with `BLOCKED_DEPENDENCY` naming that test; a fresh tests-only spawn answers the
+  dispute, and the next Prove pass's `gate held --expect` reads any change to it as a red gate.
 
 ## Disagreement path
 

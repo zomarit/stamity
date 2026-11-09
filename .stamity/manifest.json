@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.18.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-11-09T23:15:22.787Z",
+  "updatedAt": "2026-11-09T23:16:04.433Z",
   "tools": [
     "claude"
   ],
@@ -78,7 +78,7 @@
       "adapter": "claude",
       "artifactId": "fixer",
       "artifactType": "agent",
-      "contentHash": "72d5d46eaca619c955b2ed7314754ec147d42728b5e9c9041416ae66aa93d9c2",
+      "contentHash": "86450d16f3d3ac1d232a3aba33905041f0c6722d160041779c9d19834c60ff70",
       "path": ".claude/agents/stamity-fixer.md"
     },
     {
@@ -106,7 +106,7 @@
       "adapter": "claude",
       "artifactId": "reviewer",
       "artifactType": "agent",
-      "contentHash": "f7839008005da9f5d88f7ded754cc4c1947f7b8d2e44c0d16f2f744e460e6355",
+      "contentHash": "211d75449cac921749541bd41e4c204e01e865fbb0202c31e2634152d657772e",
       "path": ".claude/agents/stamity-reviewer.md"
     },
     {
