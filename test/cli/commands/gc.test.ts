@@ -1,7 +1,9 @@
-import { lstat, mkdir, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { formatBytes, gcCommand } from "../../../src/cli/commands/gc.ts";
+import { archiveHandoff, writeHandoff } from "../../../src/handoffs/store.ts";
+import { REQUIRED_BODY_SECTIONS } from "../../../src/handoffs/validation.ts";
 import { applyGc, planGc, type GcOptions, type HandoffSweep } from "../../../src/runs/gc.ts";
 import { runGit } from "../../../src/worktree/git.ts";
 import { WORKTREE_FARM_DIR_NAME } from "../../../src/worktree/policy.ts";
@@ -13,13 +15,15 @@ import { useTempDir } from "../../support/tempDir.ts";
  * repositories in temp folders outside this checkout.
  *
  * No git runner is stubbed: every bound gc keeps — tracked, merged, gone on origin, dirty — is git's answer, and a
- * stub would assert this file's belief about git instead. The one substitute is the handoff sweep in the engine
- * cases, injected at the seam the engine already has (`HandoffSweep`): the store's own prune is proven in its suite,
- * and a fake lets a case hold a tracked handoff without writing the store's file format here.
+ * stub would assert this file's belief about git instead. The one substitute is the handoff preview in the engine
+ * cases, injected at the seam the engine already has (`HandoffSweep`): a fake lets a case hold a tracked handoff
+ * without writing the file format of the store. The verb cases run the real store (a linked archive, a stale
+ * handoff).
  *
- * Fixtures are non-degenerate: two runs of different ages, old and new reports beside a tracked one, a link inside
- * a run and a run whose `reports/` is a link, three `stamity/*` branches (merged, unmerged, checked out), two
- * tracking refs (one origin dropped), and three worktrees (dirty in the farm, gone in the farm, outside it).
+ * Fixtures are non-degenerate: two closed runs of different ages, an open run, old and new reports beside a tracked
+ * one, a link inside a run and a run whose `reports/` is a link (and no record), three `stamity/*` branches (merged,
+ * unmerged, checked out), two tracking refs (one origin dropped), and three worktrees (dirty in the farm, gone in the
+ * farm, outside it).
  */
 
 const gitAvailable = (await runGit({ args: ["--version"], cwd: process.cwd() })).status === 0;
@@ -54,12 +58,18 @@ async function writeAged(path: string, body: string, at: Date): Promise<void> {
   await utimes(path, at, at);
 }
 
+/** Record heads as a run writes them: closed at its end, in progress until then. */
+const OLD_RECORD = "# Run 2026-09-01_old\n\nStatus: closed 2026-09-02\n";
+const NEW_RECORD = "# Run 2026-11-08_new\n\nStatus: closed 2026-11-08 — merged\n";
+const OPEN_RECORD = "# Run 2026-09-03_open\n\nStatus: in progress\n";
+
 interface Fixture {
   readonly root: string;
   readonly farm: string;
   readonly outsideDir: string;
   readonly oldRun: string;
   readonly newRun: string;
+  readonly openRun: string;
   readonly linkedRun: string;
 }
 
@@ -77,25 +87,32 @@ async function seed(base: string, now: Date): Promise<Fixture> {
   await mustGit(root, "-c", "init.defaultBranch=main", "init", "--quiet");
   await mustGit(root, "remote", "add", "origin", origin);
   await writeFile(join(root, ".gitignore"), ".stamity/runs/\n", "utf8");
-  await writeFile(join(root, "README.md"), "# fixture\n", "utf8");
+  // Not named after a tracked file of this repository: the test-input guard reads such a quoted name as a read of it.
+  await writeFile(join(root, "fixture-readme.txt"), "# fixture\n", "utf8");
 
   const oldRun = join(root, ".stamity", "runs", "2026-09-01_old");
   const newRun = join(root, ".stamity", "runs", "2026-11-08_new");
+  const openRun = join(root, ".stamity", "runs", "2026-09-03_open");
   const linkedRun = join(root, ".stamity", "runs", "2026-09-02_linked");
   const old = new Date(now.getTime() - 60 * DAY);
   const fresh = new Date(now.getTime() - 1 * DAY);
   // A tracked report, force-added past the ignore rule: old enough to be eligible, and never removed.
   await writeAged(join(oldRun, "reports", "tracked-r1.md"), "tracked report\n", old);
-  await mustGit(root, "add", ".gitignore", "README.md");
+  await mustGit(root, "add", ".gitignore", "fixture-readme.txt");
   await mustGit(root, "add", "-f", join(".stamity", "runs", "2026-09-01_old", "reports", "tracked-r1.md"));
   await mustGit(root, ...IDENTITY, "commit", "--quiet", "-m", "base");
   await utimes(join(oldRun, "reports", "tracked-r1.md"), old, old);
 
   await writeAged(join(oldRun, "reports", "old-r1.md"), "x".repeat(4000), old);
-  await writeAged(join(oldRun, "record.md"), "record of the old run\n", old);
+  await writeAged(join(oldRun, "record.md"), OLD_RECORD, old);
   await writeAged(join(oldRun, "notes", "scratch.txt"), "scratch\n", old);
+  await writeAged(join(newRun, "record.md"), NEW_RECORD, fresh);
   await writeAged(join(newRun, "reports", "new-r1.md"), "y".repeat(500), fresh);
   await writeAged(join(newRun, "reports", "aged-r1.md"), "z".repeat(700), old);
+  // An open run past both ages: its record, ledger and old report are never freed.
+  await writeAged(join(openRun, "record.md"), OPEN_RECORD, old);
+  await writeAged(join(openRun, "ledger.jsonl"), "{}\n", old);
+  await writeAged(join(openRun, "reports", "open-r1.md"), "o".repeat(300), old);
 
   // Links: one inside a run, and one run whose whole reports folder is a link to a folder outside the root.
   await writeAged(join(outsideDir, "precious.md"), "outside the root\n", old);
@@ -121,30 +138,25 @@ async function seed(base: string, now: Date): Promise<Fixture> {
   // Worktrees: dirty in the farm (on stamity/out), gone in the farm, and one outside it.
   await mkdir(farm, { recursive: true });
   await mustGit(root, "worktree", "add", "--quiet", join(farm, "dirty"), "stamity/out");
-  await writeFile(join(farm, "dirty", "README.md"), "edited\n", "utf8");
+  await writeFile(join(farm, "dirty", "fixture-readme.txt"), "edited\n", "utf8");
   await mustGit(root, "worktree", "add", "--quiet", "--detach", join(farm, "gone"));
   await rm(join(farm, "gone"), { recursive: true, force: true });
   await mustGit(root, "worktree", "add", "--quiet", "--detach", join(base, "outside-lane"));
 
-  return { root, farm, outsideDir, oldRun, newRun, linkedRun };
+  return { root, farm, outsideDir, oldRun, newRun, openRun, linkedRun };
 }
 
-/** The store's sweep stand-in; see the header for why the engine cases inject it. */
+/** A stand-in for the preview of the store; see the header for why the engine cases inject it. */
 function fakeSweep(
   targets: { archive?: { id: string; path: string }[]; remove?: { id: string; path: string }[] } = {},
-): HandoffSweep & { applied: number } {
+): HandoffSweep & { archived: string[] } {
   const sweep = {
-    applied: 0,
+    archived: [] as string[],
     async preview() {
       return { archive: targets.archive ?? [], remove: targets.remove ?? [] };
     },
-    async apply() {
-      sweep.applied += 1;
-      await Promise.all((targets.remove ?? []).map((target) => rm(target.path, { force: true })));
-      return {
-        archivedExpired: (targets.archive ?? []).map((target) => target.id),
-        deleted: (targets.remove ?? []).map((target) => target.id),
-      };
+    async archive(_rootDir: string, id: string) {
+      sweep.archived.push(id);
     },
   };
   return sweep;
@@ -175,10 +187,24 @@ describe.skipIf(!gitAvailable)("gc engine — the preview writes nothing and rep
     expect(old?.tracked).toBe(true);
     expect(old?.ageDays).toBe(69);
     expect(old?.reportsBytes).toBe("tracked report\n".length + 4000);
-    expect(old?.bytes).toBe("tracked report\n".length + 4000 + "record of the old run\n".length + "scratch\n".length);
+    expect(old?.bytes).toBe("tracked report\n".length + 4000 + OLD_RECORD.length + "scratch\n".length);
     expect(report.runs.find((row) => row.run === "2026-11-08_new")?.tracked).toBe(false);
-    // Three regular report files are counted; the link and the linked folder are not walked.
-    expect(report.reports).toEqual({ files: 4, bytes: "tracked report\n".length + 4000 + 500 + 700, eligible: 2 });
+    // TEST CHANGE, justified (review/33, sign-off S33): the fixture gained an open run, so the counts below take its
+    // one old report (counted, never eligible) and each row says whether its record reads closed.
+    const open = Object.fromEntries(report.runs.map((row) => [row.run, row.open]));
+    expect(open).toEqual({
+      "2026-09-01_old": false,
+      "2026-09-02_linked": true,
+      "2026-09-03_open": true,
+      "2026-11-08_new": false,
+    });
+    // Five regular report files are counted; the link and the linked folder are not walked; the old report of the
+    // open run is counted but not eligible.
+    expect(report.reports).toEqual({
+      files: 5,
+      bytes: "tracked report\n".length + 4000 + 500 + 700 + 300,
+      eligible: 2,
+    });
     expect(report.freed.paths).toEqual([
       ".stamity/runs/2026-09-01_old/reports/old-r1.md",
       ".stamity/runs/2026-11-08_new/reports/aged-r1.md",
@@ -200,6 +226,10 @@ describe.skipIf(!gitAvailable)("gc engine — the preview writes nothing and rep
         { path: ".stamity/runs/2026-09-02_linked/reports", reason: "a link, not followed" },
         { path: ".stamity/runs/2026-09-01_old/reports/tracked-r1.md", reason: "tracked by git" },
         { path: join(fixture.farm, "dirty"), reason: "uncommitted changes; gc never removes a tree" },
+        {
+          path: ".stamity/runs/2026-09-03_open",
+          reason: "open: its record does not read a closed status, so the whole run stays",
+        },
       ]),
     );
 
@@ -248,11 +278,13 @@ describe.skipIf(!gitAvailable)("gc engine — apply frees the default set and ke
     expect(await exists(join(fixture.newRun, "reports", "new-r1.md"))).toBe(true);
     expect(await readFile(join(fixture.oldRun, "reports", "tracked-r1.md"), "utf8")).toBe("tracked report\n");
     expect(await exists(join(fixture.oldRun, "record.md"))).toBe(true);
+    // The report of the open run is past the age and untracked, and stays: the run is not over.
+    expect(await exists(join(fixture.openRun, "reports", "open-r1.md"))).toBe(true);
     expect((await lstat(join(fixture.oldRun, "reports", "link-r1.md"))).isSymbolicLink()).toBe(true);
     // Through the linked reports folder nothing was touched.
     expect(await readFile(join(fixture.outsideDir, "precious.md"), "utf8")).toBe("outside the root\n");
     // The dirty tree stands with its edit; the gone registration is pruned; the outside lane stays registered.
-    expect(await readFile(join(fixture.farm, "dirty", "README.md"), "utf8")).toBe("edited\n");
+    expect(await readFile(join(fixture.farm, "dirty", "fixture-readme.txt"), "utf8")).toBe("edited\n");
     const list = await mustGit(fixture.root, "worktree", "list", "--porcelain");
     expect(list).not.toContain(join(fixture.farm, "gone"));
     expect(list).toContain("outside-lane");
@@ -293,6 +325,58 @@ describe.skipIf(!gitAvailable)("gc engine — apply frees the default set and ke
     expect(await readFile(join(fixture.outsideDir, "precious.md"), "utf8")).toBe("outside the root\n");
     // The run inside the age keeps everything but its aged report.
     expect(await exists(join(fixture.newRun, "reports", "new-r1.md"))).toBe(true);
+    // The open run is past the age and keeps its whole folder: record, ledger and report.
+    expect(await readFile(join(fixture.openRun, "record.md"), "utf8")).toBe(OPEN_RECORD);
+    expect(await exists(join(fixture.openRun, "ledger.jsonl"))).toBe(true);
+    expect(await exists(join(fixture.openRun, "reports", "open-r1.md"))).toBe(true);
+  });
+
+  it("keeps a run whose record is unreadable as a closed status, as an open one", async () => {
+    const fixture = await seed(getTemp().dir, NOW);
+    // A record that is a link to a closed record outside the root is not the word of the run itself: kept.
+    const outsideRecord = join(fixture.outsideDir, "closed-record.md");
+    await writeAged(outsideRecord, OLD_RECORD, NOW);
+    await rm(join(fixture.oldRun, "record.md"));
+    await symlink(outsideRecord, join(fixture.oldRun, "record.md"));
+    const options = optionsFor(fixture, { runsOlderThanDays: 30 });
+    const report = await applyGc(await planGc(options), options);
+    expect(report.runs.find((row) => row.run === "2026-09-01_old")?.open).toBe(true);
+    expect(await exists(join(fixture.oldRun, "reports", "old-r1.md"))).toBe(true);
+    expect(await exists(join(fixture.oldRun, "notes", "scratch.txt"))).toBe(true);
+  });
+
+  it("keeps a report whose folder is swapped for a link between the preview and the sweep", async () => {
+    const fixture = await seed(getTemp().dir, NOW);
+    const options = optionsFor(fixture);
+    const plan = await planGc(options);
+    // The planned folder moves outside the root, and a link to it takes its place: same names, outside target.
+    const moved = join(fixture.outsideDir, "moved-reports");
+    await rename(join(fixture.oldRun, "reports"), moved);
+    await symlink(moved, join(fixture.oldRun, "reports"));
+    const report = await applyGc(plan, options);
+    expect(report.kept).toContainEqual({
+      path: ".stamity/runs/2026-09-01_old/reports/old-r1.md",
+      reason: "its folder now resolves elsewhere through a link",
+    });
+    expect(await exists(join(moved, "old-r1.md"))).toBe(true);
+  });
+
+  it("reports a git refusal to list branches or refs as kept, not as an empty list", async () => {
+    const fixture = await seed(getTemp().dir, NOW);
+    // The real runner for every call but `for-each-ref`, which answers as a refusing git would: the one way to make a
+    // healthy repository refuse that read on demand.
+    const refusing: GcOptions["run"] = async (call) =>
+      call.args[0] === "for-each-ref"
+        ? { status: 128, stdout: "", stderr: "fatal: refused" }
+        : await runGit(call);
+    const plan = await planGc(optionsFor(fixture, { run: refusing }));
+    expect(plan.report.branches).toEqual([]);
+    expect(plan.report.kept).toEqual(
+      expect.arrayContaining([
+        { path: "refs/heads/stamity/", reason: "git would not list these branches, so none is known" },
+        { path: "refs/remotes/origin/stamity/", reason: "git would not list these refs, so none is known stale" },
+      ]),
+    );
   });
 
   it("keeps a file swapped for a link between the preview and the sweep", async () => {
@@ -314,21 +398,26 @@ describe.skipIf(!gitAvailable)("gc engine — apply frees the default set and ke
     const fixture = await seed(getTemp().dir, NOW);
     const archived = join(fixture.root, ".stamity", "handoffs", "archive", "h-1.md");
     await writeAged(archived, "handoff body\n", NOW);
-    const free = fakeSweep({ remove: [{ id: "h-1", path: archived }] });
+    const live = join(fixture.root, ".stamity", "handoffs", "h-2.md");
+    await writeAged(live, "live handoff\n", NOW);
+    // TEST CHANGE, justified (review/32, review/37): the apply now acts on the previewed list — gc removes each
+    // archived handoff itself and asks the store to archive each expired one by id — so the fake records the
+    // archive calls instead of running a sweep of its own, and gc itself does the removal below.
+    const free = fakeSweep({ archive: [{ id: "h-2", path: live }], remove: [{ id: "h-1", path: archived }] });
     const options = optionsFor(fixture, { handoffs: free });
     const plan = await planGc(options);
-    expect(plan.report.handoffs).toEqual({ archived: [], eligible: ["h-1"] });
+    expect(plan.report.handoffs).toEqual({ archived: ["h-2"], eligible: ["h-1"] });
     const report = await applyGc(plan, options);
-    expect(free.applied).toBe(1);
+    expect(free.archived).toEqual(["h-2"]);
     expect(report.freed.paths).toContain(".stamity/handoffs/archive/h-1.md");
     expect(await exists(archived)).toBe(false);
 
     await writeAged(archived, "handoff body\n", NOW);
     await mustGit(fixture.root, "add", "-f", ".stamity/handoffs/archive/h-1.md");
-    const held = fakeSweep({ remove: [{ id: "h-1", path: archived }] });
+    const held = fakeSweep({ archive: [{ id: "h-2", path: live }], remove: [{ id: "h-1", path: archived }] });
     const heldOptions = optionsFor(fixture, { handoffs: held });
     const heldReport = await applyGc(await planGc(heldOptions), heldOptions);
-    expect(held.applied).toBe(0);
+    expect(held.archived).toEqual([]);
     expect(heldReport.kept).toContainEqual({
       path: ".stamity/handoffs/archive/h-1.md",
       reason: "tracked by git, so the handoff sweep did not run",
@@ -341,6 +430,58 @@ describe.skipIf(!gitAvailable)("stamity gc — the verb", () => {
   async function runGc(cwd: string, args: readonly string[]): Promise<{ code: number; stdout: string; stderr: string }> {
     return await runInProcess([gcCommand], ["gc", ...args], { cwd, env: { NO_COLOR: "1" } });
   }
+
+  /** One handoff through the real store, expired long ago and archived: past the 90-day retention at any real now. */
+  async function staleArchivedHandoff(root: string): Promise<string> {
+    const { id } = await writeHandoff({
+      rootDir: root,
+      slug: "gc fixture",
+      body: REQUIRED_BODY_SECTIONS.map((heading) => `## ${heading}\n\nRecorded for the fixture.\n`).join("\n"),
+      summary: "A handoff the fixture wrote long ago and archived.",
+      now: new Date("2025-01-01T00:00:00Z"),
+    });
+    await archiveHandoff(root, id);
+    return join(root, ".stamity", "handoffs", "archive", `${id}.md`);
+  }
+
+  it("removes an archived handoff past retention through the real store with --apply", async () => {
+    const fixture = await seed(getTemp().dir, new Date());
+    const archived = await staleArchivedHandoff(fixture.root);
+    const preview = await runGc(fixture.root, ["--json"]);
+    expect(preview.code).toBe(0);
+    const eligible = (JSON.parse(preview.stdout) as { handoffs: { eligible: string[] } }).handoffs.eligible;
+    expect(eligible).toEqual([basename(archived, ".md")]);
+    const applied = await runGc(fixture.root, ["--apply"]);
+    expect(applied.code).toBe(0);
+    expect(await exists(archived)).toBe(false);
+  });
+
+  it("follows no linked handoff archive: a stale handoff outside the root stays with --apply", async () => {
+    const fixture = await seed(getTemp().dir, new Date());
+    const archived = await staleArchivedHandoff(fixture.root);
+    // The archive moves outside the root, and a link to it takes its place.
+    const outsideArchive = join(fixture.outsideDir, "handoff-archive");
+    await rename(dirname(archived), outsideArchive);
+    await symlink(outsideArchive, dirname(archived));
+    const result = await runGc(fixture.root, ["--apply", "--json"]);
+    expect(result.code).toBe(0);
+    const doc = JSON.parse(result.stdout) as { kept: { path: string; reason: string }[] };
+    expect(doc.kept).toContainEqual({
+      path: ".stamity/handoffs/archive",
+      reason: "a link, not followed: the handoff sweep did not run",
+    });
+    expect(await exists(join(outsideArchive, basename(archived)))).toBe(true);
+  });
+
+  it("marks an open run in the preview and lists every path --apply would remove", async () => {
+    const fixture = await seed(getTemp().dir, new Date());
+    const result = await runGc(fixture.root, []);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toMatch(/2026-09-03_open .*open: kept whole/u);
+    expect(result.stdout).toContain("  .stamity/runs/2026-09-01_old/reports/old-r1.md\n");
+    expect(result.stdout).toContain("  .stamity/runs/2026-11-08_new/reports/aged-r1.md\n");
+    expect(result.stdout).not.toContain("open-r1.md");
+  });
 
   it("previews by default: one JSON document with the cell's keys, and no file removed", async () => {
     const fixture = await seed(getTemp().dir, new Date());

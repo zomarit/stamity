@@ -35,7 +35,8 @@ import { readWorktreePolicy, resolveFarmDir } from "../../worktree/policy.ts";
  * inside a lane reads the `.stamity/` and the farm every lane shares rather than its own copy.
  *
  * Handoffs go through the engine registry's store (`ctx.engine.handoffs`), the way `./handoff.ts` reaches it: the
- * preview mirrors that verb's dry-run prune over the same verdicts, and the sweep is the store's `pruneHandoffs`.
+ * preview mirrors that verb's dry-run prune over the same verdicts, and the apply acts on that preview: the store's
+ * `archiveHandoff` moves each expired one, and the engine removes each one past retention under its own bounds.
  *
  * Exit 1 when any act the sweep attempted failed, with the failures in the payload and an `error` document;
  * a kept item is not a failure.
@@ -101,8 +102,8 @@ function handoffSweep(ctx: CliContext): HandoffSweep {
       });
       return { archive: expired.map(target), remove: stale.map(target) };
     },
-    async apply(rootDir, now) {
-      return await store.pruneHandoffs(rootDir, { now });
+    async archive(rootDir, id) {
+      await store.archiveHandoff(rootDir, id);
     },
   };
 }
@@ -135,7 +136,8 @@ function render(ctx: CliContext, report: GcReport, reportDays: number): void {
   for (const row of report.runs) {
     out(
       `  ${label(row.run)}  ${formatBytes(row.bytes)} (reports ${formatBytes(row.reportsBytes)}), ` +
-        `${String(row.ageDays)} days${row.tracked ? ", holds tracked files" : ""}`,
+        `${String(row.ageDays)} days${row.tracked ? ", holds tracked files" : ""}` +
+        `${row.open ? ", open: kept whole" : ""}`,
     );
   }
   out(
@@ -169,14 +171,14 @@ function render(ctx: CliContext, report: GcReport, reportDays: number): void {
   out("");
   out(
     `${report.dryRun ? "Would free" : "Freed"} ${formatBytes(report.freed.bytes)} across ` +
-      `${String(report.freed.paths.length)} paths and refs.`,
+      `${String(report.freed.paths.length)} paths and refs${report.freed.paths.length === 0 ? "." : ":"}`,
   );
+  for (const path of report.freed.paths) out(`  ${label(path)}`);
 }
 
 export const gcCommand: CommandModule = {
   name: "gc",
-  summary: "report the disk local runs, branches, worktrees and handoffs hold, and free it with --apply (plumbing)",
-  hidden: true,
+  summary: "report the disk local runs, branches, worktrees and handoffs hold, and free it with --apply",
   mutating: true,
 
   configure(cmd: Command): void {
@@ -209,7 +211,7 @@ export const gcCommand: CommandModule = {
       run: runGit,
     });
     const apply = opts["apply"] === true && !ctx.dryRun;
-    const report = apply ? await applyGc(plan, { handoffs, now, run: runGit }) : plan.report;
+    const report = apply ? await applyGc(plan, { handoffs, run: runGit }) : plan.report;
     render(ctx, report, reportDays);
     const json = { ...report } as Record<string, unknown>;
     if (report.failed.length === 0) return { exitCode: 0, json };

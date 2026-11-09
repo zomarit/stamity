@@ -44,19 +44,19 @@ import { noticeCacheDir, resolveOwnPackageFacts, startupNotice } from "./cli/not
 
 /**
  * The advertised surface in help order — init, sync, upgrade, check, validate,
- * add, config, workspace, worktree, clean — plus `gc`, `learn`, `handoff`,
- * `ledger`, `gate`, `plan` and `run`, the seven hidden plumbing verbs. Ten
+ * add, config, workspace, worktree, clean, gc — plus `learn`, `handoff`,
+ * `ledger`, `gate`, `plan` and `run`, the six hidden plumbing verbs. Eleven
  * advertised, seventeen registered.
  *
- * `gc` sits directly after `clean`, first of the hidden verbs: both free what
- * the others wrote, and `clean` stays the last ADVERTISED verb.
+ * `gc` sits directly after `clean`, the last advertised verb: both free what
+ * the others wrote, and a person, not generated agent content, runs it.
  *
  * `upgrade` sits directly after `sync`: it runs the running release's sync and
  * moves the repository's pin, so a reader meets the two together.
  *
  * `workspace` sits after `config` and before `clean`: it is a configuration
- * verb, and `clean` stays last on the advertised surface because it is the one
- * that removes what the others wrote.
+ * verb, and `clean` and `gc` stay last on the advertised surface because they
+ * are the ones that remove what the others wrote.
  *
  * `worktree` sits directly after `workspace`, and the adjacency is deliberate
  * rather than alphabetical: the two differ at the fifth character and are

@@ -191,6 +191,16 @@ describe("command coverage", () => {
     expect(section).toContain("May write when it runs");
   });
 
+  // ADDED (plan 024 file 2, unit d-gc, sign-off S31): `gc` is a person's verb, so it is advertised — listed by
+  // `--help`, marked `yes` in the index, and its section carries no plumbing note.
+  it("documents `gc` as advertised, not plumbing", () => {
+    const gc = COMMANDS.find((command) => command.name === "gc");
+    expect(gc?.hidden).not.toBe(true);
+    expect(gc?.summary).not.toContain("plumbing");
+    expect(page).toMatch(/^\| `stamity gc` \| yes \|/mu);
+    expect(sectionOf("gc")).not.toContain("plumbing");
+  });
+
   it("documents `learn` as plumbing — neither omitted nor advertised as a user verb", () => {
     const learn = COMMANDS.find((command) => command.name === "learn");
     expect(learn?.hidden).toBe(true);

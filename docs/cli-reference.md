@@ -28,7 +28,7 @@ mistake.
 | `stamity workspace` | yes | writes | one policy across several repositories: status, guided creation, and the cascade |
 | `stamity worktree` | yes | writes | parallel checkouts of this repository: the inventory, guided setup, and receipt-based teardown |
 | `stamity clean` | yes | writes | remove every generated file and the setup's own state, keeping yours under .stamity/ |
-| `stamity gc` | plumbing | writes | report the disk local runs, branches, worktrees and handoffs hold, and free it with --apply (plumbing) |
+| `stamity gc` | yes | writes | report the disk local runs, branches, worktrees and handoffs hold, and free it with --apply |
 | `stamity learn` | plumbing | writes | capture a learning through the engine's write gates, or read them through its screen (plumbing) |
 | `stamity handoff` | plumbing | writes | prepare, resume, list, complete and prune handoffs through the engine's gates (plumbing) |
 | `stamity ledger` | plumbing | writes | append findings to a run's ledger, close its rows, print its resume card, and read and write the deferral inbox (plumbing) |
@@ -251,12 +251,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 ## `stamity gc`
 
-report the disk local runs, branches, worktrees and handoffs hold, and free it with --apply (plumbing)
-
-Plumbing. This verb is not listed in `stamity --help` because its caller is generated
-agent content rather than a person. Hidden is not secret — `stamity gc --help` prints
-in full — and it is documented here because a verb that exists and is undocumented is
-worse than one that is merely unadvertised.
+report the disk local runs, branches, worktrees and handoffs hold, and free it with --apply
 
 May write when it runs, so `--dry-run` previews any change without making it.
 

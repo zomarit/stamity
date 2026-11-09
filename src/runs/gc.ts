@@ -1,5 +1,5 @@
 import type { Stats } from "node:fs";
-import { lstat, readdir, realpath, rmdir, unlink } from "node:fs/promises";
+import { lstat, open, readdir, realpath, rmdir, unlink } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { EngineError } from "../types/errors.ts";
 import { STATE_DIR } from "../types/markers.ts";
@@ -12,7 +12,15 @@ import {
   runGit,
   type WorktreeGitRunner,
 } from "../worktree/git.ts";
-import { REPORTS_DIR, RUNS_SEGMENTS, isRunId } from "./layout.ts";
+import {
+  RECORD_FILE,
+  RECORD_HEAD_LINES,
+  RECORD_HEAD_READ_BYTES,
+  RECORD_STATUS_PATTERN,
+  REPORTS_DIR,
+  RUNS_SEGMENTS,
+  isRunId,
+} from "./layout.ts";
 
 /**
  * `stamity gc`'s engine (REQ-FLOW-177): what local state the setup's runs left, how large it is, and — only when
@@ -27,7 +35,8 @@ import { REPORTS_DIR, RUNS_SEGMENTS, isRunId } from "./layout.ts";
  * 1. **The root bound.** A file is removed only under `<root>/.stamity/`, never through a link: the walk does not
  *    follow one, a link it meets is kept and named, and the apply re-reads the file and its folder's real path
  *    before the unlink, so a folder swapped for a link between the plan and the sweep is refused, not followed.
- *    A worktree registration is pruned only when every prunable one sits in the managed farm.
+ *    A link at `.stamity/handoffs` or at its `archive/` stops the handoff sweep whole, at the plan and again at the
+ *    apply. A worktree registration is pruned only when every prunable one sits in the managed farm.
  * 2. **The tracked bound.** git's own tracked list for `.stamity/` is read once, and no path on it is ever removed;
  *    a list git will not give stops the run, because nothing could then prove a file untracked.
  * 3. **No remote write.** A branch is deleted with `git branch -d` (never `-D`), only when merged into the main
@@ -36,9 +45,14 @@ import { REPORTS_DIR, RUNS_SEGMENTS, isRunId } from "./layout.ts";
  *    Nothing is pushed and no remote branch is touched.
  * 4. **No dirty tree.** No worktree is removed at all: the inventory lists them, a dirty one as `dirty`, and the
  *    only worktree act is `git worktree prune`, which drops registrations whose folder is already gone.
+ * 5. **No open run.** A run folder is touched only when its `record.md` head reads a closed status (`Status: closed
+ *    …`, as a run writes it at its end). An open run, or one whose record is missing, a link or unreadable, keeps its
+ *    whole folder, reports included, and the report marks it `open`.
  *
  * Handoffs reach this module as an injected {@link HandoffSweep}: the store is the engine registry's, and the CLI
- * hands its preview and its sweep down, so this file names the store's verdicts without importing the store.
+ * hands its preview and its one-handoff archive down, so this file names the store's verdicts without importing the
+ * store. The apply acts on the previewed list, not on a fresh read: each archived handoff past retention is removed
+ * here under the same re-check as a run file, and each expired one is archived by id after the same re-check.
  *
  * `freed.paths` holds three spellings, one per kind of thing freed: a repo-relative POSIX path for a file under
  * `.stamity/`, a full ref name (`refs/heads/…`, `refs/remotes/…`) for a ref, and the absolute path git records for
@@ -49,6 +63,13 @@ import { REPORTS_DIR, RUNS_SEGMENTS, isRunId } from "./layout.ts";
 export const GC_DEFAULT_REPORT_DAYS = 30;
 
 const MS_PER_DAY = 86_400_000;
+
+/** The handoff store's folder under `.stamity/`, and its archive under that. */
+const HANDOFF_SEGMENTS = ["handoffs"] as const;
+const HANDOFF_ARCHIVE_SEGMENTS = ["handoffs", "archive"] as const;
+
+/** A record status value that says the run is over: `closed`, then anything (a date, a reason). */
+const CLOSED_STATUS_PATTERN = /^closed\b/iu;
 
 /** The local branch namespace a run's branch lives in. */
 const RUN_BRANCH_PREFIX = "refs/heads/stamity/";
@@ -64,12 +85,13 @@ export interface HandoffTarget {
 }
 
 /**
- * The handoff store's prune, as two calls: `preview` names what a sweep would archive and delete without moving
- * anything, and `apply` runs the store's own sweep (`store.pruneHandoffs`).
+ * The handoff store's prune, as two calls: `preview` names what the store's sweep would archive and delete without
+ * moving anything, and `archive` moves one live handoff into the archive (`store.archiveHandoff`). The deletes are
+ * this module's own, bounded like every other file it removes.
  */
 export interface HandoffSweep {
   preview(rootDir: string, now: Date): Promise<{ archive: HandoffTarget[]; remove: HandoffTarget[] }>;
-  apply(rootDir: string, now: Date): Promise<{ archivedExpired: string[]; deleted: string[] }>;
+  archive(rootDir: string, id: string): Promise<void>;
 }
 
 export interface GcOptions {
@@ -94,6 +116,8 @@ interface GcRunRow {
   readonly ageDays: number;
   /** Whether git tracks any file in the folder. */
   readonly tracked: boolean;
+  /** The record head does not read a closed status (or cannot be read), so nothing in the folder is freed. */
+  readonly open: boolean;
 }
 
 interface GcBranchRow {
@@ -149,6 +173,7 @@ export interface GcPlan {
   readonly files: readonly FileTarget[];
   /** Run folders whose emptied directories the sweep then removes, deepest first. */
   readonly emptyDirCandidates: readonly string[];
+  readonly handoffArchive: readonly (FileTarget & { readonly id: string })[];
   readonly handoffRemove: readonly (FileTarget & { readonly id: string })[];
   readonly sweepHandoffs: boolean;
   readonly prune: readonly string[];
@@ -234,16 +259,17 @@ function runAgeDays(runId: string, now: Date): number | null {
 const sum = (entries: readonly { bytes: number }[]): number =>
   entries.reduce((total, entry) => total + entry.bytes, 0);
 
+/** The refs under `prefix`, or null when git refuses the read: a refusal is not an empty namespace. */
 async function readRefs(
   run: WorktreeGitRunner,
   repoRoot: string,
   prefix: string,
-): Promise<{ ref: string; sha: string }[]> {
+): Promise<{ ref: string; sha: string }[] | null> {
   const outcome = await run({
     args: ["for-each-ref", "--format=%(refname)%00%(objectname)", prefix],
     cwd: repoRoot,
   });
-  if (outcome.status !== 0) return [];
+  if (outcome.status !== 0) return null;
   return outcome.stdout
     .split("\n")
     .filter((line) => line !== "")
@@ -254,18 +280,63 @@ async function readRefs(
     .filter((row) => row.ref.startsWith(prefix) && row.sha !== "");
 }
 
-/** git's ignored entries in one tree, directories collapsed (`--ignored=traditional`). */
-async function readIgnored(run: WorktreeGitRunner, worktreePath: string): Promise<string[]> {
+/** git's ignored entries in one tree, directories collapsed (`--ignored=traditional`); null when git refuses. */
+async function readIgnored(run: WorktreeGitRunner, worktreePath: string): Promise<string[] | null> {
   const outcome = await run({
     args: ["status", "--porcelain=v1", "-z", "--ignored=traditional", "--untracked-files=normal"],
     cwd: worktreePath,
   });
-  if (outcome.status !== 0) return [];
+  if (outcome.status !== 0) return null;
   return outcome.stdout
     .split("\0")
     .filter((token) => token.startsWith("!! "))
     .map((token) => token.slice(3).replace(/\/$/u, ""))
     .toSorted();
+}
+
+/**
+ * Whether the run's record head reads a closed status. A record that is missing, a link, not a regular file or
+ * unreadable reads as not closed, so the run is kept: only the run's own word that it is over lets gc touch it.
+ */
+async function recordIsClosed(runPath: string): Promise<boolean> {
+  const path = join(runPath, RECORD_FILE);
+  let raw: string;
+  try {
+    const stats = await lstat(path);
+    if (!stats.isFile()) return false;
+    const handle = await open(path, "r");
+    try {
+      const buffer = Buffer.alloc(RECORD_HEAD_READ_BYTES);
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+      raw = buffer.toString("utf8", 0, bytesRead);
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    return false;
+  }
+  const body = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
+  for (const line of body.split(/\r?\n/u).slice(0, RECORD_HEAD_LINES)) {
+    const status = RECORD_STATUS_PATTERN.exec(line)?.[1];
+    if (status !== undefined) return CLOSED_STATUS_PATTERN.test(status.trim());
+  }
+  return false;
+}
+
+/**
+ * The first handoff folder that exists and is not a plain folder (a link, most likely), repo-relative; null when
+ * both are plain folders or absent. The handoff folder is checked before its archive, so a linked parent is never
+ * read through.
+ */
+async function linkedHandoffFolder(stateDir: string, repoRoot: string): Promise<string | null> {
+  for (const segments of [HANDOFF_SEGMENTS, HANDOFF_ARCHIVE_SEGMENTS]) {
+    const path = join(stateDir, ...segments);
+    // oxlint-disable-next-line no-await-in-loop -- the parent first, so the archive is never read through a link
+    const stats = await lstatOrNull(path);
+    if (stats === null) return null;
+    if (!stats.isDirectory()) return toPosix(relative(repoRoot, path));
+  }
+  return null;
 }
 
 interface RunsRead {
@@ -321,6 +392,8 @@ async function readRuns(
     const reportFiles =
       reportsRoot?.kind === "dir" ? files.filter((entry) => entry.rel.startsWith(`${reportsRel}/`)) : [];
     const ageDays = runAgeDays(name, opts.now) ?? Math.floor((opts.now.getTime() - stats.mtimeMs) / MS_PER_DAY);
+    // oxlint-disable-next-line no-await-in-loop -- one record head per run, as above
+    const closed = await recordIsClosed(runPath);
 
     result.rows.push({
       run: name,
@@ -328,12 +401,20 @@ async function readRuns(
       reportsBytes: sum(reportFiles),
       ageDays,
       tracked: files.some((entry) => tracked.has(entry.rel)),
+      open: !closed,
     });
     result.reports.files += reportFiles.length;
     result.reports.bytes += sum(reportFiles);
 
     for (const link of entries.filter((entry) => entry.kind === "link")) {
       result.kept.push({ path: link.rel, reason: "a link, not followed" });
+    }
+    if (!closed) {
+      result.kept.push({
+        path: `${runsRel}/${name}`,
+        reason: "open: its record does not read a closed status, so the whole run stays",
+      });
+      continue;
     }
 
     const choose = (entry: WalkEntry): void => {
@@ -405,12 +486,12 @@ export async function planGc(opts: GcOptions): Promise<GcPlan> {
       else prunableOutside = true;
     }
     if (klass === "dirty") kept.push({ path: row.entry.path, reason: "uncommitted changes; gc never removes a tree" });
-    worktrees.push({
-      path: row.entry.path,
-      class: klass,
-      // oxlint-disable-next-line no-await-in-loop -- one status per tree, as the inventory reads them
-      ignored: row.classification === "prunable" ? [] : await readIgnored(run, row.entry.path),
-    });
+    // oxlint-disable-next-line no-await-in-loop -- one status per tree, as the inventory reads them
+    const ignored = row.classification === "prunable" ? [] : await readIgnored(run, row.entry.path);
+    if (ignored === null) {
+      kept.push({ path: row.entry.path, reason: "git would not read its status, so its ignored files are not known" });
+    }
+    worktrees.push({ path: row.entry.path, class: klass, ignored: ignored ?? [] });
   }
   if (prunableOutside && prunableInFarm.length > 0) {
     for (const path of prunableInFarm) {
@@ -422,7 +503,11 @@ export async function planGc(opts: GcOptions): Promise<GcPlan> {
   // Branches: merged means an ancestor of the main checkout's HEAD — the test `git branch -d` itself makes.
   const branches: GcBranchRow[] = [];
   const branchesToDelete: string[] = [];
-  for (const { ref } of await readRefs(run, repoRoot, RUN_BRANCH_PREFIX)) {
+  const branchRefs = await readRefs(run, repoRoot, RUN_BRANCH_PREFIX);
+  if (branchRefs === null) {
+    kept.push({ path: RUN_BRANCH_PREFIX, reason: "git would not list these branches, so none is known" });
+  }
+  for (const { ref } of branchRefs ?? []) {
     const name = ref.slice("refs/heads/".length);
     // oxlint-disable-next-line no-await-in-loop -- one ancestry test per branch
     const ancestry = await run({ args: ["merge-base", "--is-ancestor", ref, "HEAD"], cwd: repoRoot });
@@ -436,7 +521,11 @@ export async function planGc(opts: GcOptions): Promise<GcPlan> {
   }
 
   // Tracking refs: stale only on origin's own word.
-  const trackingRefs = await readRefs(run, repoRoot, RUN_TRACKING_PREFIX);
+  const trackingRead = await readRefs(run, repoRoot, RUN_TRACKING_PREFIX);
+  if (trackingRead === null) {
+    kept.push({ path: RUN_TRACKING_PREFIX, reason: "git would not list these refs, so none is known stale" });
+  }
+  const trackingRefs = trackingRead ?? [];
   const tracking: { ref: string; sha: string }[] = [];
   if (trackingRefs.length > 0 && (await hasOriginRemote(run, repoRoot))) {
     const remote = await run({
@@ -460,30 +549,41 @@ export async function planGc(opts: GcOptions): Promise<GcPlan> {
     }
   }
 
-  // Handoffs: the store's own verdicts, kept whole when any file it would touch is tracked.
-  const preview = stateIsLink ? { archive: [], remove: [] } : await opts.handoffs.preview(repoRoot, opts.now);
-  const handoffTargets = [...preview.archive, ...preview.remove];
-  const trackedHandoff = handoffTargets.find((target) => tracked.has(toPosix(relative(repoRoot, target.path))));
+  // Handoffs: the store's own verdicts, never read through a linked folder, each target a regular file inside the
+  // handoff folder, and kept whole when any file the sweep would touch is tracked.
+  const linkedHandoffs = stateIsLink ? null : await linkedHandoffFolder(stateDir, repoRoot);
+  if (linkedHandoffs !== null) {
+    kept.push({ path: linkedHandoffs, reason: "a link, not followed: the handoff sweep did not run" });
+  }
+  const read =
+    stateIsLink || linkedHandoffs !== null
+      ? { archive: [], remove: [] }
+      : await opts.handoffs.preview(repoRoot, opts.now);
+  const handoffsDir = join(stateDir, ...HANDOFF_SEGMENTS);
+  const regular = async (targets: readonly HandoffTarget[]): Promise<(FileTarget & { id: string })[]> => {
+    const out: (FileTarget & { id: string })[] = [];
+    for (const target of targets) {
+      const rel = toPosix(relative(repoRoot, target.path));
+      // oxlint-disable-next-line no-await-in-loop -- one lstat per handoff the store named
+      const stats = isInside(target.path, handoffsDir) ? await lstatOrNull(target.path) : null;
+      if (stats?.isFile() !== true) {
+        kept.push({ path: rel, reason: "not a regular file inside .stamity/handoffs (a link is not followed)" });
+        continue;
+      }
+      out.push({ id: target.id, abs: target.path, rel, bytes: Number(stats.size) });
+    }
+    return out;
+  };
+  const archiveTargets = await regular(read.archive);
+  const removeTargets = await regular(read.remove);
+  const handoffTargets = [...archiveTargets, ...removeTargets];
+  const trackedHandoff = handoffTargets.find((target) => tracked.has(target.rel));
   const sweepHandoffs = trackedHandoff === undefined && handoffTargets.length > 0;
   if (trackedHandoff !== undefined) {
-    kept.push({
-      path: toPosix(relative(repoRoot, trackedHandoff.path)),
-      reason: "tracked by git, so the handoff sweep did not run",
-    });
+    kept.push({ path: trackedHandoff.rel, reason: "tracked by git, so the handoff sweep did not run" });
   }
-  const handoffRemove: (FileTarget & { id: string })[] = [];
-  if (sweepHandoffs) {
-    for (const target of preview.remove) {
-      // oxlint-disable-next-line no-await-in-loop -- one lstat per archived handoff
-      const stats = await lstatOrNull(target.path);
-      handoffRemove.push({
-        id: target.id,
-        abs: target.path,
-        rel: toPosix(relative(repoRoot, target.path)),
-        bytes: stats?.isFile() === true ? Number(stats.size) : 0,
-      });
-    }
-  }
+  const handoffArchive = sweepHandoffs ? archiveTargets : [];
+  const handoffRemove = sweepHandoffs ? removeTargets : [];
 
   const freedFiles = [...runs.files, ...handoffRemove];
   const report: GcReport = {
@@ -494,8 +594,8 @@ export async function planGc(opts: GcOptions): Promise<GcPlan> {
     staleTracking: tracking.map((row) => row.ref),
     worktrees,
     handoffs: {
-      archived: preview.archive.map((target) => target.id).toSorted(),
-      eligible: preview.remove.map((target) => target.id).toSorted(),
+      archived: archiveTargets.map((target) => target.id).toSorted(),
+      eligible: removeTargets.map((target) => target.id).toSorted(),
     },
     freed: {
       bytes: sum(freedFiles),
@@ -516,6 +616,7 @@ export async function planGc(opts: GcOptions): Promise<GcPlan> {
     realStateDir,
     files: runs.files,
     emptyDirCandidates: runs.emptyDirCandidates,
+    handoffArchive,
     handoffRemove,
     sweepHandoffs,
     prune,
@@ -546,7 +647,7 @@ async function stillBounded(plan: GcPlan, abs: string): Promise<string | null> {
 /** Acts on exactly the plan: removes its files, runs the handoff sweep, prunes, drops refs, deletes branches. */
 export async function applyGc(
   plan: GcPlan,
-  opts: Pick<GcOptions, "handoffs" | "now" | "run">,
+  opts: Pick<GcOptions, "handoffs" | "run">,
 ): Promise<GcReport> {
   const run = opts.run ?? runGit;
   const failed: GcKept[] = [];
@@ -554,22 +655,25 @@ export async function applyGc(
   const freedPaths: string[] = [];
   let freedBytes = 0;
 
-  for (const file of plan.files) {
-    // oxlint-disable-next-line no-await-in-loop -- each unlink is preceded by its own re-check
+  const remove = async (file: FileTarget): Promise<void> => {
     const refusal = await stillBounded(plan, file.abs);
-    if (refusal === "already gone") continue;
+    if (refusal === "already gone") return;
     if (refusal !== null) {
       kept.push({ path: file.rel, reason: refusal });
-      continue;
+      return;
     }
     try {
-      // oxlint-disable-next-line no-await-in-loop -- as above
       await unlink(file.abs);
       freedPaths.push(file.rel);
       freedBytes += file.bytes;
     } catch (cause) {
       failed.push({ path: file.rel, reason: describe(cause) });
     }
+  };
+
+  for (const file of plan.files) {
+    // oxlint-disable-next-line no-await-in-loop -- each unlink is preceded by its own re-check
+    await remove(file);
   }
   for (const dir of plan.emptyDirCandidates) {
     if (!isInside(dir, plan.stateDir) || dir === plan.stateDir) continue;
@@ -587,17 +691,33 @@ export async function applyGc(
     }
   }
 
+  // The handoff sweep acts on the previewed list: a folder that became a link since the plan stops it whole, each
+  // expired handoff is archived by id after its own re-check, and each one past retention is removed as a run file
+  // is, so nothing outside `.stamity/` is reached through a link.
   if (plan.sweepHandoffs) {
-    try {
-      const swept = await opts.handoffs.apply(plan.repoRoot, opts.now);
-      const deleted = new Set(swept.deleted);
-      for (const target of plan.handoffRemove) {
-        if (!deleted.has(target.id)) continue;
-        freedPaths.push(target.rel);
-        freedBytes += target.bytes;
+    const linked = await linkedHandoffFolder(plan.stateDir, plan.repoRoot);
+    if (linked === null) {
+      for (const target of plan.handoffArchive) {
+        // oxlint-disable-next-line no-await-in-loop -- each move is preceded by its own re-check
+        const refusal = await stillBounded(plan, target.abs);
+        if (refusal === "already gone") continue;
+        if (refusal !== null) {
+          kept.push({ path: target.rel, reason: refusal });
+          continue;
+        }
+        try {
+          // oxlint-disable-next-line no-await-in-loop -- as above
+          await opts.handoffs.archive(plan.repoRoot, target.id);
+        } catch (cause) {
+          failed.push({ path: target.rel, reason: describe(cause) });
+        }
       }
-    } catch (cause) {
-      failed.push({ path: `${STATE_DIR}/handoffs`, reason: describe(cause) });
+      for (const target of plan.handoffRemove) {
+        // oxlint-disable-next-line no-await-in-loop -- each unlink is preceded by its own re-check
+        await remove(target);
+      }
+    } else {
+      kept.push({ path: linked, reason: "a link since the preview, not followed: the handoff sweep did not run" });
     }
   }
 
