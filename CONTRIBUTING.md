@@ -75,6 +75,9 @@ The setup this repository generates is the setup used to review changes to it. I
 reviews your pull request badly, say so in the thread. A weak review is a defect in the corpus, and
 it gets fixed there rather than worked around.
 
+A Dependabot pull request gets a read too. Before it merges, the whole lockfile diff is read, not
+the summary, and `st-dep-audit` runs against the pull request's base.
+
 [GOVERNANCE.md](GOVERNANCE.md) is where the decision model and the landing rules live. This page
 covers the mechanics.
 
