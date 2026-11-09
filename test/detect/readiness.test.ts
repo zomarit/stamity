@@ -328,7 +328,7 @@ describe("readReadinessFiles", () => {
   });
 
   it("reads an empty repository as absent everywhere, without a throw", async () => {
-    const files = await readReadinessFiles(await seedRepo({ "README.md": "# x\n" }));
+    const files = await readReadinessFiles(await seedRepo({ "notes.txt": "x\n" }));
     expect(files).toEqual({ workflows: [], lockfiles: [], classFile: { state: "absent" }, coverage: { state: "absent" } });
   });
 
