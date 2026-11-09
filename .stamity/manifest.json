@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.18.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-11-09T22:06:24.542Z",
+  "updatedAt": "2026-11-09T22:09:53.719Z",
   "tools": [
     "claude"
   ],
@@ -78,14 +78,14 @@
       "adapter": "claude",
       "artifactId": "fixer",
       "artifactType": "agent",
-      "contentHash": "567d8489f1369588cff20b29d39517aeccd19cb86877238a94d21a072e9ed12d",
+      "contentHash": "72d5d46eaca619c955b2ed7314754ec147d42728b5e9c9041416ae66aa93d9c2",
       "path": ".claude/agents/stamity-fixer.md"
     },
     {
       "adapter": "claude",
       "artifactId": "implementer",
       "artifactType": "agent",
-      "contentHash": "6693137c820814e71e56ffd3713982ad7abaf86ef3557d7720b9038475107c69",
+      "contentHash": "72343d60baff9477783bf298b8e6d8e7d5adea08dc39881755fe570f3655eecf",
       "path": ".claude/agents/stamity-implementer.md"
     },
     {
@@ -99,7 +99,7 @@
       "adapter": "claude",
       "artifactId": "researcher",
       "artifactType": "agent",
-      "contentHash": "ddd73f1c30b8f2c4010e7b6092553086a0c28e6a87589484ffe7896f4ae1ba23",
+      "contentHash": "eaae8ed769d48a28533fbe71437b0184ec265958a1dbe15c25a6744b6f0fa5c5",
       "path": ".claude/agents/stamity-researcher.md"
     },
     {
@@ -127,7 +127,7 @@
       "adapter": "claude",
       "artifactId": "test-runner",
       "artifactType": "agent",
-      "contentHash": "ecfffa1fb48ba4a1c7370e1be351049548dea8d59cfb4d6371564e753e4ac563",
+      "contentHash": "0235e0e9abec35b94ed047b5bc44d1d64796c34df42da2e430e8bd2288eadea3",
       "path": ".claude/agents/stamity-test-runner.md"
     },
     {
@@ -169,7 +169,7 @@
       "adapter": "claude",
       "artifactId": "cmd-quick",
       "artifactType": "command",
-      "contentHash": "091555bb6f3ce67ac86e08bd7103f9c9f9e28a0fe208c2c9a59541f68f6b84ce",
+      "contentHash": "9a6e74ab979fafd88a45031c20a60b39ca6e81bdc303c50e15e76c7d85c71540",
       "path": ".claude/commands/st-quick.md"
     },
     {
@@ -253,7 +253,7 @@
       "adapter": "claude",
       "artifactId": "api-versioning",
       "artifactType": "rule",
-      "contentHash": "ed3a351d0ff5c6e76547267a3d79a69bd0267af96b659dc91398160921253391",
+      "contentHash": "33cf64f53d78b3900d6cc9b17da8fbb8928845905da3483ce8d83f65999aceda",
       "path": ".claude/rules/stamity-api-versioning.md"
     },
     {
@@ -276,6 +276,13 @@
       "artifactType": "rule",
       "contentHash": "2f198bab7c82362db7328339dc10b576cb6694490e94451be40cc150ca4a25d0",
       "path": ".claude/rules/stamity-learnings-schema.md"
+    },
+    {
+      "adapter": "claude",
+      "artifactId": "maintainer-process",
+      "artifactType": "rule",
+      "contentHash": "855c29ed4c73199f784e272a0f2d12873c0e09bd548c3c27dada7969a26f3cb8",
+      "path": ".claude/rules/stamity-maintainer-process.md"
     },
     {
       "adapter": "claude",
@@ -455,7 +462,7 @@
       "adapter": "claude",
       "artifactId": "st-eval-run",
       "artifactType": "skill",
-      "contentHash": "21b3e087a97866e6abb057d0fdb392d1e325877f9a271f3876a4cebb94fdcf5f",
+      "contentHash": "6a7fa9d3c7f40e8fece1524fcd0661806af777f95c6e7ff74bd83ff4fbd76894",
       "path": ".claude/skills/st-eval-run/SKILL.md"
     },
     {
@@ -651,7 +658,7 @@
       "adapter": "claude",
       "artifactId": "ai-evals",
       "artifactType": "rule",
-      "contentHash": "dc65fca7b620871bbf1997264d29eded3e024d50957e0df571dc7999b22ea285",
+      "contentHash": "cd390f5674d48ac44a04f1a9849527ac17d5c6d48d25068dfe72681061537255",
       "path": ".claude/skills/stamity-ai-evals/SKILL.md"
     },
     {
