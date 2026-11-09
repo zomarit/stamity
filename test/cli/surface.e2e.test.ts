@@ -58,6 +58,15 @@ const packageJson = createRequire(import.meta.url)("../../package.json") as { ve
  * TEST CHANGE, justified (plan 024 file 3, x-ready-verb, REQ-FLOW-182; S53): `ready` joins the
  * advertised surface right after `validate`, beside the other read-only reports, so each count below
  * moves up by one for it. The assertions keep their shape; the surface grew by one command.
+ *
+ * TEST CHANGE, justified (plan 024, sign-off S31; units d-gc, s-skill-verb and n-away-verb, REQ-FLOW-177,
+ * REQ-FLOW-180, REQ-FLOW-166): `gc` joins directly after `clean`, `skill` after `gc`, and `away` after `skill`, all
+ * three advertised as a person's verbs, so the counts below move from ten advertised and sixteen registered to
+ * thirteen and nineteen. The assertions keep their shape; the surface grew by three commands.
+ *
+ * TEST CHANGE, justified (plan 024, integration of x-ready-verb with d-gc, s-skill-verb and n-away-verb): both
+ * changes land together, so the counts below are fourteen advertised and twenty registered — `ready` after
+ * `validate`, and `gc`, `skill`, `away` after `clean`, in the order `src/cli.ts` registers them.
  */
 const ADVERTISED = [
   "init",
@@ -71,6 +80,9 @@ const ADVERTISED = [
   "workspace",
   "worktree",
   "clean",
+  "gc",
+  "skill",
+  "away",
 ] as const;
 
 /** The plumbing verbs, in registration order: off `--help`, on the surface. */
@@ -96,9 +108,9 @@ const twin = (name: string): CommandModule => ({
 });
 
 describe("COMMANDS enumeration (in-process)", () => {
-  it("registers exactly 17 uniquely-named commands in help order, the hidden six last", () => {
+  it("registers exactly 20 uniquely-named commands in help order, the hidden six last", () => {
     expect(COMMANDS.map((command) => command.name)).toEqual([...ADVERTISED, ...HIDDEN]);
-    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(17);
+    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(20);
     expect(HIDDEN).toHaveLength(6);
     expect(COMMANDS.filter((command) => command.hidden === true).map((c) => c.name)).toEqual([
       ...HIDDEN,
@@ -127,7 +139,7 @@ describe("COMMANDS enumeration (in-process)", () => {
 describe("advertised surface (child process)", () => {
   const getFixture = useCliFixture();
 
-  it("--help lists exactly the 11 advertised commands and none of the four plumbing verbs", async () => {
+  it("--help lists exactly the 14 advertised commands and none of the four plumbing verbs", async () => {
     const result = await getFixture().run(["--help"]);
 
     expect(result.code).toBe(0);
@@ -226,6 +238,10 @@ describe("exit-code matrix on an empty fixture", () => {
       "is not inside a git repository",
     ],
     ["clean has nothing to clean", ["clean"], 0, null],
+    // ADDED (plan 024 file 1, unit n-away-verb, REQ-FLOW-166): the switch's verb on an empty fixture.
+    ["away without its subcommand is a usage error", ["away"], 2, "missing required argument"],
+    ["away status reads the switch off", ["away", "status"], 0, null],
+    ["away on refuses where there is no .stamity/", ["away", "on"], 1, ".stamity/"],
     ["learn without its verb is a usage error", ["learn"], 2, "run stamity learn --help"],
     [
       "learn capture refuses uninitialised",

@@ -213,6 +213,20 @@ describe("command coverage", () => {
     expect(sectionOf("gc")).not.toContain("plumbing");
   });
 
+  // ADDED (plan 024 file 1, unit n-away-verb, REQ-FLOW-166, sign-off S31): `away` is a person's verb, advertised after
+  // `skill`, and the page counts it among all nineteen commands it documents.
+  it("documents `away` as advertised after `skill`, with its three subcommands, among nineteen commands", () => {
+    const names = COMMANDS.map((command) => command.name);
+    expect(names.indexOf("away")).toBe(names.indexOf("skill") + 1);
+    expect(COMMANDS).toHaveLength(19);
+    expect(page).toContain("all 19 of the commands above");
+    expect(page).toMatch(/^\| `stamity away` \| yes \|/mu);
+    const section = sectionOf("away");
+    expect(section).toContain("| `<subcommand>` | on \\| off \\| status |");
+    expect(section).toContain("May write when it runs");
+    expect(section).not.toContain("plumbing");
+  });
+
   it("documents `learn` as plumbing — neither omitted nor advertised as a user verb", () => {
     const learn = COMMANDS.find((command) => command.name === "learn");
     expect(learn?.hidden).toBe(true);

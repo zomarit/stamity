@@ -2429,6 +2429,28 @@ describe("clean keeps the user's state under .stamity/ (REQ-FLOW-028)", () => {
   );
 
   it(
+    // ADDED (plan 024 file 1, unit n-away-verb, ledger fix/1, REQ-FLOW-166): the away marker and the held list are
+    // machine-local files the setup ignores, so the default clean takes them with the other machine-local files and
+    // the take-back can then drop their ignore lines; left, the marker would refuse every ask after a re-init.
+    "removes the away marker and the held list with the other machine-local files",
+    async () => {
+      const root = await copyOf(bare);
+      await writeFile(join(root, STATE_DIR, "away.json"), '{"since":"2026-11-09T22:06:56.000Z","by":"stamity away"}\n', "utf-8");
+      await writeFile(join(root, STATE_DIR, "away-held.jsonl"), '{"at":"2026-11-09T22:10:00.000Z","rule":"gh-pr-merge","act":"A merge","client":"claude"}\n', "utf-8");
+
+      const result = await runClean(root, ["-y", "--json"]);
+
+      expect(result.code, result.stderr).toBe(0);
+      expect(existsSync(join(root, STATE_DIR, "away.json"))).toBe(false);
+      expect(existsSync(join(root, STATE_DIR, "away-held.jsonl"))).toBe(false);
+      const doc = parseSingleDoc(result.stdout);
+      expect(doc["kept"]).not.toContain("away.json");
+      expect(doc["kept"]).not.toContain("away-held.jsonl");
+    },
+    60_000,
+  );
+
+  it(
     // TEST CHANGE, justified (2026-10-25_autonomy-distribution-02/prove/64): since prove/44 the next init takes a kept
     // pack back only when it is a bundled catalog pack and add's gates pass again on its bytes, and names any other one
     // with `add <source>` as its route; the closing line said every kept pack came back, so the pin and title follow it.

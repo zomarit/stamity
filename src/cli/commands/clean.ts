@@ -15,6 +15,8 @@ import type { PackSuppliedServer } from "../../mcp/catalog.ts";
 import { MERGED_MCP_JSON_PATHS, engineOwnedServerIds } from "../../mcp/emit.ts";
 import { provableOwnServers } from "../../mcp/ownServers.ts";
 import {
+  AWAY_HELD_FILE,
+  AWAY_MARKER_FILE,
   CLIENT_MODELS_CACHE_FILE,
   CONTEXT_ONCE_DIR,
   GITIGNORE_FILE,
@@ -846,8 +848,17 @@ interface StateRemoval {
 /** Why a linked store folder is left: its placeholder is not under this repository (review/60). */
 const LINK_NOT_FOLLOWED = "it is a link, so clean did not follow it";
 
-/** The engine's machine-local files directly under the state directory (REQ-FLOW-028, plan round 1's W-5). */
-const MACHINE_LOCAL_FILES: readonly string[] = [PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE, CLIENT_MODELS_CACHE_FILE];
+/**
+ * The engine's machine-local files directly under the state directory (REQ-FLOW-028, plan round 1's W-5), the away
+ * marker and the held list among them (REQ-FLOW-166): a marker left behind would refuse every ask after a re-init.
+ */
+const MACHINE_LOCAL_FILES: readonly string[] = [
+  PREFLIGHT_CANARY_FILE,
+  RUN_ENDED_MARKER_FILE,
+  CLIENT_MODELS_CACHE_FILE,
+  AWAY_MARKER_FILE,
+  AWAY_HELD_FILE,
+];
 
 /**
  * Unlink `path` when it is a regular file; leave a link, a folder or anything
@@ -884,14 +895,14 @@ async function removeOrFail(path: string, remove: () => Promise<unknown>): Promi
 
 /**
  * The engine's machine-local files (REQ-FLOW-028): the pre-flight canary, the
- * run-ended marker, the client model cache, and each regular file directly
+ * run-ended marker, the client model cache, the away marker, the held list, and each regular file directly
  * under the context-once folder, then that folder once empty. So no file is
  * left whose ignore line the take-back removes. Each is `lstat`-checked: a link
  * is left and named, and keeps its ignore line, since the take-back sees it.
  */
 async function removeMachineLocalFiles(rootDir: string, removal: StateRemoval): Promise<void> {
   for (const path of MACHINE_LOCAL_FILES) {
-    // oxlint-disable-next-line no-await-in-loop -- three fixed names, each its own file
+    // oxlint-disable-next-line no-await-in-loop -- five fixed names, each its own file
     await unlinkRegularFile(rootDir, path, removal);
   }
   const markers = join(rootDir, ...CONTEXT_ONCE_DIR.split("/"));

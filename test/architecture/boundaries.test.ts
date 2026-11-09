@@ -732,6 +732,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // TEST CHANGE, justified (plan 024 file 2, unit d-gc, REQ-FLOW-177): the `gc` verb, a leaf command shaped after
   // `worktree.ts`: the wave-6 gc engine, the wave-4/5 worktree policy and git seam and the wave-13 kit.
   "src/cli/commands/gc.ts": { unit: "d-gc", wave: 14 },
+  // TEST CHANGE, justified (plan 024 file 1, unit n-away-verb, REQ-FLOW-166): the `away` verb, a leaf command: the
+  // wave-3 machine-local file names, the wave-4 guard's variable name, the wave-6 held-list parser and the wave-13
+  // kit and capped read. `run.ts` (wave 15) reads the held list through it.
+  "src/cli/commands/away.ts": { unit: "n-away-verb", wave: 14 },
   // wave 15 (P2 wave 2) — commands composed over a wave-14 engine
   "src/cli/commands/init.ts": { unit: "p2-13", wave: 15 },
   "src/cli/commands/init/panel.ts": { unit: "p2-13", wave: 15 },

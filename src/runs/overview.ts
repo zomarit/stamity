@@ -24,7 +24,38 @@ export interface OverviewInput {
   readonly ledgerFailure?: string;
   /** Why `morning` is not the whole list, where it is not: nothing is then read from it. */
   readonly morningFailure?: string;
+  /** The acts the guard held while nobody watched (REQ-FLOW-166), from the held list beside the run folders. */
+  readonly held?: readonly HeldLine[];
 }
+
+/** One entry of the held list, `.stamity/away-held.jsonl`, as the person-only guard writes it, never a command's text. */
+export interface HeldLine {
+  readonly rule: string;
+  readonly act: string;
+  readonly at: string;
+}
+
+/**
+ * The held list's entries: each line that is a JSON object with a string `rule`, `act` and `at`. Any other line, a cut
+ * last line among them, is no entry and is skipped, so a damaged list shows what reads and never fails the reader.
+ */
+export function parseHeldList(text: string): HeldLine[] {
+  return text.split(/\r?\n/).flatMap((line) => {
+    if (line.trim() === "") return [];
+    let value: unknown;
+    try {
+      value = JSON.parse(line);
+    } catch {
+      return [];
+    }
+    if (value === null || typeof value !== "object") return [];
+    const { rule, act, at } = value as Record<string, unknown>;
+    return typeof rule === "string" && typeof act === "string" && typeof at === "string" ? [{ rule, act, at }] : [];
+  });
+}
+
+/** A held act as the page prints it, behind its own label so the act reads as the guard's words and no row of the page. */
+const heldLine = ({ rule, act, at }: HeldLine): string => `held while nobody watched: ${act} (${rule}, ${at})`;
 
 /** The most rows of one list the page prints; the person's own list is never cut. */
 const LIST_MAX = 12;
@@ -175,7 +206,10 @@ function humanOnly({ run, morning, morningFailure }: OverviewInput): string[] {
   return [...(rows.length === 0 ? [MORNING_EMPTY] : [RUN_WORDS, ...rows.map(quoted)]), ...(proposed ? [PROPOSAL_WAITS] : [])];
 }
 
-/** The page: `## What happened`, `## How`, `## Why` and `## Only you can do`, in that order. */
+/**
+ * The page: `## What happened`, `## How`, `## Why` and `## Only you can do`, in that order. The held acts follow the
+ * morning list's rows uncut, as the person's own list is never cut.
+ */
 export function overviewFrom(input: OverviewInput): string {
   const lines = input.record.split(/\r?\n/);
   const { ledgerFailure } = input;
@@ -195,7 +229,7 @@ export function overviewFrom(input: OverviewInput): string {
     ],
     ["How", [...gatesLines(lines), fromLedger("rounds", roundsLine), fromLedger("findings", findingsLine), usageLine(lines)]],
     ["Why", [...listed("defaults", captured(lines, DEFAULT_LINE)), ...listed("choices", captured(lines, CHOICE_LINE))]],
-    ["Only you can do", humanOnly(input)],
+    ["Only you can do", [...humanOnly(input), ...(input.held ?? []).map(heldLine)]],
   ];
   return `${sections.map(([name, rows]) => [`## ${name}`, "", ...rows].join("\n")).join("\n\n")}\n`;
 }

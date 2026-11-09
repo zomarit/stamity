@@ -123,6 +123,15 @@ const section = (text: string, name: string): string => {
   return parts.find((part) => part.startsWith(`${name}\n`)) ?? "";
 };
 
+/** Three held entries as the guard writes them while nobody is watching (REQ-FLOW-166), and the page's line for each. */
+const HELD_ENTRIES = [
+  { rule: "gh-pr-merge", act: "A merge of a pull request", at: "2026-11-09T22:10:00.000Z" },
+  { rule: "push-default", act: "A push to the default branch", at: "2026-11-09T22:11:00.000Z" },
+  { rule: "merge_pull_request", act: "A call to the GitHub MCP server", at: "2026-11-09T22:12:00.000Z" },
+] as const;
+const HELD_FILE_TEXT = HELD_ENTRIES.map((entry) => `${JSON.stringify({ ...entry, client: "claude" })}\n`).join("");
+const heldPageLine = (entry: (typeof HELD_ENTRIES)[number]): string => `held while nobody watched: ${entry.act} (${entry.rule}, ${entry.at})`;
+
 describe("overviewFrom", () => {
   it("prints the four sections in order, and nothing before the first", () => {
     const headings = page()
@@ -360,6 +369,20 @@ describe("overviewFrom", () => {
   it("leaves the blast radius out where the record holds none", () => {
     expect(section(page({ record: "Status: closed\n" }), "What happened")).not.toContain("Narrow");
   });
+
+  // ADDED (plan 024 file 1, unit n-away-verb, REQ-FLOW-166): the acts the guard held while nobody watched are the
+  // person's, so they print under the person's section, after the morning list's rows, each with its rule and time.
+  it("lists each act held while nobody watched under Only you can do, after the list's rows", () => {
+    const text = section(page({ morning: morning(HELD_ROW), held: HELD_ENTRIES }), "Only you can do");
+
+    expect(text).toBe(`Only you can do\n\n${RUN_WORDS}\n> ${HELD_ROW}\n${HELD_ENTRIES.map(heldPageLine).join("\n")}\n`);
+  });
+
+  it("lists the held acts where the run has no list, and none where nothing was held", () => {
+    expect(section(page({ morning: null, held: HELD_ENTRIES.slice(0, 1) }), "Only you can do")).toContain(`\n${heldPageLine(HELD_ENTRIES[0])}\n`);
+    expect(page({ held: [] })).not.toContain("held while nobody watched");
+    expect(page()).not.toContain("held while nobody watched");
+  });
 });
 
 describe("stamity run overview", () => {
@@ -543,5 +566,41 @@ describe("stamity run overview", () => {
     expect(stray.stderr).toContain("--title does not apply to overview");
     expect(bare.code).toBe(2);
     expect(bare.stderr).toContain("run overview needs --run <run-id>");
+  });
+
+  // ADDED (plan 024 file 1, unit n-away-verb, REQ-FLOW-166): the verb reads the held list beside the run folder, from
+  // the project root it runs in, and a list that is missing or reads as no entry prints no held line and fails nothing.
+  it("lists the three acts .stamity/away-held.jsonl holds", async () => {
+    const cwd = await seed({ "record.md": RECORD });
+    await getRoot().seedFiles({ ".stamity/away-held.jsonl": HELD_FILE_TEXT });
+
+    const { code, stdout } = await overview(cwd);
+
+    expect(code).toBe(0);
+    for (const entry of HELD_ENTRIES) expect(stdout).toContain(`${heldPageLine(entry)}\n`);
+    expect(JSON.parse((await overview(cwd, ["--json"])).stdout)).toMatchObject({ overview: expect.stringContaining(heldPageLine(HELD_ENTRIES[2])) });
+  });
+
+  it("lists no held act where the held list is missing, or holds no line that reads as one, and exits 0", async () => {
+    const cwd = await seed({ "record.md": RECORD });
+    const none = await overview(cwd);
+    expect(none.code).toBe(0);
+    expect(none.stdout).not.toContain("held while nobody watched");
+
+    await getRoot().seedFiles({ ".stamity/away-held.jsonl": 'not json\n{"rule":"r","act":5,"at":"t"}\n[1]\n' });
+    const malformed = await overview(cwd);
+    expect(malformed.code).toBe(0);
+    expect(malformed.stdout).not.toContain("held while nobody watched");
+  });
+
+  it("drops what a terminal would act on from a held act it prints", async () => {
+    const cwd = await seed({ "record.md": RECORD });
+    await getRoot().seedFiles({ ".stamity/away-held.jsonl": `${JSON.stringify({ rule: "push-default", act: "A push\u001b[2J", at: "2026-11-09T22:11:00.000Z" })}\n` });
+
+    const { code, stdout } = await overview(cwd);
+
+    expect(code).toBe(0);
+    expect(stdout).toContain("held while nobody watched: A push");
+    expect(stdout).not.toContain("\u001b");
   });
 });

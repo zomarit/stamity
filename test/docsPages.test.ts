@@ -1461,7 +1461,10 @@ describe("README", () => {
   // TEST CHANGE, justified (plan 022 file 2, unit b9-upgrade-verb, REQ-FLOW-034): `upgrade` joins
   // the advertised surface after `sync` (`src/cli.ts`), so README names ten verbs and this array
   // gains it in that CLI position. The order and length assertions keep their shape.
-  it("states the command surface — ten verbs plus the plumbing verbs", () => {
+  // TEST CHANGE, justified (plan 024, sign-off S31; units d-gc, s-skill-verb and n-away-verb): `gc`, `skill` and
+  // `away` join the advertised surface after `clean`, in that CLI order (`src/cli.ts`), so README names thirteen verbs
+  // and this array gains all three. The order and length assertions keep their shape.
+  it("states the command surface — thirteen verbs plus the plumbing verbs", () => {
     const text = read(README);
     const ADVERTISED = [
       "init",
@@ -1474,6 +1477,9 @@ describe("README", () => {
       "workspace",
       "worktree",
       "clean",
+      "gc",
+      "skill",
+      "away",
     ];
     // TEST CHANGE, justified (strictly stronger): nine `toContain` calls over the
     // WHOLE page became one equality on the `·` list itself. Containment could
@@ -1490,9 +1496,9 @@ describe("README", () => {
     expect(listed, "README's `·` verb list is not the advertised surface").toEqual(ADVERTISED);
     // The count WORD beside the list is still hand-typed; the length assertion
     // next to it is what makes the two disagreeing visible.
-    expect(listed).toHaveLength(10);
+    expect(listed).toHaveLength(13);
     expect(commands, "README's verb count word does not match its own list").toContain(
-      "ten verbs",
+      "thirteen verbs",
     );
     expect(text).toContain("`learn`");
     // TEST CHANGE, justified: `handoff` joined `learn` behind the advertised surface, so
@@ -4705,6 +4711,11 @@ describe("the guides", () => {
       // this second hand-maintained copy of the surface with the README array above, from the
       // same CLI position.
       "clean",
+      // TEST CHANGE, justified (plan 024, sign-off S31; units d-gc, s-skill-verb and n-away-verb): `gc`, `skill` and
+      // `away` join this copy of the surface from their CLI positions after `clean`, with the README array.
+      "gc",
+      "skill",
+      "away",
     ];
     for (const command of verbs) {
       expect(text, `the getting-started guide omits \`${command}\``).toContain(`\`${command}\``);

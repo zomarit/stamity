@@ -3,6 +3,7 @@ import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { addCommand } from "./cli/commands/add.ts";
+import { awayCommand } from "./cli/commands/away.ts";
 import { checkCommand } from "./cli/commands/check.ts";
 import { cleanCommand } from "./cli/commands/clean.ts";
 import { configCommand } from "./cli/commands/config.ts";
@@ -29,7 +30,7 @@ import { noticeCacheDir, resolveOwnPackageFacts, startupNotice } from "./cli/not
  *
  * Everything else is owned elsewhere: the exit-code contract, flag matrix and
  * JSON funnel live in `./cli/kit/program.ts`; each verb's behavior lives in its
- * own module under `./cli/commands/`. This file only (1) enumerates the eighteen
+ * own module under `./cli/commands/`. This file only (1) enumerates the twenty
  * CommandModules in help order, (2) fires the update-notice probe early, where
  * its banner can show, and settles it non-blockingly after the run, and (3)
  * records the exit code.
@@ -46,9 +47,9 @@ import { noticeCacheDir, resolveOwnPackageFacts, startupNotice } from "./cli/not
 
 /**
  * The advertised surface in help order — init, sync, upgrade, check, validate,
- * ready, add, config, workspace, worktree, clean, gc, skill — plus `learn`,
- * `handoff`, `ledger`, `gate`, `plan` and `run`, the six hidden plumbing verbs.
- * Thirteen advertised, nineteen registered.
+ * ready, add, config, workspace, worktree, clean, gc, skill, away — plus
+ * `learn`, `handoff`, `ledger`, `gate`, `plan` and `run`, the six hidden
+ * plumbing verbs. Fourteen advertised, twenty registered.
  *
  * `ready` follows `validate`: the three are the read-only reports, and `ready`
  * is the one a team runs before it lets a run go unattended.
@@ -65,6 +66,10 @@ import { noticeCacheDir, resolveOwnPackageFacts, startupNotice } from "./cli/not
  *
  * `skill` follows `gc`: it copies content in from outside the repository,
  * after the setup verbs and apart from them.
+ *
+ * `away` follows `skill`, last of the advertised verbs: it turns the guard's
+ * asks into refusals held for the person (REQ-FLOW-166), a switch about the
+ * session rather than about the setup, and `gc` keeps its place beside `clean`.
  *
  * `worktree` sits directly after `workspace`, and the adjacency is deliberate
  * rather than alphabetical: the two differ at the fifth character and are
@@ -89,6 +94,7 @@ export const COMMANDS: readonly CommandModule[] = [
   cleanCommand,
   gcCommand,
   skillCommand,
+  awayCommand,
   learnCommand,
   handoffCommand,
   ledgerCommand,

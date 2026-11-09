@@ -25,6 +25,7 @@ import { GitWriteGroupStopped, gitProgramVariablesIn, gitWrite, type GitWriteRes
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
+import { readHeldList } from "./away.ts";
 import { gitSurfaceRecordPath, readPushed, readRunGitSurface, scanChange } from "./gate.ts";
 import { parseItemRef, runContract } from "./runContract.ts";
 import { runLand } from "./runLand.ts";
@@ -180,7 +181,8 @@ import { runLand } from "./runLand.ts";
  * **`contract`** (REQ-FLOW-155) reads a ready item and writes the run's contract, pushing nothing; its body is
  * `./runContract.ts`, registered here only.
  *
- * **`overview`** (REQ-FLOW-161) prints the run's one short page from its record, ledger and morning list, writing nothing
+ * **`overview`** (REQ-FLOW-161) prints the run's one short page from its record, ledger and morning list, plus the acts
+ * the guard held while nobody watched (`.stamity/away-held.jsonl`, REQ-FLOW-166, read by `./away.ts`), writing nothing
  * and calling neither git nor GitHub; the page is `../../runs/overview.ts`, each line cleaned here as it prints. Exit 0
  * where the record reads whole, a ledger or morning list that does not read named on the page; 1 for a record missing or over its cap,
  * since a land line past the cap could not be seen. The JSON is `{ subcommand, run, overview }`, `overview` the page.
@@ -431,7 +433,8 @@ function runOverview(ctx: CliContext, run: string): CommandResult {
   }
   const morning = readCapped(join(cwd, runDir, MORNING_FILE), MORNING_READ_MAX_BYTES);
   const morningFailure = morning?.truncated === true ? { morningFailure: `${MORNING_FILE} is over ${MORNING_READ_MAX_BYTES} bytes` } : {};
-  const page = overviewFrom({ run, record: record.text, ...overviewLedger(ctx, runDir), morning: morning?.text ?? null, ...morningFailure })
+  const held = readHeldList(cwd);
+  const page = overviewFrom({ run, record: record.text, ...overviewLedger(ctx, runDir), morning: morning?.text ?? null, ...morningFailure, held })
     .split("\n")
     .map((line) => sanitizeLabel(line))
     .join("\n");
