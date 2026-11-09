@@ -761,11 +761,25 @@ describe("reviewer — multi-lens verdict", () => {
     expect(critical).toMatch(
       /each of the unit's criteria maps to a held test, and every held test is unchanged per the Prove pass's `gate held --expect` result/i,
     );
-    // The reviewer runs no gate (Reading the change): it reads the digest check's result.
-    expect(critical).toMatch(/which this role reads and never runs/i);
-    expect(critical).toMatch(
-      /a unit with no held tests \(a `docs`, `config` or `records` unit\) says so in one line and skips this mapping/i,
+    // The reviewer runs no gate (Reading the change): it reads the digest check's result from the
+    // path its Verdict dispatch names (S56), and the brief lists that path.
+    expect(critical).toMatch(/which this role reads from the path its Verdict dispatch names and never runs/i);
+    expect(reading).toMatch(
+      /and for a unit with held tests the path of its `gate held --expect` result — never the implementer's account/i,
     );
+    // A missing result is the dispatch's gap, closed by the orchestrator, never the unit's Critical (S56).
+    expect(critical).toMatch(
+      /a unit with a `held:` line whose dispatch names no result gets one finding against the dispatch, `held-test result not handed in`, which the orchestrator closes by running the check and handing the result in; it is never a Critical against the unit/i,
+    );
+    // The mapping binds only a unit with a tests-only dispatch; any other unit is bound by the
+    // row's first sentence, kept word for word (S57).
+    expect(critical).toMatch(
+      /that mapping binds only a unit that had a tests-only dispatch, one with a `held:` line in `record\.md`; any other unit says `no held tests` in one line, and the row's first sentence binds it in full/i,
+    );
+    expect(critical).toMatch(
+      /- Every changed behaviour has a test that fails without the change; a defect fix carries a regression test; a deleted or weakened gating test is justified in the diff itself\. Each of the unit's criteria/,
+    );
+    expect(critical).not.toMatch(/\(a `docs`, `config` or `records` unit\)/);
   });
 
   it("gates posting on locators, severity floor, and ranked evidence classes", async () => {
