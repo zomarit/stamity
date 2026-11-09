@@ -48,14 +48,14 @@ interface Fixture {
 }
 
 /** A project trusting one source, `house`, whose repository holds `house-style/` at a commit tagged `v1.0.0`. */
-async function fixture(sources?: string): Promise<Fixture> {
+async function fixture(sources?: string, skillMd = SKILL_MD): Promise<Fixture> {
   const base = getTemp().dir;
   const work = join(base, "source");
   const bare = join(base, "source.git");
   const root = join(base, "project");
   await mkdir(join(work, "house-style"), { recursive: true });
   await mkdir(join(root, ".stamity"), { recursive: true });
-  await writeFile(join(work, "house-style", "SKILL.md"), SKILL_MD);
+  await writeFile(join(work, "house-style", "SKILL.md"), skillMd);
   await mustGit(work, "init", "--quiet", "--initial-branch", "main");
   await mustGit(work, "add", "--all");
   await mustGit(work, ...IDENTITY, "commit", "--quiet", "-m", "fixture");
@@ -188,5 +188,65 @@ describe.skipIf(!gitAvailable)("stamity skill", () => {
 
     expect((await skill(fx.root, ["add", "house", "house-style"])).stderr).toContain("needs --tag <tag> and --commit <40-hex>");
     expect((await skill(fx.root, ["fetch"])).stderr).toContain('unknown skill subcommand "fetch"');
+  });
+
+  it.each([
+    [["fetch"], 'unknown skill subcommand "fetch"'],
+    [["add"], "skill add needs a source id and a skill name"],
+    [["add", "house"], "skill add needs a source id and a skill name"],
+    [["add", "house", "house-style"], "skill add needs --tag <tag> and --commit <40-hex>"],
+    [["add", "house", "house-style", "--tag", "v1.0.0"], "skill add needs --tag <tag> and --commit <40-hex>"],
+    [["remove"], "skill remove needs a skill name"],
+  ])("answers the rejected command line %j with exit 2 and an empty stdout, --json or not", async (argv, message) => {
+    const fx = await fixture();
+
+    const human = await skill(fx.root, argv);
+    const json = await skill(fx.root, [...argv, "--json"]);
+
+    for (const result of [human, json]) {
+      expect(result.code).toBe(2);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toContain(message);
+    }
+    expect(await readdir(join(fx.root, ".stamity"))).toEqual(["skill-sources.json"]);
+  });
+
+  it("refuses while an in-progress run record reads Mode: unattended, naming the record", async () => {
+    const fx = await fixture();
+    await mkdir(join(fx.root, ".stamity", "runs", "2026-11-09_night"), { recursive: true });
+    await writeFile(join(fx.root, ".stamity", "runs", "2026-11-09_night", "record.md"), "# Run 2026-11-09_night\n\nStatus: in progress\nMode: unattended\n");
+
+    const result = await skill(fx.root, add(fx));
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("skill add refused: this session is unattended");
+    expect(result.stderr).toContain(".stamity/runs/2026-11-09_night/record.md reads `Status: in progress` and `Mode: unattended`");
+    expect(await readdir(join(fx.root, ".stamity"))).toEqual(["runs", "skill-sources.json"]);
+  });
+
+  it("adds while an in-progress run record reads Mode: attended, even with STAMITY_UNATTENDED set", async () => {
+    const fx = await fixture();
+    await mkdir(join(fx.root, ".stamity", "runs", "2026-11-09_day"), { recursive: true });
+    await writeFile(join(fx.root, ".stamity", "runs", "2026-11-09_day", "record.md"), "# Run 2026-11-09_day\n\nStatus: in progress\nMode: attended\n");
+
+    const result = await skill(fx.root, add(fx), { STAMITY_UNATTENDED: "1" });
+
+    expect(result.code).toBe(0);
+  });
+
+  it("prints the tool grant a copy carries from a source that allows scripts", async () => {
+    const repo = "https://skills.example.test/acme/skills";
+    const fx = await fixture(
+      JSON.stringify({ version: 1, sources: [{ id: "house", repo, allowScripts: true }] }),
+      SKILL_MD.replace("load: on-demand\n", 'load: on-demand\nallowed-tools: "Bash(git status)"\n'),
+    );
+
+    const json = await skill(fx.root, add(fx, "--dry-run", "--json"));
+    const result = await skill(fx.root, add(fx));
+
+    expect(json.code).toBe(0);
+    expect((JSON.parse(json.stdout) as Record<string, unknown>)["grants"]).toEqual(['allowed-tools: "Bash(git status)"']);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('  tool grant, allowed by the source: allowed-tools: "Bash(git status)"\n');
   });
 });

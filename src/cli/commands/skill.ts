@@ -149,8 +149,9 @@ async function runAdd(ctx: CliContext, opts: Record<string, unknown>, sourceId: 
   ctx.io.out(`${verb} ${origin.name} from ${source.id} at ${origin.version} (${origin.commit.slice(0, 12)}) -> ${added.copyPath}/\n`);
   ctx.io.out(`  ${origin.files.length} file(s), aggregate sha256 ${origin.aggregateSha256}\n`);
   for (const line of origin.scripts) ctx.io.out(`  script, allowed by the source: ${line}\n`);
+  for (const line of added.grants) ctx.io.out(`  tool grant, allowed by the source: ${line}\n`);
   if (added.written) ctx.io.out(`  origin record: ${added.originPath}\n  The copy sits on a held path: a person lands it.\n`);
-  return { exitCode: 0, json: { dryRun: !added.written, skill: origin, copy: added.copyPath, record: added.originPath } };
+  return { exitCode: 0, json: { dryRun: !added.written, skill: origin, copy: added.copyPath, record: added.originPath, grants: added.grants } };
 }
 
 function describeDrift(skill: CopiedSkill): string {
@@ -210,6 +211,21 @@ export const skillCommand: CommandModule = {
     cmd.option("--tag <tag>", "skill add: the source's version tag, which must name --commit (the root `--version` prints the engine's)");
     cmd.option("--commit <sha>", "skill add: the pinned commit, 40 hex digits");
     cmd.option("--sha256 <aggregate>", "skill add: the aggregate sha256 the source published; a copy reading any other is refused");
+    // Usage errors, so exit 2 with stdout empty, before the action runs (as `gate` refuses its own).
+    cmd.hook("preAction", (command) => {
+      const [subcommand, first, second] = command.processedArgs.map((value: unknown) => (typeof value === "string" ? value : undefined));
+      if (!(SUBCOMMANDS as readonly (string | undefined)[]).includes(subcommand)) {
+        command.error(`error: unknown skill subcommand ${JSON.stringify(subcommand)}; use one of ${SUBCOMMANDS.join(", ")}`, { exitCode: 2 });
+      }
+      const given = command.opts<Record<string, unknown>>();
+      if (subcommand === "add" && (first === undefined || second === undefined)) {
+        command.error("error: skill add needs a source id and a skill name: stamity skill add <source-id> <name> --tag <tag> --commit <40-hex>", { exitCode: 2 });
+      }
+      if (subcommand === "add" && (given["tag"] === undefined || given["commit"] === undefined)) {
+        command.error("error: skill add needs --tag <tag> and --commit <40-hex>", { exitCode: 2 });
+      }
+      if (subcommand === "remove" && first === undefined) command.error("error: skill remove needs a skill name: stamity skill remove <name>", { exitCode: 2 });
+    });
   },
 
   async run(ctx, opts, args): Promise<CommandResult> {

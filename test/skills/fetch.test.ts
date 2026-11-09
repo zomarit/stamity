@@ -1,7 +1,9 @@
+import { execFileSync } from "node:child_process";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { toSpecFrontmatter } from "../../src/emit/skillsProjection.ts";
 import { computeAggregateContentSha } from "../../src/pack/trust.ts";
 import { addSkill, listCopiedSkills, removeSkill, type AddSkillRequest } from "../../src/skills/fetch.ts";
 import type { SkillSource } from "../../src/skills/sources.ts";
@@ -58,6 +60,11 @@ interface Extra {
   readonly link?: string;
   /** A path committed with git mode 100755. */
   readonly executable?: string;
+  /**
+   * Index entries added by hand, past what a work tree on this disk can hold: a blob from `body` (two names differing
+   * only by case), or a raw `oid` (a nested repository's gitlink).
+   */
+  readonly entries?: readonly { readonly mode: string; readonly path: string; readonly body?: string; readonly oid?: string }[];
 }
 
 /** A commit holding `files` (paths from the repository root), tagged `v1.0.0`, served from a bare clone. */
@@ -74,8 +81,31 @@ async function commitAll(work: string, files: Record<string, string>, extra: Ext
     await mustGit(work, "update-index", "--add", "--cacheinfo", `120000,${blob},${extra.link}`);
   }
   if (extra.executable !== undefined) await mustGit(work, "update-index", "--chmod=+x", extra.executable);
+  for (const entry of extra.entries ?? []) {
+    const bodyFile = join(dirname(work), "entry-body");
+    // oxlint-disable-next-line no-await-in-loop -- fixture entries, added in order
+    if (entry.body !== undefined) await writeFile(bodyFile, entry.body);
+    // oxlint-disable-next-line no-await-in-loop -- see above
+    const oid = entry.oid ?? (await mustGit(work, "hash-object", "-w", bodyFile));
+    // oxlint-disable-next-line no-await-in-loop -- see above
+    await mustGit(work, "update-index", "--add", "--cacheinfo", `${entry.mode},${oid},${entry.path}`);
+  }
   await mustGit(work, ...IDENTITY, "commit", "--quiet", "--allow-empty", "-m", "fixture");
   return mustGit(work, "rev-parse", "HEAD");
+}
+
+/**
+ * Re-point the fixture's commit and its `v1.0.0` tag at a tree built with `git mktree`, where `skillTree` lists the
+ * skill folder's entries: what git's own index refuses to hold (a `.git` segment) can still sit in a fetched tree.
+ */
+async function commitBuiltTree(fx: Fixture, skillTree: string): Promise<string> {
+  const mktree = (input: string): string => execFileSync("git", ["mktree"], { cwd: fx.work, input, encoding: "utf8" }).trim();
+  const skill = mktree(skillTree);
+  const root = mktree(`040000 tree ${skill}\thouse-style\n`);
+  const commit = await mustGit(fx.work, ...IDENTITY, "commit-tree", root, "-m", "built");
+  await mustGit(fx.work, ...IDENTITY, "tag", "--force", "v1.0.0", commit);
+  await mustGit(fx.work, "push", "--quiet", "--force", join(dirname(fx.work), "source.git"), `${commit}:refs/heads/main`, "refs/tags/v1.0.0");
+  return commit;
 }
 
 async function fixture(files: Record<string, string>, opts: { allowScripts?: boolean; extra?: Extra } = {}): Promise<Fixture> {
@@ -276,6 +306,177 @@ describe.skipIf(!gitAvailable)("addSkill", () => {
     await expect(addSkill(request(fx, { tempParent: inside }))).rejects.toThrow("lies inside the project");
 
     expect(await readdir(inside)).toEqual([]);
+  });
+});
+
+/** `SKILL_MD` with `lines` added to its head, after `load:`. */
+function skillHead(...lines: string[]): string {
+  return SKILL_MD.replace("load: on-demand\n", `load: on-demand\n${lines.map((line) => `${line}\n`).join("")}`);
+}
+
+describe.skipIf(!gitAvailable)("addSkill — what a copy may not take (review round 1)", () => {
+  it.each(["verify", "qa", "unattended", "plain"])("refuses %s, a bundled skill's id, naming the st- skill it would replace, before any fetch", async (name) => {
+    const fx = await fixture({ ...SKILL_FILES, [`${name}/SKILL.md`]: SKILL_MD.replace("id: house-style", `id: ${name}`) });
+
+    const error = await refusal(fx, () => addSkill(request(fx, { name })));
+
+    expect(error.code).toBe("VALIDATION_ERROR");
+    expect(error.message).toContain(`is the id of the bundled skill st-${name}, and a copy under it would replace st-${name} on the next sync`);
+  });
+
+  it("names the bundled skill when a prefixed name matches one", async () => {
+    const fx = await fixture(SKILL_FILES);
+
+    const error = await refusal(fx, () => addSkill(request(fx, { name: "st-verify" })));
+
+    expect(error.message).toContain("starts with `st-`");
+    expect(error.message).toContain("it names the bundled skill st-verify");
+  });
+
+  it("refuses a SKILL.md declaring allowed-tools from a source that does not allow scripts, naming the key", async () => {
+    const fx = await fixture({ ...SKILL_FILES, "house-style/SKILL.md": skillHead('allowed-tools: "Bash(git status)"') });
+
+    const error = await refusal(fx, () => addSkill(request(fx)));
+
+    expect(error.message).toContain("house-style/SKILL.md declares `allowed-tools`");
+    expect(error.message).toContain('allowed-tools: "Bash(git status)"');
+    expect(error.message).toContain("does not allow scripts");
+  });
+
+  it("copies a SKILL.md declaring allowed-tools from a source that allows scripts, and returns the grant", async () => {
+    const fx = await fixture({ ...SKILL_FILES, "house-style/SKILL.md": skillHead('allowed-tools: "Bash(git status)"') }, { allowScripts: true });
+
+    const added = await addSkill(request(fx));
+
+    expect(added.written).toBe(true);
+    expect(added.grants).toEqual(['allowed-tools: "Bash(git status)"']);
+  });
+
+  it("returns no grant for a SKILL.md that declares none", async () => {
+    const fx = await fixture(SKILL_FILES);
+
+    expect((await addSkill(request(fx, { dryRun: true }))).grants).toEqual([]);
+  });
+
+  it("keeps allowed-tools as the only tool-granting key at the projected head's top level", () => {
+    // The fetch's grant list holds one key because the projection hoists every other key under `metadata`, where no
+    // client reads it. This pins that premise: a key a client reads as a grant reaching the top level fails here.
+    const projected = toSpecFrontmatter(
+      skillHead("allowed-tools: Bash", "tools: Bash", "hooks: {}", "permissionMode: bypassPermissions", "model: opus", "context: fork", "agent: general"),
+      "house-style",
+      "house-style/SKILL.md",
+    );
+    const head = projected.slice(4, projected.indexOf("\n---\n"));
+    const topLevel = head.split("\n").filter((line) => /^[^\s#][^:]*:/.test(line)).map((line) => line.slice(0, line.indexOf(":")));
+
+    expect(topLevel.toSorted()).toEqual(["allowed-tools", "description", "metadata", "name"]);
+  });
+
+  it("refuses an overlay half beside SKILL.md, which the next sync would refuse", async () => {
+    const fx = await fixture({ ...SKILL_FILES, "house-style/SKILL.customize.md": "More words.\n" });
+
+    const error = await refusal(fx, () => addSkill(request(fx)));
+
+    expect(error.message).toContain("the next sync would refuse house-style");
+    expect(error.message).not.toContain(fx.tempParent);
+  });
+
+  it("refuses an overlay head beside SKILL.md from a source that allows scripts", async () => {
+    const fx = await fixture({ ...SKILL_FILES, "house-style/SKILL.customize.yaml": "description: Patched.\n" }, { allowScripts: true });
+
+    const error = await refusal(fx, () => addSkill(request(fx)));
+
+    expect(error.message).toContain("the next sync would refuse house-style");
+  });
+
+  it("refuses a non-boolean user-invocable, which the projection refuses at sync", async () => {
+    const fx = await fixture({ ...SKILL_FILES, "house-style/SKILL.md": skillHead('user-invocable: "no"') });
+
+    const error = await refusal(fx, () => addSkill(request(fx)));
+
+    expect(error.message).toContain("the next sync would refuse house-style");
+    expect(error.message).toContain("`user-invocable` must be true or false");
+  });
+
+  it("refuses more files than the pack file-count cap before reading a blob", async () => {
+    const many = Object.fromEntries(Array.from({ length: 500 }, (_, at) => [`house-style/references/n${String(at)}.md`, `${String(at)}\n`]));
+    const fx = await fixture({ ...SKILL_FILES, ...many });
+
+    const error = await refusal(fx, () => addSkill(request(fx)));
+
+    expect(error.message).toContain("over the 500-file ceiling");
+  });
+
+  it("refuses more bytes than the pack footprint cap before reading a blob", async () => {
+    const fx = await fixture({ ...SKILL_FILES, "house-style/references/big.md": "x".repeat(5 * 1024 * 1024) });
+
+    const error = await refusal(fx, () => addSkill(request(fx)));
+
+    expect(error.message).toContain("footprint cap");
+  });
+
+  it.each([
+    ["house-style/references/con.md", "a name Windows opens as a device"],
+    ["house-style/references/notes.", "a trailing dot or space Windows drops"],
+    ['house-style/references/a"b.md', "a character Windows refuses in a name"],
+  ])("refuses %s, which cannot land on every platform", async (path, defect) => {
+    const fx = await fixture({ ...SKILL_FILES, [path]: "# Note\n" });
+
+    const error = await refusal(fx, () => addSkill(request(fx)));
+
+    expect(error.message).toContain(`${path} carries ${defect}`);
+  });
+
+  it("refuses a .git segment in the fetched tree", async () => {
+    const fx = await fixture(SKILL_FILES);
+    const blob = (body: string): string => execFileSync("git", ["hash-object", "-w", "--stdin"], { cwd: fx.work, input: body, encoding: "utf8" }).trim();
+    const dotGit = execFileSync("git", ["mktree"], { cwd: fx.work, input: `100644 blob ${blob("[core]\n")}\tconfig\n`, encoding: "utf8" }).trim();
+    const commit = await commitBuiltTree(fx, `100644 blob ${blob(SKILL_MD)}\tSKILL.md\n040000 tree ${dotGit}\t.git\n`);
+
+    const error = await refusal(fx, () => addSkill(request(fx, { commit })));
+
+    // Refused by fsck at the fetch, or by the path check after it: either way nothing lands.
+    expect(error.message).toMatch(/a `\.git` segment|fetching .* failed/);
+  });
+
+  it("refuses two files that differ only by case", async () => {
+    const fx = await fixture(SKILL_FILES, { extra: { entries: [{ mode: "100644", path: "house-style/references/Voice.md", body: VOICE_MD }] } });
+
+    const error = await refusal(fx, () => addSkill(request(fx)));
+
+    expect(error.message).toContain("differs from another file only by case");
+  });
+
+  it("refuses a nested repository inside the skill's folder", async () => {
+    const fx = await fixture(SKILL_FILES, { extra: { entries: [{ mode: "160000", path: "house-style/vendor", oid: "1".repeat(40) }] } });
+
+    const error = await refusal(fx, () => addSkill(request(fx)));
+
+    expect(error.message).toContain("house-style/vendor is a nested repository, not a file");
+  });
+
+  it("refuses a file whose bytes differ from the size git listed", async () => {
+    const fx = await fixture(SKILL_FILES);
+    // A seam at the git runner the request already takes: real git cannot list a size its own blob does not have, so
+    // the listing alone is rewritten, one byte longer for one file. Every other call is the real git's.
+    const run: AddSkillRequest["run"] = async (invocation) => {
+      const outcome = await runGit(invocation);
+      if (!invocation.args.includes("ls-tree")) return outcome;
+      return { ...outcome, stdout: outcome.stdout.replace(/ +(\d+)\thouse-style\/references\/voice\.md/, (_, size: string) => ` ${String(Number(size) + 1)}\thouse-style/references/voice.md`) };
+    };
+
+    const error = await refusal(fx, () => addSkill(request(fx, { run })));
+
+    expect(error.message).toContain(`house-style/references/voice.md read ${String(Buffer.byteLength(VOICE_MD))} bytes, git listed ${String(Buffer.byteLength(VOICE_MD) + 1)}`);
+  });
+
+  it("prints a link's path only after its control characters are refused", async () => {
+    const fx = await fixture(SKILL_FILES, { extra: { link: "house-style/references/\u001b[2Jx.md" } });
+
+    const error = await refusal(fx, () => addSkill(request(fx)));
+
+    expect(error.message).toContain("control character");
+    expect(error.message).not.toContain("\u001b");
   });
 });
 

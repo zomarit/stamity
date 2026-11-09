@@ -1,8 +1,11 @@
 import { createHash } from "node:crypto";
 import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { buildContentIndex } from "../content/catalog.ts";
+import { parseFrontmatter } from "../content/frontmatter.ts";
 import { checkUserArtifact, discoverUserContent, scanUserSkillSupportFiles, SKILL_FILE } from "../content/userContent.ts";
+import { toSpecFrontmatter } from "../emit/skillsProjection.ts";
 import { assertWriteTargetContained } from "../merge/atomicWrite.ts";
 import {
   checkFootprint,
@@ -15,7 +18,7 @@ import {
 import { assertSafePackRelPath } from "../pack/permissions.ts";
 import { computeAggregateContentSha } from "../pack/trust.ts";
 import { EngineError } from "../types/errors.ts";
-import { ENGINE_CONTENT_PREFIXES, STATE_DIR } from "../types/markers.ts";
+import { ENGINE_CONTENT_PREFIXES, STATE_DIR, stripEngineContentPrefix } from "../types/markers.ts";
 import { GIT_FETCH_TIMEOUT_MS, runGit, type GitOutcome, type WorktreeGitRunner } from "../worktree/git.ts";
 import { carriesScripts } from "./scriptDetect.ts";
 import { isSkillSlug, type SkillSource } from "./sources.ts";
@@ -52,6 +55,14 @@ const MAX_TAG_LENGTH = 128;
 const HEAD_BYTES = 512;
 /** Names Windows opens as devices, refused as any path segment's stem. */
 const WINDOWS_DEVICE = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\..*)?$/i;
+/**
+ * `SKILL.md` head keys that grant tools or permissions in a client's projection. The projection keeps the Agent Skills
+ * spec's six keys and two boolean client keys at the top level and hoists every other key under `metadata`, where no
+ * client reads it (`../emit/skillsProjection.ts`, `toSpecFrontmatter`); of the keys it keeps, `allowed-tools` is the one
+ * a client reads as a grant (Claude Code runs the listed tools unasked while the skill is active). A copy carrying one
+ * is held to the same trust as a script: refused unless the source allows scripts, and named when it does.
+ */
+const TOOL_GRANT_KEYS: readonly string[] = ["allowed-tools"];
 
 /** One file of a copied skill, as its origin record lists it. */
 interface SkillOriginFile {
@@ -102,6 +113,8 @@ export interface AddedSkill {
   readonly originPath: string;
   /** False on a dry run. */
   readonly written: boolean;
+  /** The tool-granting `SKILL.md` head keys the copy carries, each `<key>: <value as JSON>`; a source that allows scripts only. */
+  readonly grants: readonly string[];
 }
 
 /** One file of the skill's folder in git's tree, before any byte is read. */
@@ -146,6 +159,26 @@ function skillNameDefect(name: string): string | null {
   return null;
 }
 
+/**
+ * The directory of the bundled skill `name` would replace, or undefined. The corpus strips the engine prefix to make an
+ * id, and an override whose id matches a bundled skill's replaces it under the bundled directory on the next sync
+ * (`../content/userContent.ts`, `saveIdDefect`; `../emit/skillsProjection.ts`, `projectSkills`), so `verify` and
+ * `st-verify` both name `st-verify`. The id a copy takes is its folder name: the artifact gate refuses a `SKILL.md`
+ * whose declared `id` differs from it.
+ */
+async function bundledSkillDir(name: string): Promise<string | undefined> {
+  const wanted = stripEngineContentPrefix(name);
+  const bundled = (await buildContentIndex()).items.find((item) => item.type === "skill" && stripEngineContentPrefix(item.id) === wanted);
+  if (bundled === undefined) return undefined;
+  return bundled.relativePath.split("/").at(-2) ?? bundled.id;
+}
+
+/** The tool-granting keys a `SKILL.md` head declares, each `<key>: <value as JSON>`. */
+function toolGrants(skillText: string, source: string): string[] {
+  const { frontmatter } = parseFrontmatter(skillText, source);
+  return TOOL_GRANT_KEYS.filter((key) => Object.hasOwn(frontmatter, key)).map((key) => `${key}: ${JSON.stringify(frontmatter[key])}`);
+}
+
 /** Whether anything, a link included, sits at `path`. */
 async function present(path: string): Promise<boolean> {
   try {
@@ -177,6 +210,9 @@ function readTree(listing: string, name: string): TreeFile[] {
     const match = /^(\d+) (\w+) ([0-9a-f]+) +(\d+|-)\t(.*)$/s.exec(row);
     if (match === null) refuse(`skill add refused: git listed a tree row it cannot read (${JSON.stringify(row.slice(0, 80))}).`);
     const [, mode = "", type = "", oid = "", size = "", path = ""] = match;
+    // Before any refusal prints `path`: it refuses control characters through a quoted message, so no escape byte
+    // from the source's tree reaches the terminal.
+    assertSafePackRelPath(path, "the fetched skill");
     if (mode === "120000") refuse(`skill add refused: ${path} is a link, and a link can address files outside the skill.`);
     if (type !== "blob") refuse(`skill add refused: ${path} is a ${type === "commit" ? "nested repository" : type}, not a file.`);
     if (!path.startsWith(`${name}/`)) refuse(`skill add refused: ${path} is not inside the folder ${name}/.`);
@@ -271,6 +307,7 @@ function contentFile(name: string, skillDir: string, rel: string, sizeBytes: num
 async function judge(request: AddSkillRequest, stageRoot: string, skillDir: string, tree: readonly TreeFile[]): Promise<{
   files: SkillOriginFile[];
   scripts: string[];
+  grants: string[];
   aggregate: string;
   packIntegrity: Record<string, string>;
 }> {
@@ -312,11 +349,39 @@ async function judge(request: AddSkillRequest, stageRoot: string, skillDir: stri
   if (check.errors.length > 0) {
     refuse(`skill add refused: ${request.name}/${SKILL_FILE} fails the artifact gate:\n${check.errors.map((error) => `  - ${error.kind}: ${error.detail}`).join("\n")}`);
   }
+  const skillLabel = `${request.name}/${SKILL_FILE}`;
+  const skillText = read.find(({ file }) => file.rel === SKILL_FILE)?.bytes.toString("utf8") ?? "";
+  const grants = toolGrants(skillText, skillLabel);
+  if (grants.length > 0 && !request.source.allowScripts) {
+    refuse(
+      `skill add refused: ${skillLabel} declares ${grants.map((grant) => `\`${grant.slice(0, grant.indexOf(":"))}\``).join(", ")}, which pre-approves tools in a client that reads it, and the source ${request.source.id} does not allow scripts:\n${grants.map((grant) => `  - ${grant}`).join("\n")}`,
+      `a person who trusts this source's tools sets "allowScripts": true on it in .stamity/skill-sources.json`,
+    );
+  }
   const support = await scanUserSkillSupportFiles(stageRoot);
   const hits = [...support.findings.map((finding) => `${relative(skillDir, finding.filePath)}: ${finding.detail}`), ...support.skipped.map((entry) => `${relative(skillDir, entry.filePath)}: ${entry.reason}`)];
   if (hits.length > 0) refuse(`skill add refused: the deny scan refused ${request.name}'s files:\n${hits.map((hit) => `  - ${hit}`).join("\n")}`);
   await scanPackBodies(packFiles);
-  return { files, scripts, aggregate, packIntegrity: Object.fromEntries(files.map((file) => [`skills/${request.name}/${file.path}`, file.sha256])) };
+  await syncWouldTake(request.name, stageRoot, skillText, skillLabel);
+  return { files, scripts, grants, aggregate, packIntegrity: Object.fromEntries(files.map((file) => [`skills/${request.name}/${file.path}`, file.sha256])) };
+}
+
+/**
+ * The checks the next `sync` runs on an override skill folder, run on the staged copy so nothing lands that `sync`
+ * refuses: the projection's head transform (a non-boolean `user-invocable` or `disable-model-invocation`, a head that
+ * is not a YAML map) and the content walk over the override tree (an overlay half, `SKILL.customize.md` or
+ * `SKILL.customize.yaml`, beside the `SKILL.md` that fully replaces the same id).
+ */
+async function syncWouldTake(name: string, stageRoot: string, skillText: string, skillLabel: string): Promise<void> {
+  try {
+    toSpecFrontmatter(skillText, name, skillLabel);
+    await buildContentIndex({ overrideRoot: join(stageRoot, STATE_DIR, "overrides") });
+  } catch (cause) {
+    if (!(cause instanceof EngineError)) throw cause;
+    // The walk names staged paths; shown from the root, as the copy would sit.
+    const said = cause.message.replaceAll(`${stageRoot}${sep}`, "").replaceAll(`${stageRoot.split(sep).join("/")}/`, "");
+    refuse(`skill add refused: the next sync would refuse ${name}: ${said}`);
+  }
 }
 
 /** Copy the judged tree into place through a partial folder, re-verify it, and write the record. */
@@ -358,8 +423,15 @@ async function land(root: string, stagedDir: string, origin: SkillOrigin, packIn
  * folder is removed on every exit, and nothing lands under the root unless every check passed.
  */
 export async function addSkill(request: AddSkillRequest): Promise<AddedSkill> {
+  const bundled = isSkillSlug(request.name) ? await bundledSkillDir(request.name) : undefined;
   const nameDefect = skillNameDefect(request.name);
-  if (nameDefect !== null) refuse(`skill add refused: ${nameDefect}.`);
+  if (nameDefect !== null) refuse(`skill add refused: ${nameDefect}${bundled === undefined ? "" : `, and it names the bundled skill ${bundled}`}.`);
+  if (bundled !== undefined) {
+    refuse(
+      `skill add refused: the skill name ${JSON.stringify(request.name)} is the id of the bundled skill ${bundled}, and a copy under it would replace ${bundled} on the next sync.`,
+      "a bundled skill is changed by an override or an overlay a person writes, not by a copy",
+    );
+  }
   if (!COMMIT_SHAPE.test(request.commit)) {
     refuse(`skill add refused: --commit ${JSON.stringify(request.commit)} is not a full commit id (40 lowercase hex digits).`, "pin the full commit id the tag names");
   }
@@ -394,7 +466,7 @@ export async function addSkill(request: AddSkillRequest): Promise<AddedSkill> {
       fetchedAt: request.now.toISOString(),
     };
     if (request.dryRun !== true) await land(request.root, skillDir, origin, judged.packIntegrity);
-    return { origin, copyPath: skillCopyPath(request.name), originPath: skillOriginPath(request.name), written: request.dryRun !== true };
+    return { origin, copyPath: skillCopyPath(request.name), originPath: skillOriginPath(request.name), written: request.dryRun !== true, grants: judged.grants };
   } finally {
     await rm(temp, { recursive: true, force: true });
   }
