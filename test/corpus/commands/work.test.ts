@@ -1573,8 +1573,16 @@ describe("/st-work — Prove", () => {
     // `asks` question, but unfixed tool comments are evidence gaps, so `run land` returns `refused`, which asks nothing
     // (`src/runs/landEvidence.ts:676-685`, `:695`). The walk moves to the `refused` path, as one round the close adds there.
     expect(qa).not.toContain("That question also walks the review tool's comments");
+    // TEST CHANGE, justified (fix round 3, review/58; REQ-FLOW-175, sign-off S40): the walk fired on any `refused` whose
+    // reasons named unresolved threads, so with the tool clean on the head and only someone else's thread open
+    // (`src/runs/landEvidence.ts:679`) it walked the tool's threads its clean word had set aside (`runLand.ts:665`).
+    // What moved: the walk keys on the land JSON's `evidence.review.state` (`runLand.ts:699`), only `findings`, `silent`
+    // or `spent`, and never takes another author's thread as the tool's.
+    expect(qa).not.toContain(
+      "When a `refused` outcome's reasons include the review tool's findings or unresolved review threads",
+    );
     const reviewComments =
-      "When a `refused` outcome's reasons include the review tool's findings or unresolved review threads, the close walks that tool's comments on the pull request not marked resolved as leftovers, each put as fix now, schedule (with a place) or drop with a one-line plain reason, in one round after the land, the only round the close adds there; the answers take effect as the walk's do, fixes first; with no response, the leftovers' unattended rule applies.";
+      "Only when a `refused` land's JSON reads `evidence.review.state` as `findings`, `silent` or `spent`, never `clean` or `waiting`, does the close walk that tool's own comments on the pull request not marked resolved as leftovers, each put as fix now, schedule (with a place) or drop with a one-line plain reason, in one round after the land, the only round the close adds there; a thread someone else opened is never walked as the tool's and stays a held row; the answers take effect as the walk's do, fixes first; with no response, the leftovers' unattended rule applies.";
     expect(qa).toContain(reviewComments);
     // After the held-row sentence that covers a `refused` exit, before the `asks` question.
     expect(qa.indexOf(reviewComments)).toBeGreaterThan(qa.indexOf("or `merge waits on: the land call returned nothing`)."));
