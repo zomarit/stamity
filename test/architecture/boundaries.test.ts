@@ -592,6 +592,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // wave 7 — pack-install leaves over the trust ladder
   "src/pack/receipt.ts": { unit: "p5-install-pipeline", wave: 7 },
   "src/pack/curated.ts": { unit: "p5-curated-catalog", wave: 7 },
+  // Plan 024 file 2 (REQ-FLOW-180): a skill fetched from a trusted source, judged by the pack gates (wave 5-6), the
+  // artifact gate (wave 5) and the lane's git runner (wave 5), so one wave above the trust ladder.
+  "src/skills/fetch.ts": { unit: "s-skill-verb", wave: 7 },
   // wave 8 — the installer and the projection that feeds the composer
   "src/pack/install.ts": { unit: "p1-41", wave: 8 },
   "src/pack/projection.ts": { unit: "p5-projection", wave: 8 },
@@ -678,6 +681,7 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/cli/commands/config/mcp.ts": { unit: "p2-09", wave: 14 },
   "src/cli/commands/config/policy.ts": { unit: "p2-09", wave: 14 },
   "src/cli/commands/clean.ts": { unit: "p2-10", wave: 14 },
+  "src/cli/commands/skill.ts": { unit: "s-skill-verb", wave: 14 },
   "src/cli/commands/learn.ts": { unit: "p2-11", wave: 14 },
   // The handoff verb, beside `learn.ts` because it is the same shape: a hidden
   // plumbing command whose modes call engine modules through the kit and reach

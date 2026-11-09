@@ -29,6 +29,7 @@ mistake.
 | `stamity worktree` | yes | writes | parallel checkouts of this repository: the inventory, guided setup, and receipt-based teardown |
 | `stamity clean` | yes | writes | remove every generated file and the setup's own state, keeping yours under .stamity/ |
 | `stamity gc` | yes | writes | report the disk local runs, branches, worktrees and handoffs hold, and free it with --apply |
+| `stamity skill` | yes | writes | copy in a skill from a trusted source, pinned and scanned; list copied skills and their drift; remove one |
 | `stamity learn` | plumbing | writes | capture a learning through the engine's write gates, or read them through its screen (plumbing) |
 | `stamity handoff` | plumbing | writes | prepare, resume, list, complete and prune handoffs through the engine's gates (plumbing) |
 | `stamity ledger` | plumbing | writes | append findings to a run's ledger, close its rows, print its resume card, and read and write the deferral inbox (plumbing) |
@@ -53,7 +54,7 @@ identically everywhere they apply.
 ### JSON output
 
 `--json` produces exactly one JSON document on stdout, and nothing else, for every
-run that reaches a command — all 17 of the commands above, success and
+run that reaches a command — all 18 of the commands above, success and
 failure alike. Human output is suppressed in the same run, so a reader never has to
 separate prose from payload. Every document carries `ok`, `command` and `version`;
 a success adds the command's own fields, and a failure adds `error` with `code` and
@@ -261,6 +262,24 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--reports-older-than <days>` | free run reports older than this many days | `30` |
 | `--runs-older-than <days>` | also free the untracked files of run folders older than this many days | — |
 | `--branches` | also delete merged local stamity/* branches, with git branch -d | — |
+
+## `stamity skill`
+
+copy in a skill from a trusted source, pinned and scanned; list copied skills and their drift; remove one
+
+May write when it runs, so `--dry-run` previews any change without making it.
+
+| Argument | What it is |
+|---|---|
+| `<subcommand>` | add \| list \| remove |
+| `[source-or-name]` | add: the source id from .stamity/skill-sources.json; remove: the skill name |
+| `[name]` | add: the skill's folder name in the source |
+
+| Flag | What it does | Default |
+|---|---|---|
+| `--tag <tag>` | skill add: the source's version tag, which must name --commit (the root `--version` prints the engine's) | — |
+| `--commit <sha>` | skill add: the pinned commit, 40 hex digits | — |
+| `--sha256 <aggregate>` | skill add: the aggregate sha256 the source published; a copy reading any other is refused | — |
 
 ## `stamity learn`
 

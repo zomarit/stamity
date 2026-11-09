@@ -14,6 +14,7 @@ import { learnCommand } from "./cli/commands/learn.ts";
 import { ledgerCommand } from "./cli/commands/ledger.ts";
 import { planCommand } from "./cli/commands/plan.ts";
 import { runCommand } from "./cli/commands/run.ts";
+import { skillCommand } from "./cli/commands/skill.ts";
 import { syncCommand } from "./cli/commands/sync.ts";
 import { upgradeCommand } from "./cli/commands/upgrade.ts";
 import { validateCommand } from "./cli/commands/validate.ts";
@@ -27,7 +28,7 @@ import { noticeCacheDir, resolveOwnPackageFacts, startupNotice } from "./cli/not
  *
  * Everything else is owned elsewhere: the exit-code contract, flag matrix and
  * JSON funnel live in `./cli/kit/program.ts`; each verb's behavior lives in its
- * own module under `./cli/commands/`. This file only (1) enumerates the seventeen
+ * own module under `./cli/commands/`. This file only (1) enumerates the eighteen
  * CommandModules in help order, (2) fires the update-notice probe early, where
  * its banner can show, and settles it non-blockingly after the run, and (3)
  * records the exit code.
@@ -44,19 +45,22 @@ import { noticeCacheDir, resolveOwnPackageFacts, startupNotice } from "./cli/not
 
 /**
  * The advertised surface in help order — init, sync, upgrade, check, validate,
- * add, config, workspace, worktree, clean, gc — plus `learn`, `handoff`,
- * `ledger`, `gate`, `plan` and `run`, the six hidden plumbing verbs. Eleven
- * advertised, seventeen registered.
+ * add, config, workspace, worktree, clean, gc, skill — plus `learn`, `handoff`,
+ * `ledger`, `gate`, `plan` and `run`, the six hidden plumbing verbs. Twelve
+ * advertised, eighteen registered.
  *
- * `gc` sits directly after `clean`, the last advertised verb: both free what
- * the others wrote, and a person, not generated agent content, runs it.
+ * `gc` sits directly after `clean`: both free what the others wrote, and a
+ * person, not generated agent content, runs it.
  *
  * `upgrade` sits directly after `sync`: it runs the running release's sync and
  * moves the repository's pin, so a reader meets the two together.
  *
  * `workspace` sits after `config` and before `clean`: it is a configuration
- * verb, and `clean` and `gc` stay last on the advertised surface because they
- * are the ones that remove what the others wrote.
+ * verb, and `clean` and `gc` stay last of the setup verbs because they are
+ * the ones that remove what the others wrote.
+ *
+ * `skill` follows `gc`: it copies content in from outside the repository,
+ * after the setup verbs and apart from them.
  *
  * `worktree` sits directly after `workspace`, and the adjacency is deliberate
  * rather than alphabetical: the two differ at the fifth character and are
@@ -79,6 +83,7 @@ export const COMMANDS: readonly CommandModule[] = [
   worktreeCommand,
   cleanCommand,
   gcCommand,
+  skillCommand,
   learnCommand,
   handoffCommand,
   ledgerCommand,
