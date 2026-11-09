@@ -478,8 +478,11 @@ describe("light trio — the close walk (REQ-FLOW-080)", () => {
     // TEST CHANGE, justified (2026-11-09, plan 024 file 1 unit k-protocol, REQ-FLOW-174): the close
     // speaks in chat, so the walk's last print is the summary alone; the proof block goes to the
     // record and the pull request. The pointer still resolves to the summary-last sentence.
+    // TEST CHANGE, justified (2026-11-09, fix round 1, review/1 with the orchestrator's sign-off):
+    // the sentence names the run's closing report, a summary or a flow's proof block, so every
+    // flow pointing at the walk keeps its own closing print last.
     expect(protocol.parsed.body.replace(/\s+/g, " ")).toContain(
-      "The summary prints after the last answer, and nothing prints after it.",
+      "The run's closing report (its summary, or a flow's proof block) prints after the last answer, and nothing prints after it.",
     );
   });
 

@@ -340,7 +340,17 @@ describe("question-protocol — the five triggers and the ask shape", () => {
     expect(item3).toContain(
       "deleting data, dropping a column, renaming a public identifier, rewriting shared history. A force push stays the person's, even on a yes.",
     );
-    expect(item3).not.toMatch(/\bdeploy/i);
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 1 unit k-protocol, fix round 1, review/2):
+    // the pin forbade the word itself, stricter than the spec's "a deploy no longer stands alone".
+    // It now forbids a bare deploy as the rule or as one of its examples; a deploy that names
+    // whom it reaches ("a production deploy users reach") stays a case the text may give.
+    const [rule = "", examples = ""] = item3.split("repository:");
+    expect(rule).not.toMatch(/\bdeploy/i);
+    const bare = examples
+      .split(/[,.;]/)
+      .map((part) => part.trim())
+      .filter((part) => /^(?:an? |any )?deploy(?:s|ment|ments)?$/i.test(part));
+    expect(bare, "a bare deploy stands alone as the trigger").toEqual([]);
 
     const lines = (await load("rules/stamity-question-protocol.md")).raw.split("\n");
     expect(lines[25]?.startsWith("3. **Irreversible or outward action**")).toBe(true);
@@ -526,11 +536,14 @@ describe("question-protocol — the close walk (REQ-FLOW-080)", () => {
     expect(walk).toMatch(/Critical, Warning and `decision-waiting` items first, the recommended option first/);
     expect(walk).toMatch(/up to the tool's per-call limit/);
     expect(walk).toMatch(/further rounds, one ask per turn, until none is undecided/);
-    // TEST CHANGE, justified (2026-11-09, plan 024 file 1 unit k-protocol, REQ-FLOW-174): the close
-    // speaks in chat, so the walk's last print is the summary alone; the proof block goes to the
-    // record and the pull request, not to the person after the last answer.
-    expect(walk).toMatch(/The summary prints after the last answer, and nothing prints after it\./);
-    expect(walk).not.toMatch(/proof block/);
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 1 unit k-protocol, REQ-FLOW-174; fix round
+    // 1, review/1 with the orchestrator's sign-off): the walk names the general closing print, the
+    // run's closing report, so a flow that closes on its summary and one that closes on its proof
+    // block (/st-rework, /st-pr-resolve) both print it last, and nothing after it.
+    expect(walk).toContain(
+      "The run's closing report (its summary, or a flow's proof block) prints after the last answer, and nothing prints after it.",
+    );
+    expect(walk).toContain("A closing report printed while a leftover is still open is the defect.");
     expect(walk).toMatch(/each leftover takes its declared default/);
     expect(walk).toContain("Default applied:");
     expect(walk).toMatch(/A real defect is never defaulted to dropped: it waits as `decision-waiting`\./);
@@ -542,6 +555,9 @@ describe("question-protocol — the close walk (REQ-FLOW-080)", () => {
   // opens with two plain lines saying what it holds (not "summary", the word the walk keeps for the
   // closing print it holds back until the last answer), and each leftover carries its reason in one
   // plain line. The walk keeps :77-98 so the two cases citing it keep their ranges.
+  // TEST CHANGE, justified (2026-11-09, fix round 1, review/3): the opening now says it is about
+  // what is left, not what the run did, so it cannot be read as part of the closing report the
+  // floor case close-summary-after-last-decision forbids before the last answer.
   it("walks the review tool's unfixed comments too, opening with two plain lines and a one-line reason each (REQ-FLOW-174, REQ-FLOW-175)", async () => {
     const file = await load(RELPATH);
     const walk = flatten(section(file, "Close walk"));
@@ -549,7 +565,7 @@ describe("question-protocol — the close walk (REQ-FLOW-080)", () => {
     expect(walk).toContain(
       "A run that ends with leftovers (open findings, deferred items, questions still undecided, the review tool's unfixed comments on the run's pull request) walks them before it reports.",
     );
-    expect(walk).toContain("The walk opens with two plain lines saying what it holds.");
+    expect(walk).toContain("The walk opens with two plain lines on what is left, not on what the run did.");
     expect(walk).toContain("Each leftover is one question in the client's own question tool, its reason one plain line:");
 
     const lines = file.raw.split("\n");
