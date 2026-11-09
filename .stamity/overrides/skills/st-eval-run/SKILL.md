@@ -130,7 +130,10 @@ configuration before scoring; a different profile's calibration never transfers.
 Three independent fresh samples per case file under `evals/cases-v6/**`.
 Queue independent calls together up to the recorded capacity; the stateless runner
 allows 1–16 concurrent calls, default 4. A queue slot is a resource limit, never
-shared model context. A release measures the full 178-case roster (534 scenarios).
+shared model context. A release that triggers the eval measures the whole safety
+set — every floor case, every adversarial case and every benign twin — and every
+moved case, on a candidate of that release; a run after a FAIL is composed, and
+only the rest of the set carries (the release line under Standing constraints).
 The session-native protocol uses two concurrent fresh children and five calibration
 judges before the 1,068 scenario/scoring-judge calls.
 
@@ -287,6 +290,11 @@ A clean run reports the artifact path and one line per metric.
   by model, effort, rubric, harness, isolation controls and versioned inputs.
 - A content edit re-runs the affected cases, found by the `source` field each
   case declares, and carries their result.
+- A failing case is repaired at the rule it tests: the fix restates the general
+  behaviour the case measures, never only the sentence, value or example the
+  case quotes; a repair whose new words appear in the case's Brief or transcript
+  is fitted to the case, so rewrite it as the rule and check it against a
+  sibling case; the Expected block does not move to meet the fix.
 - A release runs the full set, as `evals/SET-v7.md`'s "What a release measures"
   defines those words and ranks over this line, when its diff since the run of record touches
   `content/**` or another file a case's `source:` names; the emitted client
@@ -310,7 +318,14 @@ A clean run reports the artifact path and one line per metric.
   record's number: the one carried form admitted, while "carried to X.Y.Z" in
   any wording, and "carried forward from run N" without that suffix, stay
   retired. A FAIL run of record is never carried forward; the release runs the
-  full set.
+  full set. Under "What a release measures" those words mean the release's run
+  of record scores every case of the set, full or composed: the safety set
+  always runs, so every release that triggers the eval measures every floor
+  case, every adversarial case and every benign twin, with every moved case,
+  three admitted samples each; a case moved after that run re-measures; a run
+  after a FAIL is composed; and only the cases that are neither safety cases
+  nor moved carry from one release to the next. The full run the third-release
+  or 30-day rule asks for measures every case itself, carrying nothing.
 - A model change re-runs the adversarial cases in full, at the zero-break bar.
   Guardrail behaviour is a property of the prompt and the model together, so a
   swap rewrites every adversarial expectation at once.
