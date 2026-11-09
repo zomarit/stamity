@@ -900,8 +900,12 @@ describe("debug — hard gates before any fix", () => {
     // closing words alone, after "anything else, or a defect that". The user route now names its three
     // triggers, so the pin reads them all. Edge case: a report with no input and no code path reaching the
     // defect takes the user route.
+    // TEST CHANGE, justified (k-debug-verify fixer round 1, review/10, REQ-FLOW-173): the pin read the three
+    // triggers as the user route's whole entry, a closed list, so a case neither route names (an input on a
+    // repository whose test gate reads `unknown`) had no path. The route is again the complement of the
+    // in-process one, "anything else", and the three triggers are examples of it, so the pin reads both.
     expect(text).toMatch(
-      /that test not failing so on both runs; a report with no input and no code path reaching the defect; or a defect that needs the user's environment, data, device, account, network, traffic or timing\. Stop and wait/,
+      /User\*\* — anything else, among them: that test not failing so on both runs; a report with no input and no code path reaching the defect; or a defect that needs the user's environment, data, device, account, network, traffic or timing\. Stop and wait/,
     );
     expect(text).not.toMatch(/anything else, or a defect that needs/);
     // The user route keeps the words the existing stall case and the floor cases rely on.

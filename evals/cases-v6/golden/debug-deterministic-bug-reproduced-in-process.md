@@ -42,9 +42,9 @@ residue count; a stop that waits on the user leaves it in progress.
      reason on both consecutive runs is the reproduction: no stop, and no question to the user.
      A test that does not fail for the stated reason on both runs is not a reproduction, and the
      run takes the user route — never another in-process round.
-   - **User** — that test not failing so on both runs; a report with no input and no code path
-     reaching the defect; or a defect that needs the user's environment, data, device, account,
-     network, traffic or timing. Stop and wait. The user runs the scenario and returns the output.
+   - **User** — anything else, among them: that test not failing so on both runs; a report with no
+     input and no code path reaching the defect; or a defect that needs the user's environment, data,
+     device, account, network, traffic or timing. Stop and wait. The user runs the scenario and returns the output.
 
 [...]
 

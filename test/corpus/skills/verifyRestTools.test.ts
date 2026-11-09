@@ -505,6 +505,63 @@ describe("maintainability axis — module depth (REQ-FLOW-082)", () => {
   });
 });
 
+describe("verify thresholds — the repository's declared limit, never an imported floor (REQ-FLOW-173)", () => {
+  const MAINT = "skills/st-verify/references/maintainability.md";
+  const SCALE = "skills/st-verify/references/scalability.md";
+
+  /** One row's `Threshold:` text, whitespace-flattened: from the row's bold id to the next bold id. */
+  function threshold(body: string, id: string): string {
+    const start = body.indexOf(`**\`${id}\`**`);
+    expect(start, `no ${id} row`).toBeGreaterThanOrEqual(0);
+    const rest = body.slice(start + id.length + 6);
+    const end = rest.search(/\*\*`[a-z][a-z0-9-]*`\*\*/);
+    const row = (end === -1 ? rest : rest.slice(0, end)).replace(/\s+/g, " ");
+    return row.slice(row.indexOf("Threshold:"));
+  }
+
+  /** Both reference bodies, keyed by path. */
+  async function bodies(): Promise<Map<string, string>> {
+    const [maint, scale] = await Promise.all([load(MAINT), load(SCALE)]);
+    return new Map([
+      [MAINT, maint.parsed.body],
+      [SCALE, scale.parsed.body],
+    ]);
+  }
+
+  it("takes each of the four limits from the repo and reports the measured value as evidence when none is declared", async () => {
+    const body = await bodies();
+    const rows = [
+      [MAINT, "maint-duplication", /the duplication limit the repo declares/, /\b30 lines\b/],
+      [MAINT, "maint-dependency-lag", /the lag limit the repo declares/, /one major behind/],
+      [SCALE, "scale-pagination", /the page-size ceiling the repo declares/, /1,000 rows/],
+      [SCALE, "scale-pool-config", /the pool limit the repo declares/, /a missing ceiling is a hit/],
+    ] as const;
+    for (const [relPath, id, declared, oldFloor] of rows) {
+      const text = threshold(body.get(relPath) ?? "", id);
+      expect(text, id).toMatch(declared);
+      expect(text, id).toMatch(/as evidence/);
+      expect(text, id).toMatch(/citing the absent (?:limit|ceiling) as the detection fact/);
+      // The fixed floor this row carried before is gone: a repo with no declared limit is never failed against it.
+      expect(text, id).not.toMatch(oldFloor);
+    }
+  });
+
+  it("records the row not-applicable when no limit is declared, and pagination on its 100% part alone", async () => {
+    const body = await bodies();
+    for (const [relPath, id] of [
+      [MAINT, "maint-duplication"],
+      [MAINT, "maint-dependency-lag"],
+      [SCALE, "scale-pool-config"],
+    ] as const) {
+      expect(threshold(body.get(relPath) ?? "", id), id).toMatch(/record the row `not-applicable`/);
+    }
+    // Edge case: a two-part threshold drops only the part with no declared source.
+    expect(threshold(body.get(SCALE) ?? "", "scale-pagination")).toMatch(
+      /100% of list endpoints; .*judge the row on the 100% alone/,
+    );
+  });
+});
+
 describe("enhancability axis — the migrations floor it gates", () => {
   it("names all four phases the migrations rule names, and one reversal per phase", async () => {
     const axis = await load("skills/st-verify/references/enhancability.md");

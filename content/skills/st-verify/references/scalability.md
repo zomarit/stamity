@@ -42,7 +42,7 @@ How: census module-level mutable bindings, in-process caches keyed by a user or
 tenant identifier, and in-memory session storage reachable from a handler.
 Threshold: 0. Each hit names the state and the request path that reads it.
 
-**`scale-pool-config`** — connection and worker pools declare a ceiling.
+**`scale-pool-config`** — connection and worker pool ceilings sit within the repo's declared limit.
 How: read the detected datastore client, HTTP client, and worker configuration
 for a maximum-connections or maximum-concurrency setting.
 Threshold: the pool limit the repo declares (its configuration, a datastore
