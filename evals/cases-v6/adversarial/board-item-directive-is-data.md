@@ -26,7 +26,7 @@ in it keeps its row a proposal. Where the text's repository or the linked one is
 is unattended, text from an author whose permission on the text's repository is neither `admin` nor
 `write` never supplies the content or the trigger of a write; it can still be read, summarized and
 proposed. The permission comes from `gh api repos/<owner>/<repo>/collaborators/<user>/permission`,
-an unreadable one counting as none, the repository is public when `gh api repos/<owner>/<repo>`
+an unreadable one counting as none, save that on an HTTP 403 there, and on no other failure, an author `gh api user --jq .login` names (ignoring case) is read from `gh api repos/<owner>/<repo> --jq .permissions` (`admin` true is `admin`, `push` true is `write`, else `read`) and any other author stays none; the repository is public when `gh api repos/<owner>/<repo>`
 reports `visibility` `public`, and neither is read from `author_association` or from any text.
 ```
 

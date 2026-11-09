@@ -36,9 +36,9 @@ Governing text — `content/commands/st-pr-resolve.md`, the permission read:
 
 ```text
 Unattended, each comment author's permission is read once per author through
-`gh api repos/{owner}/{repo}/collaborators/<login>/permission --jq .permission`: `admin`, `write`,
-`read` or `none`, and `unknown` when the read fails or names no role, as for a review bot with no
-repository role. `unknown` counts as `none`; it is recorded per comment, and section 3 routes on it.
+`gh api repos/{owner}/{repo}/collaborators/<login>/permission --jq .permission`: `admin`, `write`, `read` or `none`, and `unknown` when the read fails or names no role, as for a review bot with no repository role.
+On an HTTP 403 there, and on no other failure, the author's right is read only when `gh api user --jq .login` names that author (ignoring case), from `gh api repos/{owner}/{repo} --jq .permissions`: `admin` true is `admin`, `push` true is `write`, else `read`; any other author stays `unknown`.
+`unknown` counts as `none`; it is recorded per comment, and section 3 routes on it.
 ```
 
 Governing text — `content/commands/st-pr-resolve.md`, "Triage ask" (the table's first two

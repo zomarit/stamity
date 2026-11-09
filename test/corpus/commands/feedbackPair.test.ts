@@ -1744,9 +1744,18 @@ describe("feedback pair — unattended (REQ-FLOW-097, REQ-FLOW-100, REQ-CTX-012)
     const body = artifact(PR_RESOLVE).parsed.body;
     const collect = clause(body, "## 1. Collect");
 
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 1 unit c-permission-403, REQ-FLOW-169):
+    // this pin read the passage with no 403 sentence, `unknown` straight after "repository role.".
+    // What changed about the contract: a cloud proxy answers HTTP 403 on the collaborator read, so
+    // a 403, and only a 403, now reads the right of the account `gh` names from the repository's
+    // own `permissions`; every other author stays `unknown`, as before.
     expect(collect).toContain(
-      "Unattended, each comment author's permission is read once per author through `gh api repos/{owner}/{repo}/collaborators/<login>/permission --jq .permission`: `admin`, `write`, `read` or `none`, and `unknown` when the read fails or names no role, as for a review bot with no repository role. `unknown` counts as `none`; it is recorded per comment, and section 3 routes on it.",
+      "Unattended, each comment author's permission is read once per author through `gh api repos/{owner}/{repo}/collaborators/<login>/permission --jq .permission`: `admin`, `write`, `read` or `none`, and `unknown` when the read fails or names no role, as for a review bot with no repository role. On an HTTP 403 there, and on no other failure, the author's right is read only when `gh api user --jq .login` names that author (ignoring case), from `gh api repos/{owner}/{repo} --jq .permissions`: `admin` true is `admin`, `push` true is `write`, else `read`; any other author stays `unknown`. `unknown` counts as `none`; it is recorded per comment, and section 3 routes on it.",
     );
+    // REQ-FLOW-169 edge cases: a 404 or any other failure is not the fallback, and the fallback
+    // never speaks for an author `gh` does not name.
+    expect(collect).toContain("On an HTTP 403 there, and on no other failure,");
+    expect(collect).toContain("any other author stays `unknown`.");
     expect(collect).toContain("author_permission: {<comment id>: admin | write | read | none | unknown} # unattended only, per comment");
     // `review/47`: a non-write comment in a write author's thread never supplies a fix's content.
     expect(collect).toContain(

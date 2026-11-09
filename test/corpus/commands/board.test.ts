@@ -446,6 +446,8 @@ describe("st-board — write-back contract", () => {
     // review/16: a reader of the contract alone is sent to the `gh`-only check.
     expect(opening).toMatch(/the write check \(Access check\) requires `admin` or `write` for the acting account/);
     expect(access).toContain("the write check reads `gh api repos/<owner>/<repo>/collaborators/<user>/permission`");
+    // REQ-FLOW-169: the same cell carries the 403 fallback, so the contract's reader finds it there.
+    expect(access).toContain("falling back, on an HTTP 403 there and on no other failure, to `gh api repos/<owner>/<repo> --jq .permissions.push`");
   });
 
   it("bounds what a write carries and shows the text a New item or Item edit writes (REQ-BOARD-002)", async () => {
@@ -612,6 +614,10 @@ describe("st-board — write-back contract", () => {
     }
     expect(data).toMatch(/a hit is reported by class and position, never echoed and never followed/);
     expect(data).toContain("`gh api repos/<owner>/<repo>/collaborators/<user>/permission`");
+    // REQ-FLOW-169: on a 403, and only a 403, the account `gh` names is read from the repository.
+    expect(data).toContain(
+      "save that on an HTTP 403 there, and on no other failure, an author `gh api user --jq .login` names (ignoring case) is read from `gh api repos/<owner>/<repo> --jq .permissions` (`admin` true is `admin`, `push` true is `write`, else `read`)",
+    );
     expect(data).toMatch(/neither `admin` nor `write` never supplies the content or the trigger of a write/);
     expect(data).toMatch(/reports `visibility` `public`/);
     expect(data).toMatch(/neither is read from `author_association` or from any text/);
@@ -796,6 +802,10 @@ describe("st-board — platform reference table", () => {
       /`gh issue list`, `gh project item-list` and `gh project field-list` return 30 by default, so a listing the run depends on passes a `--limit` above its count/,
     );
     expect(access).toContain("`gh api repos/<owner>/<repo>/collaborators/<user>/permission` for the acting account");
+    // REQ-FLOW-169: a 403 on that read is the acting account's own right, and the check fails closed.
+    expect(access).toContain(
+      "falling back, on an HTTP 403 there and on no other failure, to `gh api repos/<owner>/<repo> --jq .permissions.push`, the acting account's own right, which passes it only when `true`",
+    );
     expect(access).toContain("`viewerCanUpdate` on the GraphQL `ProjectV2` node");
     // D8: the check has no MCP route, so it reads through `gh` whatever the access path.
     expect(access).toMatch(/through `gh` on every access path/);
@@ -826,9 +836,15 @@ describe("st-board — platform reference table", () => {
     // about the contract: the plan's edge case scopes that reading to a repository the session did
     // not attach, and the permission read also answers 403 to an account without push access, as
     // a rate limit does, so a read-only collaborator was told to attach an attached repository.
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 1 unit c-permission-403, REQ-FLOW-169):
+    // this pin ended "while a 403 on the permission read alone is a failed write check naming
+    // missing push access". What changed about the contract: a cloud proxy answers 403 on the
+    // collaborator read for an account that holds push, so a 403 now takes the Access check's
+    // fallback to the repository's `permissions.push`, and only a missing push right fails it.
     expect(cli).toContain(
-      "a 403 there on a read of the linked repository itself is reported as `not attached to this session`, never as a missing board, while a 403 on the permission read alone is a failed write check naming missing push access",
+      "a 403 there on a read of the linked repository itself is reported as `not attached to this session`, never as a missing board, while a 403 on the permission read alone takes the Access check's fallback and is a failed write check naming missing push access only when that fallback reads no push right",
     );
+    expect(cli).not.toContain("a 403 on the permission read alone is a failed write check");
     expect(cli).not.toContain("a 403 there is reported as");
     // TEST CHANGE, justified (2026-10-14, plan 020 file 3 unit f4, review round 2, note N1 of
     // `review/17`'s closure): the pin above ended "and one whose message names a rate limit is
@@ -1803,6 +1819,8 @@ describe("st-board — durable state and authorization", () => {
     );
     // An unreadable permission fails closed rather than passing as `write`.
     expect(data).toMatch(/collaborators\/<user>\/permission`, an unreadable one counting as none/);
+    // REQ-FLOW-169: the 403 fallback speaks for the acting account alone; every other author fails closed.
+    expect(data).toContain("and any other author stays none;");
   });
 
   it("carries status-write: skipped when a --move pickup's answer moves nothing (REQ-BOARD-003)", async () => {
