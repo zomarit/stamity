@@ -1567,16 +1567,18 @@ describe("/st-work — Prove", () => {
     expect(qa).toContain(
       "on a client whose guard refuses that line instead of asking, the close does not run it on 1: it hands the person that exact line to run themselves and keeps the held row.",
     );
-    // Added 2026-11-09 (plan 024 file 1, unit k-work-close round 1, review W-1; REQ-FLOW-175, sign-off S39): an attended
-    // close opens its pull request after the walk's last round and meets the review tool only inside `run land`, so the
-    // pointer's "where the run's pull request is open" never reached a first close. The tool's unfixed comments are walked
-    // in the land's own merge-or-hold question, each a leftover with its three answers and a plain reason, in no new round.
+    // Added 2026-11-09 (plan 024 file 1, unit k-work-close, review/55; REQ-FLOW-175, sign-off S40): an attended close
+    // opens its pull request after the walk's last round and meets the review tool only inside `run land`.
+    // TEST CHANGE, justified (fix round 2, review/55; sign-off S40 replaces S39's placement): round 1 put the walk in the
+    // `asks` question, but unfixed tool comments are evidence gaps, so `run land` returns `refused`, which asks nothing
+    // (`src/runs/landEvidence.ts:676-685`, `:695`). The walk moves to the `refused` path, as one round the close adds there.
+    expect(qa).not.toContain("That question also walks the review tool's comments");
     const reviewComments =
-      "That question also walks the review tool's comments, read from the pull request as its comments not marked resolved: each one the land's `asks.reasons` names as waiting, or that the tool left open on `pr.head`, is a leftover put as fix now, schedule (with a place) or drop with a one-line plain reason, in that round and no new one, the answers taking effect as the walk's do, fixes first; with no response, the leftovers' unattended rule applies.";
+      "When a `refused` outcome's reasons include the review tool's findings or unresolved review threads, the close walks that tool's comments on the pull request not marked resolved as leftovers, each put as fix now, schedule (with a place) or drop with a one-line plain reason, in one round after the land, the only round the close adds there; the answers take effect as the walk's do, fixes first; with no response, the leftovers' unattended rule applies.";
     expect(qa).toContain(reviewComments);
-    // Inside the merge-or-hold question's handling: after the question, before the `--approved` call's outcomes.
-    expect(qa.indexOf(reviewComments)).toBeGreaterThan(qa.indexOf(approved));
-    expect(qa.indexOf(reviewComments)).toBeLessThan(qa.indexOf("That call's `landed` outcome writes its `## Decisions` row;"));
+    // After the held-row sentence that covers a `refused` exit, before the `asks` question.
+    expect(qa.indexOf(reviewComments)).toBeGreaterThan(qa.indexOf("or `merge waits on: the land call returned nothing`)."));
+    expect(qa.indexOf(reviewComments)).toBeLessThan(qa.indexOf(approved));
     // TEST CHANGE, justified (whole-branch review M-3, review/175; REQ-FLOW-144): the walk's retry clause gains the
     // checkpoint that rewrites a pull-request record another run's checkpoint replaced (`runLand.ts:386-389`).
     expect(qa).toContain(
