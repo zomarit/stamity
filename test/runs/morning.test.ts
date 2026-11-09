@@ -40,6 +40,8 @@ const question = (id: string, extra: Record<string, unknown> = {}) =>
 
 interface Shape {
   title?: string;
+  /** Text between the title and the first section, written as given (c-morning-lead, REQ-FLOW-094). */
+  lead?: string;
   refused?: string | null;
   sections?: Partial<Record<string, string>>;
   questions?: readonly string[];
@@ -60,6 +62,7 @@ const ORDER = ["For you to check", "Decisions", "Prerequisites", "Person's calls
 /** A morning list in the shape, with `shape` over the defaults. */
 function morning(shape: Shape = {}): string {
   const lines = [shape.title ?? `# Morning list — ${RUN}`, ""];
+  if (shape.lead !== undefined) lines.push(shape.lead, "");
   const sections = { ...DEFAULT_SECTIONS, ...shape.sections };
   if (shape.refused !== undefined && shape.refused !== null) lines.push("## Refused", "", shape.refused, "");
   for (const name of shape.order ?? ORDER) {
@@ -195,6 +198,105 @@ describe("parseMorning", () => {
     const crlf = parseMorning(morning().replace(/\n/g, "\r\n"));
 
     expect(crlf).toEqual(lf);
+  });
+});
+
+describe("the summary before the first section (c-morning-lead, REQ-FLOW-094)", () => {
+  const summary = "Two units landed; one decision waits for you.";
+
+  it("parses a one-line summary as the lead and prints it right after the body's title", () => {
+    const text = morning({ lead: summary });
+    const parsed = parseMorning(text);
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.lead).toBe(summary);
+    expect(Object.keys(parsed.sections)).toEqual(ORDER);
+
+    const lines = prBodyFrom(text, RUN).split("\n");
+    expect(lines.slice(0, 5)).toEqual([`# Morning list — ${RUN}`, "", summary, "", "## For you to check"]);
+    expect(lines.at(-1)).toBe(runMarker(RUN));
+  });
+
+  it("keeps a summary's inner blank lines and drops its blank edges", () => {
+    const parsed = parseMorning(morning({ lead: "\n\n- landed: two units\n\n- waits: one decision\n\n" }));
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.lead).toBe("- landed: two units\n\n- waits: one decision");
+  });
+
+  it("reads a list with no summary, or blank lines alone, as before: no lead and the same body", () => {
+    const bare = parseMorning(morning());
+    expect(bare.ok).toBe(true);
+    expect(bare).not.toHaveProperty("lead");
+
+    const blank = morning({ lead: "   \n\n\t" });
+    expect(parseMorning(blank)).toEqual(bare);
+    expect(prBodyFrom(blank, RUN)).toBe(prBodyFrom(morning(), RUN));
+  });
+
+  it("parses a summary at the cap: 10 non-blank lines and 1,000 characters", () => {
+    const atCap = Array.from({ length: 10 }, (_, at) => "a".repeat(at === 0 ? 100 : 99)).join("\n");
+    expect(atCap.length).toBe(1_000);
+
+    const parsed = parseMorning(morning({ lead: atCap }));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.lead).toBe(atCap);
+  });
+
+  it("refuses a summary past either cap, naming both limits", () => {
+    const tooManyLines = Array.from({ length: 11 }, (_, at) => `- row ${at + 1}`).join("\n");
+    expect(parseMorning(morning({ lead: tooManyLines }))).toEqual({
+      ok: false,
+      problems: ["line 3: the summary before the first section has 11 non-blank lines and 89 characters; it holds at most 10 non-blank lines and 1,000 characters"],
+    });
+
+    expect(parseMorning(morning({ lead: "s".repeat(1_001) }))).toEqual({
+      ok: false,
+      problems: ["line 3: the summary before the first section has 1 non-blank lines and 1001 characters; it holds at most 10 non-blank lines and 1,000 characters"],
+    });
+  });
+
+  it("still refuses a summary that opens a `stamity-morning` block", () => {
+    const parsed = parseMorning(morning({ lead: "```stamity-morning\n```" }));
+
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.problems).toContain("line 3: the `stamity-morning` block sits outside `## How to answer`");
+  });
+
+  it("refuses any other fence before the first section, since a summary is plain lines", () => {
+    const parsed = parseMorning(morning({ lead: "the change:\n```diff\n+ a line\n```" }));
+
+    expect(parsed).toEqual({ ok: false, problems: ["line 4: a fence before the first section; the summary there is plain lines"] });
+
+    // A control character hides the fence from the parser, but the body drops it and would print a bare fence there.
+    const hidden = parseMorning(morning({ lead: "\u0007```text" }));
+    expect(hidden).toEqual({ ok: false, problems: ["line 3: a fence before the first section; the summary there is plain lines"] });
+  });
+
+  it("counts the summary in a cut body's fixed part, so the body stays inside the cap with the summary whole", () => {
+    const lead = Array.from({ length: 10 }, (_, at) => `- summary ${at} ${"l".repeat(85)}`).join("\n");
+    const rows = Array.from({ length: 400 }, (_, at) => `- decision row ${at} ${"x".repeat(40)}`).join("\n");
+    const body = prBodyFrom(morning({ lead, sections: { Decisions: rows } }), RUN, { maxChars: 5_000 });
+
+    expect(body.length).toBeLessThanOrEqual(5_000);
+    expect(body.length).toBeGreaterThan(4_000);
+    expect(body).toContain(`# Morning list — ${RUN}\n\n${lead}\n\n## For you to check\n`);
+    expect(body).toContain("- decision row 0 ");
+    expect(body).not.toContain("- decision row 399 ");
+    expect(body.split("\n").at(-1)).toBe(runMarker(RUN));
+  });
+
+  it("cleans the summary as the body prints it, and drops it where the list names another run", () => {
+    const body = prBodyFrom(morning({ lead: "- landed‮ two\u0007 units" }), RUN);
+    expect(body).toContain(`# Morning list — ${RUN}\n\n- landed two units\n\n## For you to check`);
+
+    const other = prBodyFrom(morning({ title: "# Morning list — 2026-10-15_other", lead: summary }), RUN);
+    expect(other).toContain("the title names run 2026-10-15_other");
+    expect(other).not.toContain(summary);
   });
 });
 

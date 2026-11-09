@@ -13,6 +13,7 @@ import { runMarker } from "./pullRequest.ts";
  * The shape, one level-2 section each, in this order:
  *
  *     # Morning list — <run-id>
+ *     <a short summary>     (optional plain lines: at most 10 non-blank, 1,000 characters, no fence)
  *     ## Refused            (only on a pre-flight or plan-check refusal, then first)
  *     ## For you to check
  *     ## Decisions
@@ -84,6 +85,8 @@ export type MorningParse =
       readonly ok: true;
       /** The run the title names. */
       readonly runId: string;
+      /** The summary between the title and the first section, trimmed of blank edge lines; absent when there is none. */
+      readonly lead?: string;
       /** Each section's text, trimmed of blank edge lines, {@link MORNING_EMPTY} when it has none; `Refused` first when present. */
       readonly sections: Record<string, string>;
       readonly questions: readonly MorningQuestion[];
@@ -99,6 +102,9 @@ const QUESTION_ID = /^Q[1-9][0-9]*$/;
 const OPTIONS_MIN = 2;
 const OPTIONS_MAX = 9;
 const TEXT_CAPS = { question: 500, option: 200, source: 300 } as const;
+/** The summary before the first section holds at most this many non-blank lines and characters (REQ-FLOW-094). */
+const LEAD_MAX_LINES = 10;
+const LEAD_MAX_CHARS = 1_000;
 const HOW_TO_ANSWER: string = MORNING_SECTIONS[5];
 const PREREQUISITES: string = MORNING_SECTIONS[2];
 const NOT_DONE: string = MORNING_SECTIONS[4];
@@ -139,7 +145,8 @@ export function parseMorning(text: string): MorningParse {
   let blockOpenedAt = 0;
   let otherFence: string | null = null; // the marker run of any other open fence, whose lines are section text
   let blocks = 0;
-  let strayReported = false;
+  const leadLines: { readonly text: string; readonly line: number }[] = []; // lines before the first section, outside a fence
+  let leadFenceReported = false;
 
   for (let index = titleAt + 1; index < lines.length; index += 1) {
     const line = lines[index] ?? "";
@@ -180,15 +187,18 @@ export function parseMorning(text: string): MorningParse {
     const other = OTHER_FENCE_OPEN.exec(line);
     if (other !== null) otherFence = other[1] ?? "```";
     if (current === null) {
-      if (line.trim() !== "" && !strayReported) {
-        problems.push(`line ${lineNo}: text before the first section`);
-        strayReported = true;
+      // Read as the body prints it too: a control character in front would hide a fence the body then opens.
+      if (other === null && !OTHER_FENCE_OPEN.test(bodyText(line))) leadLines.push({ text: line, line: lineNo });
+      else if (!leadFenceReported) {
+        problems.push(`line ${lineNo}: a fence before the first section; the summary there is plain lines`);
+        leadFenceReported = true;
       }
     } else if (current !== "") {
       bodies.get(current)?.push(line);
     }
   }
   if (inBlock) problems.push(`line ${blockOpenedAt}: the \`${MORNING_FENCE}\` block opened here is never closed`);
+  const lead = readLead(leadLines, problems);
 
   for (const name of MORNING_SECTIONS) if (!bodies.has(name)) problems.push(`missing section ${sectionName(name)}`);
   const present = [...bodies.keys()];
@@ -211,7 +221,27 @@ export function parseMorning(text: string): MorningParse {
     const body = bodies.get(name);
     if (body !== undefined) sections[name] = trimBlankEdges(body);
   }
-  return { ok: true, runId, sections, questions };
+  return { ok: true, runId, ...(lead === undefined ? {} : { lead }), sections, questions };
+}
+
+/** The summary's text, blank edge lines dropped; `undefined` when it has no non-blank line. A summary past either cap pushes one problem naming both. */
+function readLead(lines: readonly { readonly text: string; readonly line: number }[], problems: string[]): string | undefined {
+  const filled = lines.filter(({ text }) => text.trim() !== "");
+  const first = filled[0];
+  const last = filled.at(-1);
+  if (first === undefined || last === undefined) return undefined;
+  const lead = lines
+    .slice(lines.indexOf(first), lines.indexOf(last) + 1)
+    .map(({ text }) => text)
+    .join("\n");
+  const chars = Array.from(lead).length;
+  if (filled.length > LEAD_MAX_LINES || chars > LEAD_MAX_CHARS) {
+    problems.push(
+      `line ${first.line}: the summary before the first section has ${filled.length} non-blank lines and ${chars} characters; ` +
+        `it holds at most ${LEAD_MAX_LINES} non-blank lines and ${LEAD_MAX_CHARS.toLocaleString("en-US")} characters`,
+    );
+  }
+  return lead;
 }
 
 /** The block's question lines, each checked field by field; every problem is pushed onto `problems`. */
@@ -394,7 +424,8 @@ function checkedMaxChars(given: number | undefined): number {
 }
 
 /**
- * The pull request body made from a morning list: the title, each section (a
+ * The pull request body made from a morning list: the title, the list's
+ * summary when it has one (each line cleaned as below), each section (a
  * section with no rows reading `none`), the inferred prerequisite rows the
  * section does not already name, the questions with their option numbers,
  * the run record's `## Blast radius` section when `opts.blastRadius` carries
@@ -404,7 +435,7 @@ function checkedMaxChars(given: number | undefined): number {
  * characters and the Unicode tag block are dropped.
  *
  * Past `maxChars` ({@link PR_BODY_MAX_CHARS} by default) the body keeps the
- * title, every heading, `## Refused` and `## Not done:` first, then the other
+ * title and the summary whole, every heading, `## Refused` and `## Not done:` first, then the other
  * sections' first rows, one row of each a round, then the blast radius rows
  * the rest leaves room for (so that section is the first cut), and names
  * `morning.md` for the rest; a cut section closes any fence its kept rows
@@ -419,13 +450,15 @@ export function prBodyFrom(text: string, runId: string, opts: { inferred?: reado
   const path = runRelPath(runId, MORNING_FILE); // throws on a value that is not a run id, so no text can close the marker early
   const marker = runMarker(runId);
   const maxChars = checkedMaxChars(opts.maxChars);
-  const title = `# Morning list — ${runId}`;
   const parsed = parseMorning(text);
   const problems = !parsed.ok
     ? parsed.problems
     : parsed.runId !== runId
       ? [`the title names run ${parsed.runId}, not ${runId}`]
       : [];
+  // The summary rides in the head, so `fitBody` counts it in the fixed part and never cuts it.
+  const lead = parsed.ok && problems.length === 0 ? parsed.lead : undefined;
+  const title = [`# Morning list — ${runId}`, ...(lead === undefined ? [] : ["", ...lead.split("\n").map(bodyText)])].join("\n");
 
   const sections: { readonly name: string; readonly lines: readonly string[] }[] = [];
   if (!parsed.ok || problems.length > 0) {
