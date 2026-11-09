@@ -355,7 +355,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | Flag | What it does | Default |
 |---|---|---|
 | `--base <ref>` | the base the change is read against (default: HEAD, reported as no base) | — |
-| `--paths <path...>` | classify these paths by path rules instead of reading the change from git; held: the files to digest, from the repository root | — |
+| `--paths <path...>` | classify these paths by path rules instead of reading the change from git; held: the files to digest, from the project root | — |
 | `--expect <digest>` | held: the digest the files must still give; any other exits 1 | — |
 | `--text <file>` | scan this outbound text file instead of the change (with --label) | — |
 | `--label <label>` | what the --text file is — one of `pr-body`, `morning`, `reply`, `comment` | — |

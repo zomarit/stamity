@@ -220,9 +220,9 @@ import type { GitRunner } from "../../workspace/git.ts";
  * **`gate held --paths <files...> [--expect <digest>]`** (REQ-FLOW-171) is the
  * digest of the tests a tests-only dispatch wrote, so a later pass can prove a
  * builder left them unchanged ({@link runHeld}). The paths read from the
- * repository root, as `classify --paths` names them; an absolute path, one
- * that climbs out with `..`, an empty one and no `--paths` at all are usage
- * errors, exit 2, before anything is read. The digest is `sha256:` over the
+ * project root, the one `classify` reads from ({@link findProjectRoot}, review/14);
+ * an absolute path, one that climbs out with `..`, an empty one and no `--paths`
+ * at all are usage errors, exit 2, before anything is read. The digest is `sha256:` over the
  * sorted `(path, bytes)` pairs, each framed with its length; every file's own
  * `sha256` is listed beside it, so a record can name the one that moved. A
  * link, on the file or on a folder above it, is never followed: that file reads
@@ -1851,7 +1851,7 @@ function parseDigest(value: string): string {
 }
 
 /**
- * A `--paths` entry's segments below the repository root, `.` and empty ones
+ * A `--paths` entry's segments below the project root, `.` and empty ones
  * dropped. A backslash separates on win32 only; elsewhere it is a filename
  * character, as git reads it.
  */
@@ -1860,7 +1860,7 @@ function heldSegments(path: string, windows: boolean): string[] {
 }
 
 /**
- * Why a `--paths` entry names no file below the repository root, or
+ * Why a `--paths` entry names no file below the project root, or
  * `undefined` when it does. A `..` is refused whichever separator carries it,
  * so no platform reads a climb the other would not.
  */
@@ -1901,7 +1901,7 @@ function readHeldFile(top: string, segments: readonly string[]): { body: Buffer 
 }
 
 /**
- * `gate held`: the digest of the listed files, read from the repository root.
+ * `gate held`: the digest of the listed files, read from the project root.
  * Each path is framed with its byte length, then its bytes with theirs, or `-`
  * for a file with none, in byte order of the paths, so the same files give the
  * same digest in any order and no byte can move between a name and a body
@@ -1917,17 +1917,24 @@ function runHeld(ctx: CliContext, opts: Record<string, unknown>): CommandResult 
   try {
     const runner = gitCheckRunner({ timeoutMs: GATE_GIT_TIMEOUT_MS, maxBuffer: GATE_GIT_MAX_BUFFER });
     const cwd = ctx.app.runtime.cwd;
-    const depth = heldSegments(readCwdPrefix(runner, cwd), false).length;
-    let start = cwd;
-    try {
-      start = realpathSync(cwd);
-    } catch {
-      // git answered from this cwd, so it exists; the lexical form walks the same steps.
+    const cwdPrefix = readCwdPrefix(runner, cwd);
+    // review/14: the root `classify` reads from, so a project in a subfolder of its repository hashes the files it
+    // names. An unborn HEAD has no tree to hold a `.stamity/`, so its root is the top-level, as findProjectRoot's own.
+    const head = resolveBase(runner, cwd, "HEAD");
+    if (head !== null) {
+      top = findProjectRoot(runner, cwd, cwdPrefix, head).dir;
+    } else {
+      let start = cwd;
+      try {
+        start = realpathSync(cwd);
+      } catch {
+        // git answered from this cwd, so it exists; the lexical form walks the same steps.
+      }
+      top = resolve(start, ...Array.from({ length: heldSegments(cwdPrefix, false).length }, () => ".."));
     }
-    top = resolve(start, ...Array.from({ length: depth }, () => ".."));
   } catch (err) {
     if (!(err instanceof GitReadError)) throw err;
-    const reason = sanitizeLabel(`the repository root could not be read (${describeGitFailure(err)}), so no digest is given`);
+    const reason = sanitizeLabel(`the project root could not be read (${describeGitFailure(err)}), so no digest is given`);
     ctx.io.err(`held failed: ${reason}\n`);
     return {
       exitCode: 1,
@@ -2003,7 +2010,7 @@ export const gateCommand: CommandModule = {
       )
       .option(
         "--paths <path...>",
-        "classify these paths by path rules instead of reading the change from git; held: the files to digest, from the repository root",
+        "classify these paths by path rules instead of reading the change from git; held: the files to digest, from the project root",
       )
       .addOption(new Option("--expect <digest>", "held: the digest the files must still give; any other exits 1").argParser(parseDigest))
       .option("--text <file>", "scan this outbound text file instead of the change (with --label)")
@@ -2037,11 +2044,11 @@ export const gateCommand: CommandModule = {
         }
         if (subcommand === HELD) {
           const paths = given["paths"] as string[] | undefined;
-          if (paths === undefined) command.error("error: held needs --paths <files...>, relative to the repository root", { exitCode: 2 });
+          if (paths === undefined) command.error("error: held needs --paths <files...>, relative to the project root", { exitCode: 2 });
           for (const path of paths ?? []) {
             const why = heldPathRefusal(path);
             if (why !== undefined) {
-              command.error(`error: --paths names files relative to the repository root, and ${sanitizeLabel(JSON.stringify(path))} ${why}`, {
+              command.error(`error: --paths names files relative to the project root, and ${sanitizeLabel(JSON.stringify(path))} ${why}`, {
                 exitCode: 2,
               });
             }

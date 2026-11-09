@@ -227,6 +227,37 @@ describe.skipIf(!gitAvailable)("stamity gate held", () => {
     expect(result.doc["digest"]).toBe(expectedDigest(FILES));
   });
 
+  it("reads the paths from the project root when the project sits in a subfolder of its repository (review/14)", async () => {
+    // A committed `app/.stamity/` makes `app/` the project, as `classify` finds it; a same-named file at the git
+    // top-level is the decoy the old read hashed instead.
+    const repo = await seedRepo({
+      "app/.stamity/manifest.json": "{}\n",
+      "app/test/a.test.ts": FILES["test/a.test.ts"],
+      "test/a.test.ts": "it('decoy', () => {});\n",
+    });
+    const git = (args: readonly string[]): void => {
+      execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], {
+        cwd: repo,
+        stdio: "ignore",
+        env: { ...process.env, ...SEED_ENV },
+      });
+    };
+    git(["add", "-A"]);
+    git(["commit", "-q", "-m", "seed"]);
+    const want = expectedDigest({ "test/a.test.ts": FILES["test/a.test.ts"] });
+
+    const fromProject = await heldIn(getRoot().path("repo", "app"), ["--paths", "test/a.test.ts", "--json"]);
+    const fromBelow = await heldIn(getRoot().path("repo", "app", "test"), ["--paths", "test/a.test.ts", "--json"]);
+    const fromTop = await heldIn(repo, ["--paths", "test/a.test.ts", "--json"]);
+
+    expect(fromProject.code).toBe(0);
+    expect(fromProject.doc["digest"]).toBe(want);
+    expect(fromBelow.code).toBe(0);
+    expect(fromBelow.doc["digest"]).toBe(want);
+    // Run from the top-level, the project is the repository itself, so its own file is read.
+    expect(fromTop.doc["digest"]).toBe(expectedDigest({ "test/a.test.ts": "it('decoy', () => {});\n" }));
+  });
+
   it("prints the digest and each file on the terminal", async () => {
     const repo = await seedRepo(FILES);
 
@@ -271,7 +302,8 @@ describe("stamity gate held usage errors (exit 2, before anything is read)", () 
   ])("refuses %s", async (_label, path) => {
     const result = await run(["held", "--paths", "test/a.test.ts", path]);
     expect(result.code).toBe(2);
-    expect(result.stderr).toContain("repository root");
+    // review/14: paths now read from the project root `classify` uses, not the git top-level, and the refusal says so.
+    expect(result.stderr).toContain("project root");
   });
 
   it("refuses a malformed --expect", async () => {
