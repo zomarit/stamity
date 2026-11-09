@@ -199,6 +199,9 @@ const CONTEXT_ONCE_IGNORE_LINE = ".stamity/context-once/";
 /** The client model list cache's ignore line, appended after the context-once folder's; structural, as the canary's. */
 const MODEL_CACHE_IGNORE_LINE = ".stamity/client-models.json";
 
+/** The away marker's and the held list's ignore lines, appended after the cache's; structural, as the canary's. */
+const AWAY_IGNORE_LINES = ".stamity/away.json\n.stamity/away-held.jsonl\n";
+
 /** Claude Code's hook folder; structural, never imported from src/ (cliHarness lane discipline). */
 const CLAUDE_HOOKS_FOLDER = ".claude/hooks/stamity";
 
@@ -460,10 +463,12 @@ describe("a 1.14.0 tree upgrades through the current sync and check (node dist/c
           // markers, so the upgrade appends that folder's line after the marker's.
           // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): the engine now ignores the
           // client model list cache, so the upgrade appends its line last.
+          // TEST CHANGE, justified (n-switch-guard build/4, REQ-FLOW-166): the engine now ignores the away marker
+          // and the held list, so the upgrade appends both after the cache's line; the user's bytes are still held.
           const expected =
             path === ".gitignore"
               ? createHash("sha256")
-                  .update(`${gitignoreBefore}${CANARY_IGNORE_LINE}\n${MARKER_IGNORE_LINE}\n${CONTEXT_ONCE_IGNORE_LINE}\n${MODEL_CACHE_IGNORE_LINE}\n`, "utf8")
+                  .update(`${gitignoreBefore}${CANARY_IGNORE_LINE}\n${MARKER_IGNORE_LINE}\n${CONTEXT_ONCE_IGNORE_LINE}\n${MODEL_CACHE_IGNORE_LINE}\n${AWAY_IGNORE_LINES}`, "utf8")
                   .digest("hex")
               : hash;
           expect(afterFirst.get(path), `the user's ${path} was moved by sync`).toBe(expected);

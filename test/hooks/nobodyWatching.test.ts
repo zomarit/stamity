@@ -10,6 +10,7 @@
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { buildPortableHookRunner, PORTABLE_RUNNER_FILE } from "../../src/hooks/portableRunner.ts";
 import { GITHUB_MCP_ROWS } from "../../src/hooks/personOnly.ts";
@@ -35,7 +36,11 @@ const NO_MODE_BITS = process.platform === "win32" || process.getuid?.() === 0;
 const NO_LINKS = process.platform === "win32";
 
 const ON = { [NOBODY_WATCHING_VARIABLE]: "1" };
-const AWAY_SENTENCE = " Nobody is watching, so it waits for the morning list.";
+// TEST CHANGE, justified (review/18, sign-off S25): outside an unattended run the held refusal names the held list
+// and `stamity away status`, not the run's `morning.md`, which an attended run may not have; and it claims the list
+// only when the line was written.
+const HELD_TAIL = " and is on the held list (`stamity away status`).";
+const NOT_HELD_TAIL = "; the held list could not be written, so name it in your reply.";
 const CANNOT_ASK = "This client cannot ask the person for a click, so the guard refuses it: give the person the exact command.";
 /** Copilot's recorded main session (w4-copilot-ask): the record its session start keeps under the common git directory. */
 const MAIN = "8177e220-4c1d-4b52-9b7e-1f0a6d3c2e11";
@@ -102,9 +107,33 @@ interface Answer {
   stderr: string;
 }
 
-function run(script: string, input: string, env: Record<string, string> = {}): Answer {
-  const result = spawnSync(process.execPath, [script], { input, encoding: "utf8", env: hookEnv(env), timeout: CHILD_TIMEOUT_MS });
+function run(script: string, input: string, env: Record<string, string> = {}, nodeArgs: readonly string[] = []): Answer {
+  const result = spawnSync(process.execPath, [...nodeArgs, script], { input, encoding: "utf8", env: hookEnv(env), timeout: CHILD_TIMEOUT_MS });
   return { status: result.status, stdout: String(result.stdout), stderr: String(result.stderr) };
+}
+
+/**
+ * Node arguments that make every `lstatSync` of the away marker fail with EIO, preloaded before the script runs.
+ * A substitute, at the fs boundary the scripts already have: no real file layout faults the marker's look-up alone,
+ * since the guard reads `.stamity/runs` beside it first and a fault on the shared folder refuses there.
+ */
+function markerFault(): string[] {
+  const preload = getRepo().path("marker-fault.mjs");
+  writeFileSync(
+    preload,
+    [
+      'import fs from "node:fs";',
+      'import { syncBuiltinESMExports } from "node:module";',
+      "const real = fs.lstatSync;",
+      "fs.lstatSync = function (path, ...rest) {",
+      `  if (String(path).endsWith(${JSON.stringify(AWAY_MARKER_FILE.split("/").at(-1))})) throw Object.assign(new Error("EIO: i/o error, lstat"), { code: "EIO", path: String(path) });`,
+      "  return real.call(this, path, ...rest);",
+      "};",
+      "syncBuiltinESMExports();",
+      "",
+    ].join("\n"),
+  );
+  return ["--import", pathToFileURL(preload).href];
 }
 
 /** What a client's answer says: allowed, asked, or refused with its reason. */
@@ -139,9 +168,9 @@ function askedAct(reason: string): { act: string; rule: string } {
   return { act: hit[1] ?? "", rule: hit[2] ?? "" };
 }
 
-/** The refusal the switch gives an act: the unattended sentence, then the morning list. */
-function heldReason(act: string, rule: string): string {
-  return `${act} is a person-only act (\`${rule}\`) and this run is unattended: list it on the run's summary list (\`morning.md\`), whose walk runs it after one click.${AWAY_SENTENCE}`;
+/** The refusal the switch gives an act outside an unattended run: it waits for a person, on the held list or not. */
+function heldReason(act: string, rule: string, held = true): string {
+  return `${act} is a person-only act (\`${rule}\`) and nobody is watching: it waits for a person${held ? HELD_TAIL : NOT_HELD_TAIL}`;
 }
 
 /** The held list's lines, parsed; none when the file is absent. */
@@ -179,7 +208,10 @@ describe("the guard while nobody is watching (REQ-FLOW-166)", () => {
       expect(before.kind, command).toBe("ask");
       const { act, rule } = askedAct(before.kind === "ask" ? before.reason : "");
       expect(heldLines(), command).toHaveLength(index);
-      expect(said("claude", run(guard, payload("claude", command), ON)), command).toEqual({ kind: "refuse", reason: heldReason(act, rule) });
+      const after = said("claude", run(guard, payload("claude", command), ON));
+      expect(after, command).toEqual({ kind: "refuse", reason: heldReason(act, rule) });
+      // review/18 (S25): an attended session may hold no run's summary list, so the refusal does not send the agent to one.
+      expect(after.kind === "refuse" ? after.reason : "", command).not.toContain("morning.md");
       const lines = heldLines();
       expect(lines, command).toHaveLength(index + 1);
       expectHeld(lines[index], act, rule, "claude", command);
@@ -193,7 +225,8 @@ describe("the guard while nobody is watching (REQ-FLOW-166)", () => {
     expect(before).toEqual({ kind: "refuse", reason: expect.stringContaining(CANNOT_ASK) as unknown as string });
     const after = said(tool, run(guard, payload(tool, command), ON));
     expect(after.kind).toBe("refuse");
-    expect(after.kind === "refuse" ? after.reason : "").toMatch(/Nobody is watching, so it waits for the morning list\.$/);
+    // TEST CHANGE, justified (review/18, sign-off S25): the held refusal names the held list, not the morning list.
+    expect(after.kind === "refuse" ? after.reason : "").toMatch(/ and nobody is watching: it waits for a person and is on the held list \(`stamity away status`\)\.$/);
     expect(after.kind === "refuse" ? after.reason : "").not.toContain(CANNOT_ASK);
     const lines = heldLines();
     expect(lines).toHaveLength(1);
@@ -250,6 +283,19 @@ describe("the guard while nobody is watching (REQ-FLOW-166)", () => {
     expect(said("claude", run(guard, payload("claude", command))).kind).toBe("ask");
   });
 
+  it("refuses, naming the fault, when the away marker cannot be looked for, and holds nothing", async () => {
+    const guard = await placeGuard("claude");
+    const command = "npm publish";
+    // Non-degenerate: switch off and no marker, the same call asks.
+    expect(said("claude", run(guard, payload("claude", command))).kind).toBe("ask");
+    // review/17: a fault other than a missing marker fails closed; a catch reading it as absent would ask here.
+    expect(said("claude", run(guard, payload("claude", command), {}, markerFault()))).toEqual({
+      kind: "refuse",
+      reason: expect.stringMatching(/^The person-only guard could not decide this shell call \(EIO on .*away\.json\), so it is refused \(REQ-FLOW-102\)\.$/) as unknown as string,
+    });
+    expect(heldLines()).toEqual([]);
+  });
+
   it("reads the variable as readsUnattended does: empty, 0 and false are off, anything else is on", async () => {
     const guard = await placeGuard("claude");
     const command = "npm publish";
@@ -261,6 +307,13 @@ describe("the guard while nobody is watching (REQ-FLOW-166)", () => {
       expect(said("claude", run(guard, payload("claude", command), { [NOBODY_WATCHING_VARIABLE]: on })).kind, on).toBe("refuse");
     }
     expect(heldLines()).toHaveLength(3);
+  });
+});
+
+describe("the suite's own environment (build/5)", () => {
+  it("runs every test file with the switch off, so a shell that has it on still tests the asks", () => {
+    // vitest.config.ts sets it to "" in every worker; a child spawned with this env inherits it off.
+    expect(process.env[NOBODY_WATCHING_VARIABLE]).toBe("");
   });
 });
 
@@ -303,28 +356,36 @@ describe("what the switch leaves alone (a strict tightening)", () => {
 });
 
 describe("the held list's write", () => {
+  // TEST CHANGE, justified (review/18, sign-off S25): each unwritten case now pins the sentence that does not claim the
+  // held list, where it only pinned a refusal; the refusal itself is unchanged.
+  /** The refusal that does not claim the held list, for the act and rule the same call's attended ask names. */
+  function notHeld(guard: string, command: string): Said {
+    const asked = said("claude", run(guard, payload("claude", command)));
+    expect(asked.kind).toBe("ask");
+    const { act, rule } = askedAct(asked.kind === "ask" ? asked.reason : "");
+    return { kind: "refuse", reason: heldReason(act, rule, false) };
+  }
+
   it.skipIf(NO_LINKS)("follows no link at its path: the target stays as it was, and the call is still refused", async () => {
     const guard = await placeGuard("claude", { "outside.txt": "keep\n" });
     symlinkSync(getRepo().path("outside.txt"), getRepo().path(...AWAY_HELD_FILE.split("/")));
-    expect(said("claude", run(guard, payload("claude", "npm publish"), ON)).kind).toBe("refuse");
+    expect(said("claude", run(guard, payload("claude", "npm publish"), ON))).toEqual(notHeld(guard, "npm publish"));
     expect(readFileSync(getRepo().path("outside.txt"), "utf8")).toBe("keep\n");
   });
 
-  it("still refuses when a folder stands at its path", async () => {
+  it("still refuses when a folder stands at its path, and does not claim the held list", async () => {
     const guard = await placeGuard("claude");
     mkdirSync(getRepo().path(...AWAY_HELD_FILE.split("/")), { recursive: true });
-    expect(said("claude", run(guard, payload("claude", "npm publish"), ON)).kind).toBe("refuse");
+    expect(said("claude", run(guard, payload("claude", "npm publish"), ON))).toEqual(notHeld(guard, "npm publish"));
   });
 
-  it.skipIf(NO_MODE_BITS)("still refuses when the state folder cannot be written, and writes nothing", async () => {
+  it.skipIf(NO_MODE_BITS)("still refuses when the state folder cannot be written, writes nothing, and does not claim the held list", async () => {
     const guard = await placeGuard("claude");
     const state = getRepo().path(".stamity");
+    const expected = notHeld(guard, "npm publish");
     chmodSync(state, 0o555);
     try {
-      expect(said("claude", run(guard, payload("claude", "npm publish"), ON))).toEqual({
-        kind: "refuse",
-        reason: expect.stringMatching(/Nobody is watching, so it waits for the morning list\.$/) as unknown as string,
-      });
+      expect(said("claude", run(guard, payload("claude", "npm publish"), ON))).toEqual(expected);
     } finally {
       chmodSync(state, 0o755);
     }
@@ -334,15 +395,15 @@ describe("the held list's write", () => {
 
 describe("Copilot's portable runner while nobody is watching (REQ-FLOW-166)", () => {
   /** The runner where emission writes it, running `check.mjs`, whose stdout is `decision`; returns a run of it. */
-  async function placeRunner(tool: Tool, decision: string): Promise<(env?: Record<string, string>) => Answer> {
+  async function placeRunner(tool: Tool, decision: string): Promise<(env?: Record<string, string>, nodeArgs?: readonly string[]) => Answer> {
     await getRepo().seedFiles({
       [`.stamity/generated/hooks/${tool}/${PORTABLE_RUNNER_FILE}`]: buildPortableHookRunner(tool),
       "check.mjs": `process.stdout.write(${JSON.stringify(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: decision, permissionDecisionReason: "Review first" } }))});\n`,
     });
     const runner = getRepo().path(".stamity", "generated", "hooks", tool, PORTABLE_RUNNER_FILE);
     const row = Buffer.from(JSON.stringify({ event: "pre_tool_use", command: [process.execPath, "check.mjs"] })).toString("base64url");
-    return (env = {}) => {
-      const result = spawnSync(process.execPath, [runner, row], {
+    return (env = {}, nodeArgs = []) => {
+      const result = spawnSync(process.execPath, [...nodeArgs, runner, row], {
         input: JSON.stringify({ toolName: "bash", toolArgs: { command: "pwd" } }),
         encoding: "utf8",
         env: hookEnv(env),
@@ -365,6 +426,17 @@ describe("Copilot's portable runner while nobody is watching (REQ-FLOW-166)", ()
     expect(on.stderr).toContain("nobody is watching");
     await getRepo().seedFiles({ [AWAY_MARKER_FILE]: "{}\n" });
     expect(decision(execute())).toBe("deny");
+  });
+
+  it("denies a hook's ask when the away marker cannot be looked for", async () => {
+    const execute = await placeRunner("copilot", "ask");
+    const decision = (answer: Answer): unknown => (JSON.parse(answer.stdout) as Record<string, unknown>).permissionDecision;
+    // Non-degenerate: switch off and no marker, the ask stays an ask.
+    expect(decision(execute())).toBe("ask");
+    // review/17: a look-up fault counts as the marker present; a catch reading it as absent would keep the ask.
+    const faulted = execute({}, markerFault());
+    expect(faulted.status).toBe(0);
+    expect(JSON.parse(faulted.stdout)).toEqual({ permissionDecision: "deny", permissionDecisionReason: "Review first" });
   });
 
   it.each(["allow", "deny"])("leaves a hook's %s as it was under the switch", async (verdict) => {

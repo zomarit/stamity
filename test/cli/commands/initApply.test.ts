@@ -332,12 +332,13 @@ describe("applyInit — fresh repo", () => {
 });
 
 describe("applyInit — the .gitignore lines it records (REQ-FLOW-016)", () => {
-  it("writes no .env.mcp line for codex with no MCP server, and the other seven", async () => {
+  it("writes no .env.mcp line for codex with no MCP server, and the other nine", async () => {
     const root = await makeRepo();
     const report = await applyInit(optionsFor(root, { decisions: decisionsFor(root, { tools: ["codex"] }) }));
 
     expect(report.gitignoreAdded).toEqual(CLIENT_ENTRIES);
-    expect(CLIENT_ENTRIES).toHaveLength(7);
+    // TEST CHANGE, justified (n-switch-guard build/4, REQ-FLOW-166): nine, not seven, since the engine now ignores the away marker and the held list.
+    expect(CLIENT_ENTRIES).toHaveLength(9);
     expect(await readFile(join(root, ".gitignore"), "utf8")).toBe(`${CLIENT_ENTRIES.join("\n")}\n`);
     expect((await readManifest(root))?.ledger).toEqual([gitignoreRow("codex")]);
   });

@@ -337,7 +337,10 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     // TEST CHANGE, justified (n-switch-guard, REQ-FLOW-166, 2026-11-09): both rows moved, bytes from 331,435 to 333,505
     // and lines from 6,863 to 6,910, the measured size of the largest copy (copilot), since the guard now reads the
     // nobody-watching switch for an ask and holds the act on the morning list.
-    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 333_505, lines: 6_910 });
+    // TEST CHANGE, justified (n-switch-guard fix round 1, review/18, sign-off S25): both rows moved, bytes from 333,505
+    // to 333,878 and lines from 6,910 to 6,915, the measured size of the largest copy (copilot), since the held refusal
+    // now names the held list and claims it only when its line was written.
+    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 333_878, lines: 6_915 });
     const guards = renders.filter((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
     expect(guards).toHaveLength(TOOLS.length);
     for (const script of guards) expect(budgetViolation(script), script.tool).toBeUndefined();

@@ -203,7 +203,11 @@ export default defineConfig({
     // an env built fresh does not get it: the CLI harness
     // (test/support/cliHarness.ts) sets the switch in its own fixed env. A case
     // that exercises the probe hands its command an env without it.
-    env: { ...tempRoot.env, STAMITY_NO_CLIENT_PROBE: "1" },
+    //
+    // The nobody-watching switch (REQ-FLOW-166) is set off the same way: a suite
+    // started from a shell with it on would turn every ask case the hook tests
+    // pin into a refusal. A case that tests the switch sets it on its child.
+    env: { ...tempRoot.env, STAMITY_NO_CLIENT_PROBE: "1", STAMITY_NOBODY_WATCHING: "" },
     environment: "node",
     // Child-process cases shell out to the CLI entry; 20s is generous for a cold start
     // and still fails fast if a spawn hangs. On win32 the parallel project raises it (see

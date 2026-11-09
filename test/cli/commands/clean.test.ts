@@ -461,6 +461,9 @@ describe("clean — the .gitignore lines setup recorded", () => {
     ".stamity/run-ended.json",
     ".stamity/context-once/",
     ".stamity/client-models.json",
+    // TEST CHANGE, justified (n-switch-guard build/4, REQ-FLOW-166): init now records the away marker and the held list too.
+    ".stamity/away.json",
+    ".stamity/away-held.jsonl",
   ];
 
   async function initialised(): Promise<string> {

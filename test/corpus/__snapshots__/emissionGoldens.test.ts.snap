@@ -6910,7 +6910,7 @@ try { main(); } catch (error) {
 exports[`emission goldens — hook scripts > preserves the deterministic portable runner bytes for copilot 1`] = `
 "#!/usr/bin/env node
 /* eslint-disable */
-import { accessSync, constants, readFileSync, realpathSync, statSync } from "node:fs";
+import { accessSync, constants, lstatSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -6967,6 +6967,16 @@ function launcherPath(name, cwd) {
     }
   }
   throw safeError("Hook process failed (launcher " + JSON.stringify(name) + " not found on PATH outside the folder the hook runs in)");
+}
+
+// Whether nobody is watching (REQ-FLOW-166, src/hooks/scripts.ts in the engine
+// that wrote this file): STAMITY_NOBODY_WATCHING set to anything but "", "0"
+// or "false", or the away marker present under the repository, a link among it.
+// A marker that cannot be looked for counts as present: it only tightens.
+function nobodyWatching(root) {
+  const flag = (process.env.STAMITY_NOBODY_WATCHING ?? "").trim().toLowerCase();
+  if (!["", "false", "0"].includes(flag)) return true;
+  try { lstatSync(join(root, ...[".stamity","away.json"])); return true; } catch (error) { return !(error && ["ENOENT", "ENOTDIR"].includes(error.code)); }
 }
 
 function main() {
@@ -7169,7 +7179,11 @@ function main() {
         if (decision === "ask") warn("Cursor has no ask decision; denied pending manual permission review");
         out.user_message = reason;
       } else {
-        out.permissionDecision = decision;
+        // Nobody is watching (REQ-FLOW-166): an ask would wait for nobody, so
+        // it becomes a denial held for the morning.
+        const away = decision === "ask" && nobodyWatching(cwd);
+        if (away) warn("nobody is watching; an ask is denied and waits for the morning list");
+        out.permissionDecision = away ? "deny" : decision;
         out.permissionDecisionReason = reason;
       }
     } else if (TOOL === "cursor") {

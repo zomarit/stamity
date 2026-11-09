@@ -32,7 +32,14 @@ import type { Tool } from "../types/core.ts";
 import type { AutonomousAct, AutonomyMode, AutoShipConfig, DeployingAct, LandJobConfig, ReviewToolConfig } from "../types/manifest.ts";
 import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE, HOOKS_ACTIVE_ENV, STATE_DIR } from "../types/markers.ts";
-import { CONTEXT_ONCE_DIR, PREFLIGHT_CANARY_FILE, RUN_ENDED_MARKER_FILE, RUN_ENDED_MAX_AGE_MS } from "../mcp/env.ts";
+import {
+  AWAY_HELD_FILE,
+  AWAY_MARKER_FILE,
+  CONTEXT_ONCE_DIR,
+  PREFLIGHT_CANARY_FILE,
+  RUN_ENDED_MARKER_FILE,
+  RUN_ENDED_MAX_AGE_MS,
+} from "../mcp/env.ts";
 import { buildCardBranchSource, buildResumeCardSource, RESUME_CARD_HOST_NAMES } from "../runs/cardSource.ts";
 import {
   DEBUG_RUN_SEGMENT,
@@ -385,7 +392,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // Moved again 2026-11-09 by plan 024's n-switch-guard (REQ-FLOW-166, base 4f945a3a), by what was measured: 333,505
   // bytes / 6,910 lines (copilot, generated), past both rows, because the guard now reads the nobody-watching switch for
   // an ask and holds the act on the morning list. 331,435 + 2,070 = 333,505 bytes; 6,863 + 47 = 6,910 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 333_505, lines: 6_910 },
+  // Moved again 2026-11-09 by that unit's first fix round (review/18, sign-off S25), by what was measured: 333,878
+  // bytes / 6,915 lines (copilot, generated), past both rows, because the held refusal now names the held list and says
+  // so only when its line was written. 333,505 + 373 = 333,878 bytes; 6,910 + 5 = 6,915 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 333_878, lines: 6_915 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -4508,18 +4518,11 @@ if (told !== null) {
 export const NOBODY_WATCHING_VARIABLE = "STAMITY_NOBODY_WATCHING";
 
 /**
- * The away marker (REQ-FLOW-166): present, a link among it, it turns the switch
- * on as {@link NOBODY_WATCHING_VARIABLE} does. Machine-local: a committed copy
- * would refuse every ask in every checkout of the branch.
+ * The away marker and the held list (REQ-FLOW-166), defined beside the other
+ * machine-local files (`../mcp/env.ts`) so the `.gitignore` lane can name them
+ * without importing this module. Re-exported under the same names.
  */
-export const AWAY_MARKER_FILE = `${STATE_DIR}/away.json`;
-
-/**
- * The held list (REQ-FLOW-166): one JSON line, `{"at","rule","act","client"}`,
- * per ask the guard refused while nobody was watching, never the command text.
- * Machine-local, like the marker.
- */
-export const AWAY_HELD_FILE = `${STATE_DIR}/away-held.jsonl`;
+export { AWAY_HELD_FILE, AWAY_MARKER_FILE } from "../mcp/env.ts";
 
 /**
  * The person-only shell guard (REQ-FLOW-102, REQ-FLOW-120, REQ-FLOW-123,
@@ -5631,11 +5634,14 @@ function nobodyWatching(root) {
 /**
  * An attended ask's decision while nobody is watching (REQ-FLOW-166): refused and noted on the held list, never the
  * command text; any other decision, a sub-agent's refused ask among them, is returned as it is. The note is the
- * canary's write, a link at its path not followed, and a failed one leaves the refusal as it is.
+ * canary's write, a link at its path not followed, and a failed one leaves the refusal as it is. Only reached outside
+ * an unattended run, so the sentence names the held list, not a run's morning list (S25); it claims the list only
+ * when the line was written.
  */
 function heldForMorning(decision, root, act, rule) {
   if (!decision.ask || !nobodyWatching(root)) return decision;
   const path = join(root, ...HELD_SEGMENTS);
+  let held = false;
   try {
     let other = false;
     try {
@@ -5646,11 +5652,13 @@ function heldForMorning(decision, root, act, rule) {
     if (!other) {
       mkdirSync(dirname(path), { recursive: true });
       writeFileSync(path, JSON.stringify({ at: new Date().toISOString(), rule, act, client: CLIENT }) + "\n", { flag: "a" });
+      held = true;
     }
   } catch {
-    // Not written: the refusal stands, and the morning list misses this line.
+    // Not written: the refusal stands, and the sentence does not claim the held list.
   }
-  return { ask: false, reason: unattendedSentence(act, rule) + " Nobody is watching, so it waits for the morning list." };
+  const where = held ? " and is on the held list (\`stamity away status\`)." : "; the held list could not be written, so name it in your reply.";
+  return { ask: false, reason: act + " is a person-only act (\`" + rule + "\`) and nobody is watching: it waits for a person" + where };
 }
 
 `}${attendedAskSource(opts.tool)}${String.raw`

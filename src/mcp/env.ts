@@ -226,6 +226,21 @@ export const CONTEXT_ONCE_GITIGNORE_ENTRY = `${CONTEXT_ONCE_DIR}/`;
 export const CLIENT_MODELS_CACHE_FILE = `${STATE_DIR}/client-models.json`;
 
 /**
+ * The away marker (REQ-FLOW-166): present, a link among it, it turns the
+ * nobody-watching switch on as `STAMITY_NOBODY_WATCHING` does. Machine-local: a
+ * committed copy would refuse every ask in every checkout of the branch.
+ */
+export const AWAY_MARKER_FILE = `${STATE_DIR}/away.json`;
+
+/**
+ * The held list (REQ-FLOW-166): one JSON line, `{"at","rule","act","client"}`,
+ * per ask the guard refused while nobody was watching, never the command text.
+ * Machine-local, like the marker: a committed copy would carry one machine's
+ * held acts into every checkout.
+ */
+export const AWAY_HELD_FILE = `${STATE_DIR}/away-held.jsonl`;
+
+/**
  * Paths this engine writes that must never reach a commit: the credential
  * file, and the review gate's runtime state — its counter, the lock directory
  * beside it, and the temp files its publish renames over the counter. The gate
@@ -251,6 +266,8 @@ export const REQUIRED_GITIGNORE_ENTRIES: readonly string[] = [
   RUN_ENDED_MARKER_FILE,
   CONTEXT_ONCE_GITIGNORE_ENTRY,
   CLIENT_MODELS_CACHE_FILE,
+  AWAY_MARKER_FILE,
+  AWAY_HELD_FILE,
 ];
 
 /** What {@link GITIGNORE_ENTRY_WHEN} reads of a setup. */
@@ -267,11 +284,12 @@ const anyClient = (setup: GitignoreSetup): boolean => setup.tools.length > 0;
 /**
  * When a setup needs each of {@link REQUIRED_GITIGNORE_ENTRIES} (decision E1,
  * REQ-FLOW-016). Fixed, not derived: the credential file's line only when a
- * selected server needs a credential, and each of the other seven whenever any
+ * selected server needs a credential, and each of the other nine whenever any
  * client is set up, because each of their writers serves every client — the
  * review gate's state is written by the hidden `gate` verb for any client, the
  * canary and the run-ended marker by the guard and `run`, the context-once
- * markers by the shared hook scripts, the model cache by `init` and `sync`.
+ * markers by the shared hook scripts, the model cache by `init` and `sync`, the
+ * held list by the guard every client runs, and the away marker by the CLI.
  * `test/mcp/env.test.ts` holds the census of those writers and these keys equal
  * to the list, so a new entry or writer meets this table first.
  */
@@ -284,6 +302,8 @@ export const GITIGNORE_ENTRY_WHEN: Readonly<Record<string, (setup: GitignoreSetu
   [RUN_ENDED_MARKER_FILE]: anyClient,
   [CONTEXT_ONCE_GITIGNORE_ENTRY]: anyClient,
   [CLIENT_MODELS_CACHE_FILE]: anyClient,
+  [AWAY_MARKER_FILE]: anyClient,
+  [AWAY_HELD_FILE]: anyClient,
 });
 
 /**
@@ -344,7 +364,9 @@ const DOMINATING_PATTERNS: Record<string, readonly string[]> = {
         ...(entry === PREFLIGHT_CANARY_FILE ||
         entry === RUN_ENDED_MARKER_FILE ||
         entry === CONTEXT_ONCE_GITIGNORE_ENTRY ||
-        entry === CLIENT_MODELS_CACHE_FILE
+        entry === CLIENT_MODELS_CACHE_FILE ||
+        entry === AWAY_MARKER_FILE ||
+        entry === AWAY_HELD_FILE
           ? STATE_DIR_DOMINATORS
           : REVIEW_GATE_DOMINATORS),
       ],

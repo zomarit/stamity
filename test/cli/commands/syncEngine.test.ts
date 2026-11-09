@@ -1148,6 +1148,9 @@ describe("the review gate's state is ignored on sync", () => {
       ".stamity/context-once/",
       // TEST CHANGE, justified (v17-model-list-cache, REQ-LADDER-009): the engine now ignores the client model list cache, so a sync adds it too.
       ".stamity/client-models.json",
+      // TEST CHANGE, justified (n-switch-guard build/4, REQ-FLOW-166): the engine now ignores the away marker and the held list, so a sync adds both.
+      ".stamity/away.json",
+      ".stamity/away-held.jsonl",
     ];
 
     const firstPlan = await planSync(root, ENGINE_VERSION);
@@ -1204,7 +1207,7 @@ describe("the review gate's state is ignored on sync", () => {
   const gitignoreRows = async (root: string): Promise<LedgerEntry[]> =>
     ((await readManifest(root))?.ledger ?? []).filter((row) => row.path === ".gitignore");
 
-  /** The seven entries every client setup ignores (decision E1): all but `.env.mcp`. */
+  /** The entries every client setup ignores (decision E1): all but `.env.mcp`. */
   const MACHINE_LOCAL = [
     ".stamity/review-gate.json",
     ".stamity/review-gate.json.lock",
@@ -1213,9 +1216,12 @@ describe("the review gate's state is ignored on sync", () => {
     ".stamity/run-ended.json",
     ".stamity/context-once/",
     ".stamity/client-models.json",
+    // TEST CHANGE, justified (n-switch-guard build/4, REQ-FLOW-166): the engine now ignores the away marker and the held list.
+    ".stamity/away.json",
+    ".stamity/away-held.jsonl",
   ];
 
-  it("keeps all seven machine-local lines when the client changes, and records them on the new client's row (decision E1)", async () => {
+  it("keeps all the machine-local lines when the client changes, and records them on the new client's row (decision E1)", async () => {
     const handle = tempDir();
     const root = await seedRepo(handle);
     await liveSync(root, T1);
