@@ -166,9 +166,9 @@ Every sub-agent returns a structured result, read without its transcript:
   the reviewer, each lens, the implementer and the fixer; `security:` in
   full, or `none`; `contract delta:` census rows, or `none` — then at most
   1,500 characters of prose. The cap binds the prose only.
-- **Never digested:** a BLOCKED_* return and a red test-runner return, beside
-  the full returns above. Open the report when a digest line is not enough to
-  act on.
+- **Never digested:** a BLOCKED_* return and a red test-runner return. Open a report when a digest is not enough.
+  Each test-runner brief names a fresh random spawn token made for that spawn alone, new on every retry, held only in the orchestrator's context and that brief, never written to the run record or any file a builder's shell can read before the report is read.
+  An empty or unreadable test-runner return is read from its report only if its first line is `spawn: <that exact token>`, else each gate reads `unknown` and the failure ladder runs.
 - **Report path:** `.stamity/runs/<run-id>/reports/<pass>-<role>-r<N>.md`,
   always under the main checkout's run folder. `<pass>` is the plan unit id,
   `branch` for a whole-branch pass or `plan` for planning research; a client

@@ -10,8 +10,9 @@
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
 // Reads outside repo state: the pending call's payload on stdin and the
-// STAMITY_UNATTENDED and STAMITY_REPO_ROOT variables. Reads the run records'
-// heads and the run-ended marker; writes nothing.
+// STAMITY_UNATTENDED, STAMITY_NOBODY_WATCHING and STAMITY_REPO_ROOT variables.
+// Reads the away marker, the run records' heads and the run-ended marker;
+// writes nothing. While nobody is watching it reads no record and refuses.
 
 import { closeSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
@@ -35,6 +36,8 @@ const ASK_TOOL = "AskUserQuestion";
 const REASON = "This run is unattended: take the declared default and record `Default applied: <question> → option <N> (unattended)`; with no declared default, stop at BLOCKED_AMBIGUITY.";
 const RECORD_SOURCE = " (<record> is in progress and reads `Mode: unattended`.)";
 const VARIABLE_SOURCE = " (STAMITY_UNATTENDED is set, and no in-progress record reads `Mode: attended`.)";
+const AWAY_SOURCE = " (nobody is watching: STAMITY_NOBODY_WATCHING is set or .stamity/away.json is present.)";
+const AWAY_SEGMENTS = [".stamity","away.json"];
 const FAULT_NOTE = "stamity unattended ask gate: <read> could not be read (<cause>), so the question goes through.";
 const BLOCK_EXIT = 2;
 
@@ -208,10 +211,36 @@ function unattendedSource(root) {
   return VARIABLE_SOURCE;
 }
 
-/** The source of the refusal this call earns, or null when the call goes through. */
+/**
+ * Whether nobody is watching (REQ-FLOW-166): the variable set to anything but "", "0" or "false", or the away marker
+ * present, a link among it; a marker the gate cannot look for reads as absent, so the question stays the safe failure.
+ */
+function nobodyWatching() {
+  const flag = (process.env.STAMITY_NOBODY_WATCHING ?? "").trim().toLowerCase();
+  if (!["", "false", "0"].includes(flag)) return true;
+  try {
+    lstatSync(join(repoRoot(), ...AWAY_SEGMENTS));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The source of the refusal this call earns, or null when the call goes through. The switch is read first: on, only a
+ * payload naming another tool goes through, and one that cannot be read refuses; no record is read.
+ */
 function decide() {
-  const raw = readFileSync(0, "utf8");
-  const payload = raw.trim() === "" ? null : JSON.parse(raw);
+  const away = nobodyWatching();
+  let payload = null;
+  try {
+    const raw = readFileSync(0, "utf8");
+    payload = raw.trim() === "" ? null : JSON.parse(raw);
+  } catch (error) {
+    if (away) return AWAY_SOURCE;
+    throw error;
+  }
+  if (away) return typeof payload?.tool_name === "string" && payload.tool_name !== ASK_TOOL ? null : AWAY_SOURCE;
   if (payload === null || typeof payload !== "object" || payload.tool_name !== ASK_TOOL) return null;
   return unattendedSource(repoRoot());
 }

@@ -30,8 +30,8 @@ before the first write means ask.
    different artifacts.
 2. **Multiple valid interpretations** — two or more approaches differ materially
    in cost, blast radius, or scope, and the request does not pick one.
-3. **Irreversible action** — deleting data, dropping a column, renaming a public identifier, a deploy,
-   a message sent outside the repository (the run's own pull request aside), rewriting shared history. A force push stays the person's, even on a yes.
+3. **Irreversible or outward action** — an act that cannot be undone or that reaches people outside the repository:
+   a release users receive, a message sent outside it (the run's own pull request aside), deleting data, dropping a column, renaming a public identifier, rewriting shared history. A force push stays the person's, even on a yes.
 4. **Missing acceptance criteria** — no testable definition of done for the
    change requested.
 5. **Unattested product decision** — the change moves user-visible behaviour or
@@ -83,16 +83,16 @@ should be added?") spends the same turn and resolves nothing.
 
 ## Close walk
 
-A run that ends with leftovers (open findings, deferred items, questions still
-undecided) walks them before it reports. No leftovers, no walk.
+A run that ends with leftovers (open findings, deferred items, questions still undecided, the review
+tool's unfixed comments on the run's pull request) walks them before it reports. No leftovers, no walk.
 
-- Each leftover is one question in the client's own question tool: Critical,
-  Warning and `decision-waiting` items first, the recommended option first, every
-  option with its one-line trade-off, and a declared default (item 6).
+- The walk opens with two plain lines on what is left, not on what the run did. Each leftover is one question in the
+  client's own question tool, its reason one plain line: Critical, Warning and `decision-waiting` items
+  first, the recommended option first, every option with its one-line trade-off, and a declared default (item 6).
 - Related questions bundle into one call up to the tool's per-call limit; the
   rest follow in further rounds, one ask per turn, until none is undecided.
-- The summary or proof block prints after the last answer, and nothing prints
-  after it. A summary printed while a leftover is still open is the defect.
+- The run's closing report (its summary, or a flow's proof block) prints after the last answer, and
+  nothing prints after it. A closing report printed while a leftover is still open is the defect.
 - With nobody to answer (item 8), each leftover takes its declared default and
   the run writes its `Default applied:` line. A real defect is never defaulted
   to dropped: it waits as `decision-waiting`. A question a headless client

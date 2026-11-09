@@ -32,18 +32,24 @@ instead of failing, since a batch job reading everything is the job.
 continuation form.
 How: cross the route or handler inventory with the parameters each accepts;
 default page size and maximum page size both stated.
-Threshold: 100% of list endpoints; a maximum above 1,000 rows is a hit.
+Threshold: 100% of list endpoints; a maximum above the page-size ceiling the
+repo declares is a hit. With no ceiling declared, report each maximum as
+evidence, citing the absent ceiling as the detection fact, and judge the row on
+the 100% alone.
 
 **`scale-local-state`** — process-local state on a horizontally scaled tier.
 How: census module-level mutable bindings, in-process caches keyed by a user or
 tenant identifier, and in-memory session storage reachable from a handler.
 Threshold: 0. Each hit names the state and the request path that reads it.
 
-**`scale-pool-config`** — connection and worker pools declare a ceiling.
+**`scale-pool-config`** — connection and worker pool ceilings sit within the repo's declared limit.
 How: read the detected datastore client, HTTP client, and worker configuration
 for a maximum-connections or maximum-concurrency setting.
-Threshold: present and written as a number rather than left to a library
-default; a missing ceiling is a hit even when the default happens to fit.
+Threshold: the pool limit the repo declares (its configuration, a datastore
+connection cap, a capacity note); a ceiling above it, or none where one is
+declared, is a hit. With no limit declared, report the ceiling in effect, naming
+a library default as one, as evidence and record the row `not-applicable`,
+citing the absent limit as the detection fact.
 
 ## Judgment checks
 

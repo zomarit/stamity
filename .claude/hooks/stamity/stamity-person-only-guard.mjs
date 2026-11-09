@@ -15,13 +15,16 @@
 // The autonomy setting this copy was written for is the marker line below the
 // banner: the acts it names in `runs` run unasked, and a deploying branch or act
 // asks (REQ-FLOW-137). A commit status or check run write is refused in every mode.
+// While nobody is watching (STAMITY_NOBODY_WATCHING or .stamity/away.json),
+// an act it would ask about is refused and noted in .stamity/away-held.jsonl.
 //
 // Generated file — regenerate it rather than editing; local edits are overwritten.
 // Trust posture: exec form, repo-committed, no dynamic evaluation, no network reach.
 // Reads outside repo state: the pending call's payload on stdin and the
-// STAMITY_UNATTENDED, STAMITY_REPO_ROOT, GH_REPO and GH_HOST variables. Reads the
-// git metadata, the remotes in the git config, and the run records' heads;
-// writes only the pre-flight canary.
+// STAMITY_UNATTENDED, STAMITY_NOBODY_WATCHING, STAMITY_REPO_ROOT, GH_REPO and GH_HOST
+// variables. Reads the git metadata, the remotes in the git config, the away
+// marker and the run records' heads; writes only the pre-flight canary and the
+// held list.
 // stamity-autonomy {"mode":"autonomous","runs":["pr-ready","tag"],"deployingBranches":[],"deploying":[]}
 
 import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, readlinkSync, statSync, writeFileSync } from "node:fs";
@@ -49,6 +52,9 @@ const INCLUDE_FILES_MAX = 64;
 const INCLUDE_BYTES_MAX = 4194304;
 const PLACES_MAX = 32;
 const CANARY_SEGMENTS = [".stamity","preflight-canary.json"];
+const AWAY_SEGMENTS = [".stamity","away.json"];
+const HELD_SEGMENTS = [".stamity","away-held.jsonl"];
+const CLIENT = "claude";
 const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Shell", "bash", "powershell", "shell"]);
 // The GitHub MCP server's person-only tools and whether each is ask-class (personOnly.ts, GITHUB_MCP_ROWS).
 const MCP_ROWS = new Map([["mcp__github__merge_pull_request",true],["mcp__github__push_files",true],["mcp__github__create_or_update_file",true],["mcp__github__delete_file",true],["mcp__github__update_pull_request_branch",true],["mcp__github__pull_request_review_write",true],["mcp__github__create_pull_request_review",true],["mcp__github__submit_pending_pull_request_review",true],["mcp__github__update_pull_request",true],["mcp__github__update_pull_request_state",true],["mcp__github__update_pull_request_draft_state",true],["mcp__github__create_branch",true],["mcp__github__delete_repository",false],["mcp__github__create_pull_request",true]]);
@@ -5329,6 +5335,52 @@ function unattendedSentence(act, rule) {
   return act + " is a person-only act (\`" + rule + "\`) and this run is unattended: list it on the run's summary list (\`morning.md\`), whose walk runs it after one click.";
 }
 
+/**
+ * Whether nobody is watching (REQ-FLOW-166): the variable set to anything but "", "0" or "false", or the away marker
+ * present, a link among it. A marker this guard cannot look for throws, so the call is refused.
+ */
+function nobodyWatching(root) {
+  const flag = (process.env.STAMITY_NOBODY_WATCHING ?? "").trim().toLowerCase();
+  if (!["", "false", "0"].includes(flag)) return true;
+  try {
+    lstatSync(join(root, ...AWAY_SEGMENTS));
+    return true;
+  } catch (error) {
+    if (error && (error.code === "ENOENT" || error.code === "ENOTDIR")) return false;
+    throw error;
+  }
+}
+
+/**
+ * An attended ask's decision while nobody is watching (REQ-FLOW-166): refused and noted on the held list, never the
+ * command text; any other decision, a sub-agent's refused ask among them, is returned as it is. The note is the
+ * canary's write, a link at its path not followed, and a failed one leaves the refusal as it is. Only reached outside
+ * an unattended run, so the sentence names the held list, not a run's morning list (S25); it claims the list only
+ * when the line was written.
+ */
+function heldForMorning(decision, root, act, rule) {
+  if (!decision.ask || !nobodyWatching(root)) return decision;
+  const path = join(root, ...HELD_SEGMENTS);
+  let held = false;
+  try {
+    let other = false;
+    try {
+      other = !lstatSync(path).isFile();
+    } catch {
+      // Absent: written below.
+    }
+    if (!other) {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, JSON.stringify({ at: new Date().toISOString(), rule, act, client: CLIENT }) + "\n", { flag: "a" });
+      held = true;
+    }
+  } catch {
+    // Not written: the refusal stands, and the sentence does not claim the held list.
+  }
+  const where = held ? " and is on the held list (\`stamity away status\`)." : "; the held list could not be written, so name it in your reply.";
+  return { ask: false, reason: act + " is a person-only act (\`" + rule + "\`) and nobody is watching: it waits for a person" + where };
+}
+
 // The payload fields that name a helper agent on this client (GUARD_HELPER_FIELDS in the engine).
 const HELPER_NAMES = ["subagent_type","agentType","subagentType","agent_id","subagent_id","agentId","parentAgentId","parent_agent_id","parent_tool_call_id"];
 
@@ -5376,7 +5428,7 @@ function mcpDecision(tool, ask, root, payload) {
   const act = "A call to the GitHub MCP server";
   if (!ask) return { ask: false, reason: refuseSentence(act, tool) };
   const why = unattendedBy(root);
-  return why === null ? attendedAsk(payload, act, tool) : { ask: false, reason: unattendedSentence(act, tool) + " " + why };
+  return why === null ? heldForMorning(attendedAsk(payload, act, tool), root, act, tool) : { ask: false, reason: unattendedSentence(act, tool) + " " + why };
 }
 
 /** The decision this call earns: null to allow it, else whether the client asks the person and the reason. */
@@ -5432,7 +5484,7 @@ function decide() {
     // A loosening read in one place or reading names itself only where no other act was found (REQ-FLOW-138).
     const named = found.find((verdict) => verdict.rule !== "autonomy-loosen") ?? found[0];
     const why = unattendedBy(root);
-    if (why === null) return attendedAsk(payload, named.act, named.rule);
+    if (why === null) return heldForMorning(attendedAsk(payload, named.act, named.rule), root, named.act, named.rule);
     // Unattended, a push keeps the push rule's own reason; any other act goes on the morning list.
     const push = run();
     return { ask: false, reason: (push !== undefined ? push.reason : unattendedSentence(named.act, named.rule)) + " " + why };

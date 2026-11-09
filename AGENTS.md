@@ -26,7 +26,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: `npm run lint && npm run typecheck && node scripts/ci/test-run.mjs --coverage`
 
 ## Invariants
-Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
+Invariants version 1.4.0 · ratified 2026-08-31 · last amended 2026-11-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -36,6 +36,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
+   Where no floor applies, caution matches the real risk: a step that does not apply is skipped in one line, and only
+   what cannot be undone, reaches people outside the repository, or this setup keeps for a person waits for one.
 2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
    else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
    second request in the same turn. Sub-agents do not ask — they return `BLOCKED_AMBIGUITY` naming the readings.
@@ -82,4 +84,6 @@ as any skill (`/st-<id>` or `$st-<id>`); with neither, ask for the outcome in pl
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted `.agents/skills/` tree, plus a native copy where the
   client reads its own location; call a skill by name whenever its description fits the job.
+- A rule with several parts holds only when every part that applies to the work holds;
+  naming some of them is not applying it.
 <!-- STAMITY:END -->

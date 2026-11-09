@@ -104,7 +104,10 @@
         "read",
         "execute"
       ],
-      "rationale": "Runs the declared gate commands and returns their structured results. Independence from whoever wrote the change is the entire point of the role, so it inspects the tree and executes commands but never edits what it is grading."
+      "writePaths": [
+        ".stamity/runs/*/reports/*-test-runner-r*.md"
+      ],
+      "rationale": "Runs the declared gate commands and returns their structured results. Independence from whoever wrote the change is the entire point of the role, so it inspects the tree and executes commands but never edits what it is grading. Its `Write` tool reaches only its own gate report, so an empty hand-back still reaches the run; that pattern does not narrow its shell, so the report is matched by its spawn token, not trusted for its path."
     }
   ]
 }
