@@ -23,6 +23,7 @@ mistake.
 | `stamity upgrade` | yes | writes | move this setup to the running release: run its sync and move the package.json pin |
 | `stamity check` | yes | reads only | diagnose the environment and gate on drift between disk and the engine's output |
 | `stamity validate` | yes | reads only | check the content, hooks, learnings and credentials this repo authored |
+| `stamity ready` | yes | reads only | report whether this repository is ready for unattended runs, reading files only |
 | `stamity add` | yes | writes | install a content pack: run the gate chain, show every command it would wire, then write |
 | `stamity config` | yes | writes | inspect and change the setup: keys, detection refresh, MCP servers |
 | `stamity workspace` | yes | writes | one policy across several repositories: status, guided creation, and the cascade |
@@ -54,7 +55,7 @@ identically everywhere they apply.
 ### JSON output
 
 `--json` produces exactly one JSON document on stdout, and nothing else, for every
-run that reaches a command — all 18 of the commands above, success and
+run that reaches a command — all 19 of the commands above, success and
 failure alike. Human output is suppressed in the same run, so a reader never has to
 separate prose from payload. Every document carries `ok`, `command` and `version`;
 a success adds the command's own fields, and a failure adds `error` with `code` and
@@ -167,6 +168,16 @@ check the content, hooks, learnings and credentials this repo authored
 Reads only. Nothing is written, so there is no preview mode to need.
 
 Adds no flags of its own beyond the shared matrix above.
+
+## `stamity ready`
+
+report whether this repository is ready for unattended runs, reading files only
+
+Reads only. Nothing is written, so there is no preview mode to need.
+
+| Flag | What it does | Default |
+|---|---|---|
+| `--path <dir>` | the repository root to read (default: the current folder) | — |
 
 ## `stamity add`
 

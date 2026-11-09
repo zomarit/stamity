@@ -6162,6 +6162,15 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     expect(seen).toEqual(order.map((_, index) => index));
   });
 
+  // ADDED 2026-11-10 (plan 024 file 3, unit x-ready-verb, REQ-FLOW-182): Step 1 runs the ready report before setup.
+  it("names stamity ready in Step 1, before the setup steps, as a report that runs none of your commands", () => {
+    const step = section("Step 1: Install stamity");
+    const readyAt = step.indexOf("npx @zomarit/stamity ready");
+    expect(readyAt, "Step 1 does not run the ready report").toBeGreaterThanOrEqual(0);
+    expect(readyAt).toBeLessThan(step.indexOf("npx @zomarit/stamity init"));
+    expect(flowed(step)).toContain("It reads files only, runs none of your commands, and exits 0 whatever it finds.");
+  });
+
   it("says who acts and where in every step", () => {
     const steps = sections.filter((text) => /^(?:Step \d+:|The same steps locally|When nothing fired)/.test(text));
     expect(steps.length).toBe(12);

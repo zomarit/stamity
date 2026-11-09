@@ -80,6 +80,18 @@ match a step, go by what you see.
 
 **Who:** you. **Where:** a terminal in your repository, on the default branch.
 
+First see how far the repository is from ready:
+
+```sh
+npx @zomarit/stamity ready
+```
+
+It reads files only, runs none of your commands, and exits 0 whatever it finds. Each line is one check:
+its state (`ready`, `gap`, `not-checked` or `unknown`), what it found, and a fix. Before setup the
+`setup-pinned` line is a gap. Run it again once these steps are done.
+
+Then set up:
+
 ```sh
 npx @zomarit/stamity init
 ```

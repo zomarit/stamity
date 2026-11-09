@@ -416,6 +416,9 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   "src/runs/itemContract.ts": { unit: "item-contract", wave: 3 },
   "src/detect/stackSupport.ts": { unit: "p1-19", wave: 3 },
   "src/detect/verificationGates.ts": { unit: "p1-19", wave: 3 },
+  // TEST CHANGE, justified (plan 024 file 3, x-ready-core, REQ-FLOW-182; S53): the ready report's checks, over the wave-3
+  // stack tiers, the wave-2 class-file parser and the wave-1 YAML reader, so it sits one wave above them.
+  "src/detect/readiness.ts": { unit: "x-ready-core", wave: 4 },
   "src/merge/atomicWrite.ts": { unit: "p1-23", wave: 3 },
   "src/tools/categories.ts": { unit: "p1-24", wave: 3 },
   "src/tools/allowlist.ts": { unit: "p1-24", wave: 3 },
@@ -762,6 +765,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // `src/cli.ts`, which registers it: a file at wave 16 under another unit is one `cli.ts` could not
   // import (`checkWaveLayering`).
   "src/cli/commands/upgrade.ts": { unit: "p2-16", wave: 16 },
+  // TEST CHANGE, justified (plan 024 file 3, x-ready-verb, REQ-FLOW-182; S53): the `ready` verb reads the wave-15
+  // `check` verb's `resolveCharterGates` and `checkLandJobWorkflows`, so it sits at wave 16 and, as `upgrade` does,
+  // shares the program-assembly unit with `src/cli.ts`, which registers it.
+  "src/cli/commands/ready.ts": { unit: "p2-16", wave: 16 },
   // TEST CHANGE, justified (plan 022 file 2, b10-shrinkwrap-st, REQ-FLOW-049): the `st` bin's own
   // entry. It imports Node builtins only and loads `src/cli.ts` through a computed specifier, so it
   // has no internal edge; it sits beside the entry it launches.

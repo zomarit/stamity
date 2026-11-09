@@ -54,6 +54,10 @@ const packageJson = createRequire(import.meta.url)("../../package.json") as { ve
  * `upgrade` joins the advertised surface right after `sync`, so the counts below
  * move from nine advertised and fifteen registered to ten and sixteen. The
  * assertions keep their shape; the surface grew by one command.
+ *
+ * TEST CHANGE, justified (plan 024 file 3, x-ready-verb, REQ-FLOW-182; S53): `ready` joins the
+ * advertised surface right after `validate`, beside the other read-only reports, so each count below
+ * moves up by one for it. The assertions keep their shape; the surface grew by one command.
  */
 const ADVERTISED = [
   "init",
@@ -61,6 +65,7 @@ const ADVERTISED = [
   "upgrade",
   "check",
   "validate",
+  "ready",
   "add",
   "config",
   "workspace",
@@ -91,9 +96,9 @@ const twin = (name: string): CommandModule => ({
 });
 
 describe("COMMANDS enumeration (in-process)", () => {
-  it("registers exactly 16 uniquely-named commands in help order, the hidden six last", () => {
+  it("registers exactly 17 uniquely-named commands in help order, the hidden six last", () => {
     expect(COMMANDS.map((command) => command.name)).toEqual([...ADVERTISED, ...HIDDEN]);
-    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(16);
+    expect(new Set(COMMANDS.map((command) => command.name)).size).toBe(17);
     expect(HIDDEN).toHaveLength(6);
     expect(COMMANDS.filter((command) => command.hidden === true).map((c) => c.name)).toEqual([
       ...HIDDEN,
@@ -122,7 +127,7 @@ describe("COMMANDS enumeration (in-process)", () => {
 describe("advertised surface (child process)", () => {
   const getFixture = useCliFixture();
 
-  it("--help lists exactly the 10 advertised commands and none of the four plumbing verbs", async () => {
+  it("--help lists exactly the 11 advertised commands and none of the four plumbing verbs", async () => {
     const result = await getFixture().run(["--help"]);
 
     expect(result.code).toBe(0);
@@ -205,6 +210,9 @@ describe("exit-code matrix on an empty fixture", () => {
     ["sync refuses uninitialised", ["sync"], 1, npxCommand("init")],
     ["check gates red uninitialised", ["check"], 1, null],
     ["validate passes with nothing user-authored", ["validate"], 0, null],
+    // A report, not a gate: an empty, uninitialised folder still exits 0, its gaps on stdout.
+    ["ready reports an uninitialised repo and exits 0", ["ready"], 0, null],
+    ["ready --path naming a file is a usage error", ["ready", "--path", fileURLToPath(new URL("../../src/cli.ts", import.meta.url))], 2, "--path takes a folder"],
     ["add without a pack-spec is a usage error", ["add"], 2, "missing required argument"],
     ["add with a spec refuses uninitialised", ["add", "./missing-pack"], 1, npxCommand("init")],
     ["config refuses uninitialised", ["config"], 1, "stamity init"],
@@ -288,6 +296,15 @@ describe("--json emits exactly one document on stdout (no-manifest fixture)", ()
     expect(doc.ok).toBe(false);
     expect(doc.command).toBe("check");
     expect(Array.isArray(doc.doctor)).toBe(true);
+  });
+
+  it("ready reports an uninitialised repo as one ok:true document carrying its report", async () => {
+    const result = await getFixture().run(["ready", "--json"]);
+
+    expect(result.code).toBe(0);
+    const doc = parseSingleDoc(result.stdout) as Envelope & { ready?: unknown; checks?: unknown[] };
+    expect(doc).toMatchObject({ ok: true, command: "ready", ready: false });
+    expect(Array.isArray(doc.checks)).toBe(true);
   });
 
   it("clean reports the already-clean repo as one ok:true document", async () => {

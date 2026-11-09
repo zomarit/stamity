@@ -13,6 +13,7 @@ import { initCommand } from "./cli/commands/init.ts";
 import { learnCommand } from "./cli/commands/learn.ts";
 import { ledgerCommand } from "./cli/commands/ledger.ts";
 import { planCommand } from "./cli/commands/plan.ts";
+import { readyCommand } from "./cli/commands/ready.ts";
 import { runCommand } from "./cli/commands/run.ts";
 import { skillCommand } from "./cli/commands/skill.ts";
 import { syncCommand } from "./cli/commands/sync.ts";
@@ -45,9 +46,12 @@ import { noticeCacheDir, resolveOwnPackageFacts, startupNotice } from "./cli/not
 
 /**
  * The advertised surface in help order — init, sync, upgrade, check, validate,
- * add, config, workspace, worktree, clean, gc, skill — plus `learn`, `handoff`,
- * `ledger`, `gate`, `plan` and `run`, the six hidden plumbing verbs. Twelve
- * advertised, eighteen registered.
+ * ready, add, config, workspace, worktree, clean, gc, skill — plus `learn`,
+ * `handoff`, `ledger`, `gate`, `plan` and `run`, the six hidden plumbing verbs.
+ * Thirteen advertised, nineteen registered.
+ *
+ * `ready` follows `validate`: the three are the read-only reports, and `ready`
+ * is the one a team runs before it lets a run go unattended.
  *
  * `gc` sits directly after `clean`: both free what the others wrote, and a
  * person, not generated agent content, runs it.
@@ -77,6 +81,7 @@ export const COMMANDS: readonly CommandModule[] = [
   upgradeCommand,
   checkCommand,
   validateCommand,
+  readyCommand,
   addCommand,
   configCommand,
   workspaceCommand,

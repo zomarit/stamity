@@ -191,6 +191,18 @@ describe("command coverage", () => {
     expect(section).toContain("May write when it runs");
   });
 
+  // ADDED (plan 024 file 3, unit x-ready-verb, REQ-FLOW-182): the page counts and documents `ready` after
+  // `validate`, as an advertised verb that reads only, with its `--path` flag.
+  it("documents `ready` after `validate`, advertised, reading only, with --path", () => {
+    const names = COMMANDS.map((command) => command.name);
+    expect(names.indexOf("ready")).toBe(names.indexOf("validate") + 1);
+    expect(page).toContain(`all ${String(COMMANDS.length)} of the commands above`);
+    expect(page).toMatch(/^\| `stamity ready` \| yes \| reads only \| /m);
+    const section = sectionOf("ready");
+    expect(section).toContain("Reads only.");
+    expect(section).toContain("| `--path <dir>` |");
+  });
+
   // ADDED (plan 024 file 2, unit d-gc, sign-off S31): `gc` is a person's verb, so it is advertised — listed by
   // `--help`, marked `yes` in the index, and its section carries no plumbing note.
   it("documents `gc` as advertised, not plumbing", () => {
