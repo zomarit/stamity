@@ -645,11 +645,15 @@ describe("/st-plan — plan artifact shape", () => {
 
     // The eight required fields keep their order; the ninth row is conditional,
     // written only for a unit whose files the classifier places security-sensitive.
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 2 unit s-skills-content, REQ-FLOW-180): a tenth
+    // row, `skills`, now follows `threat`, so the list gains it and the threat row is found by its name
+    // instead of read as the last row. The nine rows before it keep their order and words.
     expect(rows.map((row) => /^\| (`[A-Za-z_]+`) \|/.exec(row)?.[1])).toEqual([
       ...UNIT_FIELDS,
       "`threat`",
+      "`skills`",
     ]);
-    const threat = rows.at(-1) ?? "";
+    const threat = rows.find((row) => row.startsWith("| `threat` |")) ?? "";
     // `--paths` classifies files that are not yet a diff, so the check runs at plan time.
     expect(threat).toContain("`stamity gate classify --base HEAD --paths <its files>` places `security-sensitive`");
     expect(threat).toMatch(
@@ -752,6 +756,9 @@ describe("/st-plan — plan artifact shape", () => {
     // optional Prerequisites section now follows Open questions, so Follow-ups and Drop list
     // renumber 6 -> 7 and 7 -> 8. Their words are pinned unchanged; only the numbers move, and
     // the Open-questions adjacency below now names Prerequisites as the next section.
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 2 unit s-skills-content, REQ-FLOW-180): an
+    // optional Skills section now follows Prerequisites, so Follow-ups and Drop list renumber
+    // 7 -> 8 and 8 -> 9. Their words are pinned unchanged; only the numbers move.
     expect([...shape.matchAll(/^(\d)\. \*\*([^*]+)\*\*/gm)].map((match) => `${match[1]} ${match[2]}`)).toEqual([
       "1 Context",
       "2 Spec delta",
@@ -759,11 +766,12 @@ describe("/st-plan — plan artifact shape", () => {
       "4 Risks",
       "5 Open questions",
       "6 Prerequisites",
-      "7 Follow-ups",
-      "8 Drop list",
+      "7 Skills",
+      "8 Follow-ups",
+      "9 Drop list",
     ]);
     expect(read).toContain(
-      "7. **Follow-ups** (optional) — items this plan deliberately leaves out, one per line, each with `by: <YYYY-MM-DD>` or `when: <trigger>`, and `files:` when it names no location; they append as the Side effects say.",
+      "8. **Follow-ups** (optional) — items this plan deliberately leaves out, one per line, each with `by: <YYYY-MM-DD>` or `when: <trigger>`, and `files:` when it names no location; they append as the Side effects say.",
     );
     // TEST CHANGE, justified (2026-10-10, q11a-plan-writer fix round 1; ledger rows review/53 and
     // build/32, signed off): the pinned sentence moves. "items with only a revisit trigger" also
@@ -771,7 +779,7 @@ describe("/st-plan — plan artifact shape", () => {
     // holds what has no date and no trigger a run can check. The old words are asserted gone;
     // nothing is loosened.
     expect(read).toContain(
-      "8. **Drop list** (optional) — a table, `Item | Revisit when`, of items with no date and no trigger a run can check; they append nowhere.",
+      "9. **Drop list** (optional) — a table, `Item | Revisit when`, of items with no date and no trigger a run can check; they append nowhere.",
     );
     expect(read).not.toContain("items with only a revisit trigger");
     // Both are optional and close the list: a plan with neither is a valid plan, and the criteria
@@ -787,7 +795,9 @@ describe("/st-plan — plan artifact shape", () => {
   it("names an optional Prerequisites section after Open questions, one valueless row per need (REQ-FLOW-077)", () => {
     const shape = sectionOf(plan.parsed.body, "## Plan artifact shape");
     const read = flat(shape);
-    const entry = read.slice(read.indexOf("6. **Prerequisites**"), read.indexOf("7. **Follow-ups**"));
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 2 unit s-skills-content, REQ-FLOW-180): the
+    // section after Prerequisites is now Skills, so the entry ends there; its assertions are unchanged.
+    const entry = read.slice(read.indexOf("6. **Prerequisites**"), read.indexOf("7. **Skills**"));
 
     expect(entry).toMatch(/^6\. \*\*Prerequisites\*\* \(optional\) — /);
     expect(entry).toContain("`kind · name · read where · set by · blocks merge|deploy|run · verified yes|no`");
@@ -880,7 +890,10 @@ describe("/st-plan — side effects", () => {
       "belongs in the plan's Drop list with its revisit trigger. That inbox is the rendezvous `/st-board fill` triages",
     );
     // Still two side effects: the rule adds no third bullet.
-    expect(sectionOf(plan.parsed.body, "## Side effects").split("\n").filter((line) => line.startsWith("- **"))).toHaveLength(2);
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 2 unit s-skills-content, REQ-FLOW-180): the
+    // skill copy is a third side effect, pinned under "/st-plan — named skills"; the schedule rule
+    // still adds no bullet of its own, so the count moves by that one bullet only.
+    expect(sectionOf(plan.parsed.body, "## Side effects").split("\n").filter((line) => line.startsWith("- **"))).toHaveLength(3);
   });
 
   it("parts a follow-up's trigger from a Drop-list revisit trigger by what a run can check (review/53)", () => {
@@ -988,8 +1001,11 @@ describe("/st-plan — return contract", () => {
     // pinned token gains a third value. A run whose coverage script could not run had no honest L5
     // value, since `none` says no size code fired when none was looked for; it now reads
     // `not run`. The two-value token is asserted gone; nothing is loosened.
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 2 unit s-skills-content, REQ-FLOW-180): the
+    // line gains L6 after the five-check token, a blocking check reading `pass|fail`. The token and
+    // the two assertions after it are unchanged; only the closing backtick moves past L6.
     expect(returns).toContain(
-      "`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run`",
+      "`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run · L6 pass|fail`",
     );
     expect(returns).not.toContain("L5 none|<n> advisory`");
     expect(returns).not.toContain("L5 pass|fail");
@@ -1026,8 +1042,10 @@ describe("/st-plan — return contract", () => {
     // The gate already forbids a claimed pass for a script that did not run; the return line had
     // no value to say so with.
     expect(gate).toContain("report that check unrun; do not replace a missing result with a claimed pass");
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 2 unit s-skills-content, REQ-FLOW-180): L6
+    // follows the shared token as rework's R1 follows it, so the token both commands carry is unchanged.
     expect(returns).toContain(
-      `- Plan-lint result per check: \`${token}\` (\`L5 not run\` where the coverage script could not run, never a claimed pass).`,
+      `- Plan-lint result per check: \`${token} · L6 pass|fail\` (\`L5 not run\` where the coverage script could not run, never a claimed pass).`,
     );
     // One token, two commands: rework's line is this one with its own check after it.
     expect(rework).toContain(`\`${token} · R1 pass|fail\``);
@@ -1098,5 +1116,76 @@ describe("/st-plan — return contract", () => {
     for (const flag of flags) {
       expect(boardBody, `board defines no ${flag}`).toContain(`\`${flag} `);
     }
+  });
+});
+
+// Added 2026-11-09 (plan 024 file 2 unit s-skills-content, REQ-FLOW-180): a plan names the skill a
+// unit's build uses, pinned to a commit from a trusted source, and copies it in on an attended run
+// before the plan-lint gate reads its origin record. `stamity skill add | list` carry the fetch and
+// the drift read; this file carries where a plan names a skill and when it is copied.
+describe("/st-plan — named skills (REQ-FLOW-180)", () => {
+  it("adds a `skills` unit field after `threat`, each entry pinned to a commit, or `none`", () => {
+    const shape = sectionOf(plan.parsed.body, "## Plan artifact shape");
+    const row = shape.split("\n").find((line) => line.startsWith("| `skills` |")) ?? "";
+
+    expect(row).toBe(
+      "| `skills` | the skills the unit's build uses, each `<name> · <source-id> · <version> · <commit>` with the full 40-hex commit its origin record holds, from a source `.stamity/skill-sources.json` lists; `none` when it uses none, and a plan whose units all read `none` names no skill anywhere else |",
+    );
+    expect(shape.indexOf("| `threat` |")).toBeLessThan(shape.indexOf("| `skills` |"));
+  });
+
+  it("names an optional Skills section after Prerequisites that a plan with no skill omits", () => {
+    const read = flat(sectionOf(plan.parsed.body, "## Plan artifact shape"));
+
+    expect(read).toContain(
+      "7. **Skills** (optional) — one row per skill the units name, `name · source-id · version · commit · units`, each copied in as the Side effects say; a plan whose units all read `none` omits it. 8. **Follow-ups**",
+    );
+  });
+
+  it("copies a named skill on an attended run only, by the run itself, only from the trusted sources", () => {
+    const effects = flat(sectionOf(plan.parsed.body, "## Side effects"));
+
+    expect(effects).toContain(
+      "Three, each reported in the Return contract below: the skill copy runs before the plan-lint gate, the other two after the artifact is written. No product file moves here, and no side effect is a further write channel for the plan itself.",
+    );
+    expect(effects).toContain(
+      "- **Skill copy.** On an attended run, this run itself, never a sub-agent, copies in each skill a unit names that `stamity skill list --json` does not show `clean` at its commit: `stamity skill add <source-id> <name> --tag <version> --commit <commit>`, from a source `.stamity/skill-sources.json` lists and from nowhere else. The verb refuses an unattended run and one while nobody is watching; the copy lands on a held path, so a person commits it. A plan whose units all read `none` copies nothing.",
+    );
+    expect(effects).not.toContain("Two, both after the artifact is written");
+  });
+
+  it("gates the write on L6: every named skill has an origin record at its commit and a clean copy", () => {
+    const gate = sectionOf(plan.parsed.body, "## Plan-lint gate");
+    const l6 = gate.split("\n").find((line) => line.startsWith("| L6 |")) ?? "";
+
+    expect(l6).toBe(
+      "| L6 | **Named skills copied** | every `skills` entry other than `none` has an origin record at that entry's commit and a `clean` copy, as `stamity skill list --json` reads them. | copy it as the Side effects say, re-run the pass; a run that cannot copy returns `BLOCKED_DEPENDENCY` naming the `stamity skill add` line a person runs |",
+    );
+    expect(gate.indexOf("| L5 |")).toBeLessThan(gate.indexOf("| L6 |"));
+    expect(gate.indexOf("| L6 |")).toBeLessThan(gate.indexOf("**Structural coverage pass.**"));
+  });
+
+  it("reports L6 and the skills it copied in the Return contract", () => {
+    const returns = sectionOf(plan.parsed.body, "## Return contract");
+
+    expect(returns).toContain("· L5 none|<n> advisory|not run · L6 pass|fail`");
+    expect(returns).toContain("- Skills copied, each with its origin record's path; `none` when this run copied none.");
+  });
+
+  it("leaves the structural pass unmoved by a `skills` field, named or `none`", () => {
+    // The coverage script reads `id`, `requirements` and `depends_on` only; a `skills` entry is not a
+    // dependency, so a named skill reads no dangling reference and `none` adds nothing.
+    const unit = (skills: string | null) =>
+      "## Spec delta\n\nADDED REQ-DEMO-001.\n\n## Units\n\n### U1 — webhook\n- **requirements**: REQ-DEMO-001.\n" +
+      "- **depends_on**: none.\n" +
+      (skills === null ? "" : `- **skills**: ${skills}.\n`);
+    const codes = (skills: string | null) =>
+      checkCoverage({ path: "plan.md", text: unit(skills) }, [{ path: "spec.md", text: "## Requirements\n\n### REQ-DEMO-001\nVerify the signature.\n" }], { exists: () => false })
+        .findings.map((row: { code: string }) => row.code);
+    const named = `pdf-forms · acme-skills · v1.2.0 · ${"a1".repeat(20)}`;
+
+    expect(codes(named)).toEqual(codes(null));
+    expect(codes("none")).toEqual(codes(null));
+    expect(codes(named)).not.toContain("dangling-dependency");
   });
 });

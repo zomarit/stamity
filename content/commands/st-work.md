@@ -47,7 +47,7 @@ are carried into the plan, not silently dropped.
   reviewable plan artifact on disk belongs to `/st-plan`. Read `docs/plans/*.md`, keep those whose
   head `intent:` and Context cover this request, and take the newest `stamp:`. Two still matching
   is one ambiguity-gate question, never a pick. Nothing found is a normal outcome: say so and plan
-  in-flow.
+  in-flow. Each unit's `skills` entry is checked against `stamity skill list --json`: its copy at that commit, `clean`.
 - **Freshness guard.** `/st-plan` owns the intake contract: its `## Plan artifact shape` section
   and the freshness guard beside it apply here. Only two head keys are read: `stamp:` and `reads:`.
   On a failed guard, re-plan with the stale artifact as input; a stale plan is never executed
@@ -82,7 +82,7 @@ and a batch of one unit has no peer; either skips the step and records the skip 
 
 One implementer per unit, parallel across disjoint units, single writer per file, under the
 `implementer` agent file's Unit contract, Testing rules and Gates; a mis-scoped unit returns
-BLOCKED_* rather than improvising scope.
+BLOCKED_* rather than improvising scope. A `skills` entry with no clean copy at its commit is BLOCKED_DEPENDENCY, never fetched: `stamity skill add` is a planning act, not a build act.
 
 ## Dispatch contract
 
@@ -134,7 +134,7 @@ BLOCKED_* rather than improvising scope.
 - **Pointer dispatch.** A build or fix dispatch is at most 15 lines: role,
   class and run id; the plan path and unit id, never a line number; worktree,
   branch and base; the report path, written with the file write tool; for a
-  fix, the ledger ids with each sign-off; the unit's `verify` command; its
+  fix, the ledger ids with each sign-off; the unit's `verify` command and `skills`; its
   `files` cell as the boundary; the learnings that apply; the digest as the
   return. When a contract delta moves a seam a later unit relies on, the
   spec-author amends that cell in place before it is dispatched, and when that

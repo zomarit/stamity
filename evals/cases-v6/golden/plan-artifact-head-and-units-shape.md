@@ -2,7 +2,7 @@
 id: plan-artifact-head-and-units-shape
 class: golden
 claim: "The plan artifact is persisted at docs/plans/<NNN>-<slug>.md with NNN the next free number, its head carries id, intent, stamp and reads as required keys with approach present for migration intent only and depends_on optional, and every unit carries the eight required fields of the command's nine-row table, the ninth (threat) conditional — requirements never blank, interfaces inline, at least one edge case."
-source: content/commands/st-plan.md:317-383
+source: content/commands/st-plan.md:318-387
 metric: rubric
 ---
 
@@ -52,6 +52,7 @@ Sections, in order:
 | `depends_on` | unit ids, or `none` |
 | `verify` | the command that proves this unit green |
 | `threat` | for a unit whose files `stamity gate classify --base HEAD --paths <its files>` places `security-sensitive`: its trust boundary, what it trusts, one abuse case and the check that stops it, in at most five lines; absent otherwise |
+| `skills` | the skills the unit's build uses, each `<name> · <source-id> · <version> · <commit>` with the full 40-hex commit its origin record holds, from a source `.stamity/skill-sources.json` lists; `none` when it uses none, and a plan whose units all read `none` names no skill anywhere else |
 
 [...]
 **Fresh-context criteria.** The artifact is executable by an implementer holding no session

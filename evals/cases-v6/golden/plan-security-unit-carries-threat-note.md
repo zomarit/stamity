@@ -2,7 +2,7 @@
 id: plan-security-unit-carries-threat-note
 class: golden
 claim: "A plan unit whose files gate classify places security-sensitive carries a threat row naming its trust boundary, what it trusts, one abuse case and the check that stops it, in at most five lines, while a unit in the same plan whose files classify as docs carries no threat row."
-source: content/commands/st-plan.md:345-360
+source: content/commands/st-plan.md:346-362
 metric: rubric
 ---
 
@@ -28,6 +28,7 @@ Governing text — `content/commands/st-plan.md`, "Plan artifact shape":
 | `depends_on` | unit ids, or `none` |
 | `verify` | the command that proves this unit green |
 | `threat` | for a unit whose files `stamity gate classify --base HEAD --paths <its files>` places `security-sensitive`: its trust boundary, what it trusts, one abuse case and the check that stops it, in at most five lines; absent otherwise |
+| `skills` | the skills the unit's build uses, each `<name> · <source-id> · <version> · <commit>` with the full 40-hex commit its origin record holds, from a source `.stamity/skill-sources.json` lists; `none` when it uses none, and a plan whose units all read `none` names no skill anywhere else |
 
 **Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `${STAMITY:CLI} <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
 When neither form runs, the installed copy has no `gate` verb, or a classify's `reason` names a failed read, no unit's class can be read, so every unit carries the `threat` row.

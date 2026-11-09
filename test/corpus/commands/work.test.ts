@@ -447,11 +447,15 @@ describe("/st-work — body skeleton", () => {
   // name a fresh random spawn token kept out of the run record and every builder-readable file
   // (251 characters), so an empty return can be matched and a planted report cannot. The line
   // budget did not move.
-  it("leaves room under both budgets: 481 characters before the cut, 15 lines under the cap", async () => {
+  // Moved 2026-11-09 (plan 024 file 2 unit s-skills-content, REQ-FLOW-180), 481 to 215 characters:
+  // the intake's `skills` check, the Build's BLOCKED_DEPENDENCY rule for a skill with no clean copy,
+  // and the pointer dispatch's `skills` (266 characters), each joined to an existing line, so the line
+  // budget did not move and no eval range shifted.
+  it("leaves room under both budgets: 215 characters before the cut, 15 lines under the cap", async () => {
     const file = await workFile;
     const cut = file.raw.indexOf("\n### Specialist pass\n");
     expect(cut).toBeGreaterThan(-1);
-    expect(REATTACH_BUDGET_CHARS - cut).toBeGreaterThanOrEqual(481);
+    expect(REATTACH_BUDGET_CHARS - cut).toBeGreaterThanOrEqual(215);
     const bodyLines = file.parsed.body.replace(/\r?\n$/, "").split(/\r?\n/).length;
     expect(BODY_LINE_CAP - bodyLines).toBeGreaterThanOrEqual(15);
   });
@@ -2326,6 +2330,24 @@ describe("/st-work — dispatch contract", () => {
     // Resume: the card by hook where the client re-runs it, by hand elsewhere.
     expect(dispatch).toContain("`stamity ledger status`");
     expect(dispatch).toContain("re-read this command's own file");
+  });
+
+  // Added 2026-11-09 (plan 024 file 2 unit s-skills-content, REQ-FLOW-180): a plan unit can name a
+  // skill copied in at a pinned commit. Work checks the copies at intake, hands the unit's skills to
+  // the implementer, and never fetches one: a build with no clean copy is BLOCKED_DEPENDENCY.
+  it("checks a unit's named skills at intake, dispatches them, and never fetches one at Build (REQ-FLOW-180)", async () => {
+    const text = await body();
+    const plan = collapse(section(text, "## Phase 2 — Plan"));
+    const build = collapse(section(text, "## Phase 3 — Build"));
+    const dispatch = collapse(section(text, "## Dispatch contract"));
+
+    expect(plan).toContain(
+      "Nothing found is a normal outcome: say so and plan in-flow. Each unit's `skills` entry is checked against `stamity skill list --json`: its copy at that commit, `clean`.",
+    );
+    expect(build).toContain(
+      "A `skills` entry with no clean copy at its commit is BLOCKED_DEPENDENCY, never fetched: `stamity skill add` is a planning act, not a build act.",
+    );
+    expect(dispatch).toContain("for a fix, the ledger ids with each sign-off; the unit's `verify` command and `skills`; its `files` cell as the boundary;");
   });
 
   it("defines how a `stamity <verb>` call runs before the first one, with a by-hand ledger fallback (REQ-FLOW-002, REQ-FLOW-003)", async () => {
