@@ -1,4 +1,4 @@
-import { chmod, lstat, mkdir, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, readFile, readdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, win32 } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -399,6 +399,37 @@ describe.skipIf(!gitAvailable)("git facts, read from a real repository", () => {
     expect(classes.get(".env.mcp")).toBe("ignored");
     expect(classes.get("node_modules")).toBe("ignored");
     expect(classes.get("review-gate.json")).toBe("untracked");
+  });
+
+  // REQ-WORKTREE-019: a slash-only rule (`build/`) matches a directory only, and
+  // git answers a path that is not on disk as a non-directory, so before this
+  // change an absent row under a slash-only rule read as "untracked" and setup
+  // refused it. The slash form is asked too for an absent path; a path that is
+  // there keeps git's own answer, and a link is never asked in the slash form
+  // (git exits 128 on a path "beyond a symbolic link", which would fail the
+  // whole batch).
+  it("reads an absent path under a slash-only rule as ignored, and an absent unruled path as untracked", async () => {
+    const fix = await seedRepo(getRoot().dir);
+    await writeFile(join(fix.root, ".gitignore"), `${IGNORE_FILE}build/\n`, "utf8");
+
+    const classes = await classifyRepoPaths(runGit, fix.root, ["build", "nowhere", "node_modules"]);
+
+    expect(classes.get("build")).toBe("ignored");
+    expect(classes.get("nowhere")).toBe("untracked");
+    expect(classes.get("node_modules")).toBe("ignored");
+  });
+
+  // A directory link needs Developer Mode or an elevated shell on Windows,
+  // which the CI leg does not promise, so the link half runs on POSIX only.
+  it.skipIf(WINDOWS)("reads a link under a slash-only rule as untracked, without failing the batch", async () => {
+    const fix = await seedRepo(getRoot().dir);
+    await writeFile(join(fix.root, ".gitignore"), `${IGNORE_FILE}linked/\n`, "utf8");
+    await symlink(join(fix.root, "node_modules"), join(fix.root, "linked"));
+
+    const classes = await classifyRepoPaths(runGit, fix.root, ["linked", ".env.mcp"]);
+
+    expect(classes.get("linked")).toBe("untracked");
+    expect(classes.get(".env.mcp")).toBe("ignored");
   });
 
   it("refuses a name git's own check-ref-format rejects, before any write", async () => {
@@ -1716,5 +1747,169 @@ describe.skipIf(!gitAvailable)("managed-orphan farm trees (frontier W1) [secfix]
     );
     expect(error.next).toContain("--force");
     expect(await exists(join(fix.farm, "feat"))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A linked install (REQ-WORKTREE-019)
+// ---------------------------------------------------------------------------
+
+/**
+ * Declares a `symlink` row for `node_modules` and the ignore lines the case
+ * names, committed so the new worktree's checkout carries them. The seeded
+ * `node_modules` gains a file whose basename is a known credential, deep in a
+ * package, so a scan of the linked tree would refuse the row.
+ */
+async function declareLinkedInstall(fix: Fixture, ignoreLines: string): Promise<void> {
+  await writeFile(join(fix.root, ".gitignore"), `.env.mcp\n${ignoreLines}`, "utf8");
+  await mustGit(fix.root, "add", "-A");
+  // `--allow-empty`: a case whose lines equal the seeded `.gitignore` has nothing to commit.
+  await mustGit(fix.root, ...IDENTITY, "commit", "--quiet", "--allow-empty", "-m", "ignore the install");
+  await writeFile(join(fix.root, "node_modules", "left-pad", ".env.mcp"), SECRET_BODY, "utf8");
+  await mkdir(join(fix.root, ".stamity"), { recursive: true });
+  await writeFile(
+    join(fix.root, ".stamity", "worktree.json"),
+    JSON.stringify({ version: 1, entries: [{ path: "node_modules", strategy: "symlink" }] }),
+    "utf8",
+  );
+}
+
+// A directory link needs Developer Mode or an elevated shell on Windows, which
+// the CI leg does not promise; materialize's EPERM answer there is covered in
+// test/worktree/materialize.test.ts.
+describe.skipIf(!gitAvailable || WINDOWS)("a linked node_modules lane (REQ-WORKTREE-019)", () => {
+  it("links node_modules without scanning it, prints the install notice, and leaves the lane clean", async () => {
+    const fix = await seedRepo(getRoot().dir);
+    await declareLinkedInstall(fix, "node_modules/\nnode_modules\n");
+
+    const result = await runWorktreeSetup(setupOptions(fix, "feat"));
+
+    const lane = join(fix.farm, "feat");
+    const target = join(fix.root, "node_modules");
+    expect(result.status).toBe("complete");
+    expect(result.entries.find((entry) => entry.path === "node_modules")?.outcome).toBe("materialized");
+    expect((await lstat(join(lane, "node_modules"))).isSymbolicLink()).toBe(true);
+    expect(await realpath(join(lane, "node_modules", "left-pad", "index.js"))).toBe(
+      await realpath(join(target, "left-pad", "index.js")),
+    );
+    expect(result.notices).toContain(
+      `node_modules here is a link to ${target}: install in that checkout, never here.`,
+    );
+    expect(await mustGit(lane, "status", "--porcelain")).toBe("");
+  });
+
+  it("refuses with the .gitignore fix when only the slash form ignores the link, and leaves no link behind", async () => {
+    const fix = await seedRepo(getRoot().dir);
+    await declareLinkedInstall(fix, "node_modules/\n");
+
+    const result = await runWorktreeSetup(setupOptions(fix, "feat"));
+
+    const lane = join(fix.farm, "feat");
+    const entry = result.entries.find((row) => row.path === "node_modules");
+    expect(result.status).toBe("partial");
+    expect(entry?.outcome).toBe("failed");
+    expect(entry?.reason).toContain("no trailing slash");
+    expect(await exists(join(lane, "node_modules"))).toBe(false);
+    expect(result.notices.some((notice) => notice.includes("install in that checkout"))).toBe(false);
+    expect(await mustGit(lane, "status", "--porcelain")).toBe("");
+  });
+
+  it("admits a symlink row under a slash-only rule when there is nothing to link", async () => {
+    const fix = await seedRepo(getRoot().dir);
+    await declareLinkedInstall(fix, "node_modules/\n");
+    await rm(join(fix.root, "node_modules"), { recursive: true, force: true });
+
+    const result = await runWorktreeSetup(setupOptions(fix, "feat"));
+
+    expect(result.status).toBe("complete");
+    expect(result.entries.find((row) => row.path === "node_modules")?.outcome).toBe("absent");
+    expect(await mustGit(join(fix.farm, "feat"), "status", "--porcelain")).toBe("");
+  });
+
+  it("still refuses a symlink row over any other directory that holds a credential", async () => {
+    const fix = await seedRepo(getRoot().dir);
+    await declareLinkedInstall(fix, "node_modules\nvendor\n");
+    await mkdir(join(fix.root, "vendor"), { recursive: true });
+    await writeFile(join(fix.root, "vendor", ".env.mcp"), SECRET_BODY, "utf8");
+    await writeFile(
+      join(fix.root, ".stamity", "worktree.json"),
+      JSON.stringify({
+        version: 1,
+        entries: [
+          { path: "node_modules", strategy: "symlink" },
+          { path: "vendor", strategy: "symlink" },
+        ],
+      }),
+      "utf8",
+    );
+
+    const result = await runWorktreeSetup(setupOptions(fix, "feat"));
+
+    expect(result.entries.map((entry) => [entry.path, entry.outcome])).toEqual([
+      ["node_modules", "materialized"],
+      ["vendor", "failed"],
+    ]);
+    expect(result.entries[1]?.reason).toContain("vendor/.env.mcp");
+    expect(await exists(join(fix.farm, "feat", "vendor"))).toBe(false);
+  });
+
+  it("cleanup removes the link and leaves the linked tree intact", async () => {
+    const fix = await seedRepo(getRoot().dir);
+    await declareLinkedInstall(fix, "node_modules\n");
+    await runWorktreeSetup(setupOptions(fix, "feat"));
+
+    const result = await runWorktreeCleanup(cleanupOptions(fix, { names: ["feat"] }));
+
+    expect(result.status).toBe("complete");
+    expect(await exists(join(fix.farm, "feat"))).toBe(false);
+    expect(await readFile(join(fix.root, "node_modules", "left-pad", "index.js"), "utf8")).toBe(
+      "module.exports=1\n",
+    );
+  });
+
+  it("links a dangling node_modules, names its target, and cleanup removes only the link", async () => {
+    const fix = await seedRepo(getRoot().dir);
+    await declareLinkedInstall(fix, "node_modules\n");
+    await rm(join(fix.root, "node_modules"), { recursive: true, force: true });
+    await symlink(join(fix.root, "gone"), join(fix.root, "node_modules"));
+
+    const result = await runWorktreeSetup(setupOptions(fix, "feat"));
+
+    const lane = join(fix.farm, "feat");
+    expect(result.status).toBe("complete");
+    expect(result.notices).toContain(
+      `node_modules here is a link to ${join(fix.root, "node_modules")}: install in that checkout, never here.`,
+    );
+    expect(await mustGit(lane, "status", "--porcelain")).toBe("");
+
+    await runWorktreeCleanup(cleanupOptions(fix, { names: ["feat"] }));
+    expect(await exists(lane)).toBe(false);
+    expect((await lstat(join(fix.root, "node_modules"))).isSymbolicLink()).toBe(true);
+  });
+
+  it("links a node_modules that points outside every checkout, and cleanup leaves that folder intact", async () => {
+    const base = getRoot().dir;
+    const fix = await seedRepo(base);
+    await declareLinkedInstall(fix, "node_modules\n");
+    const outside = join(base, "shared-install");
+    await mkdir(join(outside, "left-pad"), { recursive: true });
+    await writeFile(join(outside, "left-pad", "index.js"), "module.exports=2\n", "utf8");
+    await rm(join(fix.root, "node_modules"), { recursive: true, force: true });
+    await symlink(outside, join(fix.root, "node_modules"));
+
+    const result = await runWorktreeSetup(setupOptions(fix, "feat"));
+
+    const lane = join(fix.farm, "feat");
+    expect(result.status).toBe("complete");
+    expect(await readFile(join(lane, "node_modules", "left-pad", "index.js"), "utf8")).toBe(
+      "module.exports=2\n",
+    );
+    expect(result.notices).toContain(
+      `node_modules here is a link to ${join(fix.root, "node_modules")}: install in that checkout, never here.`,
+    );
+
+    await runWorktreeCleanup(cleanupOptions(fix, { names: ["feat"] }));
+    expect(await exists(lane)).toBe(false);
+    expect(await readFile(join(outside, "left-pad", "index.js"), "utf8")).toBe("module.exports=2\n");
   });
 });

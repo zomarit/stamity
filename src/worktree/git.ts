@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { lstat } from "node:fs/promises";
 import { isAbsolute, join, normalize, resolve, sep } from "node:path";
 import { bareShapeRefusal, gitDiscoveryMeetsBareShape } from "../merge/safeWrite.ts";
 import { gitProgramFor, programNotFound } from "../shared/programPath.ts";
@@ -473,6 +474,17 @@ export async function readDirtyCounts(
  * "nothing matched" rather than "the call failed"; only 128 and above are real.
  * Paths arrive on stdin because `-z` is accepted only with `--stdin`, which is
  * also what keeps a path starting with `-` off the argv.
+ *
+ * Both ignore forms are asked (REQ-WORKTREE-019). Git answers a path in the
+ * bare form by what is on disk: a directory there matches a slash-only rule
+ * (`node_modules/`), while an absent path or a link matches only a rule with no
+ * trailing slash. So an ABSENT path is also asked as `path/`, and either answer
+ * admits it — nothing will be placed for it, so the slash-only rule cannot
+ * leave a worktree dirty. A path that is there is asked in the bare form only:
+ * git already reads a directory as one, and a link asked as `path/` makes git
+ * exit 128 ("beyond a symbolic link"), which would fail the whole batch. A
+ * `symlink` row over a directory still needs the bare rule in the new worktree;
+ * setup checks that against the placed link itself.
  */
 export async function classifyRepoPaths(
   run: WorktreeGitRunner,
@@ -486,10 +498,18 @@ export async function classifyRepoPaths(
   if (tracked.status !== 0) gitFailed("listing tracked paths", tracked);
   const trackedPaths = tracked.stdout.split("\0").filter((entry) => entry !== "");
 
+  const absent = new Set(
+    (
+      await Promise.all(
+        relPaths.map(async (relPath) => ((await isAbsent(join(repoRoot, relPath))) ? relPath : null)),
+      )
+    ).filter((relPath): relPath is string => relPath !== null),
+  );
+  const asked = [...relPaths, ...[...absent].map((relPath) => `${relPath}/`)];
   const ignored = await run({
     args: ["check-ignore", "-z", "--stdin"],
     cwd: repoRoot,
-    stdin: `${relPaths.join("\0")}\0`,
+    stdin: `${asked.join("\0")}\0`,
   });
   // 0 = at least one path is ignored, 1 = none are. Anything else is a fault.
   if (ignored.status !== 0 && ignored.status !== 1) gitFailed("checking ignored paths", ignored);
@@ -500,10 +520,24 @@ export async function classifyRepoPaths(
       (entry) => entry === relPath || entry.startsWith(`${relPath}/`),
     );
     if (isTracked) classes.set(relPath, "tracked");
-    else if (ignoredPaths.has(relPath)) classes.set(relPath, "ignored");
+    else if (ignoredPaths.has(relPath) || ignoredPaths.has(`${relPath}/`)) classes.set(relPath, "ignored");
     else classes.set(relPath, "untracked");
   }
   return classes;
+}
+
+/**
+ * True only when nothing is at `absPath` (`ENOENT`). Any other answer — a file,
+ * a directory, a link, or an errno such as `ENOTDIR` — is "there", which keeps
+ * the path out of the slash-form question {@link classifyRepoPaths} asks.
+ */
+async function isAbsent(absPath: string): Promise<boolean> {
+  try {
+    await lstat(absPath);
+    return false;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT";
+  }
 }
 
 // ---------------------------------------------------------------------------

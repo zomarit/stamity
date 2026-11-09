@@ -1,4 +1,4 @@
-import { chmod, lstat, mkdir, readFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, readFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { acquireWriteLock, isCrossProcessLockingEnabled } from "../merge/atomicWrite.ts";
 import { isRunId } from "../runs/layout.ts";
@@ -21,6 +21,7 @@ import {
   type WorktreeGitRunner,
 } from "./git.ts";
 import {
+  isInstallTreePath,
   materializeEntries,
   receiptEntryFor,
   type MaterializeRequest,
@@ -623,10 +624,16 @@ async function setupUnderLock(
       secret: entry.secret,
     };
     // oxlint-disable-next-line no-await-in-loop -- rows share parent directories; a parallel batch races its own mkdir and reports an errno that names no row
-    const results = await materializeEntries([request], options);
+    const materialized = await materializeEntries([request], options);
+    const results: MaterializeResult[] = [];
+    for (const result of materialized) {
+      // oxlint-disable-next-line no-await-in-loop -- one row's results, checked in order against the tree this loop is building
+      results.push(await confirmLinkIgnored(run, plan.worktreePath, result));
+    }
     placed.push(...results);
     entries.push(...results.map(toEntryReport));
     notices.push(...placementNotices(results));
+    notices.push(...installLinkNotices(results, opts.repoRoot));
   }
 
   // [secfix A6b] `resolveSha` and `resolveWorktreeGitDir` both run AFTER the
@@ -756,6 +763,66 @@ function placementNotices(results: readonly MaterializeResult[]): string[] {
     }
   }
   return notices;
+}
+
+/**
+ * REQ-WORKTREE-019: a placed link must be ignored in the new worktree, or the
+ * worktree is dirty at creation. The plan's admissibility check cannot answer
+ * that for a directory: git reads a directory in the source checkout as one, so
+ * a slash-only rule (`node_modules/`) admits it there, while the link placed
+ * here is not a directory and matches only a rule with no trailing slash. So
+ * the link itself is asked, in the worktree, right after it lands.
+ *
+ * A link the worktree's own rules do not ignore is removed again and its row
+ * fails with the `.gitignore` fix. Removing it is safe: `symlink(2)` refuses an
+ * existing name, so a `materialized` link is one this run made, and `unlink`
+ * removes the link without following it into its target. A failure here is
+ * returned in the row, never thrown (REQ-WORKTREE-011).
+ */
+async function confirmLinkIgnored(
+  run: WorktreeGitRunner,
+  worktreePath: string,
+  result: MaterializeResult,
+): Promise<MaterializeResult> {
+  if (result.strategy !== "symlink" || result.outcome !== "materialized") return result;
+  let reason: string;
+  try {
+    const classes = await classifyRepoPaths(run, worktreePath, [result.relPath]);
+    if (classes.get(result.relPath) === "ignored") return result;
+    reason =
+      `${result.relPath} is a link in the new worktree, and git ignores a link only through a rule ` +
+      `with no trailing slash: .gitignore does not ignore ${result.relPath} in that form, so the link ` +
+      `would leave the worktree dirty. Add the line \`${result.relPath}\` (no trailing slash) to ` +
+      `.gitignore, beside any \`${result.relPath}/\` line, commit it, and set up again.`;
+  } catch (error) {
+    reason =
+      `git could not say whether the link ${result.relPath} is ignored in the new worktree: ` +
+      `${error instanceof Error ? error.message : String(error)}`;
+  }
+  try {
+    await unlink(join(worktreePath, result.relPath));
+    reason += " The link was removed again.";
+  } catch (error) {
+    reason += ` The link could not be removed: ${error instanceof Error ? error.message : String(error)}`;
+  }
+  return { ...result, outcome: "failed", reason };
+}
+
+/**
+ * The install notice (REQ-WORKTREE-019): a `node_modules` placed as a link is
+ * the other checkout's install, so an install run here would rewrite that
+ * checkout's tree. The notice names the link's target and where to install.
+ */
+function installLinkNotices(results: readonly MaterializeResult[], repoRoot: string): string[] {
+  return results
+    .filter(
+      (result) =>
+        result.strategy === "symlink" && result.outcome === "materialized" && isInstallTreePath(result.relPath),
+    )
+    .map(
+      (result) =>
+        `${result.relPath} here is a link to ${join(repoRoot, result.relPath)}: install in that checkout, never here.`,
+    );
 }
 
 function presenceNotices(setup: SetupPresence, worktreePath: string): string[] {

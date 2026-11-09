@@ -1276,6 +1276,46 @@ The CLI page is generated and byte-checked, so it is not optional either.
 re-open trigger names this event; a trigger that fires and is not acted on is a
 trigger nobody will trust the next time.
 
+### REQ-WORKTREE-019 — A lane links its install safely and carries its run
+
+**Decision.** Added 2026-11-09. This section states the linked-install half; the
+receipt's `run` tag is stated with its own change.
+
+- **Both ignore forms are asked.** Git answers a path in its bare form by what is
+  on disk: a directory there matches a slash-only rule (`node_modules/`), while an
+  absent path or a link matches only a rule with no trailing slash. The
+  admissibility pass (REQ-WORKTREE-003) also asks an ABSENT path as `path/`, and
+  either answer admits it, since nothing is placed for it. A path that is there is
+  asked in the bare form only; a link asked as `path/` makes git exit 128. A row
+  neither form ignores is still refused with the `.gitignore` fix.
+- **A placed link is checked where it lands.** Right after a `symlink` row's link
+  is placed, setup asks git in the new worktree whether that link is ignored. If
+  not (a directory admitted by a slash-only rule), the link is removed again (it
+  is one this run made; `unlink` does not follow it) and the row fails with the
+  fix: add the line with no trailing slash. So a lane with a linked `node_modules`
+  is clean at creation, or the row says why it is not there. A dry run places
+  nothing, so it cannot ask this, and still shows such a row as placed.
+- **The credential scan does not walk a linked install.** A `symlink` row whose
+  last segment is `node_modules` is not scanned for credential basenames
+  (`[secfix S1-W6]`); every other `symlink` row over a directory still is, and
+  every `copy` row's walk is unchanged.
+- **The install notice.** When a `symlink` row places `node_modules`, setup adds
+  `<path> here is a link to <target>: install in that checkout, never here.` to
+  `notices`, naming the link's target. A dangling link, or a link to a folder
+  outside every checkout, is placed and named the same way; cleanup removes the
+  link and never its target.
+- The policy format is unchanged.
+
+**Rationale.** A slash-only rule left every linked lane showing `?? node_modules`,
+and an absent row under that rule was refused for a dirt it could never cause.
+Walking an install tree made setup slow and refused rows over the package files
+that carry credential-looking names.
+
+**Dropped.** Skipping the scan for every `symlink` row: the S1-W6 refusal keeps
+its reach everywhere except the install tree, which the notice names instead.
+Writing the bare rule into the shared `info/exclude`: that file belongs to every
+checkout of the repository, not to the lane.
+
 ## Acceptance criteria
 
 One set per requirement. Ninety-five criteria; each is machine-checkable unless

@@ -136,6 +136,18 @@ export interface MaterializeResult {
 
 const SECRET_FILE_MODE = 0o600;
 
+/** The folder name a package manager installs into. */
+const INSTALL_TREE_NAME = "node_modules";
+
+/**
+ * True when `relPath`'s last segment is `node_modules`, at any depth
+ * (`node_modules`, `website/node_modules`). Exact spelling: a row spelled in
+ * another case is scanned like any other directory, the stricter answer.
+ */
+export function isInstallTreePath(relPath: string): boolean {
+  return posix.basename(relPath) === INSTALL_TREE_NAME;
+}
+
 /** Errnos that mean "this platform will not make a link", not "the write failed". */
 const SYMLINK_FALLBACK_ERRNOS: ReadonlySet<string> = new Set(["EPERM", "EACCES"]);
 
@@ -460,7 +472,12 @@ async function placeSymlink(
   // there is no per-file boundary to elevate or withhold at the way `copy`
   // has: the row is refused OUTRIGHT, before the syscall, naming the file and
   // pointing at `copy` (which DOES have a consent gate) as the route.
-  if (sourceIsDirectory && opts.isKnownCredential !== undefined) {
+  // [REQ-WORKTREE-019] The one row this scan does not walk is a link placing
+  // an install tree: `node_modules` is the package manager's output, large
+  // enough that walking it makes setup crawl, and its packages ship files with
+  // credential basenames. Setup names the link's target in a notice instead.
+  // Every other `symlink` row over a directory is still scanned.
+  if (sourceIsDirectory && opts.isKnownCredential !== undefined && !isInstallTreePath(request.relPath)) {
     const credential = await findCredentialInSubtree(opts.sourceRoot, request.relPath, opts.isKnownCredential);
     if (credential !== null) {
       return {
