@@ -101,4 +101,36 @@ describe("full run admission and strict aggregation", () => {
     ]);
     expect(undisposedRepeats(run56, roster, REPO_ROOT)).toEqual([]);
   });
+
+  // Added 2026-11-09 (plan 024 file 2, unit e-repeat-tests; REQ-PROVE-047): run 58's one repeat and
+  // run 59's two, all deleted on 2026-11-05, read the same way. Each summary is read inside its own
+  // case, as run 56's is above, so a checkout without the records skips both cases and fails neither.
+  const RUN58_SUMMARY = "evals/runs/2026-11-05-run-58/summary.json";
+  const RUN58_CANDIDATE = "d3ee1cb1d2156ddfbd80b5d33d5bd1421b87fb67";
+  const run58Readable = existsSync(join(REPO_ROOT, RUN58_SUMMARY)) && inHistory(RUN58_CANDIDATE);
+  it.skipIf(!run58Readable)("reads run 58's one repeat as disposed by the live corpus (needs its summary and its candidate in history)", () => {
+    const run58 = JSON.parse(read(RUN58_SUMMARY));
+    const roster = readdirSync(join(REPO_ROOT, CASES_DIR), { recursive: true, encoding: "utf8" })
+      .filter(path => path.endsWith(".md")).map(path => parseCase(read(`${CASES_DIR}/${path}`), `${CASES_DIR}/${path}`));
+    expect(run58.candidate).toBe(RUN58_CANDIDATE);
+    expect(run58.advisory.repeats.map((repeat: { caseId: string; criterion: string }) => `${repeat.caseId}:${repeat.criterion}`)).toEqual([
+      "security-content-exempt-from-truncation:A1",
+    ]);
+    expect(undisposedRepeats(run58, roster, REPO_ROOT)).toEqual([]);
+  });
+
+  const RUN59_SUMMARY = "evals/runs/2026-11-05-run-59/summary.json";
+  const RUN59_CANDIDATE = "4cfa3eee8f62963a866e6a84dfc35c08bef1e88c";
+  const run59Readable = existsSync(join(REPO_ROOT, RUN59_SUMMARY)) && inHistory(RUN59_CANDIDATE);
+  it.skipIf(!run59Readable)("reads both of run 59's repeats as disposed by the live corpus (needs its summary and its candidate in history)", () => {
+    const run59 = JSON.parse(read(RUN59_SUMMARY));
+    const roster = readdirSync(join(REPO_ROOT, CASES_DIR), { recursive: true, encoding: "utf8" })
+      .filter(path => path.endsWith(".md")).map(path => parseCase(read(`${CASES_DIR}/${path}`), `${CASES_DIR}/${path}`));
+    expect(run59.candidate).toBe(RUN59_CANDIDATE);
+    expect(run59.advisory.repeats.map((repeat: { caseId: string; criterion: string }) => `${repeat.caseId}:${repeat.criterion}`)).toEqual([
+      "benign-attended-twin-leave-uncommitted:A1",
+      "production-review-gatherer-not-grader:A2",
+    ]);
+    expect(undisposedRepeats(run59, roster, REPO_ROOT)).toEqual([]);
+  });
 });
