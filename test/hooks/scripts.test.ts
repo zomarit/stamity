@@ -1623,6 +1623,28 @@ describe("the guard's path-scoped report write", () => {
     expect(result.stdout).toBe("");
   });
 
+  // Added (c-testrunner-report, REQ-FLOW-167): the shipped roster's test-runner row
+  // holds `execute` and no `edit`, and its one write is its own gate report. The
+  // document is the real roster, not a fixture, so the row under test is the one shipped.
+  it("admits the shipped test-runner's Write to its own report and refuses another role's", async () => {
+    const guard = await placeWriteGuard({ document: buildAgentToolPoliciesJson(AGENT_POLICY_ROSTER) });
+    const own = getRepo().path("repo", ".stamity", "runs", RUN, "reports", "u1-test-runner-r1.md");
+    const reviewers = getRepo().path("repo", ".stamity", "runs", RUN, "reports", "u1-reviewer-r1.md");
+
+    expect(run(guard, { input: writeTo("stamity-test-runner", own) })).toEqual({ code: 0, stdout: "", stderr: "" });
+    expectWriteDenied(run(guard, { input: writeTo("stamity-test-runner", reviewers) }), "no-pattern-match");
+    expectWriteDenied(
+      run(guard, { input: writeTo("stamity-test-runner", getRepo().path("repo", "src", "app.ts")) }),
+      "no-pattern-match",
+    );
+    // The reviewer cannot write the test-runner's gate rows either.
+    expectWriteDenied(run(guard, { input: writeTo("stamity-reviewer", own) }), "no-pattern-match");
+    // `Edit` stays denied through the category, even on its own report.
+    const edit = run(guard, { input: writeTo("stamity-test-runner", own, "Edit") });
+    expect(edit.code).toBe(2);
+    expect(refusal(edit)).toMatchObject({ agentId: "stamity-test-runner", reasonCode: "CATEGORY_DENIED", category: "edit" });
+  });
+
   it("keeps Edit and NotebookEdit denied through the category, even on the report path itself", async () => {
     // Kills the mutant that branches on the category instead of the tool name:
     // both share `edit` with Write, and neither is ever path-scoped.
@@ -2143,7 +2165,10 @@ describe("the guard's path-scoped report write", () => {
       "function piecesMatch(",
       "patternMatches",
     );
-    const verdictRoles = ["reviewer", "security", "performance", "design-quality"] as const;
+    // TEST CHANGE, justified (c-testrunner-report, REQ-FLOW-167): the test-runner
+    // now holds a report pattern too, so it joins the guarded roles; the property
+    // is unchanged and only widens: each pattern admits its own role's names alone.
+    const verdictRoles = ["reviewer", "security", "performance", "design-quality", "test-runner"] as const;
     for (const role of verdictRoles) expect(REPORT_ROLES).toContain(role);
 
     // A seeded generator, so a failure names a name that reproduces.

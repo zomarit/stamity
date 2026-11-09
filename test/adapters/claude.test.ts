@@ -2892,7 +2892,10 @@ describe("the verdict roles' path-scoped report write", () => {
   it("never renders Write for a role whose row names no writePaths", async () => {
     const { rows } = await planned();
 
-    for (const id of ["stamity-researcher", "stamity-test-runner"]) {
+    // TEST CHANGE, justified (2026-11-09, c-testrunner-report, REQ-FLOW-167): the test-runner's
+    // row now names its own report pattern, so it left this control; the researcher is the one
+    // roster row left with neither `writePaths` nor `edit`. Its render is pinned in the next case.
+    for (const id of ["stamity-researcher"]) {
       const grant = resolveAgentGrant({ runtimeId: id, frontmatter: {} });
       // The control: the key the render reads is absent, and the grant holds
       // no `edit` category that would name `Write` on its own.
@@ -2901,6 +2904,19 @@ describe("the verdict roles' path-scoped report write", () => {
       expect(grant.allow, id).not.toContain("edit");
       expect(toolNames(rows, id), id).not.toContain(CLAUDE_REPORT_WRITE_TOOL);
     }
+  });
+
+  // Added 2026-11-09 (c-testrunner-report, REQ-FLOW-167): the test-runner keeps its shell and
+  // gains the one path-scoped `Write` for its gate report, never `Edit` or `NotebookEdit`.
+  it("renders the scoped Write beside the shell for the test-runner, and no Edit", async () => {
+    const { rows } = await planned();
+    const grant = resolveAgentGrant({ runtimeId: "stamity-test-runner", frontmatter: {} });
+    expect(grant.allow).toEqual(["read", "execute"]);
+    expect(grant.writePaths).toEqual([".stamity/runs/*/reports/*-test-runner-r*.md"]);
+
+    expect(toolNames(rows, "stamity-test-runner")).toEqual([
+      "Read", "Grep", "Glob", "Skill", CLAUDE_REPORT_WRITE_TOOL, "Bash", "PowerShell",
+    ]);
   });
 
   it("does not pre-approve Write for the session", async () => {

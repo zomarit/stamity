@@ -83,6 +83,17 @@ const VERDICT_REPORT_ROLES = {
 } as const;
 
 /**
+ * Every row that holds a report write: the four verdict roles plus the
+ * test-runner (REQ-FLOW-167), whose gate report reaches the run when its
+ * hand-back is empty. The test-runner is the one carrier that also holds
+ * `execute`; none holds `edit`.
+ */
+const REPORT_WRITE_ROLES = {
+  ...VERDICT_REPORT_ROLES,
+  "stamity-test-runner": "test-runner",
+} as const;
+
+/**
  * One client-native tool name per category — enough to rule on a grant without
  * pulling in a whole client dialect. The dialect-wide parity between this
  * roster and the emitted guard is `test/corpus/hookWiring.test.ts`'s subject.
@@ -217,32 +228,39 @@ describe("AGENT_POLICY_ROSTER", () => {
   });
 
   it("holds exactly the report write path and no edit category", () => {
-    // Only the four verdict rows carry the field; a fifth carrier would be a
-    // write nobody decided on.
+    // TEST CHANGE, justified (c-testrunner-report, REQ-FLOW-167): the test-runner
+    // now writes its own gate report, so the carriers are the four verdict rows
+    // plus that one; a sixth carrier would be a write nobody decided on. Every
+    // other assertion below still binds each verdict row as before, and now the
+    // test-runner row too.
     const carriers = AGENT_POLICY_ROSTER.filter((row) => row.writePaths !== undefined).map(
       (row) => row.agentId,
     );
-    expect(carriers.toSorted()).toEqual(Object.keys(VERDICT_REPORT_ROLES).toSorted());
+    expect(carriers.toSorted()).toEqual(Object.keys(REPORT_WRITE_ROLES).toSorted());
     // The security row still refuses code writes, and now says which kind it refuses.
     expect(
       AGENT_POLICY_ROSTER.find((entry) => entry.agentId === "stamity-security")?.rationale,
     ).toContain("No code write grant:");
 
-    const roles = Object.values(VERDICT_REPORT_ROLES);
-    for (const [id, role] of Object.entries(VERDICT_REPORT_ROLES)) {
+    const roles = Object.values(REPORT_WRITE_ROLES);
+    for (const [id, role] of Object.entries(REPORT_WRITE_ROLES)) {
       const row = AGENT_POLICY_ROSTER.find((entry) => entry.agentId === id);
 
       // `allow` is what a guard that predates the field decides on, so it
-      // stays read-only: that guard denies the report write, fail-closed.
-      expect(row?.allow, id).toEqual(["read"]);
+      // withholds `edit`: that guard denies the report write, fail-closed. The
+      // verdict rows stay read-only; the test-runner keeps the shell its gates need.
+      expect(row?.allow, id).toEqual(
+        id === "stamity-test-runner" ? ["read", "execute"] : ["read"],
+      );
+      expect(row?.allow as readonly string[], id).not.toContain("edit");
       expect(row?.writePaths, id).toEqual([`.stamity/runs/*/reports/*-${role}-r*.md`]);
       expect(row?.writePaths, id).toEqual(verdictReportWritePaths(role));
       // The rationale an operator audits names the one write the row holds.
       expect(row?.rationale, id).toMatch(/\breport\b/);
       for (const pattern of row?.writePaths ?? []) {
         expect(isWritePathPattern(pattern), `${id}: ${pattern}`).toBe(true);
-        // One role's pattern names no other role's report, so no verdict role
-        // can overwrite another's findings.
+        // One role's pattern names no other role's report, so no carrier can
+        // overwrite another's findings or gate rows.
         for (const other of roles.filter((candidate) => candidate !== role)) {
           expect(pattern, `${id} reaches ${other}'s reports`).not.toContain(`-${other}-r`);
         }

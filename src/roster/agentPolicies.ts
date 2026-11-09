@@ -95,7 +95,7 @@ export interface AgentPolicyRow {
    * category, which {@link allow} still withholds. Honoured only by the
    * generated Claude Code guard in the repository layout; ignored by every
    * other reader, so a reader unaware of the field denies the write through the
-   * category. Absent on every row but the four verdict roles'.
+   * category. Absent on every row but the four verdict roles' and the test-runner's.
    */
   readonly writePaths?: readonly string[];
   /**
@@ -114,10 +114,10 @@ export interface AgentPolicyRow {
 }
 
 /**
- * The report files one verdict role may write: its own, in any run, and no
- * other role's. One pattern per role rather than one for the whole folder, so
- * a verdict role steered by text in the code under review cannot overwrite
- * another role's findings before they reach the ledger.
+ * The report files one verdict role, or the test-runner, may write: its own, in
+ * any run, and no other role's. One pattern per role rather than one for the
+ * whole folder, so a role steered by text in the code under review cannot
+ * overwrite another role's findings or gate rows before they reach the ledger.
  *
  * The isolation between roles is enforced by the generated guard's round-number
  * rule, not by the pass slug: in a pattern's final segment the LAST `*` — the
@@ -125,15 +125,16 @@ export interface AgentPolicyRow {
  * admits `<pass>-reviewer-r<N>.md` and never a name in which another role's
  * token follows `-reviewer-r`, even when the pass slug itself holds a role
  * token. The rule's precondition is that no role token is a suffix of another:
- * `-reviewer-r`, `-security-r`, `-performance-r` and `-design-quality-r` today.
- * A future role such as `quality` would collide with `design-quality`, so adding
- * a role re-checks this precondition. The rule's limit: the round takes the
+ * `-reviewer-r`, `-security-r`, `-performance-r`, `-design-quality-r` and
+ * `-test-runner-r` today. A future role such as `quality` would collide with
+ * `design-quality`, and one such as `runner` with `test-runner`, so adding a
+ * role re-checks this precondition. The rule's limit: the round takes the
  * LONGEST trailing digit run, so a pattern whose piece just before that last `*`
  * ends in a digit (`*-v2*.md`) matches nothing; every role token here ends in
  * `-r`, so no pattern this returns has one.
  */
 export function verdictReportWritePaths(
-  role: "reviewer" | "security" | "performance" | "design-quality",
+  role: "reviewer" | "security" | "performance" | "design-quality" | "test-runner",
 ): readonly string[] {
   return [`.stamity/runs/*/reports/*-${role}-r*.md`];
 }
@@ -220,8 +221,9 @@ export const AGENT_POLICY_ROSTER: readonly AgentPolicyRow[] = [
   {
     agentId: "stamity-test-runner",
     allow: ["read", "execute"],
+    writePaths: verdictReportWritePaths("test-runner"),
     rationale:
-      "Runs the declared gate commands and returns their structured results. Independence from whoever wrote the change is the entire point of the role, so it inspects the tree and executes commands but never edits what it is grading.",
+      "Runs the declared gate commands and returns their structured results. Independence from whoever wrote the change is the entire point of the role, so it inspects the tree and executes commands but never edits what it is grading. Its single file write is the gate report it saves for the run, so an empty hand-back still reaches the run.",
   },
   {
     agentId: "stamity-spec-author",

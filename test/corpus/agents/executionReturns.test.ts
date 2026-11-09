@@ -146,18 +146,51 @@ describe("test-runner — a green verdict may be digested, a red one never", () 
     // TEST CHANGE, justified (2026-10-10, q6t-test-runner-ci-line, `build/85`, D36): the red
     // sentence now also states that a red verdict writes nothing to the named path, which was
     // already true; the full return it pins is unchanged.
-    expect(contract).toContain("A `red` verdict writes nothing to the named path and is returned in full");
+    // TEST CHANGE, justified (2026-11-09, c-testrunner-report, REQ-FLOW-167): a red verdict
+    // now writes the same report as a green one, so an empty hand-back can be read from it;
+    // the full return this case pins is unchanged.
+    expect(contract).toContain("A `red` verdict writes the same report and is returned in full");
+    expect(contract).not.toContain("writes nothing to the named path");
     expect(contract).toContain("whatever the dispatch names");
     // The pin the quality suite holds survives beside the new bullet.
     expect(contract).toMatch(/a red verdict is still `DONE`/i);
   });
 
-  it("writes a green report through its shell, holding no edit tool", async () => {
+  // TEST CHANGE, justified (2026-11-09, c-testrunner-report, REQ-FLOW-167): the report is now
+  // written on every verdict, its first line the brief's spawn token, through the path-scoped
+  // `Write` where the client grants it and through the shell, as before, where it does not
+  // (sign-off S20 on the key, M-2 on the shell route); the role still holds no edit capability.
+  it("writes every verdict's report through Write where granted, else its shell, its first line the spawn token", async () => {
     const file = await load(TEST_RUNNER);
     const contract = section(file, "Return contract");
-    expect(contract).toContain("written through this role's shell because it holds no edit tool");
+    expect(contract).toContain(
+      "With a report path named, every verdict writes its rows and excerpts to that exact path",
+    );
+    // The key is `spawn:`, not `token:`: a `token:` line trips the deny-scan's inline-secret
+    // pattern, in this corpus and in any screen that reads the report.
+    expect(contract).toContain("the report's first line `spawn: <the brief's spawn token>`");
+    expect(contract).toContain(
+      "through `Write` where the client grants it, else through this role's shell as the one redirect it makes, never a gate command's",
+    );
+    expect(contract).toContain("A refused write is said so and the result is returned in full");
     expect(contract).toContain("`contract delta: none`");
     expect(flat(file.parsed.body)).toMatch(/holds no edit capability/i);
+  });
+});
+
+// Added 2026-11-09 (c-testrunner-report, REQ-FLOW-167): the orchestrator's half of the report
+// route. An empty hand-back is read from the report only when its token is this spawn's; with
+// no such report, nothing reads as a pass.
+describe("st-work — an empty test-runner return is read from its report", () => {
+  it("reads the report only under this spawn's token, else every gate is unknown", async () => {
+    const contract = section(await load("commands/st-work.md"), "Return contract");
+    const never = contract.slice(contract.indexOf("**Never digested:**"), contract.indexOf("**Report path:**"));
+    expect(never).toContain("a BLOCKED_* return and a red test-runner return");
+    expect(never).toContain(
+      "An empty or unreadable test-runner return is read from its report only if it opens `spawn: <the fresh token its brief named>`",
+    );
+    expect(never).toContain("else each gate reads `unknown` and the failure ladder runs");
+    expect(never).toContain("Open a report when a digest is not enough");
   });
 });
 

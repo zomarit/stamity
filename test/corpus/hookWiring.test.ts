@@ -327,6 +327,9 @@ describe("emitted policy document", () => {
     // Stated as literals, independent of the roster: exactly the four verdict
     // rows carry a write path, each naming only its own role's reports, and
     // each keeps the read-only grant a guard that predates the field decides on.
+    // TEST CHANGE, justified (2026-11-09, c-testrunner-report, REQ-FLOW-167): the
+    // test-runner now writes its own gate report, so it is the fifth carrier; it
+    // keeps `read` and `execute` and, like the four, holds no `edit`.
     const carriers = Object.fromEntries(
       document.policies
         .filter((policy) => Object.hasOwn(policy, "writePaths"))
@@ -348,6 +351,10 @@ describe("emitted policy document", () => {
       "stamity-security": {
         allow: ["read"],
         writePaths: [".stamity/runs/*/reports/*-security-r*.md"],
+      },
+      "stamity-test-runner": {
+        allow: ["read", "execute"],
+        writePaths: [".stamity/runs/*/reports/*-test-runner-r*.md"],
       },
     });
   });

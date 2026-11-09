@@ -33,9 +33,9 @@ and "Return contract" (the two tiers and the digest):
   the reviewer, each lens, the implementer and the fixer; `security:` in
   full, or `none`; `contract delta:` census rows, or `none` — then at most
   1,500 characters of prose. The cap binds the prose only.
-- **Never digested:** a BLOCKED_* return and a red test-runner return, beside
-  the full returns above. Open the report when a digest line is not enough to
-  act on.
+- **Never digested:** a BLOCKED_* return and a red test-runner return. Open a report when a
+  digest is not enough. An empty or unreadable test-runner return is read from its report only
+  if it opens `spawn: <the fresh token its brief named>`, else each gate reads `unknown` and the failure ladder runs.
 ```
 
 Governing text — `content/agents/stamity-reviewer.md`, "Return contract" (report and

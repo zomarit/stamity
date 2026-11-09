@@ -390,7 +390,10 @@ describe("the path-scoped report write in the Claude dialect", () => {
 describe("the verdict-role report write in the coverage rows", () => {
   it("states the Write scope on Claude and the inline return on every other client", () => {
     const claude = ADAPTER_ALLOWLIST_COVERAGE.find((row) => row.tool === "claude");
-    expect(claude?.mechanism).toContain("the four verdict roles also carry `Write`");
+    // TEST CHANGE, justified (2026-11-09, c-testrunner-report, REQ-FLOW-167, finding M-1): the
+    // test-runner's row now names its own report pattern, so the Claude row names it beside the
+    // four verdict roles as a carrier of the scoped `Write`; the scope pins below are unchanged.
+    expect(claude?.mechanism).toContain("the four verdict roles and the test-runner also carry `Write`");
     expect(claude?.mechanism).toContain("`writePaths`");
     expect(claude?.mechanism).toContain("never `Edit` or `NotebookEdit`");
     // TEST CHANGE, justified (2026-10-15, unit e12-translator, ledger build/32): the pins read
@@ -398,7 +401,7 @@ describe("the verdict-role report write in the coverage rows", () => {
     // route, so the repository layout is the only one and the row states no condition that
     // cannot arise; the Write's scope is pinned unconditionally instead.
     expect(claude?.mechanism).toContain(
-      "the four verdict roles also carry `Write`, which the generated pre-tool-use guard admits only for a regular file",
+      "the four verdict roles and the test-runner also carry `Write`, which the generated pre-tool-use guard admits only for a regular file",
     );
     expect(claude?.mechanism).not.toMatch(/plugin|repository layout/);
     expect(claude?.mechanism).not.toContain("stay read-only here");

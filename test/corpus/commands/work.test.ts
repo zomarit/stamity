@@ -439,11 +439,14 @@ describe("/st-work — body skeleton", () => {
   // Moved 2026-10-15 (ledger row 2026-10-14_cli-native/review/143), 900 to 870 characters: the
   // Frame's model step bought ", none where the map has none" (29 characters), so a class whose
   // map entry holds no `model` is dispatched with none. The line budget did not move.
-  it("leaves room under both budgets: 870 characters before the cut, 15 lines under the cap", async () => {
+  // Moved 2026-11-09 (c-testrunner-report, REQ-FLOW-167; sign-off S19), 870 to 732 characters:
+  // the Never-digested bullet bought the rule that reads an empty test-runner return from its
+  // report under the spawn token (139 characters). The line budget did not move.
+  it("leaves room under both budgets: 732 characters before the cut, 15 lines under the cap", async () => {
     const file = await workFile;
     const cut = file.raw.indexOf("\n### Specialist pass\n");
     expect(cut).toBeGreaterThan(-1);
-    expect(REATTACH_BUDGET_CHARS - cut).toBeGreaterThanOrEqual(870);
+    expect(REATTACH_BUDGET_CHARS - cut).toBeGreaterThanOrEqual(732);
     const bodyLines = file.parsed.body.replace(/\r?\n$/, "").split(/\r?\n/).length;
     expect(BODY_LINE_CAP - bodyLines).toBeGreaterThanOrEqual(15);
   });

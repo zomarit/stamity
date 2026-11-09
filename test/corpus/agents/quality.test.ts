@@ -454,14 +454,18 @@ describe("test-runner — independence and status mapping", () => {
   // Added 2026-10-10 (q6t-test-runner-ci-line, `build/85`, D36): only a green verdict writes the
   // report; a red one states the absence, so a dispatch naming a path never finds a stale report
   // standing in for the rows it returned in full.
-  it("writes nothing to the named path on a red verdict", async () => {
+  // TEST CHANGE, justified (2026-11-09, c-testrunner-report, REQ-FLOW-167): a red verdict now
+  // writes the same report as a green one, its first line this spawn's token, so an empty
+  // hand-back still reaches the run; the full return, rows and excerpts, is unchanged. The
+  // stale-report risk above is now met by the token: an earlier spawn's report carries its own.
+  it("writes the same report on a red verdict and still returns it in full", async () => {
     const contract = section(await load("agents/stamity-test-runner.md"), "Return contract").replace(
       /\s+/g,
       " ",
     );
 
     expect(contract).toContain(
-      "A `red` verdict writes nothing to the named path and is returned in full, rows and excerpts, whatever the dispatch names: its excerpts are ledger evidence.",
+      "A `red` verdict writes the same report and is returned in full, rows and excerpts, whatever the dispatch names: its excerpts are ledger evidence.",
     );
   });
 });

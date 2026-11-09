@@ -330,7 +330,7 @@ export const ADAPTER_ALLOWLIST_COVERAGE: readonly AdapterAllowlistCoverage[] = [
     // code.claude.com/docs/en/sub-agents (accessed 2026-08-13)
     tool: "claude",
     mechanism:
-      "`tools:` sub-agent frontmatter allowlist (comma-separated names); an omitted field inherits every tool, and a list resolving to nothing refuses the spawn; the four verdict roles also carry `Write`, which the generated pre-tool-use guard admits only for a regular file matching the row's `writePaths` under the repository root — never `Edit` or `NotebookEdit`; the four verdict roles and the spec-author also carry `Bash`, which the guard admits only for `git` with one read-only subcommand (log, show, diff, rev-list, merge-base) and nothing that writes a file or runs a configured program — never `PowerShell`",
+      "`tools:` sub-agent frontmatter allowlist (comma-separated names); an omitted field inherits every tool, and a list resolving to nothing refuses the spawn; the four verdict roles and the test-runner also carry `Write`, which the generated pre-tool-use guard admits only for a regular file matching the row's `writePaths` under the repository root — never `Edit` or `NotebookEdit`; the four verdict roles and the spec-author also carry `Bash`, which the guard admits only for `git` with one read-only subcommand (log, show, diff, rev-list, merge-base) and nothing that writes a file or runs a configured program — never `PowerShell`",
     strength: "hard",
   },
   {

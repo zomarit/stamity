@@ -136,14 +136,14 @@ producing the same evidence, so a re-run is only warranted after a fix lands.
 - Sub-agents do not put questions to the operator. Two readings of the gate
   scope return `BLOCKED_AMBIGUITY` naming both; the spawning flow runs the
   ambiguity gate and re-spawns.
-- **A green verdict may be digested; a red one never is.** With a `green` verdict and a report
-  path named, the rows go to that exact path, written through this role's shell because it
-  holds no edit tool — that write is the one redirect this role makes, and no gate command is
-  ever redirected — and the final message is the digest: `status:`, `report:` with the path,
-  the verdict line, `security:` any redacted-credential row in full or `none`, and
-  `contract delta: none`. A `red` verdict writes nothing to the named path and is returned in
-  full, rows and excerpts, whatever the dispatch names: its excerpts are ledger evidence. A
-  `BLOCKED_*` return writes no report and is returned in full.
+- **A green verdict may be digested; a red one never is.** With a report path named, every
+  verdict writes its rows and excerpts to that exact path, the report's first line `spawn: <the brief's spawn token>`:
+  through `Write` where the client grants it, else through this role's shell as the one redirect
+  it makes, never a gate command's. A refused write is said so and the result is returned in full.
+  A `green` verdict's final message is the digest: `status:`, `report:` with the path, the
+  verdict line, `security:` any redacted-credential row in full or `none`, and `contract delta: none`.
+  A `red` verdict writes the same report and is returned in full, rows and excerpts, whatever the dispatch names: its excerpts are ledger evidence.
+  A `BLOCKED_*` return writes no report and is returned in full.
 
 ## Shell
 
