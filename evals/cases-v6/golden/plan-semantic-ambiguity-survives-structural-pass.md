@@ -2,7 +2,7 @@
 id: plan-semantic-ambiguity-survives-structural-pass
 class: golden
 claim: "A structurally complete requirement-to-plan mapping still blocks handoff when its meanings conflict and gives a usable clarification."
-source: content/commands/st-plan.md:277-454
+source: content/commands/st-plan.md:277-458
 metric: rubric
 ---
 
@@ -28,7 +28,7 @@ plan-review sub-agent loop at this seam produced no measured quality gain, so no
 | L3 | **Edge cases non-empty** | every unit lists at least one edge case with its expected behavior. `none` is admissible only with a one-line reason. | derive the missing cases from the unit's inputs and failure modes, re-run the pass |
 | L4 | **Requirement ids cited** | every unit's `requirements` names at least one `REQ-<area>-<nnn>` carried by the spec, or states `spec carries no ids`. A blank field fails; an id absent from `docs/specs/` fails as a dangling reference. | cite the requirement the unit implements, or record that the spec carries none, re-run the pass |
 | L5 | **Plan size (advisory)** | the structural coverage pass reports `unit-size` (a unit past 60 lines), `unit-oversize` (past 100), `unit-prewritten` (a fenced block, or five or more `>` lines, inside a unit) and `delta-verbose` (a requirement entry past six lines); none fails the pass | split the unit, or point at the file that will carry the text instead of writing it into the unit; the write is never blocked |
-| L6 | **Named skills copied** | every `skills` entry other than `none` has an origin record at that entry's commit and a `clean` copy, as `stamity skill list --json` reads them. | copy it as the Side effects say, re-run the pass; a run that cannot copy returns `BLOCKED_DEPENDENCY` naming the `stamity skill add` line a person runs |
+| L6 | **Named skills copied** | every `skills` entry other than `none` has an origin record at that entry's commit and a `clean` copy, as `stamity skill list --json` reads them. | copy a skill `stamity skill list --json` does not list as the Side effects say, re-run the pass; a listed copy that is not `clean` at the entry's commit, or a run that cannot copy, returns `BLOCKED_DEPENDENCY` naming the steps a person runs |
 
 **Structural coverage pass.** Before handoff, locate the installed verify skill and run
 `node <verify-skill>/scripts/spec-plan-coverage.mjs <plan.md> <spec.md|spec-directory> ...`.
@@ -157,11 +157,15 @@ further write channel for the plan itself.
   That inbox is the rendezvous `/st-board fill` triages and `/st-work` reads at its framing
   phase, so a deliberate exclusion stays visible instead of dying with the session.
 - **Skill copy.** On an attended run, this run itself, never a sub-agent, copies in each skill a
-  unit names that `stamity skill list --json` does not show `clean` at its commit:
+  unit names that `stamity skill list --json` does not list under its name:
   `stamity skill add <source-id> <name> --tag <version> --commit <commit>`, from a source
-  `.stamity/skill-sources.json` lists and from nowhere else. The verb refuses an unattended run and
-  one while nobody is watching; the copy lands on a held path, so a person commits it. A plan whose
-  units all read `none` copies nothing.
+  `.stamity/skill-sources.json` lists and from nowhere else, then runs `stamity sync` so every
+  client's copy is regenerated. A listed copy that is not `clean` at the entry's commit is never
+  re-added or removed by the run: it returns `BLOCKED_DEPENDENCY` naming the
+  `stamity skill remove <name>` and then `stamity skill add` steps a person runs. The verb refuses
+  an unattended run and one while nobody is watching; the copy lands on a held path, so a person
+  commits it, with what `sync` wrote, before `/st-work` cuts any lane. A plan whose units all read
+  `none` copies nothing.
 
 ## Return contract
 

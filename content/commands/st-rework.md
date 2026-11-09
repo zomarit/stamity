@@ -249,9 +249,11 @@ Plan-lint runs once, deterministically, before anything is persisted. The gate i
 stated as an observable outcome fails it), `L2` dependencies resolve, `L3` edge cases non-empty,
 `L4` every unit's `requirements` field cites a requirement id carried by the spec or the literal
 `spec carries no ids`, blank never passing, `L5` plan size, advisory, whose codes fail no unit
-and block nothing — run here unchanged rather than restated with different content under the
-same name. One rework-only check runs beside it, labelled so the difference is visible: `R1`,
-every unit cites validated `file:line` evidence or is explicitly marked `unvalidated`. Apply
+and block nothing, `L6` every named skill has an origin record at its entry's commit and a `clean`
+copy — run here unchanged rather than restated with different content under the same name.
+Rework copies no skill: a unit whose entry fails `L6` returns `BLOCKED_DEPENDENCY` naming the
+steps a person runs. One rework-only check runs beside it, labelled so the difference is visible:
+`R1`, every unit cites validated `file:line` evidence or is explicitly marked `unvalidated`. Apply
 `/st-plan`'s structural coverage pass and semantic coverage review at the same handoff; a
 structural pass alone does not resolve incompatible requirement and unit meanings.
 
@@ -279,7 +281,7 @@ Close with this run's proof block, printed after the handoff's answer with nothi
 after it (on `execute now`, `/st-work` starts after it): baseline source (proof record, or
 `no proof record`), findings by severity plus the notes count, REVISE/DEFER counts, validation
 verdicts with confidence, plan-lint per check as
-`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run · R1 pass|fail`
+`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run · L6 pass|fail · R1 pass|fail`
 (`L5 not run` where the coverage script could not run; no `L5` value blocks the handoff), the plan
 path, the inbox rows added, and one recommended next step, derived from this run's own state and
 not from a fixed menu: a standing `[NEEDS CLARIFICATION]` marker makes resolving it the step, since

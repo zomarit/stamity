@@ -18,7 +18,7 @@ Governing text — `content/commands/st-work.md`, "Dispatch contract" (pointer d
 - **Pointer dispatch.** A build or fix dispatch is at most 15 lines: role,
   class and run id; the plan path and unit id, never a line number; worktree,
   branch and base; the report path, written with the file write tool; for a
-  fix, the ledger ids with each sign-off; the unit's `verify` command and `skills`; its
+  fix, the ledger ids with each sign-off; the unit's `verify` command and `skills`, read-only to the builder; its
   `files` cell as the boundary; the learnings that apply; the digest as the
   return. When a contract delta moves a seam a later unit relies on, the
   spec-author amends that cell in place before it is dispatched, and when that

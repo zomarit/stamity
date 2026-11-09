@@ -18,7 +18,7 @@ Governing text — `content/commands/st-work.md`, "Dispatch contract" (Pointer d
 - **Pointer dispatch.** A build or fix dispatch is at most 15 lines: role,
   class and run id; the plan path and unit id, never a line number; worktree,
   branch and base; the report path, written with the file write tool; for a
-  fix, the ledger ids with each sign-off; the unit's `verify` command and `skills`; its
+  fix, the ledger ids with each sign-off; the unit's `verify` command and `skills`, read-only to the builder; its
   `files` cell as the boundary; the learnings that apply; the digest as the
   return. When a contract delta moves a seam a later unit relies on, the
   spec-author amends that cell in place before it is dispatched, and when that
@@ -36,7 +36,7 @@ on):
   cell part of the brief. When an interface the cell names does not resolve at HEAD — a
   signature, field or path that is not where the cell puts it — return `BLOCKED_DEPENDENCY`
   naming the interface, where the cell expected it, and what HEAD holds instead. Building
-  against a guessed seam is the drift this return exists to stop.
+  against a guessed seam is the drift this return exists to stop. The cell's `skills` are read-only to the builder: a copy missing or not `clean` in this lane returns `BLOCKED_DEPENDENCY` naming the skill, and the builder never runs `stamity skill add` or fetches a skill any other way.
 [...]
 - `BLOCKED_*` carries what was attempted, what blocks it, and the smallest unblocking
   input; work completed before the block is listed file by file so nothing is silently

@@ -451,11 +451,15 @@ describe("/st-work — body skeleton", () => {
   // the intake's `skills` check, the Build's BLOCKED_DEPENDENCY rule for a skill with no clean copy,
   // and the pointer dispatch's `skills` (266 characters), each joined to an existing line, so the line
   // budget did not move and no eval range shifted.
-  it("leaves room under both budgets: 215 characters before the cut, 15 lines under the cap", async () => {
+  // Moved 2026-11-10 (s-skills-content fix round 1, review/74 to /77), 215 to 135 characters: the
+  // intake's failure outcome (", else BLOCKED_DEPENDENCY here, before any lane is cut", 54) and
+  // the pointer dispatch's ", read-only to the builder" (26), each joined to its line, so the
+  // line budget did not move.
+  it("leaves room under both budgets: 135 characters before the cut, 15 lines under the cap", async () => {
     const file = await workFile;
     const cut = file.raw.indexOf("\n### Specialist pass\n");
     expect(cut).toBeGreaterThan(-1);
-    expect(REATTACH_BUDGET_CHARS - cut).toBeGreaterThanOrEqual(215);
+    expect(REATTACH_BUDGET_CHARS - cut).toBeGreaterThanOrEqual(135);
     const bodyLines = file.parsed.body.replace(/\r?\n$/, "").split(/\r?\n/).length;
     expect(BODY_LINE_CAP - bodyLines).toBeGreaterThanOrEqual(15);
   });
@@ -2341,13 +2345,29 @@ describe("/st-work — dispatch contract", () => {
     const build = collapse(section(text, "## Phase 3 — Build"));
     const dispatch = collapse(section(text, "## Dispatch contract"));
 
+    // TEST CHANGE, justified (2026-11-10, s-skills-content fix round 1, review/75): the check named
+    // no outcome, so a run could carry a missing copy to Build. It now blocks at intake; the words
+    // pinned before are all still in the sentence.
     expect(plan).toContain(
-      "Nothing found is a normal outcome: say so and plan in-flow. Each unit's `skills` entry is checked against `stamity skill list --json`: its copy at that commit, `clean`.",
+      "Nothing found is a normal outcome: say so and plan in-flow. Each unit's `skills` entry is checked against `stamity skill list --json`: its copy at that commit, `clean`, else BLOCKED_DEPENDENCY here, before any lane is cut.",
     );
     expect(build).toContain(
       "A `skills` entry with no clean copy at its commit is BLOCKED_DEPENDENCY, never fetched: `stamity skill add` is a planning act, not a build act.",
     );
-    expect(dispatch).toContain("for a fix, the ledger ids with each sign-off; the unit's `verify` command and `skills`; its `files` cell as the boundary;");
+    // TEST CHANGE, justified (2026-11-10, s-skills-content fix round 1, review/74 and review/77):
+    // the dispatch hands the skill's source, tag and commit to the builder, so it says the field is
+    // read-only there; the implementer's own contract carries the rule, pinned below.
+    expect(dispatch).toContain("for a fix, the ledger ids with each sign-off; the unit's `verify` command and `skills`, read-only to the builder; its `files` cell as the boundary;");
+  });
+
+  // Added 2026-11-10 (s-skills-content fix round 1, review/74 and review/77): the builder gets every
+  // argument of `skill add` in its dispatch, so its own contract says it never runs it.
+  it("keeps a unit's skills read-only in the implementer's contract, a missing copy BLOCKED_DEPENDENCY (REQ-FLOW-180)", async () => {
+    const implementer = collapse(section((await corpusFile("agents/stamity-implementer.md")).parsed.body, "## Unit contract"));
+
+    expect(implementer).toContain(
+      "The cell's `skills` are read-only to the builder: a copy missing or not `clean` in this lane returns `BLOCKED_DEPENDENCY` naming the skill, and the builder never runs `stamity skill add` or fetches a skill any other way.",
+    );
   });
 
   it("defines how a `stamity <verb>` call runs before the first one, with a by-hand ledger fallback (REQ-FLOW-002, REQ-FLOW-003)", async () => {

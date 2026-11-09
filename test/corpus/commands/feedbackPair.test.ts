@@ -776,11 +776,31 @@ describe("rework — validation and handoff", () => {
     // rework-written plan now reports its plan-size reading as `/st-plan`'s own line does, in
     // L5's vocabulary and not the other four's, ahead of the one rework-only check. Nothing is
     // relaxed: the whole token is still pinned, and the old five-token line is asserted gone.
+    // TEST CHANGE, justified (2026-11-10, s-skills-content fix round 1, review/72, sign-off S49):
+    // `/st-plan` gained L6 (named skills copied) and rework runs its gate unchanged, so the token
+    // gains `· L6 pass|fail` before R1. Nothing is relaxed: the whole token is still pinned, and
+    // the line without L6 is asserted gone.
     expect(handoff).toContain(
-      "`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run · R1 pass|fail`",
+      "`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run · L6 pass|fail · R1 pass|fail`",
     );
+    expect(handoff).not.toContain("advisory|not run · R1 pass|fail");
     expect(handoff).not.toContain("L4 pass|fail · R1 pass|fail");
     expect(handoff).not.toContain("L5 pass|fail");
+  });
+
+  // Added 2026-11-10 (s-skills-content fix round 1, review/72, sign-off S49; REQ-FLOW-180): a rework
+  // plan is the artifact `/st-plan` writes, so a unit can name a skill. Rework runs L6 with the same
+  // meaning and copies none: a failing entry blocks at the handoff, not at `/st-work`'s Build.
+  it("runs `/st-plan`'s L6 unchanged, copies no skill, and blocks a failing entry as BLOCKED_DEPENDENCY (REQ-FLOW-180)", () => {
+    const handoff = clause(artifact(REWORK).parsed.body, "## 6. Plan handoff");
+
+    // L6 is cited after L5 and before "run here unchanged", in the same enumeration.
+    expect(handoff).toMatch(/`L5` plan size, advisory[^.]*`L6` every named skill has an origin record at its entry's commit and a `clean` copy[^.]*run here unchanged/);
+    expect(handoff).toContain("Rework copies no skill: a unit whose entry fails `L6` returns `BLOCKED_DEPENDENCY` naming the steps a person runs.");
+    expect(handoff).not.toContain("skill add");
+    // `/st-plan` owns the row this cites; read its own table rather than a copied literal.
+    const planGate = artifact(PLAN).parsed.body.split("\n").find((line) => line.startsWith("| L6 |")) ?? "";
+    expect(planGate, "`/st-plan`'s gate table carries no L6 row for rework to cite").toContain("Named skills copied");
   });
 
   it("names L5 as `/st-plan`'s advisory plan-size check, one that never blocks the handoff (REQ-FLOW-070)", () => {
@@ -798,6 +818,7 @@ describe("rework — validation and handoff", () => {
     expect(handoff).toContain("no `L5` value blocks the handoff");
     // The rework-only check keeps its label and stays last on the line.
     expect(handoff.indexOf("L5 none|<n> advisory|not run")).toBeLessThan(handoff.indexOf("R1 pass|fail"));
+    expect(handoff.indexOf("L6 pass|fail")).toBeLessThan(handoff.indexOf("R1 pass|fail"));
 
     // `/st-plan` owns the row this cites; read its own table rather than a copied literal.
     const planGate = artifact(PLAN).parsed.body.split("\n").find((line) => line.startsWith("| L5 |")) ?? "";

@@ -2,7 +2,7 @@
 id: rework-next-step-derived-from-run-state
 class: golden
 claim: "A /st-rework run closes on its proof block, printed after the handoff's answer, whose last field is one recommended next step derived from that run's own state — a standing [NEEDS CLARIFICATION] marker, a plan persisted on stop, or DEFER rows alone — rather than from a fixed menu."
-source: content/commands/st-rework.md:278-287
+source: content/commands/st-rework.md:280-289
 metric: rubric
 ---
 
@@ -19,7 +19,7 @@ Close with this run's proof block, printed after the handoff's answer with nothi
 after it (on `execute now`, `/st-work` starts after it): baseline source (proof record, or
 `no proof record`), findings by severity plus the notes count, REVISE/DEFER counts, validation
 verdicts with confidence, plan-lint per check as
-`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run · R1 pass|fail`
+`L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run · L6 pass|fail · R1 pass|fail`
 (`L5 not run` where the coverage script could not run; no `L5` value blocks the handoff), the plan
 path, the inbox rows added, and one recommended next step, derived from this run's own state and
 not from a fixed menu: a standing `[NEEDS CLARIFICATION]` marker makes resolving it the step, since

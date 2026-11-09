@@ -32,7 +32,7 @@ interfaces, so the unit is buildable without reconstructing the plan.
   cell part of the brief. When an interface the cell names does not resolve at HEAD — a
   signature, field or path that is not where the cell puts it — return `BLOCKED_DEPENDENCY`
   naming the interface, where the cell expected it, and what HEAD holds instead. Building
-  against a guessed seam is the drift this return exists to stop.
+  against a guessed seam is the drift this return exists to stop. The cell's `skills` are read-only to the builder: a copy missing or not `clean` in this lane returns `BLOCKED_DEPENDENCY` naming the skill, and the builder never runs `stamity skill add` or fetches a skill any other way.
 - **An adjacent improvement is a note, not a bonus.** A cleaner structure, a rename or a
   wording with no consequence, found while building, is applied when its fix is one line
   inside this unit's own files. A larger one, or one that touches a file outside them, is

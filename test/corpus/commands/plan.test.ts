@@ -1048,7 +1048,10 @@ describe("/st-plan — return contract", () => {
       `- Plan-lint result per check: \`${token} · L6 pass|fail\` (\`L5 not run\` where the coverage script could not run, never a claimed pass).`,
     );
     // One token, two commands: rework's line is this one with its own check after it.
-    expect(rework).toContain(`\`${token} · R1 pass|fail\``);
+    // TEST CHANGE, justified (2026-11-10, s-skills-content fix round 1, review/72, sign-off S49):
+    // rework now runs L6 too, so its line carries `· L6 pass|fail` before R1, as this command's does.
+    // Nothing is loosened: the whole token is still pinned, now with the check both commands run.
+    expect(rework).toContain(`\`${token} · L6 pass|fail · R1 pass|fail\``);
   });
 
   it("derives the next step from this run's own state rather than a fixed menu", () => {
@@ -1148,18 +1151,43 @@ describe("/st-plan — named skills (REQ-FLOW-180)", () => {
     expect(effects).toContain(
       "Three, each reported in the Return contract below: the skill copy runs before the plan-lint gate, the other two after the artifact is written. No product file moves here, and no side effect is a further write channel for the plan itself.",
     );
+    // TEST CHANGE, justified (2026-11-10, s-skills-content fix round 1, review/71 and review/73,
+    // sign-off S50): `skill add` refuses whenever a copy or its record exists (src/skills/fetch.ts,
+    // "a copy never overwrites one"), so the run copies only a skill the list does not show and
+    // blocks on any other non-clean copy; and the copy is followed by `stamity sync` and committed
+    // before a lane is cut, so every client and every lane holds it at Build. The pin grows; the
+    // attended-only, run-only and trusted-source words it held are all still in it.
     expect(effects).toContain(
-      "- **Skill copy.** On an attended run, this run itself, never a sub-agent, copies in each skill a unit names that `stamity skill list --json` does not show `clean` at its commit: `stamity skill add <source-id> <name> --tag <version> --commit <commit>`, from a source `.stamity/skill-sources.json` lists and from nowhere else. The verb refuses an unattended run and one while nobody is watching; the copy lands on a held path, so a person commits it. A plan whose units all read `none` copies nothing.",
+      "- **Skill copy.** On an attended run, this run itself, never a sub-agent, copies in each skill a unit names that `stamity skill list --json` does not list under its name: `stamity skill add <source-id> <name> --tag <version> --commit <commit>`, from a source `.stamity/skill-sources.json` lists and from nowhere else, then runs `stamity sync` so every client's copy is regenerated. A listed copy that is not `clean` at the entry's commit is never re-added or removed by the run: it returns `BLOCKED_DEPENDENCY` naming the `stamity skill remove <name>` and then `stamity skill add` steps a person runs. The verb refuses an unattended run and one while nobody is watching; the copy lands on a held path, so a person commits it, with what `sync` wrote, before `/st-work` cuts any lane. A plan whose units all read `none` copies nothing.",
     );
     expect(effects).not.toContain("Two, both after the artifact is written");
+    expect(effects).not.toContain("does not show `clean` at its commit");
+  });
+
+  it("never re-adds or removes a copy that exists, and syncs and commits a new one before any lane (review/71, review/73)", () => {
+    const effects = flat(sectionOf(plan.parsed.body, "## Side effects"));
+    const copy = effects.slice(effects.indexOf("- **Skill copy.**"));
+
+    // The add is reached only for a skill the list does not show; every other state blocks.
+    expect(copy.indexOf("does not list under its name")).toBeLessThan(copy.indexOf("`stamity skill add <source-id>"));
+    expect(copy).toContain("is never re-added or removed by the run: it returns `BLOCKED_DEPENDENCY`");
+    // The person removes, then adds: in that order, named as steps, never run by the flow.
+    expect(copy.indexOf("`stamity skill remove <name>`")).toBeLessThan(copy.indexOf("and then `stamity skill add` steps a person runs"));
+    // The sync follows the add, and the commit lands before /st-work cuts a lane.
+    expect(copy.indexOf("`stamity skill add <source-id>")).toBeLessThan(copy.indexOf("then runs `stamity sync`"));
+    expect(copy).toContain("a person commits it, with what `sync` wrote, before `/st-work` cuts any lane");
   });
 
   it("gates the write on L6: every named skill has an origin record at its commit and a clean copy", () => {
     const gate = sectionOf(plan.parsed.body, "## Plan-lint gate");
     const l6 = gate.split("\n").find((line) => line.startsWith("| L6 |")) ?? "";
 
+    // TEST CHANGE, justified (2026-11-10, s-skills-content fix round 1, review/71): the fail action
+    // copied every non-clean entry, which `skill add` refuses for any copy that exists, so three
+    // failed passes ended in BLOCKED_AMBIGUITY. It now copies only an unlisted skill and blocks on
+    // the rest as BLOCKED_DEPENDENCY; the pass condition is unchanged.
     expect(l6).toBe(
-      "| L6 | **Named skills copied** | every `skills` entry other than `none` has an origin record at that entry's commit and a `clean` copy, as `stamity skill list --json` reads them. | copy it as the Side effects say, re-run the pass; a run that cannot copy returns `BLOCKED_DEPENDENCY` naming the `stamity skill add` line a person runs |",
+      "| L6 | **Named skills copied** | every `skills` entry other than `none` has an origin record at that entry's commit and a `clean` copy, as `stamity skill list --json` reads them. | copy a skill `stamity skill list --json` does not list as the Side effects say, re-run the pass; a listed copy that is not `clean` at the entry's commit, or a run that cannot copy, returns `BLOCKED_DEPENDENCY` naming the steps a person runs |",
     );
     expect(gate.indexOf("| L5 |")).toBeLessThan(gate.indexOf("| L6 |"));
     expect(gate.indexOf("| L6 |")).toBeLessThan(gate.indexOf("**Structural coverage pass.**"));
