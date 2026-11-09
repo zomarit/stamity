@@ -91,8 +91,11 @@ Credential handling is the secrets rule's subject and is not restated here.
 - Every path that reads or mutates a record carries an ownership or role check
   against that record, covered by a test that acts as a non-owner and asserts a
   refusal. The test is the evidence, not the reviewer's reading.
-- The environment allowlist is asserted at startup, and a test boots with an
+- Where the code has a capability that must stay out of production (a debug
+  route, a seed endpoint, a destructive admin verb, or the like), the
+  environment allowlist is asserted at startup, and a test boots with an
   unrecognised environment value and asserts the gated capability stays off.
+  A repository with no such capability says so in one line instead.
 - Error responses carry a code and a correlation identifier and nothing else;
   a test asserts that no stack frame or query text reaches the body.
 - The lockfile is committed, the pipeline install is lockfile-only, and every

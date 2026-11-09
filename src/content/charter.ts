@@ -235,7 +235,8 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
   // floor:security) — so the slice is 95 + 312 = 407. The other nine rules are
   // projected as skills; the appendix, which used to drop eight rules to fit
   // 32 KiB, now drops none.
-  codex: 407,
+  // 407 -> 410 on 2026-11-09: the security rule's production-only gate states its condition, plan 024 k-security-gate.
+  codex: 410,
 };
 
 /**
@@ -449,7 +450,8 @@ export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_682;
 // 25_800 -> 25_872 on 2026-10-21, unit u4-charter: the charter half of the
 // override carries the same +72 bytes (invariants 1.3.1); the line count holds
 // at 407, the charter's three new lines paid by its three trims.
-export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 25_872;
+// 25_872 -> 26_082 on 2026-11-09: the security rule's production-only gate states its condition, plan 024 k-security-gate.
+export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 26_082;
 
 /**
  * Physical lines Cursor's cloud block adds to the shared root `AGENTS.md` when

@@ -65,9 +65,9 @@ instance worse without introducing it:
   algorithm is used for a security purpose.
 - Client-visible errors carry no stack trace, internal path, or database detail; personal
   data stays out of logs and analytics events.
-- Dangerous capabilities — debug endpoints, seed and reset paths, mock modes, destructive
-  verbs — are gated by an allowlist of named non-production environments; an unset or
-  unrecognized environment value takes the deny branch.
+- A capability the change adds or exposes that must stay out of production (a debug route, a
+  seed endpoint, a destructive admin verb, or the like; not a script run against an environment)
+  is gated by an allowlist of named non-production environments; an unset or unknown value denies.
 - A new or bumped dependency has no unresolved high-or-critical advisory, carries a
   compatible license, and is justified against what the repo already depends on.
 - No swallowed errors, no placeholder markers without a tracked issue, no type escape

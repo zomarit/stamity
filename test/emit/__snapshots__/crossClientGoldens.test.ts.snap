@@ -4923,8 +4923,11 @@ Credential handling is the secrets rule's subject and is not restated here.
 - Every path that reads or mutates a record carries an ownership or role check
   against that record, covered by a test that acts as a non-owner and asserts a
   refusal. The test is the evidence, not the reviewer's reading.
-- The environment allowlist is asserted at startup, and a test boots with an
+- Where the code has a capability that must stay out of production (a debug
+  route, a seed endpoint, a destructive admin verb, or the like), the
+  environment allowlist is asserted at startup, and a test boots with an
   unrecognised environment value and asserts the gated capability stays off.
+  A repository with no such capability says so in one line instead.
 - Error responses carry a code and a correlation identifier and nothing else;
   a test asserts that no stack frame or query text reaches the body.
 - The lockfile is committed, the pipeline install is lockfile-only, and every
@@ -5174,7 +5177,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/agents/stamity-implementer.md": "65da285e3bb4ba592afda400fe2a19b9012bac75aa91e144c0bc43bffd91d850 10351 bytes",
   ".claude/agents/stamity-performance.md": "3211fe9fb4c5535a7c43e3e829cf9ea11a9f6c381e5bff98cdb053db00eb0294 14040 bytes",
   ".claude/agents/stamity-researcher.md": "ddd73f1c30b8f2c4010e7b6092553086a0c28e6a87589484ffe7896f4ae1ba23 8440 bytes",
-  ".claude/agents/stamity-reviewer.md": "4f3239f18b4edc1a25eaea22cd9aa2f5da0153b35c510bc35e459bc1132ded7e 17129 bytes",
+  ".claude/agents/stamity-reviewer.md": "fe111df075ce56dc7d044894e8cdadb7b8c39ba66f1812ab54dd9af189a54a2a 17182 bytes",
   ".claude/agents/stamity-security.md": "baf297774a6fac2c2b0cbe928dd80755c14187cc7556db69c1cb85e23866d0fd 13040 bytes",
   ".claude/agents/stamity-spec-author.md": "ce02ef8625403a9e493dadace62ce107e5b23290dd280a642991f4ec4e8235d7 12248 bytes",
   ".claude/agents/stamity-test-runner.md": "36401d4ee6e79c390b43d082522bc73b0a0a95c3200c23d91120b3ffb6bbbc7f 11973 bytes",
@@ -5202,7 +5205,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/rules/stamity-migrations.md": "fd4062af3c8c6a20ea42528f7ef789a67cb892d2b7c039ff5f856ee73e458440 4818 bytes",
   ".claude/rules/stamity-resilience.md": "089a40824f251b2032bc9e2c457ada244dffa6eb3f0ceebe40da15182ee1d26d 5029 bytes",
   ".claude/rules/stamity-secrets.md": "074b2f82a2f1711dcc68772ff149eeb3a48487e6170690fb9746715caeb3c2d3 6251 bytes",
-  ".claude/rules/stamity-security-patterns.md": "38e2df2df4035af00c9e78932e136e1130bfcabc4c6ade96f4e53ec46d859056 6361 bytes",
+  ".claude/rules/stamity-security-patterns.md": "e992b75688c83bb1ccb645cd9659a815b445ef88425bfd60b19276aded63c88c 6571 bytes",
   ".claude/rules/stamity-testing.md": "7481e2488317f64c22152c4e40011bf01bf2e941ae7d9eb7b28339040093bbe9 4246 bytes",
   ".claude/rules/stamity-ui-states.md": "3a141312dd4c2d687e14750eae0c22648e28422f0ce0279148c79e69b861cd90 4591 bytes",
   ".claude/settings.json": "943aecb126d0050bf65f90fb0ab9622d15556e6ed95a9198cec9455bb4a9a289 7108 bytes",
@@ -5243,7 +5246,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".codex/agents/stamity-implementer.toml": "1e595b60231d0bdcfc495ba70aebe9dc83a0698af8b95a98d303e0fbe0af1512 11229 bytes",
   ".codex/agents/stamity-performance.toml": "1ac7209b72e645c78b32227b5bbd5a02f6e692c389801f5d6783932f8aaeee3a 14996 bytes",
   ".codex/agents/stamity-researcher.toml": "8bb6071ef1d36a68d93c802061e06b97a888f92b7f33e7c003960c70dc4ac561 9301 bytes",
-  ".codex/agents/stamity-reviewer.toml": "ad6da2848788296e25e52f9534054ad884533c197234a631a9fd12de1f4522b7 18086 bytes",
+  ".codex/agents/stamity-reviewer.toml": "dfe8b5290d8b94bf7468ab8a7d6e004bd791d6e7c5b36c81de12387c7911678b 18139 bytes",
   ".codex/agents/stamity-security.toml": "049387bdbea10269acae781e9dd54137475d4a6d9b6b39a9872cfcfccb5022ae 13997 bytes",
   ".codex/agents/stamity-spec-author.toml": "edfe5792a8caa4c5cc143317971f94f9c2960a948ff3fa9990793782029a24cf 13227 bytes",
   ".codex/agents/stamity-test-runner.toml": "8d82c74896b3ea574e7b2bb58413089fd50416a6f8e84b5e9ef352c48454c657 12850 bytes",
@@ -5255,7 +5258,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".cursor/agents/stamity-implementer.md": "caaa6cd15ccf75e8a5ef1d89b350d60f3bc677f4630798ff5be53632dca573cf 10218 bytes",
   ".cursor/agents/stamity-performance.md": "5e0a889afdb1bd63a9298938ae288125fe7674b8032a34a102b28a2b8b9ad7c4 13950 bytes",
   ".cursor/agents/stamity-researcher.md": "3cbfe45b2977f1b58eee5c776e940bfdf65ed81d41a4b66b6dd0470256200dbd 8343 bytes",
-  ".cursor/agents/stamity-reviewer.md": "b61b7f9e81f394fdc9b6d473586c55332be17c3fd77a4a128a441682ce119559 17046 bytes",
+  ".cursor/agents/stamity-reviewer.md": "3adaa61dd0df19b3f067a9d143e82d12d0c97d256090c61a66bfd03a10870d90 17099 bytes",
   ".cursor/agents/stamity-security.md": "f90f648c8c90190111f5daf6b98a4a9478b5ba5aa9daa74abab7adb9bee53f7d 12957 bytes",
   ".cursor/agents/stamity-spec-author.md": "0d9336d97be3411e7f6e11c5cb685e8c92d840dc707ad0d541adea3bf865db47 12127 bytes",
   ".cursor/agents/stamity-test-runner.md": "32f01838be02469f7de045b334fd060882febc356859ab4b37356599db966ca7 11867 bytes",
@@ -5272,7 +5275,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".cursor/rules/stamity-question-protocol.mdc": "4b281d4be2a87caa3115432ecebc7affef505c81d1b6b2f206e11d20719caa86 6041 bytes",
   ".cursor/rules/stamity-resilience.mdc": "3fe9757aa442903b52cc5f32754ce3d6fe21afdb44ec0f48d9369bf482108f47 5030 bytes",
   ".cursor/rules/stamity-secrets.mdc": "ddb1d0956c519ba7b3b6c36a47ae9af7c0180206e06d3c2179cbd08cfec47437 6254 bytes",
-  ".cursor/rules/stamity-security-patterns.mdc": "cb06fff62f42ec6f32b83926041d03b75067c73d18fa8eeb8cfd55d49d0e76a3 6364 bytes",
+  ".cursor/rules/stamity-security-patterns.mdc": "6f6756d76a57caadc26eb0f0499b46c9c1eab1acfe3ac037ca692cd2f3367886 6574 bytes",
   ".cursor/rules/stamity-testing.mdc": "b1e6ccf40fbc412f50906738e91daba2852e6c893ee201d43c1408397cef3a78 4250 bytes",
   ".cursor/rules/stamity-ui-states.mdc": "6c771070237804228629abfbfb0c41adf795d0b1259aa6e4286cc7d110f633c6 4589 bytes",
   ".github/agents/stamity-creator.agent.md": "fd41cceb29c4f77e443ed5b59bb46c524b25a3902df8b5437e1cc804eef7a55e 14124 bytes",
@@ -5281,7 +5284,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".github/agents/stamity-implementer.agent.md": "06f1f5751b1d531a1805e31d5a679f21ae1e86055c3575c992cb4b23093cc488 10469 bytes",
   ".github/agents/stamity-performance.agent.md": "ccae408280c8f1a528df0b6e852c4c92ea7dfef964a2ff1a08c0dc23a031bf82 14168 bytes",
   ".github/agents/stamity-researcher.agent.md": "eae9b9c799c9f91a0672d9b3d187a86f4817d7cd4ab317aae521eb34cea8489c 8567 bytes",
-  ".github/agents/stamity-reviewer.agent.md": "785ad9f6a61deb646d94eb6fc6b9e1477fd41216b6ed19b716121cb78e523ac5 17260 bytes",
+  ".github/agents/stamity-reviewer.agent.md": "e7ab382f5b976c5ab15b63c11368d804b8d186d2971a4ef3d4c4ea8b2142678c 17313 bytes",
   ".github/agents/stamity-run.agent.md": "78b70bbebf5f9457633b09cd39a2d56186efbaf7d80e4d220406bf47fcc54755 1236 bytes",
   ".github/agents/stamity-security.agent.md": "eabe8afdb9e9f2a6f49f3e5f869e9a25468ad004dbf2140f0519c5fbf6836348 13171 bytes",
   ".github/agents/stamity-spec-author.agent.md": "271cf7782b8db4cb153e488ed6ade22a9df968c821a116a0a0d03e4e20147cc4 12367 bytes",
@@ -5294,7 +5297,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".github/instructions/stamity-migrations.instructions.md": "f53283267b903267368fa067e1cc77185e488ecf4456bdd0efe37d9e44b15889 4809 bytes",
   ".github/instructions/stamity-resilience.instructions.md": "777d6e62e82a88a892e368e7f82856a703b7747a3abd09f343aa550412ea7863 5017 bytes",
   ".github/instructions/stamity-secrets.instructions.md": "195f69bcccd0283ff1f519a1fed86dbc697757d5c802d530120da36967166f7f 6239 bytes",
-  ".github/instructions/stamity-security-patterns.instructions.md": "11561e6ba340b435e0ff84de345595602c0fb7ec2adfb73cfe46874c79e01919 6349 bytes",
+  ".github/instructions/stamity-security-patterns.instructions.md": "022e2510faf4705c69a6d5edbe2881cd2e308523c63b0de5824bd4cb70131d42 6559 bytes",
   ".github/instructions/stamity-testing.instructions.md": "2e47ffb0bc4190eb744a27f557d349d52443f66d90f8b01f78a5d2b996d83b86 4237 bytes",
   ".github/instructions/stamity-ui-states.instructions.md": "9fd51f222c2ec6bb94cea8bf863ec29df25f4c4663ad865dad90add92c525a3f 4576 bytes",
   ".github/prompts/st-ask.prompt.md": "2b37498b17fec1f9ae9a80ee201b9804cadfa9303c3e0c38a8dae330d26d6292 9595 bytes",
@@ -5337,11 +5340,11 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "5ca7691a933c3f0106dd4a7ab299dcaa04f12d28e538689adfc23134603b6cbc 94105 bytes",
+  ".stamity/manifest.json": "b6f75e0a5dea9a7175f25d9e4aeb9bd8b46b3cb6c4c00c76866490e6f68e078c 94105 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "8a27073afaf09be0ca5fc782dd2632108aab084a85b0dccaaad3ceba751a7173 6548 bytes",
-  "AGENTS.override.md": "122504f41cc40a99c65cba4995c228bf4a5137d738324bbe3a847c6aaa5192db 25872 bytes",
+  "AGENTS.override.md": "686fd81f67eb54c94f3884c56ddd67f43d5db3f761596707ac4edb7a5960536d 26082 bytes",
   "CLAUDE.md": "697c902a89fcffe97474d8ca71b309c303c3989f9c87dbbf2c6fb12d12e95bc4 55 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
@@ -9203,7 +9206,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/agents/stamity-implementer.md": "65da285e3bb4ba592afda400fe2a19b9012bac75aa91e144c0bc43bffd91d850 10351 bytes",
   ".claude/agents/stamity-performance.md": "3211fe9fb4c5535a7c43e3e829cf9ea11a9f6c381e5bff98cdb053db00eb0294 14040 bytes",
   ".claude/agents/stamity-researcher.md": "ddd73f1c30b8f2c4010e7b6092553086a0c28e6a87589484ffe7896f4ae1ba23 8440 bytes",
-  ".claude/agents/stamity-reviewer.md": "4f3239f18b4edc1a25eaea22cd9aa2f5da0153b35c510bc35e459bc1132ded7e 17129 bytes",
+  ".claude/agents/stamity-reviewer.md": "fe111df075ce56dc7d044894e8cdadb7b8c39ba66f1812ab54dd9af189a54a2a 17182 bytes",
   ".claude/agents/stamity-security.md": "baf297774a6fac2c2b0cbe928dd80755c14187cc7556db69c1cb85e23866d0fd 13040 bytes",
   ".claude/agents/stamity-spec-author.md": "ce02ef8625403a9e493dadace62ce107e5b23290dd280a642991f4ec4e8235d7 12248 bytes",
   ".claude/agents/stamity-test-runner.md": "36401d4ee6e79c390b43d082522bc73b0a0a95c3200c23d91120b3ffb6bbbc7f 11973 bytes",
@@ -9231,7 +9234,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/rules/stamity-migrations.md": "fd4062af3c8c6a20ea42528f7ef789a67cb892d2b7c039ff5f856ee73e458440 4818 bytes",
   ".claude/rules/stamity-resilience.md": "089a40824f251b2032bc9e2c457ada244dffa6eb3f0ceebe40da15182ee1d26d 5029 bytes",
   ".claude/rules/stamity-secrets.md": "074b2f82a2f1711dcc68772ff149eeb3a48487e6170690fb9746715caeb3c2d3 6251 bytes",
-  ".claude/rules/stamity-security-patterns.md": "38e2df2df4035af00c9e78932e136e1130bfcabc4c6ade96f4e53ec46d859056 6361 bytes",
+  ".claude/rules/stamity-security-patterns.md": "e992b75688c83bb1ccb645cd9659a815b445ef88425bfd60b19276aded63c88c 6571 bytes",
   ".claude/rules/stamity-testing.md": "7481e2488317f64c22152c4e40011bf01bf2e941ae7d9eb7b28339040093bbe9 4246 bytes",
   ".claude/rules/stamity-ui-states.md": "3a141312dd4c2d687e14750eae0c22648e28422f0ce0279148c79e69b861cd90 4591 bytes",
   ".claude/settings.json": "943aecb126d0050bf65f90fb0ab9622d15556e6ed95a9198cec9455bb4a9a289 7108 bytes",
@@ -9275,7 +9278,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "75d29a4000bedb619d03045b5240f59e19c978b673a7cccb14784853f159dc1d 28615 bytes",
+  ".stamity/manifest.json": "4a07a0a5ddd02d3e7763167d056049ddbdcf80a31123faaa5c483d956ac8919f 28615 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
   "CLAUDE.md": "697c902a89fcffe97474d8ca71b309c303c3989f9c87dbbf2c6fb12d12e95bc4 55 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -9889,8 +9892,11 @@ Credential handling is the secrets rule's subject and is not restated here.
 - Every path that reads or mutates a record carries an ownership or role check
   against that record, covered by a test that acts as a non-owner and asserts a
   refusal. The test is the evidence, not the reviewer's reading.
-- The environment allowlist is asserted at startup, and a test boots with an
+- Where the code has a capability that must stay out of production (a debug
+  route, a seed endpoint, a destructive admin verb, or the like), the
+  environment allowlist is asserted at startup, and a test boots with an
   unrecognised environment value and asserts the gated capability stays off.
+  A repository with no such capability says so in one line instead.
 - Error responses carry a code and a correlation identifier and nothing else;
   a test asserts that no stack frame or query text reaches the body.
 - The lockfile is committed, the pipeline install is lockfile-only, and every
@@ -10136,7 +10142,7 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".codex/agents/stamity-implementer.toml": "1e595b60231d0bdcfc495ba70aebe9dc83a0698af8b95a98d303e0fbe0af1512 11229 bytes",
   ".codex/agents/stamity-performance.toml": "1ac7209b72e645c78b32227b5bbd5a02f6e692c389801f5d6783932f8aaeee3a 14996 bytes",
   ".codex/agents/stamity-researcher.toml": "8bb6071ef1d36a68d93c802061e06b97a888f92b7f33e7c003960c70dc4ac561 9301 bytes",
-  ".codex/agents/stamity-reviewer.toml": "ad6da2848788296e25e52f9534054ad884533c197234a631a9fd12de1f4522b7 18086 bytes",
+  ".codex/agents/stamity-reviewer.toml": "dfe8b5290d8b94bf7468ab8a7d6e004bd791d6e7c5b36c81de12387c7911678b 18139 bytes",
   ".codex/agents/stamity-security.toml": "049387bdbea10269acae781e9dd54137475d4a6d9b6b39a9872cfcfccb5022ae 13997 bytes",
   ".codex/agents/stamity-spec-author.toml": "edfe5792a8caa4c5cc143317971f94f9c2960a948ff3fa9990793782029a24cf 13227 bytes",
   ".codex/agents/stamity-test-runner.toml": "8d82c74896b3ea574e7b2bb58413089fd50416a6f8e84b5e9ef352c48454c657 12850 bytes",
@@ -10155,9 +10161,9 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "70794a4d0d93c959a476825a25ec7afe0208c9f18bafd7d63a9df3df28ef1eb6 22768 bytes",
+  ".stamity/manifest.json": "dac5675f35dc9b1ec69e9fecae62d3927d7462b0eff6bf89bca8c95baf24a0e8 22768 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
-  "AGENTS.override.md": "122504f41cc40a99c65cba4995c228bf4a5137d738324bbe3a847c6aaa5192db 25872 bytes",
+  "AGENTS.override.md": "686fd81f67eb54c94f3884c56ddd67f43d5db3f761596707ac4edb7a5960536d 26082 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
@@ -10475,7 +10481,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".github/agents/stamity-implementer.agent.md": "06f1f5751b1d531a1805e31d5a679f21ae1e86055c3575c992cb4b23093cc488 10469 bytes",
   ".github/agents/stamity-performance.agent.md": "ccae408280c8f1a528df0b6e852c4c92ea7dfef964a2ff1a08c0dc23a031bf82 14168 bytes",
   ".github/agents/stamity-researcher.agent.md": "eae9b9c799c9f91a0672d9b3d187a86f4817d7cd4ab317aae521eb34cea8489c 8567 bytes",
-  ".github/agents/stamity-reviewer.agent.md": "785ad9f6a61deb646d94eb6fc6b9e1477fd41216b6ed19b716121cb78e523ac5 17260 bytes",
+  ".github/agents/stamity-reviewer.agent.md": "e7ab382f5b976c5ab15b63c11368d804b8d186d2971a4ef3d4c4ea8b2142678c 17313 bytes",
   ".github/agents/stamity-run.agent.md": "78b70bbebf5f9457633b09cd39a2d56186efbaf7d80e4d220406bf47fcc54755 1236 bytes",
   ".github/agents/stamity-security.agent.md": "eabe8afdb9e9f2a6f49f3e5f869e9a25468ad004dbf2140f0519c5fbf6836348 13171 bytes",
   ".github/agents/stamity-spec-author.agent.md": "271cf7782b8db4cb153e488ed6ade22a9df968c821a116a0a0d03e4e20147cc4 12367 bytes",
@@ -10488,7 +10494,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".github/instructions/stamity-migrations.instructions.md": "f53283267b903267368fa067e1cc77185e488ecf4456bdd0efe37d9e44b15889 4809 bytes",
   ".github/instructions/stamity-resilience.instructions.md": "777d6e62e82a88a892e368e7f82856a703b7747a3abd09f343aa550412ea7863 5017 bytes",
   ".github/instructions/stamity-secrets.instructions.md": "195f69bcccd0283ff1f519a1fed86dbc697757d5c802d530120da36967166f7f 6239 bytes",
-  ".github/instructions/stamity-security-patterns.instructions.md": "11561e6ba340b435e0ff84de345595602c0fb7ec2adfb73cfe46874c79e01919 6349 bytes",
+  ".github/instructions/stamity-security-patterns.instructions.md": "022e2510faf4705c69a6d5edbe2881cd2e308523c63b0de5824bd4cb70131d42 6559 bytes",
   ".github/instructions/stamity-testing.instructions.md": "2e47ffb0bc4190eb744a27f557d349d52443f66d90f8b01f78a5d2b996d83b86 4237 bytes",
   ".github/instructions/stamity-ui-states.instructions.md": "9fd51f222c2ec6bb94cea8bf863ec29df25f4c4663ad865dad90add92c525a3f 4576 bytes",
   ".github/prompts/st-ask.prompt.md": "2b37498b17fec1f9ae9a80ee201b9804cadfa9303c3e0c38a8dae330d26d6292 9595 bytes",
@@ -10514,7 +10520,7 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "48e969b94db3b58a50faaa1d1fb54f5ba48c8e07b41f4a8d46845daf7ffb3342 20871 bytes",
+  ".stamity/manifest.json": "60ea396a5e86e8e62c80be08fca01dc2503dc8ced313a4b9953c82718363659c 20871 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
@@ -11103,7 +11109,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".cursor/agents/stamity-implementer.md": "caaa6cd15ccf75e8a5ef1d89b350d60f3bc677f4630798ff5be53632dca573cf 10218 bytes",
   ".cursor/agents/stamity-performance.md": "5e0a889afdb1bd63a9298938ae288125fe7674b8032a34a102b28a2b8b9ad7c4 13950 bytes",
   ".cursor/agents/stamity-researcher.md": "3cbfe45b2977f1b58eee5c776e940bfdf65ed81d41a4b66b6dd0470256200dbd 8343 bytes",
-  ".cursor/agents/stamity-reviewer.md": "b61b7f9e81f394fdc9b6d473586c55332be17c3fd77a4a128a441682ce119559 17046 bytes",
+  ".cursor/agents/stamity-reviewer.md": "3adaa61dd0df19b3f067a9d143e82d12d0c97d256090c61a66bfd03a10870d90 17099 bytes",
   ".cursor/agents/stamity-security.md": "f90f648c8c90190111f5daf6b98a4a9478b5ba5aa9daa74abab7adb9bee53f7d 12957 bytes",
   ".cursor/agents/stamity-spec-author.md": "0d9336d97be3411e7f6e11c5cb685e8c92d840dc707ad0d541adea3bf865db47 12127 bytes",
   ".cursor/agents/stamity-test-runner.md": "32f01838be02469f7de045b334fd060882febc356859ab4b37356599db966ca7 11867 bytes",
@@ -11120,7 +11126,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".cursor/rules/stamity-question-protocol.mdc": "4b281d4be2a87caa3115432ecebc7affef505c81d1b6b2f206e11d20719caa86 6041 bytes",
   ".cursor/rules/stamity-resilience.mdc": "3fe9757aa442903b52cc5f32754ce3d6fe21afdb44ec0f48d9369bf482108f47 5030 bytes",
   ".cursor/rules/stamity-secrets.mdc": "ddb1d0956c519ba7b3b6c36a47ae9af7c0180206e06d3c2179cbd08cfec47437 6254 bytes",
-  ".cursor/rules/stamity-security-patterns.mdc": "cb06fff62f42ec6f32b83926041d03b75067c73d18fa8eeb8cfd55d49d0e76a3 6364 bytes",
+  ".cursor/rules/stamity-security-patterns.mdc": "6f6756d76a57caadc26eb0f0499b46c9c1eab1acfe3ac037ca692cd2f3367886 6574 bytes",
   ".cursor/rules/stamity-testing.mdc": "b1e6ccf40fbc412f50906738e91daba2852e6c893ee201d43c1408397cef3a78 4250 bytes",
   ".cursor/rules/stamity-ui-states.mdc": "6c771070237804228629abfbfb0c41adf795d0b1259aa6e4286cc7d110f633c6 4589 bytes",
   ".github/workflows/ci.yml": "f4f971a7fcd25b9c11a4341c8976e478fe78e38b27fd84cc0f7ad0f224d1195f 60 bytes",
@@ -11139,7 +11145,7 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "7929c59bdfce5b52b92ab0e58ae56f5abdcf9283f9802757602ff807511e0fc1 22426 bytes",
+  ".stamity/manifest.json": "c8235734bec38a5ae3ad8d71a44ad0ed44fb987651ef85bc686148c2ddced619 22426 bytes",
   "AGENTS.md": "8a27073afaf09be0ca5fc782dd2632108aab084a85b0dccaaad3ceba751a7173 6548 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",

@@ -145,6 +145,31 @@ function section(file: CorpusFile, heading: string): string {
   return end === -1 ? rest : rest.slice(0, end);
 }
 
+/** The one top-level bullet of a section that contains `needle`, flattened, marker dropped. */
+function bulletContaining(sectionText: string, needle: string): string {
+  const bullets = sectionText
+    .split(/\n(?=- )/)
+    .map((bullet) => flatten(bullet).trim().replace(/^- /, ""))
+    .filter((bullet) => bullet.includes(needle));
+  expect(bullets, `expected exactly one bullet containing "${needle}"`).toHaveLength(1);
+  return bullets[0] ?? "";
+}
+
+/**
+ * Floor item 5 of the security-patterns rule, verbatim. REQ-FLOW-173 narrowed the gate that
+ * enforces it, never the floor itself, so the item is pinned byte-for-byte.
+ */
+const FAIL_CLOSED_FLOOR_ITEM = [
+  "5. **Fail closed.** An absent grant denies. Configuration that will not parse",
+  "   takes the restrictive branch. An error raised inside an authorization check",
+  "   denies rather than falls through. Capabilities that must not reach",
+  "   production — debug routes, seed and reset commands, test-login paths, mock",
+  "   payment modes — are gated on an allowlist of named environments, and startup",
+  "   refuses to boot on an environment value outside that enum. The inverted form",
+  '   (`env !== "production"`) turns the capability ON in every environment nobody',
+  "   thought to name: a fresh container, a renamed stage, a misspelling.",
+].join("\n");
+
 /**
  * Prose lines long enough that an exact match across two files is a copy
  * rather than a coincidence. Short lines (headings, list scaffolding, a
@@ -362,6 +387,38 @@ describe("security-patterns — the pattern-level floor", () => {
     expect(text).toContain('`env !== "production"`');
     expect(text).toMatch(/a fresh container, a renamed stage, a misspelling/i);
     expect(flatten(section(file, "Gates"))).toMatch(/unrecognised environment value/i);
+  });
+
+  // REQ-FLOW-173: the production-only gate fires where the code has such a capability, and
+  // only there. The floor item that motivates it stays byte-for-byte what it was; only the
+  // gate's condition narrows.
+  it("keeps floor item 5 byte-identical while the allowlist gate narrows to code with the capability", async () => {
+    const file = await load("rules/stamity-security-patterns.md");
+
+    expect(file.parsed.body).toContain(FAIL_CLOSED_FLOOR_ITEM);
+
+    const gate = bulletContaining(section(file, "Gates"), "environment allowlist");
+    // The condition is general; the named kinds are examples ("or the like"), not a closed list.
+    expect(gate).toMatch(/^Where the code has a capability that must stay out of production \(/);
+    expect(gate).toMatch(/a debug route, a seed endpoint, a destructive admin verb, or the like/);
+    // The gate itself is unchanged where it applies: a change adding a seed endpoint still
+    // meets the startup assertion and the boot test.
+    expect(gate).toMatch(/the environment allowlist is asserted at startup/);
+    expect(gate).toMatch(/a test boots with an unrecognised environment value and asserts the gated capability stays off/);
+    expect(gate).toMatch(/A repository with no such capability says so in one line instead\.$/);
+  });
+
+  it("fires the reviewer's production-only row on a capability the change adds or exposes, not on a script", async () => {
+    const file = await load("agents/stamity-reviewer.md");
+    const row = bulletContaining(section(file, "Critical rows"), "non-production environments");
+
+    expect(row).toMatch(/^A capability the change adds or exposes that must stay out of production \(/);
+    expect(row).toMatch(/a debug route, a seed endpoint, a destructive admin verb, or the like/);
+    expect(row).toMatch(/not a script run against an environment/);
+    expect(row).toMatch(/is gated by an allowlist of named non-production environments/);
+    expect(row).toMatch(/an unset or unknown value denies\.$/);
+    // The old row fired on any "dangerous capability" the reviewer could name, script or not.
+    expect(row).not.toMatch(/^Dangerous capabilities/);
   });
 
   it("carries the auth floor row and routes deep protocol work out", async () => {
