@@ -741,6 +741,25 @@ describe("the cloud column and the Cloud sessions section", () => {
     expect(cells(printed ?? "")[3]).toBe("A missing review-gate counter is rebuilt from the run record on this branch.");
   });
 
+  it("names the permission reads Claude's proxy refused in a real run, citing a public record (REQ-FLOW-170)", () => {
+    const row = cloudFact("claude", "Permission reads");
+    expect(row.status).toBe("not documented");
+    expect(row.citation).toEqual({ url: "https://code.claude.com/docs/en/cloud-environments", accessDate: "2026-11-09" });
+    for (const read of ["`collaborators/<login>/permission`", "`collaborators`", "`user/memberships/orgs/<org>`"]) {
+      expect(row.fact).toContain(read);
+    }
+    expect(row.fact).toContain("403");
+    expect(row.fact).toContain("404 on `branches/<default>/protection`");
+    expect(row.fact).toContain("reads the account's own rights instead");
+    // The page is silent, so the session start tells an agent nothing on it (sessionStart rows stay `documented`).
+    expect(row.sessionStart).toBeUndefined();
+    expect(row.run?.date).toBe("2026-11-06");
+    // The record is a page in this repository, never a local folder or a private path.
+    expect(row.run?.record).toContain("`docs/factory.md`");
+    expect(row.run?.record).not.toMatch(/\/Users\/|~\/|\.stamity\/|private/);
+    expect(personCheck(page, "claude", "Permission reads")).toBe(`${row.run?.record}, run 2026-11-06`);
+  });
+
   it("records the open Copilot path-argument question as unverified, not as a claim", () => {
     const row = cloudFact("copilot", "Tool arguments");
     expect(row.status).toBe("unverified");
@@ -762,7 +781,9 @@ describe("the cloud column and the Cloud sessions section", () => {
     expect(tableRows(section(page, "## Cloud sessions")).length).toBeGreaterThan(1);
     // TEST CHANGE, justified: real runs on 2026-11-06 and 2026-11-08 started on the label on Claude's and Cursor's
     // clouds, so their issue-trigger rows name that check; every other live row still reads "not run".
-    const checked = new Set(["claude:Issue trigger", "cursor:Issue trigger"]);
+    // TEST CHANGE, justified: the 2026-11-06 real run on Claude's cloud also saw the proxy refuse the permission reads,
+    // so the new "Permission reads" row names that run as its check (REQ-FLOW-170, build/27).
+    const checked = new Set(["claude:Issue trigger", "cursor:Issue trigger", "claude:Permission reads"]);
     for (const fact of CLIENT_CLOUD_FACTS) {
       const key = `${fact.tool}:${fact.subject}`;
       if (checked.has(key)) {

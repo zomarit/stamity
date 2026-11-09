@@ -233,6 +233,18 @@ export const CLIENT_CLOUD_FACTS: readonly ClientCloudFact[] = [
   },
   {
     tool: "claude",
+    subject: "Permission reads",
+    fact:
+      "In a real session on 2026-11-06 the GitHub proxy answered 403 on " +
+      "`collaborators/<login>/permission`, `collaborators` and `user/memberships/orgs/<org>`, " +
+      "and 404 on `branches/<default>/protection`; the page says nothing on these reads, so " +
+      "stamity reads the account's own rights instead.",
+    status: "not documented",
+    citation: { url: "https://code.claude.com/docs/en/cloud-environments", accessDate: "2026-11-09" },
+    run: { record: "`docs/factory.md`, What real runs have shown and Step 7", date: "2026-11-06" },
+  },
+  {
+    tool: "claude",
     subject: "Session state",
     fact:
       "A reclaimed VM is rebuilt fresh when the session reopens, so state the hooks wrote there, " +
