@@ -1,7 +1,11 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, type TestContext } from "vitest";
 import { awayCommand } from "../../../src/cli/commands/away.ts";
+import { CLAUDE_HOOKS_DIR } from "../../../src/hooks/model.ts";
+import { PERSON_ONLY_GUARD_FILE, planCoreHookScripts } from "../../../src/hooks/scripts.ts";
+import { CHILD_TIMEOUT_MS } from "../../support/childTimeout.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { seedGitRepo } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -300,5 +304,120 @@ describe("stamity away", () => {
     expect(on.code, on.stderr).toBe(0);
     expect(existsSync(join(root.dir, "main", MARKER))).toBe(true);
     expect(await json(lane, ["status"])).toMatchObject({ away: true, source: "marker" });
+  });
+
+  // ADDED (n-away-verb fixer r3, build/53 and review/105): the guard's root is the folder above the hooks folder it was
+  // emitted into, the folder `stamity init` set up, and that folder can sit below git's top. The verb walks up from where
+  // it runs to the nearest setup, no further than git's top.
+  describe("finds the setup the guard reads", () => {
+    /** A git repository at the case's scratch folder, with a setup's manifest in each folder named (top-relative). */
+    async function repoWithSetups(skip: TestContext["skip"], setups: readonly string[]): Promise<string> {
+      const top = getRoot().dir;
+      try {
+        await seedGitRepo(top);
+      } catch (error) {
+        if ((error as Error).name === "GitUnavailableError") skip("git is not installed here");
+        throw error;
+      }
+      await getRoot().seedFiles(Object.fromEntries(setups.map((setup) => [join(setup, ".stamity", "manifest.json"), "{}\n"])));
+      return top;
+    }
+
+    /** The real person-only guard for Claude Code, placed in `setup` where emission writes it; returns its path. */
+    function placeGuard(setup: string): string {
+      const guard = planCoreHookScripts("../../agent-tool-policies.json", "claude", {
+        packageName: "@zomarit/stamity",
+        version: "1.0.0-golden",
+        personOnlyGuard: true,
+        layout: "claude",
+      }).find((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
+      if (guard === undefined) throw new Error("the plan carried no person-only guard");
+      const folder = join(setup, ...CLAUDE_HOOKS_DIR.split("/"));
+      mkdirSync(folder, { recursive: true });
+      writeFileSync(join(folder, guard.fileName), guard.content, "utf8");
+      return join(folder, guard.fileName);
+    }
+
+    /** What the guard answers a shell call run from `cwd`, as Claude Code hands it over, with the switch's variable unset. */
+    function guardSays(guard: string, cwd: string, command: string): "ask" | "refuse" | "allow" {
+      const env = { ...process.env };
+      for (const name of ["STAMITY_UNATTENDED", "STAMITY_REPO_ROOT", "STAMITY_NOBODY_WATCHING"]) delete env[name];
+      const input = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command } });
+      const result = spawnSync(process.execPath, [guard], { cwd, input, encoding: "utf8", env, timeout: CHILD_TIMEOUT_MS });
+      if (result.status === 2) return "refuse";
+      expect(result.status, String(result.stderr)).toBe(0);
+      return String(result.stdout).includes('"permissionDecision":"ask"') ? "ask" : "allow";
+    }
+
+    it("acts on a setup below git's top, the marker its own emitted guard reads, from a folder under that setup", async ({ skip }) => {
+      const top = await repoWithSetups(skip, ["packages/api"]);
+      const setup = join(top, "packages", "api");
+      const below = join(setup, "src");
+      mkdirSync(below, { recursive: true });
+      const guard = placeGuard(setup);
+      // Non-degenerate: with the switch off, the same call asks.
+      expect(guardSays(guard, below, "npm publish")).toBe("ask");
+
+      const on = await away(below, ["on"]);
+
+      expect(on.code, on.stderr).toBe(0);
+      expect(existsSync(join(setup, MARKER))).toBe(true);
+      expect(existsSync(join(top, ".stamity"))).toBe(false);
+      expect(guardSays(guard, below, "npm publish")).toBe("refuse");
+      // The held list the guard wrote is the one the verb reads.
+      expect(await json(below, ["status"])).toMatchObject({ away: true, source: "marker", held: 1 });
+      expect((await away(below, ["off"])).code).toBe(0);
+      expect(existsSync(join(setup, MARKER))).toBe(false);
+      expect(guardSays(guard, below, "npm publish")).toBe("ask");
+    });
+
+    it("takes the nearest setup where git's top holds one too", async ({ skip }) => {
+      const top = await repoWithSetups(skip, ["", "packages/api"]);
+      const setup = join(top, "packages", "api");
+      mkdirSync(join(setup, "src"), { recursive: true });
+      mkdirSync(join(top, "docs"), { recursive: true });
+
+      expect((await away(join(setup, "src"), ["on"])).code).toBe(0);
+      expect(existsSync(join(setup, MARKER))).toBe(true);
+      expect(existsSync(join(top, MARKER))).toBe(false);
+      expect(await json(join(top, "docs"), ["status"])).toMatchObject({ away: false, source: "none" });
+      expect((await away(join(top, "docs"), ["on"])).code).toBe(0);
+      expect(existsSync(join(top, MARKER))).toBe(true);
+    });
+
+    it("refuses on and off where no setup is at or above the folder, naming where it looked; status reads the variable alone", async ({ skip }) => {
+      const top = await repoWithSetups(skip, ["packages/api"]);
+
+      const on = await away(top, ["on"]);
+      const off = await away(top, ["off"]);
+      const status = await away(top, ["status"], { STAMITY_NOBODY_WATCHING: "1" });
+
+      expect(on.code).toBe(1);
+      expect(on.stderr).toContain(`found no .stamity/manifest.json in ${top}`);
+      expect(on.stderr).toContain("run stamity away on in the folder stamity init set up, or in a folder below it");
+      expect(off.code).toBe(1);
+      expect(off.stderr).toContain("run stamity away off in the folder stamity init set up");
+      expect(existsSync(join(top, ".stamity"))).toBe(false);
+      expect(status.code, status.stderr).toBe(0);
+      expect(status.stdout).toContain("away: on\nsource: env\nsetup: none found in ");
+    });
+
+    it("walks no further than git's top, so a setup around the repository is never the one switched", async ({ skip }) => {
+      const outer = getRoot().dir;
+      await getRoot().seedFiles({ ".stamity/manifest.json": "{}\n", "repo/sub/README.md": "a folder\n" });
+      const repo = join(outer, "repo");
+      try {
+        await seedGitRepo(repo);
+      } catch (error) {
+        if ((error as Error).name === "GitUnavailableError") skip("git is not installed here");
+        throw error;
+      }
+
+      const on = await away(join(repo, "sub"), ["on"]);
+
+      expect(on.code).toBe(1);
+      expect(on.stderr).toContain(`up to ${repo}`);
+      expect(existsSync(join(outer, MARKER))).toBe(false);
+    });
   });
 });

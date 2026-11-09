@@ -1,10 +1,11 @@
 import { closeSync, fstatSync, lstatSync, openSync, readSync, type Stats } from "node:fs";
-import { lstat, stat, unlink, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { lstat, realpath, stat, unlink, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import type { Command } from "commander";
 import { NOBODY_WATCHING_VARIABLE } from "../../hooks/scripts.ts";
 import { AWAY_HELD_FILE, AWAY_MARKER_FILE } from "../../mcp/env.ts";
 import { heldUnreadLine, parseHeldList, type HeldLine } from "../../runs/overview.ts";
+import { MANIFEST_FILE } from "../../types/manifest.ts";
 import { STATE_DIR } from "../../types/markers.ts";
 import { readCapped } from "../engine/landSetting.ts";
 import { CliFailure } from "../kit/output.ts";
@@ -20,11 +21,13 @@ import { runGit } from "../../worktree/git.ts";
  *   away status   whether the switch is on, from the variable, the marker or both, and the acts held while it was on
  *
  * The guard reads the switch from `STAMITY_NOBODY_WATCHING` (set at launch, so this verb cannot unset it) or from the
- * marker at its own project root, the folder its hook was installed into, which is the repository's top (the linked
- * worktree's own top inside one). So all three subcommands act on the marker at git's top level, wherever under it the
- * verb runs, and on the folder it runs in only where git names no top (build/53). `on` refuses where that root holds no
- * `.stamity/` folder, since a marker there turns nothing on. A `.stamity` that is a link to a folder counts: the guard
- * reads `<root>/.stamity/away.json` through it, so the marker written through it is the one the guard reads (M-2).
+ * marker at its own project root: the folder above the hooks folder it was emitted into (`derivedRoot` in the emitted
+ * guard), which is the folder `stamity init` set up, the one holding `.stamity/manifest.json`. That folder can sit below
+ * git's top. So all three subcommands act on the nearest setup at or above the folder the verb runs in, walking up no
+ * further than git's top (build/53, review/105). `on` and `off` refuse where the walk finds none, since no guard reads a
+ * marker there; `status` reads the switch off the variable alone and says no setup was found. A `.stamity` that is a
+ * link to a folder counts: the guard reads `<root>/.stamity/away.json` through it, so the marker written through it is
+ * the one the guard reads (M-2).
  * The marker counts as present by `lstat`, a link among it, as the guard reads it: a link only tightens. `off` removes
  * a file or a link, never a link's target, and refuses anything else at that name, which the guard still reads as on.
  *
@@ -114,14 +117,66 @@ export function readHeldList(root: string): HeldRead {
   return read === null ? { entries: [], olderUnread: 0 } : { entries: parseHeldList(read.text).map(cleaned), olderUnread: read.olderLines };
 }
 
-/**
- * The project root the guard reads the marker under: git's top level for the folder the verb runs in (a linked
- * worktree's own top inside one), else that folder itself, as the guard falls back to its working folder (build/53).
- */
-async function projectRoot(cwd: string): Promise<string> {
+/** Where the verb looked for a setup: the nearest folder holding one, or `null`, and the first and last folders read. */
+interface SetupPlace {
+  readonly root: string | null;
+  readonly from: string;
+  readonly last: string;
+}
+
+/** Git's top level for `cwd` as a real path (a linked worktree's own top inside one), or `null` where git names none. */
+async function gitTop(cwd: string): Promise<string | null> {
   const outcome = await runGit({ args: ["rev-parse", "--show-toplevel"], cwd });
   const top = outcome.stdout.replace(/\r?\n$/, "");
-  return outcome.status !== 0 || outcome.keptFromGit === true || top === "" ? cwd : resolve(top);
+  if (outcome.status !== 0 || outcome.keptFromGit === true || top === "") return null;
+  return realpath(top).catch(() => resolve(top));
+}
+
+/** Whether `dir` holds a setup's manifest; `stat` follows a `.stamity` that is a link to a folder, as the guard does (M-2). */
+async function holdsSetup(dir: string): Promise<boolean> {
+  return stat(join(dir, STATE_DIR, MANIFEST_FILE)).then(
+    (entry) => entry.isFile(),
+    () => false,
+  );
+}
+
+/**
+ * The setup the guard reads the marker under (build/53, review/105): the nearest folder, from the one the verb runs in
+ * up, that holds `.stamity/manifest.json`, the folder `stamity init` set up and emitted the guard into. The walk stops
+ * at git's top, so a lane inside another checkout never reaches that checkout's setup; where git names no top, it
+ * stops at the filesystem root. Real paths are walked, as git names its top and as Node resolves the guard's own path.
+ */
+async function findSetup(cwd: string): Promise<SetupPlace> {
+  const from = await realpath(cwd).catch(() => resolve(cwd));
+  const top = await gitTop(from);
+  let dir = from;
+  for (;;) {
+    // oxlint-disable-next-line no-await-in-loop -- nearest first: the first folder holding a setup wins, and the walk stops there
+    if (await holdsSetup(dir)) return { root: dir, from, last: dir };
+    const up = dirname(dir);
+    if (dir === top || up === dir) return { root: null, from, last: dir };
+    dir = up;
+  }
+}
+
+/** Where the walk read, for a line naming that no setup was found. */
+function lookedIn({ from, last }: SetupPlace): string {
+  return `${sanitizeLabel(from)}${last === from ? "" : ` or a folder above it, up to ${sanitizeLabel(last)}`}`;
+}
+
+const GUARD_READS = `the guard reads the marker at its project root's ${AWAY_MARKER_FILE}, the folder stamity init set up, so a marker anywhere else turns nothing on`;
+
+/** `on` or `off` where the walk found no setup: no guard reads a marker here, so nothing is written or removed. */
+function noSetup(subcommand: "on" | "off", place: SetupPlace): CliFailure {
+  return new CliFailure({
+    code: "VALIDATION_ERROR",
+    message: `away ${subcommand} found no ${STATE_DIR}/${MANIFEST_FILE} in ${lookedIn(place)}, so no project root the guard reads`,
+    why: GUARD_READS,
+    next:
+      subcommand === "on"
+        ? "run stamity away on in the folder stamity init set up, or in a folder below it; where nothing is set up yet, run stamity init first, in the folder your agent sessions open in"
+        : "run stamity away off in the folder stamity init set up, or in a folder below it",
+  });
 }
 
 /** The marker's own entry, without following a link; `null` when nothing is at its name. */
@@ -166,17 +221,8 @@ function envOn(ctx: CliContext): boolean {
 
 const ENV_HOLDS = `${NOBODY_WATCHING_VARIABLE} is set, so the switch stays on until it is unset where the session was launched.`;
 
+/** `root` is a setup's folder ({@link findSetup}), so its `.stamity` is a folder or a link to one (M-2). */
 async function runOn(ctx: CliContext, root: string): Promise<CommandResult> {
-  // `stat`, not `lstat`: a `.stamity` link to a folder is one the guard reads the marker through (M-2).
-  const state = await stat(join(root, STATE_DIR)).catch(() => null);
-  if (state === null || !state.isDirectory()) {
-    throw new CliFailure({
-      code: "VALIDATION_ERROR",
-      message: `away on found no ${STATE_DIR}/ folder in ${sanitizeLabel(root)}, the project root it reads`,
-      why: `the guard reads the marker at the project root's ${AWAY_MARKER_FILE}, the repository's top, so a marker anywhere else turns nothing on`,
-      next: "run stamity init at the repository's top first; stamity away then works from anywhere in it",
-    });
-  }
   const env = envOn(ctx);
   if ((await markerStats(root)) !== null) {
     const since = markerSince(root);
@@ -247,15 +293,20 @@ async function runOff(ctx: CliContext, root: string): Promise<CommandResult> {
   };
 }
 
-async function runStatus(ctx: CliContext, root: string): Promise<CommandResult> {
+/** With no setup found, the variable alone says on or off, and a line says no marker is read here. */
+async function runStatus(ctx: CliContext, place: SetupPlace): Promise<CommandResult> {
+  const { root } = place;
   const env = envOn(ctx);
-  const marker = (await markerStats(root)) !== null;
-  const since = marker ? markerSince(root) : null;
-  const { entries: held, olderUnread } = readHeldList(root);
+  const marker = root !== null && (await markerStats(root)) !== null;
+  const since = root !== null && marker ? markerSince(root) : null;
+  const { entries: held, olderUnread } = root === null ? { entries: [], olderUnread: 0 } : readHeldList(root);
   const source = sourceOf(env, marker);
   const lines = [
     `away: ${source === "none" ? "off" : "on"}`,
     `source: ${source}`,
+    ...(root === null
+      ? [`setup: none found in ${lookedIn(place)}, so no marker is read here; run stamity away status in the folder stamity init set up, or in a folder below it`]
+      : []),
     ...(since === null ? [] : [`since: ${since}`]),
     `held: ${String(held.length)}`,
     ...(olderUnread > 0 ? [heldUnreadLine(olderUnread)] : []),
@@ -289,10 +340,10 @@ export const awayCommand: CommandModule = {
   },
 
   async run(ctx, _opts, args): Promise<CommandResult> {
-    const root = await projectRoot(ctx.app.runtime.cwd);
+    const place = await findSetup(ctx.app.runtime.cwd);
     const [subcommand] = args;
-    if (subcommand === "on") return runOn(ctx, root);
-    if (subcommand === "off") return runOff(ctx, root);
-    return runStatus(ctx, root);
+    if (subcommand !== "on" && subcommand !== "off") return runStatus(ctx, place);
+    if (place.root === null) throw noSetup(subcommand, place);
+    return subcommand === "on" ? runOn(ctx, place.root) : runOff(ctx, place.root);
   },
 };
