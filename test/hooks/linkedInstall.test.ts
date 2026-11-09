@@ -10,6 +10,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, readFileSync, realpathSync, symlinkSync, existsSync } from "node:fs";
+import { dirname } from "node:path";
 import { describe, expect, it } from "vitest";
 import { AWAY_HELD_FILE, NOBODY_WATCHING_VARIABLE, PERSON_ONLY_GUARD_FILE, planCoreHookScripts } from "../../src/hooks/scripts.ts";
 import { type Tool, TOOLS } from "../../src/types/core.ts";
@@ -25,9 +26,14 @@ const POLICY = "../../agent-tool-policies.json";
 const NO_DANGLING = process.platform === "win32";
 const NO_MODE_BITS = process.platform === "win32" || process.getuid?.() === 0;
 
-/** The refusal the cell names, for a link resolving to `target`. */
+/**
+ * The refusal the cell names, for a link resolving to `target`. TEST CHANGE, justified: the sentence now names the
+ * fix that works, a cd to that checkout or an absolute --prefix (review/83, sign-off S54); the cell's sentence alone
+ * left an agent no spelling the guard let through, and every other word is the cell's.
+ */
 function refusal(target: string): string {
-  return `This install would write through node_modules here, which is a link to ${target}, another checkout's install. Run it in that checkout, or remove the link (the link only) and install here.`;
+  const checkout = dirname(target);
+  return `This install would write through node_modules here, which is a link to ${target}, another checkout's install. Run it in that checkout (cd ${checkout} first, or give the install an absolute --prefix ${checkout}), or remove the link (the link only) and install here.`;
 }
 
 /** The guard for one client where emission writes it, in a repository on `feat/x`; returns its path. */
@@ -54,11 +60,11 @@ function linkInstall(folder: string, target = getRepo().path("main", "node_modul
   return existsSync(target) ? realpathSync(target) : target;
 }
 
-/** A shell call as each client hands it to the guard. */
-function payload(tool: Tool, command: string): string {
-  if (tool === "cursor") return JSON.stringify({ hook_event_name: "beforeShellExecution", command, cwd: "." });
+/** A shell call as each client hands it to the guard, run in `cwd` (relative to the root) when one is given. */
+function payload(tool: Tool, command: string, cwd?: string): string {
+  if (tool === "cursor") return JSON.stringify({ hook_event_name: "beforeShellExecution", command, cwd: cwd ?? "." });
   const extra = tool === "copilot" ? { toolName: "bash" } : { hook_event_name: "PreToolUse" };
-  return JSON.stringify({ ...extra, tool_name: "Bash", tool_input: { command } });
+  return JSON.stringify({ ...extra, tool_name: "Bash", tool_input: { command }, ...(cwd === undefined ? {} : { cwd }) });
 }
 
 /** The child's environment: the test's own, less every variable the guard reads, plus the case's. */
@@ -76,8 +82,8 @@ function hookEnv(env: Record<string, string>): NodeJS.ProcessEnv {
 type Said = { kind: "allow" } | { kind: "ask"; reason: string } | { kind: "refuse"; reason: string };
 
 /** Runs the guard on one call and reads the client's answer. */
-function decide(tool: Tool, guard: string, command: string, env: Record<string, string> = {}): Said {
-  const answer = spawnSync(process.execPath, [guard], { input: payload(tool, command), encoding: "utf8", env: hookEnv(env), timeout: CHILD_TIMEOUT_MS });
+function decide(tool: Tool, guard: string, command: string, env: Record<string, string> = {}, cwd?: string): Said {
+  const answer = spawnSync(process.execPath, [guard], { input: payload(tool, command, cwd), encoding: "utf8", env: hookEnv(env), timeout: CHILD_TIMEOUT_MS });
   const stdout = String(answer.stdout).trim();
   if (tool === "claude" && stdout !== "") {
     expect(answer.status, command).toBe(0);
@@ -217,6 +223,83 @@ describe("an install through a linked node_modules (REQ-FLOW-178)", () => {
     for (const env of modes) expect(decide("claude", guard, "cd lane && npm ci", env)).toEqual({ kind: "refuse", reason: refusal(target) });
     // A refusal, never an ask: the held list is not written.
     expect(existsSync(getRepo().path(...AWAY_HELD_FILE.split("/")))).toBe(false);
+  });
+
+  it("reads the line in order: each install against the folder in effect where it runs (review/83, review/80, build/41)", async () => {
+    const guard = await placeGuard("claude", { "node_modules/.keep": "" });
+    const target = linkInstall(getRepo().path("lane"));
+    const main = getRepo().path("main");
+    // From the linked lane, the refusal's own fix runs: a cd to the main checkout first, relative or absolute, also
+    // behind a command that runs before it in the same chain, and git -C naming the lane moves only git.
+    for (const command of [`cd ${main} && npm ci`, "cd ../main && npm ci", "cd ../main; npm ci", `git fetch && cd ${main} && npm ci`, `npm --prefix ${main} ci`]) {
+      expect(decide("claude", guard, command, {}, "lane"), command).toEqual({ kind: "allow" });
+    }
+    for (const command of ["git -C lane status && npm ci", "cd lane && npm test; cd - && npm ci", "(cd lane && npm test) && npm ci", "env -C lane npm test; npm ci"]) {
+      expect(decide("claude", guard, command), command).toEqual({ kind: "allow" });
+    }
+    // Non-degenerate, and nothing loosened: a cd that does not hold where the install runs (a subshell's, a pipe's, a
+    // background job's, a condition's, one after ||) leaves the lane's folder in play; eval's cd and env -C move it.
+    for (const command of [`(cd ${main} && npm test); npm ci`, `cd ${main} | cat; npm ci`, `cd ${main} & npm ci`, `if true; then cd ${main}; fi; npm ci`, `true || cd ${main}; npm ci`, `false && cd ${main}; npm ci`, `{ cd ${main}; }; npm ci`, `echo $(cd ${main}) && npm ci`, "npm ci", "cd . && npm ci"]) {
+      expect(decide("claude", guard, command, {}, "lane"), command).toEqual({ kind: "refuse", reason: refusal(target) });
+    }
+    for (const command of ["eval 'cd lane'; npm ci", "env -C lane npm ci", "env --chdir=lane npm ci", "cd main; cd ../lane && npm ci"]) {
+      expect(decide("claude", guard, command), command).toEqual({ kind: "refuse", reason: refusal(target) });
+    }
+  });
+
+  it("walks up to the folder holding the package.json, as the managers do (review/78)", async () => {
+    const guard = await placeGuard("claude", { "node_modules/.keep": "", "lane/package.json": "{}\n", "lane/src/.keep": "", "lane/tools/package.json": "{}\n" });
+    const target = linkInstall(getRepo().path("lane"));
+    // A subfolder with no package.json of its own installs at the lane's top, through the link.
+    for (const command of ["cd lane/src && npm ci", "npm --prefix lane/src install", "pnpm -C lane/src add left-pad"]) {
+      expect(decide("claude", guard, command), command).toEqual({ kind: "refuse", reason: refusal(target) });
+    }
+    expect(decide("claude", guard, "npm ci", {}, "lane/src")).toEqual({ kind: "refuse", reason: refusal(target) });
+    // Non-degenerate: a subfolder holding its own package.json installs there, and the root's real folder is its own.
+    for (const command of ["cd lane/tools && npm ci", "cd src && npm ci"]) {
+      expect(decide("claude", guard, command), command).toEqual({ kind: "allow" });
+    }
+  });
+
+  it("reads past a wrapper's number and value arguments (review/82)", async () => {
+    const guard = await placeGuard("claude");
+    const target = linkInstall(getRepo().path());
+    for (const command of ["timeout 600 npm ci", "timeout -k 5 600 pnpm install", "timeout 10m yarn", "nice -n 10 npm ci", "timeout 600 env CI=1 npm ci"]) {
+      expect(decide("claude", guard, command), command).toEqual({ kind: "refuse", reason: refusal(target) });
+    }
+    expect(decide("claude", guard, "timeout 600 npm test")).toEqual({ kind: "allow" });
+  });
+
+  it("counts a bare yarn only with options alone after it, and lets help and version run (review/79, review/84)", async () => {
+    const guard = await placeGuard("claude");
+    const target = linkInstall(getRepo().path());
+    // Each writes nothing, probed against yarn 1.22.22 and npm 10 in a scratch folder.
+    for (const command of ["yarn --version", "yarn -v", "yarn --help", "yarn -h", "yarn --silent test", "yarn -s lint", "yarn add -h", "npm ci --dry-run", "npm install --help", "npm i -h", "npm ci -v"]) {
+      expect(decide("claude", guard, command), command).toEqual({ kind: "allow" });
+    }
+    // Still installs: options alone, a value option's value among them, and yarn 1's --dry-run, which it ignores.
+    for (const command of ["yarn --frozen-lockfile", "yarn --network-timeout 100000", "yarn --cache-folder /tmp/c --frozen-lockfile", "yarn --dry-run", "yarn --silent add left-pad"]) {
+      expect(decide("claude", guard, command), command).toEqual({ kind: "refuse", reason: refusal(target) });
+    }
+  });
+
+  it("reads each manager's other spellings: aliases, a runner's line, a quoted name (review/81)", async () => {
+    const guard = await placeGuard("claude");
+    const target = linkInstall(getRepo().path());
+    for (const command of ["npm sit", "npm clean-install-test", "pnpm dislink left-pad", "npm exec -- npm ci", "pnpm exec npm ci", "yarn exec npm ci", "n''pm ci", "n\\pm ci", "\"n\"pm ci"]) {
+      expect(decide("claude", guard, command), command).toEqual({ kind: "refuse", reason: refusal(target) });
+    }
+    expect(decide("claude", guard, "npm exec -- vitest run")).toEqual({ kind: "allow" });
+  });
+
+  it("checks a folder hidden in a variable against the folder the line starts from (build/42)", async () => {
+    const guard = await placeGuard("claude", { "node_modules/.keep": "" });
+    const target = linkInstall(getRepo().path("lane"));
+    // Started in the linked lane, an install behind cd "$x" is refused; started in a real folder, it runs: the guard
+    // cannot read where $x points, and refusing every such line would refuse ordinary ones.
+    expect(decide("claude", guard, 'cd "$MAIN" && npm ci', {}, "lane")).toEqual({ kind: "refuse", reason: refusal(target) });
+    expect(decide("claude", guard, 'npm --prefix "$MAIN" ci', {}, "lane")).toEqual({ kind: "refuse", reason: refusal(target) });
+    expect(decide("claude", guard, 'cd "$LANE" && npm ci')).toEqual({ kind: "allow" });
   });
 
   it.skipIf(NO_DANGLING)("refuses through a dangling link, naming where it points", async () => {

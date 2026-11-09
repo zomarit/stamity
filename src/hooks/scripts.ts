@@ -401,7 +401,11 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // Moved again 2026-11-09 by that unit's widening (sign-off S47), by what was measured: 339,154 bytes / 7,021 lines
   // (copilot, generated), past both rows, because every package-manager verb that writes into node_modules is now
   // read. 338,691 + 463 = 339,154 bytes; 7,014 + 7 = 7,021 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 339_154, lines: 7_021 },
+  // Moved again 2026-11-09 by that unit's first fix round (sign-off S54), by what was measured: 345,411 bytes / 7,142
+  // lines (copilot, generated), past both rows, because the check now reads the line in order, walks up to the folder
+  // holding the package.json, and reads wrappers' values, runners and yarn's options. 339,154 + 6,257 = 345,411 bytes;
+  // 7,021 + 121 = 7,142 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 345_411, lines: 7_142 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -4605,8 +4609,9 @@ export { AWAY_HELD_FILE, AWAY_MARKER_FILE } from "../mcp/env.ts";
  * other than its absence) refuses the call.
  *
  * An install verb (`npm ci`, `pnpm install`, a bare `yarn`, `bun add`, …) whose
- * folder, read through the places and a `--prefix`, `-C`, `--dir` or `--cwd`,
- * holds a `node_modules` that is a symbolic link is refused in every mode, never
+ * folder, read in the line's order (a `cd`, then a `--prefix`, `-C`, `--dir` or
+ * `--cwd`) and up to the nearest `package.json`, holds a `node_modules` that
+ * is a symbolic link is refused in every mode, never
  * asked, naming the link's target (REQ-FLOW-178); that check catches its own
  * faults, so none reaches the fail-closed refusal.
  *
@@ -4842,9 +4847,13 @@ function present(path) {
   }
 }
 
-/** A line's words (a null where a command can follow), the lines they run, and its heredocs' bodies; with braces, a brace is a word's. */
+/**
+ * A line's words (a null where a command can follow, its operator character in marks at that index), the lines they
+ * run, and its heredocs' bodies; with braces, a brace is a word's.
+ */
 function shellWords(command, braces = false) {
   const words = [];
+  const marks = [];
   const nested = [];
   const docs = [];
   const pending = [];
@@ -4927,6 +4936,7 @@ function shellWords(command, braces = false) {
       end();
       if (c === "\n" || c === "\r" || !/\s/.test(c)) {
         drop = false;
+        marks[words.length] = c;
         words.push(null);
       }
       if (c === "\n" && pending.length > 0) k = bodies(k);
@@ -4934,7 +4944,7 @@ function shellWords(command, braces = false) {
   }
   end();
   const home = process.env.HOME ?? process.env.USERPROFILE;
-  return { words: words.map((w) => (w !== null && home && /^~(?=[\\/]|$)/.test(w) ? home + w.slice(1) : w)), nested, docs };
+  return { words: words.map((w) => (w !== null && home && /^~(?=[\\/]|$)/.test(w) ? home + w.slice(1) : w)), marks, nested, docs };
 }
 
 const RUNNER = ["pw", "--package --workspace --filter", "-c --call --shell-mode"];
@@ -5208,100 +5218,216 @@ function linesOf(name, tail) {
 }
 
 /**
- * Each manager's verbs that write into its node_modules, each manager's own spellings among them; a bare yarn
- * installs, and npm's audit writes with fix (REQ-FLOW-178, sign-off S47).
+ * Each manager's verbs that write into its node_modules, each manager's own spellings among them; a bare yarn with
+ * options alone installs, and npm's audit writes with fix (REQ-FLOW-178, sign-offs S47 and S54).
  */
 const INSTALLS = new Map([
-  ["npm", "ci clean-install ic install-clean isntall-clean install i in ins inst insta instal isnt isnta isntal isntall add install-test it install-ci-test cit update up upgrade udpate uninstall un unlink remove rm r link ln dedupe ddp prune rebuild rb"],
-  ["pnpm", "install i add install-test it remove rm uninstall un update up upgrade link ln unlink dedupe prune rebuild rb fetch"],
-  ["yarn", " install add remove upgrade up upgrade-interactive link unlink dedupe rebuild autoclean"],
+  ["npm", "ci clean-install ic install-clean isntall-clean install i in ins inst insta instal isnt isnta isntal isntall add install-test it install-ci-test cit clean-install-test sit update up upgrade udpate uninstall un unlink remove rm r link ln dedupe ddp prune rebuild rb"],
+  ["pnpm", "install i add install-test it remove rm uninstall un update up upgrade link ln unlink dislink dedupe prune rebuild rb fetch"],
+  ["yarn", "install add remove upgrade up upgrade-interactive link unlink dedupe rebuild autoclean"],
   ["bun", "install i add a remove rm update link unlink"],
 ].map(([name, verbs]) => [name, verbs.split(" ")]));
+/** The options after which a manager writes nothing, each tried in a scratch folder (S54); yarn 1 ignores --dry-run. */
+const WRITES_NOTHING = new Map([["npm", "-h --help -v --version --dry-run"], ["yarn", "-h --help -v --version"]].map(([name, options]) => [name, options.split(" ")]));
+/** Yarn 1's options that take a value, so a bare yarn followed by options and their values alone still installs. */
+const YARN_VALUED = new Set("--use-yarnrc --prod --production --link-folder --global-folder --modules-folder --preferred-cache-folder --cache-folder --mutex --emoji --proxy --https-proxy --network-concurrency --network-timeout --scripts-prepend-node-path --otp".split(" "));
+
+/** Whether a bare yarn's words are options and their values alone, so it installs; a script name runs that script. */
+function yarnBare(tail) {
+  for (let j = 0; j < tail.length; j += 1) {
+    if (!tail[j].startsWith("-")) return false;
+    if (YARN_VALUED.has(tail[j]) || MANAGER_VALUED.has(tail[j])) j += 1;
+  }
+  return true;
+}
 
 /**
- * The folders a line's install verbs write node_modules in (REQ-FLOW-178): an install read where a command runs, as
- * the place reader reads one (a line's start, after an operator, an assignment or a wrapper with its options, and the
- * lines a command runs), writes in the folder its --prefix, -C, --dir or --cwd names against each base, else in each
- * base; a global install writes none here.
+ * The folders a line's package-manager writes start from (REQ-FLOW-178, sign-off S54), read in order as a shell runs
+ * the line from the folders in start. A cd moves the folder for what follows: alone where it surely holds, beside the
+ * old one where it may not (a pipe's, a background job's, a block's, a brace group's, one after || or behind another
+ * command of its chain once the chain ends), and a subshell's ends with it. env -C moves one command, and --prefix, -C,
+ * --dir or --cwd one install. A folder the line cannot show (cd "$x") leaves the folder as it was. Returns those
+ * folders and the folders in effect at the line's end.
  */
-function installFolders(line, bases, depth = 0) {
-  const { words, nested, docs } = shellWords(line);
+function installFolders(line, start, depth = 0) {
+  const { words, marks, nested, docs } = shellWords(line);
   const folders = [];
-  const inner = (text) => {
-    if (depth < 4 && typeof text === "string") folders.push(...installFolders(text, bases, depth + 1));
-  };
+  const seen = new Set(start);
+  const union = (a, b) => [...new Set([...a, ...b])];
+  // The and-or list's state: its folder at the start, whether at its first command, a || met, a cd behind another command.
+  const fresh = () => ({ from: here, first: true, or: false, chained: false });
+  let here = start;
+  let prev = start;
+  let local = null;
+  let list = fresh();
+  let segment = here;
+  let piped = false;
+  let block = 0;
   let shell = false;
+  const scopes = [];
+  const read = (text, from) => {
+    if (depth >= 4 || typeof text !== "string") return from;
+    const got = installFolders(text, from, depth + 1);
+    folders.push(...got.folders);
+    return got.here;
+  };
+  const moved = (from, path) => (typeof path !== "string" || /[$\`]/.test(path) ? from : from.map((base) => resolve(base, path)));
+  const go = (to) => {
+    prev = here;
+    if (block > 0 || list.or) here = union(here, to);
+    else {
+      here = to;
+      if (!list.first) list.chained = true;
+    }
+    for (const dir of here) seen.add(dir);
+  };
+  // A wrapper's or a runner's options from k (a number or an assignment among them), its command-line option read and
+  // env's -C moving its command; returns the index before that command.
+  const options = (name, [short = "", long = "", lines = ""], k) => {
+    while (typeof words[k + 1] === "string" && (ASSIGNMENT.test(words[k + 1]) || /^(-|\d)/.test(words[k + 1]))) {
+      const option = words[(k += 1)];
+      const key = option.split("=")[0];
+      if (option === "--") break;
+      if (ASSIGNMENT.test(option) || /^\d/.test(option)) continue;
+      let value;
+      if (option.startsWith("--") && option.includes("=")) value = option.slice(key.length + 1);
+      else if (lines.split(" ").includes(key) || (option.startsWith("--") ? long.split(" ").includes(key) : short.includes(option.at(-1)))) value = words[(k += 1)];
+      if (lines.split(" ").includes(key)) read(value, local ?? here);
+      else if (name === "env" && (key === "-C" || key === "--chdir")) {
+        local = moved(local ?? here, value);
+        for (const dir of local) seen.add(dir);
+      }
+    }
+    return k;
+  };
   for (let k = 0, at = true; k < words.length; k += 1) {
     const word = words[k];
-    if (word === null) at = true;
-    if (word === null || !at || ASSIGNMENT.test(word) || KEYWORDS.has(word)) continue;
+    if (word === null) {
+      const mark = marks[k];
+      const twin = (mark === "|" || mark === "&") && (marks[k - 1] === mark || marks[k + 1] === mark);
+      // A pipe's or a background job's segment runs in a subshell: its cd may not hold after it.
+      if (piped || ((mark === "|" || mark === "&") && !twin)) here = union(segment, here);
+      piped = mark === "|" && !twin;
+      if (twin) {
+        list.first = false;
+        list.or ||= mark === "|";
+      } else if (!piped) {
+        const opens = mark === "(" || mark === "{" || (mark === "\`" && scopes.at(-1)?.mark !== "\`");
+        if (list.chained && !opens) here = union(list.from, here);
+        if (opens) {
+          scopes.push({ mark, here, list });
+          list = fresh();
+        } else if (mark === ")" || mark === "}" || mark === "\`") {
+          const scope = scopes.pop();
+          if (scope !== undefined) {
+            here = scope.mark === "{" ? union(scope.here, here) : scope.here;
+            list = scope.list;
+          }
+        } else list = fresh();
+      }
+      segment = here;
+      local = null;
+      at = true;
+      continue;
+    }
+    if (!at || ASSIGNMENT.test(word)) continue;
+    if (/^(?:if|while|until|for|case|select)$/.test(word)) block += 1;
+    else if (/^(?:fi|done|esac)$/.test(word)) block = Math.max(0, block - 1);
+    if (KEYWORDS.has(word) || word === "esac") continue;
     const name = programName(word);
+    const from = local ?? here;
     const tail = [];
     for (let j = k + 1; typeof words[j] === "string"; j += 1) tail.push(words[j]);
-    if (/\s/.test(word)) inner([word, ...tail].join(" "));
+    if (/\s/.test(word)) read([word, ...tail].join(" "), from);
     if (WRAPPERS.has(name)) {
-      const [short = "", long = "", lines = ""] = WRAPPERS.get(name);
-      while (typeof words[k + 1] === "string" && words[k + 1].startsWith("-")) {
-        const option = words[(k += 1)];
-        const key = option.split("=")[0];
-        if (option === "--") break;
-        if (lines.split(" ").includes(key)) inner(option.includes("=") ? option.slice(key.length + 1) : words[(k += 1)]);
-        else if (option.startsWith("--") ? !option.includes("=") && long.split(" ").includes(option) : short.includes(option.at(-1))) k += 1;
-      }
+      k = options(name, WRAPPERS.get(name), k);
       continue;
     }
     at = false;
     if (SHELLS.has(name) || POWERSHELLS.has(name)) shell = true;
-    for (const text of linesOf(name, tail)) inner(text);
+    for (const text of linesOf(name, tail)) {
+      const end = read(text, from);
+      // eval's line runs in this shell, so its cd may hold after it.
+      if (name === "eval" || name === "iex" || name === "invoke-expression") here = union(here, end);
+      for (const dir of here) seen.add(dir);
+    }
+    if (["cd", "pushd", "chdir", "sl", "set-location", "push-location", "cd.."].includes(name)) {
+      let path = name === "cd.." ? ".." : undefined;
+      for (let j = k + 1; path === undefined && typeof words[j] === "string"; j += 1) {
+        const option = /^--?(\w*)(?::(.*))?$/.exec(words[j]);
+        if (option === null) path = words[j];
+        else if (/^(?:path?|l\w*|pspath)$/i.test(option[1])) path = option[2] || words[j + 1] || null;
+        else if (/^s/i.test(option[1]) && option[2] === undefined) j += 1;
+      }
+      if (words[k + 1] === "-") go(prev);
+      else if (typeof path === "string" && !/[$\`]/.test(path)) go(here.map((base) => resolve(base, path)));
+      continue;
+    }
     const verbs = INSTALLS.get(name);
-    const writes = (sub) => {
-      const verb = typeof words[sub] === "string" ? words[sub] : "";
-      return verbs.includes(verb) || (name === "npm" && verb === "audit" && tail.slice(sub - k).includes("fix"));
-    };
-    if (verbs === undefined || !managerSubs(name, words, k + 1).some(writes)) continue;
-    if (tail.some((option) => /^(?:-g|--global|--location=global)$/.test(option))) continue;
+    if (verbs === undefined) continue;
+    const subs = managerSubs(name, words, k + 1);
+    // A runner's command (npm exec -- npm ci) is a line of its own.
+    for (const sub of subs) {
+      if (!RUNNERS.has(name + " " + words[sub])) continue;
+      const rest = [];
+      for (let j = options(name, RUNNER, sub) + 1; typeof words[j] === "string"; j += 1) rest.push(words[j]);
+      read(rest.join(" "), from);
+    }
+    if (tail.some((option) => /^(?:-g|--global|--location=global)$/.test(option) || (WRITES_NOTHING.get(name) ?? []).includes(option))) continue;
+    const writes = (sub) => typeof words[sub] === "string" && (verbs.includes(words[sub]) || (name === "npm" && words[sub] === "audit" && tail.slice(sub - k).includes("fix")));
+    if (!subs.some(writes) && !(name === "yarn" && yarnBare(tail))) continue;
     const named = [];
     for (let j = 0; j < tail.length; j += 1) {
       const hit = /^(?:--prefix|--dir|--cwd|-C)(?:=([\s\S]*))?$/.exec(tail[j]);
       if (hit !== null) named.push(hit[1] ?? tail[(j += 1)]);
     }
-    for (const base of bases) {
+    for (const base of from) {
       if (named.length === 0) folders.push(base);
       for (const path of named) if (typeof path === "string") folders.push(resolve(base, path));
     }
   }
-  for (const text of nested) inner(text);
-  if (shell) for (const text of docs) inner(text);
-  return folders;
+  if (piped) here = union(segment, here);
+  // A substitution in quotes or a heredoc's body: where it runs is not kept, so each folder the line reached is read.
+  for (const text of nested) read(text, [...seen]);
+  if (shell) for (const text of docs) read(text, [...seen]);
+  return { folders, here };
 }
 
 /**
- * The refusal an install through a linked node_modules earns, in every mode (REQ-FLOW-178): it would write into the
- * checkout the link points at. Null when no install folder's node_modules is a link; a fault of its own is null too,
- * so this check never sends a call to the fail-closed refusal. A place the line cannot show (cd "$x") is not read.
+ * The refusal an install through a linked node_modules earns, in every mode (REQ-FLOW-178). From each folder an
+ * install starts in, it writes in the nearest folder up holding a package.json or a node_modules, as the managers find
+ * it, up to the repository's top (sign-off S54). Null when none of those is a link; a fault of its own is null too, so
+ * this check never sends a call to the fail-closed refusal.
  */
 function linkedInstall(command, cwd) {
   try {
-    if (!/npm|yarn|bun/i.test(command)) return null;
-    const bases = placesOf(command, cwd).flatMap((place) => (place !== null && place.work !== undefined ? [place.work] : []));
-    for (const folder of new Set(installFolders(command, bases))) {
-      const link = join(folder, "node_modules");
-      try {
-        if (!lstatSync(link).isSymbolicLink()) continue;
-      } catch {
-        continue;
-      }
-      let target = link;
-      try {
-        target = realpathSync(link);
-      } catch {
+    if (!/npm|yarn|bun/i.test(command.replace(/['"\\]/g, ""))) return null;
+    for (const start of new Set(installFolders(command, [cwd]).folders)) {
+      for (let dir = start, hops = 0; hops < 64; hops += 1) {
+        const link = join(dir, "node_modules");
+        let stat = null;
         try {
-          target = resolve(folder, readlinkSync(link));
+          stat = lstatSync(link);
         } catch {
-          // Unreadable: the link's own path names it.
+          // None here, or none readable: the walk goes on up.
         }
+        if (stat?.isSymbolicLink()) {
+          let target = link;
+          try {
+            target = realpathSync(link);
+          } catch {
+            try {
+              target = resolve(dir, readlinkSync(link));
+            } catch {
+              // Unreadable: the link's own path names it.
+            }
+          }
+          const checkout = dirname(target);
+          return "This install would write through node_modules here, which is a link to " + target + ", another checkout's install. Run it in that checkout (cd " + checkout + " first, or give the install an absolute --prefix " + checkout + "), or remove the link (the link only) and install here.";
+        }
+        if (stat !== null || present(join(dir, "package.json")) || present(join(dir, ".git")) || dirname(dir) === dir) break;
+        dir = dirname(dir);
       }
-      return "This install would write through node_modules here, which is a link to " + target + ", another checkout's install. Run it in that checkout, or remove the link (the link only) and install here.";
     }
   } catch {
     // The check's own fault: the call goes on to the verdicts.
