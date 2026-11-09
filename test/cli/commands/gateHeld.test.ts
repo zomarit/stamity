@@ -30,9 +30,14 @@ const SEED_ENV = {
   GIT_CONFIG_SYSTEM: NO_GIT_CONFIG,
 } as const;
 
-/** The digest as the cell defines it, computed here on its own: sorted `(path, bytes)` pairs, each framed with its length. */
-function expectedDigest(files: Record<string, string>): string {
+/**
+ * The digest as the cell defines it, computed here on its own: the project root's path below the git top-level
+ * (review/16, empty at the top-level), then sorted `(path, bytes)` pairs, each framed with its length.
+ */
+function expectedDigest(files: Record<string, string>, root = ""): string {
   const hash = createHash("sha256");
+  const rootName = Buffer.from(root, "utf8");
+  hash.update(`${rootName.length}\n`).update(rootName);
   const paths = Object.keys(files).toSorted((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)));
   for (const path of paths) {
     const name = Buffer.from(path, "utf8");
@@ -101,6 +106,7 @@ describe.skipIf(!gitAvailable)("stamity gate held", () => {
       version: expect.any(String) as string,
       subcommand: "held",
       digest: expectedDigest(FILES),
+      root: "",
       paths: [
         { path: "test/a.test.ts", sha256: sha(FILES["test/a.test.ts"]) },
         { path: "test/b.test.ts", sha256: sha(FILES["test/b.test.ts"]) },
@@ -244,7 +250,7 @@ describe.skipIf(!gitAvailable)("stamity gate held", () => {
     };
     git(["add", "-A"]);
     git(["commit", "-q", "-m", "seed"]);
-    const want = expectedDigest({ "test/a.test.ts": FILES["test/a.test.ts"] });
+    const want = expectedDigest({ "test/a.test.ts": FILES["test/a.test.ts"] }, "app");
 
     const fromProject = await heldIn(getRoot().path("repo", "app"), ["--paths", "test/a.test.ts", "--json"]);
     const fromBelow = await heldIn(getRoot().path("repo", "app", "test"), ["--paths", "test/a.test.ts", "--json"]);
@@ -252,10 +258,57 @@ describe.skipIf(!gitAvailable)("stamity gate held", () => {
 
     expect(fromProject.code).toBe(0);
     expect(fromProject.doc["digest"]).toBe(want);
+    expect(fromProject.doc["root"]).toBe("app");
     expect(fromBelow.code).toBe(0);
     expect(fromBelow.doc["digest"]).toBe(want);
-    // Run from the top-level, the project is the repository itself, so its own file is read.
+    // Run from the top-level, the project is the repository itself, so its own file is read, under its own root.
+    expect(fromTop.doc["root"]).toBe("");
     expect(fromTop.doc["digest"]).toBe(expectedDigest({ "test/a.test.ts": "it('decoy', () => {});\n" }));
+    // review/16: a hold taken from `app/` checked from the top-level compares another root, so it cannot match.
+    const crossCheck = await heldIn(repo, ["--paths", "test/a.test.ts", "--expect", want, "--json"]);
+    expect(crossCheck.code).toBe(1);
+    expect(crossCheck.doc["ok"]).toBe(false);
+  });
+
+  it("exits 1 when a commit untracks the nested project's .stamity/ and byte-identical copies sit at the top-level (review/16)", async () => {
+    // The held tests live in `app/`; the attack moves the root to the top-level, where the original bytes wait under
+    // the same names while `app/test/` is weakened. The root is held with the files, so the old digest cannot match.
+    const repo = await seedRepo({
+      "app/.stamity/manifest.json": "{}\n",
+      "app/test/a.test.ts": FILES["test/a.test.ts"],
+      "app/test/b.test.ts": FILES["test/b.test.ts"],
+    });
+    const git = (args: readonly string[]): void => {
+      execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], {
+        cwd: repo,
+        stdio: "ignore",
+        env: { ...process.env, ...SEED_ENV },
+      });
+    };
+    git(["add", "-A"]);
+    git(["commit", "-q", "-m", "seed"]);
+    const app = getRoot().path("repo", "app");
+    const paths = ["--paths", "test/a.test.ts", "test/b.test.ts"];
+
+    const hold = await heldIn(app, [...paths, "--json"]);
+    expect(hold.code).toBe(0);
+    expect(hold.doc["root"]).toBe("app");
+    const recorded = String(hold.doc["digest"]);
+
+    git(["rm", "-r", "-q", "--cached", "app/.stamity"]);
+    git(["commit", "-q", "-m", "untrack the project's state folder"]);
+    await getRoot().seedFiles({ "repo/test/a.test.ts": FILES["test/a.test.ts"], "repo/test/b.test.ts": FILES["test/b.test.ts"] });
+    await writeFile(getRoot().path("repo", "app", "test", "b.test.ts"), FILES["test/b.test.ts"].replace("toBe(1)", "toBe(2)"));
+
+    const check = await heldIn(app, [...paths, "--expect", recorded, "--json"]);
+
+    expect(check.code).toBe(1);
+    expect(check.doc["ok"]).toBe(false);
+    expect(check.doc["root"]).toBe("");
+    // The decoys are byte-identical, so each file's own sha256 matches the hold; only the root tells them apart.
+    expect(check.doc["paths"]).toEqual(hold.doc["paths"]);
+    expect(check.doc["digest"]).not.toBe(recorded);
+    expect(check.doc["reason"]).toContain("does not match");
   });
 
   it("prints the digest and each file on the terminal", async () => {
@@ -265,6 +318,7 @@ describe.skipIf(!gitAvailable)("stamity gate held", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain(`held: ${expectedDigest(FILES)}`);
+    expect(result.stdout).toContain("root: .");
     expect(result.stdout).toContain(`${sha(FILES["test/a.test.ts"])}  test/a.test.ts`);
     expect(result.stdout.indexOf("test/a.test.ts")).toBeLessThan(result.stdout.indexOf("test/b.test.ts"));
   });
@@ -279,6 +333,7 @@ describe.skipIf(!gitAvailable)("stamity gate held", () => {
     expect(result.code).toBe(1);
     expect(result.doc["ok"]).toBe(false);
     expect(result.doc["digest"]).toBeNull();
+    expect(result.doc["root"]).toBeNull();
     expect(String(result.doc["reason"])).toContain("work tree");
   });
 });

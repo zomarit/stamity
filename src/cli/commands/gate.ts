@@ -223,7 +223,10 @@ import type { GitRunner } from "../../workspace/git.ts";
  * project root, the one `classify` reads from ({@link findProjectRoot}, review/14);
  * an absolute path, one that climbs out with `..`, an empty one and no `--paths`
  * at all are usage errors, exit 2, before anything is read. The digest is `sha256:` over the
- * sorted `(path, bytes)` pairs, each framed with its length; every file's own
+ * project root's path below the git top-level (`root`, empty at the top-level), then the
+ * sorted `(path, bytes)` pairs, each framed with its length, so a moved root (a
+ * nested `.stamity/` untracked) or a check run from another project gives another
+ * digest (review/16); every file's own
  * `sha256` is listed beside it, so a record can name the one that moved. A
  * link, on the file or on a folder above it, is never followed: that file reads
  * `sha256: null`, as a missing one does, and either exits 1. So does a digest
@@ -1902,7 +1905,7 @@ function readHeldFile(top: string, segments: readonly string[]): { body: Buffer 
 
 /**
  * `gate held`: the digest of the listed files, read from the project root.
- * Each path is framed with its byte length, then its bytes with theirs, or `-`
+ * The root's path below the git top-level is framed first (review/16). Each path is framed with its byte length, then its bytes with theirs, or `-`
  * for a file with none, in byte order of the paths, so the same files give the
  * same digest in any order and no byte can move between a name and a body
  * unseen. Exit 1 for any file with no bytes, or a digest other than `--expect`.
@@ -1914,6 +1917,8 @@ function runHeld(ctx: CliContext, opts: Record<string, unknown>): CommandResult 
     Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8")),
   );
   let top: string;
+  // review/16: the root is held with the files, so a commit that moves it cannot point the same names at other bytes.
+  let root = "";
   try {
     const runner = gitCheckRunner({ timeoutMs: GATE_GIT_TIMEOUT_MS, maxBuffer: GATE_GIT_MAX_BUFFER });
     const cwd = ctx.app.runtime.cwd;
@@ -1922,7 +1927,9 @@ function runHeld(ctx: CliContext, opts: Record<string, unknown>): CommandResult 
     // names. An unborn HEAD has no tree to hold a `.stamity/`, so its root is the top-level, as findProjectRoot's own.
     const head = resolveBase(runner, cwd, "HEAD");
     if (head !== null) {
-      top = findProjectRoot(runner, cwd, cwdPrefix, head).dir;
+      const project = findProjectRoot(runner, cwd, cwdPrefix, head);
+      top = project.dir;
+      root = project.prefix.replace(/\/$/, "");
     } else {
       let start = cwd;
       try {
@@ -1938,11 +1945,20 @@ function runHeld(ctx: CliContext, opts: Record<string, unknown>): CommandResult 
     ctx.io.err(`held failed: ${reason}\n`);
     return {
       exitCode: 1,
-      json: { subcommand: HELD, digest: null, paths: keys.map((path) => ({ path: sanitizeLabel(path), sha256: null })), expect: expected, reason },
+      json: {
+        subcommand: HELD,
+        digest: null,
+        root: null,
+        paths: keys.map((path) => ({ path: sanitizeLabel(path), sha256: null })),
+        expect: expected,
+        reason,
+      },
     };
   }
 
   const digest = createHash("sha256");
+  const rootName = Buffer.from(root, "utf8");
+  digest.update(`${rootName.length}\n`).update(rootName);
   const problems: string[] = [];
   const rows = keys.map((key) => {
     const name = Buffer.from(key, "utf8");
@@ -1965,12 +1981,12 @@ function runHeld(ctx: CliContext, opts: Record<string, unknown>): CommandResult 
   const shown = rows.map((row) => ({ path: sanitizeLabel(row.path), sha256: row.sha256 }));
   const verdict = reason !== undefined ? "changed or unreadable" : expected === null ? "no expectation given" : "matches";
   ctx.io.out(
-    `${[`held: ${held}`, `expect: ${expected ?? "none"}`, `result: ${verdict}`, ...shown.map((row) => `  ${row.sha256 ?? "-"}  ${row.path}`)].join("\n")}\n`,
+    `${[`held: ${held}`, `root: ${root === "" ? "." : sanitizeLabel(root)}`, `expect: ${expected ?? "none"}`, `result: ${verdict}`, ...shown.map((row) => `  ${row.sha256 ?? "-"}  ${row.path}`)].join("\n")}\n`,
   );
   if (reason !== undefined) ctx.io.err(`held: ${reason}\n`);
   return {
     exitCode: reason === undefined ? 0 : 1,
-    json: { subcommand: HELD, digest: held, paths: shown, expect: expected, ...(reason === undefined ? {} : { reason }) },
+    json: { subcommand: HELD, digest: held, root: sanitizeLabel(root), paths: shown, expect: expected, ...(reason === undefined ? {} : { reason }) },
   };
 }
 
