@@ -34,13 +34,17 @@ const CALIBRATION =
  * show is `unknown`" made every passing gate `unknown`, so no run could close green. One
  * `false` before the first gate tells the two tool shapes apart; the calibration is neither a
  * gate nor a wrapper, and an uncalibrated missing status still never reads as a pass.
+ *
+ * TEST CHANGE, justified (2026-11-09, REQ-FLOW-173): the closed list of banned forms gave way
+ * to one general rule — nothing may hide or replace a gate's own exit code — with the forms
+ * kept as examples. A list only covers the forms someone thought of; a piped or wrapped gate in
+ * a form it missed could still read green. The calibration and `sleep` sentences are unchanged.
  */
 const SHELL_PARAGRAPH =
-  "Where this role runs commands, it writes portable POSIX `sh`, so a command runs the same under " +
-  "`sh`, `bash`, `dash` or `zsh`: no `PIPESTATUS`, no `[[ … ]]`, no arrays, no `pipefail`, no " +
-  "`<( … )`. Each command runs once, as written — no `time`, no `{ …; }` grouping, no redirect " +
-  "into a temp file, no `echo $?`, no pipe into `tail` or `head` — and its exit code is read from " +
-  "the tool result. " +
+  "Where this role runs commands, it writes portable POSIX `sh` that runs the same under `sh`, " +
+  "`bash`, `dash` or `zsh`. Nothing may hide or replace a gate's own exit code: each command runs " +
+  "once, as written, and its exit code is read from the tool result — never from a wrapper, a " +
+  "pipe, a second run or a printed status (for instance `pipefail`, `echo $?`, a pipe into `tail`). " +
   CALIBRATION +
   " A long command is " +
   "waited on in the foreground under the tool's own timeout, never polled with `sleep`.";

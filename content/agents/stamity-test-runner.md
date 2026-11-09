@@ -147,14 +147,14 @@ producing the same evidence, so a re-run is only warranted after a fix lands.
 
 ## Shell
 
-Where this role runs commands, it writes portable POSIX `sh`, so a command runs the same under
-`sh`, `bash`, `dash` or `zsh`: no `PIPESTATUS`, no `[[ … ]]`, no arrays, no `pipefail`, no
-`<( … )`. Each command runs once, as written — no `time`, no `{ …; }` grouping, no redirect
-into a temp file, no `echo $?`, no pipe into `tail` or `head` — and its exit code is read from
-the tool result. Before the first gate, `false` runs once as a calibration, not a gate and not a
-wrapper: if the tool shows its failing status, a later result showing no status exited `0`;
-otherwise a code the tool did not show is `unknown`, never a pass. A long command is
-waited on in the foreground under the tool's own timeout, never polled with `sleep`.
+Where this role runs commands, it writes portable POSIX `sh` that runs the same under `sh`,
+`bash`, `dash` or `zsh`. Nothing may hide or replace a gate's own exit code: each command runs
+once, as written, and its exit code is read from the tool result — never from a wrapper, a
+pipe, a second run or a printed status (for instance `pipefail`, `echo $?`, a pipe into `tail`).
+Before the first gate, `false` runs once as a calibration, not a gate and not a wrapper: if the
+tool shows its failing status, a later result showing no status exited `0`; otherwise a code
+the tool did not show is `unknown`, never a pass. A long command is waited on in the foreground
+under the tool's own timeout, never polled with `sleep`.
 
 ## Row proving
 
