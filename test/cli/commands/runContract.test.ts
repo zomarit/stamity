@@ -174,7 +174,7 @@ interface Verb {
   code: number;
   stdout: string;
   stderr: string;
-  doc: { subcommand: string; outcome: string; run: string; item: string; path: string; notDone: string[]; dryRun?: boolean; stripped?: boolean; strippedComments?: number };
+  doc: { subcommand: string; outcome: string; run: string; item: string; path: string; notDone: string[]; dryRun?: boolean; stripped?: boolean; strippedComments?: number; rightsFallback?: string[] };
 }
 
 async function contract(cwd: string, extra: readonly string[] = [], item: string = ITEM): Promise<Verb> {
@@ -233,6 +233,11 @@ describe("stamity run contract", () => {
     });
     expect(text).not.toContain(SUMMARY);
     expect(text).not.toContain(BRANCH);
+    // REQ-FLOW-169: a right the permission read answered with 200 is no fallback, so neither the field nor the line.
+    expect(doc.rightsFallback).toBeUndefined();
+    const plain = await runInProcess([runCommand], ["run", "contract", "--run", RUN, "--item", ITEM], { cwd, env: { PATH: process.env["PATH"] } });
+    expect(plain.stdout).toContain("outcome: written");
+    expect(plain.stdout).not.toContain("rights:");
 
     const check = await runInProcess([planCommand], ["plan", "check", PLAN_PATH, "--contract", CONTRACT, "--json"], { cwd, env: { PATH: process.env["PATH"] } });
     expect(JSON.parse(check.stdout)).toMatchObject({ contract: { ok: true, problems: [] } });
@@ -763,11 +768,19 @@ describe("stamity run contract", () => {
     const author = `${ITEM}'s author ${AUTHOR}`;
     const unreadable = (cause: string): string => `${author}: the permission on o/r is unreadable (HTTP 403, and ${cause})`;
 
+    /** What `run contract` says of a pass the 403 fallback gave `who`, read as `word` (REQ-FLOW-169). */
+    const fallback = (who: string, word: string): string =>
+      `${who} has ${word} on o/r, the account's own rights, read from the repository because the permission read answered HTTP 403`;
+    const labeler = `the last to apply \`${READY}\` to ${ITEM} ${AUTHOR}`;
+    const rightsLines = (stdout: string): string[] => stdout.split("\n").filter((line) => line.startsWith("rights: "));
+
+    // TEST CHANGE, justified: REQ-FLOW-169 has a pass from the 403 fallback say so; these cases gain the `rights:` lines
+    // and the `rightsFallback` field, and every assertion they held before stands unchanged.
     it.each([
-      ["admin true", AUTHOR, { admin: true, push: true }],
-      ["push true and admin false", AUTHOR, WRITER],
-      ["a login differing only by case", AUTHOR.toUpperCase(), WRITER],
-    ])("takes the account's own right: %s", async (_label, login, permissions) => {
+      ["admin true", AUTHOR, { admin: true, push: true }, "admin"],
+      ["push true and admin false", AUTHOR, WRITER, "write"],
+      ["a login differing only by case", AUTHOR.toUpperCase(), WRITER, "write"],
+    ])("takes the account's own right, and says so: %s", async (_label, login, permissions, word) => {
       const cwd = await forbidden(account(login), rights(permissions));
 
       const { code, doc, stdout } = await contract(cwd);
@@ -776,6 +789,23 @@ describe("stamity run contract", () => {
       expect(code, stdout).toBe(0);
       expect(paths()).toEqual([ISSUE, permission(AUTHOR), "user", REPOSITORY, events(), permission(AUTHOR), "user", REPOSITORY]);
       expect(existsSync(join(cwd, CONTRACT))).toBe(true);
+      // Two notes, the label's last actor first, in the order the refusals list the same two people.
+      expect(doc.rightsFallback).toEqual([fallback(labeler, word), fallback(author, word)]);
+      const text = await runInProcess([runCommand], ["run", "contract", "--run", RUN, "--item", ITEM], { cwd, env: { PATH: process.env["PATH"] } });
+      expect(rightsLines(text.stdout)).toEqual([`rights: ${fallback(labeler, word)}`, `rights: ${fallback(author, word)}`]);
+    });
+
+    it("says so for the one person the fallback proved, under --dry-run too, and not for one the permission read proved", async () => {
+      const cwd = await forbidden(account(AUTHOR), rights(WRITER));
+      rest.routes.set(events(), { status: 200, json: [labeled(OUTSIDER)] });
+      rest.routes.set(permission(OUTSIDER), { status: 200, json: { permission: "admin" } });
+
+      const { code, doc } = await contract(cwd, ["--dry-run"]);
+
+      expect(doc).toMatchObject({ outcome: "would-write", notDone: [], rightsFallback: [fallback(author, "write")] });
+      expect(code).toBe(0);
+      const { stdout } = await runInProcess([runCommand], ["run", "contract", "--run", RUN, "--item", ITEM, "--dry-run"], { cwd, env: { PATH: process.env["PATH"] } });
+      expect(rightsLines(stdout)).toEqual([`rights: ${fallback(author, "write")}`]);
     });
 
     it("refuses the account's own right where push reads false, saying whose rights it read", async () => {

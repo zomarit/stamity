@@ -38,8 +38,9 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * closer refuses, since what it would drop has no end a person could check.
  *
  * Exit 0 `written` or `would-write` (`--dry-run`), with `stripped` and `strippedComments` where the
- * strip took anything, so the issue can be rewritten at its source; 1 `refused`, `notDone` naming
- * what refused it; 2 usage.
+ * strip took anything, so the issue can be rewritten at its source, and `rightsFallback` (one `rights:`
+ * line each) where a person passed on the account's own rights after a 403 (REQ-FLOW-169); 1
+ * `refused`, `notDone` naming what refused it; 2 usage.
  */
 
 interface ItemRef {
@@ -92,13 +93,25 @@ async function gitRead(cwd: string, args: readonly string[]): Promise<string | n
   }
 }
 
-/** Why `login` cannot stand behind an item on `repo`, or `null` where it holds write or admin there. */
-async function rightGap(read: RestRead, repo: string, who: string, login: unknown): Promise<string | null> {
-  if (typeof login !== "string") return `${who} is unreadable`;
+/** Who stands behind an item: the gaps that refuse it, and the passes the 403 fallback gave, each said in one sentence. */
+interface Proof {
+  gaps: string[];
+  notes: string[];
+}
+
+/**
+ * Why `login` cannot stand behind an item on `repo` (`gap`, `null` where it holds write or admin there), and, where
+ * that pass came from `personRight`'s 403 fallback, the sentence saying so (`note`, REQ-FLOW-169).
+ */
+async function rightGap(read: RestRead, repo: string, who: string, login: unknown): Promise<{ gap: string | null; note: string | null }> {
+  if (typeof login !== "string") return { gap: `${who} is unreadable`, note: null };
   const right = await personRight(read, repo, login);
-  if (right.permission === "admin" || right.permission === "write") return null;
-  if (right.permission === undefined) return `${who} ${login}: the permission on ${repo} is unreadable (${right.cause})`;
-  return `${who} ${login} has ${right.permission === "read" ? "read" : "no write"} permission on ${repo}${right.note}`;
+  if (right.permission === "admin" || right.permission === "write") {
+    const note = right.note === "" ? null : `${who} ${login} has ${right.permission} on ${repo}, the account's own rights, read from the repository because the permission read answered HTTP 403`;
+    return { gap: null, note };
+  }
+  if (right.permission === undefined) return { gap: `${who} ${login}: the permission on ${repo} is unreadable (${right.cause})`, note: null };
+  return { gap: `${who} ${login} has ${right.permission === "read" ? "read" : "no write"} permission on ${repo}${right.note}`, note: null };
 }
 
 /** The login that last applied the ready label, `undefined` where any page of the events did not read. The oldest come first, so every page is read. */
@@ -117,17 +130,21 @@ async function lastLabeler(read: RestRead, issue: string): Promise<unknown> {
   return undefined;
 }
 
-/** Every gap in who stands behind the issue `json`, read on origin's `repo`. The body is not looked at. */
-async function proofGaps(read: RestRead, repo: string, issue: string, label: string, json: Record<string, unknown>): Promise<string[]> {
+/** Every gap in who stands behind the issue `json`, read on origin's `repo`, and each pass the 403 fallback gave, both listing the label's last actor first. The body is not looked at. */
+async function proofGaps(read: RestRead, repo: string, issue: string, label: string, json: Record<string, unknown>): Promise<Proof> {
   const { labels, state, user } = json;
   const ready = Array.isArray(labels) && (labels as unknown[]).some((entry) => isPlainObject(entry) && entry["name"] === READY_LABEL);
   const author = await rightGap(read, repo, `${label}'s author`, isPlainObject(user) ? user["login"] : undefined);
-  const labeler = ready ? await rightGap(read, repo, `the last to apply \`${READY_LABEL}\` to ${label}`, await lastLabeler(read, issue)) : `${label} does not carry \`${READY_LABEL}\``;
-  return [...(state === "open" ? [] : [`${label} is not open`]), ...[labeler, author].filter((gap) => gap !== null)];
+  const labeler = ready ? await rightGap(read, repo, `the last to apply \`${READY_LABEL}\` to ${label}`, await lastLabeler(read, issue)) : { gap: `${label} does not carry \`${READY_LABEL}\``, note: null };
+  const people = [labeler, author];
+  return {
+    gaps: [...(state === "open" ? [] : [`${label} is not open`]), ...people.map(({ gap }) => gap).filter((gap) => gap !== null)],
+    notes: people.map(({ note }) => note).filter((note) => note !== null),
+  };
 }
 
 /** The issue's body and author, over REST on the host origin was matched on, once the item is proven: see the file's header. */
-async function readItem(ctx: CliContext, ref: ItemRef, label: string): Promise<{ body: string; author: string }> {
+async function readItem(ctx: CliContext, ref: ItemRef, label: string): Promise<{ body: string; author: string; rights: string[] }> {
   const { cwd } = ctx.app.runtime;
   const env: NodeJS.ProcessEnv = { ...ctx.app.runtime.env };
   const origin = await gitRead(cwd, ["remote", "get-url", "origin"]);
@@ -144,12 +161,12 @@ async function readItem(ctx: CliContext, ref: ItemRef, label: string): Promise<{
   const reply = await read(issue);
   if (reply.status !== 200 || !isPlainObject(reply.json)) throw new Refused(`${label}: the read answered HTTP ${reply.status}`);
   if (reply.json["pull_request"] !== undefined) throw new Refused(`${label} is a pull request`);
-  const gaps = await proofGaps(read, name, issue, label, reply.json);
+  const { gaps, notes } = await proofGaps(read, name, issue, label, reply.json);
   if (gaps.length > 0) throw new Refused(...gaps);
   const { body, user } = reply.json;
   const text = typeof body === "string" ? body : "";
   if (Buffer.byteLength(text) > ITEM_BODY_MAX_BYTES) throw new Refused(`${label}: the body is over ${ITEM_BODY_MAX_BYTES} bytes`);
-  return { body: text, author: String(isPlainObject(user) ? user["login"] : "") };
+  return { body: text, author: String(isPlainObject(user) ? user["login"] : ""), rights: notes };
 }
 
 /** Why the criteria cannot go into a contract, or `null`. The scan's hits by id alone; past the bound it is not run. */
@@ -164,11 +181,11 @@ function criteriaGap(acceptance: string, label: string): string | null {
  * The contract's text and what the strip took, or a {@link Refused} naming why the item cannot have one here. The
  * plan is read as a raw blob: the text the hash ties the item to.
  */
-async function contractText(ctx: CliContext, ref: ItemRef, label: string): Promise<{ text: string; strip: Strip }> {
+async function contractText(ctx: CliContext, ref: ItemRef, label: string): Promise<{ text: string; strip: Strip; rights: string[] }> {
   const { cwd } = ctx.app.runtime;
   const base = (await gitRead(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"]))?.trim();
   if (base === undefined) throw new Refused("no commit at HEAD");
-  const { body, author } = await readItem(ctx, ref, label);
+  const { body, author, rights } = await readItem(ctx, ref, label);
   const item = parseItemBody(body);
   if (item.plan === null) throw new Refused(`${label} has no usable \`Plan:\` line`);
 
@@ -190,7 +207,7 @@ async function contractText(ctx: CliContext, ref: ItemRef, label: string): Promi
   if (gap !== null) reasons.push(gap);
   if (reasons.length > 0) throw new Refused(...reasons);
   const strip = { comments: item.comments.dropped, characters: printableText(body, "\t\n\r") !== body };
-  return { text: contractFromItem(item, { base, files, itemRef: label, author }), strip };
+  return { text: contractFromItem(item, { base, files, itemRef: label, author }), strip, rights };
 }
 
 /** The strip report's words, empty where nothing left the text. Counts and kinds alone, never the text. */
@@ -203,21 +220,36 @@ export async function runContract(ctx: CliContext, opts: Record<string, unknown>
   const ref = opts["item"] as ItemRef;
   const item = `${ref.owner}/${ref.repo}#${ref.number}`;
   const path = `${ctx.engine.runs.layout.runRelPath(run)}/contract.yml`;
-  const finish = (outcome: string, reasons: readonly string[] = [], strip: Strip = { comments: 0, characters: false }): CommandResult => {
+  const finish = (outcome: string, reasons: readonly string[] = [], strip: Strip = { comments: 0, characters: false }, rights: readonly string[] = []): CommandResult => {
     const notDone = reasons.map((reason) => sanitizeLabel(reason));
+    const rightsFallback = rights.map((entry) => sanitizeLabel(entry));
     const words = stripWords(strip);
     const stripped = words.length > 0;
     const note = stripped ? [`stripped: ${words.join(" and ")} left out of the contract; rewrite ${item} without them`] : [];
-    ctx.io.out([`run: ${run}`, `item: ${item}`, `contract: ${path}`, `outcome: ${outcome}`, ...note, ...notDone.map((entry) => `Not done: ${entry}`), ""].join("\n"));
-    return { exitCode: outcome === "refused" ? 1 : 0, json: { subcommand: "contract", run, item, outcome, path, notDone, ...(stripped ? { stripped, strippedComments: strip.comments } : {}), ...(ctx.dryRun ? { dryRun: true } : {}) } };
+    const fallback = rightsFallback.map((entry) => `rights: ${entry}`);
+    ctx.io.out([`run: ${run}`, `item: ${item}`, `contract: ${path}`, `outcome: ${outcome}`, ...fallback, ...note, ...notDone.map((entry) => `Not done: ${entry}`), ""].join("\n"));
+    return {
+      exitCode: outcome === "refused" ? 1 : 0,
+      json: {
+        subcommand: "contract",
+        run,
+        item,
+        outcome,
+        path,
+        notDone,
+        ...(rightsFallback.length > 0 ? { rightsFallback } : {}),
+        ...(stripped ? { stripped, strippedComments: strip.comments } : {}),
+        ...(ctx.dryRun ? { dryRun: true } : {}),
+      },
+    };
   };
   try {
-    const { text, strip } = await contractText(ctx, ref, item);
-    if (ctx.dryRun) return finish("would-write", [], strip);
+    const { text, strip, rights } = await contractText(ctx, ref, item);
+    if (ctx.dryRun) return finish("would-write", [], strip, rights);
     await ctx.engine.merge.atomicWrite.atomicWriteFile(join(ctx.app.runtime.cwd, path), text, { boundaryDir: ctx.app.runtime.cwd }).catch((cause: unknown) => {
       throw new Refused(`${path} could not be written (${failureClass(cause)})`);
     });
-    return finish("written", [], strip);
+    return finish("written", [], strip, rights);
   } catch (cause) {
     if (cause instanceof Refused) return finish("refused", cause.reasons);
     throw cause;
