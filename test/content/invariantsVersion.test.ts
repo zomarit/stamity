@@ -76,6 +76,12 @@ const INVARIANTS_HASHES: Record<string, string> = {
   // Codex (they hold Claude Code's, Cursor's and Copilot's). No release or tag carries the earlier
   // 1.3.1 text, so no repository ran it and this row moves instead of a 1.3.2, as the 1.3.0 row did.
   "1.3.1": "c21ecad95adac354f4efcaa5ee842fcfed998071d513ae5e6b74846a26c7cfcd",
+  // Appended 2026-11-09 (plan 024 file 1, unit k-charter; REQ-FLOW-173): a MINOR. Invariant 1 gains
+  // a last sentence on two new lines: where no floor applies, caution matches the real risk, a step
+  // that does not apply is skipped in one line, and only what cannot be undone or reaches people
+  // outside the repository waits for a person. The floors before it are unchanged, word for word.
+  // The 1.3.1 row above stays as the record.
+  "1.4.0": "44f088eee07f438cad22055bd5059d52d48ea7c44fd03de886d00b90a812560c",
 };
 
 /** The rendered version line, template form and emitted form alike. */

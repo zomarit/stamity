@@ -4520,7 +4520,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
+Invariants version 1.4.0 · ratified 2026-08-31 · last amended 2026-11-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -4530,6 +4530,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
+   Where no floor applies, caution matches the real risk: a step that does not apply is skipped in one line, and
+   only what cannot be undone or reaches people outside the repository waits for a person.
 2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
    else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
    second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -4576,6 +4578,8 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
   client reads its own location; call a skill by name whenever its description fits the job.
+- A rule with several parts holds only when every part that applies to the work holds;
+  naming some of them is not applying it.
 
 ## Cursor Cloud specific instructions
 
@@ -4619,7 +4623,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
+Invariants version 1.4.0 · ratified 2026-08-31 · last amended 2026-11-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -4629,6 +4633,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
+   Where no floor applies, caution matches the real risk: a step that does not apply is skipped in one line, and
+   only what cannot be undone or reaches people outside the repository waits for a person.
 2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
    else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
    second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -4675,6 +4681,8 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
   client reads its own location; call a skill by name whenever its description fits the job.
+- A rule with several parts holds only when every part that applies to the work holds;
+  naming some of them is not applying it.
 
 ## Conditional rules (Codex down-conversion)
 
@@ -5002,7 +5010,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
+Invariants version 1.4.0 · ratified 2026-08-31 · last amended 2026-11-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -5012,6 +5020,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
+   Where no floor applies, caution matches the real risk: a step that does not apply is skipped in one line, and
+   only what cannot be undone or reaches people outside the repository waits for a person.
 2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
    else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
    second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -5058,6 +5068,8 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
   client reads its own location; call a skill by name whenever its description fits the job.
+- A rule with several parts holds only when every part that applies to the work holds;
+  naming some of them is not applying it.
 ",
   "packages/beta/AGENTS.md": "
 # Charter
@@ -5087,7 +5099,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
+Invariants version 1.4.0 · ratified 2026-08-31 · last amended 2026-11-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -5097,6 +5109,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
+   Where no floor applies, caution matches the real risk: a step that does not apply is skipped in one line, and
+   only what cannot be undone or reaches people outside the repository waits for a person.
 2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
    else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
    second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -5143,6 +5157,8 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
   client reads its own location; call a skill by name whenever its description fits the job.
+- A rule with several parts holds only when every part that applies to the work holds;
+  naming some of them is not applying it.
 ",
 }
 `;
@@ -5374,18 +5390,18 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "2c32b41c15956fbcb4bfbfd77e76615cd85d0a662b1d64474af84ae0124b751b 94385 bytes",
+  ".stamity/manifest.json": "4bb6b1922abc5099e490b5348f5e852fde1fcbe173fb99cefa0131c487c5f05e 94385 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "8a27073afaf09be0ca5fc782dd2632108aab084a85b0dccaaad3ceba751a7173 6548 bytes",
-  "AGENTS.override.md": "686fd81f67eb54c94f3884c56ddd67f43d5db3f761596707ac4edb7a5960536d 26082 bytes",
+  "AGENTS.md": "02c92104b17db691395b92b2708822544a6a628a14d62c85e289467f33e3af1f 6881 bytes",
+  "AGENTS.override.md": "8e0ba0e5881048190a7d22ae8f4b3670a3389e75bd81a41833a3cdae24afc6c6 26415 bytes",
   "CLAUDE.md": "697c902a89fcffe97474d8ca71b309c303c3989f9c87dbbf2c6fb12d12e95bc4 55 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
+  "packages/alpha/AGENTS.md": "08ce08e1a5c557f927de18261e1cbfe4e3fb813bfe111a144634ac2db5a23a51 6015 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
+  "packages/beta/AGENTS.md": "08ce08e1a5c557f927de18261e1cbfe4e3fb813bfe111a144634ac2db5a23a51 6015 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -9202,7 +9218,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
+Invariants version 1.4.0 · ratified 2026-08-31 · last amended 2026-11-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -9212,6 +9228,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
+   Where no floor applies, caution matches the real risk: a step that does not apply is skipped in one line, and
+   only what cannot be undone or reaches people outside the repository waits for a person.
 2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
    else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
    second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -9258,6 +9276,8 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
   client reads its own location; call a skill by name whenever its description fits the job.
+- A rule with several parts holds only when every part that applies to the work holds;
+  naming some of them is not applying it.
 ",
   "CLAUDE.md": "<!-- STAMITY:BEGIN -->
 @AGENTS.md
@@ -9346,8 +9366,8 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "7850c923b560d31a0cc6b620cdd5abfaf3181ddab4b6eb2eb93a890bda3231bc 28685 bytes",
-  "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
+  ".stamity/manifest.json": "1c2a66fdb067604a28f78885f5d96fb470e1c7921811e088fb1b8f8a3cfbdcbe 28685 bytes",
+  "AGENTS.md": "08ce08e1a5c557f927de18261e1cbfe4e3fb813bfe111a144634ac2db5a23a51 6015 bytes",
   "CLAUDE.md": "697c902a89fcffe97474d8ca71b309c303c3989f9c87dbbf2c6fb12d12e95bc4 55 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
@@ -9539,7 +9559,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
+Invariants version 1.4.0 · ratified 2026-08-31 · last amended 2026-11-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -9549,6 +9569,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
+   Where no floor applies, caution matches the real risk: a step that does not apply is skipped in one line, and
+   only what cannot be undone or reaches people outside the repository waits for a person.
 2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
    else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
    second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -9595,6 +9617,8 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
   client reads its own location; call a skill by name whenever its description fits the job.
+- A rule with several parts holds only when every part that applies to the work holds;
+  naming some of them is not applying it.
 ",
   "AGENTS.override.md": "
 # Charter
@@ -9624,7 +9648,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
+Invariants version 1.4.0 · ratified 2026-08-31 · last amended 2026-11-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -9634,6 +9658,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
+   Where no floor applies, caution matches the real risk: a step that does not apply is skipped in one line, and
+   only what cannot be undone or reaches people outside the repository waits for a person.
 2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
    else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
    second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -9680,6 +9706,8 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
   client reads its own location; call a skill by name whenever its description fits the job.
+- A rule with several parts holds only when every part that applies to the work holds;
+  naming some of them is not applying it.
 
 ## Conditional rules (Codex down-conversion)
 
@@ -10003,7 +10031,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
+Invariants version 1.4.0 · ratified 2026-08-31 · last amended 2026-11-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -10013,6 +10041,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
+   Where no floor applies, caution matches the real risk: a step that does not apply is skipped in one line, and
+   only what cannot be undone or reaches people outside the repository waits for a person.
 2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
    else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
    second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -10059,6 +10089,8 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
   client reads its own location; call a skill by name whenever its description fits the job.
+- A rule with several parts holds only when every part that applies to the work holds;
+  naming some of them is not applying it.
 ",
   "packages/beta/AGENTS.md": "
 # Charter
@@ -10088,7 +10120,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
+Invariants version 1.4.0 · ratified 2026-08-31 · last amended 2026-11-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -10098,6 +10130,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
+   Where no floor applies, caution matches the real risk: a step that does not apply is skipped in one line, and
+   only what cannot be undone or reaches people outside the repository waits for a person.
 2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
    else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
    second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -10144,6 +10178,8 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
   client reads its own location; call a skill by name whenever its description fits the job.
+- A rule with several parts holds only when every part that applies to the work holds;
+  naming some of them is not applying it.
 ",
 }
 `;
@@ -10231,15 +10267,15 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "8718d56f2363ce168214d829a6c4407936b8e27115039780a2fc75f8ca6dff7a 22838 bytes",
-  "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
-  "AGENTS.override.md": "686fd81f67eb54c94f3884c56ddd67f43d5db3f761596707ac4edb7a5960536d 26082 bytes",
+  ".stamity/manifest.json": "f5028e964871d9db5b9c845daa4f4bd55d7c55b67a3d810bf610518bcf38e998 22838 bytes",
+  "AGENTS.md": "08ce08e1a5c557f927de18261e1cbfe4e3fb813bfe111a144634ac2db5a23a51 6015 bytes",
+  "AGENTS.override.md": "8e0ba0e5881048190a7d22ae8f4b3670a3389e75bd81a41833a3cdae24afc6c6 26415 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
-  "packages/alpha/AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
+  "packages/alpha/AGENTS.md": "08ce08e1a5c557f927de18261e1cbfe4e3fb813bfe111a144634ac2db5a23a51 6015 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
   "packages/alpha/src/index.ts": "861f47677ae6211aa1c061e4539af4aec5ece3ad7cd009963cf22d3274a9ba5a 27 bytes",
-  "packages/beta/AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
+  "packages/beta/AGENTS.md": "08ce08e1a5c557f927de18261e1cbfe4e3fb813bfe111a144634ac2db5a23a51 6015 bytes",
   "packages/beta/package.json": "3e2d6efbc58f695353eaf34b6b1f3a65e3cd5093da2ac0a315f088fad21eddd1 70 bytes",
   "packages/beta/src/index.ts": "00fbaec0f27cf6037ed8001f2340a515175b1c48686ee94d6acd2513254a05b5 26 bytes",
   "pnpm-lock.yaml": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48 23 bytes",
@@ -10454,7 +10490,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
+Invariants version 1.4.0 · ratified 2026-08-31 · last amended 2026-11-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -10464,6 +10500,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
+   Where no floor applies, caution matches the real risk: a step that does not apply is skipped in one line, and
+   only what cannot be undone or reaches people outside the repository waits for a person.
 2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
    else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
    second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -10510,6 +10548,8 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
   client reads its own location; call a skill by name whenever its description fits the job.
+- A rule with several parts holds only when every part that applies to the work holds;
+  naming some of them is not applying it.
 ",
 }
 `;
@@ -10592,10 +10632,10 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "3223bb7dab4611e828d362ef016655a5a2c64932304440b6164b6e4b0c07f7bd 20941 bytes",
+  ".stamity/manifest.json": "967ba066a1b72c76acdb89174ef6ad5ca7cacac76492e60bbe44e51c302afb14 20941 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
-  "AGENTS.md": "b56b20335e26273faf1fb27e0962f4849ba11c7b1af00a07101900d2b56204cb 5682 bytes",
+  "AGENTS.md": "08ce08e1a5c557f927de18261e1cbfe4e3fb813bfe111a144634ac2db5a23a51 6015 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",
@@ -11063,7 +11103,7 @@ Run before declaring any change done; invariant 4 says which of them.
 - Full gate: \`pnpm run lint && pnpm run typecheck && pnpm run test\`
 
 ## Invariants
-Invariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
+Invariants version 1.4.0 · ratified 2026-08-31 · last amended 2026-11-09
 
 Floors, not defaults: they hold in every flow, at every intensity tier.
 
@@ -11073,6 +11113,8 @@ Floors, not defaults: they hold in every flow, at every intensity tier.
    Offering a subset of them, a lighter pass, or a deferral to after the release as the way to meet
    the request is that same relaxation, and it counts in the closing line as much as in the body.
    That report is the whole exit — no context block, no summary framed for closing beside it.
+   Where no floor applies, caution matches the real risk: a step that does not apply is skipped in one line, and
+   only what cannot be undone or reaches people outside the repository waits for a person.
 2. **Ambiguity (B1).** Materially different readings: one ask per turn (one question-tool call of related questions,
    else one numbered list), numbered options, a declared default-if-no-response, rounds until none is undecided, no
    second request in the same turn. Sub-agents do not ask — they return \`BLOCKED_AMBIGUITY\` naming the readings.
@@ -11119,6 +11161,8 @@ as any skill (\`/st-<id>\` or \`$st-<id>\`); with neither, ask for the outcome i
 - A model-backed feature ships with a versioned golden-and-adversarial eval set, thresholds declared before the run.
 - Skills are description-triggered and land in the emitted \`.agents/skills/\` tree, plus a native copy where the
   client reads its own location; call a skill by name whenever its description fits the job.
+- A rule with several parts holds only when every part that applies to the work holds;
+  naming some of them is not applying it.
 
 ## Cursor Cloud specific instructions
 
@@ -11219,8 +11263,8 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "291f09f534effe180d9b2c173514a719b44e88d08f08f1d9c40b7c79b4930df3 22496 bytes",
-  "AGENTS.md": "8a27073afaf09be0ca5fc782dd2632108aab084a85b0dccaaad3ceba751a7173 6548 bytes",
+  ".stamity/manifest.json": "a8d84e7c2615e8b3f9aa3a0d624817c8ff671fc9586b302f229d282c86a381af 22496 bytes",
+  "AGENTS.md": "02c92104b17db691395b92b2708822544a6a628a14d62c85e289467f33e3af1f 6881 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",
   "packages/alpha/package.json": "683571974f2a0026952b934f5b37b33cf51a41d45be0a3c450712966fa1d495d 71 bytes",

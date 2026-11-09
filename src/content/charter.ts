@@ -204,7 +204,14 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
   // pin — ALWAYS_ON_CURSOR_BLOCK_LINES below, added by composeAlwaysOnLoad only
   // for a selection with cursor — so every ceiling in this table stays the
   // charter-and-rules figure a selection without cursor pays.
-  cursor: 95,
+  // 95 -> 99 on 2026-11-09, plan 024 file 1, unit k-charter (invariants 1.4.0),
+  // and UP, raised rather than paid back. Four lines land: invariant 1's caution
+  // sentence (two) and the Conditional layer's multi-part bullet (two). The
+  // earlier payback route, rewrapping at the file's widest line, would change
+  // invariant 1's and invariant 7's existing lines, which four eval cases quote
+  // word for word in their Briefs; raising the pin moves no quoted line. Net +4
+  // on every client below.
+  cursor: 99,
   // 240 -> 236 on 2026-09-12: same four charter lines. These two clients pay the
   // charter plus the two glob-less rules, and neither of those grew a line.
   // Held at 236 on 2026-09-12: the run-20 charter saving funds ai-evals' net +1,
@@ -216,8 +223,9 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
   // and they were the whole of what these clients paid beside the charter. What
   // remains is the charter alone — 239 - 144 = 95. Reclaimed, not deleted: the
   // bodies still reach the model, through a description the client matches.
-  claude: 95,
-  copilot: 95,
+  // 95 -> 99 on 2026-11-09, unit k-charter: the charter's +4 above, unchanged rules.
+  claude: 99,
+  copilot: 99,
   // 1065 -> 1063 on 2026-09-10: Package 10 removes repeated security-reporting
   // prose while preserving the rule floors and repaired behavior. This client
   // loads the whole rule set, so its measured reduction tightens the ratchet.
@@ -236,7 +244,9 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
   // projected as skills; the appendix, which used to drop eight rules to fit
   // 32 KiB, now drops none.
   // 407 -> 410 on 2026-11-09: the security rule's production-only gate states its condition, plan 024 k-security-gate.
-  codex: 410,
+  // 410 -> 414 on 2026-11-09, unit k-charter: the charter's +4 above, on top of
+  // the security rule's +3 (S13: recomputed at integration over the combined tree).
+  codex: 414,
 };
 
 /**
@@ -369,7 +379,15 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
 // at 95 (the version line and the amended date keep their widths). Net +72
 // bytes. The same +72 lands in the charter-alone figure below, in
 // ALWAYS_ON_CODEX_OVERRIDE_BYTES and in ALWAYS_ON_SHARED_BYTES_WITH_CURSOR.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_682;
+// 5_682 -> 6_015 on 2026-11-09, plan 024 file 1, unit k-charter (invariants
+// 1.4.0): invariant 1's caution sentence and the Conditional layer's multi-part
+// bullet, four new lines (ALWAYS_ON_BUDGET_LINES moved +4 with them), and the
+// version line's amended date at the same width. The plain-words line is now
+// the `${STAMITY:COMMUNICATION_STYLE}` token, which renders the same sentence
+// for the golden's unset style, so it moves no byte. Net +333. The same +333
+// lands in the charter-alone figure below, in ALWAYS_ON_CODEX_OVERRIDE_BYTES
+// and in ALWAYS_ON_SHARED_BYTES_WITH_CURSOR.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 6_015;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
@@ -407,7 +425,10 @@ export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 5_682;
 // 5_610 -> 5_682 on 2026-10-21, unit u4-charter: the plain-words lines,
 // invariant 5's four lines (invariants 1.3.1), the maturity line and the three
 // trims, the same +72 as above and the whole of the change here.
-export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_682;
+// 5_682 -> 6_015 on 2026-11-09, unit k-charter: invariant 1's caution sentence
+// and the multi-part bullet (invariants 1.4.0), the same +333 as above and the
+// whole of the change here.
+export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 6_015;
 
 /**
  * Bytes of the Codex-only root `AGENTS.override.md` on the golden selection —
@@ -451,7 +472,11 @@ export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 5_682;
 // override carries the same +72 bytes (invariants 1.3.1); the line count holds
 // at 407, the charter's three new lines paid by its three trims.
 // 25_872 -> 26_082 on 2026-11-09: the security rule's production-only gate states its condition, plan 024 k-security-gate.
-export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 26_082;
+// 26_082 -> 26_415 on 2026-11-09, unit k-charter: the charter half of the
+// override carries the same +333 bytes (invariants 1.4.0); the line count moves
+// 410 -> 414 with the charter's four new lines (S13: recomputed at integration
+// over the combined tree, the security rule's change included).
+export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 26_415;
 
 /**
  * Physical lines Cursor's cloud block adds to the shared root `AGENTS.md` when
@@ -483,7 +508,9 @@ export const ALWAYS_ON_CURSOR_BLOCK_LINES = 14;
 // block's 866 bytes at the golden's `npx -y @zomarit/stamity@1.0.0-golden`.
 // 6_476 -> 6_548 on 2026-10-21, unit u4-charter: the charter's +72 bytes
 // (invariants 1.3.1), now 5_682 of charter plus the unchanged 866 of the block.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CURSOR = 6_548;
+// 6_548 -> 6_881 on 2026-11-09, unit k-charter: the charter's +333 bytes
+// (invariants 1.4.0), now 6_015 of charter plus the unchanged 866 of the block.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CURSOR = 6_881;
 
 /**
  * The composite always-on line count one client pays for a plan under a

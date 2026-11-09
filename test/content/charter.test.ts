@@ -202,7 +202,9 @@ describe("corpus charter", () => {
     expect(body.split("${STAMITY:").length - 1).toBe(tokens.length);
   });
 
-  it("exercises all ten wired tokens, and full substitution leaves none behind", async () => {
+  // TEST CHANGE, justified (2026-11-09, k-charter): "ten" -> "eleven" in the name only; the body
+  // already loops over REPO_SUBSTITUTION_TOKENS, which gained `${STAMITY:COMMUNICATION_STYLE}`.
+  it("exercises all eleven wired tokens, and full substitution leaves none behind", async () => {
     // TEST CHANGE, justified (2026-09-30, sw26-cli-token): the charter gained a tenth token,
     // `${STAMITY:CLI}`, on its maturity line — "change via `stamity config`" was the one bare
     // call every user's AGENTS.md carried, and a bare `stamity` runs only where a global install
@@ -258,8 +260,18 @@ describe("corpus charter", () => {
     // TEST CHANGE, justified (2026-10-21, plan 018 file 2, unit u4-charter; REQ-FLOW-063): 1.3.0 ->
     // 1.3.1, amended 2026-10-14 -> 2026-10-21. Invariant 5's wording names the script's place per
     // client (a PATCH clarification); the version line keeps its width. Only the shipped values move.
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 1, unit k-charter; REQ-FLOW-173): 1.3.1 ->
+    // 1.4.0, amended 2026-10-21 -> 2026-11-09. Invariant 1 gains its caution sentence (a MINOR);
+    // the version line keeps its width. Only the shipped values move.
     expect(rendered).toContain(
-      "## Invariants\nInvariants version 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21\n",
+      "## Invariants\nInvariants version 1.4.0 · ratified 2026-08-31 · last amended 2026-11-09\n",
+    );
+    // TEST CHANGE, justified (2026-11-09, k-charter; REQ-FLOW-174): the eleventh token,
+    // `${STAMITY:COMMUNICATION_STYLE}`, sits where the plain-words sentence stood. A render with
+    // no style set (this context carries none) gives back that sentence, byte for byte.
+    expect(rendered).toContain(
+      "commands run on invocation.\n" +
+        "Write every reply in plain words: short sentences, common words, no jargon the reader has to decode. Say how sure\n",
     );
   });
 
@@ -417,10 +429,13 @@ describe("corpus charter", () => {
     // TEST CHANGE, justified (2026-10-21, plan 018 file 2, unit u4-charter): 1.3.0 -> 1.3.1, amended
     // 2026-10-14 -> 2026-10-21. Invariant 5's wording moved (a PATCH clarification); the
     // ratification date still does not move.
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 1, unit k-charter): 1.3.1 -> 1.4.0, amended
+    // 2026-10-21 -> 2026-11-09. Invariant 1 gains its caution sentence (a MINOR); the ratification
+    // date still does not move.
     expect(invariants).toEqual({
-      version: "1.3.1",
+      version: "1.4.0",
       ratified: "2026-08-31",
-      amended: "2026-10-21",
+      amended: "2026-11-09",
     });
     // The typed read and the raw map agree — no second spelling of the keys.
     expect(charter.frontmatter["invariants_version"]).toBe(invariants.version);
@@ -623,7 +638,17 @@ describe("corpus charter", () => {
     const opening = body.slice(0, body.indexOf("## Repo facts"));
 
     // Inside the opening paragraph, joined to it with no blank line between.
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 1, unit k-charter; REQ-FLOW-174): the
+    // template now carries `${STAMITY:COMMUNICATION_STYLE}` where the plain-words sentence stood, so
+    // the manifest's style reaches this line. The default render (no style, or `plain`) is that
+    // sentence byte for byte, and this case asserts it on the rendered opening; the confidence and
+    // no-first sentence stays literal in the template.
     expect(opening).toContain(
+      "commands run on invocation.\n" +
+        "${STAMITY:COMMUNICATION_STYLE} Say how sure\n" +
+        "you are and what that rests on, and when the answer is no, say no first, then why.\n",
+    );
+    expect(substituteRepoTokens(opening, { linters: [], testFrameworks: [], ciProviders: [] })).toContain(
       "commands run on invocation.\n" +
         "Write every reply in plain words: short sentences, common words, no jargon the reader has to decode. Say how sure\n" +
         "you are and what that rests on, and when the answer is no, say no first, then why.\n",
@@ -644,7 +669,33 @@ describe("corpus charter", () => {
     );
     expect(raw).not.toContain("three clients out of four");
     expect(raw).not.toContain("Named invocation beats");
-    expect(lineCount).toBe(95);
+    // TEST CHANGE, justified (2026-11-09, k-charter; REQ-FLOW-173): 95 -> 99. Invariant 1's caution
+    // sentence (two lines) and the Conditional layer's multi-part bullet (two lines) were not paid
+    // back: a rewrap would change lines the charter eval cases quote. ALWAYS_ON_BUDGET_LINES moved +4.
+    expect(lineCount).toBe(99);
+  });
+
+  // Added 2026-11-09 (plan 024 file 1, unit k-charter; REQ-FLOW-173): the Conditional layer says a
+  // rule with several parts holds only when every part that applies holds. It lies outside the
+  // invariants block, so the hash gate does not see it; this case is its pin. Invariant 1's caution
+  // sentence is inside the block and the 1.4.0 hash holds it; the case reads it too, as a sentence.
+  it("states the multi-part rule in the conditional layer and the caution sentence in invariant 1", async () => {
+    const { body } = await readCharterTemplate(CORPUS_ROOT);
+
+    const conditional = sectionOf(body, "Conditional layer");
+    expect(conditional).toContain(
+      "- A rule with several parts holds only when every part that applies to the work holds;\n" +
+        "  naming some of them is not applying it.",
+    );
+    expect(sectionOf(body, "Invariants")).not.toContain("A rule with several parts");
+
+    const invariants = sectionOf(body, "Invariants");
+    const one = invariants.slice(invariants.indexOf("1. **Universal floor.**"), invariants.indexOf("2. **"));
+    expect(one.replace(/\s+/g, " ")).toContain(
+      "That report is the whole exit — no context block, no summary framed for closing beside it. " +
+        "Where no floor applies, caution matches the real risk: a step that does not apply is skipped " +
+        "in one line, and only what cannot be undone or reaches people outside the repository waits for a person.",
+    );
   });
 
   it("advertises only the board sources a mode can actually discover", async () => {

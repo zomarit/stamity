@@ -1639,12 +1639,6 @@ export function readReviewCap(manifest: SetupManifest | null | undefined): numbe
   return value === undefined ? DEFAULT_MAX_REVIEW_ITERATIONS : clampReviewIterations(value);
 }
 
-const COMMUNICATION_STYLE_EFFECT: Record<CommunicationStyle, string> = {
-  plain: "define jargon on first use and lead with outcomes",
-  technical: "use precise domain terminology and lead with implementation detail",
-};
-
-/** One-line directive carrying the resolved style into generated agents. */
-export function communicationStyleDirective(style: CommunicationStyle): string {
-  return `Communication style=${style}: ${COMMUNICATION_STYLE_EFFECT[style]}.`;
-}
+// Moved to the zero-import leaf on 2026-11-09 (k-charter) so the substitution pass, two waves
+// below this module, can render it; re-exported so every importer stays as it was.
+export { communicationStyleDirective } from "../types/core.ts";

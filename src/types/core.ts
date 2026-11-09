@@ -41,16 +41,13 @@ export const VALID_MATURITY_TIERS: Set<string> = new Set(MATURITY_TIERS);
 export const DEFAULT_MATURITY_TIER: MaturityTier = "solo";
 
 /**
- * How generated agents are ASKED to talk to the human operator — and, today,
- * are not: the value reaches no generated file.
+ * How generated agents are asked to talk to the human operator.
  *
- * The only renderer is `communicationStyleDirective`
- * (`src/manifest/manifest.ts`), and no emission path calls it; its sole caller
- * is that module's own suite. So the key is settable, validated, persisted and
- * shown by `stamity config`, and an agent never sees it. Recorded here because
- * this is where a reader decides whether setting it changes anything, and the
- * honest answer is that it changes what the manifest carries, not what an
- * agent does.
+ * The value reaches every generated always-on file: the charter's plain-words
+ * line is the `${STAMITY:COMMUNICATION_STYLE}` token, which the repo-facts pass
+ * in `src/emit/substitution.ts` renders from the manifest (since 2026-11-09,
+ * REQ-FLOW-174). `plain`, and no value set, render the charter's plain-words
+ * sentence; `technical` renders {@link communicationStyleDirective}.
  *
  * - `plain`     — define jargon on first use; lead with outcomes.
  * - `technical` — precise domain terminology; lead with implementation detail.
@@ -59,6 +56,20 @@ export const COMMUNICATION_STYLES = ["plain", "technical"] as const;
 export type CommunicationStyle = (typeof COMMUNICATION_STYLES)[number];
 export const VALID_COMMUNICATION_STYLES: Set<string> = new Set(COMMUNICATION_STYLES);
 export const DEFAULT_COMMUNICATION_STYLE: CommunicationStyle = "plain";
+
+const COMMUNICATION_STYLE_EFFECT: Record<CommunicationStyle, string> = {
+  plain: "define jargon on first use and lead with outcomes",
+  technical: "use precise domain terminology and lead with implementation detail",
+};
+
+/**
+ * One-line directive carrying the resolved style into generated agents. Lives
+ * in this zero-import leaf so the wave-2 substitution pass can render it;
+ * `src/manifest/manifest.ts` re-exports it for its existing importers.
+ */
+export function communicationStyleDirective(style: CommunicationStyle): string {
+  return `Communication style=${style}: ${COMMUNICATION_STYLE_EFFECT[style]}.`;
+}
 
 /**
  * What a run does with an agent-instruction file the repository already had

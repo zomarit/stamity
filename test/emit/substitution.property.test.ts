@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   CI_PROVIDER_TOKEN,
   CLI_TOKEN,
+  COMMUNICATION_STYLE_TOKEN,
   DETECTION_UNKNOWN,
   INVARIANTS_VERSION_TOKEN,
   LINTER_TOKEN,
@@ -13,6 +14,7 @@ import {
   VERIFY_GATE_LINT_TOKEN,
   VERIFY_GATE_TEST_TOKEN,
   VERIFY_GATE_TYPECHECK_TOKEN,
+  renderCommunicationStyle,
   renderDetectionList,
   renderInvariantsVersion,
   substituteCharterTokens,
@@ -25,7 +27,13 @@ import {
   type VerificationGateSet,
 } from "../../src/emit/substitution.ts";
 import { pinnedCliPrefix } from "../../src/shared/cliCall.ts";
-import { DEFAULT_MATURITY_TIER, MATURITY_TIERS, type MaturityTier } from "../../src/types/core.ts";
+import {
+  COMMUNICATION_STYLES,
+  DEFAULT_MATURITY_TIER,
+  MATURITY_TIERS,
+  type CommunicationStyle,
+  type MaturityTier,
+} from "../../src/types/core.ts";
 
 /**
  * Property lane for emission-time substitution. `substitution.test.ts` pins the
@@ -122,14 +130,19 @@ const ctxArb: fc.Arbitrary<DetectedRepoContext> = fc
     testFrameworks: detectionListArb,
     ciProviders: detectionListArb,
     tier: fc.option(fc.constantFrom<MaturityTier>(...MATURITY_TIERS), { nil: undefined }),
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 1, unit k-charter; REQ-FLOW-174): the
+    // repo-facts pass now resolves a second dial, the communication style. The context draws it
+    // the same way as the tier, so both the plain sentence and the technical directive render.
+    style: fc.option(fc.constantFrom<CommunicationStyle>(...COMMUNICATION_STYLES), { nil: undefined }),
   })
-  .map(({ linters, testFrameworks, ciProviders, tier }) => {
+  .map(({ linters, testFrameworks, ciProviders, tier, style }) => {
     // Built by conditional ASSIGNMENT rather than conditional spread: the
     // generated shape is identical (key absent when the dial is absent, as
     // `exactOptionalPropertyTypes` demands), but an in-place assignment states
     // it without spreading inside a `map` callback (oxc/no-map-spread).
     const generated: DetectedRepoContext = { linters, testFrameworks, ciProviders };
     if (tier !== undefined) generated.maturityTier = tier;
+    if (style !== undefined) generated.communicationStyle = style;
     return generated;
   });
 
@@ -214,6 +227,9 @@ function expectedValues(
     [INVARIANTS_VERSION_TOKEN, renderInvariantsVersion(INVARIANTS)],
     // TEST CHANGE, justified (2026-09-30): the tenth wired token, resolved by the CLI pass.
     [CLI_TOKEN, pinnedCliPrefix(CLI.packageName, CLI.version)],
+    // TEST CHANGE, justified (2026-11-09, k-charter): the eleventh wired token, resolved by the
+    // repo-facts pass from the context's style dial.
+    [COMMUNICATION_STYLE_TOKEN, renderCommunicationStyle(ctx.communicationStyle)],
   ]);
 }
 
@@ -341,6 +357,10 @@ describe("substitution — determinism", () => {
           testFrameworks: [...ctx.testFrameworks],
           ciProviders: [...ctx.ciProviders],
           ...(ctx.maturityTier === undefined ? {} : { maturityTier: ctx.maturityTier }),
+          // TEST CHANGE, justified (2026-11-09, k-charter): the clone carries the style dial too.
+          ...(ctx.communicationStyle === undefined
+            ? {}
+            : { communicationStyle: ctx.communicationStyle }),
         };
         expect(render(document, clonedCtx, { ...gates })).toBe(first);
         expect(ctx.linters).toEqual(clonedCtx.linters);
@@ -407,6 +427,8 @@ describe("substitution — pass independence", () => {
           TEST_FRAMEWORK_TOKEN,
           CI_PROVIDER_TOKEN,
           MATURITY_TIER_TOKEN,
+          // TEST CHANGE, justified (2026-11-09, k-charter): the style token is a repo-facts token.
+          COMMUNICATION_STYLE_TOKEN,
         ];
         const seeded = join([...gateTokens, ...repoTokens, document]);
 

@@ -89,10 +89,6 @@ clients your own manifest selects.
 | `autonomy.landJob` | one of off \| ci — ci lets the final merge job finish a land after the workflow `CI`, where a cloud cannot. Turning it on loosens the setting | `off` |
 | `copilot.setupSteps` | one of managed \| user \| off — managed writes `.github/workflows/copilot-setup-steps.yml` on every sync; user hands it to you (no ledger row, no reclaim, `clean` leaves it); off writes none and takes back an unedited copy, so the cloud agent's flows find no `stamity` on PATH and fetch it with `npx -y` | `managed` |
 
-One row is recorded but not yet consumed. `communicationStyle` is validated, persisted and
-carried through migrations, and no generated file reads it, so setting it changes what the
-manifest records rather than how any emitted file asks an agent to write.
-
 The `model.*` rows are classes, not model ids. Each names a rung, and each selected client
 maps that rung to an id it accepts, so one setting travels across clients instead of being
 restated per client. Claude Code maps every rung onto its own family aliases, the top rung onto

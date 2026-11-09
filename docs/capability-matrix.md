@@ -42,10 +42,10 @@ delivery leaves in front of it.
 
 | Client | Always-on lines | Delivery of description-scoped rules | What it loads unconditionally |
 |---|---|---|---|
-| `claude` | 95 | skill, on demand | the charter alone — a rule with no globs is delivered as a skill instead, and every other rule attaches on paths |
-| `cursor` | 95 | rule, pulled on relevance | the charter alone — a rule with no globs is pulled in when the conversation matches it |
-| `copilot` | 95 | skill, on demand | the charter alone — a rule with no globs is delivered as a skill instead, and every other rule attaches on paths |
-| `codex` | 410 | skill, on demand | the charter plus the rules that must be unconditional — critical, floor-tagged, or anchored to a nested instruction file; the rest are skills — 26082 bytes, in its own `AGENTS.override.md` |
+| `claude` | 99 | skill, on demand | the charter alone — a rule with no globs is delivered as a skill instead, and every other rule attaches on paths |
+| `cursor` | 99 | rule, pulled on relevance | the charter alone — a rule with no globs is pulled in when the conversation matches it |
+| `copilot` | 99 | skill, on demand | the charter alone — a rule with no globs is delivered as a skill instead, and every other rule attaches on paths |
+| `codex` | 414 | skill, on demand | the charter plus the rules that must be unconditional — critical, floor-tagged, or anchored to a nested instruction file; the rest are skills — 26415 bytes, in its own `AGENTS.override.md` |
 
 Measured under `ruleDelivery: on-demand`, the shipped default. A rule that carries no globs has
 no attach trigger, so under `always-on` claude and copilot load its whole body every session;
@@ -63,9 +63,9 @@ plan against, not a reading this page took as it rendered.
 
 **What co-selecting codex costs every other client: nothing at the root.** Codex's rules
 appendix goes to a codex-only root `AGENTS.override.md`, which codex reads instead of
-`AGENTS.md` and no other client reads at all, so the shared root `AGENTS.md` is 5682 bytes with
-codex selected and 5682 without it. The override repeats the charter — an operator's own text
-in `AGENTS.md` included — and adds the appendix: 26082 bytes, ≈4.6x the shared file, paid by
+`AGENTS.md` and no other client reads at all, so the shared root `AGENTS.md` is 6015 bytes with
+codex selected and 6015 without it. The override repeats the charter — an operator's own text
+in `AGENTS.md` included — and adds the appendix: 26415 bytes, ≈4.4x the shared file, paid by
 codex alone. It is regenerated from `AGENTS.md` as each sync leaves it, and leaves out the one
 part of that file it does not repeat, Cursor's cloud block below. Under a `supplement` or
 `skip` import decision the operator's own text in `AGENTS.md` survives, so an edit to that text
@@ -78,8 +78,8 @@ is not repeated: `sync` and `check` report the override as a collision.
 **What co-selecting cursor costs every client that reads the shared file.** With cursor
 selected, the root `AGENTS.md` ends on a `Cursor Cloud specific instructions` block — Node
 first, the skill paths, the learnings read, the draft pull request and the unattended rule — 14
-lines counted apart from the line figures above, so the file is 6548 bytes with cursor and 5682
-without it. A cursor session therefore loads its ceiling plus the block, 95 + 14 = 109 lines,
+lines counted apart from the line figures above, so the file is 6881 bytes with cursor and 6015
+without it. A cursor session therefore loads its ceiling plus the block, 99 + 14 = 113 lines,
 as a claude or copilot session on a selection with cursor loads its own ceiling plus the block.
 Cursor and copilot read it natively, and claude pays it too, through its `CLAUDE.md`'s
 `@AGENTS.md` import: on a claude and cursor selection a claude session loads the block every

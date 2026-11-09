@@ -10,8 +10,9 @@
  * like.
  *
  * Four token families, four entry points, because they resolve from
- * different inputs: repo facts — detection lists plus the maturity dial — come
- * off the persisted manifest ({@link substituteRepoTokens}); verification-gate
+ * different inputs: repo facts — detection lists plus the maturity and
+ * communication-style dials — come off the persisted manifest
+ * ({@link substituteRepoTokens}); verification-gate
  * commands are resolved upstream from the project's language and package
  * manager and arrive here already computed
  * ({@link substituteVerificationGateTokens}); the invariants version comes
@@ -27,7 +28,13 @@
  */
 
 import { DEFAULT_CLI_PACKAGE_NAME, pinnedCliPrefix } from "../shared/cliCall.ts";
-import { DEFAULT_MATURITY_TIER, type MaturityTier } from "../types/core.ts";
+import {
+  DEFAULT_MATURITY_TIER,
+  VALID_COMMUNICATION_STYLES,
+  communicationStyleDirective,
+  type CommunicationStyle,
+  type MaturityTier,
+} from "../types/core.ts";
 import type { SetupManifest } from "../types/manifest.ts";
 
 /**
@@ -56,6 +63,24 @@ export const CI_PROVIDER_TOKEN = "${STAMITY:CI_PROVIDER}";
  * never the unknown sentinel, since the dial always has an effective value.
  */
 export const MATURITY_TIER_TOKEN = "${STAMITY:MATURITY_TIER}";
+
+/**
+ * Resolves to the charter's reply-style sentence, from the manifest's
+ * `communicationStyle` dial ({@link renderCommunicationStyle}). Like
+ * {@link MATURITY_TIER_TOKEN} it is live configuration resolved in the
+ * repo-facts pass, so a repo that runs `stamity config set communicationStyle`
+ * gets the new line on its next sync. Absence renders the plain-words sentence
+ * the charter carried before the token existed, byte for byte.
+ */
+export const COMMUNICATION_STYLE_TOKEN = "${STAMITY:COMMUNICATION_STYLE}";
+
+/**
+ * The charter's plain-words sentence: what {@link COMMUNICATION_STYLE_TOKEN}
+ * renders for `plain` and for a manifest with no style set. Kept as the exact
+ * text the charter held at that place, so the default render is unchanged.
+ */
+export const PLAIN_WORDS_SENTENCE =
+  "Write every reply in plain words: short sentences, common words, no jargon the reader has to decode.";
 
 /**
  * Verification-gate tokens. Generated agents that hard-code `npm run test`
@@ -110,6 +135,7 @@ export const REPO_SUBSTITUTION_TOKENS: readonly string[] = [
   VERIFY_GATE_ALL_TOKEN,
   INVARIANTS_VERSION_TOKEN,
   CLI_TOKEN,
+  COMMUNICATION_STYLE_TOKEN,
 ];
 
 /** Detection facts that feed {@link substituteRepoTokens}. */
@@ -124,6 +150,12 @@ export interface DetectedRepoContext {
    * {@link DEFAULT_MATURITY_TIER}.
    */
   maturityTier?: MaturityTier;
+  /**
+   * Manifest communication-style dial, carried the same way as
+   * {@link maturityTier} (see {@link COMMUNICATION_STYLE_TOKEN}). Optional;
+   * absence renders {@link PLAIN_WORDS_SENTENCE}.
+   */
+  communicationStyle?: CommunicationStyle;
 }
 
 /**
@@ -235,7 +267,27 @@ export function detectionContextFromManifest(manifest: SetupManifest): DetectedR
     // the optional field, and an absent dial should leave the context shaped
     // exactly as before the field existed.
     ...(manifest.maturityTier === undefined ? {} : { maturityTier: manifest.maturityTier }),
+    // Same shape for the style dial, and carried only when it is a member of the enum: the
+    // value lands in the always-on file every agent reads, so a hand-edited manifest that
+    // slipped past the persistence check renders the default rather than its own text.
+    ...(manifest.communicationStyle !== undefined &&
+    VALID_COMMUNICATION_STYLES.has(manifest.communicationStyle)
+      ? { communicationStyle: manifest.communicationStyle }
+      : {}),
   };
+}
+
+/**
+ * The line {@link COMMUNICATION_STYLE_TOKEN} renders: the plain-words sentence
+ * for `plain`, for no value, and for any value outside the enum; the style's
+ * {@link communicationStyleDirective} otherwise. Total on purpose — the token
+ * sits in the charter, and no input may render it as raw text.
+ */
+export function renderCommunicationStyle(style: CommunicationStyle | undefined): string {
+  if (style === undefined || style === "plain" || !VALID_COMMUNICATION_STYLES.has(style)) {
+    return PLAIN_WORDS_SENTENCE;
+  }
+  return communicationStyleDirective(style);
 }
 
 /**
@@ -250,6 +302,7 @@ export function substituteRepoTokens(content: string, ctx: DetectedRepoContext):
       [TEST_FRAMEWORK_TOKEN, renderDetectionList(ctx.testFrameworks)],
       [CI_PROVIDER_TOKEN, renderDetectionList(ctx.ciProviders)],
       [MATURITY_TIER_TOKEN, ctx.maturityTier ?? DEFAULT_MATURITY_TIER],
+      [COMMUNICATION_STYLE_TOKEN, renderCommunicationStyle(ctx.communicationStyle)],
     ]),
   );
 }
