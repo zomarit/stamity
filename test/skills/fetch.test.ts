@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { buildContentIndex, type PackContentRoot } from "../../src/content/catalog.ts";
 import { toSpecFrontmatter } from "../../src/emit/skillsProjection.ts";
 import { computeAggregateContentSha } from "../../src/pack/trust.ts";
 import { addSkill, listCopiedSkills, removeSkill, type AddSkillRequest } from "../../src/skills/fetch.ts";
@@ -477,6 +478,61 @@ describe.skipIf(!gitAvailable)("addSkill — what a copy may not take (review ro
 
     expect(error.message).toContain("control character");
     expect(error.message).not.toContain("\u001b");
+  });
+});
+
+/** An installed pack's content root, `acme-ops`, supplying the skill `deploy-check` under `skills/st-deploy-check/`, outside the project. */
+async function packRootOf(fx: Fixture): Promise<PackContentRoot> {
+  const root = join(dirname(fx.root), "packs", "acme-ops");
+  await mkdir(join(root, "skills", "st-deploy-check"), { recursive: true });
+  await writeFile(join(root, "skills", "st-deploy-check", "SKILL.md"), SKILL_MD.replace("id: house-style", "id: deploy-check"));
+  return { pack: "acme-ops", root };
+}
+
+describe.skipIf(!gitAvailable)("addSkill — a name an installed pack's skill holds (review round 2)", () => {
+  it("lets an override win a pack skill's id, the replacement the name check exists to stop", async () => {
+    const fx = await fixture(SKILL_FILES);
+    const pack = await packRootOf(fx);
+    const overrides = join(fx.tempParent, "overrides");
+    await mkdir(join(overrides, "skills", "deploy-check"), { recursive: true });
+    await writeFile(join(overrides, "skills", "deploy-check", "SKILL.md"), SKILL_MD.replace("id: house-style", "id: deploy-check"));
+
+    const index = await buildContentIndex({ packRoots: [pack], overrideRoot: overrides });
+
+    const shadow = (index.shadows ?? []).find((row) => row.type === "skill" && row.id === "deploy-check");
+    expect(shadow?.shadowed.map((item) => item.provenance?.pack)).toEqual(["acme-ops"]);
+  });
+
+  it("refuses a bare name an installed pack's skill holds, naming the pack and the skill, before any fetch", async () => {
+    const fx = await fixture({ ...SKILL_FILES, "deploy-check/SKILL.md": SKILL_MD.replace("id: house-style", "id: deploy-check") });
+    const pack = await packRootOf(fx);
+
+    const error = await refusal(fx, () => addSkill(request(fx, { name: "deploy-check", packRoots: [pack] })));
+
+    expect(error.code).toBe("VALIDATION_ERROR");
+    expect(error.message).toContain(
+      'the skill name "deploy-check" is the id of the skill st-deploy-check of the installed pack acme-ops, and a copy under it would replace st-deploy-check on the next sync',
+    );
+  });
+
+  it("names the pack's skill when a prefixed name matches one", async () => {
+    const fx = await fixture(SKILL_FILES);
+    const pack = await packRootOf(fx);
+
+    const error = await refusal(fx, () => addSkill(request(fx, { name: "st-deploy-check", packRoots: [pack] })));
+
+    expect(error.message).toContain("starts with `st-`");
+    expect(error.message).toContain("it names the skill st-deploy-check of the installed pack acme-ops");
+  });
+
+  it("still copies a name no installed pack's skill holds", async () => {
+    const fx = await fixture(SKILL_FILES);
+    const pack = await packRootOf(fx);
+
+    const added = await addSkill(request(fx, { packRoots: [pack] }));
+
+    expect(added.written).toBe(true);
+    expect(await readFile(join(fx.root, ".stamity", "overrides", "skills", "house-style", "SKILL.md"), "utf8")).toBe(SKILL_MD);
   });
 });
 

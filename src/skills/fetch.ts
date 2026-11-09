@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { buildContentIndex } from "../content/catalog.ts";
+import { buildContentIndex, type PackContentRoot } from "../content/catalog.ts";
 import { parseFrontmatter } from "../content/frontmatter.ts";
 import { checkUserArtifact, discoverUserContent, scanUserSkillSupportFiles, SKILL_FILE } from "../content/userContent.ts";
 import { toSpecFrontmatter } from "../emit/skillsProjection.ts";
@@ -104,6 +104,11 @@ export interface AddSkillRequest {
   readonly tempParent?: string;
   /** The git seam; the real git by default. */
   readonly run?: WorktreeGitRunner;
+  /**
+   * The installed packs' content roots, read as `validate` reads them (`../cli/commands/validate.ts`,
+   * `installedPackRoots`); none by default. A name a pack skill holds is refused as a bundled one is.
+   */
+  readonly packRoots?: readonly PackContentRoot[];
 }
 
 export interface AddedSkill {
@@ -159,18 +164,26 @@ function skillNameDefect(name: string): string | null {
   return null;
 }
 
+/** A skill a copy's name would replace: its directory, and who supplies it. */
+interface HeldSkill {
+  readonly dir: string;
+  /** `the bundled skill <dir>` or `the skill <dir> of the installed pack <pack>`. */
+  readonly owner: string;
+}
+
 /**
- * The directory of the bundled skill `name` would replace, or undefined. The corpus strips the engine prefix to make an
- * id, and an override whose id matches a bundled skill's replaces it under the bundled directory on the next sync
- * (`../content/userContent.ts`, `saveIdDefect`; `../emit/skillsProjection.ts`, `projectSkills`), so `verify` and
- * `st-verify` both name `st-verify`. The id a copy takes is its folder name: the artifact gate refuses a `SKILL.md`
- * whose declared `id` differs from it.
+ * The skill `name` would replace, or undefined: a bundled skill, or one an installed pack supplies. The corpus strips
+ * the engine prefix to make an id, and an override whose id matches a bundled or pack skill's replaces it under that
+ * skill's directory on the next sync (`../content/catalog.ts`, `resolveLayerInto`; `../content/userContent.ts`,
+ * `saveIdDefect`; `../emit/skillsProjection.ts`, `projectSkills`), so `verify` and `st-verify` both name `st-verify`.
+ * The id a copy takes is its folder name: the artifact gate refuses a `SKILL.md` whose declared `id` differs from it.
  */
-async function bundledSkillDir(name: string): Promise<string | undefined> {
+async function heldSkill(name: string, packRoots: readonly PackContentRoot[]): Promise<HeldSkill | undefined> {
   const wanted = stripEngineContentPrefix(name);
-  const bundled = (await buildContentIndex()).items.find((item) => item.type === "skill" && stripEngineContentPrefix(item.id) === wanted);
-  if (bundled === undefined) return undefined;
-  return bundled.relativePath.split("/").at(-2) ?? bundled.id;
+  const held = (await buildContentIndex({ packRoots })).items.find((item) => item.type === "skill" && stripEngineContentPrefix(item.id) === wanted);
+  if (held === undefined) return undefined;
+  const dir = held.relativePath.split("/").at(-2) ?? held.id;
+  return { dir, owner: held.provenance === undefined ? `the bundled skill ${dir}` : `the skill ${dir} of the installed pack ${held.provenance.pack}` };
 }
 
 /** The tool-granting keys a `SKILL.md` head declares, each `<key>: <value as JSON>`. */
@@ -423,13 +436,13 @@ async function land(root: string, stagedDir: string, origin: SkillOrigin, packIn
  * folder is removed on every exit, and nothing lands under the root unless every check passed.
  */
 export async function addSkill(request: AddSkillRequest): Promise<AddedSkill> {
-  const bundled = isSkillSlug(request.name) ? await bundledSkillDir(request.name) : undefined;
+  const held = isSkillSlug(request.name) ? await heldSkill(request.name, request.packRoots ?? []) : undefined;
   const nameDefect = skillNameDefect(request.name);
-  if (nameDefect !== null) refuse(`skill add refused: ${nameDefect}${bundled === undefined ? "" : `, and it names the bundled skill ${bundled}`}.`);
-  if (bundled !== undefined) {
+  if (nameDefect !== null) refuse(`skill add refused: ${nameDefect}${held === undefined ? "" : `, and it names ${held.owner}`}.`);
+  if (held !== undefined) {
     refuse(
-      `skill add refused: the skill name ${JSON.stringify(request.name)} is the id of the bundled skill ${bundled}, and a copy under it would replace ${bundled} on the next sync.`,
-      "a bundled skill is changed by an override or an overlay a person writes, not by a copy",
+      `skill add refused: the skill name ${JSON.stringify(request.name)} is the id of ${held.owner}, and a copy under it would replace ${held.dir} on the next sync.`,
+      "a bundled or pack skill is changed where it is supplied, not by a copy; add the copy under another name",
     );
   }
   if (!COMMIT_SHAPE.test(request.commit)) {

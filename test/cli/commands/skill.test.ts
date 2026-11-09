@@ -1,10 +1,14 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { skillCommand } from "../../../src/cli/commands/skill.ts";
+import { createApp } from "../../../src/index.ts";
+import { createManifest, readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
+import { applyPackInstall, planPackInstall } from "../../../src/pack/install.ts";
 import { runGit } from "../../../src/worktree/git.ts";
 import { runInProcess, type InProcessResult } from "../../support/inProcess.ts";
+import { madeUpArtifact, writeMadeUpPack } from "../../support/packFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
 
 /**
@@ -181,6 +185,38 @@ describe.skipIf(!gitAvailable)("stamity skill", () => {
 
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("is not a full commit id (40 lowercase hex digits)");
+  });
+
+  it("refuses a name an installed pack's skill holds, reading the packs the manifest records", async () => {
+    const fx = await fixture();
+    const now = new Date("2026-11-09T12:00:00.000Z");
+    const engineVersion = createApp().version;
+    await writeManifest(fx.root, createManifest({ tools: ["claude"], selection: { items: { agent: [], skill: [], rule: [], command: [] } }, generatorVersion: engineVersion, now }), { now });
+    const packDir = await writeMadeUpPack(join(dirname(fx.root), "pack-src"), "acme-ops", {
+      "skills/st-deploy-check/SKILL.md": madeUpArtifact("deploy-check", "skill", "Checks a deploy when someone ships a release."),
+    });
+    const plan = await planPackInstall(fx.root, packDir, { allowUntrusted: true });
+    const seeded = await readManifest(fx.root);
+    if (seeded === null) throw new Error("fixture lost its manifest");
+    const installed = await applyPackInstall(fx.root, plan, seeded, { engineVersion, now });
+    await writeManifest(fx.root, installed.manifest, { now });
+
+    const result = await skill(fx.root, ["add", "house", "deploy-check", "--tag", "v1.0.0", "--commit", fx.commit]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("is the id of the skill st-deploy-check of the installed pack acme-ops");
+    await expect(readdir(join(fx.root, ".stamity", "overrides"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("refuses when the manifest cannot be read, since the name cannot be checked against the installed packs", async () => {
+    const fx = await fixture();
+    await writeFile(join(fx.root, ".stamity", "manifest.json"), "{ not json");
+
+    const result = await skill(fx.root, add(fx));
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("skill add refused: the installed packs cannot be read");
+    await expect(readdir(join(fx.root, ".stamity", "overrides"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("refuses add without its pins, and an unknown subcommand", async () => {

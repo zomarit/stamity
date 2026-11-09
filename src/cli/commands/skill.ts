@@ -1,6 +1,7 @@
 import { lstat, open, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Command } from "commander";
+import type { PackContentRoot } from "../../content/catalog.ts";
 import { addSkill, listCopiedSkills, removeSkill, type CopiedSkill } from "../../skills/fetch.ts";
 import { readSkillSources, SKILL_SOURCES_REL_PATH } from "../../skills/sources.ts";
 import { STATE_DIR } from "../../types/markers.ts";
@@ -86,6 +87,27 @@ async function nobodyWatching(ctx: CliContext, rootDir: string): Promise<string 
   }
 }
 
+/**
+ * The installed packs' content roots, read as `validate` reads them (`./validate.ts`, `installedPackRoots`): none
+ * without a manifest. Unlike `validate`, a manifest or pack state that cannot be read refuses rather than reading as
+ * no packs, because these roots are what a copy's name is checked against, and an unchecked name can replace a pack
+ * skill on the sync after the state is mended.
+ */
+async function installedPackRoots(ctx: CliContext, rootDir: string): Promise<PackContentRoot[]> {
+  try {
+    const manifest = await ctx.engine.manifest.manifest.readManifest(rootDir);
+    if (manifest === null) return [];
+    return ctx.engine.pack.projection.packContentRoots(await ctx.engine.pack.projection.discoverInstalledPacks(rootDir, manifest));
+  } catch (cause) {
+    throw new CliFailure({
+      code: "CONFIG_ERROR",
+      message: "skill add refused: the installed packs cannot be read, so the name cannot be checked against their skills",
+      why: cause instanceof Error ? cause.message : String(cause),
+      next: "mend what the reason names, then re-run",
+    });
+  }
+}
+
 function optionText(opts: Record<string, unknown>, key: string): string | undefined {
   const value = opts[key];
   return typeof value === "string" ? value : undefined;
@@ -143,6 +165,7 @@ async function runAdd(ctx: CliContext, opts: Record<string, unknown>, sourceId: 
     engineVersion: ctx.app.version,
     now: ctx.app.runtime.clock.now(),
     dryRun: ctx.dryRun,
+    packRoots: await installedPackRoots(ctx, rootDir),
   });
   const { origin } = added;
   const verb = added.written ? "Copied" : "Would copy";
