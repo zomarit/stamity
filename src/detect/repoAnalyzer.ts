@@ -240,6 +240,11 @@ const TEST_FRAMEWORK_INDICATORS: readonly Indicator<string>[] = [
   // only evidence a repo can give that `go test` / `cargo test` are available.
   { name: "go-test", files: ["go.mod"] },
   { name: "cargo-test", files: ["Cargo.toml"] },
+  // CTest ships with CMake, so a root CMakeLists.txt is the evidence. The other
+  // C/C++ indicators (meson, autotools, conan, vcpkg) are not: meson and
+  // autotools write no CTest files, so the C/C++ test gate stays unresolved
+  // for them (`./verificationGates.ts`).
+  { name: "ctest", files: ["CMakeLists.txt"] },
   { name: "phpunit", files: ["phpunit.xml", "phpunit.xml.dist"] },
   { name: "playwright", files: ["playwright.config.ts", "playwright.config.js"] },
   { name: "cypress", files: ["cypress.config.ts", "cypress.config.js", "cypress.json"] },
@@ -1010,7 +1015,9 @@ export function formatRepoSummary(info: RepoInfo): string {
     "Language versions",
     (info.languageVersions ?? []).map((entry) => `${entry.language} ${entry.version} (${entry.source})`),
   );
-  add("Legacy stacks", info.legacyStacks);
+  // Guarded like `languageVersions`: `RepoInfo` is public, and an object built
+  // to the 1.18 shape has no `legacyStacks`.
+  add("Legacy stacks", info.legacyStacks ?? []);
   if (info.packageManager !== undefined) rows.push(`Package manager: ${info.packageManager}`);
   add("Frameworks", info.frameworks);
   add("Linters", info.linters);

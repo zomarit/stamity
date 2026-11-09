@@ -133,9 +133,12 @@ const LANGUAGE_GATES: Record<string, LanguageGate> = {
   clojure: { test: "lein test", lint: "clj-kondo --lint src" },
   lua: { test: "busted", lint: "luacheck ." },
   perl: { test: "prove -lr t", lint: "perlcritic ." },
-  // CTest against the conventional out-of-tree build directory. No lint row:
-  // clang-tidy, cppcheck and cpplint each need setup a repo may not have.
-  cpp: { test: "ctest --test-dir build" },
+  // CTest against the conventional out-of-tree build directory, used only when
+  // detection recorded `ctest` (a root CMakeLists.txt; see
+  // {@link evidencedGate}). `--no-tests=error` makes a build with no registered
+  // test fail rather than pass on nothing. No lint row: clang-tidy, cppcheck
+  // and cpplint each need setup a repo may not have.
+  cpp: { test: "ctest --test-dir build --no-tests=error" },
 };
 
 /**
@@ -179,6 +182,25 @@ function runnerGate(language: string, gate: LanguageGate, packageManager: unknow
 }
 
 /**
+ * A row with its test command dropped when the repository showed no evidence
+ * that command can run. Only C/C++ needs it: `ctest` reads the test list CMake
+ * writes, and meson or autotools write none, so without a recorded `ctest`
+ * (a root CMakeLists.txt) the test gate stays unresolved instead of naming a
+ * command that tests nothing.
+ */
+function evidencedGate(
+  language: string,
+  gate: LanguageGate,
+  testFrameworks: unknown,
+): Partial<LanguageGate> {
+  if (language !== "cpp" || stringList(testFrameworks)?.includes("ctest") === true) return gate;
+  return {
+    ...(gate.lint === undefined ? {} : { lint: gate.lint }),
+    ...(gate.typecheck === undefined ? {} : { typecheck: gate.typecheck }),
+  };
+}
+
+/**
  * Declared gate precedence over the languages detection can report — the whole
  * ranking, in one reviewable place, and total over {@link LANGUAGE_GATES}.
  *
@@ -217,7 +239,6 @@ const GATE_LANGUAGE_PRECEDENCE: readonly string[] = [
   "ocaml",
   "clojure",
   "zig",
-  "cpp",
   "lua",
   "perl",
   "ruby",
@@ -225,6 +246,10 @@ const GATE_LANGUAGE_PRECEDENCE: readonly string[] = [
   "python",
   "typescript",
   "javascript",
+  // Last of all: a root CMakeLists.txt or meson.build is common in a Python or
+  // Node package that builds a native extension, and such a repo keeps its own
+  // gates. C/C++ wins only when no other ranked language was detected.
+  "cpp",
 ];
 
 /** Script names whose presence in the root manifest is the repo declaring a gate. */
@@ -320,7 +345,8 @@ const EXEC_PREFIX: Record<PackageManagerName, string> = {
  *    record is not a record of absence.
  * 2. **A ranked non-Node language** ({@link GATE_LANGUAGE_PRECEDENCE}) → that
  *    language's native row, whole — the Python row through the lock-declared
- *    runner when detection recorded one ({@link PYTHON_RUN_PREFIX}).
+ *    runner when detection recorded one ({@link PYTHON_RUN_PREFIX}), and the
+ *    C/C++ test command only with CMake evidence ({@link evidencedGate}).
  * 3. **Node evidence** — a ranked Node language, a persisted package manager,
  *    or a persisted `scripts` block → {@link nodeCommands}: the script form for
  *    a script the repo declares, the detected runner's binary when it does not,
@@ -340,7 +366,8 @@ export function verificationCommandsFor(
   const scripts = stringList(detected.packageScripts);
   const found = rankedLanguage(languages, scripts);
   if (found !== null && !NODE_LANGUAGES.has(found.language)) {
-    return commandsFrom(runnerGate(found.language, found.gate, detected.packageManager));
+    const gate = runnerGate(found.language, found.gate, detected.packageManager);
+    return commandsFrom(evidencedGate(found.language, gate, detected.testFrameworks));
   }
 
   const name = detected.packageManager;
@@ -532,7 +559,7 @@ function firstBinary(
  * type-check step reports its linter for that gate — the static-analysis pass
  * it does have.
  */
-function commandsFrom(gate: LanguageGate): VerificationCommands {
+function commandsFrom(gate: Partial<LanguageGate>): VerificationCommands {
   return compose(gate.test, gate.lint, gate.typecheck ?? gate.lint);
 }
 

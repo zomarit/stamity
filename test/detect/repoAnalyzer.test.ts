@@ -354,6 +354,44 @@ describe("detectLanguages", () => {
   });
 });
 
+describe("REQ-FLOW-182 C/C++ test gate", () => {
+  it("records ctest off a root CMakeLists.txt and names CTest as the test gate", async () => {
+    const info = await analyze({ "CMakeLists.txt": "cmake_minimum_required(VERSION 3.20)\n" });
+
+    expect(info.testFrameworks).toEqual(["ctest"]);
+    const gates = verificationGatesFor(summarizeDetection(info));
+    expect(gates.test).toBe("ctest --test-dir build --no-tests=error");
+  });
+
+  // meson and autotools write no CTest files, and CTest exits 0 on no tests:
+  // without CMake the gate is unresolved, never a command that tests nothing.
+  it.each(["meson.build", "configure.ac", "conanfile.txt", "vcpkg.json"])(
+    "leaves the test gate unresolved for %s alone",
+    async (file) => {
+      const info = await analyze({ [file]: "" });
+
+      expect(info.languages).toEqual(["cpp"]);
+      expect(info.testFrameworks).toEqual([]);
+      const gates = verificationGatesFor(summarizeDetection(info));
+      expect(gates.test.startsWith("unknown")).toBe(true);
+      expect(gates.all.startsWith("unknown")).toBe(true);
+    },
+  );
+
+  it.each(["CMakeLists.txt", "meson.build"])(
+    "keeps a Python package's gates beside a root %s (native extension)",
+    async (file) => {
+      const info = await analyze({
+        "pyproject.toml": '[project]\nname = "ext"\n',
+        [file]: "",
+      });
+
+      expect(info.languages).toEqual(expect.arrayContaining(["python", "cpp"]));
+      expect(verificationGatesFor(summarizeDetection(info)).test).toBe("pytest");
+    },
+  );
+});
+
 describe("REQ-FLOW-182 legacy stacks", () => {
   it("reports cobol from a root source file, outside languages and with no charter gate", async () => {
     const info = await analyze({ "PAYROLL.cbl": "       IDENTIFICATION DIVISION.\n" });
@@ -525,6 +563,33 @@ describe("REQ-FLOW-182 language versions", () => {
       Gemfile: '# ruby "2.7.0"\ngem "rack"\n',
       "go.mod": "module m\n// go 1.10\n",
     });
+
+    expect(info.languageVersions).toBeUndefined();
+  });
+
+  it("steps past a pom.xml ${property} value to the next Java property", async () => {
+    const info = await analyze({
+      "pom.xml":
+        "<project><properties><maven.compiler.release>${java.version}</maven.compiler.release>" +
+        "<java.version>21</java.version></properties></project>\n",
+    });
+
+    expect(info.languageVersions).toEqual([
+      { language: "java", version: "21", source: "pom.xml java.version" },
+    ]);
+  });
+
+  it("reads the channel key of a TOML-form extensionless rust-toolchain", async () => {
+    const info = await analyze({ "rust-toolchain": '[toolchain]\nchannel = "nightly-2024-01-01"\n' });
+
+    expect(info.languageVersions).toEqual([
+      { language: "rust", version: "nightly-2024-01-01", source: "rust-toolchain channel" },
+    ]);
+  });
+
+  it("reads no version off a TOML-form rust-toolchain with no channel key", async () => {
+    // The section header is not a plain-form channel line.
+    const info = await analyze({ "rust-toolchain": '[toolchain]\ncomponents = ["rustfmt"]\n' });
 
     expect(info.languageVersions).toBeUndefined();
   });
@@ -926,6 +991,15 @@ describe("formatRepoSummary", () => {
         "Legacy stacks: cobol, abap",
       ].join("\n"),
     );
+  });
+
+  it("prints an object built to the 1.18 shape, with no legacyStacks, without throwing", () => {
+    // `RepoInfo` is public: a consumer's object from before the field existed
+    // reaches formatRepoSummary through createEngine().
+    const older: Partial<RepoInfo> = emptyInfo("/repo", { languages: ["go"] });
+    delete older.legacyStacks;
+
+    expect(formatRepoSummary(older as RepoInfo)).toBe("Languages: go");
   });
 
   it("says so when there is nothing to report", () => {

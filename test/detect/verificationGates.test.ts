@@ -36,6 +36,15 @@ function detection(over: PersistedDetection = {}): PersistedDetection {
 /** Languages whose gate row deliberately names no lint command (REQ-FLOW-182). */
 const LINTLESS_LANGUAGES: ReadonlySet<string> = new Set(["cpp"]);
 
+/**
+ * The extra detection a language's test row needs to resolve (REQ-FLOW-182):
+ * C/C++ names `ctest` only beside a root CMakeLists.txt, which detection
+ * records as the `ctest` test framework.
+ */
+const ROW_EVIDENCE: Readonly<Record<string, PersistedDetection>> = {
+  cpp: { testFrameworks: ["ctest"] },
+};
+
 /** The four managers with their run and exec spellings — the whole table, enumerated. */
 const MANAGERS = [
   { name: "npm", run: "npm run", exec: "npx --no" },
@@ -280,8 +289,14 @@ describe("verificationCommandsFor — language ranking", () => {
     // answer instead of its own commands and fails here — which is the skew a
     // user would otherwise discover as a charter naming no test command.
     for (const language of DETECTABLE_LANGUAGES) {
-      const alone = verificationCommandsFor(detection({ languages: [language] }));
-      const behindNoise = verificationCommandsFor(detection({ languages: ["klingon", language] }));
+      // TEST CHANGE (x-lang-table r1, S45): a row whose test command needs
+      // more evidence than the language name is given that evidence here; the
+      // no-evidence side is pinned in its own case below.
+      const evidence = ROW_EVIDENCE[language] ?? {};
+      const alone = verificationCommandsFor(detection({ languages: [language], ...evidence }));
+      const behindNoise = verificationCommandsFor(
+        detection({ languages: ["klingon", language], ...evidence }),
+      );
 
       expect(alone.test, language).toBeTypeOf("string");
       // TEST CHANGE (x-lang-table, REQ-FLOW-182): `cpp` is the first row with
@@ -356,22 +371,52 @@ describe("verificationCommandsFor — language ranking", () => {
     });
   });
 
-  it("resolves C/C++ to its test command alone and leaves lint unresolved (REQ-FLOW-182)", () => {
-    expect(verificationCommandsFor(detection({ languages: ["cpp"] }))).toEqual({
-      test: "ctest --test-dir build",
-      all: "ctest --test-dir build",
-    });
+  it("resolves C/C++ to CTest alone, only with CMake evidence, and leaves lint unresolved (REQ-FLOW-182)", () => {
+    // TEST CHANGE (x-lang-table r1, S45): the row was `ctest --test-dir build`
+    // on the language alone. CTest then exits 0 with no test registered, so the
+    // command now carries `--no-tests=error` and needs CMake evidence.
+    const ctest = "ctest --test-dir build --no-tests=error";
+    expect(
+      verificationCommandsFor(detection({ languages: ["cpp"], testFrameworks: ["ctest"] })),
+    ).toEqual({ test: ctest, all: ctest });
 
-    const gates = verificationGatesFor(detection({ languages: ["cpp"] }));
+    const gates = verificationGatesFor(detection({ languages: ["cpp"], testFrameworks: ["ctest"] }));
     expect(gates.lint).toBe(unresolvedGate("lint"));
     expect(gates.typecheck).toBe(unresolvedGate("typecheck"));
-    expect(gates.all).toBe("ctest --test-dir build");
+    expect(gates.all).toBe(ctest);
   });
 
-  it("puts C/C++ ahead of a companion Python binding, and Perl behind Rust", () => {
+  it("leaves the C/C++ test gate unresolved without CMake evidence (meson, autotools)", () => {
+    // CTest outside script mode exits 0 on no tests, and meson or autotools
+    // write none: naming it there would be a gate that passes on nothing.
+    expect(verificationCommandsFor(detection({ languages: ["cpp"] }))).toEqual({});
+    expect(
+      verificationCommandsFor(detection({ languages: ["cpp"], testFrameworks: ["pytest"] })),
+    ).toEqual({});
+
+    const gates = verificationGatesFor(detection({ languages: ["cpp"] }));
+    expect(gates.test).toBe(unresolvedGate("test"));
+    expect(gates.all).toBe(unresolvedGate("full-gate"));
+  });
+
+  it("ranks C/C++ last, so a companion language keeps its gates, and Perl behind Rust", () => {
+    // TEST CHANGE (x-lang-table r1, S44): this case pinned C/C++ AHEAD of
+    // Python, the builder's choice; sign-off S44 ranks C/C++ last instead.
+    // A Python package building a native extension carries a root
+    // CMakeLists.txt (scikit-build) or meson.build (meson-python).
     expect(verificationCommandsFor(detection({ languages: ["python", "cpp"] })).test).toBe(
-      "ctest --test-dir build",
+      "pytest",
     );
+    expect(
+      verificationCommandsFor(
+        detection({ languages: ["cpp", "python"], testFrameworks: ["ctest", "pytest"] }),
+      ).test,
+    ).toBe("pytest");
+    expect(
+      verificationCommandsFor(
+        detection({ languages: ["cpp", "typescript"], testFrameworks: ["ctest"], packageScripts: [] }),
+      ).typecheck,
+    ).toBe("npx --no tsc --noEmit");
     expect(verificationCommandsFor(detection({ languages: ["perl", "rust"] })).test).toBe(
       "cargo test",
     );
