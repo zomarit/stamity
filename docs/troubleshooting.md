@@ -44,7 +44,7 @@ doctor
   ok    legacy-files         no legacy prompt file or companion an earlier release wrote is left untracked
   ok    autonomy-deploying   no .github/workflows folder, so no workflow deploys on a push
   ok    model-pins           no selected client lists its models (claude runs on its family aliases)
-  ok    invariants           invariants 1.3.1 · ratified 2026-08-31 · last amended 2026-10-21
+  ok    invariants           invariants 1.4.0 · ratified 2026-08-31 · last amended 2026-11-09
 
 drift: clean — every generated file matches what a sync would write
 

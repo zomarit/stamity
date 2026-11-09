@@ -694,7 +694,8 @@ describe("corpus charter", () => {
     expect(one.replace(/\s+/g, " ")).toContain(
       "That report is the whole exit — no context block, no summary framed for closing beside it. " +
         "Where no floor applies, caution matches the real risk: a step that does not apply is skipped " +
-        "in one line, and only what cannot be undone or reaches people outside the repository waits for a person.",
+        "in one line, and only what cannot be undone, reaches people outside the repository, or this setup " +
+        "keeps for a person waits for one.",
     );
   });
 

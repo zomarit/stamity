@@ -379,15 +379,17 @@ export const ALWAYS_ON_BUDGET_LINES: Readonly<Record<Tool, number>> = {
 // at 95 (the version line and the amended date keep their widths). Net +72
 // bytes. The same +72 lands in the charter-alone figure below, in
 // ALWAYS_ON_CODEX_OVERRIDE_BYTES and in ALWAYS_ON_SHARED_BYTES_WITH_CURSOR.
-// 5_682 -> 6_015 on 2026-11-09, plan 024 file 1, unit k-charter (invariants
+// 5_682 -> 6_042 on 2026-11-09, plan 024 file 1, unit k-charter (invariants
 // 1.4.0): invariant 1's caution sentence and the Conditional layer's multi-part
 // bullet, four new lines (ALWAYS_ON_BUDGET_LINES moved +4 with them), and the
 // version line's amended date at the same width. The plain-words line is now
 // the `${STAMITY:COMMUNICATION_STYLE}` token, which renders the same sentence
-// for the golden's unset style, so it moves no byte. Net +333. The same +333
-// lands in the charter-alone figure below, in ALWAYS_ON_CODEX_OVERRIDE_BYTES
-// and in ALWAYS_ON_SHARED_BYTES_WITH_CURSOR.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 6_015;
+// for the golden's unset style, so it moves no byte. Net +360: +333 as built,
+// then +27 when the fix round (review/24, S28) widened the caution sentence's
+// last clause to the acts this setup keeps for a person, on the same two
+// lines. The same +360 lands in the charter-alone figure below, in
+// ALWAYS_ON_CODEX_OVERRIDE_BYTES and in ALWAYS_ON_SHARED_BYTES_WITH_CURSOR.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 6_042;
 
 /**
  * Bytes of the same shared file when codex is NOT selected — the charter alone.
@@ -425,10 +427,10 @@ export const ALWAYS_ON_SHARED_BYTES_WITH_CODEX = 6_015;
 // 5_610 -> 5_682 on 2026-10-21, unit u4-charter: the plain-words lines,
 // invariant 5's four lines (invariants 1.3.1), the maturity line and the three
 // trims, the same +72 as above and the whole of the change here.
-// 5_682 -> 6_015 on 2026-11-09, unit k-charter: invariant 1's caution sentence
-// and the multi-part bullet (invariants 1.4.0), the same +333 as above and the
+// 5_682 -> 6_042 on 2026-11-09, unit k-charter: invariant 1's caution sentence
+// and the multi-part bullet (invariants 1.4.0), the same +360 as above and the
 // whole of the change here.
-export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 6_015;
+export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 6_042;
 
 /**
  * Bytes of the Codex-only root `AGENTS.override.md` on the golden selection —
@@ -472,11 +474,11 @@ export const ALWAYS_ON_SHARED_BYTES_WITHOUT_CODEX = 6_015;
 // override carries the same +72 bytes (invariants 1.3.1); the line count holds
 // at 407, the charter's three new lines paid by its three trims.
 // 25_872 -> 26_082 on 2026-11-09: the security rule's production-only gate states its condition, plan 024 k-security-gate.
-// 26_082 -> 26_415 on 2026-11-09, unit k-charter: the charter half of the
-// override carries the same +333 bytes (invariants 1.4.0); the line count moves
+// 26_082 -> 26_442 on 2026-11-09, unit k-charter: the charter half of the
+// override carries the same +360 bytes (invariants 1.4.0); the line count moves
 // 410 -> 414 with the charter's four new lines (S13: recomputed at integration
 // over the combined tree, the security rule's change included).
-export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 26_415;
+export const ALWAYS_ON_CODEX_OVERRIDE_BYTES = 26_442;
 
 /**
  * Physical lines Cursor's cloud block adds to the shared root `AGENTS.md` when
@@ -508,9 +510,9 @@ export const ALWAYS_ON_CURSOR_BLOCK_LINES = 14;
 // block's 866 bytes at the golden's `npx -y @zomarit/stamity@1.0.0-golden`.
 // 6_476 -> 6_548 on 2026-10-21, unit u4-charter: the charter's +72 bytes
 // (invariants 1.3.1), now 5_682 of charter plus the unchanged 866 of the block.
-// 6_548 -> 6_881 on 2026-11-09, unit k-charter: the charter's +333 bytes
-// (invariants 1.4.0), now 6_015 of charter plus the unchanged 866 of the block.
-export const ALWAYS_ON_SHARED_BYTES_WITH_CURSOR = 6_881;
+// 6_548 -> 6_908 on 2026-11-09, unit k-charter: the charter's +360 bytes
+// (invariants 1.4.0), now 6_042 of charter plus the unchanged 866 of the block.
+export const ALWAYS_ON_SHARED_BYTES_WITH_CURSOR = 6_908;
 
 /**
  * The composite always-on line count one client pays for a plan under a

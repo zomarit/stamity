@@ -78,10 +78,15 @@ const INVARIANTS_HASHES: Record<string, string> = {
   "1.3.1": "c21ecad95adac354f4efcaa5ee842fcfed998071d513ae5e6b74846a26c7cfcd",
   // Appended 2026-11-09 (plan 024 file 1, unit k-charter; REQ-FLOW-173): a MINOR. Invariant 1 gains
   // a last sentence on two new lines: where no floor applies, caution matches the real risk, a step
-  // that does not apply is skipped in one line, and only what cannot be undone or reaches people
-  // outside the repository waits for a person. The floors before it are unchanged, word for word.
-  // The 1.3.1 row above stays as the record.
-  "1.4.0": "44f088eee07f438cad22055bd5059d52d48ea7c44fd03de886d00b90a812560c",
+  // that does not apply is skipped in one line, and only what cannot be undone, reaches people
+  // outside the repository, or this setup keeps for a person waits for one. The floors before it are
+  // unchanged, word for word. The 1.3.1 row above stays as the record.
+  // TEST CHANGE, justified (2026-11-09, k-charter fix round 1, review/24, sign-off S28): the last
+  // clause widens to the acts this setup keeps for a person (the guard's ask list), so an agent does
+  // not read the charter's "only" as leave to take a reversible person-only act itself. Same 1.4.0,
+  // same change, nothing released in between, so the row moves rather than a 1.4.1: 44f088ee… ->
+  // 9e8cd3d4….
+  "1.4.0": "9e8cd3d46c8be5b6827442c472e033ae17237f44edc85dcb04a39926d7a9cd5e",
 };
 
 /** The rendered version line, template form and emitted form alike. */
