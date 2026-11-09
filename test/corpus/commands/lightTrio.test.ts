@@ -875,13 +875,20 @@ describe("debug — hard gates before any fix", () => {
     const file = await load("commands/st-debug.md");
     const text = flow(file);
 
-    // Step 3 names both routes and the facts that choose between them: an exact input and
-    // expected output takes the in-process route (gate 2's failing test is the reproduction,
+    // Step 3 names both routes and the facts that choose between them: an input the report or the
+    // code gives takes the in-process route first (gate 2's failing test is the reproduction,
     // no question to the user); anything needing the user's environment still stops.
     expect(text).toMatch(/\*\*Reproduce\.\*\* Two routes/);
     expect(text).toMatch(/in-process/i);
     // REQ-FLOW-009: the actual output is part of the entry condition, and the test gate's state decides runnability.
-    expect(text).toMatch(/exact input, the expected output and the actual output/i);
+    // TEST CHANGE, justified (k-debug-verify, plan 024 file 1, REQ-FLOW-173): the pin read "exact input, the
+    // expected output and the actual output", the report alone choosing the route. The in-process route now
+    // comes first whenever the repository can drive the defect, the input coming from the report or the code;
+    // the run still states input, expected and actual output, so the pin reads the new entry sentence whole.
+    expect(text).toMatch(/Two routes; in-process comes first whenever the repository can drive the defect/);
+    expect(text).toMatch(
+      /the report or the code gives an input that should show the defect, the run states that input, the expected output and the actual output/,
+    );
     expect(text).toMatch(/the charter's test gate is runnable here: neither `unknown` nor `not-runnable`/);
     expect(text).toMatch(
       /a failure for the stated reason on both consecutive runs is the reproduction: no stop, and no question to the user/i,
@@ -889,9 +896,14 @@ describe("debug — hard gates before any fix", () => {
     // A test that does not fail twice for the stated reason sends the run to the user, never into another round.
     expect(text).toMatch(/not a reproduction, and the run takes the user route — never another in-process round/);
     expect(text).not.toMatch(/the round goes back to step 1/);
+    // TEST CHANGE, justified (k-debug-verify, plan 024 file 1, REQ-FLOW-173): the pin read the user route's
+    // closing words alone, after "anything else, or a defect that". The user route now names its three
+    // triggers, so the pin reads them all. Edge case: a report with no input and no code path reaching the
+    // defect takes the user route.
     expect(text).toMatch(
-      /needs the user's environment, data, device, account, network, traffic or timing\. Stop and wait/,
+      /that test not failing so on both runs; a report with no input and no code path reaching the defect; or a defect that needs the user's environment, data, device, account, network, traffic or timing\. Stop and wait/,
     );
+    expect(text).not.toMatch(/anything else, or a defect that needs/);
     // The user route keeps the words the existing stall case and the floor cases rely on.
     expect(text).toMatch(/this step is not simulated/i);
     // Edge case: instrumentation is skipped on the in-process route unless the test alone

@@ -92,19 +92,19 @@ An attended run's head stays the three lines above.
    the changed-file list, the instrumented sites and its lint and typecheck results as the whole
    return. A brief that leaves the exception unstated promises a unit it does not carry, and the
    spawn answers it with `BLOCKED_AMBIGUITY`. The same exception covers the strip at step 8.
-3. **Reproduce.** Two routes; the report decides which, and the first response names it
-   with the fact that chose it.
-   - **In-process** — the report states an exact input, the expected output and the actual
-     output, and the charter's test gate is runnable here: neither `unknown` nor
-     `not-runnable`. `implementer` writes gate 2's failing test — that input, that
-     expected output, nothing else — under step 2's exception with a test delta as its
-     only change; `test-runner` runs it twice. A failure for the stated reason on both
-     consecutive runs is the reproduction: no stop, and no question to the user. A test
-     that does not fail for the stated reason on both runs is not a reproduction, and the
+3. **Reproduce.** Two routes; in-process comes first whenever the repository can drive the
+   defect, and the first response names the route taken with the fact that chose it.
+   - **In-process** — the report or the code gives an input that should show the defect, the
+     run states that input, the expected output and the actual output, and the charter's test
+     gate is runnable here: neither `unknown` nor `not-runnable`. `implementer` writes gate 2's
+     failing test — that input, that expected output, nothing else — under step 2's exception
+     with a test delta as its only change; `test-runner` runs it twice. A failure for the stated
+     reason on both consecutive runs is the reproduction: no stop, and no question to the user.
+     A test that does not fail for the stated reason on both runs is not a reproduction, and the
      run takes the user route — never another in-process round.
-   - **User** — anything else, or a defect that needs the user's environment, data,
-     device, account, network, traffic or timing. Stop and wait. The user runs the
-     scenario and returns the output.
+   - **User** — that test not failing so on both runs; a report with no input and no code path
+     reaching the defect; or a defect that needs the user's environment, data, device, account,
+     network, traffic or timing. Stop and wait. The user runs the scenario and returns the output.
      When run unattended (`--unattended` or `STAMITY_UNATTENDED`, `--attended` beating the
      variable, as Unattended above reads them), nobody is there to run the scenario: strip the
      instrumentation (step 8), then take the skill's ending as Unattended above does, `morning.md`

@@ -18,8 +18,10 @@ touched.
 How: run the repo's duplication detector when one is configured; otherwise
 compare normalized blocks of 30 or more lines across the changed files and their
 sibling modules.
-Threshold: no duplicated block above 30 lines. The three largest pairs are cited
-with `file:line` on both sides.
+Threshold: the duplication limit the repo declares (its detector's configuration
+or a written norm); with none declared, report the measured block sizes as
+evidence and record the row `not-applicable`, citing the absent limit as the
+detection fact. The three largest pairs are cited with `file:line` on both sides.
 
 **`maint-size-outliers`** — files and functions far outside this repo's own
 distribution.
@@ -43,8 +45,10 @@ are not attributed to this change.
 **`maint-dependency-lag`** — release lag of direct dependencies.
 How: compare each direct dependency's resolved version against its latest
 published release and report the lag in major, minor, and patch steps.
-Threshold: no direct dependency more than one major behind. Advisories and
-licences belong to the dep-audit skill; this row counts lag only.
+Threshold: the lag limit the repo declares (its update-bot configuration or a
+written norm); with none declared, report each lag as evidence and record the
+row `not-applicable`, citing the absent limit as the detection fact. Advisories
+and licences belong to the dep-audit skill; this row counts lag only.
 
 **`maint-comment-drift`** — prose contradicted by the code it sits on.
 How: census comments naming a symbol, path, parameter, or number absent from the
