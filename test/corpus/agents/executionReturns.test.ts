@@ -186,8 +186,14 @@ describe("st-work — an empty test-runner return is read from its report", () =
     const contract = section(await load("commands/st-work.md"), "Return contract");
     const never = contract.slice(contract.indexOf("**Never digested:**"), contract.indexOf("**Report path:**"));
     expect(never).toContain("a BLOCKED_* return and a red test-runner return");
+    // TEST CHANGE, justified (2026-11-09, c-testrunner-report round 1, review/19, review/21,
+    // review/23): the old pin read the token without any step that makes one; the brief now names
+    // a fresh random token per spawn, kept out of every file a builder's shell can read.
     expect(never).toContain(
-      "An empty or unreadable test-runner return is read from its report only if it opens `spawn: <the fresh token its brief named>`",
+      "Each test-runner brief names a fresh random spawn token made for that spawn alone, new on every retry, held only in the orchestrator's context and that brief, never written to the run record or any file a builder's shell can read before the report is read.",
+    );
+    expect(never).toContain(
+      "An empty or unreadable test-runner return is read from its report only if its first line is `spawn: <that exact token>`",
     );
     expect(never).toContain("else each gate reads `unknown` and the failure ladder runs");
     expect(never).toContain("Open a report when a digest is not enough");

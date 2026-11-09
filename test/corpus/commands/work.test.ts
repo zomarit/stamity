@@ -442,11 +442,16 @@ describe("/st-work — body skeleton", () => {
   // Moved 2026-11-09 (c-testrunner-report, REQ-FLOW-167; sign-off S19), 870 to 732 characters:
   // the Never-digested bullet bought the rule that reads an empty test-runner return from its
   // report under the spawn token (139 characters). The line budget did not move.
-  it("leaves room under both budgets: 732 characters before the cut, 15 lines under the cap", async () => {
+  // Moved 2026-11-09 (c-testrunner-report round 1, ledger rows review/19, review/21 and review/23),
+  // 732 to 481 characters: the same bullet bought the sentence that makes each test-runner brief
+  // name a fresh random spawn token kept out of the run record and every builder-readable file
+  // (251 characters), so an empty return can be matched and a planted report cannot. The line
+  // budget did not move.
+  it("leaves room under both budgets: 481 characters before the cut, 15 lines under the cap", async () => {
     const file = await workFile;
     const cut = file.raw.indexOf("\n### Specialist pass\n");
     expect(cut).toBeGreaterThan(-1);
-    expect(REATTACH_BUDGET_CHARS - cut).toBeGreaterThanOrEqual(732);
+    expect(REATTACH_BUDGET_CHARS - cut).toBeGreaterThanOrEqual(481);
     const bodyLines = file.parsed.body.replace(/\r?\n$/, "").split(/\r?\n/).length;
     expect(BODY_LINE_CAP - bodyLines).toBeGreaterThanOrEqual(15);
   });

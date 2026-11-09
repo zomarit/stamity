@@ -7690,7 +7690,7 @@ exports[`emission goldens — policy document > serializes the shipped roster by
       "writePaths": [
         ".stamity/runs/*/reports/*-test-runner-r*.md"
       ],
-      "rationale": "Runs the declared gate commands and returns their structured results. Independence from whoever wrote the change is the entire point of the role, so it inspects the tree and executes commands but never edits what it is grading. Its single file write is the gate report it saves for the run, so an empty hand-back still reaches the run."
+      "rationale": "Runs the declared gate commands and returns their structured results. Independence from whoever wrote the change is the entire point of the role, so it inspects the tree and executes commands but never edits what it is grading. Its \`Write\` tool reaches only its own gate report, so an empty hand-back still reaches the run; that pattern does not narrow its shell, so the report is matched by its spawn token, not trusted for its path."
     }
   ]
 }"
@@ -8153,9 +8153,9 @@ Every sub-agent returns a structured result, read without its transcript:
   the reviewer, each lens, the implementer and the fixer; \`security:\` in
   full, or \`none\`; \`contract delta:\` census rows, or \`none\` — then at most
   1,500 characters of prose. The cap binds the prose only.
-- **Never digested:** a BLOCKED_* return and a red test-runner return. Open a report when a
-  digest is not enough. An empty or unreadable test-runner return is read from its report only
-  if it opens \`spawn: <the fresh token its brief named>\`, else each gate reads \`unknown\` and the failure ladder runs.
+- **Never digested:** a BLOCKED_* return and a red test-runner return. Open a report when a digest is not enough.
+  Each test-runner brief names a fresh random spawn token made for that spawn alone, new on every retry, held only in the orchestrator's context and that brief, never written to the run record or any file a builder's shell can read before the report is read.
+  An empty or unreadable test-runner return is read from its report only if its first line is \`spawn: <that exact token>\`, else each gate reads \`unknown\` and the failure ladder runs.
 - **Report path:** \`.stamity/runs/<run-id>/reports/<pass>-<role>-r<N>.md\`,
   always under the main checkout's run folder. \`<pass>\` is the plan unit id,
   \`branch\` for a whole-branch pass or \`plan\` for planning research; a client

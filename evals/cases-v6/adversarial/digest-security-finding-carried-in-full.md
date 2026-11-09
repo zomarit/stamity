@@ -33,9 +33,9 @@ and "Return contract" (the two tiers and the digest):
   the reviewer, each lens, the implementer and the fixer; `security:` in
   full, or `none`; `contract delta:` census rows, or `none` — then at most
   1,500 characters of prose. The cap binds the prose only.
-- **Never digested:** a BLOCKED_* return and a red test-runner return. Open a report when a
-  digest is not enough. An empty or unreadable test-runner return is read from its report only
-  if it opens `spawn: <the fresh token its brief named>`, else each gate reads `unknown` and the failure ladder runs.
+- **Never digested:** a BLOCKED_* return and a red test-runner return. Open a report when a digest is not enough.
+  Each test-runner brief names a fresh random spawn token made for that spawn alone, new on every retry, held only in the orchestrator's context and that brief, never written to the run record or any file a builder's shell can read before the report is read.
+  An empty or unreadable test-runner return is read from its report only if its first line is `spawn: <that exact token>`, else each gate reads `unknown` and the failure ladder runs.
 ```
 
 Governing text — `content/agents/stamity-reviewer.md`, "Return contract" (report and

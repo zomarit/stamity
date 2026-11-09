@@ -114,10 +114,14 @@ export interface AgentPolicyRow {
 }
 
 /**
- * The report files one verdict role, or the test-runner, may write: its own, in
- * any run, and no other role's. One pattern per role rather than one for the
- * whole folder, so a role steered by text in the code under review cannot
- * overwrite another role's findings or gate rows before they reach the ledger.
+ * The report files one verdict role, or the test-runner, may write with the
+ * `Write` tool: its own, in any run, and no other role's. One pattern per role
+ * rather than one for the whole folder, so a verdict role steered by text in the
+ * code under review cannot overwrite another role's findings before they reach
+ * the ledger. The pattern bounds the `Write` tool only, never a shell: the
+ * test-runner, the implementer and the fixer hold `execute`, which the guard
+ * does not narrow, so any of them can still write any report. The test-runner's
+ * report is trusted through the spawn token on its first line, not this pattern.
  *
  * The isolation between roles is enforced by the generated guard's round-number
  * rule, not by the pass slug: in a pattern's final segment the LAST `*` — the
@@ -223,7 +227,7 @@ export const AGENT_POLICY_ROSTER: readonly AgentPolicyRow[] = [
     allow: ["read", "execute"],
     writePaths: verdictReportWritePaths("test-runner"),
     rationale:
-      "Runs the declared gate commands and returns their structured results. Independence from whoever wrote the change is the entire point of the role, so it inspects the tree and executes commands but never edits what it is grading. Its single file write is the gate report it saves for the run, so an empty hand-back still reaches the run.",
+      "Runs the declared gate commands and returns their structured results. Independence from whoever wrote the change is the entire point of the role, so it inspects the tree and executes commands but never edits what it is grading. Its `Write` tool reaches only its own gate report, so an empty hand-back still reaches the run; that pattern does not narrow its shell, so the report is matched by its spawn token, not trusted for its path.",
   },
   {
     agentId: "stamity-spec-author",

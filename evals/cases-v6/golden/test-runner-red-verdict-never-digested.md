@@ -83,9 +83,9 @@ is never digested):
 
 [...]
 
-- **Never digested:** a BLOCKED_* return and a red test-runner return. Open a report when a
-  digest is not enough. An empty or unreadable test-runner return is read from its report only
-  if it opens `spawn: <the fresh token its brief named>`, else each gate reads `unknown` and the failure ladder runs.
+- **Never digested:** a BLOCKED_* return and a red test-runner return. Open a report when a digest is not enough.
+  Each test-runner brief names a fresh random spawn token made for that spawn alone, new on every retry, held only in the orchestrator's context and that brief, never written to the run record or any file a builder's shell can read before the report is read.
+  An empty or unreadable test-runner return is read from its report only if its first line is `spawn: <that exact token>`, else each gate reads `unknown` and the failure ladder runs.
 ```
 
 Scenario state — your dispatch and the pass you have just run, given to you as fact:
