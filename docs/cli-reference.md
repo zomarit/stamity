@@ -31,7 +31,7 @@ mistake.
 | `stamity learn` | plumbing | writes | capture a learning through the engine's write gates, or read them through its screen (plumbing) |
 | `stamity handoff` | plumbing | writes | prepare, resume, list, complete and prune handoffs through the engine's gates (plumbing) |
 | `stamity ledger` | plumbing | writes | append findings to a run's ledger, close its rows, print its resume card, and read and write the deferral inbox (plumbing) |
-| `stamity gate` | plumbing | writes | classify a change, scan its added lines or an outbound text for secrets, or check an unattended start (plumbing) |
+| `stamity gate` | plumbing | writes | classify a change, scan its added lines or an outbound text for secrets, check an unattended start, or digest held test files (plumbing) |
 | `stamity plan` | plumbing | reads only | check that plans are ready for an unattended start (plumbing) |
 | `stamity run` | plumbing | writes | put an unattended run on a branch of its own, and push its work there (plumbing) |
 
@@ -339,7 +339,7 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 ## `stamity gate`
 
-classify a change, scan its added lines or an outbound text for secrets, or check an unattended start (plumbing)
+classify a change, scan its added lines or an outbound text for secrets, check an unattended start, or digest held test files (plumbing)
 
 Plumbing. This verb is not listed in `stamity --help` because its caller is generated
 agent content rather than a person. Hidden is not secret — `stamity gate --help` prints
@@ -350,12 +350,13 @@ May write when it runs, so `--dry-run` previews any change without making it.
 
 | Argument | What it is |
 |---|---|
-| `<subcommand>` | which gate action to run — one of `classify`, `scan`, `preflight` |
+| `<subcommand>` | which gate action to run — one of `classify`, `scan`, `preflight`, `held` |
 
 | Flag | What it does | Default |
 |---|---|---|
 | `--base <ref>` | the base the change is read against (default: HEAD, reported as no base) | — |
-| `--paths <path...>` | classify these paths by path rules instead of reading the change from git | — |
+| `--paths <path...>` | classify these paths by path rules instead of reading the change from git; held: the files to digest, from the repository root | — |
+| `--expect <digest>` | held: the digest the files must still give; any other exits 1 | — |
 | `--text <file>` | scan this outbound text file instead of the change (with --label) | — |
 | `--label <label>` | what the --text file is — one of `pr-body`, `morning`, `reply`, `comment` | — |
 | `--unattended` | preflight: check that an unattended run may start here, the one mode it checks | — |

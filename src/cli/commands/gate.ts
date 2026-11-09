@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readFileSync, readSync, realpathSync, rmSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -217,6 +217,18 @@ import type { GitRunner } from "../../workspace/git.ts";
  * `git-record`, naming the error code alone (review/36). The JSON's `gitRecord`
  * is true only for a passing record. `--dry-run` writes and removes nothing.
  *
+ * **`gate held --paths <files...> [--expect <digest>]`** (REQ-FLOW-171) is the
+ * digest of the tests a tests-only dispatch wrote, so a later pass can prove a
+ * builder left them unchanged ({@link runHeld}). The paths read from the
+ * repository root, as `classify --paths` names them; an absolute path, one
+ * that climbs out with `..`, an empty one and no `--paths` at all are usage
+ * errors, exit 2, before anything is read. The digest is `sha256:` over the
+ * sorted `(path, bytes)` pairs, each framed with its length; every file's own
+ * `sha256` is listed beside it, so a record can name the one that moved. A
+ * link, on the file or on a folder above it, is never followed: that file reads
+ * `sha256: null`, as a missing one does, and either exits 1. So does a digest
+ * other than `--expect`'s. It writes nothing.
+ *
  * **Why the subcommand is positional**, as in `ledger.ts`: the funnel
  * (`../kit/program.ts`) owns the exit codes and the one JSON document through
  * the action it registers on THIS command, and a commander sub-command would run
@@ -227,6 +239,7 @@ import type { GitRunner } from "../../workspace/git.ts";
 const CLASSIFY = "classify";
 const SCAN = "scan";
 const PREFLIGHT = "preflight";
+const HELD = "held";
 
 export { toProjectPath } from "../engine/changeRange.ts";
 
@@ -1825,16 +1838,147 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
   };
 }
 
+/** A held file larger than this is not read: it reads `sha256: null` and exits 1, never a partial digest. */
+const HELD_FILE_MAX_BYTES = 16 * 1024 * 1024;
+
+/** A digest as `gate held` prints it, the one shape `--expect` takes. */
+const HELD_DIGEST = /^sha256:[0-9a-f]{64}$/i;
+
+/** `--expect`'s value, lower-cased; any other shape is refused by the parser, exit 2. */
+function parseDigest(value: string): string {
+  if (!HELD_DIGEST.test(value)) throw new InvalidArgumentError("a digest reads sha256: and 64 hex digits, as gate held prints it.");
+  return value.toLowerCase();
+}
+
+/**
+ * A `--paths` entry's segments below the repository root, `.` and empty ones
+ * dropped. A backslash separates on win32 only; elsewhere it is a filename
+ * character, as git reads it.
+ */
+function heldSegments(path: string, windows: boolean): string[] {
+  return path.split(windows ? /[\\/]/ : "/").filter((segment) => segment !== "" && segment !== ".");
+}
+
+/**
+ * Why a `--paths` entry names no file below the repository root, or
+ * `undefined` when it does. A `..` is refused whichever separator carries it,
+ * so no platform reads a climb the other would not.
+ */
+function heldPathRefusal(path: string): string | undefined {
+  if (path.includes("\0")) return "holds a NUL byte";
+  if (isAbsolute(path) || /^[\\/]/.test(path) || /^[A-Za-z]:/.test(path)) return "is absolute";
+  if (path.split(/[\\/]/).includes("..")) return "climbs out with ..";
+  if (heldSegments(path, true).length === 0) return "names no file";
+  return undefined;
+}
+
+/**
+ * One held file's bytes, or why it has none. Every folder on the way is read
+ * by `lstat`, so a link anywhere on the path is named and never followed; the
+ * file itself is opened with no-follow by {@link readRegular}.
+ */
+function readHeldFile(top: string, segments: readonly string[]): { body: Buffer } | { problem: string } {
+  for (let depth = 1; depth <= segments.length; depth += 1) {
+    const at = segments.slice(0, depth);
+    let stat: ReturnType<typeof lstatSync>;
+    try {
+      stat = lstatSync(join(top, ...at));
+    } catch (err) {
+      const code = (err as { code?: unknown }).code;
+      return { problem: code === "ENOENT" || code === "ENOTDIR" ? "is missing" : "could not be read" };
+    }
+    if (stat.isSymbolicLink()) {
+      return { problem: depth === segments.length ? "is a link, never followed" : `lies under the link ${at.join("/")}, never followed` };
+    }
+    if (depth < segments.length && !stat.isDirectory()) return { problem: "is missing" };
+    if (depth === segments.length) {
+      if (!stat.isFile()) return { problem: "is not a regular file" };
+      if (stat.size > HELD_FILE_MAX_BYTES) return { problem: `is over ${HELD_FILE_MAX_BYTES / 1024 / 1024} MiB` };
+    }
+  }
+  const body = readRegular(join(top, ...segments), HELD_FILE_MAX_BYTES, HELD_FILE_MAX_BYTES);
+  return body === undefined ? { problem: "could not be read" } : { body };
+}
+
+/**
+ * `gate held`: the digest of the listed files, read from the repository root.
+ * Each path is framed with its byte length, then its bytes with theirs, or `-`
+ * for a file with none, in byte order of the paths, so the same files give the
+ * same digest in any order and no byte can move between a name and a body
+ * unseen. Exit 1 for any file with no bytes, or a digest other than `--expect`.
+ */
+function runHeld(ctx: CliContext, opts: Record<string, unknown>): CommandResult {
+  const windows = process.platform === "win32";
+  const expected = typeof opts["expect"] === "string" ? opts["expect"] : null;
+  const keys = [...new Set((opts["paths"] as string[]).map((path) => heldSegments(path, windows).join("/")))].toSorted((a, b) =>
+    Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8")),
+  );
+  let top: string;
+  try {
+    const runner = gitCheckRunner({ timeoutMs: GATE_GIT_TIMEOUT_MS, maxBuffer: GATE_GIT_MAX_BUFFER });
+    const cwd = ctx.app.runtime.cwd;
+    const depth = heldSegments(readCwdPrefix(runner, cwd), false).length;
+    let start = cwd;
+    try {
+      start = realpathSync(cwd);
+    } catch {
+      // git answered from this cwd, so it exists; the lexical form walks the same steps.
+    }
+    top = resolve(start, ...Array.from({ length: depth }, () => ".."));
+  } catch (err) {
+    if (!(err instanceof GitReadError)) throw err;
+    const reason = sanitizeLabel(`the repository root could not be read (${describeGitFailure(err)}), so no digest is given`);
+    ctx.io.err(`held failed: ${reason}\n`);
+    return {
+      exitCode: 1,
+      json: { subcommand: HELD, digest: null, paths: keys.map((path) => ({ path: sanitizeLabel(path), sha256: null })), expect: expected, reason },
+    };
+  }
+
+  const digest = createHash("sha256");
+  const problems: string[] = [];
+  const rows = keys.map((key) => {
+    const name = Buffer.from(key, "utf8");
+    digest.update(`${name.length}\n`).update(name);
+    const read = readHeldFile(top, key.split("/"));
+    if ("problem" in read) {
+      digest.update("-\n");
+      problems.push(`${key} ${read.problem}`);
+      return { path: key, sha256: null };
+    }
+    digest.update(`${read.body.length}\n`).update(read.body);
+    return { path: key, sha256: createHash("sha256").update(read.body).digest("hex") };
+  });
+  const held = `sha256:${digest.digest("hex")}`;
+  const reasons = problems.length === 0 ? [] : [`${problems.join("; ")}, so the held tests cannot be proven unchanged`];
+  if (expected !== null && expected !== held) reasons.push(`the digest ${held} does not match the expected ${expected}: a held test changed`);
+  const reason = reasons.length === 0 ? undefined : sanitizeLabel(reasons.join("; "));
+
+  // Paths are the caller's bytes: sanitised where they meet the terminal and the JSON, as classify's are.
+  const shown = rows.map((row) => ({ path: sanitizeLabel(row.path), sha256: row.sha256 }));
+  const verdict = reason !== undefined ? "changed or unreadable" : expected === null ? "no expectation given" : "matches";
+  ctx.io.out(
+    `${[`held: ${held}`, `expect: ${expected ?? "none"}`, `result: ${verdict}`, ...shown.map((row) => `  ${row.sha256 ?? "-"}  ${row.path}`)].join("\n")}\n`,
+  );
+  if (reason !== undefined) ctx.io.err(`held: ${reason}\n`);
+  return {
+    exitCode: reason === undefined ? 0 : 1,
+    json: { subcommand: HELD, digest: held, paths: shown, expect: expected, ...(reason === undefined ? {} : { reason }) },
+  };
+}
+
 /** The options each subcommand takes; any other one given is a usage error, exit 2, before anything is read. */
 const SUBCOMMAND_OPTIONS: Readonly<Record<string, readonly string[]>> = {
   [CLASSIFY]: ["base", "paths"],
   [SCAN]: ["base", "text", "label"],
   [PREFLIGHT]: ["unattended", "item"],
+  [HELD]: ["paths", "expect"],
 };
 
 const OPTION_FLAGS: Readonly<Record<string, string>> = {
   base: "--base",
   paths: "--paths",
+  expect: "--expect",
   unattended: "--unattended",
   item: "--item",
   text: "--text",
@@ -1843,20 +1987,25 @@ const OPTION_FLAGS: Readonly<Record<string, string>> = {
 
 export const gateCommand: CommandModule = {
   name: "gate",
-  summary: "classify a change, scan its added lines or an outbound text for secrets, or check an unattended start (plumbing)",
+  summary:
+    "classify a change, scan its added lines or an outbound text for secrets, check an unattended start, or digest held test files (plumbing)",
   hidden: true,
   // review/97: `preflight` writes the git surface's record on a pass, so the verb takes `--dry-run`.
   mutating: true,
 
   configure(cmd: Command): void {
     cmd
-      .addArgument(new Argument("<subcommand>", "which gate action to run").choices([CLASSIFY, SCAN, PREFLIGHT]))
+      .addArgument(new Argument("<subcommand>", "which gate action to run").choices([CLASSIFY, SCAN, PREFLIGHT, HELD]))
       .addOption(
         new Option("--base <ref>", "the base the change is read against (default: HEAD, reported as no base)").argParser(
           parseBaseRef,
         ),
       )
-      .option("--paths <path...>", "classify these paths by path rules instead of reading the change from git")
+      .option(
+        "--paths <path...>",
+        "classify these paths by path rules instead of reading the change from git; held: the files to digest, from the repository root",
+      )
+      .addOption(new Option("--expect <digest>", "held: the digest the files must still give; any other exits 1").argParser(parseDigest))
       .option("--text <file>", "scan this outbound text file instead of the change (with --label)")
       .addOption(new Option("--label <label>", "what the --text file is").choices([...TEXT_LABELS]))
       .option("--unattended", "preflight: check that an unattended run may start here, the one mode it checks")
@@ -1886,12 +2035,25 @@ export const gateCommand: CommandModule = {
         if (subcommand === PREFLIGHT && given["unattended"] !== true) {
           command.error("error: preflight checks an unattended start only; pass --unattended", { exitCode: 2 });
         }
+        if (subcommand === HELD) {
+          const paths = given["paths"] as string[] | undefined;
+          if (paths === undefined) command.error("error: held needs --paths <files...>, relative to the repository root", { exitCode: 2 });
+          for (const path of paths ?? []) {
+            const why = heldPathRefusal(path);
+            if (why !== undefined) {
+              command.error(`error: --paths names files relative to the repository root, and ${sanitizeLabel(JSON.stringify(path))} ${why}`, {
+                exitCode: 2,
+              });
+            }
+          }
+        }
       });
   },
 
   run(ctx, opts, args): Promise<CommandResult> {
     // Commander's `choices()` already refused every other subcommand at parse time.
     if (args[0] === PREFLIGHT) return runPreflightVerb(ctx, opts);
+    if (args[0] === HELD) return Promise.resolve(runHeld(ctx, opts));
     if (args[0] === SCAN && typeof opts["text"] === "string") {
       return Promise.resolve(runTextScan(ctx, opts["text"], String(opts["label"])));
     }
