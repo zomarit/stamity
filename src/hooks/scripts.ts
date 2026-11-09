@@ -405,7 +405,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // lines (copilot, generated), past both rows, because the check now reads the line in order, walks up to the folder
   // holding the package.json, and reads wrappers' values, runners and yarn's options. 339,154 + 6,257 = 345,411 bytes;
   // 7,021 + 121 = 7,142 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 345_411, lines: 7_142 },
+  // Moved again 2026-11-09 by the same round (sign-off S64), by what was measured: 345,984 bytes / 7,155 lines (copilot,
+  // generated), past both rows, because a workspace member's install is now checked at its workspace root too.
+  // 345,411 + 573 = 345,984 bytes; 7,142 + 13 = 7,155 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 345_984, lines: 7_155 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -5396,37 +5399,50 @@ function installFolders(line, start, depth = 0) {
 /**
  * The refusal an install through a linked node_modules earns, in every mode (REQ-FLOW-178). From each folder an
  * install starts in, it writes in the nearest folder up holding a package.json or a node_modules, as the managers find
- * it, up to the repository's top (sign-off S54). Null when none of those is a link; a fault of its own is null too, so
- * this check never sends a call to the fail-closed refusal.
+ * it, up to the repository's top (sign-off S54), and a workspace member at each folder above it, up to that top,
+ * declaring a workspace too (sign-off S64). Null when none of those is a link; a fault of its own is null too, so this
+ * check never sends a call to the fail-closed refusal.
  */
 function linkedInstall(command, cwd) {
   try {
     if (!/npm|yarn|bun/i.test(command.replace(/['"\\]/g, ""))) return null;
+    const top = (dir) => present(join(dir, ".git")) || dirname(dir) === dir;
+    const workspace = (dir) => {
+      if (present(join(dir, "pnpm-workspace.yaml"))) return true;
+      try {
+        const file = join(dir, "package.json");
+        return statSync(file).size <= 1048576 && JSON.parse(readFileSync(file, "utf8")).workspaces !== undefined;
+      } catch {
+        return false;
+      }
+    };
     for (const start of new Set(installFolders(command, [cwd]).folders)) {
-      for (let dir = start, hops = 0; hops < 64; hops += 1) {
-        const link = join(dir, "node_modules");
-        let stat = null;
+      let dir = start;
+      for (let hops = 0; hops < 64 && !present(join(dir, "node_modules")) && !present(join(dir, "package.json")) && !top(dir); hops += 1) dir = dirname(dir);
+      const roots = [dir];
+      for (let up = dir, hops = 0; hops < 64 && !top(up); hops += 1) {
+        up = dirname(up);
+        if (workspace(up)) roots.push(up);
+      }
+      for (const root of roots) {
+        const link = join(root, "node_modules");
         try {
-          stat = lstatSync(link);
+          if (!lstatSync(link).isSymbolicLink()) continue;
         } catch {
-          // None here, or none readable: the walk goes on up.
+          continue;
         }
-        if (stat?.isSymbolicLink()) {
-          let target = link;
+        let target = link;
+        try {
+          target = realpathSync(link);
+        } catch {
           try {
-            target = realpathSync(link);
+            target = resolve(root, readlinkSync(link));
           } catch {
-            try {
-              target = resolve(dir, readlinkSync(link));
-            } catch {
-              // Unreadable: the link's own path names it.
-            }
+            // Unreadable: the link's own path names it.
           }
-          const checkout = dirname(target);
-          return "This install would write through node_modules here, which is a link to " + target + ", another checkout's install. Run it in that checkout (cd " + checkout + " first, or give the install an absolute --prefix " + checkout + "), or remove the link (the link only) and install here.";
         }
-        if (stat !== null || present(join(dir, "package.json")) || present(join(dir, ".git")) || dirname(dir) === dir) break;
-        dir = dirname(dir);
+        const checkout = dirname(target);
+        return "This install would write through node_modules here, which is a link to " + target + ", another checkout's install. Run it in that checkout (cd " + checkout + " first, or give the install an absolute --prefix " + checkout + "), or remove the link (the link only) and install here.";
       }
     }
   } catch {

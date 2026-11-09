@@ -261,6 +261,37 @@ describe("an install through a linked node_modules (REQ-FLOW-178)", () => {
     }
   });
 
+  it("checks a workspace member's install at its workspace root too (fixer W-1, sign-off S64)", async () => {
+    const guard = await placeGuard("claude", {
+      "node_modules/.keep": "",
+      // An npm workspace lane, a pnpm workspace lane (its member holding its own real node_modules, as pnpm leaves it),
+      // and a workspace whose root install is a real folder.
+      "lane/package.json": '{ "workspaces": ["packages/*"] }\n',
+      "lane/packages/a/package.json": "{}\n",
+      "pnpm/package.json": "{}\n",
+      "pnpm/pnpm-workspace.yaml": "packages:\n  - packages/*\n",
+      "pnpm/packages/a/package.json": "{}\n",
+      "pnpm/packages/a/node_modules/.keep": "",
+      "real/package.json": '{ "workspaces": ["packages/*"] }\n',
+      "real/node_modules/.keep": "",
+      "real/packages/a/package.json": "{}\n",
+      "plain/package.json": "{}\n",
+      "plain/tools/package.json": "{}\n",
+    });
+    const target = linkInstall(getRepo().path("lane"));
+    linkInstall(getRepo().path("pnpm"));
+    linkInstall(getRepo().path("plain"));
+    for (const command of ["cd lane/packages/a && npm ci", "cd lane/packages/a && pnpm install", "npm --prefix lane/packages/a install"]) {
+      expect(decide("claude", guard, command), command).toEqual({ kind: "refuse", reason: refusal(target) });
+    }
+    expect(decide("claude", guard, "cd pnpm/packages/a && pnpm install")).toEqual({ kind: "refuse", reason: refusal(target) });
+    // Non-degenerate: a workspace whose root install is real runs, and a subfolder of a linked checkout that declares
+    // no workspace keeps today's result (its own package.json, its own install).
+    for (const command of ["cd real/packages/a && npm ci", "cd plain/tools && npm ci"]) {
+      expect(decide("claude", guard, command), command).toEqual({ kind: "allow" });
+    }
+  });
+
   it("reads past a wrapper's number and value arguments (review/82)", async () => {
     const guard = await placeGuard("claude");
     const target = linkInstall(getRepo().path());
