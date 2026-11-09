@@ -2,7 +2,7 @@
 id: plan-semantic-ambiguity-survives-structural-pass
 class: golden
 claim: "A structurally complete requirement-to-plan mapping still blocks handoff when its meanings conflict and gives a usable clarification."
-source: content/commands/st-plan.md:277-458
+source: content/commands/st-plan.md:277-459
 metric: rubric
 ---
 
@@ -159,13 +159,13 @@ further write channel for the plan itself.
 - **Skill copy.** On an attended run, this run itself, never a sub-agent, copies in each skill a
   unit names that `stamity skill list --json` does not list under its name:
   `stamity skill add <source-id> <name> --tag <version> --commit <commit>`, from a source
-  `.stamity/skill-sources.json` lists and from nowhere else, then runs `stamity sync` so every
-  client's copy is regenerated. A listed copy that is not `clean` at the entry's commit is never
-  re-added or removed by the run: it returns `BLOCKED_DEPENDENCY` naming the
-  `stamity skill remove <name>` and then `stamity skill add` steps a person runs. The verb refuses
-  an unattended run and one while nobody is watching; the copy lands on a held path, so a person
-  commits it, with what `sync` wrote, before `/st-work` cuts any lane. A plan whose units all read
-  `none` copies nothing.
+  `.stamity/skill-sources.json` lists and from nowhere else. A listed copy that is not `clean` at
+  the entry's commit is never re-added or removed by the run: it returns `BLOCKED_DEPENDENCY`
+  naming the `stamity skill remove <name>` and then `stamity skill add` steps a person runs. The
+  verb refuses an unattended run and one while nobody is watching. Whenever L6 passes with any
+  skill named, copied by this run or before it, the run then runs `stamity sync` so every client's
+  copy is regenerated; the copy lands on a held path, so a person commits it, with what `sync`
+  wrote, before `/st-work` cuts any lane. A plan whose units all read `none` copies nothing.
 
 ## Return contract
 
@@ -191,6 +191,7 @@ Close the run with:
 - Open questions carried; a non-empty list blocks handoff.
 - Learnings written, with their paths; `none` when the run met no qualifying failure.
 - Skills copied, each with its origin record's path; `none` when this run copied none.
+- Paths `stamity sync` wrote, which a person commits before `/st-work` cuts any lane; `none` when it wrote none.
 - Next step — user-gated, not automatic, and derived from this run's own state rather than a
   fixed menu: open questions still carried make resolving them the next step; a clean roadmap
   artifact goes to `/st-board fill --source docs/plans/<file>`; any other clean artifact

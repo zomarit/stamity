@@ -1157,8 +1157,12 @@ describe("/st-plan — named skills (REQ-FLOW-180)", () => {
     // blocks on any other non-clean copy; and the copy is followed by `stamity sync` and committed
     // before a lane is cut, so every client and every lane holds it at Build. The pin grows; the
     // attended-only, run-only and trusted-source words it held are all still in it.
+    // TEST CHANGE, justified (2026-11-09, s-skills-content fix round 3, review/95, sign-off S60): the
+    // sync ran only after this run's own add, so a person's remove-then-add re-run read L6 clean,
+    // copied nothing and synced nothing, leaving every client on the old copy. The sync now follows
+    // L6 passing with any named skill, whoever copied it; every word the round-1 pin held is kept.
     expect(effects).toContain(
-      "- **Skill copy.** On an attended run, this run itself, never a sub-agent, copies in each skill a unit names that `stamity skill list --json` does not list under its name: `stamity skill add <source-id> <name> --tag <version> --commit <commit>`, from a source `.stamity/skill-sources.json` lists and from nowhere else, then runs `stamity sync` so every client's copy is regenerated. A listed copy that is not `clean` at the entry's commit is never re-added or removed by the run: it returns `BLOCKED_DEPENDENCY` naming the `stamity skill remove <name>` and then `stamity skill add` steps a person runs. The verb refuses an unattended run and one while nobody is watching; the copy lands on a held path, so a person commits it, with what `sync` wrote, before `/st-work` cuts any lane. A plan whose units all read `none` copies nothing.",
+      "- **Skill copy.** On an attended run, this run itself, never a sub-agent, copies in each skill a unit names that `stamity skill list --json` does not list under its name: `stamity skill add <source-id> <name> --tag <version> --commit <commit>`, from a source `.stamity/skill-sources.json` lists and from nowhere else. A listed copy that is not `clean` at the entry's commit is never re-added or removed by the run: it returns `BLOCKED_DEPENDENCY` naming the `stamity skill remove <name>` and then `stamity skill add` steps a person runs. The verb refuses an unattended run and one while nobody is watching. Whenever L6 passes with any skill named, copied by this run or before it, the run then runs `stamity sync` so every client's copy is regenerated; the copy lands on a held path, so a person commits it, with what `sync` wrote, before `/st-work` cuts any lane. A plan whose units all read `none` copies nothing.",
     );
     expect(effects).not.toContain("Two, both after the artifact is written");
     expect(effects).not.toContain("does not show `clean` at its commit");
@@ -1176,6 +1180,27 @@ describe("/st-plan — named skills (REQ-FLOW-180)", () => {
     // The sync follows the add, and the commit lands before /st-work cuts a lane.
     expect(copy.indexOf("`stamity skill add <source-id>")).toBeLessThan(copy.indexOf("then runs `stamity sync`"));
     expect(copy).toContain("a person commits it, with what `sync` wrote, before `/st-work` cuts any lane");
+  });
+
+  it("syncs whenever L6 passes with a named skill, a person's earlier copy included (review/95)", () => {
+    const effects = flat(sectionOf(plan.parsed.body, "## Side effects"));
+    const copy = effects.slice(effects.indexOf("- **Skill copy.**"));
+    const returns = sectionOf(plan.parsed.body, "## Return contract");
+
+    // A person's `skill remove` then `skill add` leaves the per-client copies stale, and the re-run's
+    // L6 reads `clean` with nothing to copy. The sync is keyed to L6 passing, not to this run's add,
+    // so that re-run still regenerates every client's copy before a lane is cut.
+    expect(copy).toContain(
+      "Whenever L6 passes with any skill named, copied by this run or before it, the run then runs `stamity sync` so every client's copy is regenerated",
+    );
+    expect(copy).not.toContain("from nowhere else, then runs `stamity sync`");
+    // The sync sentence follows the blocked path, so it is no step of the add alone.
+    expect(copy.indexOf("steps a person runs")).toBeLessThan(copy.indexOf("Whenever L6 passes with any skill named"));
+    // What the sync wrote is reported, so the person commits it before the next step's /st-work.
+    expect(returns).toContain(
+      "- Paths `stamity sync` wrote, which a person commits before `/st-work` cuts any lane; `none` when it wrote none.",
+    );
+    expect(returns.indexOf("- Skills copied,")).toBeLessThan(returns.indexOf("- Paths `stamity sync` wrote,"));
   });
 
   it("gates the write on L6: every named skill has an origin record at its commit and a clean copy", () => {
