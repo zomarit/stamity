@@ -460,6 +460,6 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--approved <sha>` | land: the head commit the person approved over an asks outcome; land it if the head is still that commit and nothing refuses (never in an unattended run) | — |
 | `--job` | land: run as the land workflow's job, which alone may use it: the run comes from the pull request's marker, and pending evidence exits 0 | — |
 | `--item <owner/repo#n>` | contract: the GitHub issue the run takes as its input | — |
-| `--transcript <path>` | metrics: a Claude Code session transcript (JSONL) to take tokens and cost from; only its usage counts are read | — |
+| `--transcript <path>` | metrics: a Claude Code session transcript (JSONL) to take tokens and cost from; only its usage counts are read, and they cover this transcript only, not sub-agents' transcripts | — |
 
 Regenerate this page with `node scripts/generate-docs.mjs`.

@@ -185,11 +185,12 @@ import { runLand } from "./runLand.ts";
  * where the record reads whole, a ledger or morning list that does not read named on the page; 1 for a record missing or over its cap,
  * since a land line past the cap could not be seen. The JSON is `{ subcommand, run, overview }`, `overview` the page.
  *
- * **`metrics`** (REQ-FLOW-183) prints the run's first numbers from its record and ledger, and tokens and cost only from
- * the transcript `--transcript` names, read for its usage counts alone (`../../runs/transcriptUsage.ts`); the numbers are
+ * **`metrics`** (REQ-FLOW-183) prints the run's first numbers from its record, ledger and `reports/` folder (fix
+ * rounds), and tokens and cost only from the transcript `--transcript` names, read for its usage counts alone
+ * (`../../runs/transcriptUsage.ts`) and covering that transcript only, not sub-agents'; the numbers are
  * `../../runs/metrics.ts`'s, each line cleaned here as it prints, the last the proof block's `metrics:` line. Read-only:
  * it writes nothing and calls neither git nor GitHub. Every read that fails is named under `unread` and its numbers read
- * `unreported`, so it exits 0 on any record, ledger or transcript; only a refused run id exits 1. The JSON is
+ * `unreported`, so it exits 0 on any record, ledger, reports folder or transcript; only a refused run id exits 1. The JSON is
  * `{ subcommand, run, wall, agentMinutes, person, rework, tokens, cost, unread }`.
  */
 
@@ -345,7 +346,7 @@ export const runCommand: CommandModule = {
       .option("--approved <sha>", "land: the head commit the person approved over an asks outcome; land it if the head is still that commit and nothing refuses (never in an unattended run)", parseApproved)
       .option("--job", "land: run as the land workflow's job, which alone may use it: the run comes from the pull request's marker, and pending evidence exits 0")
       .addOption(new Option("--item <owner/repo#n>", "contract: the GitHub issue the run takes as its input").argParser(parseItemRef))
-      .option("--transcript <path>", "metrics: a Claude Code session transcript (JSONL) to take tokens and cost from; only its usage counts are read")
+      .option("--transcript <path>", "metrics: a Claude Code session transcript (JSONL) to take tokens and cost from; only its usage counts are read, and they cover this transcript only, not sub-agents' transcripts")
       // Usage errors, so exit 2 before the action and before git runs.
       .hook("preAction", (command) => {
         const subcommand = String(command.processedArgs[0]);
@@ -458,6 +459,7 @@ function runMetrics(ctx: CliContext, run: string, transcript: string | undefined
         ? `${recordRel} is over ${RECORD_READ_MAX_BYTES} bytes`
         : undefined;
   const { ledger, ledgerFailure } = overviewLedger(ctx, runDir);
+  const { reports, reportsFailure } = metricsReports(join(cwd, runDir, layout.REPORTS_DIR), `${runDir}/${layout.REPORTS_DIR}`);
   // The path is the caller's own, printed as given once cleaned; the reader returns numbers and model ids alone.
   const named = transcript === undefined ? null : { path: sanitizeLabel(transcript), read: readTranscriptUsage(resolve(cwd, transcript)) };
   const metrics = metricsFrom({
@@ -466,10 +468,29 @@ function runMetrics(ctx: CliContext, run: string, transcript: string | undefined
     ...(recordFailure === undefined ? {} : { recordFailure }),
     ledger: ledgerFailure === undefined ? ledger : null,
     ...(ledgerFailure === undefined ? {} : { ledgerFailure }),
+    reports,
+    ...(reportsFailure === undefined ? {} : { reportsFailure }),
     transcript: named,
   });
   ctx.io.out(`${metricsText(metrics).map((line) => sanitizeLabel(line)).join("\n")}\n`);
   return { exitCode: 0, json: { subcommand: METRICS, ...metrics } };
+}
+
+/**
+ * The regular files' names in a run's `reports/` folder, for its fix rounds; null with the reason where the folder is
+ * missing, is no folder, or does not list. The folder is git-ignored, so a fresh clone has none: its rounds are unknown.
+ */
+function metricsReports(dir: string, rel: string): { reports: string[] | null; reportsFailure?: string } {
+  try {
+    if (!lstatSync(dir).isDirectory()) return { reports: null, reportsFailure: `${rel} is not a folder` };
+  } catch {
+    return { reports: null, reportsFailure: `no reports folder at ${rel}` };
+  }
+  try {
+    return { reports: readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => entry.name) };
+  } catch {
+    return { reports: null, reportsFailure: `${rel} could not be read` };
+  }
 }
 
 /** `run` checked against the run folder's grammar; anything else is refused before git runs. */
