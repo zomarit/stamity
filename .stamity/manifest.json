@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.18.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-11-09T22:09:53.719Z",
+  "updatedAt": "2026-11-09T22:46:05.963Z",
   "tools": [
     "claude"
   ],
@@ -85,7 +85,7 @@
       "adapter": "claude",
       "artifactId": "implementer",
       "artifactType": "agent",
-      "contentHash": "72343d60baff9477783bf298b8e6d8e7d5adea08dc39881755fe570f3655eecf",
+      "contentHash": "f94596ac3698af6c7fa0aee21724c34bd784abac31d6f4759e01234ae47b8f78",
       "path": ".claude/agents/stamity-implementer.md"
     },
     {

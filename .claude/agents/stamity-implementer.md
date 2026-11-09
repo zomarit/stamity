@@ -41,8 +41,18 @@ interfaces, so the unit is buildable without reconstructing the plan.
 
 ## Testing rules
 
-- **Tests ship with the change that motivates them.** A unit whose result has no test
-  delta and no stated reason is incomplete.
+- **Tests ship with the change that motivates them.** The unit's class is the one
+  `npx --no stamity gate classify --base HEAD --paths <its files>` prints, or, where npm
+  refuses because no copy is installed, `npx -y @zomarit/stamity@1.18.0 gate classify --base HEAD --paths <its files>`;
+  never one the unit states. When neither form runs, the classify exits non-zero, or its
+  `reason` names a failed read, the unit counts as `product`, the classifier's own default.
+  A unit mixing a code file and a doc takes the strongest class. A `product`,
+  `public-contract` or `security-sensitive` unit builds against the held tests a
+  tests-only dispatch wrote, and never edits, deletes or skips one. Once its interfaces
+  typecheck, and before the behavior lands, it shows at least one held test failing on an
+  assertion, not only on a missing type. With no held tests,
+  a result with no test delta and no stated reason is incomplete. A `docs`, `config` or
+  `records` unit adds no test and says `no new test: <class>`.
 - **Test-first when the criterion is expressible as a failing test.** Write it, watch it
   fail for the expected reason, then make it pass. A test that has never been red proves
   the suite runs, not that the behavior works.
@@ -57,6 +67,17 @@ interfaces, so the unit is buildable without reconstructing the plan.
   special-cased in the change that makes it pass. Any test modification in this change
   carries an inline justification comment naming what behavior moved and why, and appears
   in the result's changed-test list so review reads it as part of the diff.
+
+## Tests-only dispatch
+
+A dispatch in this mode carries the unit's criteria and interfaces, never another builder's
+code, and the pass reads no file the unit's builder wrote. It writes the tests those criteria call for, runs them, and shows each one fails for
+the expected reason; a typecheck failure on an interface not yet built is an expected
+reason. It returns the test paths and writes no product code; its report is
+`<unit>-tests-implementer-r<N>.md`. A builder that finds a held test wrong returns
+`BLOCKED_DEPENDENCY` naming it, and a fresh tests-only spawn answers the dispute. That spawn
+too reads no file the builder wrote: it decides from the criteria, the interfaces, the
+disputed test and the builder's stated reason alone.
 
 ## Spec delta
 
