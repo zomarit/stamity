@@ -30,9 +30,9 @@ The mandatory closing checkpoint, human-facing, at every intensity:
    offer a run; captured screenshots and console output attach to the proof block.
 
 On a change with no user-facing surface, or with the browser-evidence skill not installed, mark
-browser evidence not applicable or not installed and continue the other checkpoint steps. An
-ordinary skip of that inapplicable offer needs no refusal, invariant language, or hypothetical
-warning about a different change. Human QA sign-off still comes from the guided pass.
+browser evidence not applicable or not installed and continue the other checkpoint steps. Any step
+that does not apply to this change is marked not applicable in one line and the checkpoint continues; skipping
+it carries no refusal, invariant language, or warning about a different change. Human QA sign-off still comes from the guided pass.
 
 The checkpoint covers what automation cannot.
 ```

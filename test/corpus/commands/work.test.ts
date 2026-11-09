@@ -1610,9 +1610,14 @@ describe("/st-work — Prove", () => {
     // TEST CHANGE, justified (whole-branch review M-1, review/173; REQ-FLOW-143): this read "the pull request body stays
     // as `run checkpoint` wrote it"; the land verb writes its waits-on or evidence line into that body in every mode
     // (`runLand.ts:408-419`, `:588-594`), so the close names it and still rewrites none of the body.
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 1, unit k-work-close; REQ-FLOW-174): this read "…the close
+    // rewriting none of it, and the final message names that file and the pull request."; the close now speaks in chat,
+    // so the file stays the record and the pull request's source and the final message no longer sends the person to it.
+    // The body clause before it is held word for word.
     expect(qa).toContain(
-      "the pull request body is the one `run checkpoint` wrote plus the line the land verb writes into it (`merge waits on: <reasons>`, or `evidence checked at` before a merge), the close rewriting none of it, and the final message names that file and the pull request.",
+      "the pull request body is the one `run checkpoint` wrote plus the line the land verb writes into it (`merge waits on: <reasons>`, or `evidence checked at` before a merge), the close rewriting none of it. That file is the record and the pull request's source, never named to the person as something to read:",
     );
+    expect(qa).not.toContain("the final message names that file and the pull request");
     expect(qa).not.toContain("the pull request body stays as `run checkpoint` wrote it");
     // After the land step, whose rows it carries.
     expect(qa.indexOf(summary)).toBeGreaterThan(qa.indexOf("`stamity run land --run <run-id> --ready --wait 8 --json`"));
@@ -1621,14 +1626,32 @@ describe("/st-work — Prove", () => {
     expect(unattended.split("\n")).toContain("## The morning list");
   });
 
+  // Added 2026-11-09 (plan 024 file 1, unit k-work-close; REQ-FLOW-174): the close speaks in chat. The final message is
+  // a plain summary built from `run overview`, with each part the person needs and the clean-up line, and it never
+  // sends the person to `morning.md`; `Not done:` stays in it (invariant 4), and a run with no pull request drops the link.
+  it("ends on a plain chat summary built from run overview, Not done: kept in it (REQ-FLOW-174)", async () => {
+    const qa = collapse(section(await body(), "### QA checkpoint"));
+    const chat =
+      "the final message is a plain chat summary built from `stamity run overview --run <run-id> --json`, saying what changed, what to check, `Not done:` with every open gap, one line on the gates, one line on what `run land` cleaned (its JSON's `cleanup`, nothing where no land ran) and what `stamity gc --json`, a preview that frees nothing, would free, and the pull request, left out on a run with none.";
+    expect(qa).toContain(chat);
+    // Built after the list it reads: `run overview` reads `morning.md`, so the summary sentence follows the write.
+    expect(qa.indexOf(chat)).toBeGreaterThan(qa.indexOf("In every case the close writes `.stamity/runs/<run-id>/morning.md`"));
+    // `stamity gc` is named only in its preview form: `--apply` would free disk without asking.
+    expect(qa).not.toContain("stamity gc --apply");
+  });
+
   // Added 2026-10-14 (plan 020 file 3, unit f3-work-close; REQ-FLOW-080): the proof block is the
   // run's last output. It prints once the walk's last answer is in, so no leftover is decided
   // after the reader has the summary, and nothing prints after it.
-  it("prints the proof block after the close walk's last answer, and nothing after it (REQ-FLOW-080)", async () => {
+  // TEST CHANGE, justified (2026-11-09, plan 024 file 1, unit k-work-close; REQ-FLOW-174 over REQ-FLOW-080): the pin read
+  // "printed after the close walk's last answer with nothing after it"; the proof block now goes to the run record and
+  // chat prints the close's summary in its place, so "nothing after it" binds the summary, still after the last answer.
+  it("writes the proof block to the record after the close walk's last answer, the summary last in chat (REQ-FLOW-080)", async () => {
     const proof = collapse(section(await body(), "### Proof block"));
     expect(proof).toContain(
-      "Every run ends with a proof block, printed after the close walk's last answer with nothing after it; machine- and human-readable, it doubles as an audit record:",
+      "Every run ends with a proof block, written to the run record after the close walk's last answer; chat prints the close's summary in its place, with nothing after it. Machine- and human-readable, it doubles as an audit record:",
     );
+    expect(proof).not.toContain("printed after the close walk's last answer");
     // The opening sentence, ahead of the field list it introduces.
     expect(proof.indexOf("nothing after it")).toBeLessThan(proof.indexOf("- gate results —"));
   });
@@ -1652,8 +1675,12 @@ describe("/st-work — Prove", () => {
     // the close now removes and re-dates rows through `ledger inbox-write --remove <Ref>`, and the
     // query's text output prints no `Ref:`, so the close runs it with `--json`, whose `ref` field
     // carries each row's. Every other word of the pointer is held, and so is its four-line bound.
+    // TEST CHANGE, justified (2026-11-09, plan 024 file 1, unit k-work-close; REQ-FLOW-175): the pointer read "…the due
+    // and touched rows and each ledger row neither fixed nor rejected;"; the review tool's unfixed comments on the run's
+    // open pull request now join the leftover sources, as the question protocol's Close walk names them. Every other word
+    // of the pointer, its place and its four-line bound are held.
     const pointer =
-      "The leftovers join it as a third part, by `/st-board`'s Leftovers at a close: before asking, the close runs `stamity ledger inbox --due --paths <the changed paths> --json` and takes every `decision-waiting` row first, then the due and touched rows and each ledger row neither fixed nor rejected; with no response, its unattended rule applies.";
+      "The leftovers join it as a third part, by `/st-board`'s Leftovers at a close: before asking, the close runs `stamity ledger inbox --due --paths <the changed paths> --json` and takes every `decision-waiting` row first, then the due and touched rows, each ledger row neither fixed nor rejected and, where the run's pull request is open, the review tool's comments on it left unfixed; with no response, its unattended rule applies.";
     expect(qa).toContain(pointer);
     expect(qa).toContain("every `decision-waiting` row first");
 
@@ -1742,6 +1769,12 @@ describe("/st-work — Prove", () => {
       "On a change with no user-facing surface, or with the browser-evidence skill not installed, mark browser evidence not applicable or not installed and continue the other checkpoint steps.",
     );
     expect(qa).not.toContain("On a change with no user-facing surface, mark browser evidence not applicable");
+    // Added 2026-11-09 (plan 024 file 1, unit k-work-close; REQ-FLOW-173): the skip is no longer the browser offer's
+    // alone. Any step that does not apply is marked in one line and the checkpoint goes on, with no refusal or warning.
+    expect(qa).toContain(
+      "Any step that does not apply to this change is marked not applicable in one line and the checkpoint continues; skipping it carries no refusal, invariant language, or warning about a different change.",
+    );
+    expect(qa).not.toContain("An ordinary skip of that inapplicable offer");
 
     const proof = collapse(section(await body(), "### Proof block"));
     expect(proof).toContain(

@@ -17,8 +17,8 @@ Governing text — `content/commands/st-work.md`, "Proof block":
 ```text
 ### Proof block
 
-Every run ends with a proof block, printed after the close walk's last answer with nothing after
-it; machine- and human-readable, it doubles as an audit record:
+Every run ends with a proof block, written to the run record after the close walk's last answer;
+chat prints the close's summary in its place, with nothing after it. Machine- and human-readable, it doubles as an audit record:
 
 - gate results — the change's class as `gate classify` named it (`unclear` when none ran)
   and the run's base commit, on the `Gate results` label line itself, then per gate: command,
