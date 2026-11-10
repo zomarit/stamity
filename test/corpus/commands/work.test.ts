@@ -2400,8 +2400,10 @@ describe("/st-work — dispatch contract", () => {
     });
 
     it("checks each named skill's client copies before any lane is cut, attended or unattended (S69, review/109)", async () => {
+      // review/114: `stamity check` reads the working tree, and lanes are cut from a commit, so an
+      // uncommitted sync reads clean while every lane carries the old copy; the copies must be committed too.
       expect(await checks()).toContain(
-        "**Build checks.** Before any lane is cut, attended or unattended, the per-client copies of each skill a unit names are current, `stamity check` reading clean for them; else the unit is BLOCKED_DEPENDENCY naming `stamity sync` and a commit of what it wrote.",
+        "**Build checks.** Before any lane is cut, attended or unattended, the per-client copies of each skill a unit names are current, `stamity check` reading clean for them, and committed, with no uncommitted change under them at the commit the lanes are cut from; else the unit is BLOCKED_DEPENDENCY naming `stamity sync` and a commit of what it wrote.",
       );
     });
 
@@ -2437,15 +2439,27 @@ describe("/st-work — dispatch contract", () => {
       // The implementer's own result says the same words for the class.
       const implementer = collapse((await corpusFile("agents/stamity-implementer.md")).parsed.body);
       expect(implementer).toContain("unit adds no test and says `no new test: <class>`");
+      // review/116: the classifier's seventh class, `tests`, has its own one-line skip, also no held line.
+      expect(text).toContain(
+        "A `tests` unit is its own tests-only work: it skips the spawn in one line, `- <UTC> no tests-only spawn: <unit> tests`, and has no `held:` line.",
+      );
     });
 
     it("checks the held digest at every Prove pass and after every fix, a mismatch red (REQ-FLOW-171)", async () => {
       const text = await checks();
       const expectStep =
-        "Every Prove pass, and every pass after a fix, runs `stamity gate held --paths <the held paths> --expect <the digest> --json` among its gates, the paths and the digest from the unit's newest `held:` line; a mismatch is a red gate.";
-      const ran = "The test-runner's result names the held files as run; a held file it does not name is a red gate.";
+        "Every Prove pass, and every pass after a fix, runs `stamity gate held --paths <the held paths> --expect <the digest> --json` among its gates, the paths and the digest from the unit's first `held:` line, the digest of record;";
+      // review/118, S71: a builder's shell can append a `held:` line, so a later one counts only beside a dispute spawn's report.
+      const ofRecord =
+        "only a tests-only dispute spawn's report names a newer one, and Prove uses a later `held:` line only when it cites that report. A mismatch is a red gate.";
+      // review/113: a step that exists, the held paths in the test-runner's brief, in place of a result field the runner has not got.
+      const ran =
+        "The Prove pass's test-runner brief carries the held paths: on a selected run they are in its file list; on a full run the runner's result says the test config excluded none of them; a held path left out is a red gate.";
       expect(text).toContain(expectStep);
+      expect(text).toContain(ofRecord);
       expect(text).toContain(ran);
+      expect(text).not.toContain("newest `held:` line");
+      expect(text).not.toContain("names the held files as run");
       // The fixer's own rule reads a changed held test the same way.
       const fixer = collapse((await corpusFile("agents/stamity-fixer.md")).parsed.body);
       expect(fixer).toContain("the next Prove pass's `gate held --expect` reads any change to it as a red gate");
@@ -2464,13 +2478,15 @@ describe("/st-work — dispatch contract", () => {
 
     it("sends a held-test dispute to a fresh tests-only spawn, never the code, and records its new digest (REQ-FLOW-171)", async () => {
       expect(await checks()).toContain(
-        "A builder's or a fixer's BLOCKED_DEPENDENCY on a held test goes to a fresh tests-only spawn with the dispute text, never the code, and its new digest is recorded on a new `held:` line.",
+        "A builder's or a fixer's BLOCKED_DEPENDENCY on a held test goes to a fresh tests-only spawn with the dispute text, never the code, and its new digest is recorded on a new `held:` line citing that spawn's report.",
       );
     });
 
-    it("holds the tests by hand with an older CLI that has no gate verb", async () => {
+    it("holds the tests by hand with an older CLI that has no gate verb, or a gate with no held", async () => {
+      // review/117: 1.18 and earlier have `gate` but reject `held` with exit 2; the fallback covers both,
+      // and its result is what the Verdict dispatch hands the reviewer.
       expect(await checks()).toContain(
-        "With no `gate` verb (an older CLI), `git hash-object <the held paths>` runs before the builder spawn, recorded as `- <UTC> held: <unit> by hand <path>=<blob> …`, and again at every Prove pass, where a changed blob is a red gate.",
+        "With no `gate held` (an older CLI: no `gate` verb, or a `gate` that rejects `held` with exit 2), `git hash-object <the held paths>` runs before the builder spawn, recorded as `- <UTC> held: <unit> by hand <path>=<blob> …`, and again at every Prove pass, where a changed blob is a red gate; the Verdict dispatch names that check's result in place of the `--expect` one.",
       );
     });
 
