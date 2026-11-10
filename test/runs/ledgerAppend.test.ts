@@ -969,6 +969,26 @@ describe("stamity ledger append", () => {
     expect(existsSync(dir.path(LEDGER))).toBe(false);
   });
 
+  // REQ-CTX-005: a Warning under a fence one letter short of the opening reaches no row, and the exact empty block
+  // beside it would otherwise read as a report that found nothing.
+  it("refuses a report whose near findings fence holds a Warning beside an exact empty block, naming its line, and writes nothing", async () => {
+    const dir = tempDir();
+    const existing = `{"id":"${RUN}/review/1"}\n`;
+    // Lines 1-6 are the empty exact block's report; line 8 opens the near fence.
+    const text = `${report([])}\n\`\`\`stamity-finding\n${JSON.stringify(W1)}\n\`\`\`\n`;
+    await seedRun(dir, { [LEDGER]: existing, [REPORT_REL]: text });
+
+    const result = await cli(dir, [...APPEND, "--report", REPORT_REL]);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain(`ledger append refused ${REPORT_REL}`);
+    expect(result.stderr).toContain(
+      `${REPORT_REL}:8: this fence's info string is close to stamity-findings but is not its exact opening, so no row reads it; write the opening as \`\`\`stamity-findings`,
+    );
+    expect(await readText(dir, LEDGER)).toBe(existing);
+  });
+
   it("appends nothing for an empty block: exit 0, empty stdout, no ledger file", async () => {
     const dir = tempDir();
     await seedRun(dir, { [REPORT_REL]: report([]) });

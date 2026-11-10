@@ -1770,20 +1770,14 @@ const REPORTS_NON_REPORTS: readonly RegExp[] = [/^\.gitignore$/, /^[a-z0-9][a-z0
 const HELD_RESULT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
 
 /**
- * A fence's opening or closing line, its info string group 1: three or more backticks or tildes, at any indentation, and
- * inside a blockquote or a list item, where `ledger append`'s parser finds no block either.
- */
-const ANY_FENCE_LINE = /^(?:[ \t>]|[-*+][ \t]|[0-9]+[.)][ \t])*(?:`{3,}|~{3,})(.*)$/;
-
-/**
  * review/188 and review/191: why the run's reports rule out an empty ledger, or `null` where none does. With no ledger,
  * every finding the folder holds is one no row carries, so the write goes ahead only where every entry is one `ledger
  * append` would take as clean: its name a report name (`REPORT_NAME_PATTERN`, the check `--report` runs) or one of
- * {@link REPORTS_NON_REPORTS}, or a `.json` that is a `gate held --json` result and nothing more; a regular file within the report read cap; no fence line whose info string names
- * `findings`, in any case or spacing, but the exact opening the append's parser takes; and, where that opening is there,
- * the block parses with that parser and holds no item. A reports folder that is not a folder, does not list, or holds
- * more entries than the cap on reads also stops it. No reports folder reads as no findings. Entries are named by file
- * name only, printable.
+ * {@link REPORTS_NON_REPORTS}, or a `.json` that is a `gate held --json` result and nothing more; a regular file within the
+ * report read cap; no fence line near the findings opening but not it (`../../runs/blocks.ts::nearFindingsFences`, the
+ * rule the append's parser refuses by); and, where that opening is there, the block parses with that parser and holds no
+ * item. A reports folder that is not a folder, does not list, or holds more entries than the cap on reads also stops it.
+ * No reports folder reads as no findings. Entries are named by file name only, printable.
  */
 function reportsHoldingFindings(ctx: CliContext, dir: string, rel: string): string | null {
   const { layout, blocks } = ctx.engine.runs;
@@ -1803,13 +1797,8 @@ function reportsHoldingFindings(ctx: CliContext, dir: string, rel: string): stri
     const read = readCapped(join(dir, name), layout.REPORT_READ_MAX_BYTES);
     if (read === null || read.truncated) return "did not read";
     if (heldResult) return isHeldResult(read.text) ? null : "not a gate held result";
-    const lines = read.text.replace(/^\uFEFF/, "").split(/\r?\n/);
-    const near = lines.some((line) => {
-      const info = ANY_FENCE_LINE.exec(line)?.[1];
-      return info !== undefined && /findings/i.test(info.replace(/\s+/g, "")) && !open.test(line);
-    });
-    if (near) return "a findings fence ledger append does not read";
-    if (!lines.some((line) => open.test(line))) return null;
+    if (blocks.nearFindingsFences(read.text).length > 0) return "a findings fence ledger append does not read";
+    if (!read.text.replace(/^\uFEFF/, "").split(/\r?\n/).some((line) => open.test(line))) return null;
     const parsed = blocks.parseFindingsBlock(read.text);
     if (!parsed.ok) return "a findings block that does not parse";
     return parsed.items.length > 0 ? "holds findings" : null;

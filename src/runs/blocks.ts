@@ -134,6 +134,62 @@ function locateBlock(
   return { line: first + 1, message: `the ${fence} block opened here is never closed` };
 }
 
+/**
+ * A fence's opening or closing line, its info string group 1: three or more backticks or tildes, at any indentation, and
+ * inside a blockquote or a list item, where the findings parser finds no block either.
+ */
+export const ANY_FENCE_LINE = /^(?:[ \t>]|[-*+][ \t]|[0-9]+[.)][ \t])*(?:`{3,}|~{3,})(.*)$/;
+
+/** {@link FINDINGS_FENCE} as {@link isNearFindingsInfo} compares it: lower case, its `-` removed. */
+const FINDINGS_KEY = "stamityfindings";
+/** The most edits an info string may sit from {@link FINDINGS_KEY} and still read as meant for it. */
+const NEAR_EDITS_MAX = 2;
+
+/** The edit distance between `a` and `b`: insertions, deletions and substitutions, one row at a time. */
+function editDistance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j += 1) {
+      const substitution = (previous[j - 1] ?? 0) + (a[i - 1] === b[j - 1] ? 0 : 1);
+      current.push(Math.min((previous[j] ?? 0) + 1, (current[j - 1] ?? 0) + 1, substitution));
+    }
+    previous = current;
+  }
+  return previous[b.length] ?? 0;
+}
+
+/**
+ * Whether a fence's info string reads as meant for the findings block: lower-cased, with every whitespace, `-`, `_` and
+ * `.` removed, it is not empty and either names `finding` or sits at most {@link NEAR_EDITS_MAX} edits from
+ * `stamityfindings`. The exact opening reads as near too; whether a line is that opening is the line's question
+ * ({@link nearFindingsFences}).
+ */
+export function isNearFindingsInfo(info: string): boolean {
+  const key = info.toLowerCase().replace(/[\s._-]+/gu, "");
+  if (key === "") return false;
+  if (key.includes("finding")) return true;
+  return Math.abs(key.length - FINDINGS_KEY.length) <= NEAR_EDITS_MAX && editDistance(key, FINDINGS_KEY) <= NEAR_EDITS_MAX;
+}
+
+/**
+ * The 1-based lines of `text` that open or close a fence whose info string {@link isNearFindingsInfo} reads as near, and
+ * that are not the exact findings opening. No row reads the block under such a fence, so a finding written there would
+ * reach no ledger. A line of prose that quotes a fence is not a fence line.
+ */
+export function nearFindingsFences(text: string): number[] {
+  const open = fenceOpenPattern(FINDINGS_FENCE);
+  const near: number[] = [];
+  for (const [index, line] of text.replace(/^\uFEFF/, "").split(/\r?\n/).entries()) {
+    const info = ANY_FENCE_LINE.exec(line)?.[1];
+    if (info !== undefined && isNearFindingsInfo(info) && !open.test(line)) near.push(index + 1);
+  }
+  return near;
+}
+
+const NEAR_FENCE_MESSAGE =
+  "this fence's info string is close to stamity-findings but is not its exact opening, so no row reads it; write the opening as ```stamity-findings";
+
 /** The problems of one text field (`locator` or `summary`) that is already a string. */
 function textProblems(key: string, value: string): string[] {
   if (value.trim() === "") return [`${key} is empty`];
@@ -279,9 +335,13 @@ function readObject(raw: string): Record<string, unknown> | string {
  *
  * An empty block is `ok` with zero items: a pass that found nothing says so with
  * an empty block, and that is a valid answer, not a malformed one. No block, a
- * second block and an unclosed block are refusals of the whole text.
+ * second block and an unclosed block are refusals of the whole text. A fence near the opening but not it
+ * ({@link nearFindingsFences}) refuses the text first, one problem per such line, so a finding under a misspelt fence
+ * never passes for a report that found nothing.
  */
 export function parseFindingsBlock(text: string): BlockParse<Finding> {
+  const near = nearFindingsFences(text);
+  if (near.length > 0) return { ok: false, problems: near.map((line) => ({ line, message: NEAR_FENCE_MESSAGE })) };
   return parseBlock(text, FINDINGS_FENCE, "id", readFindingLine);
 }
 

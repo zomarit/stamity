@@ -3931,6 +3931,14 @@ describe("stamity run land", () => {
           ["is a .md whose name is not a report name, with no findings block", "notes.md", "# notes\n", "not a report name"],
           ["is a file of a kind the folder does not hold", "full-suite-r1.log", "all green\n", "not a report name"],
           ["is a diff patch whose context lines hold a finding", "u1-diff-r1.patch", ` \`\`\`stamity-findings\n ${WARNING} \`\`\`\n`, "holds findings"],
+          // REQ-FLOW-157 (1.19.1): a fence close to the opening but not exact, by a letter dropped, misspelt or doubled, or
+          // another separator, is one no row reads, as a fence naming `findings` already was.
+          ["holds a findings fence one letter short", "u1-reviewer-r1.md", fenced("```stamity-finding", "```"), DOES_NOT_READ],
+          ["holds a misspelt findings fence", "u1-reviewer-r1.md", fenced("```stamity-findngs", "```"), DOES_NOT_READ],
+          ["holds a findings fence with a letter doubled", "u1-reviewer-r1.md", fenced("```stamity-findiings", "```"), DOES_NOT_READ],
+          ["holds a findings fence with an underscore", "u1-reviewer-r1.md", fenced("```stamity_findings", "```"), DOES_NOT_READ],
+          ["holds an empty exact block beside a fence one letter short", "u1-reviewer-r1.md", `${findings("")}${fenced("```stamity-finding", "```")}`, DOES_NOT_READ],
+          ["is a diff patch whose context lines hold a near findings fence", "u1-diff-r1.patch", ` \`\`\`stamity-finding\n ${WARNING} \`\`\`\n`, DOES_NOT_READ],
         ])("writes none where a reports entry %s, naming it in Not done:, and the job refuses", async (_case, name, text, why) => {
           const { repo, remote } = await ending(LAND_ON, null);
           await put(repo, `${REPORTS}/${name}`, text);
@@ -4008,6 +4016,19 @@ describe("stamity run land", () => {
           route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: `${RUN_DIR}/record.md` }, { filename: LEDGER }]);
           gh.threads = [threadsPage([], BOT)];
           expect((await run(clone, LANDS)).doc).toMatchObject({ outcome: "landed", pr: { number: 7, head }, evidence: { ledger: { open: [] } }, notDone: [] });
+        });
+
+        // REQ-FLOW-157 (1.19.1): other fences beside an exact empty block are not near ones, so the clean run's ledger lands.
+        it("writes the empty ledger where a report's exact empty block sits beside text, sh, json, stamity-morning and stamity-closures fences", async () => {
+          const { repo } = await ending(LAND_ON, null);
+          const others = ["text", "sh", "json", "stamity-morning", "stamity-closures"].map((info) => `\`\`\`${info}\nx\n\`\`\`\n`).join("\n");
+          await put(repo, `${REPORTS}/u1-reviewer-r1.md`, `${findings("")}\n${others}`);
+
+          const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+          expect(result.code, JSON.stringify(result.doc)).toBe(0);
+          expect(result.doc).toMatchObject({ notDone: [] });
+          expect(git(repo, ["cat-file", "-s", `HEAD:${LEDGER}`])).toBe("0");
         });
 
         // review/191, amended (S105): a real cloud run saved its `gate held --json` result in its reports folder, the path the
