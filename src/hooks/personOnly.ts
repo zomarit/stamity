@@ -2176,6 +2176,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   let pushReach: readonly (readonly [string | null, WordMark | undefined])[] = [];
   /** Whether the last push read found the place's push configuration unreadable (`ctx.pushConfig`), for `pushRead`. */
   let pushUnread = false;
+  /** A remote or option word the last push read could not show, which git may read as a force or delete option, for `pushRead`. */
+  let pushUnshown: string | null = null;
   /**
    * A push's acts: its branch, force, deletion and tag acts, then the repository it reaches (`pushOutside`), then a push
    * configuration the guard cannot read whole or that the line also changes, each read as a push to the default branch,
@@ -2184,8 +2186,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   function pushRead(args: string[], config: string[], marks: readonly WordMark[]): void {
     pushReach = [];
     pushUnread = false;
+    pushUnshown = null;
     pushVerdict(args, config, marks);
     pushOutside(pushReach, config);
+    // Refuse-class (REQ-FLOW-124): recorded after the line's own acts, so a literal force or deletion is still the act named.
+    if (pushUnshown !== null) deny("force-push", pushUnshown);
     const reasons = [
       ...(pushUnread ? ["A push whose git configuration the guard cannot read whole"] : []),
       ...(pushConfigMoved ? ["A push on a line that also changes the git configuration a push reads"] : []),
@@ -2313,13 +2318,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         positionalMarks.push(marks[j]);
       }
     }
-    // An option word the line cannot show may be any push option: read as a push to the default branch, and to a
-    // deploying one where any is named. No return, so a refuse-class act on the line still decides.
-    if (hidden && !valueRead) {
-      const what = "A push holding an option word the line cannot show, which may be any push option";
-      if (deploying.length > 0) deny("push-deploying", what);
-      deny("push-default", what);
-    }
+    // An option word the line cannot show may be any push option, a force, mirror or delete option among them: refused
+    // by `pushRead`. No return, so the reads below still record.
+    if (hidden && !valueRead) pushUnshown ??= "A push holding an option word the line cannot show (it may be a force, mirror or delete option)";
     // `git send-pack --stdin` pushes more refs, read from its input after the line's own: refs the line cannot show, read
     // as a push to the default branch and to a deploying one where any is named. No return, so a refuse-class act still decides.
     if (stdin && !valueRead) {
@@ -2378,19 +2379,13 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const refless = positionals.length <= 1;
     // Any text the shell fills in, in the remote's place, may be an option git reads, its next word then the remote; an
     // unquoted expansion, a glob, a brace form or a PowerShell group may also split into the remote and refspecs. Either
-    // reads as a push to the default branch, and to a deploying one where any is named. No return, so the force,
-    // deletion and tag reads below still record, and a refuse-class act on the line still decides.
+    // may be a force, mirror or delete option: refused by `pushRead`. No return, so the force, deletion and tag reads
+    // below still record, and a literal refuse-class act on the line is the one named.
     const remoteMark = repoGiven ? "" : (positionalMarks[0]?.kinds ?? "");
     if (remoteMark !== "") {
-      const splits = /[sgbp]/.test(remoteMark);
-      if (deploying.length > 0) {
-        deny("push-deploying", splits
-          ? "A push whose remote word may split into refspecs the line cannot show"
-          : "A push whose remote word the line cannot show, which may be an option");
-      }
-      deny("push-default", splits
-        ? "A push whose remote word may split into refspecs or an option the line cannot show"
-        : "A push whose remote word the line cannot show, which may be an option");
+      pushUnshown ??= /[sgbp]/.test(remoteMark)
+        ? "A push whose remote word may split into refspecs or options the line cannot show (a force or a deletion among them)"
+        : "A push whose remote word the line cannot show (it may be a force, mirror or delete option)";
     }
     // git reads `tag <name>` as `refs/tags/<name>:refs/tags/<name>`, whatever the context lists.
     const tagWord = named.indexOf("tag");

@@ -1451,12 +1451,15 @@ describe("a place inside a line u6 reads (build/89, review/153) and a value the 
 
   it("counts a git -C value the line cannot show, a wrapper's brace placeholder among them, as unreadable", async () => {
     const guard = await placeGuard("claude", LINKED);
+    // TEST CHANGE, justified (REQ-FLOW-124): a push naming no remote under xargs reads the word xargs adds in the
+    // remote's place, which may be a force or delete option, so these lines now refuse under the force rule.
     for (const command of ["echo wt-main | xargs -I {} git -C {} push", "xargs -I{} git --git-dir {} push"]) {
-      expect(decide("claude", guard, command), command).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+      expect(decide("claude", guard, command), command).toMatchObject({ deny: true, reason: expect.stringContaining("(`force-push`)") });
     }
     // TEST CHANGE, justified (REQ-FLOW-102): a git call under xargs now reads as holding a word the line cannot show, so
     // this push asks whatever its place. A shown place alone still reads as one.
-    expect(decide("claude", guard, "xargs -I {} git -C wt-feat push")).toMatchObject({ deny: true, reason: expect.stringContaining("push-default") });
+    // TEST CHANGE, justified (REQ-FLOW-124): as above, the word xargs adds in the remote's place now refuses under the force rule.
+    expect(decide("claude", guard, "xargs -I {} git -C wt-feat push")).toMatchObject({ deny: true, reason: expect.stringContaining("(`force-push`)") });
     expect(decide("claude", guard, "git -C wt-feat push").deny).toBe(false);
     // TEST CHANGE, justified (REQ-FLOW-134, the orchestrator's sign-off): a push from a place the guard cannot read asks now.
     // TEST CHANGE, justified (REQ-FLOW-102): under xargs the push itself asks first, so it is the act named.
@@ -3399,21 +3402,23 @@ describe("a remote's HEAD ref written, on every client (b14b, review/163)", () =
 
 describe("a push whose remote or option word the shell fills in, with the origin placed", () => {
   const ORIGIN_CONFIG = '[remote "origin"]\n\turl = https://github.com/acme/app.git\n';
-  const REMOTE = "A push whose remote word the line cannot show, which may be an option";
-  const HIDDEN = "A push holding an option word the line cannot show, which may be any push option";
+  const REMOTE = "A push whose remote word the line cannot show (it may be a force, mirror or delete option)";
+  const HIDDEN = "A push holding an option word the line cannot show (it may be a force, mirror or delete option)";
   const asHelper = (command: string): string => JSON.stringify({ ...JSON.parse(payload("claude", command)), agent_id: "a1" });
-  const subAgent = (act: string): string =>
-    `${act} is a person-only act (\`push-default\`) and a sub-agent runs it: the act is the person's, so only the main thread may ask for it (REQ-FLOW-102). Give the person the exact command.`;
 
   // Red on 091d999b: the remote word asked as a push to another repository, and the option word ran with no ask.
+  // TEST CHANGE, justified (REQ-FLOW-124): such a word may be a force, mirror or delete option git reads, an act no
+  // approval reaches, so both rows moved from an ask on the main thread to a refusal on the main thread and for a
+  // sub-agent alike.
   it.each([
     ["a remote word", 'git push "$R" feat/x', REMOTE],
     ["an option word", 'git push --"$OPT" origin feat/x', HIDDEN],
-  ])("asks naming the default-branch rule for %s on the main thread, and refuses it for a sub-agent", async (_, command, act) => {
+  ])("refuses naming the force rule for %s on the main thread and for a sub-agent", async (_, command, act) => {
     const guard = await placeGuard("claude", { ".git/config": ORIGIN_CONFIG });
-    expect(decide("claude", guard, command), command).toEqual(expectedAttended("claude", { act, rule: "push-default", ask: true }));
+    const refused = expectedAttended("claude", { act, rule: "force-push", ask: false });
+    expect(decide("claude", guard, command), command).toEqual(refused);
     const helper = clientDecision("claude", run(guard, asHelper(command)), `helper: ${command}`);
-    expect(helper, `helper: ${command}`).toEqual({ deny: true, reason: expect.stringContaining(subAgent(act)) });
+    expect(helper, `helper: ${command}`).toEqual(refused);
     // One fact away: the same push with a literal remote and options runs.
     expect(decide("claude", guard, "git push -u origin feat/x")).toEqual({ deny: false });
   });
