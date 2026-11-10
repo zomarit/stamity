@@ -1464,7 +1464,9 @@ describe("README", () => {
   // TEST CHANGE, justified (plan 024, sign-off S31; units d-gc, s-skill-verb and n-away-verb): `gc`, `skill` and
   // `away` join the advertised surface after `clean`, in that CLI order (`src/cli.ts`), so README names thirteen verbs
   // and this array gains all three. The order and length assertions keep their shape.
-  it("states the command surface — thirteen verbs plus the plumbing verbs", () => {
+  // TEST CHANGE, justified (plan 024, unit x-ready-verb, S62; REQ-FLOW-182): `ready` joins the advertised surface
+  // after `validate` (`src/cli.ts`), so README names fourteen verbs and this array gains it in that CLI position.
+  it("states the command surface — fourteen verbs plus the plumbing verbs", () => {
     const text = read(README);
     const ADVERTISED = [
       "init",
@@ -1472,6 +1474,7 @@ describe("README", () => {
       "upgrade",
       "check",
       "validate",
+      "ready",
       "add",
       "config",
       "workspace",
@@ -1496,9 +1499,9 @@ describe("README", () => {
     expect(listed, "README's `·` verb list is not the advertised surface").toEqual(ADVERTISED);
     // The count WORD beside the list is still hand-typed; the length assertion
     // next to it is what makes the two disagreeing visible.
-    expect(listed).toHaveLength(13);
+    expect(listed).toHaveLength(14);
     expect(commands, "README's verb count word does not match its own list").toContain(
-      "thirteen verbs",
+      "fourteen verbs",
     );
     expect(text).toContain("`learn`");
     // TEST CHANGE, justified: `handoff` joined `learn` behind the advertised surface, so
@@ -4703,6 +4706,9 @@ describe("the guides", () => {
       "upgrade",
       "check",
       "validate",
+      // TEST CHANGE, justified (plan 024, unit x-ready-verb, S62; REQ-FLOW-182): `ready` joins this copy of the
+      // surface from its CLI position after `validate`, with the README array.
+      "ready",
       "add",
       "config",
       "workspace",

@@ -166,9 +166,9 @@ Codex, and each starts only when you name it.
 The npm route is proved before it ships, on a clean machine, lane by lane, on
 [the measurements page](measurements.md).
 
-## The thirteen verbs
+## The fourteen verbs
 
-`init` · `sync` · `upgrade` · `check` · `validate` · `add` · `config` · `workspace` ·
+`init` · `sync` · `upgrade` · `check` · `validate` · `ready` · `add` · `config` · `workspace` ·
 `worktree` · `clean` · `gc` · `skill` · `away`
 
 The package installs two names: `stamity` and the shorter alias `st`. The alias is going: it
@@ -446,7 +446,7 @@ One spelling per idea, across every page.
 | corpus | the canonical content stamity ships — `content/` plus `packs/`. Authored once, emitted per client. |
 | charter | the always-on file every generated setup carries: your repository's facts, the floor invariants, and the touchpoint index. It is written as `AGENTS.md`. |
 | touchpoint | one of the nine `/st-` slash commands your agent runs. Your client decides the invocation form. |
-| verb | one of the thirteen names you type after `stamity`: `init`, `sync`, `upgrade`, `check`, `validate`, `add`, `config`, `workspace`, `worktree`, `clean`, `gc`, `skill`, `away`. |
+| verb | one of the fourteen names you type after `stamity`: `init`, `sync`, `upgrade`, `check`, `validate`, `ready`, `add`, `config`, `workspace`, `worktree`, `clean`, `gc`, `skill`, `away`. |
 | manifest | `.stamity/manifest.json` — the record of your setup: its clients, its config, and every file stamity wrote. |
 | managed block | the span between a `STAMITY:BEGIN` and a `STAMITY:END` marker. Every sync rewrites it; the text outside it is yours. |
 | drift | disk and the engine's output disagreeing. `check` asks whether a sync would change anything, and names each file that would. |
