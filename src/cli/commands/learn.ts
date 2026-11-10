@@ -595,9 +595,9 @@ async function headOf(path: string, bytes: number): Promise<string | null> {
  * a run in progress reading `Mode: unattended`, else `STAMITY_UNATTENDED` set with no run in progress reading
  * `Mode: attended`. Never the named run's own `Mode:` alone: an unattended run that closed is the one whose proposal a
  * person walks in the morning, so that line would refuse the very accept this verb exists for. A read that fails
- * refuses, since it leaves the mode unknown.
+ * refuses, since it leaves the mode unknown. `skill add` reads the session through this one function too.
  */
-async function unattendedSession(ctx: CliContext, rootDir: string): Promise<string | null> {
+export async function unattendedSession(ctx: CliContext, rootDir: string): Promise<string | null> {
   const { layout, resumeCard } = ctx.engine.runs;
   const runsDir = join(rootDir, ...layout.RUNS_SEGMENTS);
   try {

@@ -1,4 +1,4 @@
-import { lstat, open, readdir } from "node:fs/promises";
+import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Command } from "commander";
 import type { PackContentRoot } from "../../content/catalog.ts";
@@ -7,6 +7,7 @@ import { readSkillSources, SKILL_SOURCES_REL_PATH } from "../../skills/sources.t
 import { STATE_DIR } from "../../types/markers.ts";
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
+import { unattendedSession } from "./learn.ts";
 
 /**
  * `stamity skill` — skills copied in from a source the repository trusts (REQ-FLOW-180).
@@ -22,54 +23,6 @@ import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts
  */
 
 const SUBCOMMANDS = ["add", "list", "remove"] as const;
-
-/** `learn`'s read of a run record head: the first bytes only. */
-async function headOf(path: string, bytes: number): Promise<string | null> {
-  const entry = await lstat(path).catch((cause: NodeJS.ErrnoException) => {
-    if (cause.code === "ENOENT") return null;
-    throw cause;
-  });
-  if (entry === null || !entry.isFile()) return null;
-  const handle = await open(path, "r");
-  try {
-    const { buffer, bytesRead } = await handle.read(Buffer.alloc(bytes), 0, bytes, 0);
-    return buffer.toString("utf8", 0, bytesRead);
-  } finally {
-    await handle.close();
-  }
-}
-
-/**
- * What makes this session unattended, or `null`, as `learn capture` reads it (`./learn.ts`, `unattendedSession`): a run
- * in progress reading `Mode: unattended`, else `STAMITY_UNATTENDED` set with no run in progress reading
- * `Mode: attended`. A read that fails refuses, since it leaves the mode unknown.
- */
-async function unattendedSession(ctx: CliContext, rootDir: string): Promise<string | null> {
-  const { layout, resumeCard } = ctx.engine.runs;
-  const runsDir = join(rootDir, ...layout.RUNS_SEGMENTS);
-  try {
-    const entries = await readdir(runsDir, { withFileTypes: true }).catch((cause: NodeJS.ErrnoException) => {
-      if (cause.code === "ENOENT" || cause.code === "ENOTDIR") return [];
-      throw cause;
-    });
-    const runs = entries.filter((entry) => entry.isDirectory() && layout.isRunId(entry.name)).map((entry) => entry.name);
-    const heads = await Promise.all(
-      runs.map(async (run) => {
-        const record = await headOf(join(runsDir, run, layout.RECORD_FILE), layout.RECORD_HEAD_READ_BYTES);
-        return { run, head: record === null ? null : resumeCard.readRecordHead(record) };
-      }),
-    );
-    const running = heads.filter(({ head }) => head?.inProgress === true);
-    const held = running.find(({ head }) => head?.mode === "unattended");
-    if (held !== undefined) return `${layout.runRelPath(held.run)}/${layout.RECORD_FILE} reads \`Status: in progress\` and \`Mode: unattended\``;
-    if (running.some(({ head }) => head?.mode === "attended")) return null;
-    return resumeCard.readsUnattended(null, ctx.app.runtime.env["STAMITY_UNATTENDED"])
-      ? "STAMITY_UNATTENDED is set and no in-progress run record reads `Mode: attended`"
-      : null;
-  } catch (cause) {
-    return `the run records could not be read (${cause instanceof Error ? cause.message : String(cause)})`;
-  }
-}
 
 /**
  * Whether nobody is watching, or `null`: `STAMITY_NOBODY_WATCHING` set and not `""`, `0` or `false`, or anything at

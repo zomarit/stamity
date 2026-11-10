@@ -1,7 +1,8 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { learnCommand } from "../../../src/cli/commands/learn.ts";
 import { skillCommand } from "../../../src/cli/commands/skill.ts";
 import { createApp } from "../../../src/index.ts";
 import { createManifest, readManifest, writeManifest } from "../../../src/manifest/manifest.ts";
@@ -268,6 +269,73 @@ describe.skipIf(!gitAvailable)("stamity skill", () => {
     const result = await skill(fx.root, add(fx), { STAMITY_UNATTENDED: "1" });
 
     expect(result.code).toBe(0);
+  });
+
+  /** A live `learn capture` in the same tree, the command whose reading of the session `skill add` shares. */
+  function learnCapture(root: string, env: Record<string, string>): Promise<InProcessResult> {
+    const body = "## Why\n\nThe session's mode decides both writes.\n\n## How to apply\n\nRead it once, in one place.\n";
+    return runInProcess([learnCommand], ["learn", "capture", "--title", "session mode", "--summary", "One reading of the mode.", "--json"], {
+      cwd: root,
+      env,
+      stdinLines: [body],
+    });
+  }
+
+  /** The refusal's reason up to the clause each command adds after it: the reading of the session alone. */
+  function sessionReason(result: InProcessResult): string {
+    const doc = JSON.parse(result.stdout) as { error?: { why?: string } };
+    return String(doc.error?.why).split(", and ")[0] ?? "";
+  }
+
+  async function writeRunRecord(root: string, run: string, mode: string): Promise<void> {
+    await mkdir(join(root, ".stamity", "runs", run), { recursive: true });
+    await writeFile(join(root, ".stamity", "runs", run, "record.md"), `# Run ${run}\n\nStatus: in progress\nMode: ${mode}\n`);
+  }
+
+  // REQ-FLOW-180, REQ-FLOW-163: `skill add` reads the session as `learn capture` reads it, one reading for both verbs,
+  // so a refusal names the same cause and an attended run lets both through.
+  it.each([
+    ["an in-progress run reading Mode: unattended", "unattended", {}, ".stamity/runs/2026-11-09_night/record.md reads `Status: in progress` and `Mode: unattended`"],
+    ["STAMITY_UNATTENDED with no run in progress", null, { STAMITY_UNATTENDED: "1" }, "STAMITY_UNATTENDED is set and no in-progress run record reads `Mode: attended`"],
+  ] as const)("refuses for %s with the reason learn capture gives", async (_name, mode, env, reason) => {
+    const fx = await fixture();
+    if (mode !== null) await writeRunRecord(fx.root, "2026-11-09_night", mode);
+
+    const added = await skill(fx.root, add(fx, "--json"), env);
+    const captured = await learnCapture(fx.root, env);
+
+    expect([added.code, captured.code]).toEqual([1, 1]);
+    expect(sessionReason(added)).toBe(reason);
+    expect(sessionReason(captured)).toBe(reason);
+    await expect(readdir(join(fx.root, ".stamity", "overrides"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  // Parity with learn.test.ts's "takes an attended run in progress over the variable".
+  it("adds, as learn capture captures, while an in-progress run reads Mode: attended under STAMITY_UNATTENDED", async () => {
+    const fx = await fixture();
+    await writeRunRecord(fx.root, "2026-11-09_day", "attended");
+
+    const added = await skill(fx.root, add(fx), { STAMITY_UNATTENDED: "1" });
+    const captured = await learnCapture(fx.root, { STAMITY_UNATTENDED: "1" });
+
+    expect(added.code, added.stdout + added.stderr).toBe(0);
+    expect(captured.code, captured.stdout + captured.stderr).toBe(0);
+    expect(await readFile(join(fx.root, ".stamity", "overrides", "skills", "house-style", "SKILL.md"), "utf8")).toBe(SKILL_MD);
+  });
+
+  // A record that is a link is no record, for both verbs: the head is read only off a regular file.
+  it.skipIf(process.platform === "win32")("reads a record that is a link as no record, as learn capture does", async () => {
+    const fx = await fixture();
+    const run = join(fx.root, ".stamity", "runs", "2026-11-09_night");
+    await mkdir(run, { recursive: true });
+    await writeFile(join(fx.root, "elsewhere.md"), "# Run 2026-11-09_night\n\nStatus: in progress\nMode: unattended\n");
+    await symlink(join(fx.root, "elsewhere.md"), join(run, "record.md"));
+
+    const added = await skill(fx.root, add(fx));
+    const captured = await learnCapture(fx.root, {});
+
+    expect(added.code, added.stdout + added.stderr).toBe(0);
+    expect(captured.code, captured.stdout + captured.stderr).toBe(0);
   });
 
   it("prints the tool grant a copy carries from a source that allows scripts", async () => {
