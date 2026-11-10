@@ -176,9 +176,11 @@ carried none of it. And the land job answered `not-a-run`, as above. Each failed
 On 2026-11-10 the label started three more runs, and the third landed with no hand step: the land job
 marked its draft ready and merged it on the next CI. The first answered `not-a-run` on this cloud's
 footer, and in the second the land job refused, since a run whose review found nothing wrote no
-ledger. 1.19.0 fixes both. The session's own `run land` is refused while it is unattended, since a
-merge is a person's act, so the session's last message says the merge waits on a person, even though
-the land job merges moments later. [The factory](factory.md) has the detail.
+ledger. 1.19.0 fixes both. The session's own `run land` did not land either time it ran: in the
+second run it refused because the review threads could not be read, as above, and in the third the
+cloud session's own permission check denied the land call. Both times the land job merged the pull
+request afterwards. The session's last message then said the merge waited on a person, though the
+land job merged moments later. [The factory](factory.md) has the detail.
 
 ### Protect the default branch
 

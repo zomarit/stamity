@@ -91,9 +91,12 @@ the person who added the label was the account the run acts as, with push rights
    one Minor, which the run recorded and fixed itself.
 
 So on Claude's cloud this route now goes from the label to a merge. Two things after it are still
-yours. The session's own `run land` is refused while it is unattended, since a merge is a person's
-act, so the session's last message says the merge waits on a person, even though the land job merges
-moments later: look at the pull request, not the session. And after the land job's merge the issue
+yours. The session's own `run land` did not land either time it ran: in the second run it refused
+because the review threads could not be read, since this cloud's proxy blocks that query, and in the
+third the cloud session's own permission check denied the land call. Both times the land job merged
+the pull request afterwards, in the second run after the hand check and in the third with no hand
+step. The session's last message then said the merge waited on a person, though the land job merged
+moments later, so look at the pull request, not the session. And after the land job's merge the issue
 stays open and labelled, as Step 10 says.
 
 On Cursor's cloud, on 2026-11-08, two sessions reached the pre-flight and refused at `direct-push`, and
