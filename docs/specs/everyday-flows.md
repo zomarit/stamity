@@ -7351,14 +7351,27 @@ agent's command line, Then the guard refuses it (REQ-FLOW-121).
   ledger was missing from the head commit. So the "As built" bullet above that `end` "commits `PR: <n>` and
   `Login: <login>` at the head" now reads: with `autonomy.landJob` on, an `end` with its own pull request also writes the
   run's `ledger.jsonl` as an empty file where the work tree holds nothing at that path, and commits it at the head in the
-  same pass as those lines (`writeEmptyLedger`, `src/cli/commands/run.ts`). It never writes over a ledger that exists,
-  and it writes none where the branch's history holds a ledger the work tree no longer does, since a deleted ledger is
-  not a clean one. That case, and a write that fails, is a `Not done:` line, and the exit code does not move. With
-  `autonomy.landJob` off it writes no ledger. The land job still refuses a head with no ledger, unchanged.
+  same pass as those lines (`writeEmptyLedger`, `src/cli/commands/run.ts`). It never writes over a ledger that exists.
+  It first reads the run's `reports/` folder, and writes none where a report-named file's findings block holds an item
+  or does not parse, where such a file does not read (a link or a folder in its place, or over the report read cap), or
+  where the folder is not a folder, does not list, or holds more report names than the cap on reads, since with no ledger
+  each such finding is one no row carries (an append skipped, or refused for a block that did not parse). No `reports/`
+  folder, and a report with an empty findings block or none, read as no findings. It also writes none where any ref's
+  history, read with `--full-history`, holds a ledger the work tree no longer does, since a deleted ledger is not a clean
+  one. A shallow clone does not stop the write: its history ends at its first commit, a cloud's checkout may be one, and
+  there the reports read is the guard that holds. Each of those cases, a history that does not read, and a write that
+  fails is a `Not done:` line, a report named by its file name only, and the exit code does not move. With
+  `autonomy.landJob` off it writes no ledger. The land job still refuses a head with no ledger, unchanged. Limits: a
+  finding no report file holds (an append fed on stdin alone), or a ledger lost before a shallow clone's first commit,
+  is not seen.
   - Proof: `test/cli/commands/runLand.test.ts` ("commits an empty ledger beside PR: and Login: with landJob on, and the
     job's evidence reads no open row", "leaves a ledger with rows byte-identical with landJob on", "writes no ledger with
     landJob off", "writes none where the run's history holds a ledger the work tree lost, naming it in Not done:",
-    "leaves the job refusing a head with no ledger, unchanged").
+    "writes none where a run report %s, naming the report in Not done:, and the job refuses", "writes none where a
+    report-named path does not read, a link in its place", "writes the empty ledger where every run report's findings
+    block is empty or absent", "writes none where a merged side branch added and deleted the ledger", "writes none where
+    the ledger's history does not read, naming it in Not done:", "names a ledger write that fails in Not done:, the exit
+    code unmoved", "leaves the job refusing a head with no ledger, unchanged").
 - **Proof:** `test/adapters/landWorkflow.test.ts`, `test/cli/commands/runLand.test.ts`, `test/hooks/personOnlyGuard.test.ts`.
 - **Source:** `src/adapters/landWorkflow.ts`, `src/cli/commands/runLand.ts`, `src/cli/commands/run.ts`,
   `src/hooks/personOnly.ts`.

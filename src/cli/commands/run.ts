@@ -174,7 +174,8 @@ import { runLand } from "./runLand.ts";
  * **The land job's lines** (REQ-FLOW-157): with `autonomy.landJob` on, an `end` with its own pull request appends `PR: <n>`
  * and `Login: <login>` to the record, writes the run's ledger as an empty file where none exists (amended 2026-11-10: a run
  * whose reviews found nothing has none, and the job refuses a head without one), and runs itself once more, so they reach the
- * head through every check above. An existing ledger is never written, nor one HEAD's history holds and the work tree lost.
+ * head through every check above. An existing ledger is never written, nor one where a run report holds a finding or does
+ * not read, nor one any ref's history holds and the work tree lost.
  * A failure is a `notDone` line and never moves the exit code: the job then refuses for want of the lines or the ledger.
  *
  * **`land`** (REQ-FLOW-132, REQ-FLOW-133) merges the run's own pull request, or fast-forwards the default branch to
@@ -1685,7 +1686,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   // REQ-FLOW-157: the land job has only what the head holds, so an `end` that wrote its lines commits them through this same
   // door; the pull request's number exists only after the first push, so that takes a second pass, whose lines already stand.
   const stamped = verb === END && opts["refused"] !== true && step.pr !== null && step.pr.how !== "commented" && step.repo !== undefined
-    ? await stampLandJobLines(ctx, { cwd, recordRel, ledgerRel: `${runDir}/${layout.LEDGER_FILE}`, repo: step.repo, top, number: step.pr.number }, result.notDone)
+    ? await stampLandJobLines(ctx, { cwd, recordRel, ledgerRel: `${runDir}/${layout.LEDGER_FILE}`, reportsRel: `${runDir}/${layout.REPORTS_DIR}`, repo: step.repo, top, number: step.pr.number }, result.notDone)
     : false;
   const noticed =
     verb === END && opts["refused"] !== true && step.pr !== null && step.repo !== undefined
@@ -1716,7 +1717,7 @@ function landJobOn(cwd: string): boolean {
  * empty ledger {@link writeEmptyLedger} writes and the record lines {@link writeLandJobLines} writes. `true` once either was
  * written, so the caller's second pass commits it.
  */
-async function stampLandJobLines(ctx: CliContext, at: { cwd: string; recordRel: string; ledgerRel: string; repo: OriginRepo; top: string; number: number }, notDone: string[]): Promise<boolean> {
+async function stampLandJobLines(ctx: CliContext, at: { cwd: string; recordRel: string; ledgerRel: string; reportsRel: string; repo: OriginRepo; top: string; number: number }, notDone: string[]): Promise<boolean> {
   if (!landJobOn(at.cwd)) return false;
   const ledger = await writeEmptyLedger(ctx, at, notDone);
   const lines = await writeLandJobLines(ctx, at, notDone);
@@ -1726,16 +1727,23 @@ async function stampLandJobLines(ctx: CliContext, at: { cwd: string; recordRel: 
 /**
  * REQ-FLOW-157, amended 2026-11-10: the run's ledger as an empty file where the work tree holds nothing at its path. `ledger
  * append` with no findings writes none, so a run whose reviews found nothing had no ledger at the head, and the job, which
- * refuses a missing one, refused a clean run. Anything at the path is left as it stands; so is a ledger HEAD's history holds
- * and the work tree lost, since a deleted ledger is no clean one. `true` once written; failure is a `notDone` line.
+ * refuses a missing one, refused a clean run. Anything at the path is left as it stands. None is written where a run report
+ * holds a finding or does not read (review/188: a finding whose append was skipped or refused never reached a ledger, and an
+ * empty one would land it as clean), nor where any ref's history holds a ledger the work tree lost, since a deleted ledger
+ * is no clean one. `true` once written; failure is a `notDone` line.
  */
-async function writeEmptyLedger(ctx: CliContext, at: { cwd: string; ledgerRel: string }, notDone: string[]): Promise<boolean> {
+async function writeEmptyLedger(ctx: CliContext, at: { cwd: string; ledgerRel: string; reportsRel: string }, notDone: string[]): Promise<boolean> {
   if (exists(join(at.cwd, at.ledgerRel))) return false;
   const unwritten = (why: string): boolean => {
     notDone.push(`empty ledger not written: ${why}, so the land job refuses this run`);
     return false;
   };
-  const past = await git(at.cwd, ["log", "-1", "--format=%H", "HEAD", "--", at.ledgerRel], END);
+  const held = reportsHoldingFindings(ctx, join(at.cwd, at.reportsRel), at.reportsRel);
+  if (held !== null) return unwritten(held);
+  // review/189: every ref, with `--full-history`, so a ledger added and deleted on a merged side branch still counts. A
+  // shallow clone cannot see past its first commit, and refusing every shallow clone would refuse every cloud run, whose
+  // checkout may be one: there the reports read above is the guard that holds, the reports never leaving the work tree.
+  const past = await git(at.cwd, ["log", "-1", "--format=%H", "--full-history", "--all", "--", at.ledgerRel], END);
   if (past.code !== 0) return unwritten(`the history of ${at.ledgerRel} did not read`);
   if (past.stdout.trim() !== "") return unwritten(`${at.ledgerRel} was committed before and the work tree no longer holds it`);
   try {
@@ -1744,6 +1752,38 @@ async function writeEmptyLedger(ctx: CliContext, at: { cwd: string; ledgerRel: s
     return unwritten(`${at.ledgerRel} (${cause instanceof Error ? cause.message : "the write failed"})`);
   }
   return true;
+}
+
+/**
+ * review/188: why the run's reports rule out an empty ledger, or `null` where none does. With no ledger, every finding a
+ * report holds is one no row carries, so a report-named file whose findings block holds an item or does not parse, or that
+ * does not read (a link or a folder in its place, over the report read cap), stops the write, as does a reports folder that
+ * is not a folder, does not list, or holds more report names than the cap on reads. No reports folder, and a report with
+ * an empty findings block or none, read as no findings. Reports are named by file name only.
+ */
+function reportsHoldingFindings(ctx: CliContext, dir: string, rel: string): string | null {
+  const { layout, blocks } = ctx.engine.runs;
+  if (!exists(dir)) return null;
+  let names: string[];
+  try {
+    if (!lstatSync(dir).isDirectory()) return `${rel} is not a folder`;
+    names = readdirSync(dir).filter((name) => layout.REPORT_NAME_PATTERN.test(name)).toSorted();
+  } catch {
+    return `${rel} could not be read`;
+  }
+  if (names.length > layout.REPORT_READS_MAX) return `${rel} holds over ${layout.REPORT_READS_MAX} reports, past what is read`;
+  const open = layout.fenceOpenPattern(layout.FINDINGS_FENCE);
+  const held = names.filter((name) => {
+    const read = readCapped(join(dir, name), layout.REPORT_READ_MAX_BYTES);
+    if (read === null || read.truncated) return true;
+    if (!read.text.replace(/^\uFEFF/, "").split(/\r?\n/).some((line) => open.test(line))) return false;
+    const parsed = blocks.parseFindingsBlock(read.text);
+    return !parsed.ok || parsed.items.length > 0;
+  });
+  if (held.length === 0) return null;
+  const shown = held.slice(0, layout.CARD_LIST_MAX).join(", ");
+  const more = held.length > layout.CARD_LIST_MAX ? ` and ${held.length - layout.CARD_LIST_MAX} more` : "";
+  return `${held.length === 1 ? "a run report holds" : "run reports hold"} findings no ledger row carries, or did not read: ${shown}${more}`;
 }
 
 /**

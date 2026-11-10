@@ -11,6 +11,7 @@ import { LAND_CLOCK } from "../../../src/cli/commands/runLand.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
 import type * as GhRunnerModule from "../../../src/cli/engine/ghRunner.ts";
 import type * as ChangeRangeModule from "../../../src/cli/engine/changeRange.ts";
+import type * as AtomicWriteModule from "../../../src/merge/atomicWrite.ts";
 import type * as FsModule from "node:fs";
 import { resolveAutonomy } from "../../../src/config/autonomy.ts";
 import { LAND_JOB_NAME } from "../../../src/adapters/landWorkflow.ts";
@@ -211,6 +212,20 @@ vi.mock("../../../src/cli/engine/changeRange.ts", async (importOriginal) => {
   };
 });
 
+/** review/190: a path suffix whose atomic write a case makes fail; `null` writes every path for real. */
+const atomic = vi.hoisted(() => ({ failing: null as string | null }));
+
+// A spy over the real write, which runs in every case but one. Mock reason (review/190): `run end` writes the empty ledger
+// only where nothing is at its path, so no file a case can put there makes that one write fail and leaves the rest to run.
+vi.mock("../../../src/merge/atomicWrite.ts", async (importOriginal) => {
+  const real = await importOriginal<typeof AtomicWriteModule>();
+  return {
+    ...real,
+    atomicWriteFile: (...args: Parameters<typeof real.atomicWriteFile>) =>
+      atomic.failing !== null && args[0].replaceAll("\\", "/").endsWith(atomic.failing) ? Promise.reject(new Error("disk full")) : real.atomicWriteFile(...args),
+  };
+});
+
 /** review/177: a verdict a case hands the fast-forward's push check in place of the real table's; `null` reads the real one. */
 const table = vi.hoisted(() => ({ push: null as PersonOnlyModule.PersonOnlyVerdict | null, commands: [] as string[] }));
 
@@ -258,6 +273,7 @@ describe("stamity run land", () => {
     gh.editorsRefused = false;
     gh.resolve = { status: 200, json: { data: { resolveReviewThread: { thread: { isResolved: true } } } } };
     range.refusal = null;
+    atomic.failing = null;
     gh.afterReady = ["clean"];
     gh.afterReadyPr = {};
     gh.program = "/usr/bin/gh";
@@ -3880,9 +3896,118 @@ describe("stamity run land", () => {
 
           const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
 
+          // TEST CHANGE, justified (review/190): the spec says the exit code does not move, so the case holds it to 0.
+          expect(result.code, JSON.stringify(result.doc)).toBe(0);
           expect(result.doc).toMatchObject({ notDone: [`empty ledger not written: ${LEDGER} was committed before and the work tree no longer holds it, so the land job refuses this run`] });
           expect(existsSync(join(repo, LEDGER))).toBe(false);
           expect(git(repo, ["ls-tree", "HEAD", "--", LEDGER])).toBe("");
+        });
+
+        // review/188: a finding whose append was skipped, or refused for a block that did not parse, reached no ledger, and
+        // the reports that hold it sit git-ignored in the work tree; an empty ledger would land that run as clean.
+        const REPORTS = `${RUN_DIR}/reports`;
+        const findings = (inner: string): string => `# r1\n\n\`\`\`stamity-findings\n${inner}\`\`\`\n`;
+        const WARNING = `${JSON.stringify({ id: "W-1", severity: "Warning", locator: "a.txt:1", summary: "b is wrong" })}\n`;
+
+        it.each([
+          ["holds a finding", WARNING],
+          ["holds a findings block that does not parse", "not json\n"],
+        ])("writes none where a run report %s, naming the report in Not done:, and the job refuses", async (_case, inner) => {
+          const { repo, remote } = await ending(LAND_ON, null);
+          await put(repo, `${REPORTS}/u1-reviewer-r1.md`, findings(inner));
+          await put(repo, `${REPORTS}/u1-test-runner-r1.md`, "# gates\n\nall green\n");
+
+          const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+          expect(result.code, JSON.stringify(result.doc)).toBe(0);
+          expect(result.doc).toMatchObject({
+            notDone: ["empty ledger not written: a run report holds findings no ledger row carries, or did not read: u1-reviewer-r1.md, so the land job refuses this run"],
+          });
+          expect(existsSync(join(repo, LEDGER))).toBe(false);
+          const head = git(repo, ["rev-parse", "HEAD"]);
+          expect(git(repo, ["ls-tree", head, "--", LEDGER])).toBe("");
+
+          const clone = join(dirname(repo), "job");
+          git(dirname(repo), ["clone", "-q", "-b", RUN_BRANCH, remote, clone]);
+          git(clone, ["remote", "set-url", "origin", "https://github.com/o/r.git"]);
+          route("GET repos/o/r/pulls/7", pull(head));
+          route(`GET repos/o/r/commits/${head}/check-runs`, { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] });
+          route(`GET repos/o/r/branches/${RUN_BRANCH}`, { commit: { sha: head } });
+          gh.threads = [threadsPage([], BOT)];
+          expect((await run(clone, LANDS)).doc).toMatchObject({ outcome: "refused", notDone: [`the ledger at ${head} does not read: ${LEDGER} is missing from the commit`] });
+          expect(writes()).not.toContain("merge");
+        });
+
+        it("writes none where a report-named path does not read, a link in its place", async () => {
+          const { repo } = await ending(LAND_ON, null);
+          await mkdir(join(repo, REPORTS), { recursive: true });
+          await symlink(join(repo, "a.txt"), join(repo, REPORTS, "u1-reviewer-r1.md"));
+
+          const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+          expect(result.code, JSON.stringify(result.doc)).toBe(0);
+          expect(result.doc).toMatchObject({
+            notDone: ["empty ledger not written: a run report holds findings no ledger row carries, or did not read: u1-reviewer-r1.md, so the land job refuses this run"],
+          });
+          expect(existsSync(join(repo, LEDGER))).toBe(false);
+        });
+
+        it("writes the empty ledger where every run report's findings block is empty or absent", async () => {
+          const { repo } = await ending(LAND_ON, null);
+          await put(repo, `${REPORTS}/u1-reviewer-r1.md`, findings(""));
+          await put(repo, `${REPORTS}/u1-test-runner-r1.md`, "# gates\n\nall green\n");
+
+          const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+          expect(result.code, JSON.stringify(result.doc)).toBe(0);
+          expect(result.doc).toMatchObject({ notDone: [] });
+          expect(git(repo, ["cat-file", "-s", `HEAD:${LEDGER}`])).toBe("0");
+        });
+
+        // review/189: a merge whose side branch added and deleted the ledger leaves both parents without one, so git's default
+        // history simplification prunes that side and a plain `git log HEAD -- <ledger>` finds nothing.
+        it("writes none where a merged side branch added and deleted the ledger", async () => {
+          const { repo } = await ending(LAND_ON, null);
+          git(repo, ["switch", "-q", "-c", "side"]);
+          await put(repo, LEDGER, row(`${RUN}/review/1`, "Warning", "open"));
+          git(repo, ["add", "--", LEDGER]);
+          git(repo, ["commit", "-q", "-m", "ledger"]);
+          git(repo, ["rm", "-q", "--", LEDGER]);
+          git(repo, ["commit", "-q", "-m", "lost"]);
+          git(repo, ["switch", "-q", RUN_BRANCH]);
+          git(repo, ["merge", "-q", "--no-ff", "-m", "merge side", "side"]);
+          git(repo, ["branch", "-q", "-D", "side"]);
+          expect(git(repo, ["log", "-1", "--format=%H", "HEAD", "--", LEDGER])).toBe("");
+
+          const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+          expect(result.code, JSON.stringify(result.doc)).toBe(0);
+          expect(result.doc).toMatchObject({ notDone: [`empty ledger not written: ${LEDGER} was committed before and the work tree no longer holds it, so the land job refuses this run`] });
+          expect(existsSync(join(repo, LEDGER))).toBe(false);
+        });
+
+        it("writes none where the ledger's history does not read, naming it in Not done:", async () => {
+          const { repo } = await ending(LAND_ON, null);
+          // A ref naming an object the repository does not hold: `git log --all` stops on it.
+          await put(repo, ".git/refs/heads/broken", `${"0".repeat(39)}1\n`);
+
+          const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+          expect(result.code, JSON.stringify(result.doc)).toBe(0);
+          expect(result.doc).toMatchObject({ notDone: expect.arrayContaining([`empty ledger not written: the history of ${LEDGER} did not read, so the land job refuses this run`]) });
+          expect(existsSync(join(repo, LEDGER))).toBe(false);
+        });
+
+        it("names a ledger write that fails in Not done:, the exit code unmoved", async () => {
+          const { repo } = await ending(LAND_ON, null);
+          atomic.failing = LEDGER;
+
+          const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+          expect(result.code, JSON.stringify(result.doc)).toBe(0);
+          expect(result.doc).toMatchObject({ notDone: [`empty ledger not written: ${LEDGER} (disk full), so the land job refuses this run`] });
+          expect(existsSync(join(repo, LEDGER))).toBe(false);
+          expect(git(repo, ["show", `HEAD:${RUN_DIR}/record.md`])).toMatch(/\nPR: 7\nLogin: runner$/);
         });
 
         it("leaves the job refusing a head with no ledger, unchanged", async () => {
