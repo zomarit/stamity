@@ -415,7 +415,11 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // Moved again 2026-11-10 on the u-ci1 lane (the branch's first Windows run), by what was measured: 349,390 bytes /
   // 7,207 lines (copilot, generated), past both rows, because on Windows the install check also reads a shell line's
   // backslash as Git Bash does, an escape (n\pm is npm). 348,713 + 677 = 349,390 bytes; 7,203 + 4 = 7,207 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 349_390, lines: 7_207 },
+  // Moved again 2026-11-10 by the u-ci1 fix round (sign-offs S85, S86), by what was measured: 349,784 bytes / 7,209
+  // lines (copilot, generated), past both rows, because the Git Bash reading now runs for Claude's Bash tool alone and
+  // the refusal's fix names the checkout with forward slashes on Windows outside PowerShell.
+  // 349,390 + 394 = 349,784 bytes; 7,207 + 2 = 7,209 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 349_784, lines: 7_209 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -5455,11 +5459,13 @@ function installFolders(line, start, depth = 0, cut = false, escapes = undefined
  * it, up to the repository's top (sign-off S54), and a workspace member at each folder above it, up to that top,
  * declaring a workspace too (sign-off S64). An install past the folders the reading holds is refused as well, since
  * where it runs is not known (review/106). Null when none of those is a link; a fault of its own is null too, so this
- * check never sends a call to the fail-closed refusal. On Windows a shell tool's line is read twice, outside
- * PowerShell: Git Bash, the shell it runs there, reads a backslash as an escape (n\pm is npm), where the guard's own
- * reading takes it for a path's separator, and either reading refuses (u-ci1).
+ * check never sends a call to the fail-closed refusal. On Windows the line of Claude's Bash tool, the one payload that
+ * says it runs Git Bash, is read twice: Git Bash reads a backslash as an escape (n\pm is npm), where the guard's own
+ * reading takes it for a path's separator, and either reading refuses (u-ci1); every other client's line, PowerShell by
+ * default there, keeps the one reading (sign-off S86). The fix names the checkout with forward slashes on Windows
+ * outside PowerShell, a spelling both readings take as it stands (sign-off S85).
  */
-function linkedInstall(command, cwd, pwsh = false) {
+function linkedInstall(command, cwd, pwsh = false, bash = false) {
   try {
     if (!/npm|yarn|bun/i.test(command.replace(/['"\\]/g, ""))) return null;
     const top = (dir) => present(join(dir, ".git")) || dirname(dir) === dir;
@@ -5473,7 +5479,7 @@ function linkedInstall(command, cwd, pwsh = false) {
       }
     };
     const readings = [installFolders(command, [cwd])];
-    if (process.platform === "win32" && !pwsh) readings.push(installFolders(command, [cwd], 0, false, true));
+    if (bash) readings.push(installFolders(command, [cwd], 0, false, true));
     // Past the folders the reading holds, where an install runs is not known: refused, not guessed (review/106).
     if (readings.some((got) => got.over)) return "This install comes after more folder changes than the guard follows (" + PLACES_MAX + " folders at most), so whether it writes through a linked node_modules cannot be read. Run the install on a line of its own, after a plain cd to its folder.";
     for (const start of new Set(readings.flatMap((got) => got.folders))) {
@@ -5501,7 +5507,7 @@ function linkedInstall(command, cwd, pwsh = false) {
             // Unreadable: the link's own path names it.
           }
         }
-        const checkout = dirname(target);
+        const checkout = process.platform === "win32" && !pwsh ? dirname(target).replaceAll("\\", "/") : dirname(target);
         return "This install would write through node_modules here, which is a link to " + target + ", another checkout's install. Run it in that checkout (cd " + checkout + " first, or give the install an absolute --prefix " + checkout + "), or remove the link (the link only) and install here.";
       }
     }
@@ -6020,7 +6026,7 @@ function decide() {
   // A place is a full verdict of each text: past 8 lines' worth the call is refused, not left to a timeout.
   if (command.length <= 65536 && contexts.length * texts.join("").length > 8 * 65536) throw Object.assign(new Error("readings"), { code: "MANAGER_READINGS_OVER_16" });
   // An install through a linked node_modules, refused in every mode and never asked (REQ-FLOW-178).
-  const linked = linkedInstall(command, cwd, pwsh);
+  const linked = linkedInstall(command, cwd, pwsh, process.platform === "win32" && CLIENT === "claude" && payload.tool_name === "Bash");
   if (linked !== null) return { ask: false, reason: linked };
   for (const ctx of contexts) {
     // Set, not spread: the context's getters read git only when the verdict asks.

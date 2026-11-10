@@ -9,8 +9,9 @@
  * none, fails.
  */
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, readFileSync, realpathSync, symlinkSync, existsSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, realpathSync, symlinkSync, existsSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { AWAY_HELD_FILE, NOBODY_WATCHING_VARIABLE, PERSON_ONLY_GUARD_FILE, planCoreHookScripts } from "../../src/hooks/scripts.ts";
 import { type Tool, TOOLS } from "../../src/types/core.ts";
@@ -25,6 +26,13 @@ const POLICY = "../../agent-tool-policies.json";
 /** A dangling junction and a mode bit are not what Windows or root honour, so those two cases run where they hold. */
 const NO_DANGLING = process.platform === "win32";
 const NO_MODE_BITS = process.platform === "win32" || process.getuid?.() === 0;
+/**
+ * On Windows Claude's Bash tool runs Git Bash, which reads each backslash in a native path as an escape (u-ci1, sign-off
+ * S85): `cd C:\x\main` fails there and the install after it runs where it started.
+ */
+const GIT_BASH = process.platform === "win32";
+/** A path with forward slashes, the spelling the refusal's fix prints on Windows outside PowerShell (sign-off S85). */
+const slashed = (path: string): string => path.replaceAll("\\", "/");
 
 /**
  * The refusal the cell names, for a link resolving to `target`. TEST CHANGE, justified: the sentence now names the
@@ -32,7 +40,10 @@ const NO_MODE_BITS = process.platform === "win32" || process.getuid?.() === 0;
  * left an agent no spelling the guard let through, and every other word is the cell's.
  */
 function refusal(target: string): string {
-  const checkout = dirname(target);
+  // TEST CHANGE, justified (u-ci1, sign-off S85): on Windows outside PowerShell the fix names the checkout with forward
+  // slashes, which Git Bash and PowerShell both take as they stand; a backslash path in it was refused again under Git
+  // Bash. Every payload this file sends is outside PowerShell, and elsewhere the sentence is unchanged.
+  const checkout = process.platform === "win32" ? slashed(dirname(target)) : dirname(target);
   return `This install would write through node_modules here, which is a link to ${target}, another checkout's install. Run it in that checkout (cd ${checkout} first, or give the install an absolute --prefix ${checkout}), or remove the link (the link only) and install here.`;
 }
 
@@ -238,8 +249,15 @@ describe("an install through a linked node_modules (REQ-FLOW-178)", () => {
     const main = getRepo().path("main");
     // From the linked lane, the refusal's own fix runs: a cd to the main checkout first, relative or absolute, also
     // behind a command that runs before it in the same chain, and git -C naming the lane moves only git.
-    for (const command of [`cd ${main} && npm ci`, "cd ../main && npm ci", "cd ../main; npm ci", `git fetch && cd ${main} && npm ci`, `npm --prefix ${main} ci`]) {
+    const toMain = (to: string): string[] => [`cd ${to} && npm ci`, `git fetch && cd ${to} && npm ci`, `npm --prefix ${to} ci`];
+    for (const command of ["cd ../main && npm ci", "cd ../main; npm ci", ...toMain(slashed(main))]) {
       expect(decide("claude", guard, command, {}, "lane"), command).toEqual({ kind: "allow" });
+    }
+    // TEST CHANGE, justified (u-ci1, sign-off S85): on Windows the native path's backslashes are Git Bash escapes, so
+    // its cd and --prefix name a folder that is not there and the install writes in the lane: refused there, while the
+    // forward-slash spelling above runs. Elsewhere the same lines run, as before.
+    for (const command of toMain(main)) {
+      expect(decide("claude", guard, command, {}, "lane"), command).toEqual(GIT_BASH ? { kind: "refuse", reason: refusal(target) } : { kind: "allow" });
     }
     for (const command of ["git -C lane status && npm ci", "cd lane && npm test; cd - && npm ci", "(cd lane && npm test) && npm ci", "env -C lane npm test; npm ci"]) {
       expect(decide("claude", guard, command), command).toEqual({ kind: "allow" });
@@ -371,8 +389,15 @@ describe("an install through a linked node_modules (REQ-FLOW-178)", () => {
       expect(decide("claude", guard, command, {}, "lane"), command).toEqual({ kind: "refuse", reason: refusal(target) });
     }
     // Non-degenerate: a cd to a folder that is there holds, and after && a failed cd runs nothing more.
-    for (const command of [`cd ${main}; npm ci`, `cd ${main}\nnpm ci`, `cd ${main} || true; npm ci`, `mkdir -p ${gone} && cd ${gone} && npm ci`]) {
+    const held = (to: string, made: string): string[] => [`cd ${to}; npm ci`, `cd ${to}\nnpm ci`, `cd ${to} || true; npm ci`, `mkdir -p ${made} && cd ${made} && npm ci`];
+    for (const command of held(slashed(main), slashed(gone))) {
       expect(decide("claude", guard, command, {}, "lane"), command).toEqual({ kind: "allow" });
+    }
+    // TEST CHANGE, justified (u-ci1, sign-off S85): on Windows Git Bash reads the native paths' backslashes as escapes,
+    // so each cd names a folder under the lane (the made one too) and the install writes through the lane's link:
+    // refused there, while the forward-slash spelling above runs. Elsewhere the same lines run, as before.
+    for (const command of held(main, gone)) {
+      expect(decide("claude", guard, command, {}, "lane"), command).toEqual(GIT_BASH ? { kind: "refuse", reason: refusal(target) } : { kind: "allow" });
     }
   });
 
@@ -386,9 +411,42 @@ describe("an install through a linked node_modules (REQ-FLOW-178)", () => {
     }
     expect(decide("claude", guard, `pushd lane && pushd ${main} && popd && npm ci`)).toEqual({ kind: "refuse", reason: refusal(target) });
     // Non-degenerate: an install while the pushd holds runs in main.
-    for (const command of [`pushd ${main} && npm ci && popd`, `pushd ${main} && npm ci`]) {
+    const pushes = (to: string): string[] => [`pushd ${to} && npm ci && popd`, `pushd ${to} && npm ci`];
+    for (const command of pushes(slashed(main))) {
       expect(decide("claude", guard, command, {}, "lane"), command).toEqual({ kind: "allow" });
     }
+    // TEST CHANGE, justified (u-ci1, sign-off S85): on Windows Git Bash reads the native path's backslashes as escapes,
+    // so the pushd names a folder that is not there and the install writes in the lane: refused there, while the
+    // forward-slash spelling above runs. Elsewhere the same lines run, as before.
+    for (const command of pushes(main)) {
+      expect(decide("claude", guard, command, {}, "lane"), command).toEqual(GIT_BASH ? { kind: "refuse", reason: refusal(target) } : { kind: "allow" });
+    }
+  });
+
+  it("reads a backslash as Git Bash does on Windows for Claude's Bash tool alone (u-ci1, sign-off S86)", async () => {
+    // The guard child believes it runs on Windows: a preload sets process.platform before the guard reads it. A
+    // substitute, since a POSIX leg has no Windows to run on; the guard reads the platform only to pick its readings,
+    // and the Windows legs run this case on the real one.
+    const preload = getRepo().path("win32.mjs");
+    writeFileSync(preload, 'Object.defineProperty(process, "platform", { value: "win32" });\n');
+    const windows = { NODE_OPTIONS: `--import=${pathToFileURL(preload).href}` };
+    const guards = new Map<Tool, string>();
+    // oxlint-disable-next-line no-await-in-loop -- each placement writes the same seed files, so one at a time
+    for (const tool of TOOLS) guards.set(tool, await placeGuard(tool));
+    const target = linkInstall(getRepo().path());
+    const guardOf = (tool: Tool): string => guards.get(tool) ?? "";
+    // Claude's Bash tool runs Git Bash there, where n\pm is npm: refused.
+    expect(decide("claude", guardOf("claude"), "n\\pm ci", windows)).toEqual({ kind: "refuse", reason: refusal(target) });
+    // Every other client's shell is PowerShell by default there, where n\pm is a path, not npm: the one reading runs it.
+    // Codex's payload names its tool Bash as Claude's does, so the client the copy was written for decides.
+    for (const tool of TOOLS.filter((name) => name !== "claude")) {
+      expect(decide(tool, guardOf(tool), "n\\pm ci", windows), tool).toEqual({ kind: "allow" });
+      // Nothing loosened: the plain spelling is refused on Windows as everywhere.
+      expect(decide(tool, guardOf(tool), "npm ci", windows), tool).toEqual({ kind: "refuse", reason: refusal(target) });
+    }
+    // Non-degenerate, one fact away: off Windows every client's guard reads n\pm as npm, so the preload is what moved
+    // (on Windows itself the preload moves nothing, and the lines above are the reading).
+    if (!GIT_BASH) for (const tool of TOOLS) expect(decide(tool, guardOf(tool), "n\\pm ci"), tool).toEqual({ kind: "refuse", reason: refusal(target) });
   });
 
   it.skipIf(NO_DANGLING)("refuses through a dangling link, naming where it points", async () => {
