@@ -33,6 +33,10 @@ import { fileURLToPath } from "node:url";
 
 const STATE_SEGMENTS = [".stamity"];
 const MAX_ITEM_LINES = 20;
+const INDEX_BYTES = 6144;
+const INDEX_LINES = null;
+const READ_CALL = "`stamity learn read` where the CLI is installed, else `npx -y @zomarit/stamity@1.18.0 learn read`, which needs the npm registry";
+const OUTPUT_CHARS = 9500;
 const MAX_LEARNING_BYTES = 65536;
 const MAX_HANDOFF_BYTES = 61440;
 const MAX_FIELD_CHARS = 200;
@@ -441,13 +445,51 @@ function stem(name) {
   return name.slice(0, -3);
 }
 
-/** Appends at most MAX_ITEM_LINES items, then one line accounting for the rest. */
-function append(out, items, noun) {
-  for (const item of items.slice(0, MAX_ITEM_LINES)) out.push(item);
-  const rest = items.length - MAX_ITEM_LINES;
+/** Appends at most `keep` items (MAX_ITEM_LINES by default), then one line accounting for the rest. */
+function append(out, items, noun, keep = MAX_ITEM_LINES) {
+  for (const item of items.slice(0, keep)) out.push(item);
+  const rest = items.length - keep;
   if (rest > 0) {
     out.push("- … and " + rest + " more " + noun + (rest === 1 ? "" : "s") + " not listed.");
   }
+}
+
+/** The order rank of a printed confidence: high, medium, low, then anything else. */
+const CONFIDENCE_RANK = { high: 0, medium: 1, low: 2 };
+
+/**
+ * The lines listed within INDEX_BYTES (joined by newlines) and INDEX_LINES, as the engine's `fitIndexLines` lists
+ * them: the first line that does not fit ends the list; a first line past the budget is listed cut.
+ */
+function fit(lines) {
+  const shown = [];
+  let used = 0;
+  for (const line of lines) {
+    if (INDEX_LINES !== null && shown.length >= INDEX_LINES) break;
+    const cost = Buffer.byteLength(line, "utf8") + (shown.length > 0 ? 1 : 0);
+    if (used + cost > INDEX_BYTES) {
+      if (shown.length === 0) shown.push(clip(line, INDEX_BYTES));
+      break;
+    }
+    shown.push(line);
+    used += cost;
+  }
+  return shown;
+}
+
+/** A line cut to `max` bytes with its "…"; one the screen matches, notation read too, prints a fixed line. */
+function clip(line, max) {
+  let out = "";
+  let used = Buffer.byteLength("…", "utf8");
+  for (const char of line) {
+    const size = Buffer.byteLength(char, "utf8");
+    if (used + size > max) break;
+    out += char;
+    used += size;
+  }
+  out += "…";
+  const read = readNotation(out);
+  return [out, read, printable(read).replace(/\s+/g, " ")].some(screened) ? "- (a learning line withheld: cut to the byte budget, it matched the read screen)" : out;
 }
 
 const learningsDir = join(STATE_ROOT, "learnings");
@@ -496,20 +538,15 @@ const handoffs = handoffDocs
   // Soonest expiry first: the entry that goes stale next is the one to resume.
   .sort((a, b) => Date.parse(a.expires) - Date.parse(b.expires) || (a.id < b.id ? -1 : 1));
 
-function render() {
-  if (learnings.length === 0 && handoffDocs.length === 0) {
-    return ["stamity: no learnings and no resumable handoffs in this repo yet."];
-  }
-
+/** The banner, `tail` last, within OUTPUT_CHARS; learning lines go first. */
+function render(tail) {
   const bytes = loaded.reduce((total, doc) => total + doc.size, 0);
   // The file name is payload too: it is attacker-chosen on any file that
   // reached the directory, and it is concatenated into a line an agent reads.
   const ids = loaded.map((doc) => text(doc.head.id, nameId(doc)));
   const duplicated = new Set(ids.filter((id, index) => ids.indexOf(id) !== index));
-  const section = [];
-  append(
-    section,
-    loaded.map((doc, index) => {
+  const ranked = loaded
+    .map((doc, index) => {
       const id = ids[index];
       const confidence = text(doc.head.confidence, "unrated");
       const summary = text(doc.head.summary, "(no summary)");
@@ -519,33 +556,66 @@ function render() {
         Date.parse(doc.head.reviewBy + "T00:00:00Z") <= NOW + REVIEW_WARNING_DAYS * 86400000
           ? " [review due " + text(doc.head.reviewBy, "") + "]"
           : "";
-      return "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag + due;
-    }),
-    "learning",
-  );
-  append(section, skipped.map(skipLine), "skipped file");
-  // Two figures: the bytes of the lines printed below, which is what this banner
-  // costs, and the loaded files' bytes on disk.
-  const out = [
-    "Learnings: " + loaded.length + " loaded, " + skipped.length + " skipped, " +
-      Buffer.byteLength(section.join("\n"), "utf8") + " bytes in this index (" + bytes + " bytes on disk).",
-    ...section,
-  ];
-
-  out.push(
-    "Handoffs: " + handoffs.length + " active, " + refusedHandoffs.length + " skipped.",
-  );
-  append(
-    out,
-    handoffs.map((entry) => {
-      const origin = entry.from === "" ? "" : "from " + entry.from + ", ";
-      return "- " + entry.id + " — " + entry.summary + " (" + origin + "expires " + entry.expires + ")";
-    }),
-    "handoff",
-  );
-  append(out, refusedHandoffs.map(skipLine), "skipped file");
-
+      return {
+        rank: Object.hasOwn(CONFIDENCE_RANK, confidence) ? CONFIDENCE_RANK[confidence] : 3,
+        reviewBy: text(doc.head.reviewBy, ""),
+        line: "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag + due,
+      };
+    })
+    // Ranked as `formatLearningsIndex` ranks (REQ-FLOW-179): confidence, then the soonest review, none
+    // last. Stable, so the date-then-name order above decides the rest.
+    .sort(
+      (a, b) =>
+        a.rank - b.rank ||
+        (a.reviewBy === b.reviewBy ? 0 : a.reviewBy === "" ? 1 : b.reviewBy === "" ? -1 : a.reviewBy < b.reviewBy ? -1 : 1),
+    )
+    .map((row) => row.line);
+  const fitted = fit(ranked);
+  const skips = skipped.map(skipLine);
+  const refused = refusedHandoffs.map(skipLine);
+  const active = handoffs.map((entry) => {
+    const origin = entry.from === "" ? "" : "from " + entry.from + ", ";
+    return "- " + entry.id + " — " + entry.summary + " (" + origin + "expires " + entry.expires + ")";
+  });
+  const keep = { learnings: fitted.length, skips: Math.min(skips.length, MAX_ITEM_LINES), refused: Math.min(refused.length, MAX_ITEM_LINES), active: Math.min(active.length, MAX_ITEM_LINES), tail: tail.length };
+  const compose = () => {
+    if (learnings.length === 0 && handoffDocs.length === 0) return withTail(["stamity: no learnings and no resumable handoffs in this repo yet."], tail, keep.tail);
+    const section = fitted.slice(0, keep.learnings);
+    const rest = ranked.length - section.length;
+    if (rest > 0) {
+      section.push("- … and " + rest + " more learning" + (rest === 1 ? "" : "s") + " not listed; to print them all, run " + READ_CALL + ".");
+    }
+    append(section, skips, "skipped file", keep.skips);
+    // Two figures: the bytes of the lines printed below, which is what this banner
+    // costs, and the loaded files' bytes on disk.
+    const out = [
+      "Learnings: " + loaded.length + " loaded, " + skipped.length + " skipped, " +
+        Buffer.byteLength(section.join("\n"), "utf8") + " bytes in this index (" + bytes + " bytes on disk).",
+      ...section,
+    ];
+    out.push(
+      "Handoffs: " + handoffs.length + " active, " + refusedHandoffs.length + " skipped.",
+    );
+    append(out, active, "handoff", keep.active);
+    append(out, refused, "skipped file", keep.refused);
+    return withTail(out, tail, keep.tail);
+  };
+  // Over OUTPUT_CHARS, each part in turn loses lines from its end, each loss counted.
+  let out = compose();
+  for (const part of ["learnings", "skips", "refused", "active", "tail"]) {
+    while (out.reduce((total, line) => total + line.length + 1, 0) > OUTPUT_CHARS && keep[part] > 0) {
+      keep[part] -= 1;
+      out = compose();
+    }
+  }
   return out;
+}
+
+/** `out`, the first `keep` lines of `tail`, then one line counting any left out. */
+function withTail(out, tail, keep) {
+  const cut = tail.length - keep;
+  if (cut <= 0) return [...out, ...tail];
+  return [...out, ...tail.slice(0, keep), "- … and " + cut + " more session and card line" + (cut === 1 ? "" : "s") + " not printed (banner cap " + OUTPUT_CHARS + " characters)."];
 }
 
 /** One skip line: the file by name, the reason by id. The span is never echoed. */
@@ -1187,12 +1257,13 @@ const SOURCE = isatty(0) ? "" : field(readPayload(), ["source"]);
 // Written once, then the process ends on its own. `process.exit` would race
 // the write: stdout is asynchronous when it is a pipe on macOS and the BSDs,
 // which is exactly how a client runs a hook.
-const lines = render();
 // Before the card, so the card stays everything after the last blank line.
+const tail = [];
 const session = sessionLines(process.env);
-if (session.length > 0) lines.push("", ...session);
+if (session.length > 0) tail.push("", ...session);
 if (SOURCE === "compact" || SOURCE === "resume" || SOURCE === "startup") {
   const card = resumeCardLines(repoRoot(), STATE_ROOT, NOW, SOURCE === "startup");
-  if (card !== null) lines.push("", ...card);
+  if (card !== null) tail.push("", ...card);
 }
+const lines = render(tail);
 process.stdout.write(lines.join("\n") + "\n");
