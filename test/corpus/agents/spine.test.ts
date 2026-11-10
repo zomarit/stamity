@@ -69,6 +69,14 @@ const AGENT_BODY_CAP = 350;
 const BEHAVIOR_UNCHANGED =
   "A unit whose criterion is behavior unchanged shows its tests bite instead of failing first: a characterization unit 0 shows each pin red on an assertion under a scratch change to the pinned behavior, then reverts that change, and adds a seam only behind pins it has proven; a behavior-preserving transforming unit holds unit 0's pins where the plan has a unit 0, else the test paths the plan's behavioral-invariants table names under `Verified by`, runs them unchanged before and after its change, `gate held --expect` green both times, and adds no test of its own unless its criteria add behavior.";
 
+/**
+ * The command-only refactor rule (plan 024 file 3 unit x-recipe, fix round 3, sign-off S81), next to
+ * `BEHAVIOR_UNCHANGED` in the implementer's Testing rules and in the same words in `/st-work`'s Build
+ * checks, pinned in test/corpus/commands/work.test.ts.
+ */
+const NO_HELD_COMMANDS =
+  "A behavior-preserving transforming unit with no test path to hold (no unit 0, and `Verified by` cells that name only commands) never calls `gate held` with no paths: it records `- <UTC> no held tests: <unit> commands`, and its evidence is each named command run green before and after its change, each with its exit code on the record.";
+
 /** The status enum every sub-agent returns, inlined in every body. */
 const STATUS_ENUMS: readonly string[] = [
   "DONE",
@@ -586,6 +594,10 @@ describe("implementer — single unit, single writer", () => {
     // Added 2026-11-10 (x-recipe fix round 3, review/124, S79): a covered refactor has no unit 0, so
     // the rule never again names unit 0's pins as the only tests a transforming unit holds.
     expect(testing).not.toContain("runs unit 0's held pins");
+    // Added 2026-11-10 (x-recipe fix round 3, sign-off S81): a refactor whose invariants are verified
+    // only by commands has no test path to hold, so it records the commands green before and after
+    // instead of calling `gate held` with no paths.
+    expect(testing).toContain(NO_HELD_COMMANDS);
   });
 
   it("writes held tests from the criteria alone in a tests-only dispatch", async () => {

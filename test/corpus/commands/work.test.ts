@@ -2479,6 +2479,28 @@ describe("/st-work — dispatch contract", () => {
       );
     });
 
+    // Added 2026-11-10 (plan 024 file 3 unit x-recipe, fix round 3, sign-off S81): a refactor with no
+    // unit 0 whose `Verified by` cells name only commands has no test path to hold. `gate held` with
+    // no paths exits 2, which reads like the older-CLI fallback, so the unit never calls it: it
+    // records its commands green before and after, and the fallback stays keyed to `gate` refusing
+    // `held` alone.
+    it("records a command-verified refactor's commands before and after instead of holding no paths (S81)", async () => {
+      const text = await checks();
+      const rule =
+        "A behavior-preserving transforming unit with no test path to hold (no unit 0, and `Verified by` cells that name only commands) never calls `gate held` with no paths: it records `- <UTC> no held tests: <unit> commands`, and its evidence is each named command run green before and after its change, each with its exit code on the record.";
+      expect(text).toContain(rule);
+      const implementer = collapse(section((await corpusFile("agents/stamity-implementer.md")).parsed.body, "## Testing rules"));
+      expect(implementer).toContain(rule);
+      // It follows the step that holds the paths a transforming unit does have.
+      expect(text.indexOf(rule)).toBeGreaterThan(
+        text.indexOf("A transforming unit that adds no test skips the spawn: `stamity gate held --paths <the paths it holds> --json`"),
+      );
+      // The older-CLI fallback is never reached through a missing path list.
+      const fallback = "That fallback is keyed only to `gate` refusing `held`, never to a missing path list.";
+      expect(text).toContain(fallback);
+      expect(text.indexOf(fallback)).toBeGreaterThan(text.indexOf("With no `gate held` (an older CLI:"));
+    });
+
     it("checks the held digest at every Prove pass and after every fix, a mismatch red (REQ-FLOW-171)", async () => {
       const text = await checks();
       const expectStep =
