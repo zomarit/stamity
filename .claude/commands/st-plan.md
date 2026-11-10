@@ -281,6 +281,7 @@ plan-review sub-agent loop at this seam produced no measured quality gain, so no
 | L3 | **Edge cases non-empty** | every unit lists at least one edge case with its expected behavior. `none` is admissible only with a one-line reason. | derive the missing cases from the unit's inputs and failure modes, re-run the pass |
 | L4 | **Requirement ids cited** | every unit's `requirements` names at least one `REQ-<area>-<nnn>` carried by the spec, or states `spec carries no ids`. A blank field fails; an id absent from `docs/specs/` fails as a dangling reference. | cite the requirement the unit implements, or record that the spec carries none, re-run the pass |
 | L5 | **Plan size (advisory)** | the structural coverage pass reports `unit-size` (a unit past 60 lines), `unit-oversize` (past 100), `unit-prewritten` (a fenced block, or five or more `>` lines, inside a unit) and `delta-verbose` (a requirement entry past six lines); none fails the pass | split the unit, or point at the file that will carry the text instead of writing it into the unit; the write is never blocked |
+| L6 | **Named skills copied** | every `skills` entry other than `none` has an origin record at that entry's commit and a `clean` copy, as `stamity skill list --json` reads them. | copy a skill `stamity skill list --json` does not list as the Side effects say, re-run the pass; a listed copy that is not `clean` at the entry's commit, or a run that cannot copy, returns `BLOCKED_DEPENDENCY` naming the steps a person runs |
 
 **Structural coverage pass.** Before handoff, locate the installed verify skill and run
 `node <verify-skill>/scripts/spec-plan-coverage.mjs <plan.md> <spec.md|spec-directory> ...`.
@@ -349,6 +350,7 @@ Sections, in order:
 | `depends_on` | unit ids, or `none` |
 | `verify` | the command that proves this unit green |
 | `threat` | for a unit whose files `stamity gate classify --base HEAD --paths <its files>` places `security-sensitive`: its trust boundary, what it trusts, one abuse case and the check that stops it, in at most five lines; absent otherwise |
+| `skills` | the skills the unit's build uses, each `<name> · <source-id> · <version> · <commit>` with the full 40-hex commit its origin record holds, from a source `.stamity/skill-sources.json` lists; `none` when it uses none, and a plan whose units all read `none` names no skill anywhere else |
 
 **Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `npx -y @zomarit/stamity@1.18.0 <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.
 When neither form runs, the installed copy has no `gate` verb, or a classify's `reason` names a failed read, no unit's class can be read, so every unit carries the `threat` row.
@@ -361,10 +363,12 @@ When neither form runs, the installed copy has no `gate` verb, or a classify's `
    `kind · name · read where · set by · blocks merge|deploy|run · verified yes|no`, where `set by`
    names its owner. A row names the need, never its value: no secret, key or setting's value
    appears in the plan. A plan that waits on nothing omits the section.
-7. **Follow-ups** (optional) — items this plan deliberately leaves out, one per line, each with
+7. **Skills** (optional) — one row per skill the units name, `name · source-id · version · commit ·
+   units`, each copied in as the Side effects say; a plan whose units all read `none` omits it.
+8. **Follow-ups** (optional) — items this plan deliberately leaves out, one per line, each with
    `by: <YYYY-MM-DD>` or `when: <trigger>`, and `files:` when it names no location; they append
    as the Side effects say.
-8. **Drop list** (optional) — a table, `Item | Revisit when`, of items with no date and no
+9. **Drop list** (optional) — a table, `Item | Revisit when`, of items with no date and no
    trigger a run can check; they append nowhere.
 
 **Fresh-context criteria.** The artifact is executable by an implementer holding no session
@@ -383,8 +387,9 @@ interfaces defeats the criteria: every file stands alone, or the split landed at
 
 ## Side effects
 
-Two, both after the artifact is written, both reported in the Return contract below. No product
-file moves here, and neither side effect is a third write channel for the plan itself.
+Three, each reported in the Return contract below: the skill copy runs before the plan-lint gate,
+the other two after the artifact is written. No product file moves here, and no side effect is a
+further write channel for the plan itself.
 
 - **Learnings capture.** A failure met and resolved while researching — a reproduction that
   needed a specific setup, a constraint nobody had written down — lands in `.stamity/learnings/`
@@ -404,6 +409,16 @@ file moves here, and neither side effect is a third write channel for the plan i
   with its revisit trigger.
   That inbox is the rendezvous `/st-board fill` triages and `/st-work` reads at its framing
   phase, so a deliberate exclusion stays visible instead of dying with the session.
+- **Skill copy.** On an attended run, this run itself, never a sub-agent, copies in each skill a
+  unit names that `stamity skill list --json` does not list under its name:
+  `stamity skill add <source-id> <name> --tag <version> --commit <commit>`, from a source
+  `.stamity/skill-sources.json` lists and from nowhere else. A listed copy that is not `clean` at
+  the entry's commit is never re-added or removed by the run: it returns `BLOCKED_DEPENDENCY`
+  naming the `stamity skill remove <name>` and then `stamity skill add` steps a person runs. The
+  verb refuses an unattended run and one while nobody is watching. Whenever L6 passes with any
+  skill named, copied by this run or before it, the run then runs `stamity sync` so every client's
+  copy is regenerated; the copy lands on a held path, so a person commits it, with what `sync`
+  wrote, before `/st-work` cuts any lane. A plan whose units all read `none` copies nothing.
 
 ## Return contract
 
@@ -423,11 +438,13 @@ Close the run with:
 - `intent chosen: <intent> because <matched signals>`.
 - Artifact path(s) written, with the unit count.
 - Structural coverage result and unresolved semantic readings; structural pass alone is not handoff approval.
-- Plan-lint result per check: `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run`
+- Plan-lint result per check: `L1 pass|fail · L2 pass|fail · L3 pass|fail · L4 pass|fail · L5 none|<n> advisory|not run · L6 pass|fail`
   (`L5 not run` where the coverage script could not run, never a claimed pass).
 - `sub_agents_spawned: <count> · task_structure: parallelizable | sequential | mixed`.
 - Open questions carried; a non-empty list blocks handoff.
 - Learnings written, with their paths; `none` when the run met no qualifying failure.
+- Skills copied, each with its origin record's path; `none` when this run copied none.
+- Paths `stamity sync` wrote, which a person commits before `/st-work` cuts any lane; `none` when it wrote none.
 - Next step — user-gated, not automatic, and derived from this run's own state rather than a
   fixed menu: open questions still carried make resolving them the next step; a clean roadmap
   artifact goes to `/st-board fill --source docs/plans/<file>`; any other clean artifact

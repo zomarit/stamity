@@ -14,7 +14,8 @@
 //
 // The autonomy setting this copy was written for is the marker line below the
 // banner: the acts it names in `runs` run unasked, and a deploying branch or act
-// asks (REQ-FLOW-137). A commit status or check run write is refused in every mode.
+// asks (REQ-FLOW-137). A commit status or check run write is refused in every mode,
+// and so is an install where node_modules is a link (REQ-FLOW-178).
 // While nobody is watching (STAMITY_NOBODY_WATCHING or .stamity/away.json),
 // an act it would ask about is refused and noted in .stamity/away-held.jsonl.
 //
@@ -27,7 +28,7 @@
 // held list.
 // stamity-autonomy {"mode":"autonomous","runs":["pr-ready","tag"],"deployingBranches":[],"deploying":[]}
 
-import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, readlinkSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, readlinkSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -4549,9 +4550,13 @@ function present(path) {
   }
 }
 
-/** A line's words (a null where a command can follow), the lines they run, and its heredocs' bodies; with braces, a brace is a word's. */
+/**
+ * A line's words (a null where a command can follow, its operator character in marks at that index), the lines they
+ * run, and its heredocs' bodies; with braces, a brace is a word's.
+ */
 function shellWords(command, braces = false) {
   const words = [];
+  const marks = [];
   const nested = [];
   const docs = [];
   const pending = [];
@@ -4634,6 +4639,7 @@ function shellWords(command, braces = false) {
       end();
       if (c === "\n" || c === "\r" || !/\s/.test(c)) {
         drop = false;
+        marks[words.length] = c;
         words.push(null);
       }
       if (c === "\n" && pending.length > 0) k = bodies(k);
@@ -4641,7 +4647,7 @@ function shellWords(command, braces = false) {
   }
   end();
   const home = process.env.HOME ?? process.env.USERPROFILE;
-  return { words: words.map((w) => (w !== null && home && /^~(?=[\\/]|$)/.test(w) ? home + w.slice(1) : w)), nested, docs };
+  return { words: words.map((w) => (w !== null && home && /^~(?=[\\/]|$)/.test(w) ? home + w.slice(1) : w)), marks, nested, docs };
 }
 
 const RUNNER = ["pw", "--package --workspace --filter", "-c --call --shell-mode"];
@@ -4912,6 +4918,285 @@ function linesOf(name, tail) {
     }
   }
   return lines;
+}
+
+/**
+ * Each manager's verbs that write into its node_modules, each manager's own spellings among them; a bare yarn with
+ * options alone installs, and npm's audit writes with fix (REQ-FLOW-178, sign-offs S47 and S54).
+ */
+const INSTALLS = new Map([
+  ["npm", "ci clean-install ic install-clean isntall-clean install i in ins inst insta instal isnt isnta isntal isntall add install-test it install-ci-test cit clean-install-test sit update up upgrade udpate uninstall un unlink remove rm r link ln dedupe ddp prune rebuild rb"],
+  ["pnpm", "install i add install-test it remove rm uninstall un update up upgrade link ln unlink dislink dedupe prune rebuild rb fetch"],
+  ["yarn", "install add remove upgrade up upgrade-interactive link unlink dedupe rebuild autoclean"],
+  ["bun", "install i add a remove rm update link unlink"],
+].map(([name, verbs]) => [name, verbs.split(" ")]));
+/** The options after which a manager writes nothing, each tried in a scratch folder (S54); yarn 1 ignores --dry-run. */
+const WRITES_NOTHING = new Map([["npm", "-h --help -v --version --dry-run"], ["yarn", "-h --help -v --version"]].map(([name, options]) => [name, options.split(" ")]));
+/** Yarn 1's options that take a value, so a bare yarn followed by options and their values alone still installs. */
+const YARN_VALUED = new Set("--use-yarnrc --prod --production --link-folder --global-folder --modules-folder --preferred-cache-folder --cache-folder --mutex --emoji --proxy --https-proxy --network-concurrency --network-timeout --scripts-prepend-node-path --otp".split(" "));
+
+/** Whether a bare yarn's words are options and their values alone, so it installs; a script name runs that script. */
+function yarnBare(tail) {
+  for (let j = 0; j < tail.length; j += 1) {
+    if (!tail[j].startsWith("-")) return false;
+    if (YARN_VALUED.has(tail[j]) || MANAGER_VALUED.has(tail[j])) j += 1;
+  }
+  return true;
+}
+
+/**
+ * The folders a line's package-manager writes start from (REQ-FLOW-178, sign-off S54), read in order as a shell runs
+ * the line from the folders in start. A cd moves the folder for what follows: alone where it surely holds, beside the
+ * old one where it may not (a pipe's, a background job's, a block's, a brace group's, one after ||, one behind another
+ * command of its chain or to a folder not there once the chain ends or meets ||), and a subshell's ends with it. popd
+ * puts each folder a pushd on the line left back beside the current one. env -C moves one command, and --prefix, -C,
+ * --dir or --cwd one install. A folder the line cannot show (cd "$x") leaves the folder as it was. Each set holds
+ * PLACES_MAX folders at most: one past it is dropped (cut), and an install read once one was, or naming one past it, is
+ * over (review/106), so the work stays small. Returns those folders, the folders in effect at the line's end, over, cut.
+ */
+function installFolders(line, start, depth = 0, cut = false) {
+  const { words, marks, nested, docs } = shellWords(line);
+  const folders = new Set();
+  const seen = new Set(start);
+  let over = false;
+  let lost = false;
+  const union = (a, b) => {
+    const all = [...new Set([...a, ...b])];
+    if (all.length > PLACES_MAX) cut = true;
+    return all.slice(0, PLACES_MAX);
+  };
+  const note = (dirs) => {
+    for (const dir of dirs) if (seen.size < PLACES_MAX) seen.add(dir);
+    else lost ||= !seen.has(dir);
+  };
+  const add = (dir) => {
+    if (folders.size < PLACES_MAX) folders.add(dir);
+    else over ||= !folders.has(dir);
+  };
+  const isDir = (dir) => {
+    try {
+      return statSync(dir).isDirectory();
+    } catch {
+      return false;
+    }
+  };
+  // The folders a pushd on the line left, one of which a popd goes back to.
+  let pushed = [];
+  // The and-or list's state: its folder at the start, whether at its first command, a || met, a cd behind another command.
+  const fresh = () => ({ from: here, first: true, or: false, chained: false });
+  let here = start;
+  let prev = start;
+  let local = null;
+  let list = fresh();
+  let segment = here;
+  let piped = false;
+  let block = 0;
+  let shell = false;
+  const scopes = [];
+  const read = (text, from, partial = cut) => {
+    if (depth >= 4 || typeof text !== "string") return from;
+    const got = installFolders(text, from, depth + 1, partial);
+    for (const dir of got.folders) add(dir);
+    over ||= got.over;
+    cut ||= got.cut;
+    return got.here;
+  };
+  const moved = (from, path) => (typeof path !== "string" || /[$\`]/.test(path) ? from : from.map((base) => resolve(base, path)));
+  // sure: whether the move cannot fail, asked only where it decides the reading.
+  const go = (to, sure = () => true) => {
+    prev = here;
+    if (block > 0 || list.or) here = union(here, to);
+    else {
+      here = to;
+      if (!list.first || !sure()) list.chained = true;
+    }
+    note(here);
+  };
+  // A wrapper's or a runner's options from k (a number or an assignment among them), its command-line option read and
+  // env's -C moving its command; returns the index before that command.
+  const options = (name, [short = "", long = "", lines = ""], k) => {
+    while (typeof words[k + 1] === "string" && (ASSIGNMENT.test(words[k + 1]) || /^(-|\d)/.test(words[k + 1]))) {
+      const option = words[(k += 1)];
+      const key = option.split("=")[0];
+      if (option === "--") break;
+      if (ASSIGNMENT.test(option) || /^\d/.test(option)) continue;
+      let value;
+      if (option.startsWith("--") && option.includes("=")) value = option.slice(key.length + 1);
+      else if (lines.split(" ").includes(key) || (option.startsWith("--") ? long.split(" ").includes(key) : short.includes(option.at(-1)))) value = words[(k += 1)];
+      if (lines.split(" ").includes(key)) read(value, local ?? here);
+      else if (name === "env" && (key === "-C" || key === "--chdir")) {
+        local = moved(local ?? here, value);
+        note(local);
+      }
+    }
+    return k;
+  };
+  for (let k = 0, at = true; k < words.length; k += 1) {
+    const word = words[k];
+    if (word === null) {
+      const mark = marks[k];
+      const twin = (mark === "|" || mark === "&") && (marks[k - 1] === mark || marks[k + 1] === mark);
+      // A pipe's or a background job's segment runs in a subshell: its cd may not hold after it.
+      if (piped || ((mark === "|" || mark === "&") && !twin)) here = union(segment, here);
+      piped = mark === "|" && !twin;
+      if (twin) {
+        list.first = false;
+        // What runs after || may follow a cd that did not run or failed: the list's first folder is back (review/107).
+        if (mark === "|" && list.chained) here = union(list.from, here);
+        list.or ||= mark === "|";
+      } else if (!piped) {
+        const opens = mark === "(" || mark === "{" || (mark === "\`" && scopes.at(-1)?.mark !== "\`");
+        if (list.chained && !opens) here = union(list.from, here);
+        if (opens) {
+          scopes.push({ mark, here, list });
+          list = fresh();
+        } else if (mark === ")" || mark === "}" || mark === "\`") {
+          const scope = scopes.pop();
+          if (scope !== undefined) {
+            here = scope.mark === "{" ? union(scope.here, here) : scope.here;
+            list = scope.list;
+          }
+        } else list = fresh();
+      }
+      segment = here;
+      local = null;
+      at = true;
+      continue;
+    }
+    if (!at || ASSIGNMENT.test(word)) continue;
+    if (/^(?:if|while|until|for|case|select)$/.test(word)) block += 1;
+    else if (/^(?:fi|done|esac)$/.test(word)) block = Math.max(0, block - 1);
+    if (KEYWORDS.has(word) || word === "esac") continue;
+    const name = programName(word);
+    const from = local ?? here;
+    const tail = [];
+    for (let j = k + 1; typeof words[j] === "string"; j += 1) tail.push(words[j]);
+    if (/\s/.test(word)) read([word, ...tail].join(" "), from);
+    if (WRAPPERS.has(name)) {
+      k = options(name, WRAPPERS.get(name), k);
+      continue;
+    }
+    at = false;
+    if (SHELLS.has(name) || POWERSHELLS.has(name)) shell = true;
+    for (const text of linesOf(name, tail)) {
+      const end = read(text, from);
+      // eval's line runs in this shell, so its cd may hold after it.
+      if (name === "eval" || name === "iex" || name === "invoke-expression") here = union(here, end);
+      note(here);
+    }
+    if (name === "popd" || name === "pop-location") {
+      // popd goes back to a folder a pushd on the line left, or stays where it is: each stays in play (review/108).
+      go(union(here, pushed));
+      continue;
+    }
+    if (["cd", "pushd", "chdir", "sl", "set-location", "push-location", "cd.."].includes(name)) {
+      let path = name === "cd.." ? ".." : undefined;
+      for (let j = k + 1; path === undefined && typeof words[j] === "string"; j += 1) {
+        const option = /^--?(\w*)(?::(.*))?$/.exec(words[j]);
+        if (option === null) path = words[j];
+        else if (/^(?:path?|l\w*|pspath)$/i.test(option[1])) path = option[2] || words[j + 1] || null;
+        else if (/^s/i.test(option[1]) && option[2] === undefined) j += 1;
+      }
+      const pushes = name === "pushd" || name === "push-location";
+      // pushd with no folder or +n turns the stack, and with -n stays: the folders it holds stay in play beside this one.
+      const turns = pushes && (path === undefined || /^[+-]\d+$/.test(String(path)) || tail.includes("-n"));
+      const to = typeof path === "string" && !/[$\`]/.test(path) && !(pushes && /^[+-]\d+$/.test(path)) ? [...new Set(here.map((base) => resolve(base, path)))] : [];
+      if (pushes) pushed = union(pushed, [...here, ...to]);
+      if (words[k + 1] === "-") go(prev);
+      else if (turns) go(union(here, pushed));
+      // A cd to what is not a folder fails and leaves the shell where it was (review/107).
+      else if (to.length > 0) go(to, () => to.every(isDir));
+      continue;
+    }
+    const verbs = INSTALLS.get(name);
+    if (verbs === undefined) continue;
+    const subs = managerSubs(name, words, k + 1);
+    // A runner's command (npm exec -- npm ci) is a line of its own.
+    for (const sub of subs) {
+      if (!RUNNERS.has(name + " " + words[sub])) continue;
+      const rest = [];
+      for (let j = options(name, RUNNER, sub) + 1; typeof words[j] === "string"; j += 1) rest.push(words[j]);
+      read(rest.join(" "), from);
+    }
+    if (tail.some((option) => /^(?:-g|--global|--location=global)$/.test(option) || (WRITES_NOTHING.get(name) ?? []).includes(option))) continue;
+    const writes = (sub) => typeof words[sub] === "string" && (verbs.includes(words[sub]) || (name === "npm" && words[sub] === "audit" && tail.slice(sub - k).includes("fix")));
+    if (!subs.some(writes) && !(name === "yarn" && yarnBare(tail))) continue;
+    // A folder dropped before this install may be where it runs.
+    if (cut) over = true;
+    const named = [];
+    for (let j = 0; j < tail.length; j += 1) {
+      const hit = /^(?:--prefix|--dir|--cwd|-C)(?:=([\s\S]*))?$/.exec(tail[j]);
+      if (hit !== null) named.push(hit[1] ?? tail[(j += 1)]);
+    }
+    for (const base of from) {
+      if (named.length === 0) add(base);
+      for (const path of named) if (typeof path === "string") add(resolve(base, path));
+    }
+  }
+  if (piped) here = union(segment, here);
+  // A substitution in quotes or a heredoc's body: where it runs is not kept, so each folder the line reached is read.
+  for (const text of nested) read(text, [...seen], cut || lost);
+  if (shell) for (const text of docs) read(text, [...seen], cut || lost);
+  return { folders: [...folders], here, over, cut };
+}
+
+/**
+ * The refusal an install through a linked node_modules earns, in every mode (REQ-FLOW-178). From each folder an
+ * install starts in, it writes in the nearest folder up holding a package.json or a node_modules, as the managers find
+ * it, up to the repository's top (sign-off S54), and a workspace member at each folder above it, up to that top,
+ * declaring a workspace too (sign-off S64). An install past the folders the reading holds is refused as well, since
+ * where it runs is not known (review/106). Null when none of those is a link; a fault of its own is null too, so this
+ * check never sends a call to the fail-closed refusal.
+ */
+function linkedInstall(command, cwd) {
+  try {
+    if (!/npm|yarn|bun/i.test(command.replace(/['"\\]/g, ""))) return null;
+    const top = (dir) => present(join(dir, ".git")) || dirname(dir) === dir;
+    const workspace = (dir) => {
+      if (present(join(dir, "pnpm-workspace.yaml"))) return true;
+      try {
+        const file = join(dir, "package.json");
+        return statSync(file).size <= 1048576 && JSON.parse(readFileSync(file, "utf8")).workspaces !== undefined;
+      } catch {
+        return false;
+      }
+    };
+    const got = installFolders(command, [cwd]);
+    // Past the folders the reading holds, where an install runs is not known: refused, not guessed (review/106).
+    if (got.over) return "This install comes after more folder changes than the guard follows (" + PLACES_MAX + " folders at most), so whether it writes through a linked node_modules cannot be read. Run the install on a line of its own, after a plain cd to its folder.";
+    for (const start of got.folders) {
+      let dir = start;
+      for (let hops = 0; hops < 64 && !present(join(dir, "node_modules")) && !present(join(dir, "package.json")) && !top(dir); hops += 1) dir = dirname(dir);
+      const roots = [dir];
+      for (let up = dir, hops = 0; hops < 64 && !top(up); hops += 1) {
+        up = dirname(up);
+        if (workspace(up)) roots.push(up);
+      }
+      for (const root of roots) {
+        const link = join(root, "node_modules");
+        try {
+          if (!lstatSync(link).isSymbolicLink()) continue;
+        } catch {
+          continue;
+        }
+        let target = link;
+        try {
+          target = realpathSync(link);
+        } catch {
+          try {
+            target = resolve(root, readlinkSync(link));
+          } catch {
+            // Unreadable: the link's own path names it.
+          }
+        }
+        const checkout = dirname(target);
+        return "This install would write through node_modules here, which is a link to " + target + ", another checkout's install. Run it in that checkout (cd " + checkout + " first, or give the install an absolute --prefix " + checkout + "), or remove the link (the link only) and install here.";
+      }
+    }
+  } catch {
+    // The check's own fault: the call goes on to the verdicts.
+  }
+  return null;
 }
 
 /** The configuration files git merges for a git dir: see GUARD_GIT_INCLUDE_DEPTH_MAX in the engine. */
@@ -5460,6 +5745,9 @@ function decide() {
   const contexts = contextsOf(command, cwd, pwsh, root);
   // A place is a full verdict of each text: past 8 lines' worth the call is refused, not left to a timeout.
   if (command.length <= 65536 && contexts.length * texts.join("").length > 8 * 65536) throw Object.assign(new Error("readings"), { code: "MANAGER_READINGS_OVER_16" });
+  // An install through a linked node_modules, refused in every mode and never asked (REQ-FLOW-178).
+  const linked = linkedInstall(command, cwd);
+  if (linked !== null) return { ask: false, reason: linked };
   for (const ctx of contexts) {
     // Set, not spread: the context's getters read git only when the verdict asks.
     ctx.readings = readings;
