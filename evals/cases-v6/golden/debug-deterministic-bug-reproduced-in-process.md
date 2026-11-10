@@ -2,7 +2,7 @@
 id: debug-deterministic-bug-reproduced-in-process
 class: golden
 claim: "A report stating an exact input, the expected output and the actual output, on a repository whose test gate runs, takes the in-process route: the implementer writes the failing test, the test-runner runs it twice, the user is asked nothing, the diagnosis and the test go to /st-work in the same session, the run keeps its record, and the marker count at the close is 0."
-source: content/commands/st-debug.md:48-54,77-79,95-117,125-130,185-198
+source: content/commands/st-debug.md:48-54,77-79,95-117,125-130,148-149,153-153,180-198
 metric: rubric
 ---
 
@@ -61,10 +61,24 @@ residue count; a stop that waits on the user leaves it in progress.
    still runs before the switch.
 ```
 
-Governing text — the same file, "Zero residue on every exit path", the marker check (its
-`git grep` command line is left out here):
+Governing text — the same file, "Hard gates", the gate table's head and its Zero residue row:
 
 ```text
+| Gate | Passes when | On failure |
+|---|---|---|
+[...]
+| Zero residue | Repo-wide `[STAMITY-DEBUG]` count is 0, and every helper or import added to support instrumentation is gone | Repeat cleanup until the count is 0. A run above 0 does not report done |
+```
+
+Governing text — the same file, "Zero residue on every exit path", its opening paragraph and
+the marker check (its `git grep` command line is left out here):
+
+```text
+Cleanup runs on every exit: fix shipped, `--diagnose` report, reproduction blocked, escape
+valve, user abort, and escalation to another command. No exit path leaves a tagged line, a
+commented-out probe, or a helper that existed only to carry one. Search the repository for
+the tag before the closing report and state the resulting count in it.
+
 **The marker check.** It runs at the run's start, at every stop that waits on the user, and at
 the close:
 

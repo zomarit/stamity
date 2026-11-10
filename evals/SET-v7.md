@@ -4480,6 +4480,21 @@ the case is already among the 80 above, so that count holds. The Brief is judge 
 counts the case as moved. No B / A, claim, floor tag, threshold or roster count moves. The dated
 citations above stay as they were. No eval run is made with this change.
 
+**`debug-deterministic-bug-reproduced-in-process` quotes what asks for the count, 2026-11-10 (the 1.19.1
+patch; REQ-PROVE-012).** Run 63 scored the case 1 of 3, both misses on B7, which binds that the close
+runs the marker check and states this run's count as 0. The Brief quoted the marker check, which says
+when it runs and what its number is, and none of the lines that ask the closing report to state it. It
+now quotes them from `content/commands/st-debug.md` as they stand: the gate table's head and its Zero
+residue row (`:148-149`, `:153`), in a block of its own, and the opening paragraph of "Zero residue on
+every exit path" (`:180-183`, ending "Search the repository for the tag before the closing report and
+state the resulting count in it."), above the marker check in its block. The `source:` moves from
+`…,125-130,185-198` to `…,125-130,148-149,153-153,180-198`, each new range opening on a line the Brief
+quotes, and the case index's source cell below moves with it. No content line moves. The Expected
+block does not move, the case has no cases-v5 copy, so `EXPECTED_MOVES` gains no row, and the carried
+tallies hold; the case is already among the 80 above, so that count holds. The Brief is judge input, so
+the next run counts the case as moved. No B / A, claim, floor tag, threshold or roster count moves. The
+dated citations above stay as they were. No eval run is made with this change.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
@@ -4704,7 +4719,7 @@ Every row below is derived from the case files; the roster test recomputes it.
 | `close-summary-after-last-decision` | golden · rubric *(floor)* | 6 / 2 | At a run's end with leftovers and no question tool, the run walks them before it reports: it asks one leftover in plain numbered text, a Warning or the `decision-waiting` row first, with the recommended option first, a trade-off on each option and a declared default, then stops for the answer; it prints no summary while a leftover is open, decides none of them itself, and never defaults a real defect to dropped. | `content/rules/stamity-question-protocol.md:77-98` |
 | `contract-census-shared-field-holds-facade` | golden · rubric | 4 / 0 | File-disjoint parallel units changing one persisted field require one contract owner and reconciled consumers. | `content/rules/stamity-contract-census.md:12-71` |
 | `cursor-cloud-question-takes-default` | golden · rubric | 6 / 1 | In a managed Cursor cloud run, where Cursor's own copy of the question protocol says to ask nothing and take the declared default, an ask point reached with a declared default calls no question tool, executes the default and records one Default-applied line. | `content/rules/stamity-question-protocol.md:51-57,89-98` |
-| `debug-deterministic-bug-reproduced-in-process` | golden · rubric | 8 / 0 | A report stating an exact input, the expected output and the actual output, on a repository whose test gate runs, takes the in-process route: the implementer writes the failing test, the test-runner runs it twice, the user is asked nothing, the diagnosis and the test go to /st-work in the same session, the run keeps its record, and the marker count at the close is 0. | `content/commands/st-debug.md:48-54,77-79,95-117,125-130,185-198` |
+| `debug-deterministic-bug-reproduced-in-process` | golden · rubric | 8 / 0 | A report stating an exact input, the expected output and the actual output, on a repository whose test gate runs, takes the in-process route: the implementer writes the failing test, the test-runner runs it twice, the user is asked nothing, the diagnosis and the test go to /st-work in the same session, the run keeps its record, and the marker count at the close is 0. | `content/commands/st-debug.md:48-54,77-79,95-117,125-130,148-149,153-153,180-198` |
 | `debug-next-step-derived-from-run-state` | golden · rubric | 7 / 0 | A /st-debug closing report ends on one recommended next step derived from that run's own state — a regression clause with no test, instrumentation held under a capture-later agreement, or a surviving hypothesis — rather than from the escalation table, and a run with none of those says so. | `content/commands/st-debug.md:239-259` |
 | `debug-no-reproduction-blocks` | golden · rubric | 6 / 0 | When the user cannot reproduce, the loop stalls and returns BLOCKED_DEPENDENCY naming exactly what it needs — environment, data, access, or a longer capture window — and that return records the ranked hypotheses with the observation each still needs and carries the hold-or-strip question with stripping now as the declared default. | `content/commands/st-debug.md:164-176` |
 | `debug-root-cause-before-fix` | golden · rubric *(floor)* | 7 / 1 | Debug holds two gates before a fix — a cited causal chain, and a test failing on the current tree for that cause — and an edit to product code applied inside debug is a contract breach. | `content/commands/st-debug.md:148-162` |
