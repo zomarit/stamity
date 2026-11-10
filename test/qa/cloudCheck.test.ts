@@ -1,4 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -742,7 +743,17 @@ describe("the form's cloud lane and run.mjs's dispatch", () => {
 
   it("dispatches the cloud rows from verify's output, never as page rows, and P3 reads its account reason", async () => {
     const dir = tempDir();
-    const evidence = await runHarness(["--cloud", verifyOutput(dir, "claude", "pass", "PR #1: an open draft"), "--cloud", verifyOutput(dir, "cursor", "failed", "main moved")]);
+    // TEST CHANGE, justified (u-ci2, S92): the harness read the default `website/build`, a
+    // git-ignored folder, so a checkout holding a stale build turned H2 not-run where a clean one
+    // read it failed. `--site` now names a folder under the root that no run creates, so H2 reads
+    // "no build under it" whatever `website/build` holds; the assertions below are unchanged.
+    const absentSite = join("website", `.no-build-${randomUUID()}`);
+    expect(existsSync(join(REPO_ROOT, absentSite))).toBe(false);
+    const evidence = await runHarness([
+      "--site", absentSite,
+      "--cloud", verifyOutput(dir, "claude", "pass", "PR #1: an open draft"),
+      "--cloud", verifyOutput(dir, "cursor", "failed", "main moved"),
+    ]);
     const row = (id: string) => evidence.rows.find((entry) => entry.row === id)!;
 
     // A page row with no build under it fails on the missing pages; a cloud row never reads them.
