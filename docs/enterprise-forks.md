@@ -170,10 +170,27 @@ follows your manifest on its own. The runtime's own remedies
 from `package.json`.
 
 The CLI calls your setup writes follow the same split. `init` and `sync` pin the calls they write
-into `AGENTS.md`, the generated bodies, the hook hints, the guard messages and `.codex/hooks.json` to your package at the version that wrote it, and most of the CLI's own remedies
-do the same. A few lines name only the short `stamity <verb>` form, for a machine where the CLI is
-on `PATH`: the guard's note that an ask was held while nobody watched, the hints the `away`, `gc`,
-`skill` and `ready` verbs print, and the pre-flight's pointer to `stamity ready`. Three places install it rather than call it: Copilot's `copilot-setup-steps.yml` runs
+into `AGENTS.md`, the generated bodies, the hook hints, the guard messages and `.codex/hooks.json` to your package at the version that wrote it, and many of the CLI's own remedies
+do the same. These lines name only the short `stamity <verb>` form, for a machine where the CLI is
+on `PATH`, and this is the whole list:
+
+- In the setup: the guard's note that an ask was held while nobody watched (`stamity away status`)
+  and its refusal of a push in an unattended run (`stamity run checkpoint` and `stamity run end`);
+  the run verbs named in the Cursor cloud section of `AGENTS.md` (`stamity run land --ready`) and in
+  Copilot's `stamity-run` agent file (`stamity run checkpoint`); and, with `--registry` only, the
+  session start's line on learnings it did not list (`stamity learn read`, explained below).
+- From the CLI: the hints the `away`, `config` (with `config mcp` and `config policy`), `gc`,
+  `skill`, `workspace` and `worktree` verbs print; the fixes in the `ready` report and the
+  pre-flight's pointer to `stamity ready`; `run overview`'s pointers to `stamity away status` and
+  `stamity run metrics`; `sync`'s closing `next:` line; the warnings `init` and `sync` print on a
+  Copilot model pin written as a display name and on a Codex `config.toml` they skip as too full;
+  `init`'s refusal of an existing setup or a folder outside a repository, its notes on an imported
+  configuration, a workspace, a skipped migration and an own MCP server row left out, and its dry
+  run's next step; `clean`'s and `add`'s dry-run and closing next steps, `clean`'s re-run lines
+  and its pointer to `stamity add`; `validate`'s closing line; and `handoff`'s pointer to
+  `stamity handoff list`.
+
+Three places install it rather than call it: Copilot's `copilot-setup-steps.yml` runs
 `npm install --global <your package>@<version>`, with `--@<scope>:registry=<url>` ahead of the
 package under `--registry` (under `toolOptions.copilot.setupSteps: managed`, the default; with
 `user` or `off` the workflow is yours to write, and a project Node pin below 22.22.2 gets a comment
@@ -190,9 +207,9 @@ npx finds a scope's registry only in npm's configuration, and `publishConfig` in
 steers `npm publish` only, so the call carries the setting itself: npx takes your package from
 your registry on every machine, with or without a scope mapping in its `.npmrc`, and every other
 package from the default registry. The setup, the CLI's remedies, the update notice's move command
-and `sync --help` all print this form. One line is the exception. When the session start lists fewer
-learnings than it loaded, its closing line names `stamity learn read` where the CLI is installed and
-gives no `npx` form, because that hook carries no registry URL. The flag outranks an `.npmrc` mapping, so a
+and `sync --help` all print this form, except the short-form lines listed above. The session start's
+line on learnings it did not list is on that list only under `--registry`, because that hook carries
+no registry URL. The flag outranks an `.npmrc` mapping, so a
 machine that reaches your scope through a mirror is sent to the registry you published to for the
 fallback call, while a project that installs the pinned version runs that copy with no registry
 request. A registry URL outside the plain-https rule above (no credentials, query, fragment, `%`
