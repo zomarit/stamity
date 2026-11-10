@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, realpathSync as fsRealpath } from "node:fs";
 import { appendFile, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { tmpdir, userInfo } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { gateCommand, gitSurfaceRecordPath, readRunGitSurface } from "../../../src/cli/commands/gate.ts";
@@ -543,6 +543,19 @@ describe("stamity run land", () => {
       expect(result.doc).toMatchObject({ outcome: "already-landed", cleanup: { removed: [], kept: [{ path: "p-held" }, { path: RUN_BRANCH }] } });
       for (const path of machine) expect(JSON.stringify(result.doc["cleanup"])).not.toContain(path);
       expect(existsSync(join(kept, "captures", "run.log"))).toBe(true);
+    });
+
+    // review/22: a clean-up whose worktree policy is refused is one `notDone` line, bound for the morning list, so it
+    // names what failed and holds no machine path; the landing stands.
+    it("lands a run whose committed worktree policy points its farm folder outside the repository's parent, its notDone line naming the failure with no machine path", async () => {
+      const { repo } = await seed({ files: { ".stamity/worktree.json": `${JSON.stringify({ version: 1, farmDir: "../../x" })}\n` } });
+      const machine = [dirname(repo), fsRealpath(dirname(repo)), getRoot().dir, tmpdir(), fsRealpath(tmpdir()), userInfo().homedir];
+
+      const result = await run(repo, ["land", "--run", RUN]);
+
+      expect(result.code).toBe(0);
+      expect(result.doc).toMatchObject({ outcome: "landed", notDone: [expect.stringMatching(/^clean-up not done: .*(farmDir|farm folder|worktree policy)/i)] });
+      for (const path of machine) expect(JSON.stringify(result.doc["notDone"])).not.toContain(path);
     });
 
     it("cleans up nothing on a land that refuses", async () => {

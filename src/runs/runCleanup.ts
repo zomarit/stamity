@@ -4,7 +4,7 @@ import { acquireWriteLock } from "../merge/atomicWrite.ts";
 import { EngineError } from "../types/errors.ts";
 import { isInside, readWorktreeInventory } from "../worktree/cleanup.ts";
 import { isDirty, listWorktrees, readDirtyCounts, removeWorktree, resolveGitCommonDir, resolveWorktreeGitDir, runGit, type WorktreeGitRunner } from "../worktree/git.ts";
-import { readWorktreePolicy, resolveFarmDir } from "../worktree/policy.ts";
+import { readWorktreePolicy, resolveFarmDir, WORKTREE_POLICY_FILE } from "../worktree/policy.ts";
 import { classifyReceiptEntry, inspectEntryState, readWorktreeReceipt, type WorktreeReceipt } from "../worktree/receipt.ts";
 import { worktreeLockPath } from "../worktree/setup.ts";
 import { isRunId } from "./layout.ts";
@@ -27,8 +27,11 @@ import { ITEM_REF_SHAPE } from "./preflight.ts";
  * remote branch is never touched.
  *
  * **No machine path out.** What the clean-up returns reaches a pull request's morning list and a person's terminal, so
- * a lane is named by its farm-relative name, a branch's holder by its place, and a failure by its first line with the
- * lane's path, the farm's and the checkout's prefixes taken out.
+ * a lane is named by its farm-relative name and a branch's holder by its place. A failure the clean-up's own engine
+ * raised once its places are read is its first line with each known folder taken out, in the spelling given and the
+ * one through its links. Any other failure, one raised before the places are read or one whose message comes from the
+ * policy reader, the git runner or the operating system, is named by its class and by its own words only where those
+ * hold no path separator, never by its raw message.
  */
 
 /** One lane the run's receipt tags, as read before any act. */
@@ -91,14 +94,73 @@ interface Places {
   readonly farmDir: string;
 }
 
-/** The clone's main checkout, its common git directory and its farm, read from any checkout of it. */
+/** Failures whose message the clean-up built with no machine path in it, so it reaches a reason as it is. */
+const pathFree = new WeakSet<Error>();
+
+/** An `EngineError` whose `message` the caller built with no machine path, marked so a reason keeps it whole. */
+function named(message: string, code: EngineError["code"]): EngineError {
+  const error = new EngineError(message, { code });
+  pathFree.add(error);
+  return error;
+}
+
+/** A failure's class: its string code, else the signal that stopped it, else a name more telling than `Error`. */
+function classOf(error: unknown): string | null {
+  if (typeof error !== "object" || error === null) return null;
+  const { code, signal, name } = error as { code?: unknown; signal?: unknown; name?: unknown };
+  for (const value of [code, signal]) if (typeof value === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(value)) return value;
+  return typeof name === "string" && name !== "Error" && /^[A-Za-z]{1,40}$/.test(name) ? name : null;
+}
+
+/** `line` where it holds no path separator, so no folder of the machine can be in it; else `null`. */
+function pathless(line: string): string | null {
+  const trimmed = line.trim();
+  return trimmed === "" || /[\\/]/.test(trimmed) ? null : trimmed;
+}
+
+/** A failure's own first line where it holds no path separator, `source: ` taken off its front first; else `null`. */
+function wordsOf(error: unknown, source?: string): string | null {
+  const line = firstLine(error);
+  return pathless(source !== undefined && line.startsWith(`${source}: `) ? line.slice(source.length + 2) : line);
+}
+
+/**
+ * A failure from outside the clean-up named with no machine path by construction: its own words where they hold no
+ * path separator, and its class.
+ */
+function classed(error: unknown): string {
+  const words = wordsOf(error);
+  const cls = classOf(error);
+  if (words !== null) return cls === null || words.includes(cls) ? words : `${words} (${cls})`;
+  const { syscall, signal } = (typeof error === "object" && error !== null ? error : {}) as { syscall?: unknown; signal?: unknown };
+  if (typeof syscall === "string" && syscall.startsWith("spawn")) return `git could not be started (${cls ?? "no class"})`;
+  if (typeof signal === "string") return `git was stopped before it finished (${cls ?? "no class"})`;
+  return `it failed with ${cls ?? "no class"}; its message names a path, so it is left out`;
+}
+
+/** Runs one read of `placesOf`, naming its failure as `what` and its class, and its own words where they hold no path. */
+async function step<T>(what: string, read: () => Promise<T>, source?: string): Promise<T> {
+  try {
+    return await read();
+  } catch (error) {
+    const words = wordsOf(error, source);
+    throw named(`${what} (${classOf(error) ?? "no class"})${words === null ? "" : `: ${words}`}`, error instanceof EngineError ? error.code : "FS_ERROR");
+  }
+}
+
+/**
+ * The clone's main checkout, its common git directory and its farm, read from any checkout of it. Every failure here
+ * comes before the places are known, so each is named by the read that failed and its class (REQ-FLOW-176).
+ */
 async function placesOf(rootDir: string, git: WorktreeGitRunner): Promise<Places> {
-  const top = await git({ args: ["rev-parse", "--show-toplevel"], cwd: rootDir });
-  if (top.status !== 0) throw new EngineError("the folder the clean-up runs from is not inside a git checkout, so no clean-up was read", { code: "FS_ERROR" });
-  const commonDir = await resolveGitCommonDir(git, rootDir);
+  const top = await step("the checkout the clean-up runs from could not be read", () => git({ args: ["rev-parse", "--show-toplevel"], cwd: rootDir }));
+  if (top.status !== 0) throw named("the folder the clean-up runs from is not inside a git checkout, so no clean-up was read", "FS_ERROR");
+  const commonDir = await step("the clone's git directory could not be read", () => resolveGitCommonDir(git, rootDir));
   // As the worktree verbs read it: a linked checkout's common directory is the main checkout's `.git`.
   const repoRoot = basename(commonDir) === ".git" ? dirname(commonDir) : resolve(top.stdout.trim());
-  const farmDir = resolveFarmDir(await readWorktreePolicy(repoRoot), repoRoot);
+  const source = join(repoRoot, WORKTREE_POLICY_FILE);
+  const policy = await step(`the worktree policy ${WORKTREE_POLICY_FILE} did not read`, () => readWorktreePolicy(repoRoot), source);
+  const farmDir = await step("the worktree policy's farmDir was refused", async () => resolveFarmDir(policy, repoRoot), policy.source);
   return { repoRoot, commonDir, farmDir };
 }
 
@@ -108,18 +170,39 @@ function laneName(farmDir: string, path: string): string {
   return name === "" || name.startsWith("..") || isAbsolute(name) ? basename(path) : name;
 }
 
+/** A path's start in a line: at its front or after a space, a quote or a mark, a `/`, `\`, `~` or drive letter. */
+const MACHINE_PATH = /(?:^|[\s"'`(=:,[])(?:[\\/~]|[A-Za-z]:[\\/])/;
+
 /**
- * A failure's first line with no machine path: the lane's path as its name, then each known folder's prefix taken out,
- * the longest first so a farm inside the checkout goes before the checkout, and a bare folder said by its place.
+ * A failure's line with no machine path (REQ-FLOW-176). One the clean-up built path-free is kept whole. One the
+ * clean-up's engine raised once its places are read keeps its first line with the lane's path as its name, then each
+ * known folder's prefix taken out in the spelling given and the one through its links, the longest first so a farm
+ * inside the checkout goes before the checkout, and a bare folder said by its place; where a path still shows, it is
+ * named by its class. Any other, raised before the places are read or from outside the clean-up, is named by its class.
  */
-function failureLine(error: unknown, at: { readonly places: Places | null; readonly rootDir: string; readonly lane?: RunCleanupLane }): string {
+async function failureLine(error: unknown, at: { readonly places: Places | null; readonly rootDir: string; readonly lane?: RunCleanupLane }): Promise<string> {
+  if (error instanceof Error && pathFree.has(error)) return firstLine(error);
+  if (!(error instanceof EngineError) || at.places === null) return classed(error);
+  // [folder, its words, whether it is replaced whole]. A tie in length keeps this order, so the main checkout reads as
+  // itself where the clean-up runs from it.
+  const known: [string, string, boolean][] = [
+    ...(at.lane === undefined ? [] : ([[at.lane.path, at.lane.name, true]] as [string, string, boolean][])),
+    [at.places.farmDir, "the lane farm", false],
+    [at.places.commonDir, "the git directory", false],
+    [at.places.repoRoot, "the main checkout", false],
+    [at.rootDir, "the checkout the clean-up runs from", false],
+  ];
+  const spellings = await Promise.all(
+    known.map(async ([folder, place, keeps]): Promise<[string, string, boolean][]> => [
+      [resolve(folder), place, keeps],
+      [await real(folder), place, keeps],
+    ]),
+  );
   let line = firstLine(error);
-  if (at.lane !== undefined) line = line.replaceAll(at.lane.path, at.lane.name);
-  // A tie in length keeps this order, so the main checkout reads as itself where the clean-up runs from it.
-  const folders: [string, string][] = at.places === null ? [] : [[at.places.farmDir, "the lane farm"], [at.places.commonDir, "the git directory"], [at.places.repoRoot, "the main checkout"]];
-  folders.push([at.rootDir, "the checkout the clean-up runs from"]);
-  for (const [folder, place] of folders.toSorted((a, b) => b[0].length - a[0].length)) line = line.replaceAll(`${folder}${sep}`, "").replaceAll(folder, place);
-  return line;
+  for (const [folder, place, keeps] of spellings.flat().toSorted((a, b) => b[0].length - a[0].length)) {
+    line = keeps ? line.replaceAll(folder, place) : line.replaceAll(`${folder}${sep}`, "").replaceAll(folder, place);
+  }
+  return MACHINE_PATH.test(line) ? classed(error) : line;
 }
 
 /** `path` through its links, or as given where it does not resolve, so two spellings of one folder compare equal. */
@@ -187,7 +270,7 @@ export async function planRunCleanup(rootDir: string, run: string, git: Worktree
     places = await placesOf(rootDir, git);
     return await readPlan(rootDir, run, places, git);
   } catch (error) {
-    throw new EngineError(failureLine(error, { places, rootDir: resolve(rootDir) }), { code: error instanceof EngineError ? error.code : "FS_ERROR" });
+    throw new EngineError(await failureLine(error, { places, rootDir: resolve(rootDir) }), { code: error instanceof EngineError ? error.code : "FS_ERROR" });
   }
 }
 
@@ -302,7 +385,8 @@ export async function applyRunCleanup(plan: RunCleanupPlan, opts: { readonly dry
         await release();
       }
     } catch (error) {
-      keep(lane.name, `the removal failed: ${failureLine(error, { places, rootDir, lane })}`);
+      // oxlint-disable-next-line no-await-in-loop -- the failed lane's reason is read before the next lane's lock
+      keep(lane.name, `the removal failed: ${await failureLine(error, { places, rootDir, lane })}`);
     }
   }
 
@@ -325,7 +409,7 @@ export async function applyRunCleanup(plan: RunCleanupPlan, opts: { readonly dry
         } else keep(name, `git branch -d refused it (git exited ${deleted.status})`);
       }
     } catch (error) {
-      keep(name, `the branch was not deleted: ${failureLine(error, { places, rootDir })}`);
+      keep(name, `the branch was not deleted: ${await failureLine(error, { places, rootDir })}`);
     }
   }
 
@@ -342,7 +426,8 @@ export async function applyRunCleanup(plan: RunCleanupPlan, opts: { readonly dry
         acts.push(`dropped ${ref.replace(/^refs\/remotes\//, "")}, which origin no longer has`);
       } else keep(ref, `git update-ref -d failed (git exited ${dropped.status})`);
     } catch (error) {
-      keep(ref, `the ref was not dropped: ${failureLine(error, { places, rootDir })}`);
+      // oxlint-disable-next-line no-await-in-loop -- one ref a run
+      keep(ref, `the ref was not dropped: ${await failureLine(error, { places, rootDir })}`);
     }
   }
   return { removed, kept, acts };

@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { tmpdir, userInfo } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyRunCleanup, closingRef, planRunCleanup } from "../../src/runs/runCleanup.ts";
@@ -369,6 +369,91 @@ describe("a landed run's clean-up", () => {
 
     expect(done).toEqual({ removed: ["p-policy", BRANCH], kept: [], acts: ["removed lane p-policy", `deleted branch ${BRANCH}`] });
     expect(existsSync(path)).toBe(false);
+  });
+
+  /**
+   * Every machine path a failure could carry out (REQ-FLOW-176): the case's folder, the suite's temp root, the system's
+   * temp folder through its links, and the account's home folder, read from the account so no stubbed `HOME` hides it.
+   */
+  const leakable = (at: Seeded): string[] => [...machinePaths(at), userInfo().homedir];
+
+  /** `run`'s rejection, or a failed assertion where it resolved. */
+  async function rejection(run: Promise<unknown>): Promise<Error> {
+    const outcome = await run.then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(outcome).toBeInstanceOf(Error);
+    return outcome as Error;
+  }
+
+  /** The seed with `policy` committed on `main` as `.stamity/worktree.json`, and a lane to run the clean-up from. */
+  async function withPolicy(policy: (at: Seeded) => string): Promise<{ at: Seeded; from: string[] }> {
+    const at = await seed();
+    await mkdir(join(at.repo, ".stamity"), { recursive: true });
+    await writeFile(join(at.repo, ".stamity", "worktree.json"), policy(at));
+    git(at.repo, ["add", ".stamity/worktree.json"]);
+    git(at.repo, ["commit", "-q", "-m", "policy"]);
+    const from = await lane(at, "p-from", RUN);
+    return { at, from: [at.repo, from] };
+  }
+
+  // review/22: a policy that does not read, or whose farm folder is refused, fails before the clean-up knows its places,
+  // so the message would carry the repository's parent folder, the farm it names or the main checkout's path.
+  it.each([
+    ["does not parse", () => "{ not json\n", /worktree policy/i],
+    ["points its farm folder outside the repository's parent", () => `${JSON.stringify({ version: 1, farmDir: "../../x" })}\n`, /farmDir|farm folder|worktree policy/i],
+    ["names an absolute farm folder", (at: Seeded) => `${JSON.stringify({ version: 1, farmDir: join(at.dir, "abs-lanes") })}\n`, /farmDir|farm folder|worktree policy/i],
+  ] as const)("throws for a worktree policy that %s a message that names the failure and holds no machine path, from the main checkout and from a lane", async (_what, policy, says) => {
+    const { at, from } = await withPolicy(policy);
+
+    for (const rootDir of from) {
+      // oxlint-disable-next-line no-await-in-loop -- one checkout at a time, the main checkout then the lane
+      const error = await rejection(planRunCleanup(rootDir, RUN));
+      expect(error.message).toMatch(says);
+      for (const machine of leakable(at)) expect(error.message).not.toContain(machine);
+    }
+  });
+
+  // review/23: a runner that rejects (its wall time, a spawn error other than not-found) carries Node's own message,
+  // whose first line names the git program by its absolute path.
+  it("gives a removal and a branch deletion the runner rejects, naming git's program path, reasons that name the failure and hold no machine path", async () => {
+    const at = await seed();
+    const path = await lane(at, "p-rejected", RUN);
+    const program = join(getRoot().dir, "toolchain", "bin", "git");
+    // Mock reason: git that cannot start (EACCES) or is stopped at its wall time cannot be brought about with a real git
+    // without changing the machine's own git; the errors are shaped as Node's child-process errors are.
+    const rejecting: WorktreeGitRunner = (invocation) => {
+      if (invocation.args[0] === "worktree" && invocation.args[1] === "remove") {
+        return Promise.reject(Object.assign(new Error(`spawn ${program} EACCES`), { code: "EACCES", errno: -13, syscall: `spawn ${program}`, path: program }));
+      }
+      if (invocation.args[0] === "branch" && invocation.args[1] === "-d") {
+        return Promise.reject(Object.assign(new Error(`Command failed: ${program} -c core.hooksPath=/dev/null ${invocation.args.join(" ")}\n`), { killed: true, signal: "SIGTERM", code: null }));
+      }
+      return runGit(invocation);
+    };
+
+    const done = await applyRunCleanup(await planRunCleanup(at.repo, RUN), { dryRun: false, rootDir: at.repo, git: rejecting });
+
+    expect(done.kept).toEqual([
+      { path: "p-rejected", reason: expect.stringMatching(/^the removal failed: .*EACCES/) },
+      { path: BRANCH, reason: expect.stringMatching(/^the branch was not deleted: \S/) },
+    ]);
+    for (const machine of [program, ...leakable(at)]) expect(JSON.stringify(done)).not.toContain(machine);
+    expect(existsSync(path)).toBe(true);
+    expect(hasRef(at.repo, `refs/heads/${BRANCH}`)).toBe(true);
+  });
+
+  it("throws for a plan whose first git read the runner rejects, naming git's program path, a message that names the failure and holds no machine path", async () => {
+    const at = await seed();
+    const program = join(getRoot().dir, "toolchain", "bin", "git");
+    // Mock reason: a git that cannot start (EACCES) cannot be brought about without changing the machine's own git.
+    const rejecting: WorktreeGitRunner = () => Promise.reject(Object.assign(new Error(`spawn ${program} EACCES`), { code: "EACCES", errno: -13, syscall: `spawn ${program}`, path: program }));
+
+    const error = await rejection(planRunCleanup(at.repo, RUN, rejecting));
+
+    expect(error.message).toMatch(/EACCES/);
+    for (const machine of [program, ...leakable(at)]) expect(error.message).not.toContain(machine);
   });
 
   it("reads no branch and no lane for a run that started none", async () => {
