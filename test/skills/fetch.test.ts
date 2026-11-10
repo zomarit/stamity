@@ -109,6 +109,19 @@ async function commitBuiltTree(fx: Fixture, skillTree: string): Promise<string> 
   return commit;
 }
 
+/**
+ * TEST CHANGE, justified (u-ci1): re-point the fixture at a tree whose `house-style/references/` holds `entries` beside
+ * voice.md, built with `git mktree -z`. A name Windows cannot hold (a device name, a trailing dot, a `"`, a control
+ * character) can be neither written to its disk nor added to its index (git for Windows refuses it there), yet a source
+ * served from another platform carries it in the tree the fetch reads; so the case builds that tree on every platform.
+ */
+async function commitReferences(fx: Fixture, entries: readonly { readonly mode: "100644" | "120000"; readonly name: string; readonly body: string }[]): Promise<string> {
+  const blob = (body: string): string => execFileSync("git", ["hash-object", "-w", "--stdin"], { cwd: fx.work, input: body, encoding: "utf8" }).trim();
+  const rows = [{ mode: "100644", name: "voice.md", body: VOICE_MD }, ...entries].map(({ mode, name, body }) => `${mode} blob ${blob(body)}\t${name}\0`);
+  const references = execFileSync("git", ["mktree", "-z"], { cwd: fx.work, input: rows.join(""), encoding: "utf8" }).trim();
+  return commitBuiltTree(fx, `100644 blob ${blob(SKILL_MD)}\tSKILL.md\n040000 tree ${references}\treferences\n`);
+}
+
 async function fixture(files: Record<string, string>, opts: { allowScripts?: boolean; extra?: Extra } = {}): Promise<Fixture> {
   const base = getTemp().dir;
   const work = join(base, "source");
@@ -421,9 +434,12 @@ describe.skipIf(!gitAvailable)("addSkill — what a copy may not take (review ro
     ["house-style/references/notes.", "a trailing dot or space Windows drops"],
     ['house-style/references/a"b.md', "a character Windows refuses in a name"],
   ])("refuses %s, which cannot land on every platform", async (path, defect) => {
-    const fx = await fixture({ ...SKILL_FILES, [path]: "# Note\n" });
+    // TEST CHANGE, justified (u-ci1): the name is placed in a built tree (commitReferences), not on disk, so the case
+    // runs on Windows too; the tree the fetch reads and the assertion are unchanged.
+    const fx = await fixture(SKILL_FILES);
+    const commit = await commitReferences(fx, [{ mode: "100644", name: path.slice("house-style/references/".length), body: "# Note\n" }]);
 
-    const error = await refusal(fx, () => addSkill(request(fx)));
+    const error = await refusal(fx, () => addSkill(request(fx, { commit })));
 
     expect(error.message).toContain(`${path} carries ${defect}`);
   });
@@ -472,9 +488,12 @@ describe.skipIf(!gitAvailable)("addSkill — what a copy may not take (review ro
   });
 
   it("prints a link's path only after its control characters are refused", async () => {
-    const fx = await fixture(SKILL_FILES, { extra: { link: "house-style/references/\u001b[2Jx.md" } });
+    // TEST CHANGE, justified (u-ci1): the link sits in a built tree (commitReferences), not in the index, which git for
+    // Windows refuses a control character in; the tree the fetch reads and the assertions are unchanged.
+    const fx = await fixture(SKILL_FILES);
+    const commit = await commitReferences(fx, [{ mode: "120000", name: "\u001b[2Jx.md", body: "" }]);
 
-    const error = await refusal(fx, () => addSkill(request(fx)));
+    const error = await refusal(fx, () => addSkill(request(fx, { commit })));
 
     expect(error.message).toContain("control character");
     expect(error.message).not.toContain("\u001b");
