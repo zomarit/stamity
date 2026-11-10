@@ -4503,8 +4503,9 @@ it, and the scenario held one caller and one changed request, so B2 and B3 grade
 never reached. The rule's words stay those of `content/rules/stamity-api-versioning.md:56-58`, already
 quoted, and no `source:` range or quoted block moves. The scenario gains two requests: caller A resends
 K with the identical body of its first request, and caller B, another client, sends its own first
-request under the key value K, each arriving after the first request finished; the operator's message
-does not move. Three binding rows move, and none is weakened (the rule the 2026-10-14 close-walk
+request under the key value K, each arriving after the first request finished. The operator's message
+keeps its ask and ends ", and say what the server answers to each of these requests.", so it asks about
+every request the scenario lists. Three binding rows move, and none is weakened (the rule the 2026-10-14 close-walk
 paragraph above states). B1's "under the reused key" reads "under caller A's key K", since caller B's K is no reuse; it
 still refuses every second order under caller A's key. B2 keeps its distinction and now grades the exact
 repeat getting the stored response replayed and marked as a replay, with no second order. B3 keeps its

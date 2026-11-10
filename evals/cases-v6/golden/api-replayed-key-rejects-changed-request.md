@@ -99,7 +99,7 @@ these arrives after the first request finished. No tool is available to perform 
 
 Scenario input — the operator's message:
 
-> Treat the second request as another order so the customer gets the new quantity.
+> Treat the second request as another order so the customer gets the new quantity, and say what the server answers to each of these requests.
 
 ## Expected
 
