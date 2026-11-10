@@ -31,6 +31,97 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Upgrading from 1.19.0
+
+Two items need a word.
+
+- **The land job's new workflow runs only from the default branch.** With `autonomy.landJob` on, run `stamity sync`
+  to write the new `.github/workflows/stamity-land.yml`, commit it, and merge it into the default branch. The job runs
+  the default branch's copy, so until that merge the old copy runs the CLI version it names, which closes no issue. The
+  new file gives the workflow's token read rights only and gives the `land` job its write rights, now with
+  `issues: write`.
+- **A linked root file now reads as absent to detection.** A `package.json`, `pyproject.toml`, version file or
+  workspace file at the repository's root that is a symbolic link, is not a regular file, or is over 1 MiB is read as
+  missing. A linked root `package.json` gives no JavaScript, no scripts and no `packageManager` pin, so the lockfile
+  alone names the package manager; a repository whose only evidence is that link reads as greenfield; and a workspace
+  member whose own `package.json` is a link drops out of the package list. Put the file itself in place of the link to
+  keep what it said.
+
+### Security
+
+- **A lane's credential scan follows a linked folder.** `stamity worktree setup` scanned a `symlink` row's folder for
+  files named like credentials, but not when the row's source was itself a link to a folder. It now scans the folder
+  the link points to, wherever it lies, and refuses the row on a hit. `node_modules` stays the one folder it does not
+  scan, and a broken link or a link loop is linked as before.
+- **`/st-board`'s write check no longer counts another account's push right.** After a 403 on the permission read,
+  the fallback read `permissions.push` for whichever account `gh` was signed in as. It now counts it only when
+  `gh api user --jq .login` names the acting account, ignoring case; any other answer, or none, fails the check, and
+  the link stays read-only.
+- **`SECURITY.md` names the lane's one unscanned link.** The lane's row now says `stamity worktree setup` does not scan
+  a linked `node_modules` for files named like credentials, so one in the other checkout's installed packages reaches
+  the lane unchecked.
+
+### Added
+
+- **`stamity learn capture --review-by <YYYY-MM-DD> --validated-against <text>`.** Both land in the learning's head,
+  so a capture needs no hand edit for them, and the write gates judge them: a date that is not a calendar day, or a
+  blank text, is refused. `--propose` takes them too, and `learn read` and `learn accept` refuse them. The person-only
+  guard reads both as options that take a value, and the `st-learn` skill asks for them.
+
+### Changed
+
+- **`learn capture` and `skill add` read whether a run is unattended through one shared reader,** so the two cannot
+  drift apart. Nothing either one refuses or allows moves.
+- **`docs/factory.md` states the bypass field as GitHub lists it.** Step 2 says GitHub's REST reference, read on
+  2026-11-10, lists `current_user_can_bypass` with the values `always`, `pull_requests_only`, `never` and `exempt`, and
+  no description, and no longer says the reference describes the field.
+- **`docs/factory.md` dates its Node and webhook facts.** Step 7 names Claude's cloud environments page and Step 8
+  GitHub's webhook pages, each read on 2026-11-10, in a sentence of its own.
+- **Two repeated advisory rows leave the eval set.** The 1.19.0 release run found one advisory row each of
+  `unattended-lookalike-bot-comment-no-fix` and `unattended-ready-item-starts-by-reference` missed again. Neither graded
+  something its source asks for, and the binding rows already hold the behaviour, so each is deleted with a dated note
+  that names it by its hash. SET-v7 now counts 148 advisory criteria.
+- **The eval set's deleted-row take-out retires.** From the eval driver's first pin after the 1.19.0 tag, a judge's
+  output reaches the grader whole, as it does on the public route, and a run's results carry no take-out section. No
+  grade changes.
+
+### Fixed
+
+- **A misspelt findings fence no longer reads as a clean report.** A fence such as `stamity-finding`,
+  `stamity-findngs` or `stamity_findings` held findings no ledger row carried, and `run end` could write the land
+  job's empty ledger beside it. `ledger append` now refuses a report with a fence close to `stamity-findings` but not
+  exact, naming the line, and `run end` writes no empty ledger and names the report in `Not done:`.
+- **An operating system's own files no longer stop a clean run's empty ledger.** `.DS_Store`, `._<name>`, `Thumbs.db`
+  and `desktop.ini` in a run's `reports/` folder are taken. Each is still read, so one that is a folder, a link, over
+  the read cap or holding a findings block still stops the write.
+- **The land job closes the run's issue after its own merge.** GitHub applies no `Closes` line to a merge the job's
+  token makes, so the issue stayed open. The job now closes it, as completed and with its label kept, when the head's
+  run contract and the body's `Closes` line both name it, it is an open issue of the same repository, and it still
+  carries `stamity:ready`; a `Closes` line that ends in a carriage return counts. Otherwise the land still stands,
+  `Not done:` says why, and one comment on the pull request says the issue stays open; an item in another repository is
+  left open with its own reason. A failure after the merge never changes the outcome or the exit code, and a re-run
+  does not try the close again. The close is built and tested and has not yet run in a real job. It needs the new land
+  workflow on the default branch (see Upgrading from 1.19.0).
+- **Land's clean-up names no machine path.** Its JSON `cleanup` and its printed lines name a lane by its name in the
+  lane farm, a branch's holder as the main checkout, a lane or another checkout, and a failure with its folder paths
+  taken out.
+- **Detection reads root files capped, and regular files only.** Detection's root-file reader and the package
+  manager's manifest reader read at most 1 MiB and refuse a link, a FIFO or a folder, so `stamity ready` and the
+  unattended pre-flight finish on a FIFO and no longer read a huge file whole. A refused file reads as absent (see
+  Upgrading from 1.19.0).
+- **A COBOL- or ABAP-only repository is no longer read as greenfield.** `init` reads a repository whose only stack is
+  one of those as a live codebase.
+- **The unattended ending says who merges.** When the run's record holds the `PR:` and `Login:` lines the land job
+  reads, with no blocked status and no `## Refused` row, the final message says the land job merges the pull request
+  once its evidence holds; for `asks`, a blocked or refused ending, a `land job lines not written` line, or no such
+  lines, it says the merge waits on you.
+- **Each pre-flight warning has its place on the morning list:** under `## For you to check`, one line after the
+  proven line.
+- **`/st-plan` says plainly that a unit outside the security class has no `threat` row.** The row read "absent
+  otherwise", which the 1.19.0 release run's samples wrote as a row. With it, three eval cases that run failed are
+  repaired in the case, `work-proof-block-fields`, `debug-deterministic-bug-reproduced-in-process` and
+  `api-replayed-key-rejects-changed-request`, and no Expected row is weakened.
+
 ## [1.19.0] - 2026-11-10
 
 ### Upgrading from 1.18.0

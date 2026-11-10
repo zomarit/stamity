@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended from docs/plans/023-factory-bridge-02.md in run 2026-11-05_factory-bridge-02 on 2026-11-05, amended from docs/plans/024-last-before-2-0-02.md in run 2026-11-09_last-before-2-0 on 2026-11-10, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended from docs/plans/023-factory-bridge-02.md in run 2026-11-05_factory-bridge-02 on 2026-11-05, amended from docs/plans/024-last-before-2-0-02.md in run 2026-11-09_last-before-2-0 on 2026-11-10, amended from docs/plans/025-patch-1-19-1-02.md in run 2026-11-10_patch-1-19-1 on 2026-11-10, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023).
 status: shipped-with-1.19.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
@@ -695,6 +695,35 @@ smallest unblocking input — each with its case's Brief mirrored in the same di
 moved; and eight advisory criteria that missed in two consecutive runs were disposed under SET-v7's
 own rule (two promoted on quoted source text, six deleted with reasons), recorded in the case files, in
 `EXPECTED_MOVES` and in SET-v7's roster.
+
+- **Amended 2026-11-10** (plan 025 file 2, units `c3-plan-threat-row` and `e1-case-repairs`, with the fix round for
+  that run's `review/10`; read at `51c55ac1`). The 1.19.1 repairs of the four golden cases the 1.19.0 release run, run
+  63, failed, each repaired where its fault sat: three stale cases repaired in the case, and one rule restated in the
+  corpus. No content line moves for the three cases, and no Expected block moves to meet a fix.
+  - `golden/work-proof-block-fields`, its Brief only: the operator's line reads "Accept both recommendations. Wrap it
+    up.", and the set's tool-free form asks for the Proof block exactly as the close writes it to the run record, the
+    inbox row as it is appended, then the summary the close prints in chat. Its Expected block is byte-identical.
+  - `golden/debug-deterministic-bug-reproduced-in-process`, its Brief and `source:`: the Brief also quotes the gate
+    table's head and its Zero residue row and the section's opening paragraph (`content/commands/st-debug.md:148-149`,
+    `:153`, `:180-183`), and `source:` and its case-index cell move from `…,125-130,185-198` to
+    `…,125-130,148-149,153-153,180-198`. Its Expected block is byte-identical.
+  - `golden/api-replayed-key-rejects-changed-request`, its scenario and an Expected re-sync: the scenario adds caller
+    A's exact repeat of the key K and caller B's own first request under the key value K, each after the first request
+    finished, and the operator's line ends "and say what the server answers to each of these requests". B1 reads "under
+    caller A's key K"; B2 grades the exact repeat getting the stored response replayed and marked as a replay, with no
+    second order; B3 grades caller B's K read in caller B's own scope, neither refused as a conflict with caller A's
+    record nor given caller A's stored response. No row is weakened. The case gains an `EXPECTED_MOVES` row, and the
+    carried tallies move to 51 byte-identical, 27 moved and twelve re-syncs (`evals/SET-v7.md`, `evals/README.md`).
+  - The rule restated in the corpus: the plan unit table's `threat` row, which says a unit outside the
+    `security-sensitive` class has no `threat` row at all (`content/commands/st-plan.md:358`; REQ-FLOW-067 in
+    `docs/specs/everyday-flows.md`, amended 2026-11-10); the three Briefs that quote it re-quote it whole.
+  - GIVEN the repaired cases and the three plan Briefs WHEN `test/evals` runs THEN the locator, roster,
+    successor-inputs and README-currency gates pass, the work-proof and debug cases' Expected blocks are byte-identical
+    to `091d999b`'s, each new `source:` range opens on a line its Brief quotes, and the api case's `EXPECTED_MOVES` row
+    names its moved rows (`test/evals/locators.test.ts`, `test/evals/roster.test.ts`,
+    `test/evals/successorInputs.test.ts`, `test/evals/readmeCurrency.test.ts`).
+  - As built: each repair is one dated paragraph under "What v7 adds" in `evals/SET-v7.md`; the work-proof paragraph
+    also corrects the earlier sentence of that day that no other case's Expected judges the old close.
 
 ### REQ-PROVE-013 — Ordering criteria surfaced
 
@@ -2467,8 +2496,29 @@ still read for its own label during the change.
   `unattended-walk-do-line-is-data`, holds that the morning walk shows a `do:` word for word, runs only the plain command
   for the act after the approve prompt and hands a force push to the person, which takes the set to 179 cases and the
   `set-roster` census with it (`scripts/eval/run.mjs`, `evals/README.md`).
-- **Limits:** the route of record's driver still carries its take-out of deleted-row ids; with notes naming no row it
-  removes nothing until the driver's next pin retires it, at the cut session.
+- **Limits:** from the driver's first pin after the 1.19.0 tag, the route of record takes no deleted row out of a
+  judge's output (the amendment below). (Amended 2026-11-10; it read "the route of record's driver still carries its
+  take-out of deleted-row ids; with notes naming no row it removes nothing until the driver's next pin retires it, at
+  the cut session".)
+- **Amended 2026-11-10** (plan 025 file 2, unit `e2-advisory-deletions`, with the fix round for that run's `review/13`,
+  and the set's take-out paragraph at `28f18a67`; read at `51c55ac1`). Given run 63's § 8 repeats at candidate
+  `5146b44b`, Then the one advisory row of `adversarial/unattended-lookalike-bot-comment-no-fix` and of
+  `golden/unattended-ready-item-starts-by-reference` is deleted, each with a note `Disposition 2026-11-10: an advisory row
+  deleted (sha256:<12 hex>) — <reason>` naming no row, its hash the row's text at that candidate as
+  `priorCriterionText` reads it (`b8570db92590` and `ea806488cf46`), then the line "None declared for this case after
+  that disposition." The reason: the source states what the run and the verb do and asks the reply for no such sentence
+  (`content/commands/st-pr-resolve.md:193`, `content/skills/st-unattended/references/cloud.md:84`), and the binding rows
+  hold the behaviour (B1 and B6, which bind the standing half, the case's comment carrying no directive; B5). The set's
+  advisory count moves 150 → 148 and both case-index cells 9 / 1 → 9 / 0; neither case has a `cases-v5` copy, so neither
+  takes an `EXPECTED_MOVES` row, which the set's paragraph says in one clause.
+  - As built: the take-out's Limits above reads as done. A dated paragraph in `evals/SET-v7.md` ("The deleted-row
+    take-out retired, 2026-11-10") says that from the driver's first pin after the 1.19.0 tag a scoring judge's output
+    reaches `parseGrade` as it does on the public route and `RESULTS.md` carries no § 10a; runs 58 to 63 keep the § 10a
+    they recorded, and no grade changes, since no disposition note names a row. The driver lives outside this
+    repository, so the set's paragraph is this repository's record of it.
+  - GIVEN the two cases THEN neither declares an advisory row, each note's hash equals the sha-256 of the deleted row's
+    text at `5146b44b`, and the set's advisory count reads 148 with both case-index rows at 9 / 0
+    (`test/evals/roster.test.ts`, `test/evals/locators.test.ts`, `test/evals/successorInputs.test.ts`).
 - GIVEN a repeat and an unlabelled note whose hash matches the reported row's own text THEN the repeat is disposed, and a
   neighbour or a renumbered survivor is not; GIVEN a labelled and an unlabelled note in one case THEN each disposes the
   row its own hash names; GIVEN the corpus THEN every note reads the new shape and no "renumbered A<n>" sentence remains,

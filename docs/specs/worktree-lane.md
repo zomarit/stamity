@@ -1,6 +1,6 @@
 ---
 id: worktree-lane
-# A design document, authored outside the spec command, amended from docs/plans/013-optimization-sweep-02.md on 2026-09-30, amended in run 2026-10-11_release-1-14-0 on 2026-10-12, one citation re-pointed in run 2026-10-14_cli-native on 2026-10-14, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18 and 2026-10-20, amended from docs/plans/024-last-before-2-0-02.md in run 2026-11-09_last-before-2-0 on 2026-11-09 and 2026-11-10, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/013-optimization-sweep-02.md on 2026-09-30, amended in run 2026-10-11_release-1-14-0 on 2026-10-12, one citation re-pointed in run 2026-10-14_cli-native on 2026-10-14, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18 and 2026-10-20, amended from docs/plans/024-last-before-2-0-02.md in run 2026-11-09_last-before-2-0 on 2026-11-09 and 2026-11-10, amended from docs/plans/025-patch-1-19-1-01.md in run 2026-11-10_patch-1-19-1 on 2026-11-10, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.19.0
 obsolete_when: the managed worktree lane ships and the CLI reference plus the working-with page carry its behaviour, or a decision cuts the surface
@@ -1325,6 +1325,33 @@ receipt's `run` tag is stated with its own change.
   an untagged one. A landed run's clean-up removes only clean lanes tied to the
   run by this tag, never forced (REQ-FLOW-176 in
   `docs/specs/everyday-flows.md`).
+- **A linked folder is scanned as a folder** (amended 2026-11-10, plan 025
+  file 1, unit `b2-linked-source-scan`; read at `51c55ac1`). Given a `symlink`
+  row whose source is a link to a directory, When setup runs, Then the directory
+  it points to is scanned as a directory would be, except for `node_modules`. So
+  the bullet "The credential scan does not walk a linked install" above holds for
+  a row whose source is itself a link too: before this change `lstat` read such
+  a source as no directory, and it was linked unscanned.
+  - As built: `placeSymlink` (`src/worktree/materialize.ts`) decides a
+    directory source with `lstat`, and for a source that is a link, with the
+    followed `stat`; a linked directory is scanned by `findCredentialInSubtree`
+    like a real one, wherever its target lies, so a known credential under it
+    fails the row, naming it under the row's path, and nothing is placed. A
+    broken link or a link cycle makes that `stat` fail, reads as no directory,
+    and is linked as before; a missing source is still `absent` on the `lstat`.
+    `node_modules` (`isInstallTreePath`) stays the one row not scanned, linked or
+    real.
+  - Limits: the scan of a folder still skips every link it meets inside it, so a
+    link below a scanned folder reaches the lane unchecked. `SECURITY.md` names
+    the `node_modules` exemption as a residual of the lane's row: a credential
+    file in the other checkout's installed packages reaches the lane through a
+    linked `node_modules` unchecked.
+  - Proof: `test/worktree/materialize.test.ts` (the linked-directory cases: a
+    target holding a known credential, inside and outside the source root, a
+    linked `node_modules`, a broken link, a link to a file, a cycle and an
+    unreadable target), `test/worktree/engine.test.ts` (the linked
+    `node_modules` cases, unchanged), `test/docsPages.test.ts` ("states in the
+    lane's row that a linked `node_modules` is not scanned").
 
 **Rationale.** A slash-only rule left every linked lane showing `?? node_modules`,
 and an absent row under that rule was refused for a dirt it could never cause.
@@ -1338,7 +1365,7 @@ checkout of the repository, not to the lane.
 
 ## Acceptance criteria
 
-One set per requirement. One hundred criteria; each is machine-checkable unless
+One set per requirement. One hundred and one criteria; each is machine-checkable unless
 tagged otherwise. (The count read "forty-seven" while the list held sixty-six,
 and the riders of the build rounds then took it to eighty-seven: a hand-kept
 number over a list several rounds have appended to. Restated here against the
@@ -1352,7 +1379,9 @@ REQ-WORKTREE-001 take it to ninety-two. Amended 2026-10-20 (run
 list held ninety-five, the three criteria plan 021 added under REQ-WORKTREE-003
 having moved no number. Amended 2026-11-10 (run `2026-11-09_last-before-2-0`):
 it read "Ninety-five"; the five criteria added under REQ-WORKTREE-019 take it to
-one hundred.)
+one hundred. Amended 2026-11-10 (run `2026-11-10_patch-1-19-1`): it read "One
+hundred"; the criterion added under REQ-WORKTREE-019 takes it to one hundred
+and one.)
 
 **REQ-WORKTREE-001**
 
@@ -1758,6 +1787,12 @@ one hundred.)
   with its rows; GIVEN cleanup of a tagged lane THEN it behaves as for an
   untagged one. *(test: `test/worktree/receipt.test.ts`,
   `test/cli/commands/worktree.test.ts`)*
+- GIVEN a `symlink` row `state` whose source is a link to a folder holding a
+  known credential, inside or outside the source root, WHEN setup runs THEN the
+  row is `failed`, its reason names the credential under `state/`, and nothing
+  is placed at the lane's `state`; GIVEN a linked `node_modules`, a broken link
+  or a link to a file THEN the row is `materialized` (added 2026-11-10).
+  *(test: `test/worktree/materialize.test.ts`)*
 
 ## Non-goals for v1
 

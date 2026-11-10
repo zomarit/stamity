@@ -1,6 +1,6 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, one locator amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended from docs/plans/024-last-before-2-0-03.md in run 2026-11-09_last-before-2-0 on 2026-11-10, and excluded from the site build.
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, one locator amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended from docs/plans/024-last-before-2-0-03.md in run 2026-11-09_last-before-2-0 on 2026-11-10, amended from docs/plans/025-patch-1-19-1-01.md in run 2026-11-10_patch-1-19-1 on 2026-11-10, and excluded from the site build.
 # The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.19.0
@@ -468,6 +468,22 @@ Amended 2026-09-30 (plan 013 file 3, unit `sw21-ledger-cli-papercuts`). Two chan
 
 As built, beyond the delta: a `--stdin` finding also matches a row that was filed from a report, since the rule names
 phase, source and evidence only (ledger `build/120`).
+
+Amended 2026-11-10 (plan 025 file 1, unit `a1-reports-read`; read at `51c55ac1`). Given a report with a fence close to
+the findings opening but not exact, When `ledger append --report` reads it, Then it refuses with exit 1 and names the
+line, and the ledger is unchanged. Before it looks for the block, `parseFindingsBlock` refuses a text holding any fence
+line near the opening but not it, one problem per such line:
+`<line>: this fence's info string is close to stamity-findings but is not its exact opening, so no row reads it; write
+the opening as ```stamity-findings`. A fence is near when its info string, lower-cased and with every whitespace, `-`,
+`_` and `.` removed, is not empty and either names `finding` or sits at most two edits from `stamityfindings`; a fence
+of backticks or tildes counts at any indentation and inside a blockquote or a list item (`ANY_FENCE_LINE`,
+`isNearFindingsInfo`, `nearFindingsFences`, `src/runs/blocks.ts`). `--report` and `--stdin` both take that refusal
+through the append's existing exit-1 path, so an exact empty block beside a near block no longer reads as a report that
+found nothing. `run end`'s reports read calls the same rule (REQ-FLOW-157 in `docs/specs/everyday-flows.md`, amended
+2026-11-10). `src/cli/commands/ledger.ts` is unchanged: its refusal's reason still says the block does not parse.
+
+- Proof: `test/runs/ledgerAppend.test.ts` ("refuses a report whose near findings fence holds a Warning beside an exact
+  empty block, naming its line, and writes nothing"), `test/runs/blocks.test.ts`.
 
 Implements C2, C7 (D2).
 
@@ -1534,6 +1550,10 @@ before that merge, ledger `build/5` of run `2026-09-30_optimization-sweep`). Eac
   2026-09-30).
 - GIVEN a stdin block over the input ceiling THEN the refusal names the bytes read and the
   ceiling, and the ledger is byte-identical (added 2026-09-30).
+- GIVEN a report holding an exact empty block and a ```` ```stamity-finding ```` block carrying a Warning WHEN
+  `stamity ledger append --report` runs THEN it exits 1, stderr names that fence's line with the near-fence message,
+  stdout is empty, and the ledger is byte-identical; GIVEN `text`, `sh`, `json`, `stamity-morning` and
+  `stamity-closures` fences beside an exact block THEN `parseFindingsBlock` reads `ok: true` (added 2026-11-10).
 
 **REQ-CTX-006**
 

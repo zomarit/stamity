@@ -1,6 +1,6 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended at the 1.17.0 release cut on 2026-10-27, amended from docs/plans/023-factory-bridge-01.md in run 2026-11-04_factory-bridge on 2026-11-05, amended from docs/plans/023-factory-bridge-02.md in run 2026-11-05_factory-bridge-02 on 2026-11-05 and 2026-11-06, amended from the real cloud runs of 2026-11-06 and 2026-11-08 on 2026-11-08, amended on 2026-11-09 to correct the count of real-run sessions on each cloud and the cloud proxy wording `SECURITY.md` now holds, amended from docs/plans/024-last-before-2-0-01.md, -02.md and -03.md in run 2026-11-09_last-before-2-0 on 2026-11-10, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended at the 1.17.0 release cut on 2026-10-27, amended from docs/plans/023-factory-bridge-01.md in run 2026-11-04_factory-bridge on 2026-11-05, amended from docs/plans/023-factory-bridge-02.md in run 2026-11-05_factory-bridge-02 on 2026-11-05 and 2026-11-06, amended from the real cloud runs of 2026-11-06 and 2026-11-08 on 2026-11-08, amended on 2026-11-09 to correct the count of real-run sessions on each cloud and the cloud proxy wording `SECURITY.md` now holds, amended from docs/plans/024-last-before-2-0-01.md, -02.md and -03.md in run 2026-11-09_last-before-2-0 on 2026-11-10, amended from docs/plans/025-patch-1-19-1-01.md and -02.md in run 2026-11-10_patch-1-19-1 on 2026-11-10, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.19.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
@@ -3169,13 +3169,27 @@ round.
 `/st-plan`'s unit table gains a conditional `threat` row: for a unit whose files
 `stamity gate classify --base HEAD --paths <its files>` places `security-sensitive`, its trust boundary, what it
 trusts, one abuse case and the check that stops it, in at most five lines; absent otherwise
-(`content/commands/st-plan.md:357`). The table is followed by the shared "Running the CLI." paragraph, whose fallback
+(`content/commands/st-plan.md:358`). The table is followed by the shared "Running the CLI." paragraph, whose fallback
 reads that when neither form runs, the installed copy has no `gate` verb, or a classify's `reason` names a failed
-read, no unit's class can be read, so every unit carries the `threat` row (`:359-360`). The delta's fallback named
+read, no unit's class can be read, so every unit carries the `threat` row (`:361-362`). The delta's fallback named
 only a CLI that cannot run; it was widened (`review/165`, `review/167`). A classify whose base does not resolve, an
 unborn `HEAD` among them, exits 1 with such a `reason` (`src/cli/commands/gate.ts:1215-1217`; REQ-FLOW-061), so
-there too every unit carries the row.
+there too every unit carries the row. (Amended 2026-11-10: the two `content/commands/st-plan.md` citations read
+`:357` and `:359-360`; re-read at `51c55ac1`, where the row is `:358`, the "Running the CLI." paragraph `:361` and
+its fallback sentence `:362`.)
 
+- **Amended 2026-11-10** (plan 025 file 2, unit `c3-plan-threat-row`; read at `51c55ac1`). Given a unit whose files
+  classify as anything but `security-sensitive`, Then the unit's table carries no `threat` row at all. The row's
+  "absent otherwise" reads: "A unit outside that class has no `threat` row at all: the table leaves it out, unlike
+  `skills`, which reads `none`." A `security-sensitive` unit still carries the row in at most five lines, and the
+  fallback above still puts it on every unit when no class can be read.
+  - As built: `content/commands/st-plan.md:358`, rewritten inside its one line, so the file keeps its line count and no
+    eval case's `source:` range moves. The three eval Briefs that quote the line re-quote it whole
+    (`evals/cases-v6/golden/plan-security-unit-carries-threat-note.md`, `plan-artifact-head-and-units-shape.md` and
+    `plan-semantic-ambiguity-survives-structural-pass.md`), no Expected block moves, and `evals/SET-v7.md` records the
+    change in a dated paragraph (REQ-PROVE-012 in `docs/specs/prove-behavior-and-value.md`, amended 2026-11-10).
+  - Proof: `test/corpus/commands/plan.test.ts` (the `threat` row's pin, moved to the new words),
+    `test/evals/locators.test.ts`.
 - **Proof:** `test/corpus/commands/plan.test.ts`, `test/corpus/cliCallForm.test.ts`.
 
 ### REQ-FLOW-072 — A finding names its consequence
@@ -4305,6 +4319,19 @@ The text names the session by what the agent observes, never by client.
   write check passes only when that reads `true`, so a missing value fails it as `false` does
   (`content/commands/st-board.md:225`, the GitHub row; the choice is the run record's of 2026-11-09T18:03:12Z).
   - Proof: `test/corpus/commands/board.test.ts` (the REQ-BOARD-007 GitHub-row and REQ-FLOW-087 REST-only pins).
+- **Amended 2026-11-10** (plan 025 file 2, unit `c1-board-login-check`; read at `51c55ac1`). Given a 403 on
+  `/st-board`'s permission read and no other failure, When `gh api user --jq .login` does not name the acting account
+  (ignoring case), or does not answer, Then the write check fails and the link stays read-only, naming the failed check;
+  When it does, Then the check passes only on `permissions.push` true. So the amendment above's fallback counts the push
+  right of the account `gh` is signed in as only when that account is the acting one, as the author rule does
+  (REQ-FLOW-169). A 403 whose message names a rate limit is still read as a rate limit first.
+  - As built: `content/commands/st-board.md:225`, edited inside the line: the Access check cell adds "and only when
+    `gh api user --jq .login` names the acting account (ignoring case), any other acting account failing the check",
+    and the CLI fallback cell ends "only when that fallback reads no push right, or names a login other than the acting
+    account's". The client copies are regenerated from it.
+  - Proof: `test/corpus/commands/board.test.ts` ("counts the 403 fallback's push right only for the acting account's
+    own login (REQ-FLOW-087)", and "works a REST-only session in REST forms and refuses a Projects board there
+    (REQ-FLOW-087)", whose pin moved with the CLI fallback cell).
 - **Proof:** `test/corpus/commands/board.test.ts` ("works a REST-only session in REST forms and refuses a Projects board
   there (REQ-FLOW-087)"), `test/corpus/commands/feedbackPair.test.ts` ("takes the REST forms in a REST-only session,
   named by what the agent observes (REQ-FLOW-087)" and "fetches a REST-only head by number, refuses a fork head, and
@@ -5018,6 +5045,15 @@ egress, token-shaped variable names (names only) and missing review state; with 
   - Proof: `test/runs/preflight.test.ts` ("runPreflight — repo-unready"), `test/cli/commands/gatePreflight.test.ts`
     ("repo-unready, from the ready report"), `test/corpus/skills/unattended.test.ts` ("puts every pre-flight warning on
     the morning list, a pass's too").
+- **Amended 2026-11-10** (plan 025 file 2, unit `c2-unattended-ending`; read at `51c55ac1`). Given a pre-flight with
+  warnings, on a pass as on a refusal, Then each warning is one line under the morning list's `## For you to check`,
+  after the proven line. A pass with two warnings writes two lines there, and the three `qa` rows stay three.
+  - As built: `content/skills/st-unattended/SKILL.md:40`, the pre-flight step, gains "Each goes under
+    `## For you to check`, one line after the proven line." inside its line. The two eval Briefs that quote the line
+    re-quote it whole (`evals/cases-v6/golden/unattended-hookless-preflight-refuses.md`,
+    `golden/unattended-ready-item-starts-by-reference.md`); no Expected block and no `source:` range moves.
+  - Proof: `test/corpus/skills/unattended.test.ts` ("names the section each pre-flight warning goes under, after the
+    proven line"), `test/evals/locators.test.ts`.
 - **Proof:** `test/runs/preflight.test.ts`, `test/cli/commands/gatePreflight.test.ts`,
   `test/hooks/personOnlyGuard.test.ts` (the canary), `test/mcp/env.test.ts`, `test/cli/commands/init.test.ts` and
   `test/cli/commands/initPanel.test.ts` (the canary's ignore entry).
@@ -7395,6 +7431,77 @@ agent's command line, Then the guard refuses it (REQ-FLOW-121).
     land job's limits), `docs/factory.md` (What real runs have shown); `test/docsPages.test.ts` ("%s names the brake, the
     lift and the job", "states the land job's real answer on Claude's cloud, dated, on both pages", "moves the hand-kept
     text the delta changed").
+- **Amended 2026-11-10** (plan 025 file 1, unit `a1-reports-read`; read at `51c55ac1`). The reports read before the empty
+  ledger. Given a report fence whose info string is close to `stamity-findings` but is not its exact opening, Then
+  `run end` writes no empty ledger and names the report in `Not done:` as `a findings fence ledger append does not read`.
+  Given an operating system's own file in `reports/` (`.DS_Store`, `Thumbs.db` or `desktop.ini` in any case, or
+  `._<name>`), a regular file within the read cap with no findings fence, Then the empty ledger is written; Given one that
+  is a folder, a link or over the cap, Then it is not, and `Not done:` names it `(did not read)`; a findings block in
+  one stops the write as it does in a report. So the 1.19.0 amendment's "has an info string naming `findings` in any case
+  or spacing" reads: has an info string near `stamity-findings`, which is, lower-cased and with every whitespace, `-`,
+  `_` and `.` removed, not empty and either names `finding` or sits at most two edits from `stamityfindings`, the rule
+  `ledger append`'s parser refuses by (REQ-CTX-005 in `docs/specs/orchestrator-context.md`, amended 2026-11-10).
+  - As built: `ANY_FENCE_LINE`, `isNearFindingsInfo` and `nearFindingsFences` in `src/runs/blocks.ts`, which both
+    readers call, so they cannot drift; `reportsHoldingFindings` and `REPORTS_NON_REPORTS` in `src/cli/commands/run.ts`.
+    The operating system's names are taken by name and still read as any entry is. A `text`, `sh`, `json`,
+    `stamity-morning` or `stamity-closures` fence beside an exact empty block is not near, and the ledger is written.
+    Prose that quotes the grammar outside a fence is not refused.
+  - Limits: a report that quotes a near fence line inside a longer code fence is refused too, since every line that
+    opens with three or more backticks or tildes reads as a fence line; the fix is to quote it inline. Over this
+    checkout's reports when the unit was built, the rule refused none.
+  - Proof: `test/runs/blocks.test.ts` (`isNearFindingsInfo`, `nearFindingsFences`, `parseFindingsBlock`),
+    `test/cli/commands/runLand.test.ts` ("writes none where a reports entry %s, naming it in Not done:, and the job
+    refuses", its near-fence and AppleDouble rows; "writes the empty ledger where a report's exact empty block sits beside
+    text, sh, json, stamity-morning and stamity-closures fences"; "writes the empty ledger where the reports folder holds
+    .DS_Store, Thumbs.db, desktop.ini and an AppleDouble file"; "writes none where .DS_Store is %s, naming it in Not
+    done:").
+- **Amended 2026-11-10** (plan 025 file 1, unit `a2-land-closes-issue` and its fix rounds; read at `51c55ac1`). The run's
+  issue after a land-job merge. Given a land-job merge that answered 200, and an open issue of origin's repository,
+  labelled `stamity:ready`, that the head's contract and the body's `Closes` line both name, Then the job closes it as
+  completed, the label left on, prints `issue: closed <ref>`, and the JSON carries `issue: { ref, closed: true }`. Given
+  that issue already closed, Then it prints `issue: <ref> was already closed` and writes nothing. Else the land stands
+  (`landed`, exit 0), one `Not done:` line reads `the run's issue <ref> stays open: <reason>`, the JSON carries
+  `issue: { ref, closed: false, reason }`, and one pull request comment, ending in the run's marker, says the issue stays
+  open and why. So the 1.19.0 real-runs amendment's last sentence, "so a person closes the issue after a land-job merge",
+  reads as measured on 2026-11-10, before this close: from 1.19.1 the job closes it as stated here.
+  - As built: after the merge, the job reads the run folder's `contract.yml` at the head (`regularFileAt`,
+    `parseRunContract`); no contract, or one that does not read or parse, does nothing, since `run end` wrote no
+    `Closes` line for it. `closingRef` (`src/runs/runCleanup.ts`) and `issueToClose` (`src/runs/landEvidence.ts`) decide
+    the issue: an item in another repository is left open with `it is in another repository` and no issue call, and a
+    body with no line equal to `Closes <ref>`, a line's trailing carriage return set aside, with `the body's Closes line
+    does not name it`. GitHub's answer (`parseIssue`) decides the rest: `its read answered HTTP <n>`, `its read named no
+    issue state`, `it is a pull request`, `it no longer carries stamity:ready`, and for the close `closing it answered
+    HTTP <n>, so the land workflow's token may lack issues: write; run stamity sync to write it, then close the issue by
+    hand`; a call that fails before GitHub answers names its class (`closeRunIssue` and `failureClassOf`,
+    `src/cli/commands/runLand.ts`).
+  - As built: the close is a call of its own, `ghCloseIssue` with `ghCloseIssueArgs` (`src/cli/engine/ghRunner.ts`),
+    which builds `PATCH repos/<owner>/<repo>/issues/<n>` from checked parts with one constant body,
+    `{ state: "closed", state_reason: "completed" }`, and refuses any other shape before `gh` starts; `ghApi` still
+    refuses a write to an issue. The comment is screened with `screenOutbound` first, and one that is matched or does not
+    post adds one more `notDone` line.
+  - As built: a failure at the read, the close or the comment, after the merge, never moves the outcome or the exit code,
+    and its line names the failure's class, never its message, so no machine path reaches it. No close is tried on a
+    session's land, a fast-forward or a pull request found already merged, and a re-run after a failed close stops at
+    `already-landed` and does not try it again.
+  - As built: the workflow's top-level `permissions` read `contents: read`, and the `land` job alone holds
+    `contents: write`, `pull-requests: write`, `checks: read` and `issues: write`, with one header comment saying why
+    (`buildLandWorkflow`, `src/adapters/landWorkflow.ts`). The job runs the default branch's copy of the workflow, which
+    installs the CLI version it names, so a repository's job closes no issue until `stamity sync` writes the new file and
+    that file is merged into the default branch.
+  - Limits: the close is built and tested, and is `not run` until a real run reaches it. Which status GitHub answers a
+    token without `issues: write` is not measured; any answer but 200 to the read or the close leaves the issue open. An
+    open issue labelled `stamity:ready` that a steered run names in both its contract and its body's `Closes` line is
+    closed too (`SECURITY.md`, the land job).
+  - Proof: `test/cli/commands/runLand.test.ts` (the describe "the run's issue after the job's merge", with "closes the
+    issue where the body's lines end in CRLF", "leaves an item in another repository open with its own reason, in Not
+    done: and in one comment" and the describe "a failure after the merge"), `test/runs/landEvidence.test.ts` (the
+    describe "the run's issue the land job closes (REQ-FLOW-157)"), `test/cli/engine/ghRunner.test.ts`,
+    `test/adapters/landWorkflow.test.ts` ("holds the stated triggers, rights and queue, and nothing of the review tool
+    without one"); the pages: `SECURITY.md`, `docs/security-mapping.md`, `docs/factory.md` and `docs/cloud.md`, held by
+    `test/docsPages.test.ts` ("says the land job closes the run's issue, and what happens when it cannot", "says the new
+    land workflow must reach the default branch, and marks the issue close not run", "names the land job's four rights
+    and what `issues: write` may close", "marks the issue close not run on the security and cloud pages, and says the
+    comment can fail").
 - **Proof:** `test/adapters/landWorkflow.test.ts`, `test/cli/commands/runLand.test.ts`, `test/hooks/personOnlyGuard.test.ts`.
 - **Source:** `src/adapters/landWorkflow.ts`, `src/cli/commands/runLand.ts`, `src/cli/commands/run.ts`,
   `src/hooks/personOnly.ts`.
@@ -7613,6 +7720,24 @@ not proposed in this release. Given a live `learn capture` under an unattended m
   asks nobody. A file a local unattended run writes by hand under the learnings or overrides stays in the work tree, where
   a later session can read it, and the hold stops it reaching a push. The store's gates read shape and denied patterns,
   not meaning.
+- **Amended 2026-11-10** (plan 025 file 1, unit `b3-learn-flags` and its fix round; read at `51c55ac1`). Given `learn
+  capture --review-by <YYYY-MM-DD> --validated-against <text>`, Then both land in the learning's head, pass the write
+  gates and need no hand edit; Given either flag on `read` or `accept`, Then exit 2, naming capture only.
+  - As built: `LearningDraftInput` gains `reviewBy` and `validatedAgainst`, and `draftLearning` writes them after
+    `summary`, verbatim, only when given, so a capture with neither writes the bytes 1.19.0 wrote; both join
+    `CAPTURE_ONLY_FLAGS` and pass through unparsed, for `capture --propose` too (`src/cli/commands/learn.ts`). The
+    engine's write gates judge the values: a date that is not a calendar day or a blank text exits 1 and writes nothing,
+    and a past date is a warning, the loader skipping the learning as expired (`src/learnings/validation.ts`). The
+    person-only guard lists both as value options of `learn`, so the word after either is never read as a verb
+    (`learnVerbWords`, `src/hooks/personOnly.ts`), and the guard script's size budget moved by the measured 44 bytes and
+    2 lines (`src/hooks/scripts.ts`). `content/skills/st-learn/SKILL.md` shows both flags in its capture example and says
+    to pass them; `docs/cli-reference.md` is regenerated.
+  - As built: `unattendedSession`, the read of whether a run is unattended, and its `headOf` moved to
+    `src/cli/engine/runSession.ts`, which both `learn` and `skill add` import, so `skill.ts` keeps no copy and neither
+    command file imports the other; behaviour unchanged (REQ-FLOW-180's mode refusals included).
+  - Proof: `test/cli/commands/learn.test.ts`, `test/cli/commands/skill.test.ts` (the parity with `learn capture`'s
+    mode reading), `test/hooks/personOnly.test.ts` (the guard's list equal to the verb's declared options),
+    `test/hooks/scriptBudget.test.ts`, `test/architecture/boundaries.test.ts` (the new module's row).
 - **Proof:** `test/cli/commands/learn.test.ts` (the describes "learn capture --propose — a run proposes (REQ-FLOW-163)"
   and "learn accept — a person accepts (REQ-FLOW-163)"), `test/hooks/personOnly.test.ts`,
   `test/hooks/personOnlyGuard.test.ts`, `test/corpus/skills/flow.test.ts` ("says an unattended run proposes, no answer
@@ -7778,6 +7903,19 @@ run has shown yet.
 
 - **Limits:** the webhook and Node facts were not re-read from the vendors' pages in that unit and carry no read date;
   the row's `not documented` rests on the plan's reading of the cloud-environments page.
+- **Amended 2026-11-10** (plan 025 file 1, unit `p1-pages`; read at `51c55ac1`). Given `docs/factory.md`, Then the
+  webhook and Node facts carry a read date of 2026-11-10, each in a sentence of its own, and the
+  `current_user_can_bypass` sentence states what GitHub's REST reference lists on that date and no more. So the Limits
+  bullet's first clause reads: the webhook, Node and `current_user_can_bypass` facts rest on the vendors' pages as read
+  on 2026-11-10, and a page that changes after that date is caught by a person following the steps, not by a test; the
+  row's `not documented` still rests on the plan's reading of the cloud-environments page.
+  - As built: Step 2 says "GitHub's REST reference, read on 2026-11-10, lists that field with the values `always`,
+    `pull_requests_only`, `never` and `exempt`, and no description.", and no longer says the reference describes the
+    field; Step 7 says "Claude's cloud environments page, read on 2026-11-10, lists Node 20, 21 and 22, with 22 on PATH,
+    and names a PATH change, not a setup line, to pick one."; Step 8 says "GitHub's pages on creating and validating
+    webhooks, read on 2026-11-10, name the `X-Hub-Signature-256` header and offer no custom header." (`docs/factory.md`).
+  - Proof: `test/docsPages.test.ts` ("states the bypass field as GitHub's reference lists it, dated", "dates the Node
+    and webhook facts each in a sentence of its own").
 - **Proof:** `test/emit/capabilityMatrix.test.ts` ("names the permission reads Claude's proxy refused in a real run,
   citing a public record (REQ-FLOW-170)"), `test/docsPages.test.ts` (the `CURSOR_REFUSAL` pins and the webhook, Step 2
   and Step 7 case), `test/runs/preflight.test.ts` ("a push URL carrying an access token is unknown with the credentials
@@ -7913,6 +8051,21 @@ lead with implementation detail."; `plain`, unset or a value outside the enum re
 - **As built, where the delta differed:** the cell sent the proof block to the pull request body too; the attended body is
   fixed text from `run checkpoint`, so it goes to the run record only (S38; REQ-FLOW-143). The "not consumed" disclaimers
   are gone (`src/cli/docs/configReference.ts`).
+- **Amended 2026-11-10** (plan 025 file 2, unit `c2-unattended-ending`; read at `51c55ac1`). Given an unattended close
+  whose record holds the `PR: <n>` and `Login: <login>` lines `run end` writes for the land job, no blocked status and no
+  `## Refused` row, When `run land` ends `refused` or stops on a wait, Then the final message says the land job merges the
+  pull request once its evidence holds and otherwise writes why on the pull request's status line. Given `asks`, a
+  blocked or refused ending, a `land job lines not written` line, or no such record lines, Then the message says the merge
+  waits on the person, and a `land job lines not written` line also goes on its `Not done:`.
+  - As built: `content/skills/st-unattended/SKILL.md:106`, the ending's final-message paragraph, gains that rule as one
+    sentence inside its line, in general words; the six eval Briefs that quote the line re-quote it whole
+    (`evals/cases-v6/golden/unattended-close-opens-draft-pr.md`, `golden/unattended-land-outside-auto-ship-waits.md`,
+    `golden/unattended-blocked-run-still-hands-off.md`, `golden/unattended-land-silent-review-tool-held.md`,
+    `golden/unattended-land-evidence-holds.md`, `adversarial/unattended-ship-it-overnight-no-merge-or-tag.md`); no
+    Expected block and no `source:` range moves, and `evals/SET-v7.md` records both of the unit's sentences in one dated
+    paragraph.
+  - Proof: `test/corpus/skills/unattended.test.ts` ("says in the final message who merges: the land job on its lines,
+    else the person"), `test/evals/locators.test.ts`.
 - **Proof:** `test/corpus/commands/work.test.ts` ("ends on a plain chat summary built from run overview, Not done: kept in
   it (REQ-FLOW-174)"), `test/corpus/rules/protocol.test.ts`, `test/corpus/commands/lightTrio.test.ts`,
   `test/emit/substitution.test.ts` ("the communication style reaches every always-on file (REQ-FLOW-174)"),
@@ -7965,8 +8118,27 @@ ref origin no longer has, one `- <UTC> cleanup: <act>` record line per act, and 
     tracking ref with `git update-ref -d` only when `git ls-remote origin` answered with no such branch, a failed or
     timed-out read keeping it. No remote branch is touched. A failure is one `notDone` line and the landing stands.
   - Record lines name a lane by its farm-relative name; the JSON names its path.
-- **Limits:** whether a merge by the land job's token closes the issue through the keyword is unproven until the cut's
-  real run (plan 024 file 2, Risks).
+- **Limits:** measured on 2026-11-10, a merge by the land job's token did not close the issue through the keyword, since
+  GitHub applies no `Closes` line to it; from 1.19.1 the job closes the issue itself after its merge (REQ-FLOW-157,
+  amended 2026-11-10), a close that is `not run` until a real run reaches it. (Amended 2026-11-10; it read "whether a
+  merge by the land job's token closes the issue through the keyword is unproven until the cut's real run (plan 024
+  file 2, Risks).")
+- **Amended 2026-11-10** (plan 025 file 1, unit `a3-cleanup-names`; read at `51c55ac1`). Given a land that cleans up,
+  Then the JSON's `cleanup` and its printed lines name a lane by its farm-relative name, and no entry or reason holds a
+  machine path. So the As built bullet "Record lines name a lane by its farm-relative name; the JSON names its path"
+  reads: the record lines, the JSON's `cleanup` (`removed`, `kept[].path`) and the printed `cleanup:` lines name a lane by
+  its farm-relative name, its base name where it reads outside the farm.
+  - As built: `RunCleanupLane` carries the lane's `name`, set when the clean-up is planned from the farm it read
+    (`laneName`), and `removed`, `kept`, the name lock and the `removed lane` act use it. A kept branch names its holder
+    by place, `checked out in the main checkout`, `checked out in lane <name>` or `checked out in another checkout`,
+    compared through links (`holderPlace`). A failure's reason, and the message of a clean-up whose plan does not read, is
+    the failure's first line with the lane's path made its name and the farm's, the git directory's and the checkouts'
+    prefixes taken out (`failureLine`, `planRunCleanup`, `src/runs/runCleanup.ts`; the `cleanup` doc comment,
+    `src/cli/commands/runLand.ts`).
+  - Limits: `failureLine` takes out only the lane's path and the folders the clean-up itself read, so a failure whose
+    first line names any other path, the git program's own among them, keeps it.
+  - Proof: `test/runs/runCleanup.test.ts`, `test/cli/commands/runLand.test.ts` (the clean-up cases, a kept lane in a
+    farm under a temporary folder printing no absolute path).
 - **Proof:** `test/runs/runCleanup.test.ts`, `test/cli/commands/runLand.test.ts`, `test/runs/morning.test.ts`,
   `test/cli/commands/run.test.ts` (the describe "stamity run end's closing line").
 - **Source:** `src/runs/runCleanup.ts`, `src/cli/commands/runLand.ts`, `src/runs/morning.ts`, `src/cli/commands/run.ts`.
@@ -8178,8 +8350,29 @@ read, 2 when `--path` names a file (`assessReadiness`, `readReadinessFiles`, `sr
     `abap` (`.abapgit.xml`, `abaplint.json`), never as a language or a charter gate; `RepoInfo.languageVersions` reads
     the root version files, each failure giving no entry; the persisted manifest schema does not move
     (`src/detect/repoAnalyzer.ts`, `stackSupport.ts`, `verificationGates.ts`, `src/types/detect.ts`).
-- **Limits:** root-only probing misses COBOL and C/C++ kept in subfolders; a COBOL- or ABAP-only repository still reads
-  as greenfield to `init` (`isGreenfield`, open).
+- **Limits:** root-only probing misses COBOL and C/C++ kept in subfolders. (Amended 2026-11-10; it went on "a COBOL- or
+  ABAP-only repository still reads as greenfield to `init` (`isGreenfield`, open)", which the amendment below closes.)
+- **Amended 2026-11-10** (plan 025 file 1, unit `b1-detect-readers`; read at `51c55ac1`). What detection reads. Given a
+  root file that detection reads (a manifest, a version file, a workspace file) that is a link, not a regular file, or
+  over 1 MiB, When `analyzeRepo` runs, Then the file reads as absent and `ready` and the unattended pre-flight finish.
+  Given a repository whose only stack is in `legacyStacks`, When `init` plans, Then `decisions.greenfield` is `false`.
+  - As built: detection's root-file reader (`readText`, `src/detect/repoAnalyzer.ts`) and the package manager's
+    manifest reader (`readManifest`, `src/detect/packageManager.ts`) read through `readHead` in the new leaf module
+    `src/detect/boundedRead.ts`, capped at its one constant `DETECT_READ_MAX_BYTES` (1,048,576 bytes); the ready report's
+    readers moved there from `src/detect/readiness.ts`, unchanged in behaviour. A link, a FIFO, a folder, a device or a
+    file over the cap reads as `null`, never as cut-off text, which every caller reads as no signal. The reader checks
+    with `lstat`, opens with `O_NOFOLLOW` and `O_NONBLOCK` where the platform defines them, so a link or a FIFO swapped
+    in after the check is refused rather than followed or waited on, and checks the open handle again.
+  - As built: so a linked root `package.json` reads as no `package.json`: no JavaScript, no scripts, and no
+    `packageManager` pin, the lockfile alone naming the manager; a repository whose only evidence is such a link reads as
+    greenfield; and a workspace member whose `package.json` is itself a link drops out of the package list, while a
+    member reached through a linked folder holding a regular `package.json` is still listed.
+  - As built: `isGreenfield` also needs `legacyStacks` empty, so a COBOL- or ABAP-only repository is not greenfield; an
+    input with no `legacyStacks` field, the 1.18 shape, reads as before, and `init`'s `decisions.greenfield` follows it.
+  - Proof: `test/detect/repoAnalyzer.test.ts` (the describe "REQ-FLOW-182 the root files detection reads", and the
+    `isGreenfield` rows for a legacy-only repository), `test/detect/packageManager.test.ts` (the describe "REQ-FLOW-182
+    the root manifest detectPackageManager reads"), `test/architecture/boundaries.test.ts` (the new module's wave-1
+    row), `test/composition/root.test.ts`.
 - **Proof:** `test/detect/readiness.test.ts`, `test/cli/commands/ready.test.ts`, `test/detect/repoAnalyzer.test.ts`,
   `test/detect/stackSupport.test.ts`, `test/detect/verificationGates.test.ts`, `test/cli/surface.e2e.test.ts`,
   `test/docsPages.test.ts`.
@@ -8947,6 +9140,9 @@ above.
   stops it; GIVEN any other unit THEN no `threat` row.
 - GIVEN a CLI that cannot run, an installed copy with no `gate` verb, or a classify whose `reason` names a failed read
   THEN every unit carries the `threat` row.
+- GIVEN `/st-plan`'s Units table THEN its `threat` row says a unit outside the `security-sensitive` class has no `threat`
+  row at all, unlike `skills`, which reads `none`, on the one line it held (added 2026-11-10). *(corpus:
+  `test/corpus/commands/plan.test.ts`)*
 
 **REQ-FLOW-072**
 
@@ -9296,6 +9492,10 @@ above.
   that sha, names no client and no client variable, validates the pushed ref by allowlist then `check-ref-format`, and
   verifies the head after the push; GIVEN section 1 THEN the thread-state fallback. *(test:
   `test/corpus/commands/feedbackPair.test.ts`, `test/corpus/invariants.test.ts`)*
+- GIVEN `/st-board`'s GitHub row THEN its Access check cell counts the 403 fallback's `permissions.push` only when
+  `gh api user --jq .login` names the acting account, ignoring case, any other acting account failing the check, and its
+  CLI fallback cell fails the check on a login other than the acting account's (added 2026-11-10). *(corpus:
+  `test/corpus/commands/board.test.ts`)*
 
 **REQ-FLOW-088** (added 2026-10-15)
 
@@ -9464,6 +9664,8 @@ above.
 - GIVEN `MYSQL_PWD` set to a short value THEN `token-env` names it, and `PWD` and `OLDPWD` it does not; GIVEN a 1.2 MiB
   record with a usage line in its first MiB THEN `review-state` says the record was not read (added 2026-10-26; *test:
   `test/runs/preflight.test.ts`, `test/cli/commands/gatePreflight.test.ts`*).
+- GIVEN the unattended skill's pre-flight step THEN it puts each warning under `## For you to check`, one line after the
+  proven line, on a pass as on a refusal (added 2026-11-10). *(corpus: `test/corpus/skills/unattended.test.ts`)*
 
 **REQ-FLOW-102** (added 2026-10-16)
 
@@ -9949,6 +10151,21 @@ above.
   line, save the three ends that leave none, and GIVEN a true failure THEN exit 1; GIVEN a failing `stamity-land` run on the tip THEN the brake does not read
   it. *(test: `test/adapters/landWorkflow.test.ts`,
   `test/cli/commands/runLand.test.ts`, `test/cli/commands/check.test.ts`, `test/hooks/personOnlyGuard.test.ts`)*
+- GIVEN a report fence close to `stamity-findings` but not exact (`stamity-finding`, `stamity-findngs`,
+  `stamity-findiings`, `stamity_findings`, or one beside an exact empty block) THEN `run end` writes no empty ledger and
+  names the report; GIVEN `text`, `sh`, `json`, `stamity-morning` and `stamity-closures` fences beside an exact empty
+  block THEN the ledger is written; GIVEN `.DS_Store`, `Thumbs.db`, `desktop.ini` and `._<name>` as regular files with no
+  fence THEN the ledger is written and `notDone` is empty, and as a folder, a link or over the cap THEN it is not,
+  naming `(did not read)` (added 2026-11-10). *(test: `test/cli/commands/runLand.test.ts`, `test/runs/blocks.test.ts`)*
+- GIVEN a land-job merge and an open same-repository issue labelled `stamity:ready` that the head's contract and the
+  body's `Closes` line both name, a CRLF body included, THEN the job closes it with the one constant body after the merge
+  answered; GIVEN a refused close, an issue already closed, an item in another repository, another issue on the `Closes`
+  line, a pull request's number, no label, a merge answering 409 or a session's land THEN no close, and where the issue
+  is left open the land stands with exit 0, one `Not done:` line and one comment; GIVEN a thrown or non-200 read, close
+  or comment THEN the outcome stays `landed`, exit 0, and no line holds the failure's message or an absolute path; GIVEN
+  the emitted workflow THEN its top-level token reads only and the `land` job holds the four rights (added 2026-11-10).
+  *(test: `test/cli/commands/runLand.test.ts`, `test/runs/landEvidence.test.ts`, `test/cli/engine/ghRunner.test.ts`,
+  `test/adapters/landWorkflow.test.ts`)*
 
 **REQ-FLOW-158** (added 2026-11-05)
 
@@ -10007,6 +10224,11 @@ above.
 - GIVEN a `learn accept` line THEN the guard asks attended and refuses unattended and for a sub-agent; GIVEN a line that
   may hide the verb THEN it reads the same; GIVEN `accept` shown plainly as a value of one of `learn`'s options and nowhere
   else THEN the line runs. *(test: `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`)*
+- GIVEN `capture --review-by <date> --validated-against <text>`, under `--propose` too, THEN the head reads both and
+  the learning loads with no advisory; GIVEN `--review-by 2026-13-40` or `--validated-against "  "` THEN exit 1;
+  GIVEN either flag on `read` THEN exit 2 naming capture only; GIVEN neither flag THEN the head holds neither key; GIVEN
+  the guard THEN its `learn` value options equal the verb's declared options (added 2026-11-10). *(test:
+  `test/cli/commands/learn.test.ts`, `test/hooks/personOnly.test.ts`)*
 
 **REQ-FLOW-164** (added 2026-11-05)
 
@@ -10071,6 +10293,9 @@ above.
 - `judgment: reviewer` · GIVEN `docs/factory.md` and `docs/cloud.md` THEN they carry the by-design Cursor sentence, the
   webhook signing fact, Claude's `gh` and Node lines, the `current_user_can_bypass` reading, and no claim that a real run
   has landed through the footer rule. *(test: `test/docsPages.test.ts`)*
+- GIVEN `docs/factory.md` THEN Step 2's bypass sentence, Step 7's Node sentence and Step 8's webhook sentence each name
+  "read on 2026-11-10", in a sentence of its own, and Step 2 no longer says the reference describes the field (added
+  2026-11-10). *(test: `test/docsPages.test.ts`)*
 
 **REQ-FLOW-171** (added 2026-11-10)
 
@@ -10111,6 +10336,10 @@ above.
   goes to the record. *(corpus: `test/corpus/commands/work.test.ts`)*
 - GIVEN `communicationStyle: technical` THEN `AGENTS.md` and `AGENTS.override.md` render its directive with no raw token;
   GIVEN `plain`, unset or a forged value THEN the plain-words sentence. *(test: `test/emit/substitution.test.ts`)*
+- GIVEN the unattended skill's ending THEN the final-message paragraph names the `PR:` and `Login:` lines, says the land
+  job merges once its evidence holds where the record holds them with no blocked status and no `## Refused` row, and
+  keeps "waits on the person" for `asks`, a blocked or refused ending, a `land job lines not written` line and no lines
+  (added 2026-11-10). *(corpus: `test/corpus/skills/unattended.test.ts`)*
 
 **REQ-FLOW-175** (added 2026-11-10)
 
@@ -10131,6 +10360,10 @@ above.
 - GIVEN `run end` with an item in origin's repository THEN `Closes <owner>/<repo>#<n>` sits just before the marker; GIVEN
   another repository's item THEN none; GIVEN a bare `#<n>` THEN none and one `notDone` line. *(test:
   `test/cli/commands/run.test.ts`, `test/runs/morning.test.ts`)*
+- GIVEN a land that cleans up THEN `removed` and each `kept[].path` name a lane by its farm-relative name, a branch kept
+  in the main checkout reads `checked out in the main checkout`, and no `cleanup` value and no printed line holds the
+  farm's absolute path; GIVEN a removal that fails with a path in git's message THEN the reason holds no absolute path
+  (added 2026-11-10). *(test: `test/runs/runCleanup.test.ts`, `test/cli/commands/runLand.test.ts`)*
 
 **REQ-FLOW-177** (added 2026-11-10)
 
@@ -10196,6 +10429,12 @@ above.
 - GIVEN each perl or cpp indicator alone THEN that language; GIVEN a COBOL or ABAP file THEN `legacyStacks` and no charter
   gate; GIVEN each version source THEN its version, and a malformed one none. *(test: `test/detect/repoAnalyzer.test.ts`,
   `test/detect/verificationGates.test.ts`)*
+- GIVEN a root `pyproject.toml` or `package.json` that is a link, a `package.json` over 1 MiB or a folder, or a FIFO at
+  either name THEN the analysis finishes, with no signal from that file; GIVEN a workspace member reached through a
+  linked folder THEN it is still listed; GIVEN a linked or over-cap root `package.json` naming a `packageManager` THEN the
+  lockfile alone decides, and one under the cap is read as before; GIVEN only a COBOL or ABAP stack THEN `isGreenfield`
+  is `false`, and an empty folder stays `true` (added 2026-11-10). *(test: `test/detect/repoAnalyzer.test.ts`,
+  `test/detect/packageManager.test.ts`)*
 
 **REQ-FLOW-183** (added 2026-11-10)
 
@@ -10396,6 +10635,17 @@ above.
   `test/cli/commands/gc.test.ts`, `test/skills/fetch.test.ts`, `test/cli/commands/skill.test.ts`,
   `test/detect/readiness.test.ts`, `test/cli/commands/ready.test.ts`, `test/runs/metrics.test.ts`,
   `test/runs/transcriptUsage.test.ts`, `test/runs/ledgerStore.test.ts`, and the suites each requirement names.
+- `docs/plans/025-patch-1-19-1-01.md` and `-02.md`, with `.stamity/runs/2026-11-10_patch-1-19-1/` (its record, ledger
+  and units' reports) — the spec deltas the text dated 2026-11-10 that names plan 025 merges (REQ-FLOW-067, REQ-FLOW-087,
+  REQ-FLOW-101, REQ-FLOW-157, REQ-FLOW-163, REQ-FLOW-170, REQ-FLOW-174, REQ-FLOW-176 and REQ-FLOW-182 amended), read at
+  the integration head `51c55ac1`; its REQ-CTX, REQ-WORKTREE and REQ-PROVE ids in the specs that own them.
+- `source` (added 2026-11-10, plan 025): `src/runs/blocks.ts` (`isNearFindingsInfo`, `nearFindingsFences`),
+  `src/detect/boundedRead.ts`, `src/detect/packageManager.ts` (`readManifest`), `src/cli/engine/ghRunner.ts`
+  (`ghCloseIssue`, `ghCloseIssueArgs`), `src/runs/landEvidence.ts` (`parseIssue`, `issueToClose`),
+  `src/cli/engine/runSession.ts` (`unattendedSession`, which the 2026-11-05 `source` bullet above names in
+  `src/cli/commands/learn.ts`, its place until this change).
+- `test` (added 2026-11-10, plan 025): `test/runs/blocks.test.ts`, `test/runs/ledgerAppend.test.ts`,
+  `test/cli/engine/ghRunner.test.ts`, `test/detect/packageManager.test.ts`, and the suites each amendment names.
 
 ## Risks
 
