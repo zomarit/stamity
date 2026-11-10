@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.18.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-11-10T04:40:29.160Z",
+  "updatedAt": "2026-11-10T05:52:18.517Z",
   "tools": [
     "claude"
   ],
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "8944ace3ec1e6d2c3f71c5680566133076902e7aa619af9495b2c6e3ea4a0395",
+      "contentHash": "fe4a9a7dde77b3308a8d6f3216dac65658f2ea27f88ae263dec90aad2e00669f",
       "path": ".claude/commands/st-work.md"
     },
     {
@@ -539,7 +539,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "4c96e76aff8748be3e4652ff5aab5a6aa7de9d0efcc927730cdc785a59309737",
+      "contentHash": "0f0c10ef5d17cdf84d00dcc498ea6d91530d0f6c62eec02efc1c56e32cd69ce6",
       "path": ".claude/skills/st-unattended/SKILL.md"
     },
     {
