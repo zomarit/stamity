@@ -2454,18 +2454,25 @@ describe("/st-work — dispatch contract", () => {
     // characterization unit 0's pins and a behaviour-preserving unit's tests are green before the
     // unit, so they show a bite in place of a first failure. The rule lives in the implementer's
     // Testing rules and this paragraph names it in the same words.
-    it("lets a behavior-unchanged unit show its tests bite instead of failing first, in the implementer's words (S76)", async () => {
+    // TEST CHANGE, justified (2026-11-10, x-recipe fix round 3, review/124, sign-off S79 widening
+    // S76): the rule and the skip step below named only unit 0's pins, which a refactor whose
+    // invariants are all `covered` does not have, so its transforming unit had no paths to hold. Both
+    // now take unit 0's pins where the plan has a unit 0, else the `Verified by` test paths.
+    it("lets a behavior-unchanged unit show its tests bite instead of failing first, in the implementer's words (S76, S79)", async () => {
       const text = await checks();
       const rule =
-        "A unit whose criterion is behavior unchanged shows its tests bite instead of failing first: a characterization unit 0 shows each pin red on an assertion under a scratch change to the pinned behavior, then reverts that change, and adds a seam only behind pins it has proven; a behavior-preserving transforming unit runs unit 0's held pins unchanged before and after its change, `gate held --expect` green both times, and adds no test of its own unless its criteria add behavior.";
+        "A unit whose criterion is behavior unchanged shows its tests bite instead of failing first: a characterization unit 0 shows each pin red on an assertion under a scratch change to the pinned behavior, then reverts that change, and adds a seam only behind pins it has proven; a behavior-preserving transforming unit holds unit 0's pins where the plan has a unit 0, else the test paths the plan's behavioral-invariants table names under `Verified by`, runs them unchanged before and after its change, `gate held --expect` green both times, and adds no test of its own unless its criteria add behavior.";
       expect(text).toContain(rule);
       const implementer = collapse(section((await corpusFile("agents/stamity-implementer.md")).parsed.body, "## Testing rules"));
       expect(implementer).toContain(rule);
-      // A transforming unit with no test of its own still has held paths, unit 0's pins, so Prove's
-      // `--expect` has a digest of record to check.
+      // A transforming unit with no test of its own still has held paths, unit 0's pins or the
+      // `Verified by` tests, so Prove's `--expect` has a digest of record to check.
       expect(text).toContain(
-        "A transforming unit that adds no test skips the spawn: `stamity gate held --paths <unit 0's pin paths> --json` runs in its place, recorded as its `held:` line.",
+        "A transforming unit that adds no test skips the spawn: `stamity gate held --paths <the paths it holds> --json` runs in its place, recorded as its `held:` line.",
       );
+      expect(text).not.toContain("<unit 0's pin paths>");
+      // The column the rule names is the one `/st-plan`'s Refactor table carries.
+      expect((await corpusFile("commands/st-plan.md")).parsed.body).toContain("| # | Invariant | Verified by | Status |");
       // Every other code unit keeps the red-first floor word for word.
       expect(implementer).toContain(
         "Once its interfaces typecheck, and before the behavior lands, it shows at least one held test failing on an assertion, not only on a missing type.",

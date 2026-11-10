@@ -58,9 +58,16 @@ const AGENT_BODY_CAP = 350;
  * The behaviour-unchanged rule (plan 024 file 3 unit x-recipe, sign-off S76), written once in the
  * implementer's Testing rules; `/st-work`'s Build checks name it in the same words, pinned in
  * test/corpus/commands/work.test.ts.
+ *
+ * TEST CHANGE, justified (2026-11-10, x-recipe fix round 3, review/124, sign-off S79 widening S76):
+ * the transforming unit's held tests moved. The old pin said it runs "unit 0's held pins", which a
+ * refactor whose invariants are all `covered` does not have (only `uncovered` invariants become unit
+ * 0), so that unit had no tests to hold. It now holds unit 0's pins where the plan has a unit 0, else
+ * the test paths the plan's invariants table names under `Verified by`; the rest of the sentence is
+ * unchanged.
  */
 const BEHAVIOR_UNCHANGED =
-  "A unit whose criterion is behavior unchanged shows its tests bite instead of failing first: a characterization unit 0 shows each pin red on an assertion under a scratch change to the pinned behavior, then reverts that change, and adds a seam only behind pins it has proven; a behavior-preserving transforming unit runs unit 0's held pins unchanged before and after its change, `gate held --expect` green both times, and adds no test of its own unless its criteria add behavior.";
+  "A unit whose criterion is behavior unchanged shows its tests bite instead of failing first: a characterization unit 0 shows each pin red on an assertion under a scratch change to the pinned behavior, then reverts that change, and adds a seam only behind pins it has proven; a behavior-preserving transforming unit holds unit 0's pins where the plan has a unit 0, else the test paths the plan's behavioral-invariants table names under `Verified by`, runs them unchanged before and after its change, `gate held --expect` green both times, and adds no test of its own unless its criteria add behavior.";
 
 /** The status enum every sub-agent returns, inlined in every body. */
 const STATUS_ENUMS: readonly string[] = [
@@ -576,6 +583,9 @@ describe("implementer — single unit, single writer", () => {
     // behaviour unchanged has tests that are green before it, so it shows they bite instead of failing
     // first; the red-first floor above stays word for word for every other unit.
     expect(testing).toContain(BEHAVIOR_UNCHANGED);
+    // Added 2026-11-10 (x-recipe fix round 3, review/124, S79): a covered refactor has no unit 0, so
+    // the rule never again names unit 0's pins as the only tests a transforming unit holds.
+    expect(testing).not.toContain("runs unit 0's held pins");
   });
 
   it("writes held tests from the criteria alone in a tests-only dispatch", async () => {
@@ -588,6 +598,12 @@ describe("implementer — single unit, single writer", () => {
     expect(mode).toMatch(/the unit's criteria and interfaces, never another builder's code/i);
     expect(mode).toMatch(/runs them, and shows each one fails for the expected reason/i);
     expect(mode).toMatch(/a typecheck failure on an interface not yet built is an expected reason/i);
+    // Added 2026-11-10 (x-recipe fix round 3, sign-off S79, review r2 note N-1): a behaviour-unchanged
+    // unit's tests are green before it, so this mode names the Testing rules' bite in place of the
+    // first failure; the red-first sentence above stays for every other unit.
+    expect(mode).toContain(
+      "A unit whose criterion is behavior unchanged shows each one bites instead, as the Testing rules above say.",
+    );
     expect(mode).toMatch(/returns the test paths and writes no product code/i);
     expect(mode).toContain("`<unit>-tests-implementer-r<N>.md`");
     // A dispute never reopens the held test to the builder that disputes it.
