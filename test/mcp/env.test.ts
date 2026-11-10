@@ -679,10 +679,17 @@ describe("the .gitignore entries' census (decision E1)", () => {
     "hooks/scripts.ts",
     // Reads the away marker under its own local name (the two hook modules share a wave).
     "hooks/portableRunner.ts",
-    // TEST CHANGE, justified (u-ci1): `stamity away status` reads the held list the guard writes; it writes none.
-    "cli/commands/away.ts",
     "worktree/policy.ts",
   ]);
+  /**
+   * Files that name one constant without writing its target, listed for that constant alone, so the same file naming
+   * another constant still meets the census. TEST CHANGE, justified (u-ci1, the reviewer's M-1): `stamity away status`
+   * reads the held list the guard writes and writes none; listed here rather than in NON_WRITERS, so an `away` verb
+   * that later writes the held list is flagged as its new writer.
+   */
+  const NON_WRITERS_OF: Readonly<Record<string, readonly string[]>> = {
+    AWAY_HELD_FILE: ["cli/commands/away.ts"],
+  };
 
   const sourceRoot = fileURLToPath(new URL(["..", "..", "src", ""].join("/"), import.meta.url));
   const sources = new Map(
@@ -696,7 +703,7 @@ describe("the .gitignore entries' census (decision E1)", () => {
   it.each(Object.entries(WRITERS))("lists every file that names %s, and each writer still names it", (constant, writers) => {
     const named = naming(constant);
     for (const writer of writers) expect(named, writer).toContain(writer);
-    const unknown = named.filter((name) => !writers.includes(name) && !NON_WRITERS.has(name));
+    const unknown = named.filter((name) => !writers.includes(name) && !NON_WRITERS.has(name) && !(NON_WRITERS_OF[constant] ?? []).includes(name));
     expect(unknown, `a new file names ${constant}: if it writes the target, list it and re-read GITIGNORE_ENTRY_WHEN`).toEqual([]);
   });
 
