@@ -1324,16 +1324,16 @@ not in `/st-work`'s paragraph (`review/49`); the delta defined neither.
 
 ## Acceptance criteria
 
-One set per requirement, plus one for the invariants. There are one hundred and forty-nine
-criteria: `grep -c "^- GIVEN" docs/specs/orchestrator-context.md` returns 149 (amended
-2026-10-21, when REQ-CTX-017's amendment of that day added one, beside its requirement; the sentence read 145 while
-the three criteria plan 021 added on 2026-10-16 and 2026-10-18, under REQ-CTX-012, REQ-CTX-013 and REQ-CTX-016, had
-made it 148, counted from the `- GIVEN` lines `git diff v1.15.0..936350cb` adds to this file; amended
-2026-10-15, when REQ-CTX-017's amendment of that day added one, beside its requirement; it read 144, amended
-2026-10-10, when REQ-CTX-019 and REQ-CTX-020 added seven; it read 137, amended 2026-09-30, where
-it read 111, while the command already returned 119 before that merge, ledger `build/5` of run
-`2026-09-30_optimization-sweep`). Each is machine-checkable unless tagged `judgment:`. Run the
-command again whenever this section grows; do not count by eye.
+One set per requirement, plus one for the invariants. There are one hundred and fifty criteria:
+`grep -c "^- GIVEN" docs/specs/orchestrator-context.md` returns 150 (amended 2026-11-10, where it read 149 while the
+command already returned 150 at `1daa3f8b`, ledger `build/82` of run `2026-11-09_last-before-2-0`; amended 2026-10-21,
+when REQ-CTX-017's amendment of that day added one, beside its requirement; the sentence read 145 while the three
+criteria plan 021 added on 2026-10-16 and 2026-10-18, under REQ-CTX-012, REQ-CTX-013 and REQ-CTX-016, had made it 148,
+counted from the `- GIVEN` lines `git diff v1.15.0..936350cb` adds to this file; amended 2026-10-15, when REQ-CTX-017's
+amendment of that day added one, beside its requirement; it read 144, amended 2026-10-10, when REQ-CTX-019 and
+REQ-CTX-020 added seven; it read 137, amended 2026-09-30, where it read 111, while the command already returned 119
+before that merge, ledger `build/5` of run `2026-09-30_optimization-sweep`). Each is machine-checkable unless tagged
+`judgment:`. Run the command again whenever this section grows; do not count by eye.
 
 **Invariants**
 
