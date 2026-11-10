@@ -2076,7 +2076,7 @@ const ENVELOPE_FIELDS: Readonly<Record<string, (value: unknown) => boolean>> = {
 export function isHeldResult(text: string): boolean {
   let value: unknown;
   try {
-    value = JSON.parse(text.replace(/^﻿/, ""));
+    value = JSON.parse(text.replace(/^\uFEFF/, ""));
   } catch {
     return false;
   }
