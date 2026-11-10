@@ -399,7 +399,10 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     // TEST CHANGE, justified (person-only guard hardening, REQ-FLOW-134, 2026-11-11): both rows moved again, bytes from
     // 372,232 to 372,778 and lines from 7,563 to 7,595, the measured size of the largest copy (copilot), since the
     // configuration reader now decodes each value by git's own grammar.
-    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 372_778, lines: 7_595 });
+    // TEST CHANGE, justified (person-only guard hardening, REQ-FLOW-102, 2026-11-11): both rows moved again, bytes from
+    // 372,778 to 373,310 and lines from 7,595 to 7,602, the measured size of the largest copy (copilot), since a push now
+    // reads the remote section named by the exact word it names.
+    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 373_310, lines: 7_602 });
     const guards = renders.filter((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
     expect(guards).toHaveLength(TOOLS.length);
     for (const script of guards) expect(budgetViolation(script), script.tool).toBeUndefined();

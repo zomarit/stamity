@@ -5642,6 +5642,22 @@ describe("a push read against the place's own push configuration", () => {
     }
   });
 
+  // Red before the exact word: a push to a URL or a path read the files' top-level keys alone.
+  it("reads the remote section named by the exact URL or path word a push names, as git looks a remote up", () => {
+    const url = "https://github.com/acme/app.git";
+    const mapped: Parameters<typeof personOnlyVerdict>[1] = {
+      ...FEATURE,
+      pushConfig: (remote) => (remote === url ? [`remote.${url}.push=refs/heads/feat/x:refs/heads/main`] : []),
+    };
+    expect(personOnlyVerdict(`git push ${url} feat/x`, mapped)).toMatchObject({ deny: true, rule: "push-default", ask: true });
+    expect(personOnlyVerdict(`git push --repo=${url} feat/x`, mapped)).toMatchObject({ deny: true, rule: "push-default", ask: true });
+    const mirrored: Parameters<typeof personOnlyVerdict>[1] = { ...FEATURE, pushConfig: (remote) => (remote === "../app" ? ["remote.../app.mirror=true"] : []) };
+    expect(personOnlyVerdict("git push ../app feat/x", mirrored)).toMatchObject({ deny: true, rule: "force-push", ask: false });
+    // One fact away: the files name no section of that word, and the same pushes run.
+    expect(personOnlyVerdict(`git push ${url} feat/x`, filesSet([]))).toEqual({ deny: false });
+    expect(personOnlyVerdict("git push ../app feat/x", filesSet([]))).toEqual({ deny: false });
+  });
+
   it("reads the files' refmap for git send-pack too", () => {
     const ctx = filesSet(["remote.origin.push=refs/heads/feat/x:refs/heads/main"]);
     expect(personOnlyVerdict("git send-pack origin feat/x", ctx)).toMatchObject({ deny: true, rule: "push-default" });

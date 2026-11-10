@@ -462,7 +462,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // 7,595 lines (copilot, generated), past both rows, because the configuration reader now decodes each value by git's
   // own grammar, a continued value joined, where it read such a value as partial. 372,232 + 546 = 372,778 bytes;
   // 7,563 + 32 = 7,595 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 372_778, lines: 7_595 },
+  // Moved again 2026-11-11 by the person-only guard hardening (REQ-FLOW-102), by what was measured: 373,310 bytes /
+  // 7,602 lines (copilot, generated), past both rows, because a push now reads the remote section named by the exact
+  // word it names, a URL or a path among them. 372,778 + 532 = 373,310 bytes; 7,595 + 7 = 7,602 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 373_310, lines: 7_602 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -5896,18 +5899,24 @@ function configOf(dirs) {
 
 /**
  * What the files set for a push to a remote, as the push reader's -c-style pairs (personOnly.ts, pushConfig): the
- * remote's refmaps and mirror setting (none for a URL), every push mode, tag-following, recursion, and the checked-out
- * branch's merges, which the reader takes only in upstream mode. null where the configuration cannot be read whole.
+ * refmaps and mirror setting of the section the exact word names (a URL or a path too), every push mode, tag-following,
+ * recursion, and the checked-out branch's merges, which the reader takes only in upstream mode. null where the
+ * configuration cannot be read whole.
  */
 function pushPairs(config, remote, branch) {
   if (config === null || config.partial) return null;
+  const entry = remote === null ? undefined : config.remotes.get(remote);
+  // git looks a remote up by the exact word a push names: a section named by a URL or a path that sets its own URL or
+  // push URL sends the push there, which this reading does not place.
+  if (entry !== undefined && (/[:/\\]/.test(remote) || remote === ".") && (entry.urls.length > 0 || entry.pushurls.length > 0)) return null;
   const pairs = config.pushDefaults.map((value) => "push.default=" + value);
   if (config.followTags) pairs.push("push.followtags=true");
   pairs.push(...config.recurse);
-  const entry = remote === null ? undefined : config.remotes.get(remote);
   if (entry !== undefined) {
-    for (const value of entry.push) pairs.push("remote." + remote + ".push=" + value);
-    if (entry.mirror) pairs.push("remote." + remote + ".mirror=true");
+    // The pair's name part holds no "=" and is never empty, so the reader splits it where git splits a key from its value.
+    const name = remote.replace(/=/g, "%3D") || "%";
+    for (const value of entry.push) pairs.push("remote." + name + ".push=" + value);
+    if (entry.mirror) pairs.push("remote." + name + ".mirror=true");
   }
   for (const value of branch === null ? [] : (config.branches.get(branch)?.merges ?? [])) pairs.push("branch." + branch + ".merge=" + value);
   return pairs;
@@ -6051,7 +6060,7 @@ function contextsOf(command, cwd, powershell, root) {
         const entry = branch === ".invalid" ? {} : (merged.branches.get(branch) ?? {});
         return entry.pushremote ?? merged.pushDefault ?? entry.remote ?? "origin";
       },
-      // What the place's files set for a push to a remote (REQ-FLOW-102), read once per name; null for a URL's top-level keys.
+      // What the place's files set for a push to a remote (REQ-FLOW-102), read once per word; null for the top-level keys alone.
       pushConfig(name) {
         const at = name === null ? "" : "=" + name;
         if (!pairsRead.has(at)) pairsRead.set(at, pushPairs(placeConfig(), name, branch === ".invalid" ? null : branch));

@@ -3538,6 +3538,33 @@ describe("a push read against the push configuration in git's files", () => {
     expect(decide("claude", guard, "git push -u origin feat/x")).toEqual({ deny: false });
   });
 
+  // Red before the exact word: git looks a remote section up by the URL a push names, and the reader never read one.
+  describe("a push naming the origin's own URL, beside a section of that exact name", () => {
+    const URL_PUSH = "git push https://github.com/acme/app.git feat/x";
+    const named = (body: string): string => `${ORIGIN}[remote "https://github.com/acme/app.git"]\n${body}`;
+
+    it("asks where the section maps the push onto the default branch, and runs it with no such section", async () => {
+      const guard = await placeGuard("claude", { ".git/config": named("\tpush = refs/heads/feat/x:refs/heads/main\n") });
+      expect(decide("claude", guard, URL_PUSH)).toMatchObject({ deny: true, ask: true, reason: expect.stringContaining(ruleSaid("push-default")) });
+      await getRepo().seedFiles({ ".git/config": ORIGIN });
+      expect(decide("claude", guard, URL_PUSH)).toEqual({ deny: false });
+    });
+
+    it("refuses where the section mirrors the remote", async () => {
+      const guard = await placeGuard("claude", { ".git/config": named("\tmirror = true\n") });
+      const decision = decide("claude", guard, URL_PUSH);
+      expect(decision).toMatchObject({ deny: true, reason: expect.stringContaining(ruleSaid("force-push")) });
+      expect(decision).not.toHaveProperty("ask");
+    });
+
+    it("asks where the section sets its own URL or push URL, which git sends the push to", async () => {
+      const guard = await placeGuard("claude", { ".git/config": named("\turl = https://github.com/other/repo.git\n") });
+      expect(decide("claude", guard, URL_PUSH)).toMatchObject({ deny: true, ask: true });
+      await getRepo().seedFiles({ ".git/config": named("\tpushurl = https://github.com/other/repo.git\n") });
+      expect(decide("claude", guard, URL_PUSH)).toMatchObject({ deny: true, ask: true });
+    });
+  });
+
   it("refuses a refless push to a remote whose section holds a bare mirror key", async () => {
     const guard = await placeGuard("claude", { ".git/config": `${ORIGIN}\tmirror\n` });
     const decision = decide("claude", guard, "git push");

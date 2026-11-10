@@ -302,8 +302,9 @@ export interface PersonOnlyContext {
   /** The remote a push naming none uses on this place's branch (`pushRemote`, `remote.pushDefault`, `remote`, `origin`); `null` where unread. */
   readonly pushRemote?: string | null;
   /**
-   * What the place's git configuration files set for a push to `remote` (a configured remote's name; null for a push to a
-   * URL or a word the line cannot show), as `-c`-style `key=value` pairs the push reader takes: each `remote.<remote>.push`
+   * What the place's git configuration files set for a push to `remote` (the exact word the push names, a remote's name,
+   * a URL or a path, as git looks a remote up; null for a word the line cannot show), as `-c`-style `key=value` pairs
+   * the push reader takes, null also where a section named by a URL or a path sets its own URL: each `remote.<remote>.push`
    * value, `remote.<remote>.mirror` where on, every `push.default` value read, `push.followtags` where on, the
    * `push.recursesubmodules` and `submodule.recurse` values, and the checked-out branch's `branch.<name>.merge` values,
    * which the reader takes only where the push mode is `upstream` or `tracking`. null where the configuration cannot be
@@ -2354,12 +2355,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       if (deploying.length > 0) deny("push-deploying", "A push of refs read from its input, which may name a deploying branch");
       deny("push-default", "A push of refs read from its input, which may name the default branch");
     }
-    // The place's own push configuration (`ctx.pushConfig`), asked once per repository word the push names: a plain
-    // remote name by itself, any other word (a URL, a path, a word the shell fills in) as null, for the top-level keys
-    // alone; with none, the push remote. A configuration the guard cannot read whole is recorded by `pushRead`.
+    // The place's own push configuration (`ctx.pushConfig`), asked once per repository word the push names: a word the
+    // line shows by itself, a URL or a path among them, since git looks a remote up by the exact word; a word the shell
+    // fills in as null, for the top-level keys alone; with none, the push remote. A configuration the guard cannot read
+    // whole is recorded by `pushRead`.
     if (ctx.pushConfig !== undefined) {
-      const plain = (word: string | null, mark: WordMark | undefined): string | null =>
-        word !== null && (mark?.kinds ?? "") === "" && /^[\w.-]+$/.test(word) && word !== "." && word !== ".." ? word : null;
+      const plain = (word: string | null, mark: WordMark | undefined): string | null => (word !== null && (mark?.kinds ?? "") === "" ? word : null);
       const words = [...repoWords, ...(positionals.length > 0 ? [[positionals[0] ?? null, positionalMarks[0]] as const] : [])];
       const remotes = words.length > 0 ? words.map(([word, mark]) => plain(word, mark)) : ctx.pushRemote === null ? [] : [ctx.pushRemote ?? "origin"];
       if (words.length === 0 && ctx.pushRemote === null) pushUnread = true;
