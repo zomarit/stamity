@@ -2280,6 +2280,37 @@ describe("the main-thread acts on a client whose payload names no agent (a4, rev
   });
 });
 
+/**
+ * The remote write in an unattended run (REQ-FLOW-120, REQ-FLOW-134): the run verbs' push goes where git then resolves
+ * origin, so every spelling of the act is refused on the main thread, an include among them; attended, it still runs.
+ */
+describe("the remote write in an unattended run", () => {
+  const ORIGIN = '[remote "origin"]\n\turl = https://github.com/acme/app.git\n';
+  const UNATTENDED = { ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") };
+  const SENTENCE = "Writing a git remote or a URL rewrite is a person-only act (`remote-write`) and this run is unattended";
+
+  // Red on 091d999b: the unattended rule refused a remote's and a URL rewrite's write, and the include write ran.
+  it.each(TOOLS.filter((tool) => !NO_AGENT.has(tool)))("%s: refuses the main thread's include write unattended, and runs it attended", async (tool) => {
+    const guard = await placeGuard(tool, { ".git/config": ORIGIN });
+    const write = "git config include.path extra.gitconfig";
+    // Non-degenerate, and the neighbour one fact away: attended, the same call runs unasked.
+    expect(decide(tool, guard, write)).toEqual({ deny: false });
+    await getRepo().seedFiles(UNATTENDED);
+    expect(decide(tool, guard, write)).toEqual({ deny: true, reason: expect.stringContaining(SENTENCE) });
+    expect(decide(tool, guard, write)).toEqual({ deny: true, reason: expect.stringContaining("This session is unattended because .stamity/runs/2026-10-23_x/record.md reads") });
+  });
+
+  // A pin, green before and after: the spellings the unattended rule already refused keep that rule's own reason.
+  it("keeps the unattended rule's own reason for a remote's write and a URL rewrite's", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN, ...UNATTENDED });
+    for (const command of ["git remote set-url origin https://github.com/other/repo.git", "git config url.https://github.com/other/.pushInsteadOf https://github.com/acme/"]) {
+      const source = unattendedPushVerdict(command);
+      if (!source.deny) throw new Error(`the unattended rule reads no act in: ${command}`);
+      expect(decide("claude", guard, command), command).toEqual({ deny: true, reason: expect.stringContaining(source.reason) });
+    }
+  });
+});
+
 describe("the guard's reading of quoted text, a dry run's value word and an unreadable program (a4, review/37, review/42, review/38)", () => {
   const UNATTENDED = { ".stamity/runs/2026-10-23_x/record.md": record("in progress", "unattended") };
 

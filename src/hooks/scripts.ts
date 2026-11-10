@@ -465,7 +465,11 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // Moved again 2026-11-11 by the person-only guard hardening (REQ-FLOW-102), by what was measured: 373,310 bytes /
   // 7,602 lines (copilot, generated), past both rows, because a push now reads the remote section named by the exact
   // word it names, a URL or a path among them. 372,778 + 532 = 373,310 bytes; 7,595 + 7 = 7,602 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 373_310, lines: 7_602 },
+  // Moved again 2026-11-11 by the person-only guard hardening (REQ-FLOW-134, REQ-FLOW-166), by what was measured:
+  // 374,055 bytes / 7,614 lines (copilot, generated), past both rows, because the main thread's remote write is now
+  // refused in an unattended run and held while nobody is watching. 373,310 + 745 = 374,055 bytes; 7,602 + 12 = 7,614
+  // lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 374_055, lines: 7_614 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -4782,7 +4786,9 @@ export { AWAY_HELD_FILE, AWAY_MARKER_FILE } from "../mcp/env.ts";
  * `// stamity-autonomy <json>`, which the loosen gate reads back (REQ-FLOW-138),
  * and the same value as `AUTONOMY`. An act whose rule it runs unasked is
  * allowed, except a ready mark while a run is unattended, which the run's one
- * draft keeps refused (REQ-FLOW-120). The land verb's line is read in every
+ * draft keeps refused (REQ-FLOW-120), and a remote, URL-rewrite or include
+ * write (`remote-write`) while a run is unattended, refused, or while nobody is
+ * watching, held as an ask is (REQ-FLOW-134). The land verb's line is read in every
  * mode over the parsed program words (REQ-FLOW-121), with no mode read. The four
  * factory keys are baked only when on, so a default copy's bytes do not move, and
  * the guard decides nothing on them, but for one: a named review tool makes the
@@ -4793,9 +4799,9 @@ export { AWAY_HELD_FILE, AWAY_MARKER_FILE } from "../mcp/env.ts";
  * ask is refused instead, its reason the unattended sentence and the morning
  * list, and one line naming its rule, act and client is appended to
  * {@link AWAY_HELD_FILE}, a link at that path not followed; a failed append
- * leaves the refusal as it is. Only an ask moves: every allow, every refusal
- * and a sub-agent's or `auto` mode's refused ask stay as they were, and the
- * switch is read for an ask alone. A marker the guard cannot look for (a fault
+ * leaves the refusal as it is. Only an ask and the main thread's remote write
+ * move: every other allow, every refusal and a sub-agent's or `auto` mode's
+ * refused ask stay as they were, and the switch is read for those two alone. A marker the guard cannot look for (a fault
  * other than its absence) refuses the call.
  *
  * An install verb (`npm ci`, `pnpm install`, a bare `yarn`, `bun add`, …) whose
@@ -6372,6 +6378,18 @@ function decide() {
   if (first !== undefined) {
     const helper = helperRefusal(payload, RUN_ACTS[first] ?? "This act", first);
     if (helper !== null) return helper;
+  }
+  // A remote, URL-rewrite or include write runs on the main thread because the person sees the origin move
+  // (REQ-FLOW-134). With nobody watching no one does, and an unattended run's push goes where git then resolves origin:
+  // held, or refused, the unattended rule's own reason kept where it reads one.
+  if (ran.has("remote-write")) {
+    const act = RUN_ACTS["remote-write"];
+    const why = unattendedBy(root);
+    if (why !== null) {
+      const push = run();
+      return { ask: false, reason: (push !== undefined ? push.reason : unattendedSentence(act, "remote-write")) + " " + why };
+    }
+    if (nobodyWatching(root)) return heldForMorning({ ask: true, reason: askSentence(act, "remote-write") }, root, act, "remote-write");
   }
   // Unattended, a raw ready mark stays refused: the run's one draft pull request is marked ready only by the land
   // verb's --ready (REQ-FLOW-120).

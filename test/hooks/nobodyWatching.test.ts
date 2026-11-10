@@ -339,6 +339,104 @@ describe("the guard while nobody is watching (REQ-FLOW-166)", () => {
   });
 });
 
+/**
+ * The remote write while nobody is watching (REQ-FLOW-134, REQ-FLOW-166): the act runs unasked on the main thread
+ * because the person sees the origin move, so with nobody there to see it, it waits for a person and is held, in each
+ * of its spellings. A sub-agent's refusal and a client's that names no agent stay as they were, and the lines a run
+ * relies on still run.
+ */
+describe("a remote write while nobody is watching", () => {
+  const ORIGIN = '[remote "origin"]\n\turl = https://github.com/acme/app.git\n';
+  const ACT = "Writing a git remote or a URL rewrite";
+  const RULE = "remote-write";
+  /** The act's spellings: a remote's URL, a URL rewrite, an include. */
+  const WRITES = [
+    "git remote set-url origin https://github.com/other/repo.git",
+    "git config url.https://github.com/other/.pushInsteadOf https://github.com/acme/",
+    "git config include.path extra.gitconfig",
+  ] as const;
+
+  // Red on 091d999b: each write ran unasked whatever the switch said, and nothing was held.
+  it("refuses the main thread's remote, URL-rewrite and include writes under the variable, holding one line each without the command", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN });
+    for (const [index, command] of WRITES.entries()) {
+      // Non-degenerate, and the neighbour one fact away: with the switch off the same call runs unasked.
+      expect(said("claude", run(guard, payload("claude", command))), command).toEqual({ kind: "allow" });
+      expect(heldLines(), command).toHaveLength(index);
+      expect(said("claude", run(guard, payload("claude", command), ON)), command).toEqual({ kind: "refuse", reason: heldReason(ACT, RULE) });
+      const lines = heldLines();
+      expect(lines, command).toHaveLength(index + 1);
+      expectHeld(lines[index], ACT, RULE, "claude", command);
+    }
+  });
+
+  // Red on 091d999b: the marker left each write running.
+  it("refuses the same writes under the away marker, and runs them again once it is gone", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN, [AWAY_MARKER_FILE]: "{}\n" });
+    for (const command of WRITES) expect(said("claude", run(guard, payload("claude", command))), command).toEqual({ kind: "refuse", reason: heldReason(ACT, RULE) });
+    expect(heldLines()).toHaveLength(WRITES.length);
+    rmSync(getRepo().path(...AWAY_MARKER_FILE.split("/")));
+    for (const command of WRITES) expect(said("claude", run(guard, payload("claude", command))), command).toEqual({ kind: "allow" });
+    expect(heldLines()).toHaveLength(WRITES.length);
+  });
+
+  // Red on 091d999b: the line ran, the tag and the write alike.
+  it("holds a remote write that shares its line with a tag the setting runs, under the remote write's own rule", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN });
+    const command = `git tag v2 && ${WRITES[0]}`;
+    expect(said("claude", run(guard, payload("claude", command)))).toEqual({ kind: "allow" });
+    expect(said("claude", run(guard, payload("claude", command), ON))).toEqual({ kind: "refuse", reason: heldReason(ACT, RULE) });
+    expect(heldLines()).toHaveLength(1);
+    expectHeld(heldLines()[0], ACT, RULE, "claude", command);
+  });
+
+  // A pin, green before and after: the refusals that come first are unchanged, and nothing is held for them.
+  it("leaves a sub-agent's refusal and a client's that names no agent as they were, holding nothing", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN });
+    for (const command of WRITES) {
+      const helper = payload("claude", command, { agent_id: "a1", agent_type: "general-purpose" });
+      const before = run(guard, helper);
+      expect(said("claude", before).kind, command).toBe("refuse");
+      expect(run(guard, helper, ON), command).toEqual(before);
+    }
+    const codex = await placeGuard("codex");
+    const cursor = await placeGuard("cursor");
+    for (const [tool, other] of [["codex", codex], ["cursor", cursor]] as const) {
+      for (const command of WRITES) {
+        const before = run(other, payload(tool, command));
+        expect(said(tool, before).kind, `${tool}: ${command}`).toBe("refuse");
+        expect(run(other, payload(tool, command), ON), `${tool}: ${command}`).toEqual(before);
+      }
+    }
+    expect(heldLines()).toEqual([]);
+  });
+
+  // A pin, green before and after: in a checkout shaped like the maintainers' own, the lines a run relies on still run
+  // while nobody is watching, and nothing is held.
+  it("runs the everyday lines a run relies on while nobody is watching", async () => {
+    const checkout =
+      '[remote "origin"]\n\turl = https://github.com/acme/app.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n\tgh-resolved = base\n' +
+      '[branch "main"]\n\tremote = origin\n\tmerge = refs/heads/main\n[branch "feat/x"]\n\tremote = origin\n\tmerge = refs/heads/feat/x\n';
+    const guard = await placeGuard("claude", { ".git/config": checkout });
+    const lines = [
+      "npx --no stamity gate classify --base HEAD --paths src/a.ts",
+      "git push -u origin feat/x",
+      "git push origin HEAD:refs/heads/feat/x",
+      "git push",
+      "gh pr create -R acme/app --draft --title t --body b",
+      "gh pr edit 3 -R acme/app --body b",
+      "gh pr comment 3 -R acme/app --body b",
+      'git -C lane commit -s -m "fix: a change"',
+      "lockf -k /tmp/stamity-machine.lock npx vitest run test/hooks",
+    ];
+    for (const command of lines) {
+      expect(said("claude", run(guard, payload("claude", command), ON)), command).toEqual({ kind: "allow" });
+      expect(said("claude", run(guard, payload("claude", command, { agent_id: "a1", agent_type: "general-purpose" }), ON)), `helper: ${command}`).toEqual({ kind: "allow" });
+    }
+    expect(heldLines()).toEqual([]);
+  });
+});
+
 describe("the suite's own environment (build/5)", () => {
   it("runs every test file with the switch off, so a shell that has it on still tests the asks", () => {
     // vitest.config.ts sets it to "" in every worker; a child spawned with this env inherits it off.
@@ -380,7 +478,9 @@ describe("the suite's own environment (build/5)", () => {
 });
 
 describe("what the switch leaves alone (a strict tightening)", () => {
-  it.each(TOOLS)("%s: every allow, every act run unasked and every refusal answers byte for byte as before", async (tool) => {
+  // TEST CHANGE, justified (REQ-FLOW-134, REQ-FLOW-166): the title no longer says every act run unasked, since the
+  // remote write is now held while nobody is watching (its own cases above); the list and every assertion are as they were.
+  it.each(TOOLS)("%s: every allow, every act run unasked but a remote write, and every refusal answers byte for byte as before", async (tool) => {
     const guard = await placeGuard(tool);
     const before = UNMOVED.map((command) => run(guard, payload(tool, command)));
     // Non-degenerate: the list holds an allow and a refusal on every client.
