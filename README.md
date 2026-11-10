@@ -53,11 +53,11 @@ npx @zomarit/stamity init
 `workspace`, `clean` and `add` work from. `validate` runs with or without one; `learn`, `handoff`
 and `ledger` want only `.stamity/`. Node `>= 22.22.2` is the only prerequisite; nothing installs globally.
 
-Four verbs need git: `worktree` refuses without it, `plan` and `run` exit 1 without it, `run overview` excepted, which reads only the run folder, and `gate` reads every change
+Six verbs need git: `worktree` and `gc` refuse without it, `skill add` fetches through it, `plan` and `run` exit 1 without it, `run overview` excepted, which reads only the run folder, and `gate` reads every change
 from it, so without git `gate scan` exits 1 and `/st-quick` and `/st-work` list `secret scan: not run` under
-`Not done:`. The engine reaches the network in four places, all in [`SECURITY.md`'s "Network and data
+`Not done:`. The engine reaches the network in five places, all in [`SECURITY.md`'s "Network and data
 handling"](SECURITY.md): `add` fetches the Sigstore trust root for a signed pack, `worktree setup` fetches your own
-`origin` for a branch with no local copy, a startup notice asks npm about newer versions until you switch it off, and an
+`origin` for a branch with no local copy, a startup notice asks npm about newer versions until you switch it off, `skill add` fetches a listed source's pinned commit and `gc` reads origin's branch list with `git ls-remote`, and an
 unattended run's pre-flight and the `run` verbs, which every `/st-work` close runs too, call GitHub's API through `gh`
 under your login: `run start` continuing origin's run branch, `run checkpoint` and `run end` reading `origin` with
 `git ls-remote` and pushing the run's branch to it under your git credentials, and `run land` marking the run's own
