@@ -430,6 +430,35 @@ describe.skipIf(!gitAvailable)("gc engine — apply frees the default set and ke
     });
     expect(await exists(archived)).toBe(true);
   });
+
+  it("archives no expired handoff whose file name is not <id>.md, and keeps the live <id>.md it would have moved", async () => {
+    const fixture = await seed(getTemp().dir, NOW);
+    const { id, path: liveOther } = await writeHandoff({
+      rootDir: fixture.root,
+      slug: "gc live",
+      body: REQUIRED_BODY_SECTIONS.map((heading) => `## ${heading}\n\nRecorded for the fixture.\n`).join("\n"),
+      summary: "The live handoff an id names, under its own name.",
+      now: NOW,
+    });
+    const misnamed = join(fixture.root, ".stamity", "handoffs", "renamed.md");
+    await writeAged(misnamed, "expired handoff under another name\n", NOW);
+    // The preview stays a stand-in (the header's reason); the archive is the real store's, so a move by id shows.
+    const sweep: HandoffSweep = {
+      async preview() {
+        return { archive: [{ id, path: misnamed }], remove: [] };
+      },
+      archive: archiveHandoff,
+    };
+    const options = optionsFor(fixture, { handoffs: sweep });
+    const report = await applyGc(await planGc(options), options);
+    expect(report.kept).toContainEqual({
+      path: ".stamity/handoffs/renamed.md",
+      reason: "its file name is not <id>.md, so archiving it by id would move another file",
+    });
+    expect(await exists(liveOther)).toBe(true);
+    expect(await exists(join(fixture.root, ".stamity", "handoffs", "archive", `${id}.md`))).toBe(false);
+    expect(await exists(misnamed)).toBe(true);
+  });
 });
 
 describe.skipIf(!gitAvailable)("stamity gc — the verb", () => {

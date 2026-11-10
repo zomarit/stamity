@@ -698,6 +698,12 @@ export async function applyGc(
     const linked = await linkedHandoffFolder(plan.stateDir, plan.repoRoot);
     if (linked === null) {
       for (const target of plan.handoffArchive) {
+        // The store archives by id, reading `handoffs/<id>.md`: a file under any other name would have the store
+        // move a different handoff than the one re-checked here, so it stays.
+        if (target.abs !== join(plan.stateDir, ...HANDOFF_SEGMENTS, `${target.id}.md`)) {
+          kept.push({ path: target.rel, reason: "its file name is not <id>.md, so archiving it by id would move another file" });
+          continue;
+        }
         // oxlint-disable-next-line no-await-in-loop -- each move is preceded by its own re-check
         const refusal = await stillBounded(plan, target.abs);
         if (refusal === "already gone") continue;
