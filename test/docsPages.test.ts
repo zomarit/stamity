@@ -6685,6 +6685,16 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
   });
 });
 
+// ADDED (REQ-FLOW-157, REQ-WORKTREE-019): the land job's token and the lane's one unscanned link, said where the
+// security page and the cloud page state them.
+describe("the land job's issue close and the lane's linked install tree, on the security and cloud pages", () => {
+  it("states in the lane's row that a linked `node_modules` is not scanned", () => {
+    const row = read(SECURITY).split("\n").find((line) => line.includes("Emptying or rewriting another checkout's installed packages")) ?? "";
+    const residual = row.split(" | ").at(-1) ?? "";
+    expect(residual).toContain("`stamity worktree setup` does not scan a linked `node_modules` for files named like credentials, as it scans every other linked folder");
+  });
+});
+
 describe("every land reason the code prints is on the troubleshooting page", () => {
   const page = flowed(read(TROUBLESHOOTING));
   // Held in both the source and the page, so a reason reworded on either side fails here.
