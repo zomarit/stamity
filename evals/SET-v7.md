@@ -4450,7 +4450,7 @@ The dated citations above stay as they were. No eval run is made with this chang
 
 **The plan table's `threat` row restated, 2026-11-10 (the 1.19.1 patch; REQ-FLOW-067, REQ-PROVE-012).**
 Run 63 scored `plan-security-unit-carries-threat-note` 1 of 3, both misses on B5, which refuses a
-`threat` row on the `docs` unit; the 2026-10-09 paragraph above left the corpus line they lean on as
+`threat` row on the `docs` unit; the 2026-10-18 paragraph above left the corpus line they lean on as
 it was. The line is now restated in place, so no line of `content/commands/st-plan.md` moves and every `source:`
 range holds. `:358`'s "in at most five lines; absent otherwise" now reads "in at most five lines. A unit
 outside that class has no `threat` row at all: the table leaves it out, unlike `skills`, which reads
