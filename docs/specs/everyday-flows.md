@@ -7390,8 +7390,7 @@ agent's command line, Then the guard refuses it (REQ-FLOW-121).
   under that token, the review request and the `issue_comment` wake are still `not run` until a real run reaches them.
   The run that landed did so with no hand step, on the CI after the run's last push. After that merge the run's issue
   stayed open and labelled, since GitHub did not apply the body's `Closes` line to a merge the Actions token made, so a
-  person closes the issue after a land-job merge. The record of those runs is not public, so the pages carry the dated
-  result.
+  person closes the issue after a land-job merge.
   - Proof: `SECURITY.md` (The land job), `docs/security-mapping.md`, `docs/troubleshooting.md` and `docs/cloud.md` (the
     land job's limits), `docs/factory.md` (What real runs have shown); `test/docsPages.test.ts` ("%s names the brake, the
     lift and the job", "states the land job's real answer on Claude's cloud, dated, on both pages", "moves the hand-kept
