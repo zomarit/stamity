@@ -5,8 +5,8 @@ date: 2026-11-10
 confidence: high
 summary: test/composition/root.test.ts derives its registry from src/, so a new engine module fails every CI leg until src/composition/root.ts wires it or excludes it with a reason
 reviewBy: 2027-02-10
-validatedAgainst: "test/composition/root.test.ts:19-36 at bcf4eeb9, commits 3e76d2d9 and 42aa32ee, and CI run 42730516873 on PR #138"
-integrity: sha256:50283e752825718561ab848394cd2ad316083c93bf4c344487bcbe009c3708a7
+validatedAgainst: "test/composition/root.test.ts:19-36 on the tree CI run 42730516873 tested (PR #138), commits 3e76d2d9 and 42aa32ee, and CI run 42730516873 on PR #138"
+integrity: sha256:3be16ff40a6d8aa464239a28e4af8dc97eea5f7d5397ae5148882b55a7d408b9
 ---
 
 `test/composition/root.test.ts` derives the registry it expects from the tree: it walks `src/`,
@@ -28,7 +28,7 @@ the whole-tree checks in `a-narrow-verify-run-misses-whole-tree-guards`.
 
 Confidence high: the derivation is in the test's own header and source, and both fixes were proved
 in CI. Validated against `test/composition/root.test.ts:19-36` and commits `3e76d2d9` and `42aa32ee`
-at `bcf4eeb9`. Review horizon: revisit if the composition root stops deriving its registry from the
+on the tree CI run `42730516873` tested (PR #138). Review horizon: revisit if the composition root stops deriving its registry from the
 tree.
 
 ## How to apply

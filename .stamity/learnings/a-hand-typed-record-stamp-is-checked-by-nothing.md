@@ -5,8 +5,8 @@ date: 2026-11-10
 confidence: medium
 summary: the run and ledger verbs take the stamps they write from the clock, but a stamp typed by hand into a run record is checked by nothing; five typed stamps were wrong in October 2026
 reviewBy: 2027-02-10
-validatedAgainst: "src/cli/commands/run.ts:1847 and :3033, src/cli/commands/ledger.ts:596, src/runs/ledgerStore.ts:942-943 and src/runs/morning.ts:222 at bcf4eeb9; a person-only guard probe on 2026-11-10"
-integrity: sha256:caf0a0b51b105fee9df47a224df5470ec0dff84cf64a3b6def221d90bb2c24e0
+validatedAgainst: "src/cli/commands/run.ts:1847 and :3033, src/cli/commands/ledger.ts:596, src/runs/ledgerStore.ts:942-943 and src/runs/morning.ts:222 on the tree CI run 42730516873 tested (PR #138); a person-only guard probe on 2026-11-10"
+integrity: sha256:eb27c287ef72d77dd5784093721031e22a084811b8fc675ffa15b5de0caa6c64
 ---
 
 The run and ledger verbs take the stamps they write from the clock: the run verb's review-request
@@ -21,13 +21,13 @@ therefore lands as fact, and a later reader takes it as the order things happene
 ## Why
 
 Observed in October 2026: five stamps across two sessions' run records were typed before the clock
-was read, were wrong, and each needed a correcting line. Read at `bcf4eeb9`: a search of `src/runs/`
+was read, were wrong, and each needed a correcting line. Read on the tree CI run `42730516873` tested (PR #138): a search of `src/runs/`
 and the run and ledger commands for an order or clock check on record stamps finds only the morning
 list's section order (`src/runs/morning.ts:222`). A guard probe on 2026-11-10 showed that a line which
 reads `date -u` into a variable and appends it in the same command runs without an ask.
 
 Confidence medium: the slips were observed, and the absence of a check is read from the source.
-Validated against those files at `bcf4eeb9`. Review horizon: retire when record lines are written
+Validated against those files on the tree CI run `42730516873` tested (PR #138). Review horizon: retire when record lines are written
 only by a verb.
 
 ## How to apply

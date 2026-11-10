@@ -5,8 +5,8 @@ date: 2026-11-10
 confidence: high
 summary: a lane's node_modules is usually a link to the main checkout's; npm ci there empties that shared install, which then fails elsewhere with ERR_MODULE_NOT_FOUND (2026-11-06)
 reviewBy: 2027-02-10
-validatedAgainst: "src/worktree/setup.ts:816-826, src/hooks/scripts.ts:4618-4624 and test/hooks/linkedInstall.test.ts at bcf4eeb9"
-integrity: sha256:c250ecf1b9f2eb24a7e1a526375bb0adfdfdc4dc37bc441e5c4808d603478016
+validatedAgainst: "src/worktree/setup.ts:816-826, src/hooks/scripts.ts:4618-4624 and test/hooks/linkedInstall.test.ts on the tree CI run 42730516873 tested (PR #138)"
+integrity: sha256:ee53b0a9bddd40ffb13e7f60730febb2dddc7beee4eef27b3b422280ff4ff5f5
 ---
 
 A lane set up under `.stamity-worktrees/` usually holds `node_modules` as a symbolic link to the main
@@ -24,7 +24,7 @@ the hook guard refuses an install verb whose folder holds a linked `node_modules
 guard reads an agent's shell calls; a terminal a person types into runs no hook.
 
 Confidence high for the mechanism: observed, and the guard's tests hold the refusal. Validated
-against `src/worktree/setup.ts` and `src/hooks/scripts.ts` at `bcf4eeb9`. Review horizon: retire if
+against `src/worktree/setup.ts` and `src/hooks/scripts.ts` on the tree CI run `42730516873` tested (PR #138). Review horizon: retire if
 lanes stop linking `node_modules`.
 
 ## How to apply

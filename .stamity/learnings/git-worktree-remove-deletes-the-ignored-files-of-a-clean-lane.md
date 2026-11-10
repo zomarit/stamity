@@ -5,8 +5,8 @@ date: 2026-11-10
 confidence: high
 summary: git worktree remove with no --force deletes a clean lane's ignored files, such as evals/runs/*/calls/, and git status shows nothing; run land's clean-up lists and keeps them
 reviewBy: 2027-02-10
-validatedAgainst: "a scratch-repository reproduction with git 2.52.0 on 2026-11-10; .gitignore:47-48 and src/runs/runCleanup.ts at bcf4eeb9"
-integrity: sha256:79fd48554ca7c327124c8234e96029f1554444a5a402455be279d98ae4f4c99f
+validatedAgainst: "a scratch-repository reproduction with git 2.52.0 on 2026-11-10; .gitignore:47-48 and src/runs/runCleanup.ts on the tree CI run 42730516873 tested (PR #138)"
+integrity: sha256:7df2c08dbe1c909cb4c43bff2aa11810b894beda77c90a81f6f163cf08be1f48
 ---
 
 `git worktree remove <path>` without `--force` succeeds on a worktree whose `git status --porcelain`
@@ -26,7 +26,7 @@ would have deleted the only copy of a run of record's call transcripts. The run 
 holds one beyond what its setup placed; a direct `git worktree remove` has no such check.
 
 Confidence high: reproduced. Validated against the scratch reproduction and
-`src/runs/runCleanup.ts` at `bcf4eeb9`. Review horizon: re-check on a git release that changes
+`src/runs/runCleanup.ts` on the tree CI run `42730516873` tested (PR #138). Review horizon: re-check on a git release that changes
 `worktree remove`.
 
 ## How to apply

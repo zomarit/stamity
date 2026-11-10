@@ -5,8 +5,8 @@ date: 2026-11-10
 confidence: medium
 summary: the test-runner role kills a gate at 10 minutes when its brief names no limit, about this repo's full-suite time; on 2026-10-22 that ended a passing suite as a timeout
 reviewBy: 2027-02-10
-validatedAgainst: "content/agents/stamity-test-runner.md:95-98 at bcf4eeb9"
-integrity: sha256:e9483f7e4bd5bd37de8e3f65eb84e41c77d40ba77e567217f25568eaa57a4893
+validatedAgainst: "content/agents/stamity-test-runner.md:95-98 on the tree CI run 42730516873 tested (PR #138)"
+integrity: sha256:9dfa9112bf4947d8d6bcf4044bcef660b7097749235a7980f37b48adab8f7767
 ---
 
 The test-runner role gives each gate its own wall-clock budget from its brief, 10 minutes when the
@@ -23,7 +23,7 @@ was still passing at the 10-minute default while other test runs loaded the mach
 stated limit passed. A full local suite took about 11 minutes on a quiet machine on 2026-11-05.
 
 Confidence medium: observed once, and the mechanism is the role's documented default. Validated
-against `content/agents/stamity-test-runner.md:95-98` at `bcf4eeb9`. Review horizon: retire when the
+against `content/agents/stamity-test-runner.md:95-98` on the tree CI run `42730516873` tested (PR #138). Review horizon: retire when the
 default budget is longer than this repository's full suite.
 
 ## How to apply

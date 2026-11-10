@@ -5,8 +5,8 @@ date: 2026-11-10
 confidence: high
 summary: "a narrow verify misses seven whole-tree checks: testInputsGuard, forkIdentity, architecture, cloud, composition root, fixtureSecrets and the mcp/env .gitignore census; PR #138's CI met four"
 reviewBy: 2027-02-10
-validatedAgainst: "the three retired learnings' measured runs as recorded at 62b9c758 (2026-10-11_release-1-14-0 prove/4 and fix/31, its record's 2026-10-12T01:41Z entry; 2026-10-03_pack-engine-defects prove/7, its record's lines 482-495; 2026-10-15_cloud-runs prove/7); the guard, architecture and container-leg paths read at 23b45cb9; test/ci/forkIdentity.test.ts:97-192, test/composition/root.test.ts, test/gate/fixtureSecrets.test.ts:52-236 and test/mcp/env.test.ts:652-708 at bcf4eeb9; CI run 42730516873 on PR #138 at bcf4eeb9, its failed-job log"
-integrity: sha256:eff0db69ed2cbfb18cd6f7e5c1e9efeb8a4b22a2251adf9c1dd4b72877fb8ca6
+validatedAgainst: "the three retired learnings' measured runs as recorded at 62b9c758 (2026-10-11_release-1-14-0 prove/4 and fix/31, its record's 2026-10-12T01:41Z entry; 2026-10-03_pack-engine-defects prove/7, its record's lines 482-495; 2026-10-15_cloud-runs prove/7); the guard, architecture and container-leg paths read at 23b45cb9; test/ci/forkIdentity.test.ts:97-192, test/composition/root.test.ts, test/gate/fixtureSecrets.test.ts:52-236 and test/mcp/env.test.ts:652-708 on the tree CI run 42730516873 tested (PR #138), and that run's failed-job log"
+integrity: sha256:cb4bd0545f05b3b440cb4d0463102d1652cf3ecc6860b9dae816d3c99213a67a
 ---
 
 Seven checks in this repository look at the whole tree, not at the files a change touched. A
@@ -66,13 +66,13 @@ in the full suite or in CI, on a file the change never touched.
 - Container leg: the full suite on `b4e4fbf7` was red, 1 of 15,454, at
   `test/cloud/containerLeg.test.ts:376`, whose payload the guard refuses since `20ac8475`. No
   lane's verify ran `test/cloud`.
-- PR #138, CI run `42730516873` on `bcf4eeb9` (2026-11-10): the two POSIX check legs (floor, node
+- PR #138, CI run `42730516873` (2026-11-10): the two POSIX check legs (floor, node
   22, and lts, node 24) each failed in exactly four test files and nowhere else:
   `test/ci/forkIdentity.test.ts`, `test/composition/root.test.ts`, `test/gate/fixtureSecrets.test.ts`
   and `test/mcp/env.test.ts`'s census (two of its cases, one per away constant), with the causes
-  named in the table. Both fork-probe legs failed on the census's `AWAY_HELD_FILE` case. The run's
-  integration checks on the pinned trees `be39ec58` and `04d7e802` had been green on their
-  selected sets, and the first one's listed set held none of those four files; the record does not
+  named in the table. Both fork-probe legs failed on the census's `AWAY_HELD_FILE` case. Run
+  `2026-11-09_last-before-2-0`'s integration checks 1 and 2 (its record's 2026-11-09T18:08:49Z
+  and 21:44:54Z entries) had been green on their selected sets, and the first one's listed set held none of those four files; the record does not
   list the second one's set. The Windows legs failed on some of the same four and on further tests
   that are not whole-tree checks.
 
@@ -81,8 +81,7 @@ This learning merges three that each held one row: `a-new-test-file-runs-the-tes
 retired when its first version was captured. Its second version, captured in run
 `2026-11-09_last-before-2-0`, added the fork-identity, composition-root, fixture-secrets and
 `.gitignore` census rows. Confidence high: each row was measured red in a full suite or in CI and
-green after its fix. Validated against the files in the table at `bcf4eeb9` and CI run
-`42730516873`. Review horizon: re-check when any of these checks is replaced, the wave map is
+green after its fix. Validated against the files in the table on the tree CI run `42730516873` tested, and that run's failed-job log. Review horizon: re-check when any of these checks is replaced, the wave map is
 re-cut, or the container leg stops running the emitted hooks.
 
 ## How to apply

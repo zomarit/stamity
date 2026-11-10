@@ -5,8 +5,8 @@ date: 2026-11-10
 confidence: high
 summary: the measurements page renders a composed run of record only when every safety case was measured in a run dated after the previous release, and a chain must also list them in its results file
 reviewBy: 2027-02-04
-validatedAgainst: "src/cli/docs/measurements.ts readPriorRun and proveChain and test/cli/docs/measurements.test.ts at bcf4eeb9; evals/runs/2026-10-27-run-54, -run-55 and -run-57 RESULTS.md line 12 at records fe785c17"
-integrity: sha256:e7839cf3af22a1696fcc6a05e4a3a0ffb6d9247e218aa0ca7f34a9aa289b31d9
+validatedAgainst: "src/cli/docs/measurements.ts readPriorRun and proveChain and test/cli/docs/measurements.test.ts on the tree CI run 42730516873 tested (PR #138); evals/runs/2026-10-27-run-54, -run-55 and -run-57 RESULTS.md line 12 at records fe785c17"
+integrity: sha256:068846d8a317262b2c4a4166f8f22c32e659af4545d5cc766510c13131142a05
 ---
 
 The measurements page names a run of record when that run is a full measure, composes directly with
@@ -34,8 +34,7 @@ more eval runs after a passing one, about four hours. The list replaces that cos
 
 Confidence high: the refusal and its one exception are in the source, and the tests in
 `test/cli/docs/measurements.test.ts` hold each way the list can fall short. The list shipped in
-1.18.0. Validated against `readPriorRun` and `proveChain` in `src/cli/docs/measurements.ts` at
-`bcf4eeb9`, and each run's `RESULTS.md` line 12 for runs 54, 55 and 57 at records `fe785c17`.
+1.18.0. Validated against `readPriorRun` and `proveChain` in `src/cli/docs/measurements.ts` on the tree CI run `42730516873` tested (PR #138), and each run's `RESULTS.md` line 12 for runs 54, 55 and 57 at records `fe785c17`.
 Review horizon: 2027-02-04, or sooner if the backstop or the list's section changes.
 
 ## How to apply

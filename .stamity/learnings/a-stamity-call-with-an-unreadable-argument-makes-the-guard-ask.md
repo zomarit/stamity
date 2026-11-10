@@ -5,8 +5,8 @@ date: 2026-11-10
 confidence: high
 summary: a stamity call with a shell variable or loop variable in its arguments makes the person-only guard ask (autonomy-loosen); the same call with literal arguments runs (probed 2026-11-10)
 reviewBy: 2027-02-10
-validatedAgainst: "a PreToolUse payload probe of .claude/hooks/stamity/stamity-person-only-guard.mjs on 2026-11-10 at bcf4eeb9, and src/hooks/personOnly.ts:3384-3386"
-integrity: sha256:3d4103010f4f8a7fc6690f52fdff6ef8c2c05d0990ae724f9e4963636034577c
+validatedAgainst: "a PreToolUse payload probe of .claude/hooks/stamity/stamity-person-only-guard.mjs on 2026-11-10 on the tree CI run 42730516873 tested (PR #138), and src/hooks/personOnly.ts:3384-3386"
+integrity: sha256:e64f06ed9f05a0dfe08eac81da28060bb0260da92126bfce100126cf1bad282a
 ---
 
 The person-only guard reads every `stamity` or `node dist/cli.js` call before it runs. An argument it
@@ -17,7 +17,7 @@ person, and in a run with nobody watching it waits until morning.
 
 ## Why
 
-Probed on 2026-11-10 at `bcf4eeb9` by feeding the installed guard
+Probed on 2026-11-10 on the tree CI run `42730516873` tested (PR #138) by feeding the installed guard
 (`.claude/hooks/stamity/stamity-person-only-guard.mjs`) a PreToolUse payload on stdin, which runs
 nothing: `for i in 4 5; do node dist/cli.js ledger close --run $R --id $R/prove/$i; done` returned
 `permissionDecision: "ask"` with the `autonomy-loosen` reason, and so did `R=<run id>; node dist/cli.js
@@ -26,7 +26,7 @@ no decision, so it runs. The same ask was met in live sessions on 2026-10-25, 20
 2026-11-09, each from a variable or a loop around a ledger call.
 
 Confidence high: reproduced by the probe. Validated against the probe above and
-`src/hooks/personOnly.ts` at `bcf4eeb9`. Review horizon: re-check when the guard learns to read a
+`src/hooks/personOnly.ts` on the tree CI run `42730516873` tested (PR #138). Review horizon: re-check when the guard learns to read a
 variable inside a value-taking option.
 
 ## How to apply
