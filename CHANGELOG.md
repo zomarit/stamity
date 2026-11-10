@@ -205,7 +205,9 @@ read from the code and its tests.
   file, so a run whose reviews found nothing had no ledger at the head, and the land job, which refuses a missing
   one, refused a run that was otherwise clean. With `autonomy.landJob` on, `run end` on the run's own pull request
   now writes an empty `ledger.jsonl` where none exists, beside its `PR:` and `Login:` lines, never over one that
-  exists, and none where one of the run's reports holds a finding or does not read.
+  exists, and only where every file in the run's `reports/` folder is one `ledger append` would take as clean: a
+  report name (or the folder's `.gitignore` or a diff patch), and no findings block that holds an item, does not
+  parse, or opens with anything but the exact `stamity-findings` line. Any other file is named in `Not done:`.
 
 ## [1.18.0] - 2026-11-09
 

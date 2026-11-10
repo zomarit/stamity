@@ -1727,9 +1727,9 @@ async function stampLandJobLines(ctx: CliContext, at: { cwd: string; recordRel: 
 /**
  * REQ-FLOW-157, amended 2026-11-10: the run's ledger as an empty file where the work tree holds nothing at its path. `ledger
  * append` with no findings writes none, so a run whose reviews found nothing had no ledger at the head, and the job, which
- * refuses a missing one, refused a clean run. Anything at the path is left as it stands. None is written where a run report
- * holds a finding or does not read (review/188: a finding whose append was skipped or refused never reached a ledger, and an
- * empty one would land it as clean), nor where any ref's history holds a ledger the work tree lost, since a deleted ledger
+ * refuses a missing one, refused a clean run. Anything at the path is left as it stands. None is written where an entry of
+ * the run's reports folder holds a finding, does not read, or is one `ledger append` refuses (review/188, review/191: a
+ * finding whose append was skipped or refused never reached a ledger, and an empty one would land it as clean), nor where any ref's history holds a ledger the work tree lost, since a deleted ledger
  * is no clean one. `true` once written; failure is a `notDone` line.
  */
 async function writeEmptyLedger(ctx: CliContext, at: { cwd: string; ledgerRel: string; reportsRel: string }, notDone: string[]): Promise<boolean> {
@@ -1755,11 +1755,28 @@ async function writeEmptyLedger(ctx: CliContext, at: { cwd: string; ledgerRel: s
 }
 
 /**
- * review/188: why the run's reports rule out an empty ledger, or `null` where none does. With no ledger, every finding a
- * report holds is one no row carries, so a report-named file whose findings block holds an item or does not parse, or that
- * does not read (a link or a folder in its place, over the report read cap), stops the write, as does a reports folder that
- * is not a folder, does not list, or holds more report names than the cap on reads. No reports folder, and a report with
- * an empty findings block or none, read as no findings. Reports are named by file name only.
+ * review/191: the entries a run's `reports/` folder holds that are not reports, by exact name: the ignore file
+ * `ensureReportsIgnore` writes (`src/runs/ledgerStore.ts`), and the orchestrator's `<pass>-diff-r<N>.patch` a verdict role
+ * with no git grant reads (`content/commands/st-work.md`, Verdict dispatch). Any other name that is not a report name stops
+ * the empty ledger, since `ledger append --report` refuses it and so no row carries what it holds.
+ */
+const REPORTS_NON_REPORTS: readonly RegExp[] = [/^\.gitignore$/, /^[a-z0-9][a-z0-9-]*-diff-r[1-9][0-9]*\.patch$/];
+
+/**
+ * A fence's opening or closing line, its info string group 1: three or more backticks or tildes, at any indentation, and
+ * inside a blockquote or a list item, where `ledger append`'s parser finds no block either.
+ */
+const ANY_FENCE_LINE = /^(?:[ \t>]|[-*+][ \t]|[0-9]+[.)][ \t])*(?:`{3,}|~{3,})(.*)$/;
+
+/**
+ * review/188 and review/191: why the run's reports rule out an empty ledger, or `null` where none does. With no ledger,
+ * every finding the folder holds is one no row carries, so the write goes ahead only where every entry is one `ledger
+ * append` would take as clean: its name a report name (`REPORT_NAME_PATTERN`, the check `--report` runs) or one of
+ * {@link REPORTS_NON_REPORTS}; a regular file within the report read cap; no fence line whose info string names
+ * `findings`, in any case or spacing, but the exact opening the append's parser takes; and, where that opening is there,
+ * the block parses with that parser and holds no item. A reports folder that is not a folder, does not list, or holds
+ * more entries than the cap on reads also stops it. No reports folder reads as no findings. Entries are named by file
+ * name only, printable.
  */
 function reportsHoldingFindings(ctx: CliContext, dir: string, rel: string): string | null {
   const { layout, blocks } = ctx.engine.runs;
@@ -1767,23 +1784,35 @@ function reportsHoldingFindings(ctx: CliContext, dir: string, rel: string): stri
   let names: string[];
   try {
     if (!lstatSync(dir).isDirectory()) return `${rel} is not a folder`;
-    names = readdirSync(dir).filter((name) => layout.REPORT_NAME_PATTERN.test(name)).toSorted();
+    names = readdirSync(dir).toSorted();
   } catch {
     return `${rel} could not be read`;
   }
-  if (names.length > layout.REPORT_READS_MAX) return `${rel} holds over ${layout.REPORT_READS_MAX} reports, past what is read`;
+  if (names.length > layout.REPORT_READS_MAX) return `${rel} holds over ${layout.REPORT_READS_MAX} entries, past what is read`;
   const open = layout.fenceOpenPattern(layout.FINDINGS_FENCE);
-  const held = names.filter((name) => {
+  const stop = (name: string): string | null => {
+    if (!layout.REPORT_NAME_PATTERN.test(name) && !REPORTS_NON_REPORTS.some((allowed) => allowed.test(name))) return "not a report name";
     const read = readCapped(join(dir, name), layout.REPORT_READ_MAX_BYTES);
-    if (read === null || read.truncated) return true;
-    if (!read.text.replace(/^\uFEFF/, "").split(/\r?\n/).some((line) => open.test(line))) return false;
+    if (read === null || read.truncated) return "did not read";
+    const lines = read.text.replace(/^\uFEFF/, "").split(/\r?\n/);
+    const near = lines.some((line) => {
+      const info = ANY_FENCE_LINE.exec(line)?.[1];
+      return info !== undefined && /findings/i.test(info.replace(/\s+/g, "")) && !open.test(line);
+    });
+    if (near) return "a findings fence ledger append does not read";
+    if (!lines.some((line) => open.test(line))) return null;
     const parsed = blocks.parseFindingsBlock(read.text);
-    return !parsed.ok || parsed.items.length > 0;
+    if (!parsed.ok) return "a findings block that does not parse";
+    return parsed.items.length > 0 ? "holds findings" : null;
+  };
+  const held = names.flatMap((name) => {
+    const why = stop(name);
+    return why === null ? [] : [`${sanitizeLabel(name)} (${why})`];
   });
   if (held.length === 0) return null;
   const shown = held.slice(0, layout.CARD_LIST_MAX).join(", ");
   const more = held.length > layout.CARD_LIST_MAX ? ` and ${held.length - layout.CARD_LIST_MAX} more` : "";
-  return `${held.length === 1 ? "a run report holds" : "run reports hold"} findings no ledger row carries, or did not read: ${shown}${more}`;
+  return `${rel} holds findings no ledger row carries, or what ledger append refuses: ${shown}${more}`;
 }
 
 /**

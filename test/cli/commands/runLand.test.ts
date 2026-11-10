@@ -3908,21 +3908,39 @@ describe("stamity run land", () => {
         const REPORTS = `${RUN_DIR}/reports`;
         const findings = (inner: string): string => `# r1\n\n\`\`\`stamity-findings\n${inner}\`\`\`\n`;
         const WARNING = `${JSON.stringify({ id: "W-1", severity: "Warning", locator: "a.txt:1", summary: "b is wrong" })}\n`;
+        const fenced = (open: string, close: string): string => `# r1\n\n${open}\n${WARNING}${close}\n`;
+        const held = (entry: string): string => `empty ledger not written: ${REPORTS} holds findings no ledger row carries, or what ledger append refuses: ${entry}, so the land job refuses this run`;
 
+        // review/191: each shape `ledger append --report` refuses, by its fence (blocks.ts, the exact opening alone) or by the
+        // file's name (ledgerStore.ts, the report-name check), so no row carries what it holds.
+        const DOES_NOT_READ = "a findings fence ledger append does not read";
         it.each([
-          ["holds a finding", WARNING],
-          ["holds a findings block that does not parse", "not json\n"],
-        ])("writes none where a run report %s, naming the report in Not done:, and the job refuses", async (_case, inner) => {
+          ["holds a finding", "u1-reviewer-r1.md", findings(WARNING), "holds findings"],
+          ["holds a findings block that does not parse", "u1-reviewer-r1.md", findings("not json\n"), "a findings block that does not parse"],
+          ["holds two exact findings blocks", "u1-reviewer-r1.md", `${findings("")}${findings("")}`, "a findings block that does not parse"],
+          ["holds a tilde findings fence", "u1-reviewer-r1.md", fenced("~~~stamity-findings", "~~~"), DOES_NOT_READ],
+          ["holds a findings fence in another case", "u1-reviewer-r1.md", fenced("```Stamity-Findings", "```"), DOES_NOT_READ],
+          ["holds a findings fence with a space before its info string", "u1-reviewer-r1.md", fenced("``` stamity-findings ", "```"), DOES_NOT_READ],
+          ["holds a fence named findings", "u1-reviewer-r1.md", fenced("```findings", "```"), DOES_NOT_READ],
+          ["holds a findings fence of four backticks", "u1-reviewer-r1.md", fenced("````stamity-findings", "````"), DOES_NOT_READ],
+          ["holds a findings fence indented four spaces", "u1-reviewer-r1.md", fenced("    ```stamity-findings", "    ```"), DOES_NOT_READ],
+          ["holds a findings fence in a blockquote", "u1-reviewer-r1.md", fenced("> ```stamity-findings", "> ```"), DOES_NOT_READ],
+          ["holds a findings fence in a list item", "u1-reviewer-r1.md", fenced("- ```stamity-findings", "  ```"), DOES_NOT_READ],
+          ["holds an empty exact block beside a near-miss one", "u1-reviewer-r1.md", `${findings("")}${fenced("~~~ Stamity Findings", "~~~")}`, DOES_NOT_READ],
+          ["is a .md whose name is not a report name", "u1-reviewer-1.md", findings(WARNING), "not a report name"],
+          ["is a .md whose name is not a report name, with no findings block", "notes.md", "# notes\n", "not a report name"],
+          ["is a file of a kind the folder does not hold", "full-suite-r1.log", "all green\n", "not a report name"],
+          ["is a diff patch whose context lines hold a finding", "u1-diff-r1.patch", ` \`\`\`stamity-findings\n ${WARNING} \`\`\`\n`, "holds findings"],
+        ])("writes none where a reports entry %s, naming it in Not done:, and the job refuses", async (_case, name, text, why) => {
           const { repo, remote } = await ending(LAND_ON, null);
-          await put(repo, `${REPORTS}/u1-reviewer-r1.md`, findings(inner));
+          await put(repo, `${REPORTS}/${name}`, text);
           await put(repo, `${REPORTS}/u1-test-runner-r1.md`, "# gates\n\nall green\n");
 
           const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
 
           expect(result.code, JSON.stringify(result.doc)).toBe(0);
-          expect(result.doc).toMatchObject({
-            notDone: ["empty ledger not written: a run report holds findings no ledger row carries, or did not read: u1-reviewer-r1.md, so the land job refuses this run"],
-          });
+          // TEST CHANGE, justified (review/191): the line names each entry with why it stops the write.
+          expect(result.doc).toMatchObject({ notDone: [held(`${name} (${why})`)] });
           expect(existsSync(join(repo, LEDGER))).toBe(false);
           const head = git(repo, ["rev-parse", "HEAD"]);
           expect(git(repo, ["ls-tree", head, "--", LEDGER])).toBe("");
@@ -3946,22 +3964,50 @@ describe("stamity run land", () => {
           const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
 
           expect(result.code, JSON.stringify(result.doc)).toBe(0);
-          expect(result.doc).toMatchObject({
-            notDone: ["empty ledger not written: a run report holds findings no ledger row carries, or did not read: u1-reviewer-r1.md, so the land job refuses this run"],
-          });
+          // TEST CHANGE, justified (review/191): the line names each entry with why it stops the write.
+          expect(result.doc).toMatchObject({ notDone: [held("u1-reviewer-r1.md (did not read)")] });
           expect(existsSync(join(repo, LEDGER))).toBe(false);
         });
 
-        it("writes the empty ledger where every run report's findings block is empty or absent", async () => {
+        // review/191: a report moved into a subfolder is not one `ledger append --report` reads.
+        it("writes none where the reports folder holds a folder, naming each stopping entry in Not done:", async () => {
           const { repo } = await ending(LAND_ON, null);
-          await put(repo, `${REPORTS}/u1-reviewer-r1.md`, findings(""));
+          await put(repo, `${REPORTS}/sub/u1-reviewer-r1.md`, findings(WARNING));
+          await put(repo, `${REPORTS}/notes.md`, "# notes\n");
+
+          const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+          expect(result.code, JSON.stringify(result.doc)).toBe(0);
+          expect(result.doc).toMatchObject({ notDone: [held("notes.md (not a report name), sub (not a report name)")] });
+          expect(existsSync(join(repo, LEDGER))).toBe(false);
+        });
+
+        // review/191: what a real clean run leaves in its reports folder: the ignore file the ledger writer makes, report-named
+        // reports whose findings block is exact and empty or absent, another fenced block, and the orchestrator's diff patch.
+        it("writes the empty ledger where every reports entry is one ledger append takes as clean, and the job lands", async () => {
+          const { repo, remote } = await ending(LAND_ON, null);
+          await put(repo, `${REPORTS}/.gitignore`, "*\n");
+          await put(repo, `${REPORTS}/u1-reviewer-r1.md`, `${findings("")}\n\`\`\`stamity-closures\n\`\`\`\n\n\`\`\`json\n{"findings":0}\n\`\`\`\n`);
+          await put(repo, `${REPORTS}/u1-security-r1.md`, `# security\n\n  \`\`\`stamity-findings  \n\n\`\`\`\n`);
           await put(repo, `${REPORTS}/u1-test-runner-r1.md`, "# gates\n\nall green\n");
+          await put(repo, `${REPORTS}/u1-diff-r1.patch`, "diff --git a/a.txt b/a.txt\n+b\n");
 
           const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
 
           expect(result.code, JSON.stringify(result.doc)).toBe(0);
           expect(result.doc).toMatchObject({ notDone: [] });
-          expect(git(repo, ["cat-file", "-s", `HEAD:${LEDGER}`])).toBe("0");
+          const head = git(repo, ["rev-parse", "HEAD"]);
+          expect(git(repo, ["cat-file", "-s", `${head}:${LEDGER}`])).toBe("0");
+
+          const clone = join(dirname(repo), "job");
+          git(dirname(repo), ["clone", "-q", "-b", RUN_BRANCH, remote, clone]);
+          git(clone, ["remote", "set-url", "origin", "https://github.com/o/r.git"]);
+          route("GET repos/o/r/pulls/7", pull(head));
+          route(`GET repos/o/r/commits/${head}/check-runs`, { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] });
+          route(`GET repos/o/r/branches/${RUN_BRANCH}`, { commit: { sha: head } });
+          route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: `${RUN_DIR}/record.md` }, { filename: LEDGER }]);
+          gh.threads = [threadsPage([], BOT)];
+          expect((await run(clone, LANDS)).doc).toMatchObject({ outcome: "landed", pr: { number: 7, head }, evidence: { ledger: { open: [] } }, notDone: [] });
         });
 
         // review/189: a merge whose side branch added and deleted the ledger leaves both parents without one, so git's default

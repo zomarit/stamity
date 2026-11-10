@@ -7352,24 +7352,30 @@ agent's command line, Then the guard refuses it (REQ-FLOW-121).
   `Login: <login>` at the head" now reads: with `autonomy.landJob` on, an `end` with its own pull request also writes the
   run's `ledger.jsonl` as an empty file where the work tree holds nothing at that path, and commits it at the head in the
   same pass as those lines (`writeEmptyLedger`, `src/cli/commands/run.ts`). It never writes over a ledger that exists.
-  It first reads the run's `reports/` folder, and writes none where a report-named file's findings block holds an item
-  or does not parse, where such a file does not read (a link or a folder in its place, or over the report read cap), or
-  where the folder is not a folder, does not list, or holds more report names than the cap on reads, since with no ledger
-  each such finding is one no row carries (an append skipped, or refused for a block that did not parse). No `reports/`
-  folder, and a report with an empty findings block or none, read as no findings. It also writes none where any ref's
+  It first reads the run's `reports/` folder, and writes the ledger only where every entry there is one `ledger append`
+  would take as clean (review/191): its name is a report name, by the same check `--report` runs, or is the folder's
+  `.gitignore` or an orchestrator's `<pass>-diff-r<N>.patch`; it is a regular file within the report read cap; no fence
+  in it, of backticks or tildes at any indentation or inside a blockquote or a list item, has an info string naming
+  `findings` in any case or spacing unless it is the exact opening the append's parser takes; and any such exact block
+  parses with that parser and holds no item. Any other entry (a misnamed `.md`, a log, a subfolder, a link), a near-miss fence, a block that does not parse or
+  holds an item, or a folder that is not a folder, does not list, or holds more entries than the cap on reads stops the
+  write, since with no ledger each is a finding no row carries (an append skipped, or refused for its block or its file
+  name). No `reports/` folder reads as no findings. It also writes none where any ref's
   history, read with `--full-history`, holds a ledger the work tree no longer does, since a deleted ledger is not a clean
   one. A shallow clone does not stop the write: its history ends at its first commit, a cloud's checkout may be one, and
   there the reports read is the guard that holds. Each of those cases, a history that does not read, and a write that
-  fails is a `Not done:` line, a report named by its file name only, and the exit code does not move. With
+  fails is a `Not done:` line, each entry named by its file name only with why it stops the write, and the exit code
+  does not move. With
   `autonomy.landJob` off it writes no ledger. The land job still refuses a head with no ledger, unchanged. Limits: a
   finding no report file holds (an append fed on stdin alone), or a ledger lost before a shallow clone's first commit,
   is not seen.
   - Proof: `test/cli/commands/runLand.test.ts` ("commits an empty ledger beside PR: and Login: with landJob on, and the
     job's evidence reads no open row", "leaves a ledger with rows byte-identical with landJob on", "writes no ledger with
     landJob off", "writes none where the run's history holds a ledger the work tree lost, naming it in Not done:",
-    "writes none where a run report %s, naming the report in Not done:, and the job refuses", "writes none where a
-    report-named path does not read, a link in its place", "writes the empty ledger where every run report's findings
-    block is empty or absent", "writes none where a merged side branch added and deleted the ledger", "writes none where
+    "writes none where a reports entry %s, naming it in Not done:, and the job refuses", "writes none where a
+    report-named path does not read, a link in its place", "writes none where the reports folder holds a folder, naming
+    each stopping entry in Not done:", "writes the empty ledger where every reports entry is one ledger append takes as
+    clean, and the job lands", "writes none where a merged side branch added and deleted the ledger", "writes none where
     the ledger's history does not read, naming it in Not done:", "names a ledger write that fails in Not done:, the exit
     code unmoved", "leaves the job refusing a head with no ledger, unchanged").
 - **Proof:** `test/adapters/landWorkflow.test.ts`, `test/cli/commands/runLand.test.ts`, `test/hooks/personOnlyGuard.test.ts`.
