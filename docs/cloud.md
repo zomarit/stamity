@@ -488,9 +488,15 @@ text, and the draft pull request's diff is where you check them.
   issue when the pull request merges into the default branch. An item written as a bare `#<n>` gets
   no line, and `run end` says so under `Not done:`. For a merge the land job makes, GitHub does not
   close the issue: on 2026-11-10 the issue stayed open and labelled after such a merge, since GitHub
-  did not apply the closing keyword to a merge the Actions token made. So close it by hand. Until
-  then the start prompt skips it, since its branch has a merged pull request. For a merge a
-  session's `run land` makes, this has not been seen.
+  did not apply the closing keyword to a merge the Actions token made. So from 1.19.1 the land job
+  closes the run's issue itself after its merge, where it is an open issue of the same repository,
+  not a pull request, that the head's contract and the body's `Closes` line both name and that still
+  carries `stamity:ready`. The label stays on, and an issue already closed is left as it is. Where it
+  cannot close the issue for any other reason, one of those checks or GitHub refusing the issue's
+  read or its close, the land still stands, and the pull request gets one comment saying the issue
+  stays open and why. A re-run does not try the close again, so then close the issue by hand. Until it is closed, the start prompt skips it, since its branch has a merged
+  pull request. A session's `run land` does not close the issue, and for its merge GitHub's closing
+  has not been seen.
 - After a session's `run land` that lands, or finds the run landed, the run's clean-up: each lane
   `stamity worktree setup --run <run-id>` tagged with the run goes through `git worktree remove` with
   no force, the local `stamity/<run-id>` branch through `git branch -d`, and that branch's tracking

@@ -952,8 +952,15 @@ What stays open is named here, as accepted risk:
   stays inside the files the pull request already changes and the plan's `files`. Every other author
   without write access, any other bot included, stays deferred and is never fixed.
 - **The land job.** Real runs on Claude's cloud on 2026-11-10 ran the job's merge under `GITHUB_TOKEN`: it read the evidence and the review threads, marked the run's draft ready, wrote its evidence line and merged it. The thread resolve under that token, the review request and the `issue_comment` wake are still `not run` until a real run reaches them. `GITHUB_TOKEN` is the emitted workflow's configuration, not an engine
-  check: the verb takes any `gh` login. The `workflow_run` and `issue_comment` triggers run the default
-  branch's copy of that workflow, but a `workflow_dispatch` runs the file at the ref the dispatch names,
+  check: the verb takes any `gh` login. The emitted workflow gives that token four rights, on the `land`
+  job alone: `contents: write`, `pull-requests: write`, `checks: read` and `issues: write`.
+  `issues: write` is there because on 2026-11-10 GitHub did not apply a body's `Closes` line to a
+  merge that token made, so the job closes the run's issue itself after its own merge. It closes only
+  an open issue of the same repository, not a pull request, that the head's contract and the body's
+  `Closes` line both name and that carries `stamity:ready`, and leaves the label on. It closes no other
+  issue, and the land stands either way. So a run steered into naming another open issue that carries
+  `stamity:ready`, in both its contract and its body, closes that issue too. The `workflow_run` and
+  `issue_comment` triggers run the default branch's copy of that workflow, but a `workflow_dispatch` runs the file at the ref the dispatch names,
   so it is only as safe as that ref's copy. An unnamed dispatch runs unasked, so that route reaches job
   mode past the guard's `--job` line: name `workflow-dispatch` in `autonomy.deployingActs` to make it
   ask. The evidence is still read on that route. `GITHUB_TOKEN` starts no Actions `push` workflow after its merge, so

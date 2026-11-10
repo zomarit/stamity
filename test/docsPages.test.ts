@@ -6700,11 +6700,41 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     const webhook = flowed(section("Step 8: Cursor").split("### Where the issue trigger is not offered")[1] ?? "");
     expect(webhook).toContain("GitHub's pages on creating and validating webhooks, read on 2026-11-10, name the `X-Hub-Signature-256` header and offer no custom header.");
   });
+
+  // ADDED (REQ-FLOW-157): the land job closes the run's issue after its own merge, so the guide stops telling a person to
+  // close it after every land-job merge and says what happens when the job cannot.
+  it("says the land job closes the run's issue, and what happens when it cannot", () => {
+    const step = flowed(section("Step 10: Add the label and walk away"));
+    expect(step).toContain("So from 1.19.1 the land job closes the run's issue itself, right after its merge.");
+    expect(step).toContain("that the head's contract and the body's `Closes` line both name and that still carries `stamity:ready`");
+    expect(step).toContain("the land still stands");
+    expect(step).toContain("the pull request gets one comment saying the issue stays open and why");
+    expect(step).toContain("A re-run does not try the close again");
+    expect(step).not.toContain("So close the issue yourself after a land-job merge.");
+    const proof = flowed(section("What real runs have shown"));
+    expect(proof).not.toContain("And after the land job's merge the issue stays open and labelled");
+  });
 });
 
 // ADDED (REQ-FLOW-157, REQ-WORKTREE-019): the land job's token and the lane's one unscanned link, said where the
 // security page and the cloud page state them.
 describe("the land job's issue close and the lane's linked install tree, on the security and cloud pages", () => {
+  it("names the land job's four rights and what `issues: write` may close", () => {
+    const security = flowed(read(SECURITY));
+    expect(security).toContain("four rights, on the `land` job alone: `contents: write`, `pull-requests: write`, `checks: read` and `issues: write`");
+    expect(security).toContain("so the job closes the run's issue itself after its own merge");
+    expect(security).toContain("that the head's contract and the body's `Closes` line both name and that carries `stamity:ready`");
+  });
+
+  it("says on the cloud page that the land job closes the run's issue, and what happens when it cannot", () => {
+    const cloud = flowed(read(CLOUD));
+    expect(cloud).toContain("So from 1.19.1 the land job closes the run's issue itself after its merge");
+    expect(cloud).toContain("the land still stands");
+    expect(cloud).toContain("the pull request gets one comment saying the issue stays open and why");
+    expect(cloud).toContain("A re-run does not try the close again");
+    expect(cloud).not.toContain("So close it by hand. Until then");
+  });
+
   it("states in the lane's row that a linked `node_modules` is not scanned", () => {
     const row = read(SECURITY).split("\n").find((line) => line.includes("Emptying or rewriting another checkout's installed packages")) ?? "";
     const residual = row.split(" | ").at(-1) ?? "";

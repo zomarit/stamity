@@ -96,8 +96,8 @@ because the review threads could not be read, since this cloud's proxy blocks th
 third the cloud session's own permission check denied the land call. Both times the land job merged
 the pull request afterwards, in the second run after the hand check and in the third with no hand
 step. The session's last message then said the merge waited on a person, though the land job merged
-moments later, so look at the pull request, not the session. And after the land job's merge the issue
-stays open and labelled, as Step 10 says.
+moments later, so look at the pull request, not the session. And after the land job's merge in those
+runs the issue stayed open and labelled. From 1.19.1 the job closes it, as Step 10 says.
 
 On Cursor's cloud, on 2026-11-08, two sessions reached the pre-flight and refused at `direct-push`, and
 the run's own guard stopped a third earlier. On 2026-11-10 a fourth refused at `direct-push` too. No
@@ -555,9 +555,18 @@ contract names the issue as `owner/repo#<n>` in origin's repository, `run end` w
 `Closes <owner>/<repo>#<n>` into the body, so GitHub closes the issue when the pull request merges
 into the default branch. For a merge the land job makes, it does not: on 2026-11-10 the issue stayed
 open and labelled after such a merge, since GitHub did not apply the closing keyword to a merge the
-Actions token made. So close the issue yourself after a land-job merge. Until you do, the start prompt
-skips it, since its branch has a merged pull request. For a merge your own session's `run land`
-makes, the closing has not been seen. That merge then removes the clean lanes tagged with the run.
+Actions token made. So from 1.19.1 the land job closes the run's issue itself, right after its merge.
+It closes only an open issue of the same repository, not a pull request, that the head's contract and
+the body's `Closes` line both name and that still carries `stamity:ready`, and it leaves the label on.
+An issue already closed it leaves as it is. When it cannot close the issue for any other reason, one
+of those checks or GitHub refusing the issue's read or its close, the land still stands: the job's
+output says why, and the pull request gets one comment saying the issue stays open and why. If that
+comment fails too, the output says so. A re-run does not try the close again, so then close the
+issue by hand. Until it is closed, the start prompt skips it,
+since its branch has a merged pull request. A land workflow written before 1.19.1 runs that older
+version, which closes nothing, so run `stamity sync` to write the new one. A session's own `run land`
+does not close the issue, and for its merge GitHub's closing has not been seen. That merge then
+removes the clean lanes tagged with the run.
 Only a `stamity/<run-id>` branch goes with them, so the issue's branch stays, as What a run leaves
 in [Cloud runs](cloud.md) says.
 
