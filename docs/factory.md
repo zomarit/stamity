@@ -97,7 +97,8 @@ third the cloud session's own permission check denied the land call. Both times 
 the pull request afterwards, in the second run after the hand check and in the third with no hand
 step. The session's last message then said the merge waited on a person, though the land job merged
 moments later, so look at the pull request, not the session. And after the land job's merge in those
-runs the issue stayed open and labelled. From 1.19.1 the job closes it, as Step 10 says.
+runs the issue stayed open and labelled. From 1.19.1 the job closes it, as Step 10 says. That close
+is built and tested, and is still `not run` until a real run reaches it.
 
 On Cursor's cloud, on 2026-11-08, two sessions reached the pre-flight and refused at `direct-push`, and
 the run's own guard stopped a third earlier. On 2026-11-10 a fourth refused at `direct-push` too. No
@@ -564,7 +565,9 @@ output says why, and the pull request gets one comment saying the issue stays op
 comment fails too, the output says so. A re-run does not try the close again, so then close the
 issue by hand. Until it is closed, the start prompt skips it,
 since its branch has a merged pull request. A land workflow written before 1.19.1 runs that older
-version, which closes nothing, so run `stamity sync` to write the new one. A session's own `run land`
+version, which closes nothing, so run `stamity sync` to write the new one, then commit that file and
+merge it into the default branch through a pull request. The job runs the default branch's copy, so
+until that merge the old copy runs its old pinned version, which closes nothing. A session's own `run land`
 does not close the issue, and for its merge GitHub's closing has not been seen. That merge then
 removes the clean lanes tagged with the run.
 Only a `stamity/<run-id>` branch goes with them, so the issue's branch stays, as What a run leaves

@@ -6714,6 +6714,16 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     const proof = flowed(section("What real runs have shown"));
     expect(proof).not.toContain("And after the land job's merge the issue stays open and labelled");
   });
+
+  // ADDED (REQ-FLOW-157): the job runs the default branch's copy of its workflow, so a sync alone leaves the old pinned
+  // version running; and no real run has reached the issue close yet, so the proof section marks it `not run`.
+  it("says the new land workflow must reach the default branch, and marks the issue close not run", () => {
+    const step = flowed(section("Step 10: Add the label and walk away"));
+    expect(step).toContain("so run `stamity sync` to write the new one, then commit that file and merge it into the default branch through a pull request.");
+    expect(step).toContain("The job runs the default branch's copy, so until that merge the old copy runs its old pinned version, which closes nothing.");
+    const proof = flowed(section("What real runs have shown"));
+    expect(proof).toContain("That close is built and tested, and is still `not run` until a real run reaches it.");
+  });
 });
 
 // ADDED (REQ-FLOW-157, REQ-WORKTREE-019): the land job's token and the lane's one unscanned link, said where the
@@ -6733,6 +6743,16 @@ describe("the land job's issue close and the lane's linked install tree, on the 
     expect(cloud).toContain("the pull request gets one comment saying the issue stays open and why");
     expect(cloud).toContain("A re-run does not try the close again");
     expect(cloud).not.toContain("So close it by hand. Until then");
+  });
+
+  // ADDED (REQ-FLOW-157): no real run has reached the issue close, and the comment saying the issue stays open can fail
+  // or be held back too, so both pages say so.
+  it("marks the issue close not run on the security and cloud pages, and says the comment can fail", () => {
+    const security = flowed(read(SECURITY));
+    expect(security).toContain("closes that issue too. That close is built and tested, and is still `not run` until a real run reaches it.");
+    const cloud = flowed(read(CLOUD));
+    expect(cloud).toContain("That close is built and tested, and is still `not run` until a real run reaches it.");
+    expect(cloud).toContain("stays open and why. If that comment fails too, the job's output says so.");
   });
 
   it("states in the lane's row that a linked `node_modules` is not scanned", () => {

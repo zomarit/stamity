@@ -491,10 +491,11 @@ text, and the draft pull request's diff is where you check them.
   did not apply the closing keyword to a merge the Actions token made. So from 1.19.1 the land job
   closes the run's issue itself after its merge, where it is an open issue of the same repository,
   not a pull request, that the head's contract and the body's `Closes` line both name and that still
-  carries `stamity:ready`. The label stays on, and an issue already closed is left as it is. Where it
+  carries `stamity:ready`. The label stays on, and an issue already closed is left as it is. That
+  close is built and tested, and is still `not run` until a real run reaches it. Where it
   cannot close the issue for any other reason, one of those checks or GitHub refusing the issue's
   read or its close, the land still stands, and the pull request gets one comment saying the issue
-  stays open and why. A re-run does not try the close again, so then close the issue by hand. Until it is closed, the start prompt skips it, since its branch has a merged
+  stays open and why. If that comment fails too, the job's output says so. A re-run does not try the close again, so then close the issue by hand. Until it is closed, the start prompt skips it, since its branch has a merged
   pull request. A session's `run land` does not close the issue, and for its merge GitHub's closing
   has not been seen.
 - After a session's `run land` that lands, or finds the run landed, the run's clean-up: each lane

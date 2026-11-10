@@ -959,7 +959,8 @@ What stays open is named here, as accepted risk:
   an open issue of the same repository, not a pull request, that the head's contract and the body's
   `Closes` line both name and that carries `stamity:ready`, and leaves the label on. It closes no other
   issue, and the land stands either way. So a run steered into naming another open issue that carries
-  `stamity:ready`, in both its contract and its body, closes that issue too. The `workflow_run` and
+  `stamity:ready`, in both its contract and its body, closes that issue too. That close is built and
+  tested, and is still `not run` until a real run reaches it. The `workflow_run` and
   `issue_comment` triggers run the default branch's copy of that workflow, but a `workflow_dispatch` runs the file at the ref the dispatch names,
   so it is only as safe as that ref's copy. An unnamed dispatch runs unasked, so that route reaches job
   mode past the guard's `--job` line: name `workflow-dispatch` in `autonomy.deployingActs` to make it
