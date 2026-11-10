@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { lstat, open, readdir, readFile, stat } from "node:fs/promises";
+import { lstat, readdir, readFile, stat } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import { Argument, InvalidArgumentError, Option, type Command } from "commander";
 // Registration-time import: `configure()` runs while the program is being built,
@@ -8,6 +8,7 @@ import { Argument, InvalidArgumentError, Option, type Command } from "commander"
 // reaches the engine directly.
 import { LEARNING_CONFIDENCE_LEVELS } from "../../learnings/validation.ts";
 import { STATE_DIR } from "../../types/markers.ts";
+import { headOf, unattendedSession } from "../engine/runSession.ts";
 import { CliFailure, renderFailureHuman, type FailureDoc } from "../kit/output.ts";
 import { packageCommand } from "../kit/packageName.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
@@ -581,56 +582,6 @@ async function proposeCapture(ctx: CliContext, rootDir: string, folder: string, 
   ctx.io.out(`Proposed ${JSON.stringify(fileName)} -> ${path}; nothing went live.\n`);
   ctx.io.out(`Add this row to the morning list's questions, with the next Q<n>: ${JSON.stringify(morning)}\n`);
   return { exitCode: 0, json: shared };
-}
-
-/** At most `bytes` of `path`, or `null` where it is absent or is not a regular file: a link is no record. */
-async function headOf(path: string, bytes: number): Promise<string | null> {
-  const entry = await lstat(path).catch((cause: NodeJS.ErrnoException) => {
-    if (cause.code === "ENOENT") return null;
-    throw cause;
-  });
-  if (entry === null || !entry.isFile()) return null;
-  const handle = await open(path, "r");
-  try {
-    const { buffer, bytesRead } = await handle.read(Buffer.alloc(bytes), 0, bytes, 0);
-    return buffer.toString("utf8", 0, bytesRead);
-  } finally {
-    await handle.close();
-  }
-}
-
-/**
- * What makes this session unattended, or `null`, as the shell guard reads it (`unattendedBy`, `../../hooks/scripts.ts`):
- * a run in progress reading `Mode: unattended`, else `STAMITY_UNATTENDED` set with no run in progress reading
- * `Mode: attended`. Never the named run's own `Mode:` alone: an unattended run that closed is the one whose proposal a
- * person walks in the morning, so that line would refuse the very accept this verb exists for. A read that fails
- * refuses, since it leaves the mode unknown. `skill add` reads the session through this one function too.
- */
-export async function unattendedSession(ctx: CliContext, rootDir: string): Promise<string | null> {
-  const { layout, resumeCard } = ctx.engine.runs;
-  const runsDir = join(rootDir, ...layout.RUNS_SEGMENTS);
-  try {
-    const entries = await readdir(runsDir, { withFileTypes: true }).catch((cause: NodeJS.ErrnoException) => {
-      if (cause.code === "ENOENT" || cause.code === "ENOTDIR") return [];
-      throw cause;
-    });
-    const runs = entries.filter((entry) => entry.isDirectory() && layout.isRunId(entry.name)).map((entry) => entry.name);
-    const heads = await Promise.all(
-      runs.map(async (run) => {
-        const record = await headOf(join(runsDir, run, layout.RECORD_FILE), layout.RECORD_HEAD_READ_BYTES);
-        return { run, head: record === null ? null : resumeCard.readRecordHead(record) };
-      }),
-    );
-    const running = heads.filter(({ head }) => head?.inProgress === true);
-    const held = running.find(({ head }) => head?.mode === "unattended");
-    if (held !== undefined) return `${layout.runRelPath(held.run)}/${layout.RECORD_FILE} reads \`Status: in progress\` and \`Mode: unattended\``;
-    if (running.some(({ head }) => head?.mode === "attended")) return null;
-    return resumeCard.readsUnattended(null, ctx.app.runtime.env["STAMITY_UNATTENDED"])
-      ? "STAMITY_UNATTENDED is set and no in-progress run record reads `Mode: attended`"
-      : null;
-  } catch (cause) {
-    return `the run records could not be read (${cause instanceof Error ? cause.message : String(cause)})`;
-  }
 }
 
 /** The head of a proposal, or an empty one where it does not parse: that head then matches no row, and is refused there. */

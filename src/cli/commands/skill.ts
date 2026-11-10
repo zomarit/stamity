@@ -5,9 +5,9 @@ import type { PackContentRoot } from "../../content/catalog.ts";
 import { addSkill, listCopiedSkills, removeSkill, type CopiedSkill } from "../../skills/fetch.ts";
 import { readSkillSources, SKILL_SOURCES_REL_PATH } from "../../skills/sources.ts";
 import { STATE_DIR } from "../../types/markers.ts";
+import { unattendedSession } from "../engine/runSession.ts";
 import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
-import { unattendedSession } from "./learn.ts";
 
 /**
  * `stamity skill` — skills copied in from a source the repository trusts (REQ-FLOW-180).

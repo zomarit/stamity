@@ -674,6 +674,10 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // TEST CHANGE, justified: the check of where `gh` lies moved out of `run land` so the pre-flight runs it too. Both callers sit
   // at wave 14 and neither may import the other, and it reads the wave-13 runner and setting, so it sits between them.
   "src/cli/engine/ghTrust.ts": { unit: "gh-trust", wave: 13.5 },
+  // TEST CHANGE, justified: a new file needs its row. The unattended-session read moved out of `learn` so `skill add`
+  // reads it too. Both callers sit at wave 14 in different units and neither may import the other, and it reads the
+  // wave-13 kit's context type, so it sits between them.
+  "src/cli/engine/runSession.ts": { unit: "b3-learn-flags", wave: 13.5 },
   // Plan 021 file 1 (u4): the engine's one git runner that writes and its one
   // door onto GitHub's REST API, over the wave-1 PATH walk and the wave-4 bare
   // look, below the wave-14 `gate` and run verbs that start them.
