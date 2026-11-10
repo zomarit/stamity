@@ -55,10 +55,10 @@ interfaces, so the unit is buildable without reconstructing the plan.
   typecheck, and before the behavior lands, it shows at least one held test failing on an
   assertion, not only on a missing type. With no held tests,
   a result with no test delta and no stated reason is incomplete. A `docs`, `config` or
-  `records` unit adds no test and says `no new test: <class>`.
+  `records` unit adds no test and says `no new test: <class>`. A `tests` unit is its own tests-only work: it has no held tests, and the tests it writes are its test delta.
 - **Test-first when the criterion is expressible as a failing test.** Write it, watch it
   fail for the expected reason, then make it pass. A test that has never been red proves
-  the suite runs, not that the behavior works.
+  the suite runs, not that the behavior works. A unit whose criterion is behavior unchanged shows its tests bite instead of failing first: a characterization unit 0 shows each pin red on an assertion under a scratch change to the pinned behavior, then reverts that change, and adds a seam only behind pins it has proven; a behavior-preserving transforming unit runs unit 0's held pins unchanged before and after its change, `gate held --expect` green both times, and adds no test of its own unless its criteria add behavior.
 - **Mocks are justified inline.** A mock, fake, or stub carries a comment naming why the
   real dependency is unusable at this level. Unjustified mocking is how a suite goes green
   against nothing.

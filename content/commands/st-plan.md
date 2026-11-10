@@ -207,7 +207,7 @@ Record `approach: incremental | direct because <deciding input>` in the artifact
 
 | Phase | Goal | Rollback |
 |---|---|---|
-| 0 Preparation | coverage over affected paths, version pinned, baseline captured | revert prep commits; no product behavior has moved yet |
+| 0 Preparation | coverage over affected paths (an untested one pinned per `st-verify`'s `references/characterization.md`), version pinned, baseline captured | revert prep commits; no product behavior has moved yet |
 | 1 Non-breaking | additive changes valid on both versions | revert the additive commit; both versions still build |
 | 2 Consumers | migrate call sites in reviewable batches | per-batch revert behind the compatibility layer |
 | 3 Cleanup | remove compatibility layer, old version, dead flags | last reversible point, recorded before cleanup starts |

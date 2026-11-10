@@ -1285,6 +1285,16 @@ describe("/st-plan — the characterization recipe (REQ-FLOW-184)", () => {
     );
   });
 
+  // Added 2026-11-10 (x-recipe, review/125, sign-off S77): a migration plan is always brownfield, so
+  // its Phase 0 coverage names the recipe too, in the skeleton row it already has.
+  it("points Migration's Phase 0 row at the recipe for an untested affected path", () => {
+    const migration = flat(sectionOf(plan.parsed.body, "## Migration"));
+
+    expect(migration).toContain(
+      "| 0 Preparation | coverage over affected paths (an untested one pinned per `st-verify`'s `references/characterization.md`), version pinned, baseline captured |",
+    );
+  });
+
   it("points /st-work's Phase 1 at the recipe for untested code", () => {
     const sections = work.parsed.body.split(/^(?=## )/m);
     const understand = sections.find((section) => section.startsWith("## Phase 1 — Understand\n"));
@@ -1318,5 +1328,28 @@ describe("/st-plan — the characterization recipe (REQ-FLOW-184)", () => {
       "Name the consequence as a finding in the report, with its severity. Never fix it in unit 0",
     );
     expect(body).toContain("Commit unit 0 on its own, green, before any change to the pinned code.");
+    // Added 2026-11-10 (x-recipe, sign-off S76): the bite is unit 0's red-first evidence, and a seam
+    // lands only behind pins already proven.
+    expect(body).toContain("This bite is unit 0's red-first evidence");
+    expect(body).toContain("added only behind pins already proven against today's code");
+    // Added 2026-11-10 (x-recipe, review/126): only a unit that touches a pinned path waits on unit 0,
+    // so units with no real dependency edge still run in parallel.
+    expect(body).toContain("Every later unit that touches a pinned path names unit 0 in its `depends_on`");
+    expect(body).not.toContain("Every later unit names unit 0");
+  });
+
+  // Added 2026-11-10 (x-recipe, review/127): a pin's expected value comes from today's code, which the
+  // testability axis's oracle check would otherwise flag; both references name the exception.
+  it("names the pins as the oracle-independence exception in the recipe and the testability axis", async () => {
+    const testability = flat(
+      await readFile(join(CORPUS_ROOT, "skills/st-verify/references/testability.md"), "utf8"),
+    );
+
+    expect(flat(recipe.parsed.body)).toContain(
+      "These pins are the one exception to `testability.md`'s `test-oracle-independence`, which binds tests of new behaviour.",
+    );
+    expect(testability).toContain(
+      "A characterization unit 0's `pins current:` tests are the exception: they record today's code on purpose (`characterization.md`).",
+    );
   });
 });

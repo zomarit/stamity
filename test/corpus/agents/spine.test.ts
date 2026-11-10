@@ -54,6 +54,14 @@ const MODEL_CLASSES: readonly string[] = ["frontier", "advanced", "standard", "e
  */
 const AGENT_BODY_CAP = 350;
 
+/**
+ * The behaviour-unchanged rule (plan 024 file 3 unit x-recipe, sign-off S76), written once in the
+ * implementer's Testing rules; `/st-work`'s Build checks name it in the same words, pinned in
+ * test/corpus/commands/work.test.ts.
+ */
+const BEHAVIOR_UNCHANGED =
+  "A unit whose criterion is behavior unchanged shows its tests bite instead of failing first: a characterization unit 0 shows each pin red on an assertion under a scratch change to the pinned behavior, then reverts that change, and adds a seam only behind pins it has proven; a behavior-preserving transforming unit runs unit 0's held pins unchanged before and after its change, `gate held --expect` green both times, and adds no test of its own unless its criteria add behavior.";
+
 /** The status enum every sub-agent returns, inlined in every body. */
 const STATUS_ENUMS: readonly string[] = [
   "DONE",
@@ -559,6 +567,15 @@ describe("implementer — single unit, single writer", () => {
     );
     expect(testing).toMatch(/with no held tests, a result with no test delta and no stated reason is incomplete/i);
     expect(testing).toMatch(/a `docs`, `config` or `records` unit adds no test and says `no new test: <class>`/i);
+    // Added 2026-11-10 (plan 024 file 3 unit x-recipe, fix/5): the classifier's `tests` class has its
+    // own line, as `/st-work`'s Build checks give it one, so a tests unit is not left without a rule.
+    expect(testing).toContain(
+      "A `tests` unit is its own tests-only work: it has no held tests, and the tests it writes are its test delta.",
+    );
+    // Added 2026-11-10 (x-recipe, review/123, review/124, sign-off S76): a unit whose criterion is
+    // behaviour unchanged has tests that are green before it, so it shows they bite instead of failing
+    // first; the red-first floor above stays word for word for every other unit.
+    expect(testing).toContain(BEHAVIOR_UNCHANGED);
   });
 
   it("writes held tests from the criteria alone in a tests-only dispatch", async () => {

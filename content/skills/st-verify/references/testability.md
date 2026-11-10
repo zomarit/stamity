@@ -60,7 +60,7 @@ Each row: what it establishes · how to run it from detection facts · threshold
 ## Judgment checks
 
 - **`test-oracle-independence`** — expected values are derived from the
-  specification, not copied from what the implementation currently returns.
+  specification, not copied from what the implementation currently returns. A characterization unit 0's `pins current:` tests are the exception: they record today's code on purpose (`characterization.md`).
 - **`test-failure-legibility`** — a failing test names the artifact and the
   condition that broke, so the message alone starts the fix.
 - **`test-critical-depth`** — the paths whose failure costs most carry the
