@@ -455,7 +455,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // Moved again 2026-11-11 by the person-only guard hardening (REQ-FLOW-134), by what was measured: 370,561 bytes /
   // 7,525 lines (copilot, generated), past both rows, because the push reading now counts the files' submodule
   // recursion values of both keys together. 370,173 + 388 = 370,561 bytes; 7,517 + 8 = 7,525 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 370_561, lines: 7_525 },
+  // Moved again 2026-11-11 by the person-only guard hardening (REQ-FLOW-134), by what was measured: 372,232 bytes /
+  // 7,563 lines (copilot, generated), past both rows, because a push on a line that also moves a branch's upstream is
+  // now read against that move. 370,561 + 1,671 = 372,232 bytes; 7,525 + 38 = 7,563 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 372_232, lines: 7_563 },
 };
 
 /** One generated script, ready for an adapter to place and register. */

@@ -2056,6 +2056,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    */
   let remoteMoved = false;
   let pushConfigMoved = false;
+  /**
+   * Whether the line also sets, moves or removes a branch's upstream (`upstreamWrite`): a push naming no remote may
+   * then reach another one, and a push naming no refspec another branch. Set before the verdict loop.
+   */
+  let upstreamMoved = false;
   /** Whether a gh write naming no repository lands outside the origin: gh's default unknown or another repository. */
   const defaultAway = (): boolean => {
     const fallback = ctx.ghDefaultRepo;
@@ -2078,9 +2083,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * cannot read (`ctx.placeUnread`), a word the shell fills in, a remote the configuration does not place, a push remote
    * the guard cannot tell, and a line that sets a remote or a URL through a `-c` pair or its environment.
    */
-  /** The repository a push naming none reaches: the context's push remote, `origin` where the context names none. */
+  /**
+   * The repository a push naming none reaches: the context's push remote, `origin` where the context names none; one
+   * the guard cannot place where the line also moves a branch's upstream.
+   */
   const pushRemoteWord = (): readonly (readonly [string | null, WordMark | undefined])[] =>
-    [[ctx.pushRemote === undefined ? "origin" : ctx.pushRemote, undefined]];
+    [[upstreamMoved ? null : ctx.pushRemote === undefined ? "origin" : ctx.pushRemote, undefined]];
   const pushOutside = (words: readonly (readonly [string | null, WordMark | undefined])[], config: readonly string[]): void => {
     const origin = ctx.originRepo;
     if (origin === undefined) return;
@@ -2162,6 +2170,22 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const value = args.slice(keyed + 1).some((arg) => !arg.startsWith("-"));
     return writes || (!reads && !["get", "list"].includes(subcommand) && value) ? "key" : null;
   }
+  /**
+   * Whether a `git branch`, `checkout` or `switch` call may set, move or remove a branch's upstream: an upstream or
+   * tracking option, a branch it creates (which may track its start point), or a word the line cannot show (`shown`).
+   */
+  function upstreamWrite(sub: string, args: readonly string[], shown: boolean): boolean {
+    const options = sub === "branch" ? ["--set-upstream-to", "--set-upstream", "--unset-upstream", "--track"]
+      : sub === "checkout" ? ["--track"] : sub === "switch" ? ["--track", "--create", "--force-create"] : null;
+    if (options === null) return false;
+    if (!shown) return true;
+    const letters = sub === "branch" ? /^-[^-]*[tu]/ : sub === "checkout" ? /^-[^-]*[tbB]/ : /^-[^-]*[tcC]/;
+    const end = args.indexOf("--");
+    return args.slice(0, end === -1 ? undefined : end).some((arg) => {
+      const name = arg.split("=")[0] ?? "";
+      return arg.startsWith("--") ? name.length > 2 && options.some((option) => option.startsWith(name)) : letters.test(arg);
+    });
+  }
 
   /** A refspec's destination as a branch name: `+` dropped, `<src>:` cut, `refs/heads/` or `heads/` cut. */
   function destination(refspec: string): string {
@@ -2178,6 +2202,8 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   let pushUnread = false;
   /** A remote or option word the last push read could not show, which git may read as a force or delete option, for `pushRead`. */
   let pushUnshown: string | null = null;
+  /** Whether the last push read named no refspec, in either reading, so the branch's upstream decides where it lands. */
+  let pushRefless = false;
   /**
    * A push's acts: its branch, force, deletion and tag acts, then the repository it reaches (`pushOutside`), then a push
    * configuration the guard cannot read whole or that the line also changes, each read as a push to the default branch,
@@ -2187,13 +2213,14 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     pushReach = [];
     pushUnread = false;
     pushUnshown = null;
+    pushRefless = false;
     pushVerdict(args, config, marks);
     pushOutside(pushReach, config);
     // Refuse-class (REQ-FLOW-124): recorded after the line's own acts, so a literal force or deletion is still the act named.
     if (pushUnshown !== null) deny("force-push", pushUnshown);
     const reasons = [
       ...(pushUnread ? ["A push whose git configuration the guard cannot read whole"] : []),
-      ...(pushConfigMoved ? ["A push on a line that also changes the git configuration a push reads"] : []),
+      ...(pushConfigMoved || (upstreamMoved && pushRefless) ? ["A push on a line that also changes the git configuration a push reads"] : []),
     ];
     for (const what of reasons) {
       if (deploying.length > 0) deny("push-deploying", what);
@@ -2382,6 +2409,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     // with one such word the push names no refspec. Beside `--repo` it is read both ways, as a refspec and as a
     // refspec-less push, so either reading adds denials and never lifts one.
     const refless = positionals.length <= 1;
+    if (refless) pushRefless = true;
     // Any text the shell fills in, in the remote's place, may be an option git reads, its next word then the remote; an
     // unquoted expansion, a glob, a brace form or a PowerShell group may also split into the remote and refspecs. Either
     // may be a force, mirror or delete option: refused by `pushRead`. No return, so the force, deletion and tag reads
@@ -3697,11 +3725,13 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     if (cmd[0] !== "git") continue;
     const { sub, args: lineArgs } = gitParts(cmd);
     const args = fed.has(cmd) ? [...lineArgs, "$"] : lineArgs;
-    const unshown = (sub === "remote" || sub === "config") && !shownWords((markMap.get(cmd) ?? []).slice(cmd.length - lineArgs.length));
+    const shown = shownWords((markMap.get(cmd) ?? []).slice(cmd.length - lineArgs.length));
+    const unshown = (sub === "remote" || sub === "config") && !shown;
     const action = args.find((arg) => !arg.startsWith("-")) ?? "";
     if (unshown || (sub === "remote" && ["add", "rename", "set-url", "remove", "rm", "set-head", "set-branches"].includes(action)) ||
       configWrites(sub, args, REMOTE_SECTIONS) !== null) remoteMoved = true;
     if (remoteMoved || configWrites(sub, args, PUSH_SECTIONS) !== null) pushConfigMoved = true;
+    if (upstreamWrite(sub, args, shown && !fed.has(cmd))) upstreamMoved = true;
   }
   for (const cmd of read) {
     const program = cmd[0] ?? "";

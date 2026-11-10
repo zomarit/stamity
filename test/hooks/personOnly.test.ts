@@ -5752,4 +5752,38 @@ describe("a push or a gh write on a line that also changes the git configuration
   it("asks for a push whose -c pair names an include, which may move a remote", () => {
     expect(personOnlyVerdict("git -c include.path=../more.gitconfig push origin feat/x", ORIGIN)).toMatchObject({ deny: true, rule: "outside-write" });
   });
+
+  // Red before the upstream read: a branch's upstream moved on the line was read as it stood before the line.
+  it.each([
+    ["the upstream set by its long option", "git branch --set-upstream-to=origin/main && git push"],
+    ["the upstream set by its short option", "git branch -u fork/main; git push"],
+    ["the upstream removed", "git branch --unset-upstream && git push"],
+    ["a branch created with tracking", "git branch --track feat/y fork/main && git push"],
+    ["a branch created by checkout from a start point", "git checkout -b feat/y fork/main && git push"],
+    ["a branch created by checkout with tracking", "git checkout --track fork/feat/y && git push"],
+    ["a branch created by switch with tracking", "git switch -c feat/y --track fork/main && git push"],
+    ["a branch call whose words the line cannot show", "git branch \"$OPT\" fork/main && git push"],
+  ])("asks for a push naming no remote after %s", (_, command) => {
+    expect(personOnlyVerdict(command, ORIGIN), command).toMatchObject({
+      deny: true, rule: "outside-write", ask: true, act: "A push to another repository, or to a remote the guard cannot place",
+    });
+  });
+
+  it("asks naming the default-branch rule for a push naming its remote and no refspec after the upstream moved", () => {
+    expect(personOnlyVerdict("git branch -u fork/main && git push origin", ORIGIN)).toMatchObject({ deny: true, rule: "push-default", ask: true, act: CHANGED });
+  });
+
+  it("runs each upstream move alone, a push naming its refspec beside one, and a push beside a branch read", () => {
+    for (const command of [
+      "git branch --set-upstream-to=origin/main",
+      "git checkout -b feat/y fork/main",
+      "git switch -c feat/y --track fork/main",
+      "git push",
+      "git branch -u fork/main && git push origin feat/x",
+      "git checkout -b feat/y && git push -u origin feat/y",
+      "git branch --show-current && git push",
+    ]) {
+      expect(personOnlyVerdict(command, ORIGIN), command).toEqual({ deny: false });
+    }
+  });
 });
