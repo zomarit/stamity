@@ -65,10 +65,14 @@ function skillIdsUnder(dir: string): string[] {
 // (st-unattended was never projected or token-checked here), so it is derived from content/skills/.
 const ALL_SKILL_IDS: readonly string[] = skillIdsUnder(CORE_SKILLS_DIR);
 
-/** The `st-verify` directory: SKILL.md plus its ten axis references. */
+/** The `st-verify` directory: SKILL.md, its ten axis references and the characterization recipe. */
+// TEST CHANGE, justified (2026-11-10, plan 024 file 3 unit x-recipe, REQ-FLOW-184, sign-off S70): the
+// skill ships one more reference, `references/characterization.md`, the recipe a plan's unit 0 follows
+// for untested code; it is no axis, but it projects with the subtree like every reference file.
 const VERIFY_FILES = [
   "SKILL.md",
   "agents/openai.yaml",
+  "references/characterization.md",
   "references/enhancability.md",
   "references/maintainability.md",
   "references/performance.md",

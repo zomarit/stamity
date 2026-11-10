@@ -461,11 +461,16 @@ describe("/st-work — body skeleton", () => {
   // itself, one line and its blank, at the Proof block's end below the cut, which the held tests and
   // the intake's skill-copy check (S69) needed. The rest of the paragraph costs no re-attached text,
   // and the pin drops by exactly what was spent, so x-recipe's Research sentence keeps its room (S70).
-  it("leaves room under both budgets: 97 characters before the cut, 13 lines under the cap", async () => {
+  // TEST CHANGE, justified: moved 2026-11-10 (plan 024 file 3 unit x-recipe, REQ-FLOW-184; sign-off
+  // S70), 97 to 34 characters: Phase 1's pointer to the characterization recipe (" Untested code:
+  // unit 0 per `st-verify`'s `characterization.md`.", 63 characters, joined to Phase 1's last line),
+  // which REQ-FLOW-184 needs. It sits before the cut, so the pin drops by exactly what was spent; no
+  // line was added, so the line budget and every eval range hold.
+  it("leaves room under both budgets: 34 characters before the cut, 13 lines under the cap", async () => {
     const file = await workFile;
     const cut = file.raw.indexOf("\n### Specialist pass\n");
     expect(cut).toBeGreaterThan(-1);
-    expect(REATTACH_BUDGET_CHARS - cut).toBeGreaterThanOrEqual(97);
+    expect(REATTACH_BUDGET_CHARS - cut).toBeGreaterThanOrEqual(34);
     const bodyLines = file.parsed.body.replace(/\r?\n$/, "").split(/\r?\n/).length;
     expect(BODY_LINE_CAP - bodyLines).toBeGreaterThanOrEqual(13);
   });

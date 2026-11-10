@@ -164,7 +164,7 @@ stated reason, and it is the acceptance evidence the executing run proves green.
 **Phase 0 test scaffolding.** Every `uncovered` invariant becomes unit 0: characterization tests
 pinning current behavior before one transformation lands. Every transforming unit declares
 `depends_on: [unit-0]`. A refactor plan holding uncovered invariants with no unit 0 does not leave
-the plan-lint gate.
+the plan-lint gate. Unit 0 follows the recipe in `st-verify`'s `references/characterization.md`.
 
 **Every phase green.** Each unit leaves the verification gates passing on its own; no unit borrows
 green from a later one. Sequence to that rule and state the verification command per unit — a

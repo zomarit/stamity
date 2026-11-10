@@ -1242,3 +1242,66 @@ describe("/st-plan — named skills (REQ-FLOW-180)", () => {
     expect(codes(named)).not.toContain("dangling-dependency");
   });
 });
+
+// Added 2026-11-10 (plan 024 file 3 unit x-recipe, REQ-FLOW-184): old, weakly tested code is pinned
+// before it changes. The recipe is one verify-skill reference; `/st-plan`'s Refactor Phase 0 and
+// `/st-work`'s Phase 1 each name it in one sentence. This file pins both sentences and the recipe's
+// parts, so a pointer that loses its target, or a recipe that drops a step, fails here.
+describe("/st-plan — the characterization recipe (REQ-FLOW-184)", () => {
+  const RECIPE = "skills/st-verify/references/characterization.md";
+  const WORK = "commands/st-work.md";
+  let recipe: CorpusFile;
+  let work: CorpusFile;
+
+  beforeAll(async () => {
+    recipe = corpusFileOf(RECIPE, await readFile(join(CORPUS_ROOT, RECIPE), "utf8"));
+    work = corpusFileOf(WORK, await readFile(join(CORPUS_ROOT, WORK), "utf8"));
+  });
+
+  it("points Refactor's Phase 0 unit 0 at the recipe, inside the Phase 0 paragraph", () => {
+    const refactor = flat(sectionOf(plan.parsed.body, "## Refactor"));
+    const phase0 = refactor.slice(
+      refactor.indexOf("**Phase 0 test scaffolding.**"),
+      refactor.indexOf("**Every phase green.**"),
+    );
+
+    expect(phase0).toContain(
+      "does not leave the plan-lint gate. Unit 0 follows the recipe in `st-verify`'s `references/characterization.md`.",
+    );
+  });
+
+  it("points /st-work's Phase 1 at the recipe for untested code", () => {
+    const sections = work.parsed.body.split(/^(?=## )/m);
+    const understand = sections.find((section) => section.startsWith("## Phase 1 — Understand\n"));
+
+    // Short on purpose: Phase 1 sits before the re-attach cut, whose headroom work.test.ts pins (S70).
+    expect(understand, `${WORK}: no "## Phase 1 — Understand" section`).toBeDefined();
+    expect(flat(understand ?? "")).toContain(
+      "not silently dropped. Untested code: unit 0 per `st-verify`'s `characterization.md`.",
+    );
+  });
+
+  it("ships the recipe as a verify reference holding every step the plan names", () => {
+    const body = flat(recipe.parsed.body);
+
+    requireLoadClass(recipe, ["reference"]);
+    requireObsoleteWhen(recipe);
+    // When: no test on a touched path, or a coverage report already on disk showing it uncovered.
+    expect(body).toContain("A path the plan touches has no test that exercises it.");
+    expect(body).toContain("A coverage report already on disk shows the path uncovered.");
+    // The seams, today's behaviour taken from a real run, and the pin's name.
+    expect(body).toContain("List the public entry points that reach the touched path");
+    expect(body).toContain("name its observable outputs");
+    expect(body).toContain("Name each test `pins current: <behaviour>`");
+    expect(body).toContain("Take the expected value from a real run of today's code");
+    expect(body).toContain("Inject the clock, randomness and the environment");
+    expect(body).toContain("Large outputs go to golden files beside the test");
+    // Each pin bites: one changed line goes red on an assertion.
+    expect(body).toContain("change one line of the code it covers, run it, and see it go red on an assertion");
+    // Odd behaviour is a finding, never a fix inside unit 0; unit 0 is committed green first.
+    expect(body).toContain(
+      "Name the consequence as a finding in the report, with its severity. Never fix it in unit 0",
+    );
+    expect(body).toContain("Commit unit 0 on its own, green, before any change to the pinned code.");
+  });
+});

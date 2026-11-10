@@ -39,7 +39,7 @@ spawns: [researcher, implementer, reviewer, fixer, test-runner, spec-author, sec
 Spawn brief-driven researcher sub-agents under the Dispatch contract (typical briefs: Dials).
 Every brief carries objective, scope + task boundaries, questions, named output sections, depth,
 and tool tier. Answers follow the `researcher` agent's output contract; its unanswerable questions
-are carried into the plan, not silently dropped.
+are carried into the plan, not silently dropped. Untested code: unit 0 per `st-verify`'s `characterization.md`.
 
 ## Phase 2 — Plan
 
