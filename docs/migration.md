@@ -2,7 +2,7 @@
 slug: /migration-from-hatch3r
 title: Migrating from hatch3r
 ---
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-09). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.19.0 release cut (2026-11-10). -->
 <!-- Re-open when: hatch3r's own `clean` semantics change, or when what `src/migration/` detects, carries or
      strips changes (`src/migration/detect.ts` and `src/migration/carry.ts` are the code this page describes).
      `test/docsPages.test.ts` holds this page to the hand-page contract, pins two claims no other check can reach —
@@ -90,7 +90,8 @@ asks nothing, such as `-y` with `--migrate full`, the old list stands.
 The end-of-init panel shows what landed. The tools are on its `-> installed` line, and the tier
 is in that line's `(tier: …)` note. The MCP server ids are on its `credentials:` line, which
 names `.env.mcp` as the file holding their credentials. The communication style is carried over
-but shown nowhere: neither the panel nor `init --json` reports it. Run
+too. Neither the panel nor `init --json` reports it, but the charter in your always-on file follows
+it: `technical` replaces the plain-words sentence there, and `plain` keeps it. Run
 `npx @zomarit/stamity config get communicationStyle` to print it.
 
 **2. It carries learnings and `.env.mcp`.** Learnings are re-persisted through stamity's own

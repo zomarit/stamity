@@ -1,4 +1,4 @@
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-09). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.19.0 release cut (2026-11-10). -->
 <!-- Re-open when: the corpus counts, the nine-verb surface or a client capability changes, or a
      newer measurement supersedes the proof figures. `test/docsPages.test.ts` catches the first
      three; the figures are re-read against `docs/measurements.md` and the run record they cite. -->
@@ -60,7 +60,7 @@ handling"](SECURITY.md): `add` fetches the Sigstore trust root for a signed pack
 `origin` for a branch with no local copy, a startup notice asks npm about newer versions until you switch it off, `skill add` fetches a listed source's pinned commit and `gc` reads origin's branch list with `git ls-remote`, and an
 unattended run's pre-flight and the `run` verbs, which every `/st-work` close runs too, call GitHub's API through `gh`
 under your login: `run start` continuing origin's run branch, `run checkpoint` and `run end` reading `origin` with
-`git ls-remote` and pushing the run's branch to it under your git credentials, and `run land` marking the run's own
+`git ls-remote` and pushing the run's branch to it under your git credentials, and `run land` reading the run's branch on `origin` with `git ls-remote`, marking the run's own
 pull request ready and merging it when its evidence holds (with `--fast-forward`, pushing it to the default branch).
 The client programs it starts to read a model list may make network calls of their own: `init`, `sync`, `upgrade`,
 `workspace sync` and `check` start each selected client's own CLI but Claude Code's, under your account;

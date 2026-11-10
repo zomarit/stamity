@@ -2,7 +2,7 @@
 title: The factory
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-09). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.19.0 release cut (2026-11-10). -->
 <!-- Re-open when: a step's verb, setting or check changes, an `Issue trigger` row of `CLIENT_CLOUD_FACTS`
      moves, the ready label or a filed item's body changes, or a real run proves or breaks a step.
      `test/docsPages.test.ts` holds this page to the hand-page contract, the order of its steps and the
@@ -507,8 +507,9 @@ contract names the issue as `owner/repo#<n>` in origin's repository, `run end` w
 `Closes <owner>/<repo>#<n>` into the body, so GitHub closes the issue when the pull request merges
 into the default branch. No real run has merged yet, so that has not been seen, and for a merge the
 land job makes it is not known: check the issue after the merge, and close it yourself if it is
-still open. A merge your own session's `run land` makes then removes the run's own clean lanes and
-its local branch, as What a run leaves in [Cloud runs](cloud.md) says.
+still open. A merge your own session's `run land` makes then removes the clean lanes tagged with the run.
+Only a `stamity/<run-id>` branch goes with them, so the issue's branch stays, as What a run leaves
+in [Cloud runs](cloud.md) says.
 
 ## The same steps locally
 

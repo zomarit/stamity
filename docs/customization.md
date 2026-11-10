@@ -2,7 +2,7 @@
 title: Customization
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-09). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.19.0 release cut (2026-11-10). -->
 <!-- Re-open when: a save gate is added or removed, a content class joins or leaves the
      override tree, a merge verb joins the overlay layer, a class gains or loses overlay
      support, the fork layer's place in the precedence chain moves, or patch-or-replace
@@ -249,9 +249,11 @@ source publishes one. The copy lands at `.stamity/overrides/skills/<name>/`, and
 From there it is an override like any other, and the next `sync` emits it.
 
 It refuses a source the file does not list, an unattended session, the nobody-watching switch, a
-name a bundled or installed pack skill holds, and a name already copied. It also refuses a skill that
+name a bundled or installed pack skill holds, and a name that already has an override, copied or
+your own. It also refuses a skill that
 carries scripts (a `scripts` folder, an executable file, a `#!` line or a code file such as `.sh`,
-`.py` or `.js`) or grants tools with `allowed-tools`, unless the source sets `"allowScripts": true`.
+`.py` or `.js`) or grants tools with `allowed-tools`, or carries a Codex `agents/openai.yaml` that declares
+anything past how the skill is shown and whether it may run implicitly, unless the source sets `"allowScripts": true`.
 Every file is deny-scanned before anything lands. [SECURITY.md](../SECURITY.md) says what the fetch
 does and what it leaves open.
 

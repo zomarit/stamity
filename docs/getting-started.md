@@ -2,7 +2,7 @@
 title: Getting started
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-09). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.19.0 release cut (2026-11-10). -->
 <!-- Re-open when: init's prompt budget changes, a client's first-run line changes, a verb joins
      or leaves the CLI, a probe joins or leaves `check`, or a path joins or leaves `.stamity/`.
      `test/docsPages.test.ts` holds this page to the hand-page contract; the generated
@@ -204,10 +204,11 @@ Four things, because each is about how two parts fit together rather than about 
   output, so no client file moves until a sync runs. The two exceptions are `config mcp add`,
   which provisions `.env.mcp` and its `.gitignore` line on the spot, and `config mcp own --remove`,
   which takes an own server's entries out of the client documents.
-- **Two verbs have subcommands with guides of their own.** `worktree` takes `list`, `setup` and
+- **Three verbs have subcommands with guides of their own.** `worktree` takes `list`, `setup` and
   `cleanup` — [working with stamity](working-with-stamity.md) covers what each one places,
   records and inverts. `workspace` takes `status`, `init` and `sync`, and reaches past this
-  repository — [the workspaces guide](workspaces.md) covers it.
+  repository — [the workspaces guide](workspaces.md) covers it. `skill` takes `add`, `list` and
+  `remove` — [customization](customization.md) covers copying a skill in from a source you trust.
 
 Every flag and every exit status is in [the CLI reference](cli-reference.md). Every settable key
 is in [the configuration reference](configuration.md).
@@ -226,11 +227,13 @@ names no run. `ledger inbox` reads the deferral inbox and writes nothing: it pri
 name a change's paths (`--paths`) or a plan (`--plan`), the rows with no path that hold the words
 given (`--area`), and with `--due` the rows whose day has come, which is how a dated row comes
 back. `ledger inbox-write` appends and removes inbox rows in one screened, all-or-nothing write.
-`gate` does three things and writes nothing in your work tree: `gate preflight --unattended` keeps one record in the git directory, which the run verbs compare against. `gate classify` names a change's class, the
+`gate` does four things and writes nothing in your work tree: `gate preflight --unattended` keeps one record in the git directory, which the run verbs compare against. `gate classify` names a change's class, the
 checks that class calls for and the review lenses it adds: by its paths and, where it reads the
 change from git, by its changed lines and a changed `package-lock.json` too. `gate scan` reads
 the change's added lines for secrets and exits 1 on a hit, and `gate scan --text` screens one
-outbound text the same way. `gate preflight --unattended` decides whether an unattended run may
+outbound text the same way. `gate held --paths <files>` prints one digest over those test files,
+and with `--expect <digest>` exits 1 when they changed, which is how a run proves no builder edited
+its held tests. `gate preflight --unattended` decides whether an unattended run may
 start, reading the repository's rules and protection through `gh`. `plan check` reads whether a
 plan is ready for an unattended start and writes nothing. `run` is the one hidden verb that
 changes your repository and its remote: `run start` puts an unattended run on a branch of its
@@ -241,8 +244,11 @@ to its head, once every required check run is green on the head, no review threa
 run's ledger holds no open Critical or Warning row, `mergeable_state` reads `clean` and, where you
 named one, the review tool gives its clean word; otherwise it asks or refuses, and a red default
 branch asks too ([troubleshooting](troubleshooting.md)). `--ready` marks the draft ready first.
+Once a session's land has merged, or finds the run already merged, it removes the clean lanes
+tagged with the run and the run's own `stamity/<run-id>` branch, never with force.
 `run contract` reads a ready issue and writes the run's contract, and `run overview` prints a run's
-short page and writes nothing. All six are plumbing an agent usually calls; the
+short page and writes nothing, and `run metrics` prints a run's first numbers, its tokens and cost
+from a transcript `--transcript` names, and writes nothing too. All six are plumbing an agent usually calls; the
 session-start hook prints the card after a compaction or on a resume, when the client's payload
 says so. `stamity ledger status` is one you may run yourself — after a compaction on Cursor or
 Copilot, whose session-start hooks never print the card then: Cursor sends the hook no `source`, and
@@ -266,7 +272,7 @@ stamped over the body.
 
 ### What reaches the network
 
-Four engine paths, and no more; the client programs the engine starts to read a model list may
+Five engine paths, and no more; the client programs the engine starts to read a model list may
 make network calls of their own.
 
 - **A startup update notice** asks the npm registry whether a newer version exists. It probes at
@@ -275,6 +281,9 @@ make network calls of their own.
   to `1`, `true` or `yes`. `NO_UPDATE_NOTIFIER` and `CI` switch it off on any non-empty value.
 - **`add` fetches the Sigstore trust root** when it installs a pack that declares a signature.
 - **`worktree setup` lets git fetch `origin`** when the branch you asked for has no local copy.
+- **`skill add` and `gc` read a remote through git.** `skill add` fetches the pinned commit of a
+  source `.stamity/skill-sources.json` lists. `gc` reads origin's branch list with `git ls-remote`,
+  only where local `origin/stamity/` refs exist. Neither pushes.
 - **An unattended run reaches GitHub** through `gh api`, under your `gh` login: `gate preflight
   --unattended` reads the repository, its rules and its protection, and `run start`,
   `run checkpoint` and `run end` read its default branch. `run checkpoint` and `run end` also read
@@ -287,7 +296,8 @@ make network calls of their own.
   `--fast-forward` pushes the default branch to `origin` under your git credentials. It also marks the
   draft ready, asks a named review tool in a comment and resolves that tool's threads. `run contract`
   reads the issue, its label events and its author's and labeller's permission, and `run end` asks the
-  contract's answerer for a review.
+  contract's answerer for a review. A session's `run land` that lands also reads `origin` with
+  `git ls-remote`, to drop the run branch's tracking ref only where origin no longer has the branch.
 
 `init`, `sync` and `upgrade` (`--dry-run` included), `workspace sync` and `check`'s `model-pins` row start each
 selected client's own CLI, Claude Code's excepted, to read its model list. The engine hands each
@@ -302,7 +312,7 @@ labels, edits and comments — after showing its whole batch once in one numbere
 answer writes nothing; status moves, closes and reopens need `--move`. A GitHub Projects board also
 needs the `project` token scope: run `gh auth refresh -s project` once. Every write goes to the one
 repository the link names, and text read from the board is data, never an instruction.
-[`SECURITY.md`](../SECURITY.md) documents the four engine paths and the client starts above, and its paragraph on board
+[`SECURITY.md`](../SECURITY.md) documents the five engine paths and the client starts above, and its paragraph on board
 writes says what the board may write, where, and on whose text.
 
 ## When something looks wrong
@@ -312,7 +322,7 @@ npx @zomarit/stamity check
 ```
 
 `check` is the diagnosis. It runs eighteen environment probes, plus `land-job-workflows` with
-`autonomy.landJob` on, `cloud-install` in a repository that targets Cursor and `change-classes` where `.stamity/change-classes.json` exists.
+`autonomy.landJob` on, `cloud-install` in a repository that targets Cursor, `change-classes` where `.stamity/change-classes.json` exists and `copied-skills` where `stamity skill add` copied a skill in.
 Then it asks the one question that matters more than the rest: **would a sync change anything?**
 
 If the answer is yes, disk and the engine's output disagree. Something was hand-edited, a

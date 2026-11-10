@@ -2,7 +2,7 @@
 title: Packs and trust
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-09). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.19.0 release cut (2026-11-10). -->
 <!-- Re-open when: a trust tier is added or removed, the signed payload or the `signing.signer`
      grammar changes, the bundle bound changes, the shipped signature verifier is replaced, `add`
      gains or loses a flag, the org trust policy grammar changes, or the published package stops
@@ -182,7 +182,7 @@ few kilobytes, and the limit refuses rather than truncates, because half a bundl
 ### The one network call an install makes
 
 **Verifying a signed pack is the only network access a pack install performs.** It is also one of
-the three the engine performs while it works. Verification fetches the Sigstore trust root over TUF.
+the four the engine performs while it works. Verification fetches the Sigstore trust root over TUF.
 The transparency-log proofs travel inside the bundle. `init`, `sync`, `check`, and installing any
 pack that declares no signature do not even load the Sigstore client. The trust metadata is cached
 under your user cache directory, never inside the repository. A host that cannot reach the mirror
@@ -212,6 +212,12 @@ branch under your git credentials. It also writes a status line into that pull r
 answers the named review tool there, reads `origin` with `git ls-remote`, and fetches the default branch
 where the clone lacks its tip. A land job makes the same calls under its workflow's token. None of it
 fetches pack content.
+
+The fourth is `stamity skill add` and `stamity gc`. `skill add` fetches one pinned commit and tag,
+shallowly, from the `https://` URL `.stamity/skill-sources.json` lists for the source, under your
+git credentials, into a temporary folder it removes on every exit. It sends nothing of the
+repository and runs nothing it fetched. `gc` reads `origin` with `git ls-remote --heads`, only where
+local tracking refs under `origin/stamity/` exist. Neither one pushes or writes anything remote.
 
 One further path is network-capable and is no part of any command's work. The startup update
 notice asks the npm registry the running package publishes to — the public one for
@@ -390,7 +396,8 @@ overlay is refused. [Customization](customization.md) says which pack artifacts 
 ## Limit which sources your repositories accept
 
 An organisation that wants to narrow the sources its repositories may install from checks in a
-policy file at `.stamity/policy.json`.
+policy file at `.stamity/policy.json`. The policy reaches packs alone: the repositories a skill may
+be copied in from are listed apart, in `.stamity/skill-sources.json`.
 
 The file is loaded as soon as the pack manifest has been read and validated. That is before the
 trust tier resolves and before a single content byte is read, so a malformed policy refuses every

@@ -2,7 +2,7 @@
 title: Enterprise forks
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.18.0 release cut (2026-11-09). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.19.0 release cut (2026-11-10). -->
 <!-- Re-open when: a verb or an outcome joins or leaves `scripts/upstream.mjs`, a key joins or leaves
      `.stamity/upstream.json`, the fork layer's layout or precedence changes in `src/content/catalog.ts`,
      or the jobs or the permissions in `.github/workflows/upstream-update.yml` change. `test/docsPages.test.ts`
@@ -169,9 +169,11 @@ follows your manifest on its own. The runtime's own remedies
 `npx --no <your package>@<version> init` without it) and `scripts/tarball-smoke.mjs` read `name`
 from `package.json`.
 
-The CLI calls your setup writes follow the same split. `init` and `sync` pin every call they write
-into `AGENTS.md`, the generated bodies, the hook hints, the guard messages and `.codex/hooks.json` to your package at the version that wrote it, and the CLI's own remedies
-do the same. Three places install it rather than call it: Copilot's `copilot-setup-steps.yml` runs
+The CLI calls your setup writes follow the same split. `init` and `sync` pin the calls they write
+into `AGENTS.md`, the generated bodies, the hook hints, the guard messages and `.codex/hooks.json` to your package at the version that wrote it, and most of the CLI's own remedies
+do the same. A few lines name only the short `stamity <verb>` form, for a machine where the CLI is
+on `PATH`: the guard's note that an ask was held while nobody watched, the hints the `away`, `gc`,
+`skill` and `ready` verbs print, and the pre-flight's pointer to `stamity ready`. Three places install it rather than call it: Copilot's `copilot-setup-steps.yml` runs
 `npm install --global <your package>@<version>`, with `--@<scope>:registry=<url>` ahead of the
 package under `--registry` (under `toolOptions.copilot.setupSteps: managed`, the default; with
 `user` or `off` the workflow is yours to write, and a project Node pin below 22.22.2 gets a comment
@@ -188,7 +190,9 @@ npx finds a scope's registry only in npm's configuration, and `publishConfig` in
 steers `npm publish` only, so the call carries the setting itself: npx takes your package from
 your registry on every machine, with or without a scope mapping in its `.npmrc`, and every other
 package from the default registry. The setup, the CLI's remedies, the update notice's move command
-and `sync --help` all print this form. The flag outranks an `.npmrc` mapping, so a
+and `sync --help` all print this form. One line is the exception. When the session start lists fewer
+learnings than it loaded, its closing line names `stamity learn read` where the CLI is installed and
+gives no `npx` form, because that hook carries no registry URL. The flag outranks an `.npmrc` mapping, so a
 machine that reaches your scope through a mirror is sent to the registry you published to for the
 fallback call, while a project that installs the pinned version runs that copy with no registry
 request. A registry URL outside the plain-https rule above (no credentials, query, fragment, `%`
