@@ -37,7 +37,7 @@ in-session hand-off to `/st-work` carries `run-mode: attended | unattended`, the
 1. **The pre-flight is the run's first act**, before any fetch or push: `stamity gate preflight --unattended --json`,
    with `--item <owner/repo#n>` when the input is a board item or an issue. Any exit but 0 is a refusal: its
    `refusals[]` reasons, else `pre-flight exited <code>`, go first on the morning list under `## Refused`, each with
-   its `fix`. The run never computes a verdict of its own, and never retries the check against another repository.
+   its `fix`. The run never computes a verdict of its own, and never retries the check against another repository. Every pre-flight warning goes on the morning list too, on a pass as on a refusal: each `warnings[]` entry's `id`, with its `reason` or `names`.
 2. **The two floors load by name**, from the paths in the verdict's `floors[]`, and the record holds
    `floors loaded: question-protocol, injection-screening`; an absent floor file is a refusal, never a run without it.
 3. **Learnings are read through the screen.** From the session-start banner when one printed; else

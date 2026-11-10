@@ -44,13 +44,13 @@ export type RestRead = (path: string) => Promise<{ status: number; json: unknown
 
 type CheckId = "hooks-loaded" | "node-engine" | "cli-pin" | "gate-scan" | "direct-push" | "input-author" | "floors";
 type CheckState = "pass" | "refuse" | "unknown";
-type WarningId = "cursor-egress" | "token-env" | "review-state" | "admin-can-lift";
+type WarningId = "cursor-egress" | "token-env" | "review-state" | "admin-can-lift" | "repo-unready";
 
 export interface PreflightVerdict {
   ok: boolean;
   checks: { id: CheckId; state: CheckState; evidence: string }[];
   refusals: { id: CheckId; reason: string; fix: string }[];
-  /** `names` lists `token-env`'s variables; `reason` says why `review-state` or `admin-can-lift` fired. */
+  /** `names` lists `token-env`'s variables; `reason` says why `review-state`, `admin-can-lift` or `repo-unready` fired. */
   warnings: { id: WarningId; names?: string[]; reason?: string }[];
 }
 
@@ -136,6 +136,11 @@ export interface PreflightDeps {
    * whether that record is there and was not read, over the 1 MiB cap or unreadable, so its count is unknown.
    */
   reviewState: { counter: boolean; usageReviewLines: number; recordUnread: boolean };
+  /**
+   * The ready report's open rows (REQ-FLOW-182): each `gap`, and each `unknown` from a check that ran, by id. Absent
+   * means no readiness was read and gives no warning; a gap warns `repo-unready`, never a refusal.
+   */
+  readiness?: { gaps: readonly string[] } | undefined;
 }
 
 /** The floors an unattended run loads by name; each needs at least one copy, and every listed copy must exist. */
@@ -1014,6 +1019,8 @@ export async function runPreflight(deps: PreflightDeps): Promise<PreflightVerdic
   const reviewReason = reviewStateReason(deps.reviewState, push.mergeBypass);
   if (reviewReason !== null) warnings.push({ id: "review-state", reason: reviewReason });
   if (push.adminCanLift) warnings.push({ id: "admin-can-lift", reason: ADMIN_LIFT_REASON });
+  const gaps = deps.readiness?.gaps ?? [];
+  if (gaps.length > 0) warnings.push({ id: "repo-unready", reason: `the ready report finds gaps: ${gaps.join(", ")}; run stamity ready` });
 
   return { ok: refusals.length === 0, checks, refusals, warnings };
 }

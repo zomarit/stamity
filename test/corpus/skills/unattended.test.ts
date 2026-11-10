@@ -307,6 +307,15 @@ describe("st-unattended — before Frame (REQ-FLOW-091, REQ-FLOW-098 to REQ-FLOW
     expect(text).toContain("The run never computes a verdict of its own");
   });
 
+  // Added 2026-11-10 (plan 024 file 3, unit x-preflight-warn; REQ-FLOW-101): `repo-unready` joins the warnings, and
+  // every warning, on a pass as on a refusal, reaches the morning list; the sentence joins the step's last line.
+  it("puts every pre-flight warning on the morning list, a pass's too", async () => {
+    const text = await flat();
+    expect(text).toContain(
+      "Every pre-flight warning goes on the morning list too, on a pass as on a refusal: each `warnings[]` entry's `id`, with its `reason` or `names`.",
+    );
+  });
+
   it("loads both floors by name and records them (REQ-FLOW-099)", async () => {
     const text = await flat();
     expect(text).toContain("the verdict's `floors[]`");

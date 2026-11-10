@@ -24,6 +24,7 @@ import {
   type TestSource,
 } from "../../change/testInputs.ts";
 import { linesPastCap, SCAN_LINE_MAX_CHARS, scanAddedLines, type ScanFile, type ScanHit } from "../../change/scan.ts";
+import { assessReadiness, readReadinessFiles, type ReadinessReads } from "../../detect/readiness.ts";
 import { CLAUDE_HOOKS_DIR } from "../../hooks/model.ts";
 import { PERSON_ONLY_GUARD_FILE } from "../../hooks/scripts.ts";
 import { PREFLIGHT_CANARY_FILE } from "../../mcp/env.ts";
@@ -38,8 +39,8 @@ import { findPackageRoot } from "../../shared/paths.ts";
 import { bareShapeRefusal, gitDiscoveryMeetsBareShape } from "../../merge/safeWrite.ts";
 import { fileSystemProbe, gitProgramFor, isNodeModulesBin, programNotFound, resolveProgramOnPath, searchPathOf } from "../../shared/programPath.ts";
 import { TOOLS } from "../../types/core.ts";
-import type { SetupManifest } from "../../types/manifest.ts";
-import { HOOKS_GENERATED_DIR, REVIEW_GATE_STATE_FILE } from "../../types/markers.ts";
+import { MANIFEST_FILE, type SetupManifest } from "../../types/manifest.ts";
+import { HOOKS_GENERATED_DIR, REVIEW_GATE_STATE_FILE, STATE_DIR } from "../../types/markers.ts";
 import { guardCopySetting, readGuardLegs, readRegularFile } from "../engine/autonomyGate.ts";
 import {
   applyNameFloor,
@@ -1751,6 +1752,42 @@ async function adminRuleProofGap(root: string, repoPath: string, rest: RestRead)
   }
 }
 
+/**
+ * The ready report's open rows for the pre-flight's `repo-unready` warning (REQ-FLOW-101, REQ-FLOW-182): each `gap`,
+ * and each `unknown` from a check that ran, by id; never `ready` itself. The charter gates and the land job's names are
+ * passed as `not-checked`, since the pre-flight does not run those checks, so they never warn. The setup's commit is
+ * read as `stamity ready` reads it, `git ls-files` then `git ls-tree HEAD`, each a read with no write. Anything that
+ * throws gives `undefined`: no readiness, so no warning and no refusal.
+ */
+async function readinessGaps(ctx: CliContext, root: string, manifest: SetupManifest | null, manifestUnreadable: boolean): Promise<{ gaps: string[] } | undefined> {
+  try {
+    const [info, files] = await Promise.all([ctx.engine.detect.repoAnalyzer.analyzeRepo(root), readReadinessFiles(root)]);
+    const report = assessReadiness(info, { ...files, gates: "not-checked", landJob: "not-checked", setup: setupRead(root, manifest, manifestUnreadable) });
+    return { gaps: report.checks.filter((row) => row.state === "gap" || row.state === "unknown").map((row) => row.id) };
+  } catch {
+    return undefined;
+  }
+}
+
+/** The setup manifest's read for the ready report: present, pinned and committed (`null` where git gives no answer). */
+function setupRead(root: string, manifest: SetupManifest | null, manifestUnreadable: boolean): ReadinessReads["setup"] {
+  if (manifestUnreadable) return { manifest: "unreadable", pinnedVersion: null, committed: null };
+  if (manifest === null) return { manifest: "absent", pinnedVersion: null, committed: null };
+  const runner = gitCheckRunner({ timeoutMs: GATE_GIT_TIMEOUT_MS, maxBuffer: GATE_GIT_MAX_BUFFER });
+  const read = (args: readonly string[]): string | null => {
+    try {
+      return runner(args, root).trim();
+    } catch {
+      return null;
+    }
+  };
+  const path = `${STATE_DIR}/${MANIFEST_FILE}`;
+  const tracked = read(["ls-files", "--", path]);
+  // Tracked is not committed: a staged manifest is not in a fresh clone, and a branch with no commit holds nothing.
+  const committed = tracked === null ? null : tracked !== "" && (read(["ls-tree", "--name-only", "HEAD", "--", path]) ?? "") !== "";
+  return { manifest: "present", pinnedVersion: manifest.generatedBy.length > 0 ? manifest.generatedBy : null, committed };
+}
+
 async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>): Promise<CommandResult> {
   const root = ctx.app.runtime.cwd;
   const env = ctx.app.runtime.env;
@@ -1783,6 +1820,7 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
   // The work tree's key is one leg of several, so off there settles it and on there alone proves nothing.
   const adminProofGap =
     manifest?.autonomy?.adminRuleProof === true && rest !== null && origin !== null ? await adminRuleProofGap(root, `repos/${origin.owner}/${origin.repo}`, rest) : undefined;
+  const readiness = await readinessGaps(ctx, root, manifest, manifestUnreadable);
   const verdict = await runPreflight({
     env,
     nodeVersion: process.versions.node,
@@ -1804,6 +1842,7 @@ async function runPreflightVerb(ctx: CliContext, opts: Record<string, unknown>):
     floors,
     pushIdentity,
     reviewState: { counter: existsSync(join(root, REVIEW_GATE_STATE_FILE)), usageReviewLines: usage ?? 0, recordUnread: usage === null },
+    readiness,
   });
   // review/97: the run verbs compare against this record, so a pass the record cannot follow is no pass; a refusal
   // records too, marked refused, for its own ending alone (review/33).

@@ -1515,6 +1515,37 @@ describe("runPreflight — warnings", () => {
   });
 });
 
+// Added 2026-11-10 (plan 024 file 3, unit x-preflight-warn; REQ-FLOW-101): the ready report's gaps warn, never refuse.
+describe("runPreflight — repo-unready", () => {
+  const unready = (verdict: PreflightVerdict) => verdict.warnings.filter((warning) => warning.id === "repo-unready");
+
+  it("warns repo-unready naming each gap, and leaves ok, checks and refusals as they were", async () => {
+    const plain = await runPreflight(greenDeps());
+    const verdict = await runPreflight(greenDeps({ readiness: { gaps: ["test-framework", "lockfile"] } }));
+    expect(unready(verdict)).toEqual([
+      { id: "repo-unready", reason: "the ready report finds gaps: test-framework, lockfile; run stamity ready" },
+    ]);
+    expect(verdict.ok).toBe(true);
+    expect(verdict.checks).toEqual(plain.checks);
+    expect(verdict.refusals).toEqual([]);
+  });
+
+  it("leaves a refused verdict refused, the warning beside its refusal", async () => {
+    const refused = await runPreflight(greenDeps({ canary: null }));
+    const verdict = await runPreflight(greenDeps({ canary: null, readiness: { gaps: ["pr-workflow"] } }));
+    expect(verdict.ok).toBe(false);
+    expect(verdict.refusals).toEqual(refused.refusals);
+    expect(unready(verdict).map((warning) => warning.reason)).toEqual([
+      "the ready report finds gaps: pr-workflow; run stamity ready",
+    ]);
+  });
+
+  it("gives no repo-unready warning for no gaps, or with no readiness read at all", async () => {
+    expect(unready(await runPreflight(greenDeps({ readiness: { gaps: [] } })))).toEqual([]);
+    expect(unready(await runPreflight(greenDeps()))).toEqual([]);
+  });
+});
+
 describe("gate preflight's review-state count reads the run on this branch (REQ-FLOW-106)", () => {
   const getRoot = useTempDir("preflight-usage");
 

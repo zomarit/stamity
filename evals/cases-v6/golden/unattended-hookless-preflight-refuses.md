@@ -20,7 +20,7 @@ step):
 1. **The pre-flight is the run's first act**, before any fetch or push: `stamity gate preflight --unattended --json`,
    with `--item <owner/repo#n>` when the input is a board item or an issue. Any exit but 0 is a refusal: its
    `refusals[]` reasons, else `pre-flight exited <code>`, go first on the morning list under `## Refused`, each with
-   its `fix`. The run never computes a verdict of its own, and never retries the check against another repository.
+   its `fix`. The run never computes a verdict of its own, and never retries the check against another repository. Every pre-flight warning goes on the morning list too, on a pass as on a refusal: each `warnings[]` entry's `id`, with its `reason` or `names`.
 ```
 
 Governing text — the same file, the paragraph after "Before Frame":

@@ -5,6 +5,7 @@ import { basename, dirname, join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { enginesOf, gateCommand, readPushIdentity } from "../../../src/cli/commands/gate.ts";
 import type * as GhRunnerModule from "../../../src/cli/engine/ghRunner.ts";
+import type * as ReadinessModule from "../../../src/detect/readiness.ts";
 import { VERSION } from "../../../src/composition/root.ts";
 import { autonomyMarkerLine, resolveAutonomy } from "../../../src/config/autonomy.ts";
 import { PERSON_ONLY_GUARD_FILE } from "../../../src/hooks/scripts.ts";
@@ -51,6 +52,21 @@ vi.mock("../../../src/cli/engine/ghRunner.ts", async (importOriginal) => ({
   },
   ghProgramPath: () => rest.program,
 }));
+
+/** Set by one case to make the readiness read throw; every other case reads for real. */
+const readinessRead = vi.hoisted(() => ({ throws: false }));
+
+// Stand-in only while `throws` is set: the real `readReadinessFiles` never throws by its contract, so the
+// verb's guard around a readiness read that does (plan 024 x-preflight-warn's edge case) cannot be reached
+// with real files. Every other case calls the real module unchanged.
+vi.mock("../../../src/detect/readiness.ts", async (importOriginal) => {
+  const real = await importOriginal<typeof ReadinessModule>();
+  return {
+    ...real,
+    readReadinessFiles: (root: string) =>
+      readinessRead.throws ? Promise.reject(new Error("readiness read failed")) : real.readReadinessFiles(root),
+  };
+});
 
 const SEED_ENV = {
   GIT_CONFIG_NOSYSTEM: "1",
@@ -103,6 +119,7 @@ describe("stamity gate preflight and scan --text", () => {
     rest.routes.clear();
     rest.once.clear();
     rest.program = process.execPath;
+    readinessRead.throws = false;
   });
 
   /**
@@ -185,6 +202,94 @@ describe("stamity gate preflight and scan --text", () => {
         [`GIT_CONFIG_VALUE_${index}`, value],
       ]),
     ]);
+
+  // Added 2026-11-10 (plan 024 file 3, unit x-preflight-warn; REQ-FLOW-101, S52, S61): the ready report's gaps and
+  // the unknowns of checks the pre-flight ran warn `repo-unready`; the checks it does not run never warn.
+  describe("repo-unready, from the ready report", () => {
+    const unready = (doc: Record<string, unknown>): { id: string; reason?: string }[] =>
+      (doc["warnings"] as { id: string; reason?: string }[]).filter((warning) => warning.id === "repo-unready");
+
+    /** {@link seedRepo} plus every readiness signal a file carries, committed: no row the pre-flight runs is open. */
+    async function seedReadyRepo(classFile = `${JSON.stringify({ classes: { tests: ["test/**"] } })}\n`): Promise<string> {
+      const repo = await seedRepo();
+      const files: Record<string, string> = {
+        "package.json": `${JSON.stringify({ name: "ready-fixture", private: true, scripts: { test: "vitest run" }, devDependencies: { vitest: "^3.0.0" } })}\n`,
+        "package-lock.json": `${JSON.stringify({ name: "ready-fixture", lockfileVersion: 3, packages: {} })}\n`,
+        "vitest.config.ts": "export default {};\n",
+        ".github/workflows/ci.yml": "name: ci\non:\n  pull_request:\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps: [{ run: npm test }]\n",
+        ".stamity/change-classes.json": classFile,
+      };
+      await Promise.all(
+        Object.entries(files).map(async ([path, body]) => {
+          await mkdir(dirname(join(repo, path)), { recursive: true });
+          await writeFile(join(repo, path), body);
+        }),
+      );
+      git(repo, ["add", "-A"]);
+      git(repo, ["commit", "-q", "-m", "setup"]);
+      return repo;
+    }
+
+    it("warns repo-unready naming the gaps, in the JSON and the text, and the verdict stays a pass", async () => {
+      const repo = await seedRepo();
+      protectedRepo();
+
+      const { code, doc } = await gate(repo, PREFLIGHT);
+      const text = await gate(repo, ["preflight", "--unattended", "--dry-run"]);
+
+      expect(code).toBe(0);
+      expect(doc["ok"]).toBe(true);
+      expect(doc["refusals"]).toEqual([]);
+      const reason = "the ready report finds gaps: test-framework, ci-provider, pr-workflow, setup-pinned, tests-class; run stamity ready";
+      expect(unready(doc)).toEqual([{ id: "repo-unready", reason }]);
+      expect(text.code).toBe(0);
+      expect(text.stdout).toContain(`warning: repo-unready: ${reason}\n`);
+    });
+
+    it("gives no repo-unready on a ready repository, though the gates and the land job are not checked here", async () => {
+      const repo = await seedReadyRepo();
+      protectedRepo();
+
+      const { code, doc } = await gate(repo, PREFLIGHT);
+
+      expect(code).toBe(0);
+      expect(unready(doc)).toEqual([]);
+    });
+
+    it("counts an unknown from a check it ran as a gap: an unreadable change-classes file warns", async () => {
+      const repo = await seedReadyRepo("{ not json\n");
+      protectedRepo();
+
+      const { code, doc } = await gate(repo, PREFLIGHT);
+
+      expect(code).toBe(0);
+      expect(unready(doc)).toEqual([{ id: "repo-unready", reason: "the ready report finds gaps: tests-class; run stamity ready" }]);
+    });
+
+    it("keeps a refusal a refusal: the warning rides beside it and never changes ok", async () => {
+      const repo = await seedRepo({ canary: false });
+      protectedRepo();
+
+      const { code, doc } = await gate(repo, PREFLIGHT);
+
+      expect(code).toBe(1);
+      expect(doc["ok"]).toBe(false);
+      expect((doc["refusals"] as { id: string }[]).map((refusal) => refusal.id)).toContain("hooks-loaded");
+      expect(unready(doc).length).toBe(1);
+    });
+
+    it("gives no warning and no refusal when the readiness read throws", async () => {
+      const repo = await seedRepo();
+      protectedRepo();
+      readinessRead.throws = true;
+
+      const { code, doc } = await gate(repo, PREFLIGHT);
+
+      expect(code).toBe(0);
+      expect(doc["refusals"]).toEqual([]);
+      expect(unready(doc)).toEqual([]);
+    });
+  });
 
   describe("the verdict through the verb", () => {
     it("passes a writer under a ruleset with no bypass, every REST call naming the host origin matched", async () => {
