@@ -5950,9 +5950,13 @@ describe("the security pages say one thing about the brake, the lift and the job
     // TEST CHANGE, justified: the hand start of 2026-11-06 ran every step of the workflow, the checkout of
     // `refs/pull/<n>/head` among them, before `run land --job` stopped at the body. So the checkout leaves the never-run
     // list on all four pages, which keep one list.
+    // TEST CHANGE, justified: real runs on Claude's cloud on 2026-11-10 landed through the job, which read the evidence
+    // and the threads, marked the draft ready, wrote its evidence line and merged under `GITHUB_TOKEN`. So those leave
+    // the never-run list on all four pages, which still keep one list for the parts no real run reached.
     expect(flat, `${page} does not carry the one not-run list`).toContain(
-      "No real run has proven the land job, so the whole job is `not run` until one does. That covers the ready mark, the thread reads and the thread resolve under `GITHUB_TOKEN`, the merge call under that token, the review request and the status line the job writes, and the `issue_comment` wake.",
+      "Real runs on Claude's cloud on 2026-11-10 ran the job's merge under `GITHUB_TOKEN`: it read the evidence and the review threads, marked the run's draft ready, wrote its evidence line and merged it. The thread resolve under that token, the review request and the `issue_comment` wake are still `not run` until a real run reaches them.",
     );
+    expect(flat, `${page} still calls the whole job unproven`).not.toContain("No real run has proven the land job");
     expect(flat, `${page} lists a step the hand start ran as never run`).not.toContain("and the checkout of `refs/pull/<n>/head`");
     // Wherever the exact-head claim stands, the one mode it does not hold for stands beside it.
     expect(flat, `${page} does not name clean: reaction's limit`).toMatch(/`clean: reaction`[^.]*`\+1` names no commit/);
@@ -6446,6 +6450,11 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     expect(cloud).toContain("On 2026-11-06 it did not: it answered `not-a-run`");
     expect(cloud).toContain("One real run reached the job, on Claude's cloud on 2026-11-06");
     expect(cloud).not.toContain("built to finish it from GitHub and `not run` so far");
+    // ADDED: on 2026-11-10 the issue stayed open and labelled after the land job's merge, so both pages state the
+    // measured answer where they said it was not known.
+    expect(flowed(section("Step 10: Add the label and walk away"))).toContain("on 2026-11-10 the issue stayed open and labelled after such a merge");
+    expect(cloud).toContain("on 2026-11-10 the issue stayed open and labelled after such a merge");
+    for (const doc of [CLOUD, FACTORY]) expect(flowed(read(doc)), doc).not.toContain("for a merge the land job makes it is not known");
   });
 
   it("states how a job ends and where its merge method comes from", () => {
@@ -6510,15 +6519,23 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
   // four routes no run reached still read `not run`.
   it("states each route's real result, or not run, with the date", () => {
     const proof = flowed(section("What real runs have shown"));
-    expect(proof).toContain("As of 2026-11-08");
-    expect(proof).toContain("no route on this page has merged a change in a real run yet");
+    // TEST CHANGE, justified: on 2026-11-10 a real run on Claude's cloud went from the label to a merge with no hand
+    // step, and a fourth Cursor session refused at `direct-push`. So the date moves and the "none merged" pin moves to
+    // the page's sentence that says which route merged.
+    expect(proof).toContain("As of 2026-11-10");
+    expect(proof).toContain("Claude's route has merged a change in a real run with nobody watching, and Cursor's has pushed nothing.");
+    expect(proof).not.toContain("no route on this page has merged a change in a real run yet");
+    expect(proof).toContain("The third ran on the release package and landed with no hand step.");
     expect(proof).toMatch(/Claude's scheduled task starting on the label: run on 2026-11-06\.[^.]*draft pull request with green CI\. It did not land\./);
     // TEST CHANGE, justified: the label started three Cursor sessions on 2026-11-08, two refused at `direct-push` and
     // the run's own guard stopped the third earlier, so the pin reads the count and both outcomes.
     expect(proof).toMatch(/Cursor's automation starting on the label: run on 2026-11-08\.[^.]*three sessions[^.]*\. Two refused at the pre-flight's `direct-push` check\. In the third, the run's own guard/);
-    for (const route of ["Cursor's webhook", "The land job", "Cursor's cloud finishing", "A local run"]) {
+    // TEST CHANGE, justified: the land job merged a real pull request on 2026-11-10, so it leaves the `not run` routes
+    // and reads its date and result instead; the three routes no run reached still read `not run`.
+    for (const route of ["Cursor's webhook", "Cursor's cloud finishing", "A local run"]) {
       expect(proof).toMatch(new RegExp(`${route}[^.]*\`not run\``));
     }
+    expect(proof).toContain("The land job merging a real pull request: run on 2026-11-10, on Claude's cloud. It marked a run's draft pull request ready and merged it.");
     // The three faults that stopped Claude's run before landing, each named.
     expect(proof).toContain("The test-runner sub-agent returned no result in three tries");
     expect(proof).toContain("The run's `morning.md` held a summary line before its first section");
@@ -6526,7 +6543,10 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     // and the page says the job finds the marker before a footer-shaped tail, unproven by a real run.
     expect(proof).toContain("It then read the run from a marker that had to end the pull request's body");
     expect(proof).toContain("The job now finds the marker when only a footer follows it");
-    expect(proof).toContain("Any other text after the marker still reads as no run. No real run has shown this yet.");
+    // TEST CHANGE, justified: on 2026-11-10 a real run's body with Claude's web footer read as the run's, so the
+    // "no real run has shown this" pin moves to the dated result.
+    expect(proof).toContain("Any other text after the marker still reads as no run. A real run on 2026-11-10 showed the job read such a body as the run's");
+    expect(proof).not.toContain("No real run has shown this yet.");
     expect(proof).not.toContain("It reads the run from a marker that must end the pull request's body");
     // TEST CHANGE, justified (REQ-FLOW-168): the sentence above is the 2026-11-06 run's fault, and the job no longer
     // holds that rule: it reads the run through `bodyRun`, which finds the marker before a client's short footer.
@@ -6549,7 +6569,10 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     const rule = flowed(section("Step 2: Block direct pushes to the default branch"));
     expect(rule).toContain("`current_user_can_bypass`");
     expect(rule).toContain("only where that field reads `never` or `pull_requests_only`");
-    expect(rule).toContain("What the field answers for an administrator has not been measured in a real run yet.");
+    // TEST CHANGE, justified: on 2026-11-10 the field read `never` for an administrator's account on a scratch
+    // repository's ruleset, so the "not measured" pin moves to the measured answer.
+    expect(rule).toContain("On 2026-11-10, on a private scratch repository's ruleset, the field read `never` for an administrator's account.");
+    expect(rule).not.toContain("has not been measured in a real run yet");
     // The two values the page names are the two the pre-flight counts.
     expect(read("src/runs/preflight.ts")).toContain('if (bypass === "never" || bypass === "pull_requests_only") {');
     const cloud = flowed(read(CLOUD));

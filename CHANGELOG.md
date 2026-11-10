@@ -93,7 +93,8 @@ read from the code and its tests.
   remote branch, and it needs git.
 - **A landed run cleans up what it started.** `run end` writes `Closes <owner>/<repo>#<n>` before the run's marker
   when the run's contract names an issue in origin's repository, so GitHub closes the issue when the pull request
-  merges into the default branch. No real run has shown it yet, and for a merge the land job makes it is not known.
+  merges into the default branch. For a merge the land job makes it does not: on 2026-11-10 a real run's issue stayed
+  open and labelled after such a merge, so a person closes it.
   A session's `run land` that lands, or finds the run landed, removes the run's own clean lanes, deletes its local
   `stamity/<run-id>` branch with `git branch -d` and drops a tracking ref origin no longer has, one `cleanup:` record
   line each. It never forces: a lane holding changes or an ignored file its setup did not place is kept and named.

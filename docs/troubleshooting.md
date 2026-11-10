@@ -516,8 +516,8 @@ request's body names no run, where it is closed, and where an attended run close
 checkpoint --pr` alone left no `PR:` line. It waits out a review tool's silence in one call, holding a
 runner up to `waitMinutes` per head, since a silent tool sends no event to wake it. A job that merges
 nothing can still leave the pull request marked ready, the tool's threads resolved and an evidence
-line in the body. No real run has proven the land job, so the whole job is `not run` until one does. That covers the ready mark, the thread reads and the thread resolve under `GITHUB_TOKEN`, the merge call under that token, the review request and the status line the job writes, and the `issue_comment` wake. One real run reached the job, and
-[Cloud runs](cloud.md) says where it stopped, under The land job. Its own reasons:
+line in the body. Real runs on Claude's cloud on 2026-11-10 ran the job's merge under `GITHUB_TOKEN`: it read the evidence and the review threads, marked the run's draft ready, wrote its evidence line and merged it. The thread resolve under that token, the review request and the `issue_comment` wake are still `not run` until a real run reaches them.
+[Cloud runs](cloud.md) says what the real runs that reached the job showed, under The land job. Its own reasons:
 
 - `autonomy.landJob is not on in every leg of the setting, so the job does not land here`: turn it on
   through a person's `sync --loosen`, on the default branch too.

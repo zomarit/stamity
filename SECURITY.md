@@ -951,7 +951,7 @@ What stays open is named here, as accepted risk:
   copy. So its text can reach a fix with no person's comment behind it. Its text stays data, and a fix
   stays inside the files the pull request already changes and the plan's `files`. Every other author
   without write access, any other bot included, stays deferred and is never fixed.
-- **The land job.** No real run has proven the land job, so the whole job is `not run` until one does. That covers the ready mark, the thread reads and the thread resolve under `GITHUB_TOKEN`, the merge call under that token, the review request and the status line the job writes, and the `issue_comment` wake. `GITHUB_TOKEN` is the emitted workflow's configuration, not an engine
+- **The land job.** Real runs on Claude's cloud on 2026-11-10 ran the job's merge under `GITHUB_TOKEN`: it read the evidence and the review threads, marked the run's draft ready, wrote its evidence line and merged it. The thread resolve under that token, the review request and the `issue_comment` wake are still `not run` until a real run reaches them. `GITHUB_TOKEN` is the emitted workflow's configuration, not an engine
   check: the verb takes any `gh` login. The `workflow_run` and `issue_comment` triggers run the default
   branch's copy of that workflow, but a `workflow_dispatch` runs the file at the ref the dispatch names,
   so it is only as safe as that ref's copy. An unnamed dispatch runs unasked, so that route reaches job
