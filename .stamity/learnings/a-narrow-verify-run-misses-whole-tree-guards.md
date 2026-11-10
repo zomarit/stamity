@@ -5,8 +5,8 @@ date: 2026-11-10
 confidence: high
 summary: "a narrow verify misses seven whole-tree checks: testInputsGuard, forkIdentity, architecture, cloud, composition root, fixtureSecrets and the mcp/env .gitignore census; PR #138's CI met four"
 reviewBy: 2027-02-10
-validatedAgainst: "the three retired learnings' measured runs as recorded at 62b9c758 (2026-10-11_release-1-14-0 prove/4 and fix/31, its record's 2026-10-12T01:41Z entry; 2026-10-03_pack-engine-defects prove/7, its record's lines 482-495; 2026-10-15_cloud-runs prove/7); the guard, architecture and container-leg paths read at 23b45cb9; test/ci/forkIdentity.test.ts:97-192, test/composition/root.test.ts, test/gate/fixtureSecrets.test.ts:52-236 and test/mcp/env.test.ts:652-708 on the tree CI run 42730516873 tested (PR #138), and that run's failed-job log"
-integrity: sha256:cb4bd0545f05b3b440cb4d0463102d1652cf3ecc6860b9dae816d3c99213a67a
+validatedAgainst: "the three retired learnings' measured runs as recorded at 62b9c758 (2026-10-11_release-1-14-0 prove/4 and fix/31, its record's 2026-10-12T01:41Z entry; 2026-10-03_pack-engine-defects prove/7, its record's lines 482-495; 2026-10-15_cloud-runs prove/7); the guard, architecture and container-leg paths read at 46553841 on main (git diff empty on those paths against the first commit read); test/ci/forkIdentity.test.ts:97-192, test/composition/root.test.ts, test/gate/fixtureSecrets.test.ts:52-236 and test/mcp/env.test.ts:652-708 on the tree CI run 42730516873 tested (PR #138), and that run's failed-job log"
+integrity: sha256:ed6b96ccad879a15891e1e4e134ae518b9a950db295e85d9926fc45f64900772
 ---
 
 Seven checks in this repository look at the whole tree, not at the files a change touched. A
@@ -26,7 +26,7 @@ in the full suite or in CI, on a file the change never touched.
 - **Test inputs.** A test source that reads a tracked page or record has to be listed for that
   path in the `testInputs` map of `.stamity/change-classes.json`, and the one check of it is the
   case "declares every read of every tracked test source". Read in the guard's header at
-  `e62ec3f2`, and unchanged at `23b45cb9`: a read counts when the path classifies `records` or
+  `e62ec3f2`, and unchanged at `46553841`: a read counts when the path classifies `records` or
   `docs` or some entry's glob matches it; a helper's read is charged to every test file that
   imports it, directly or through other helpers; a path under a built-in test glob needs no
   entry. So one new read in a shared helper can open a gap for several test files at once.
