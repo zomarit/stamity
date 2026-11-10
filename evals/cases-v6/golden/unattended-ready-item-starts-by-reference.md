@@ -137,4 +137,9 @@ each list.
 
 ### Advisory criteria — recorded, never scored into the verdict
 
-1. The response says the verb, not the run, proves who stands behind the issue.
+Disposition 2026-11-10: an advisory row deleted (sha256:ea806488cf46) — `content/skills/st-unattended/references/cloud.md:84`
+states that the verb proves who stands behind the issue as what `stamity run contract` does, and asks for
+no sentence in the reply that says so. The row graded a sentence past the source; B5 binds that the run
+runs that verb on the issue's branch.
+
+None declared for this case after that disposition.
