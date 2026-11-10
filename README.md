@@ -53,7 +53,7 @@ npx @zomarit/stamity init
 `workspace`, `clean` and `add` work from. `validate` runs with or without one; `learn`, `handoff`
 and `ledger` want only `.stamity/`. Node `>= 22.22.2` is the only prerequisite; nothing installs globally.
 
-Six verbs need git: `worktree` and `gc` refuse without it, `skill add` fetches through it, `plan` and `run` exit 1 without it, `run overview` excepted, which reads only the run folder, and `gate` reads every change
+Six verbs need git: `worktree` and `gc` refuse without it, `skill add` fetches through it, `plan` and `run` exit 1 without it, `run overview` and `run metrics` excepted, which read only the run folder and a transcript named to `run metrics`, and `gate` reads every change
 from it, so without git `gate scan` exits 1 and `/st-quick` and `/st-work` list `secret scan: not run` under
 `Not done:`. The engine reaches the network in five places, all in [`SECURITY.md`'s "Network and data
 handling"](SECURITY.md): `add` fetches the Sigstore trust root for a signed pack, `worktree setup` fetches your own

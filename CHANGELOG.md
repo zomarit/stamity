@@ -161,8 +161,9 @@ read from the code and its tests.
   the run reads that report only when its first line carries the fresh token that one brief named.
 - **The cloud pages say what the real runs showed.** `docs/factory.md` says why Cursor's cloud refuses at
   `direct-push`, and the capability matrix names the cloud proxy's refused permission reads.
-- **`docs/getting-started.md` and `docs/troubleshooting.md` count `run metrics` with `run overview`** among the run
-  subcommands that need no git, and `docs/getting-started.md` lists the switch's two files and the skill files.
+- **`README.md`, `docs/getting-started.md` and `docs/troubleshooting.md` count `run metrics` with `run overview`**
+  among the run subcommands that need no git, and `docs/getting-started.md` lists the switch's two files and the skill
+  files.
 
 ## [1.18.0] - 2026-11-09
 
