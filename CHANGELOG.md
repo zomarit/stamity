@@ -65,6 +65,10 @@ read from the code and its tests.
   source with `allowScripts` may bring any file type.
 - **`autonomy.unaskedPushRepos`, a loosening only a person turns on.** It lifts the ask on an attended push to a
   repository it names, and only within narrow rules: `SECURITY.md` states them, and what it never lifts.
+- **A learning's file name is screened in more readings.** The session-start banner, and `learn read` for a file it
+  skips, now also screen a name with its escape notation read, and the name as the banner cuts it, read and flattened again. A name that
+  matches prints as a placeholder naming the pattern ids, never the name. A fork whose scope names its own registry
+  is told to run `stamity learn read` where the CLI is installed, with no `npx` form.
 - **The test-runner's report carries a token the run reads it by.** `SECURITY.md` names the residual: once the report
   exists, a shell in the checkout can read the token.
 
@@ -103,7 +107,8 @@ read from the code and its tests.
   states.
 - **`stamity run metrics --run <id>`** prints a run's first numbers: wall and agent minutes, the person's minutes from
   the record's `ask:` lines, review and fix rounds and reopened findings, and tokens and cost only from a transcript
-  `--transcript` names. Anything it cannot read is `unreported`. It writes nothing and needs no git.
+  `--transcript` names. Those cover that one transcript only, not the sub-agents' own transcripts, so they are not the
+  whole run's cost. Anything it cannot read is `unreported`. It writes nothing and needs no git.
 - **`stamity gate held --paths <files> [--expect <digest>]`** digests the test files a tests-only pass wrote, so every
   Prove pass can show they did not move.
 - **Two settings for the learnings banner.** `learnings.indexBytes` (2,048 to 8,192 bytes, default 6,144) and
@@ -122,7 +127,24 @@ read from the code and its tests.
   tool's unfixed comments join the close's leftovers when the land refuses on them.
 - **Caution matches the real risk.** The charter says, beside invariant 1, that where no floor applies a step that
   does not apply is skipped in one line, and only what cannot be undone, reaches people outside the repository or
-  this setup keeps for a person waits for one.
+  this setup keeps for a person waits for one. A rule with several parts holds only when every part that applies to
+  the work holds.
+- **The production-only gate says when it applies.** The reviewer and the security rule ask for an allowlist of named
+  non-production environments only where the code has a capability that must stay out of production: a debug route,
+  a mock mode, a seed or reset command shipped with the code, a destructive admin verb. A one-off script an operator
+  runs on purpose against a named environment, such as a deploy or a migration, is not one, and a repository with no
+  such capability says so in one line.
+- **`/st-debug` reproduces in-process first** whenever the repository can drive the defect, from an input the report
+  or the code gives. The user route is for everything else: that test not failing for the stated reason on both runs,
+  no input and no code path reaching the defect, or a defect that needs the user's environment.
+- **`/st-verify` reads four limits from the repository.** The duplication, dependency-lag, page-size and pool rows
+  use the limit the repository declares. With none declared, the duplication, lag and pool rows report what they
+  measured and read `not-applicable`, and the page-size row is judged on its coverage alone.
+- **`/st-quick` commits in the repository's style,** read from its contributing guide or recent history, with a
+  conventional subject where none is found, instead of a fixed `quick:` prefix. A batch still carries one body line
+  per item.
+- **A failing eval case is repaired at the rule it tests.** The AI evals rule says a fix restates the general
+  behaviour the case measures, is checked against a sibling case, and never moves the Expected block to meet it.
 - **A morning list may open on a short summary,** at most 10 lines and 1,000 characters before its first section,
   and the pull-request body prints it after the title.
 - **The run's marker is found before a client's footer.** Every reader of a pull request's body, the land job's

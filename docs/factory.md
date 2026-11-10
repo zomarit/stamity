@@ -527,10 +527,13 @@ answer it, so read your client's permission settings before you leave.
 A session that never waits on a prompt takes two settings. For the guard, launch it with
 `STAMITY_NOBODY_WATCHING=1`, or run `stamity away on` first: every ask the guard would put to you is
 then refused and kept on the held list, and `stamity away status` shows it when you are back. For
-the client's own prompts, which no hook sees, choose a permission mode that does not prompt. Claude
-Code 2.1.322's `claude --help` lists `dontAsk` and `bypassPermissions` among its `--permission-mode`
-choices (read 2026-11-10). What each mode lets through is Claude Code's to say, and no run here has
-measured either, so read its permissions page before you choose. Cursor has settings of its own.
+the client's own prompts, launch Claude Code with `--permission-mode dontAsk`, which its 2.1.322
+`claude --help` lists (read 2026-11-10). In that mode a call no allow rule covers is denied, not
+run, so a call the guard does not class is refused instead of waiting on you. The same list holds
+`bypassPermissions`, which is not recommended: it runs every call with no check, so every call the
+guard does not class or cannot read, a file write, a shell command or a fetch, runs unchecked. No run
+here has measured either mode, so read Claude Code's permissions page before you choose. Cursor has
+settings of its own.
 
 ## When nothing fired
 

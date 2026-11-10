@@ -91,7 +91,7 @@ Say the work is a rate limit on an existing endpoint. It is a feature. It lands 
    its acceptance criteria. Two head keys record freshness: `stamp:` is the head commit, and `reads:` is the paths the plan read. A later run judges
    staleness per path, so a one-file drift does not invalidate the rest.
 3. **Execute.** `/st-work` runs Frame, Understand, Plan, Build and Prove. Build dispatches to sub-agents. Charter invariant 7 keeps the orchestrator
-   out of product files itself. For a unit that changes product code, a tests-only pass writes its tests from the criteria first, and they are held: no builder or fixer edits them, and every Prove pass checks their digest with `stamity gate held`.
+   out of product files itself. For a unit that `stamity gate classify` places `product`, `public-contract` or `security-sensitive`, a tests-only pass writes its tests from the criteria first, and they are held: no builder or fixer edits them, and every Prove pass checks their digest with `stamity gate held`.
 4. **Prove.** Each pass spawns a dedicated `test-runner`. It returns the verification gates one by one, with the exact command and any verbatim
    failing excerpt. Bare pass or fail is not a result. Then a reviewer and fixer loop on `file:line` evidence, capped at three rounds by default. A
    loop that runs out stops as blocked, with the open findings attached.
