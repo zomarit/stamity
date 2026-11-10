@@ -1,7 +1,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
@@ -62,7 +62,11 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
   return {
     ...real,
     gitWrite: (cwd: string, args: readonly string[], opts?: Parameters<typeof real.gitWrite>[2]) => {
-      const mapped = args[0] === "ls-remote" || (args[0] === "push" && lsRemote.push.has(cwd)) ? lsRemote.to.get(cwd) : undefined;
+      // TEST CHANGE, justified (u-ci1): `run end` pushes from `git rev-parse --show-toplevel`, which git prints with `/`
+      // on Windows (`C:/Users/...`), while a case keys its clone by the native path; read both as one folder, so the
+      // push reaches the case's bare remote on Windows too, not github.com. On POSIX the key is the same string.
+      const key = resolve(cwd);
+      const mapped = args[0] === "ls-remote" || (args[0] === "push" && lsRemote.push.has(key)) ? lsRemote.to.get(key) : undefined;
       if (mapped === undefined) return real.gitWrite(cwd, args, opts);
       const mapping = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: `url.${mapped.remote}.insteadOf`, GIT_CONFIG_VALUE_0: mapped.url };
       const previous = Object.fromEntries(Object.keys(mapping).map((key) => [key, process.env[key]]));
