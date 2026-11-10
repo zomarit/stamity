@@ -1270,6 +1270,21 @@ describe("/st-plan — the characterization recipe (REQ-FLOW-184)", () => {
     );
   });
 
+  // Added 2026-11-10 (x-recipe, review M-1, sign-off S73): REQ-FLOW-184 covers brownfield plans too,
+  // so a Feature plan over an existing untested path gets its unit 0 in the persisted plan, not only
+  // at /st-work's Phase 1.
+  it("points Feature's Convention alignment at the recipe for an existing path with no test", () => {
+    const feature = flat(sectionOf(plan.parsed.body, "## Feature"));
+    const alignment = feature.slice(
+      feature.indexOf("**Convention alignment.**"),
+      feature.indexOf("**Model-backed features.**"),
+    );
+
+    expect(alignment).toContain(
+      "divergence is a recorded decision, not an accident. An existing path a unit touches with no test gets unit 0 first, per `st-verify`'s `references/characterization.md`.",
+    );
+  });
+
   it("points /st-work's Phase 1 at the recipe for untested code", () => {
     const sections = work.parsed.body.split(/^(?=## )/m);
     const understand = sections.find((section) => section.startsWith("## Phase 1 — Understand\n"));

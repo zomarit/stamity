@@ -118,7 +118,7 @@ is recorded in the artifact with the default that was assumed.
 
 **Convention alignment.** Each unit cites the reference file (`path:line`) whose pattern it
 follows for structure, state handling, error shape, data access, and test layout. A unit that
-diverges states why in one line — divergence is a recorded decision, not an accident.
+diverges states why in one line — divergence is a recorded decision, not an accident. An existing path a unit touches with no test gets unit 0 first, per `st-verify`'s `references/characterization.md`.
 
 **Model-backed features.** A feature that calls a model carries an eval unit: an offline eval set,
 a pass threshold, and the failure classes the threshold gates. The `ai-evals` rule holds the
