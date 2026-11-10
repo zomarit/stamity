@@ -214,12 +214,15 @@ describe("command coverage", () => {
   });
 
   // ADDED (plan 024 file 1, unit n-away-verb, REQ-FLOW-166, sign-off S31): `away` is a person's verb, advertised after
-  // `skill`, and the page counts it among all nineteen commands it documents.
-  it("documents `away` as advertised after `skill`, with its three subcommands, among nineteen commands", () => {
+  // `skill`, and the page counts it among all twenty commands it documents.
+  // TEST CHANGE, justified (plan 024, integration of n-away-verb with x-ready-verb): `ready` landed beside `away`,
+  // so the surface is twenty commands, not the nineteen this case counted on its own branch; the assertions keep
+  // their shape and only the count moved with the surface.
+  it("documents `away` as advertised after `skill`, with its three subcommands, among twenty commands", () => {
     const names = COMMANDS.map((command) => command.name);
     expect(names.indexOf("away")).toBe(names.indexOf("skill") + 1);
-    expect(COMMANDS).toHaveLength(19);
-    expect(page).toContain("all 19 of the commands above");
+    expect(COMMANDS).toHaveLength(20);
+    expect(page).toContain("all 20 of the commands above");
     expect(page).toMatch(/^\| `stamity away` \| yes \|/mu);
     const section = sectionOf("away");
     expect(section).toContain("| `<subcommand>` | on \\| off \\| status |");
