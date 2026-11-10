@@ -8057,8 +8057,9 @@ record `.stamity/skills/<name>.origin.json` (`readSkillSources`, `src/skills/sou
     whose skill has no clean copy is `BLOCKED_DEPENDENCY` and nothing is fetched at Build
     (`content/commands/st-plan.md`, `st-work.md`, `st-rework.md`; `content/agents/stamity-implementer.md`).
 - **Limits** (`SECURITY.md`): a source with `allowScripts` may bring any file type; a GitLab subgroup source is refused;
-  a shallow fetch downloads the whole commit's tree before the skill folder's caps apply. A folder link inside a skill
-  copy is followed by `check` (`review/173`, open).
+  a shallow fetch downloads the whole commit's tree before the skill folder's caps apply. `check` follows no link inside
+  a skill copy: a recorded file reached through a folder link, or one whose real path lies outside the copy, reads as
+  `changed` and is never read (`test/skills/fetch.test.ts`, the folder-link case).
 - **Proof:** `test/skills/sources.test.ts`, `test/skills/scriptDetect.test.ts`, `test/skills/fetch.test.ts`,
   `test/cli/commands/skill.test.ts`, `test/hooks/personOnly.test.ts` (the block "the skill fetch (REQ-FLOW-180,
   s-skill-guard)"), `test/cli/commands/check.test.ts` ("check — copied-skills"), `test/change/personOnlyPaths.test.ts`,
