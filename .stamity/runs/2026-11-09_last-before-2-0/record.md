@@ -1075,3 +1075,68 @@ Not done:
 - review/192 (a misspelt findings fence passes both `ledger append` and `run end`), review/195 (an operating
   system's own file in `reports/` stops the empty ledger) and the eight deferred security Minors: the 1.19.x patch.
 - Four golden eval cases failed in run 63 and two advisory rows repeat: their dispositions before the next run.
+- 2026-11-10T16:42:16Z — The maintainer's answers, word for word (question tool, explained first; default declared: every recommended
+  option). Asked: "The one-minute ask check (open each client in its scratch folder, type `run git tag qa-check`,
+  decline the prompt): what happened?" Answer: "Both prompts appeared". Asked: "The release acts, in order: main
+  fast-forwarded to the release tree, then the tag v1.19.0, then your npm-publish approval on GitHub, then the
+  advisory (High 7.0) once npm serves 1.19.0. How should I run them?" Answer: "Go, one prompt each (Recommended)".
+  Asked when `main` moves: after a pre-merge CI run on the final tree is green (about 40 minutes), as the checklist
+  says, or at once, with `main`'s own CI as the check. Answer: the recommended option, after the pre-merge CI run.
+- 2026-11-10T16:42:16Z — The interactive ask check (checklist line): Claude Code 2.1.322 in bypass-permissions mode, in a scratch clone of
+  the release build set to `autonomy.mode: ask`, showed its approve prompt for `git tag qa-check`, declined; Copilot
+  CLI 1.0.107 with Allow All, in a one-commit scratch repository the release build set up, showed its hook
+  permission request, declined; no `qa-check` tag exists in either folder. The guard checked is the shipped one
+  (`src/hooks` unchanged since `9674a16e`'s build).
+- 2026-11-10T16:42:42Z — Pre-move checks on `091d999b`, each by exit code: `5146b44b` (the eval candidate), `e631b0d3` (#138's head)
+  and `4f945a3a` (`main`) each an ancestor (0, so `main` fast-forwards); `src/hooks` unchanged since the ask check's
+  build `9674a16e` (0); no eval input changed since `5146b44b` (0); `origin/main` still `4f945a3a`; `origin/records`
+  is `3ff2b780` (publish 2) and holds `evals/measurements/merge-ready-2026-11-10.json` and run 63's `RESULTS.md` (each
+  `cat-file -e` 0). The 24-hour reads (controls, admins, metadata, the image digest) were made today at 09:03Z to
+  09:09Z, inside the window. Waiting for the pre-merge CI run on the final tree.
+- 2026-11-10T17:23:11Z — The pre-merge CI run on the final tree (`091d999b` plus a CI-only time limit): success on every
+  check leg, read from the job logs: lts (357 files, 22,643 passed, 23 skipped; coverage 96.51 / 90.64 / 98.72 /
+  97.77), floor, windows-1 (40 min), windows-2 (62 min, inside the 90-minute limit), cloud-container, all-ci-checks.
+- 2026-11-10T17:23:11Z — **`main` fast-forwarded `4f945a3a..091d999b`** (the maintainer's approval of the guard's ask; GitHub reports the
+  admin bypass of the pull-request rule, as at 1.18.0). #138 reads merged (17:22:40Z). `main`'s push runs watched: CI
+  42864342569, Pack signing rehearsal 42864342158, Docs site 42864342345. The tag waits for them.
+- 2026-11-10T17:49:53Z — `main`'s push runs on `091d999b`, read to their end: CI 42864342569 success on every job (check lts 357 files,
+  22,642 passed, 24 skipped, coverage 96.51 / 90.63 / 98.72 / 97.77; floor, windows-1, windows-2, both fork probes,
+  cloud-container, records, prove-pr, all-ci-checks); Pack signing rehearsal 42864342158 success (prepare, sign,
+  verify); Docs site 42864342345 success (build; its deploy step skipped on this push).
+- 2026-11-10T17:49:53Z — **Tag `v1.19.0`** (the maintainer's approval of the guard's asks): annotated on `091d999b`, message "1.19.0" /
+  "records: 3ff2b7807ba27faf7d2f60da12baf2c823131e1f" (checked equal to `origin/records` just before), pushed (GitHub
+  reports the admin bypass of the tag-creation rule, as at 1.18.0). The release workflow run 42868867697 started; its
+  npm publish waits for the maintainer's environment approval.
+- 2026-11-10T18:12:32Z — Release run 42868867697: `gates and pack` success; `publish` waited on the `npm-publish` environment; the
+  maintainer: "approved" (the deployment approved on GitHub). Watching the publish to its end.
+- 2026-11-10T18:14:24Z — Release run 42868867697, `publish`: "Publish to npm with provenance" success (`+ @zomarit/stamity@1.19.0`,
+  provenance signed and written to the transparency log, "Your package is being processed and may take a few minutes
+  to become available"); "Verify the registry tarball" failed after 12 tries 10 s apart with no answer (npm still
+  processing; `npm view @zomarit/stamity@1.19.0` answered 404 at 18:14Z, `latest` still 1.18.0); "Create GitHub
+  release" skipped. The same as 1.18.0's verify step; its route: once npm serves the version, re-run the failed job,
+  which skips the publish on the same integrity, verifies and creates the release.
+- 2026-11-10T18:17:16Z — npm serves `@zomarit/stamity@1.19.0` from 18:16:48Z with `dist-tags.latest` 1.19.0 and integrity
+  `sha512-HnEN0iVMFMpLdGqYccjJe8p8qgesj1G9XeweCzgqebTovBFYWDJ5DtfE6HzHjKncY15YhABZhUnDpRyOoEx70g==`, the packed
+  tarball's (as the publish step printed it). The failed `publish` job re-run (`gh run rerun 42868867697 --failed`)
+  to verify and create the GitHub release; it waits on the `npm-publish` approval again.
+- 2026-11-10T19:14:21Z — The re-run of the `publish` job (the maintainer: "done", the `npm-publish` approval): success; it skipped the
+  publish on the same integrity, verified the registry tarball and created the GitHub release. **1.19.0 released.**
+  Registry read-back: `dist-tags.latest` 1.19.0; `dist.integrity` `sha512-HnEN0iVMFMpLdGqYccjJe8p8qgesj1G9XeweCzgqebTovBFYWDJ5DtfE6HzHjKncY15YhABZhUnDpRyOoEx70g==`,
+  equal to the sha512 of the release asset `zomarit-stamity-1.19.0.tgz` (1,150,926 bytes) downloaded from the GitHub
+  release; provenance predicate `https://slsa.dev/provenance/v1`. The GitHub release `v1.19.0` is published (not a
+  draft, not a prerelease) with the tarball and `sbom.cdx.json`.
+- 2026-11-10T19:14:53Z — The security advisory for this release's guard fix published: `GHSA-ppmc-hwrr-fvh3` (High 7.0, affected
+  `>= 1.16.0, < 1.19.0`, patched 1.19.0), with a CVE requested. The release is complete.
+- 2026-11-10T19:22:13Z — **The close's question batch**, the maintainer's answers word for word: the leftovers list "Accept all
+  (Recommended)"; the next session "1.19.1 patch first (Recommended)"; the public copy of eval runs 58 to 61 and run 63's
+  results, so their large files can leave the records branch, "At the 1.19.1 close (Recommended)".
+- 2026-11-10T19:22:13Z — **The leftovers walk applied.** Four rows filed at the close and deferred to the 1.19.1 patch, each with an
+  inbox row: close/1 (after a land-job merge the run's issue stays open; the land job closes it, with the token's
+  issues permission reviewed), close/2 (the closing message with the land job on), close/3 (run 63's four failed golden
+  cases read), close/4 (run 63's two repeated advisory rows get a disposition). review/26 re-pointed to the 1.19.1
+  patch. Two plan rows that waited on today's real runs left the inbox, answered: the administrator's
+  `current_user_can_bypass` value (measured and dated on the factory page) and whether a land-job merge closes its
+  issue through the closing keyword (it does not: close/1). Ledger 291 rows, 0 open (236 fixed, 20 rejected, 35
+  deferred, each with an inbox row).
+- 2026-11-10T19:22:13Z — Records publish 3, after the tag: this record, its ledger and the inbox, from the release lane (sync base
+  `3ff2b7807ba27faf7d2f60da12baf2c823131e1f`, the `origin/records` head).
