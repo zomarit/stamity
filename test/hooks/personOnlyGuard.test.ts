@@ -3445,3 +3445,96 @@ describe("a push whose remote or option word the shell fills in, with the origin
     expect(decision).not.toHaveProperty("ask");
   });
 });
+
+/**
+ * The place's own push configuration, read from real files (REQ-FLOW-102, REQ-FLOW-124, REQ-FLOW-134): a refmap, the
+ * push mode, a mirror setting, read from the repository's file and the global one, and a value the reader cannot decode
+ * as git does, which makes the reading partial.
+ */
+describe("a push read against the push configuration in git's files", () => {
+  const ORIGIN = '[remote "origin"]\n\turl = https://github.com/acme/app.git\n';
+  /** The shape of a maintainer's checkout: gh's marker on origin, a fetch-only remote, branches merging into themselves. */
+  const CHECKOUT =
+    '[remote "origin"]\n\turl = https://github.com/acme/app.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n\tgh-resolved = base\n' +
+    '[remote "archive"]\n\turl = https://github.com/acme/old\n\tfetch = +refs/heads/*:refs/remotes/archive/*\n\tpushurl = no_push\n' +
+    '[branch "main"]\n\tremote = origin\n\tmerge = refs/heads/main\n[branch "feat/x"]\n\tremote = origin\n\tmerge = refs/heads/feat/x\n';
+  const asHelper = (command: string): string => JSON.stringify({ ...JSON.parse(payload("claude", command)), agent_id: "a1" });
+  const ruleSaid = (rule: string): string => `(\`${rule}\`)`;
+
+  // Red on 091d999b: the repository's refmap was never read, so the feature push ran.
+  it("asks for a feature push the repository's refmap sends to the default branch, and runs it without the refmap", async () => {
+    const guard = await placeGuard("claude", { ".git/config": `${ORIGIN}\tpush = refs/heads/feat/x:refs/heads/main\n` });
+    expect(decide("claude", guard, "git push origin feat/x")).toMatchObject({ deny: true, ask: true, reason: expect.stringContaining(ruleSaid("push-default")) });
+    await getRepo().seedFiles({ ".git/config": ORIGIN });
+    expect(decide("claude", guard, "git push origin feat/x")).toEqual({ deny: false });
+  });
+
+  it("asks for a refless push where the global file sets the upstream mode and the branch merges into the default branch", async () => {
+    const guard = await placeGuard("claude", {
+      ".git/config": `${ORIGIN}[branch "feat/x"]\n\tremote = origin\n\tmerge = refs/heads/main\n`,
+      "home.gitconfig": "[push]\n\tdefault = upstream\n",
+    });
+    const global = { GIT_CONFIG_GLOBAL: getRepo().path("home.gitconfig") };
+    expect(decide("claude", guard, "git push", global)).toMatchObject({ deny: true, ask: true, reason: expect.stringContaining(ruleSaid("push-default")) });
+    // One fact away: with no global file the mode is git's default, and the same push runs.
+    expect(decide("claude", guard, "git push")).toEqual({ deny: false });
+  });
+
+  it("refuses a refless push to a remote whose section holds a bare mirror key", async () => {
+    const guard = await placeGuard("claude", { ".git/config": `${ORIGIN}\tmirror\n` });
+    const decision = decide("claude", guard, "git push");
+    expect(decision).toMatchObject({ deny: true, reason: expect.stringContaining(ruleSaid("force-push")) });
+    expect(decision).not.toHaveProperty("ask");
+    await getRepo().seedFiles({ ".git/config": `${ORIGIN}\tmirror = false\n` });
+    expect(decide("claude", guard, "git push")).toEqual({ deny: false });
+  });
+
+  // Red on 091d999b: each value was read as a plain one, or its continuation hid the line after it.
+  it.each([
+    // git joins the next line to the value, so the push URL after it is origin's, not the second section's.
+    ["a value continued onto the next line", `${ORIGIN}\tfetch = +refs/heads/*:refs/remotes/origin/*\\\n[remote "spare"]\n\tpushurl = https://github.com/other/repo.git\n`],
+    ["a value holding an escape", '[remote "origin"]\n\turl = "https://github.com/acme/app.git\\t"\n'],
+    ["a value holding a quote inside it", '[remote "origin"]\n\turl = https://github.com/"acme"/app.git\n'],
+    ["a comment mark inside a quoted value", '[remote "origin"]\n\turl = "https://github.com/acme/app.git ;x"\n'],
+    ["a comment mark git cuts with no blank before it", `${ORIGIN}\tpush = refs/heads/feat/x:refs/heads/feat/x;refs/heads/main\n`],
+    ["an include path holding an escape", `${ORIGIN}[include]\n\tpath = "../a\\\\b.gitconfig"\n`],
+    ["an include path git expands from its install", `${ORIGIN}[include]\n\tpath = %(prefix)/etc/more.gitconfig\n`],
+  ])("asks for a push to origin where the repository's file holds %s", async (_, config) => {
+    const guard = await placeGuard("claude", { ".git/config": config });
+    expect(decide("claude", guard, "git push -u origin feat/x")).toMatchObject({ deny: true, ask: true });
+  });
+
+  it("runs the same push where every value is plain, quoted whole or followed by a comment", async () => {
+    const plain = `${ORIGIN}\tfetch = "+refs/heads/*:refs/remotes/origin/*"\n\tpushurl = https://github.com/acme/app.git ; the origin\n[include]\n\tpath = ../more.gitconfig\n`;
+    const guard = await placeGuard("claude", { ".git/config": plain });
+    expect(decide("claude", guard, "git push -u origin feat/x")).toEqual({ deny: false });
+  });
+
+  it("asks on the main thread for a push on a line that also moves the origin", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN });
+    const line = "git remote set-url origin https://github.com/other/repo.git && git push -u origin feat/x";
+    expect(decide("claude", guard, line)).toMatchObject({ deny: true, ask: true, reason: expect.stringContaining(ruleSaid("outside-write")) });
+    expect(decide("claude", guard, "git push -u origin feat/x")).toEqual({ deny: false });
+  });
+
+  // A pin, green before and after: in a checkout shaped like the maintainers' own, the lines a run relies on still run,
+  // on the main thread and for a sub-agent.
+  it("runs the everyday lines in a checkout shaped like the maintainers' own", async () => {
+    const guard = await placeGuard("claude", { ".git/config": CHECKOUT });
+    const lines = [
+      "npx --no stamity gate classify --base HEAD --paths src/a.ts",
+      "git push -u origin feat/x",
+      "git push origin HEAD:refs/heads/feat/x",
+      "git push",
+      "gh pr create -R acme/app --draft --title t --body b",
+      "gh pr edit 3 -R acme/app --body b",
+      "gh pr comment 3 -R acme/app --body b",
+      'git -C lane commit -s -m "fix: a change"',
+      "lockf -k /tmp/stamity-machine.lock npx vitest run test/hooks",
+    ];
+    for (const command of lines) {
+      expect(decide("claude", guard, command), command).toEqual({ deny: false });
+      expect(clientDecision("claude", run(guard, asHelper(command)), `helper: ${command}`), `helper: ${command}`).toEqual({ deny: false });
+    }
+  });
+});

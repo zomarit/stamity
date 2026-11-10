@@ -50,7 +50,7 @@
  * (refused unattended), a computed `sh -c "$(…)"`,
  * a PowerShell `-EncodedCommand` or a line piped into `iex` or a shell,
  * a bare tag name the context's `tags` does not list, a repository's own push
- * configuration, a `git update-ref --stdin` text read from a file, a GraphQL
+ * configuration that a file write on the same line changes, a `git update-ref --stdin` text read from a file, a GraphQL
  * mutation or a REST body read from a file where the
  * API's default is not the default branch, a REST target held in a variable — passes. A line nested past four
  * levels is not read: both verdicts throw a coded `NESTING_DEPTH` error, which
@@ -301,6 +301,15 @@ export interface PersonOnlyContext {
   readonly remoteRepo?: (name: string) => string;
   /** The remote a push naming none uses on this place's branch (`pushRemote`, `remote.pushDefault`, `remote`, `origin`); `null` where unread. */
   readonly pushRemote?: string | null;
+  /**
+   * What the place's git configuration files set for a push to `remote` (a configured remote's name; null for a push to a
+   * URL or a word the line cannot show), as `-c`-style `key=value` pairs the push reader takes: each `remote.<remote>.push`
+   * value, `remote.<remote>.mirror` where on, every `push.default` value read, `push.followtags` where on, the
+   * `push.recursesubmodules` and `submodule.recurse` values, and the checked-out branch's `branch.<name>.merge` values,
+   * which the reader takes only where the push mode is `upstream` or `tracking`. null where the configuration cannot be
+   * read whole. Absent: none, as in 1.19.0, for a caller that reads only its own push.
+   */
+  readonly pushConfig?: (remote: string | null) => readonly string[] | null;
   /**
    * The repository a push to `origin` reaches where that is not simply its fetch URL (a `pushurl`, a `pushInsteadOf`
    * rewrite, or more than one URL, every one of which git pushes to), as {@link originRepo} is written; `""` where those
@@ -2039,6 +2048,14 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   /** The files the line's data and field options name by `@` (review/147), for the whole-line read. */
   const fileRefs = new Set<string>();
   const environment = /\bGH_(?:REPO|HOST)\b|\bGIT_CONFIG\w*|\b(?:HOME|XDG_CONFIG_HOME)\s*=/.test(command);
+  /**
+   * Whether the line also moves where a git remote points (a `git remote` write, a `git config` write of a remote, URL
+   * rewrite or include key or section, a `git config` edit, or either call holding a word the line cannot show), and
+   * whether it also changes any git configuration a push reads (those, or a push, branch or submodule key or section):
+   * a push or gh write on it is judged against a configuration the line has already changed. Set before the verdict loop.
+   */
+  let remoteMoved = false;
+  let pushConfigMoved = false;
   /** Whether a gh write naming no repository lands outside the origin: gh's default unknown or another repository. */
   const defaultAway = (): boolean => {
     const fallback = ctx.ghDefaultRepo;
@@ -2070,7 +2087,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const outside = (): void => {
       deny("outside-write", "A push to another repository, or to a remote the guard cannot place");
     };
-    if (ctx.placeUnread === true || gitEnvironment || config.some((pair) => /^(?:remote|url)\./i.test(pair))) return outside();
+    // An include a `-c` pair names may carry a remote or a URL rewrite too.
+    if (ctx.placeUnread === true || gitEnvironment || config.some((pair) => /^(?:remote|url|include|includeif)\./i.test(pair))) return outside();
+    if (remoteMoved) {
+      deny("outside-write", "A write on a line that also moves a git remote, a URL rewrite or an include");
+      return;
+    }
     const named = words.length > 0 ? words : pushRemoteWord();
     for (const [word, mark] of named) {
       if (word === null || (mark?.kinds ?? "") !== "" || /[$`]/.test(word)) return outside();
@@ -2115,21 +2137,30 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       return;
     }
-    if (sub !== "config") return;
-    if (args.some((arg) => arg === "-e" || arg === "--edit")) {
-      deny("remote-write", "Editing the git configuration (`git config --edit`), which may write a remote or a URL rewrite");
-      return;
-    }
-    const keyed = args.findIndex((arg) => /^(?:remote|url|include|includeif)\.|^include(?:if)?$/i.test(arg));
-    if (keyed === -1) return;
+    const written = configWrites(sub, args, REMOTE_SECTIONS);
+    if (written === "edit") deny("remote-write", "Editing the git configuration (`git config --edit`), which may write a remote or a URL rewrite");
+    else if (written === "key") deny("remote-write", "Writing a remote or URL rewrite in the git configuration (`git config`)");
+  }
+  /** The keys and sections whose write moves a remote: a remote, a URL rewrite, an include. */
+  const REMOTE_SECTIONS = /^(?:remote|url|include|includeif)\.|^include(?:if)?$/i;
+  /** The keys and sections a push reads besides those: the push settings, a branch's upstream, submodule recursion. */
+  const PUSH_SECTIONS = /^(?:push|branch|submodule)(?:\.|$)/i;
+  /**
+   * Whether a `git config` call writes: `edit` for `--edit`, which writes whatever it opens; `key` for a write of a key
+   * or section `sections` matches. A call reads only where it carries a read option or subcommand (`--get`, `--list`,
+   * `get`, `list`, …) or names a key and no value.
+   */
+  function configWrites(sub: string, args: readonly string[], sections: RegExp): "edit" | "key" | null {
+    if (sub !== "config") return null;
+    if (args.some((arg) => arg === "-e" || arg === "--edit")) return "edit";
+    const keyed = args.findIndex((arg) => sections.test(arg));
+    if (keyed === -1) return null;
     const reads = args.some((arg) => /^--(?:get(?:-all|-regexp|-urlmatch|-color(?:bool)?)?|list|show-origin|show-scope|name-only)$/.test(arg) || arg === "-l");
     const subcommand = args.find((arg) => !arg.startsWith("-")) ?? "";
     const writes = args.some((arg) => /^--(?:unset(?:-all)?|add|replace-all|rename-section|remove-section)$/.test(arg)) ||
       ["set", "unset", "rename-section", "remove-section"].includes(subcommand);
     const value = args.slice(keyed + 1).some((arg) => !arg.startsWith("-"));
-    if (writes || (!reads && !["get", "list"].includes(subcommand) && value)) {
-      deny("remote-write", "Writing a remote or URL rewrite in the git configuration (`git config`)");
-    }
+    return writes || (!reads && !["get", "list"].includes(subcommand) && value) ? "key" : null;
   }
 
   /** A refspec's destination as a branch name: `+` dropped, `<src>:` cut, `refs/heads/` or `heads/` cut. */
@@ -2143,11 +2174,26 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
 
   /** The repository words the last push read named (review/130), for `pushRead`. */
   let pushReach: readonly (readonly [string | null, WordMark | undefined])[] = [];
-  /** A push's acts: its branch, force, deletion and tag acts, then the repository it reaches (`pushOutside`). */
+  /** Whether the last push read found the place's push configuration unreadable (`ctx.pushConfig`), for `pushRead`. */
+  let pushUnread = false;
+  /**
+   * A push's acts: its branch, force, deletion and tag acts, then the repository it reaches (`pushOutside`), then a push
+   * configuration the guard cannot read whole or that the line also changes, each read as a push to the default branch,
+   * and to a deploying one where any is named. After the repository, so a push to another one is the act named first.
+   */
   function pushRead(args: string[], config: string[], marks: readonly WordMark[]): void {
     pushReach = [];
+    pushUnread = false;
     pushVerdict(args, config, marks);
     pushOutside(pushReach, config);
+    const reasons = [
+      ...(pushUnread ? ["A push whose git configuration the guard cannot read whole"] : []),
+      ...(pushConfigMoved ? ["A push on a line that also changes the git configuration a push reads"] : []),
+    ];
+    for (const what of reasons) {
+      if (deploying.length > 0) deny("push-deploying", what);
+      deny("push-default", what);
+    }
   }
 
   function pushVerdict(args: string[], config: string[], marks: readonly WordMark[] = [], valueRead = false): PersonOnlyVerdict | null {
@@ -2175,17 +2221,30 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     // a `branch.<name>.merge` names (where `push.default=upstream` sends a refspec-less push). Read whatever
     // remote or branch the pair names, so they add denials and never lift one.
     const configured: string[] = [];
-    for (const pair of config) {
+    // What the place's files set (`ctx.pushConfig`): a `remote.<name>.push` refmap, read for a refless push and beside a
+    // bare source on the line, as git maps one; and the branch's upstream, read for a refless push in upstream mode.
+    const mapped: string[] = [];
+    const merges: string[] = [];
+    // The values each setting the push reads takes, the line's `-c` pairs apart from the files': git's command line
+    // overrides the files, so where the line sets a key its values alone count.
+    const lineValues = new Map<string, string[]>();
+    const fileValues = new Map<string, string[]>();
+    const SETTINGS = /^(?:push\.(?:followtags|default|recursesubmodules)|submodule\.recurse|remote\..+\.mirror)$/;
+    const readPair = (pair: string, fromLine: boolean): void => {
       const eq = pair.indexOf("=");
       const key = (eq === -1 ? pair : pair.slice(0, eq)).toLowerCase();
       const value = eq === -1 ? "true" : pair.slice(eq + 1).toLowerCase();
-      const on = !["false", "no", "off", "0", ""].includes(value);
-      if (key === "push.followtags" && on) tags = true;
-      if (/^remote\..+\.mirror$/.test(key) && on) force = true;
-      if (key === "push.default" && value === "matching") matching = true;
-      if (/^remote\..+\.push$/.test(key) && eq !== -1) configured.push(pair.slice(eq + 1));
-      if (/^branch\..+\.merge$/.test(key) && eq !== -1) configured.push(`HEAD:${pair.slice(eq + 1)}`);
-    }
+      const taken = fromLine ? lineValues : fileValues;
+      if (SETTINGS.test(key)) taken.set(key, [...(taken.get(key) ?? []), value]);
+      if (/^remote\..+\.push$/.test(key) && eq !== -1) (fromLine ? configured : mapped).push(pair.slice(eq + 1));
+      if (/^branch\..+\.merge$/.test(key) && eq !== -1) (fromLine ? configured : merges).push(`HEAD:${pair.slice(eq + 1)}`);
+    };
+    for (const pair of config) readPair(pair, true);
+    /** The values the push takes for `key`: the line's where it sets the key, else the files'. */
+    const valuesOf = (key: string): readonly string[] => lineValues.get(key) ?? fileValues.get(key) ?? [];
+    const on = (value: string): boolean => !["false", "no", "off", "0", ""].includes(value);
+    /** The `--recurse-submodules` values the line gives, `no` for its negated form. */
+    const recursion: string[] = [];
     for (let j = 0; j < args.length; j += 1) {
       const arg = args[j] ?? "";
       if (arg === "--") {
@@ -2202,6 +2261,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         // name is read as each option it begins. A prefix of two options is one git refuses, so reading it as either
         // adds a denial to a line that pushes nothing, and a `--no-` form begins none of these.
         const is = (options: string[]): boolean => name.length > 2 && options.some((option) => option.startsWith(name));
+        // Submodule recursion's value: after `=`, else the next word, either read as on where the shell fills it in.
+        if (is(["--recurse-submodules"])) {
+          const filled = eq === -1 ? (marks[j + 1]?.kinds ?? "") !== "" : (marks[j]?.kinds ?? "") !== "" && (marks[j]?.last ?? 0) > eq;
+          recursion.push(filled ? "on" : (eq === -1 ? (args[j + 1] ?? "on") : arg.slice(eq + 1)).toLowerCase());
+        } else if (name.length > 5 && "--no-recurse-submodules".startsWith(name)) recursion.push("no");
         if (is(["--stdin"])) stdin = true;
         // `--mirror` also force-updates and deletes remote refs, so it reads as a force push (v0a).
         if (is(["--force", "--force-with-lease", "--force-if-includes", "--mirror"])) force = true;
@@ -2258,6 +2322,40 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       if (deploying.length > 0) deny("push-deploying", "A push of refs read from its input, which may name a deploying branch");
       deny("push-default", "A push of refs read from its input, which may name the default branch");
     }
+    // The place's own push configuration (`ctx.pushConfig`), asked once per repository word the push names: a plain
+    // remote name by itself, any other word (a URL, a path, a word the shell fills in) as null, for the top-level keys
+    // alone; with none, the push remote. A configuration the guard cannot read whole is recorded by `pushRead`.
+    if (ctx.pushConfig !== undefined) {
+      const plain = (word: string | null, mark: WordMark | undefined): string | null =>
+        word !== null && (mark?.kinds ?? "") === "" && /^[\w.-]+$/.test(word) && word !== "." && word !== ".." ? word : null;
+      const words = [...repoWords, ...(positionals.length > 0 ? [[positionals[0] ?? null, positionalMarks[0]] as const] : [])];
+      const remotes = words.length > 0 ? words.map(([word, mark]) => plain(word, mark)) : ctx.pushRemote === null ? [] : [ctx.pushRemote ?? "origin"];
+      if (words.length === 0 && ctx.pushRemote === null) pushUnread = true;
+      for (const remote of new Set(remotes)) {
+        const pairs = ctx.pushConfig(remote);
+        if (pairs === null) pushUnread = true;
+        else for (const pair of pairs) readPair(pair, false);
+      }
+    }
+    if (valuesOf("push.followtags").some(on)) tags = true;
+    for (const key of new Set([...lineValues.keys(), ...fileValues.keys()])) {
+      if (/^remote\..+\.mirror$/.test(key) && valuesOf(key).some(on)) force = true;
+    }
+    // Several push modes read (an include whose condition is not read among them) count as their union.
+    const modes = valuesOf("push.default");
+    if (modes.includes("matching")) matching = true;
+    if (modes.includes("upstream") || modes.includes("tracking")) configured.push(...merges);
+    // Submodule recursion (REQ-FLOW-134): the line's option over every setting, `push.recurseSubmodules` over
+    // `submodule.recurse`, each the line's over the files'. A push that recurses also pushes each changed submodule to
+    // its own remote, other repositories, on branches the line does not show.
+    const recurses = (given: readonly string[]): boolean => given.some((value) => !["check", "no", "false", "off", "0", ""].includes(value));
+    const pushRecursion = valuesOf("push.recursesubmodules");
+    if (!valueRead && recurses(recursion.length > 0 ? recursion : pushRecursion.length > 0 ? pushRecursion : valuesOf("submodule.recurse"))) {
+      if (ctx.originRepo !== undefined) deny("outside-write", "A push that also pushes submodules, to repositories the line does not show");
+      const what = "A push that also pushes submodules, whose branches the line does not show";
+      if (deploying.length > 0) deny("push-deploying", what);
+      deny("push-default", what);
+    }
     let valueReach: typeof pushReach = [];
     if (values.length > 0) {
       const kept = (_: unknown, at: number): boolean => !values.includes(at);
@@ -2293,7 +2391,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     // git reads `tag <name>` as `refs/tags/<name>:refs/tags/<name>`, whatever the context lists.
     const tagWord = named.indexOf("tag");
     const tagNamed = tagWord !== -1 && tagWord < named.length - 1;
-    const refspecs = named.length === 0 ? configured : refless ? [...named, ...configured] : named;
+    // The files' refmap joins a refless push, and a push naming a bare source, which git maps through it (a source and a
+    // destination on the line are never mapped); read whichever source it names, so it adds denials and never lifts one.
+    const bareSource = named.some((spec) => !spec.replace(/^\+/, "").includes(":"));
+    const fileMapped = refless || bareSource ? mapped : [];
+    const refspecs = named.length === 0 ? [...configured, ...fileMapped] : refless ? [...named, ...configured, ...fileMapped] : [...named, ...fileMapped];
     // A side naming a tag (`refs/tags/…`, `tags/…`, or a bare local tag name) pushes one: git gives a bare
     // destination the source's `refs/tags/` namespace, so `v1:x` and `refs/tags/v1:x` create the remote tag `x`.
     const namesTag = (side: string): boolean =>
@@ -2928,7 +3030,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       const what = gh ? "gh api" : `${line[0] ?? ""} to the GitHub API`;
       if ((gh && environment) || keys.some((key) => key === "" || key !== origin) || (defaulted && keys.length === 0 && defaultAway())) {
         deny("outside-write", `A write that reaches another repository, or one the guard cannot place (\`${what}\`)`);
-      }
+      } else if (gh && remoteMoved) deny("outside-write", "A write on a line that also moves a git remote, a URL rewrite or an include");
       if (graphql) {
         // A field word whose key, or whose `query` value, the shell fills in; for curl or wget, any body word it fills in.
         const filledKey = line.some((word, at) => {
@@ -3344,7 +3446,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const what = `gh ${group} ${sub}`;
     if (environment || targets.some((key) => key === "" || key !== origin) || (targets.length === 0 && defaultAway())) {
       deny("outside-write", `A write that reaches another repository, or one the guard cannot place (\`${what}\`)`);
-    }
+    } else if (remoteMoved) deny("outside-write", "A write on a line that also moves a git remote, a URL rewrite or an include");
     if (whole ? (lineMentions ??= mentions(command, fileRefs)) : prose.some((text) => mentions(text))) {
       deny("outside-write", `A body or title naming a person (an \`@\` mention), which reaches them (\`${what}\`)`);
     }
@@ -3585,6 +3687,18 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     };
     return stdinRead;
   };
+  // Before the verdicts: whether the line also moves a remote or changes the push configuration (`remoteMoved`,
+  // `pushConfigMoved`), wherever on the line it does, so a push or gh write anywhere on it is read against that.
+  for (const cmd of read) {
+    if (cmd[0] !== "git") continue;
+    const { sub, args: lineArgs } = gitParts(cmd);
+    const args = fed.has(cmd) ? [...lineArgs, "$"] : lineArgs;
+    const unshown = (sub === "remote" || sub === "config") && !shownWords((markMap.get(cmd) ?? []).slice(cmd.length - lineArgs.length));
+    const action = args.find((arg) => !arg.startsWith("-")) ?? "";
+    if (unshown || (sub === "remote" && ["add", "rename", "set-url", "remove", "rm", "set-head", "set-branches"].includes(action)) ||
+      configWrites(sub, args, REMOTE_SECTIONS) !== null) remoteMoved = true;
+    if (remoteMoved || configWrites(sub, args, PUSH_SECTIONS) !== null) pushConfigMoved = true;
+  }
   for (const cmd of read) {
     const program = cmd[0] ?? "";
     if (program === "git") {

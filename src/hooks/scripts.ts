@@ -433,7 +433,12 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // 355,322 bytes / 7,302 lines (copilot, generated), past both rows, because the push reading now reads any word the
   // shell fills in at the remote's place and in an option word, and no longer returns before the force and deletion
   // reads. 353,390 + 1,932 = 355,322 bytes; 7,268 + 34 = 7,302 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 355_322, lines: 7_302 },
+  // Moved again 2026-11-10 by the person-only guard hardening (REQ-FLOW-102, REQ-FLOW-134), by what was measured:
+  // 367,100 bytes / 7,476 lines (copilot, generated), past both rows, because the push reading now reads the place's own
+  // push configuration, submodule recursion and a configuration write on the same line, and the configuration reader
+  // collects the push keys and reads a value it cannot decode as partial. 355,322 + 11,778 = 367,100 bytes;
+  // 7,302 + 174 = 7,476 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 367_100, lines: 7_476 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -4411,14 +4416,20 @@ const GUARD_GIT_REWRITES_MAX = 256;
  * `configOf`:
  * What git's merged configuration says about remotes (REQ-FLOW-134, review/128): per remote its first url and pushurl
  * and its gh-resolved marker, per branch its remote and pushRemote, remote.pushDefault, and every url.<base>.insteadOf
- * and pushInsteadOf rule. Includes are followed (review/134): include.path and every includeIf target, whatever its
+ * and pushInsteadOf rule; and what it sets for a push (REQ-FLOW-102): per remote its push refmaps and mirror setting, per
+ * branch its merges, and every push.default value, push.followTags, push.recurseSubmodules and submodule.recurse,
+ * which pushPairs hands the push reader as -c-style pairs. A key with no "=" reads as true, as git reads it. Includes
+ * are followed (review/134): include.path and every includeIf target, whatever its
  * condition (a superset of what git reads), relative to the including file, ~/ from the home folder, at most
  * INCLUDE_DEPTH_MAX deep, INCLUDE_FILES_MAX files and INCLUDE_BYTES_MAX bytes in all; a missing target reads as empty,
  * as git reads it. A file that is a symbolic link is followed, at most LINK_HOPS_MAX links (review/148). partial where
  * the reading may miss or misplace a remote: a file past CONFIG_MAX_BYTES or not a regular file (/dev/null aside), a
  * link that cannot be resolved, a file it cannot read, a bound passed, an included file setting a remote, URL-rewrite or
- * branch-remote key (its condition is not read), configuration the hook's environment sets (GIT_CONFIG_COUNT,
- * GIT_CONFIG_PARAMETERS), or more than REWRITES_MAX URL rewrite rules.
+ * branch-remote key (its condition is not read; an included push key is read, which only adds denials), configuration
+ * the hook's environment sets (GIT_CONFIG_COUNT, GIT_CONFIG_PARAMETERS), more than REWRITES_MAX URL rewrite rules, a
+ * line ending in an odd run of backslashes (git joins the next line to it), or a value of a key it reads that it does
+ * not decode as git does (an escape, a quote inside it, a comment mark git cuts at or one inside a quoted span, an
+ * include path starting %().
  *
  * `ghDefaultOf`:
  * Where a gh call naming no repository lands from a place (REQ-FLOW-134): GH_REPO in the hook's environment, else the
@@ -5669,6 +5680,9 @@ function configOf(dirs) {
   const branches = new Map();
   const rewrites = [];
   let pushDefault = null;
+  const pushDefaults = [];
+  let followTags = false;
+  const recurse = [];
   let partial = (process.env.GIT_CONFIG_COUNT ?? "") !== "" || (process.env.GIT_CONFIG_PARAMETERS ?? "") !== "";
   const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
   let files = 0;
@@ -5708,21 +5722,39 @@ function configOf(dirs) {
         sub = head[2] !== undefined ? head[2].replace(/\\(.)/g, "$1") : dot === -1 ? null : head[1].slice(dot + 1).toLowerCase();
         continue;
       }
-      const pair = /^\s*([A-Za-z][\w-]*)\s*=(.*)$/.exec(line);
+      // A key with no "=" is a boolean git reads as true.
+      const pair = /^\s*([A-Za-z][\w-]*)\s*=(.*)$/.exec(line) ?? /^\s*([A-Za-z][\w-]*)\s*(?:[#;].*)?$/.exec(line);
       if (pair === null) continue;
       const key = pair[1].toLowerCase();
-      const value = pair[2].replace(/\s[#;].*$/, "").trim().replace(/^"([\s\S]*)"$/, "$1");
-      if ((kind === "include" || kind === "includeif") && key === "path") {
+      const raw = pair[2] ?? "";
+      const bare = pair[2] === undefined;
+      const value = bare ? "true" : raw.replace(/\s[#;].*$/, "").trim().replace(/^"([\s\S]*)"$/, "$1");
+      const including = (kind === "include" || kind === "includeif") && key === "path";
+      const used = including || (kind === "remote" && ["url", "pushurl", "push", "mirror", "gh-resolved", "pushdefault"].includes(key)) ||
+        (kind === "url" && (key === "insteadof" || key === "pushinsteadof")) || (kind === "branch" && ["remote", "pushremote", "merge"].includes(key)) ||
+        (kind === "push" && ["default", "followtags", "recursesubmodules"].includes(key)) || (kind === "submodule" && sub === null && key === "recurse");
+      // An odd run of backslashes ending a line joins the next line to its value, in any section, so a key or a section
+      // head after it is not where this reading puts it.
+      let end = raw.length;
+      while (end > 0 && /\s/.test(raw[end - 1])) end -= 1;
+      let slashes = 0;
+      while (slashes < end && raw[end - 1 - slashes] === "\\") slashes += 1;
+      // A value of a key the guard reads that this reading does not decode as git does: an escape, a quote inside it, a
+      // comment mark git cuts at or one inside a quoted span, an include path git expands. Either makes the reading partial.
+      if (slashes % 2 === 1 || (used && (raw.includes("\\") || /["#;]/.test(value) || /"[^"]*[#;]/.test(raw) || (including && value.startsWith("%("))))) partial = true;
+      if (including) {
+        if (bare) continue;
         // A ~user/ path names another account's home, which this reading does not place.
         if (/^~[^/]/.test(value)) partial = true;
         else readFile(value.startsWith("~/") ? join(home, value.slice(2)) : resolve(dirname(path), value), depth + 1, true);
         continue;
       }
       if (included && (kind === "remote" || kind === "url" || (kind === "branch" && (key === "remote" || key === "pushremote")))) partial = true;
+      const on = !["false", "no", "off", "0", ""].includes(value.toLowerCase());
       if (kind === "remote" && sub === null) {
         if (key === "pushdefault") pushDefault = value;
       } else if (kind === "remote") {
-        const remote = remotes.get(sub) ?? { url: null, pushurl: null, urls: [], pushurls: [], resolved: null };
+        const remote = remotes.get(sub) ?? { url: null, pushurl: null, urls: [], pushurls: [], resolved: null, push: [], mirror: false };
         remotes.set(sub, remote);
         if (key === "url") {
           remote.url ??= value;
@@ -5732,20 +5764,47 @@ function configOf(dirs) {
           remote.pushurls.push(value);
         }
         else if (key === "gh-resolved") remote.resolved = value;
+        else if (key === "push") remote.push.push(value);
+        else if (key === "mirror" && on) remote.mirror = true;
       } else if (kind === "branch" && sub !== null) {
-        const entry = branches.get(sub) ?? {};
+        const entry = branches.get(sub) ?? { merges: [] };
         branches.set(sub, entry);
         if (key === "remote" || key === "pushremote") entry[key] = value;
+        else if (key === "merge") entry.merges.push(value);
       } else if (kind === "url" && sub !== null && (key === "insteadof" || key === "pushinsteadof")) {
         rewrites.push({ base: sub, prefix: value, push: key === "pushinsteadof" });
-      }
+      } else if (kind === "push" && sub === null) {
+        // Every value read, from every file and include: the push reader counts their union.
+        if (key === "default") pushDefaults.push(value);
+        else if (key === "followtags" && on) followTags = true;
+        else if (key === "recursesubmodules") recurse.push("push.recursesubmodules=" + value);
+      } else if (kind === "submodule" && sub === null && key === "recurse") recurse.push("submodule.recurse=" + value);
     }
   };
   for (const path of configFiles(dirs)) readFile(path, 0, false);
   // Each URL looked up scans every rewrite rule, so past REWRITES_MAX of them the reading is partial: the lookups stay
   // bounded by the remotes read times that ceiling (the hook's timeout).
   if (rewrites.length > REWRITES_MAX) partial = true;
-  return { remotes, branches, rewrites, pushDefault, partial };
+  return { remotes, branches, rewrites, pushDefault, pushDefaults, followTags, recurse, partial };
+}
+
+/**
+ * What the files set for a push to a remote, as the push reader's -c-style pairs (personOnly.ts, pushConfig): the
+ * remote's refmaps and mirror setting (none for a URL), every push mode, tag-following, recursion, and the checked-out
+ * branch's merges, which the reader takes only in upstream mode. null where the configuration cannot be read whole.
+ */
+function pushPairs(config, remote, branch) {
+  if (config === null || config.partial) return null;
+  const pairs = config.pushDefaults.map((value) => "push.default=" + value);
+  if (config.followTags) pairs.push("push.followtags=true");
+  pairs.push(...config.recurse);
+  const entry = remote === null ? undefined : config.remotes.get(remote);
+  if (entry !== undefined) {
+    for (const value of entry.push) pairs.push("remote." + remote + ".push=" + value);
+    if (entry.mirror) pairs.push("remote." + remote + ".mirror=true");
+  }
+  for (const value of branch === null ? [] : (config.branches.get(branch)?.merges ?? [])) pairs.push("branch." + branch + ".merge=" + value);
+  return pairs;
 }
 
 /** A URL as git rewrites it: the longest matching insteadOf (or, for a push, pushInsteadOf) prefix replaced; null where none matches. */
@@ -5845,6 +5904,7 @@ function contextsOf(command, cwd, powershell, root) {
       return config;
     };
     const pushes = new Map();
+    const pairsRead = new Map();
     contexts.set(key, {
       currentBranch: branch !== ".invalid" ? branch : detached ? null : (defaultBranches[0] ?? "main"),
       defaultBranches,
@@ -5884,6 +5944,12 @@ function contextsOf(command, cwd, powershell, root) {
         if (merged === null || merged.partial) return null;
         const entry = branch === ".invalid" ? {} : (merged.branches.get(branch) ?? {});
         return entry.pushremote ?? merged.pushDefault ?? entry.remote ?? "origin";
+      },
+      // What the place's files set for a push to a remote (REQ-FLOW-102), read once per name; null for a URL's top-level keys.
+      pushConfig(name) {
+        const at = name === null ? "" : "=" + name;
+        if (!pairsRead.has(at)) pairsRead.set(at, pushPairs(placeConfig(), name, branch === ".invalid" ? null : branch));
+        return pairsRead.get(at);
       },
       // A place the guard cannot read shows no repository, so a push from it asks; a readable other checkout has its
       // origin compared (review/130).

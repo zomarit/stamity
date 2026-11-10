@@ -22,7 +22,8 @@ import { gitProgramFor, programNotFound } from "../../shared/programPath.ts";
  * none and pass; per-path magic leaves the hooks in the repository's own
  * pathspec mode;
  * `push.followTags=false`, so a push carries no tag whatever the repository's
- * config says; and `GIT_TERMINAL_PROMPT=0`, so a push that needs credentials
+ * config says; `push.recurseSubmodules=no`, so a push never also pushes a
+ * submodule to its own remote; and `GIT_TERMINAL_PROMPT=0`, so a push that needs credentials
  * fails instead of waiting on a prompt nobody answers.
  *
  * Unlike the read runner it keeps the caller's environment, which is where an
@@ -120,6 +121,8 @@ const PINNED_OPTIONS: readonly string[] = [
   "core.fsmonitor=false",
   "-c",
   "push.followTags=false",
+  "-c",
+  "push.recurseSubmodules=no",
   "-c",
   "core.useReplaceRefs=false",
 ];

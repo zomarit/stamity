@@ -16,7 +16,10 @@ import { useTempDir } from "../../support/tempDir.ts";
  */
 
 // TEST CHANGE, justified (review/116): every write also pins `core.useReplaceRefs=false` among its leading options.
-const PINNED = ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", "-c", "push.followTags=false", "-c", "core.useReplaceRefs=false"];
+// TEST CHANGE, justified (REQ-FLOW-134, the person-only guard hardening): every write also pins
+// `push.recurseSubmodules=no` beside `push.followTags=false`, so the run verbs' push never also pushes a submodule to
+// its own remote, whatever the repository's configuration says.
+const PINNED = ["-c", "safe.bareRepository=explicit", "-c", "core.fsmonitor=false", "-c", "push.followTags=false", "-c", "push.recurseSubmodules=no", "-c", "core.useReplaceRefs=false"];
 
 describe("gitWriteArgs", () => {
   it("puts the pinned -c options, and no global pathspec flag, ahead of arguments that carry no `--`, unchanged", () => {

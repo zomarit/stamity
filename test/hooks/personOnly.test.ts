@@ -5483,3 +5483,220 @@ describe("the skill fetch (REQ-FLOW-180, s-skill-guard)", () => {
     expect(byMarker.reason).toContain("nobody is watching");
   });
 });
+
+/**
+ * The place's own push configuration (REQ-FLOW-102, REQ-FLOW-124, REQ-FLOW-134): what git's configuration files set for
+ * a push, handed to the verdict as `-c`-style pairs by the context's `pushConfig`, read beside the line's own `-c` pairs,
+ * the line's winning where git's command line overrides the files. A plain function stands in for the guard's file
+ * reading, which `test/hooks/personOnlyGuard.test.ts` runs against real files.
+ */
+describe("a push read against the place's own push configuration", () => {
+  const FEATURE = { defaultBranches: ["trunk"], currentBranch: "feat/x", tags: [] };
+  /** A context whose files set `pairs` for every remote the verdict asks about. */
+  const filesSet = (pairs: readonly string[], extra: Record<string, unknown> = {}): Parameters<typeof personOnlyVerdict>[1] => ({
+    ...FEATURE,
+    pushConfig: () => pairs,
+    ...extra,
+  });
+  const UNREAD = "A push whose git configuration the guard cannot read whole";
+
+  // Red on 091d999b: the files' refmap was never read, so the line's feature push ran.
+  it("asks for a push the place's refmap sends to the default branch, refless or with a bare source", () => {
+    const ctx = filesSet(["remote.origin.push=refs/heads/feat/x:refs/heads/main"]);
+    expect(personOnlyVerdict("git push origin feat/x", ctx)).toMatchObject({ deny: true, rule: "push-default", ask: true });
+    expect(personOnlyVerdict("git push", ctx)).toMatchObject({ deny: true, rule: "push-default", ask: true });
+    expect(personOnlyVerdict("git push origin", ctx)).toMatchObject({ deny: true, rule: "push-default", ask: true });
+    // One fact away: the same files mapping onto the feature branch itself.
+    expect(personOnlyVerdict("git push origin feat/x", filesSet(["remote.origin.push=refs/heads/feat/x:refs/heads/feat/x"]))).toEqual({ deny: false });
+  });
+
+  it("refuses a push the place's refmap marks as forced", () => {
+    const ctx = filesSet(["remote.origin.push=+refs/heads/feat/x:refs/heads/feat/x"]);
+    expect(personOnlyVerdict("git push origin feat/x", ctx)).toMatchObject({ deny: true, rule: "force-push", ask: false });
+    expect(personOnlyVerdict("git push", ctx)).toMatchObject({ deny: true, rule: "force-push", ask: false });
+  });
+
+  it("reads a pattern refmap as the pattern check reads any refspec", () => {
+    expect(personOnlyVerdict("git push", filesSet(["remote.origin.push=refs/heads/*:refs/heads/*"]))).toMatchObject({ deny: true, rule: "push-default" });
+  });
+
+  it("leaves an explicit source and destination on the line to the line, which git maps through no refmap", () => {
+    const ctx = filesSet(["remote.origin.push=refs/heads/feat/x:refs/heads/main"]);
+    expect(personOnlyVerdict("git push origin feat/x:feat/x", ctx)).toEqual({ deny: false });
+    expect(personOnlyVerdict("git push origin HEAD:refs/heads/feat/x", ctx)).toEqual({ deny: false });
+  });
+
+  it("reads only the refmap of the remote the push names", () => {
+    const ctx: Parameters<typeof personOnlyVerdict>[1] = {
+      ...FEATURE,
+      pushConfig: (remote) => (remote === "upstream" ? ["remote.upstream.push=refs/heads/feat/x:refs/heads/main"] : []),
+    };
+    expect(personOnlyVerdict("git push origin feat/x", ctx)).toEqual({ deny: false });
+    // Non-degenerate: the push to the remote that refmap belongs to asks.
+    expect(personOnlyVerdict("git push upstream feat/x", ctx)).toMatchObject({ deny: true, rule: "push-default" });
+  });
+
+  it("asks for a refless push in the files' upstream mode whose branch merges into the default branch", () => {
+    for (const mode of ["upstream", "tracking"]) {
+      const ctx = filesSet([`push.default=${mode}`, "branch.feat/x.merge=refs/heads/main"]);
+      expect(personOnlyVerdict("git push", ctx), mode).toMatchObject({ deny: true, rule: "push-default", ask: true });
+    }
+    // One fact away: the branch merges into itself.
+    expect(personOnlyVerdict("git push", filesSet(["push.default=upstream", "branch.feat/x.merge=refs/heads/feat/x"]))).toEqual({ deny: false });
+    // Outside upstream mode the merge is not where a push goes, so a lane tracking the default branch still runs.
+    expect(personOnlyVerdict("git push", filesSet(["branch.feat/x.merge=refs/heads/main"]))).toEqual({ deny: false });
+  });
+
+  it("reads the branch's merge where the line itself sets the upstream mode", () => {
+    const ctx = filesSet(["branch.feat/x.merge=refs/heads/main"]);
+    expect(personOnlyVerdict("git -c push.default=upstream push", ctx)).toMatchObject({ deny: true, rule: "push-default" });
+  });
+
+  it("lets the line's own push.default win over the files'", () => {
+    const ctx = filesSet(["push.default=upstream", "branch.feat/x.merge=refs/heads/main"]);
+    expect(personOnlyVerdict("git -c push.default=simple push", ctx)).toEqual({ deny: false });
+    expect(personOnlyVerdict("git -c push.default=matching push", filesSet(["push.default=simple"]))).toMatchObject({ deny: true, rule: "push-default" });
+  });
+
+  it("asks for a refless push in the files' matching mode, a deploying branch named first", () => {
+    expect(personOnlyVerdict("git push", filesSet(["push.default=matching"]))).toMatchObject({ deny: true, rule: "push-default", ask: true });
+    // Several values read: any matching one counts.
+    expect(personOnlyVerdict("git push", filesSet(["push.default=simple", "push.default=matching"]))).toMatchObject({ deny: true, rule: "push-default" });
+    expect(personOnlyVerdict("git push", filesSet(["push.default=matching"], { deployingBranches: ["production"] }))).toMatchObject({
+      deny: true, rule: "push-deploying", ask: true,
+    });
+    expect(personOnlyVerdict("git push", filesSet(["push.default=simple"]))).toEqual({ deny: false });
+  });
+
+  it("refuses a refless push to a remote the files mirror", () => {
+    expect(personOnlyVerdict("git push", filesSet(["remote.origin.mirror=true"]))).toMatchObject({ deny: true, rule: "force-push", ask: false });
+    expect(personOnlyVerdict("git -c remote.origin.mirror=false push", filesSet(["remote.origin.mirror=true"]))).toEqual({ deny: false });
+  });
+
+  it("asks for a push of tags where the files turn tag-following on, and lets the line turn it off", () => {
+    const ctx = filesSet(["push.followtags=true"]);
+    expect(personOnlyVerdict("git push origin feat/x", ctx)).toMatchObject({ deny: true, rule: "push-tags", ask: true });
+    expect(personOnlyVerdict("git -c push.followTags=false push origin feat/x", ctx)).toEqual({ deny: false });
+  });
+
+  it("asks where the place's configuration cannot be read whole", () => {
+    const ctx: Parameters<typeof personOnlyVerdict>[1] = { ...FEATURE, pushConfig: () => null };
+    expect(personOnlyVerdict("git push origin feat/x", ctx)).toMatchObject({ deny: true, rule: "push-default", ask: true, act: UNREAD });
+    expect(personOnlyVerdict("git push", { ...FEATURE, pushConfig: () => [], pushRemote: null })).toMatchObject({ deny: true, rule: "push-default", act: UNREAD });
+    expect(personOnlyVerdict("git push origin feat/x", { ...ctx, deployingBranches: ["production"] })).toMatchObject({ rule: "push-deploying", act: UNREAD });
+    // A refuse-class act on the line still decides.
+    expect(personOnlyVerdict("git push --force origin feat/x", ctx)).toMatchObject({ deny: true, rule: "force-push", ask: false });
+    // Non-degenerate: the same push with a configuration read whole runs.
+    expect(personOnlyVerdict("git push origin feat/x", filesSet([]))).toEqual({ deny: false });
+  });
+
+  it("answers as before where the context hands no push configuration, as the run verbs' own reading does", () => {
+    for (const command of ["git push origin feat/x", "git push", "git push -u origin feat/x"]) {
+      expect(personOnlyVerdict(command, FEATURE), command).toEqual({ deny: false });
+    }
+  });
+
+  it("reads the files' refmap for git send-pack too", () => {
+    const ctx = filesSet(["remote.origin.push=refs/heads/feat/x:refs/heads/main"]);
+    expect(personOnlyVerdict("git send-pack origin feat/x", ctx)).toMatchObject({ deny: true, rule: "push-default" });
+  });
+});
+
+/** A push that also pushes submodules (REQ-FLOW-134): their own remotes are other repositories, on branches the line does not show. */
+describe("a push that also pushes submodules", () => {
+  const ORIGIN = { defaultBranches: ["trunk"], currentBranch: "feat/x", tags: [], originRepo: "github.com/acme/app" };
+  const OUTSIDE = "A push that also pushes submodules, to repositories the line does not show";
+
+  // Red on 091d999b: recursion was read as a word to skip, from no source.
+  it.each([
+    ["the option joined to its value", "git push --recurse-submodules=on-demand origin feat/x", {}],
+    ["the option and its value as two words", "git push --recurse-submodules on-demand origin feat/x", {}],
+    ["the option's only value", "git push --recurse-submodules=only origin feat/x", {}],
+    ["a -c pair for push", "git -c push.recurseSubmodules=on-demand push origin feat/x", {}],
+    ["a -c pair for every command", "git -c submodule.recurse=true push origin feat/x", {}],
+    ["the files' push setting", "git push origin feat/x", { pushConfig: () => ["push.recursesubmodules=on-demand"] }],
+    ["the files' setting for every command", "git push origin feat/x", { pushConfig: () => ["submodule.recurse=true"] }],
+  ])("asks for %s", (_, command, extra) => {
+    expect(personOnlyVerdict(command, { ...ORIGIN, ...extra }), command).toMatchObject({ deny: true, rule: "outside-write", ask: true, act: OUTSIDE });
+  });
+
+  it("asks as a push to the default branch where no origin is placed", () => {
+    expect(personOnlyVerdict("git push --recurse-submodules=on-demand origin feat/x", { defaultBranches: [], currentBranch: "feat/x", tags: [] })).toMatchObject({
+      deny: true, rule: "push-default", ask: true, act: "A push that also pushes submodules, whose branches the line does not show",
+    });
+  });
+
+  it.each([
+    ["the check value", "git push --recurse-submodules=check origin feat/x", {}],
+    ["the no value", "git push --recurse-submodules=no origin feat/x", {}],
+    ["the negated option over the files' setting", "git push --no-recurse-submodules origin feat/x", { pushConfig: () => ["push.recursesubmodules=on-demand"] }],
+    ["the line's push setting over the files' every-command one", "git -c push.recurseSubmodules=no push origin feat/x", { pushConfig: () => ["submodule.recurse=true"] }],
+    ["the files' push setting over their every-command one", "git push origin feat/x", { pushConfig: () => ["push.recursesubmodules=no", "submodule.recurse=true"] }],
+  ])("runs %s", (_, command, extra) => {
+    expect(personOnlyVerdict(command, { ...ORIGIN, ...extra }), command).toEqual({ deny: false });
+  });
+
+  it("runs the run verbs' own push argv, which pins recursion and tag-following off, whatever the files set", () => {
+    const argv = "git -c safe.bareRepository=explicit -c core.fsmonitor=false -c push.followTags=false -c push.recurseSubmodules=no -c core.useReplaceRefs=false push origin HEAD:refs/heads/stamity/x";
+    const ctx = { ...ORIGIN, currentBranch: "stamity/x", pushConfig: () => ["submodule.recurse=true", "push.recursesubmodules=on-demand", "push.followtags=true"] };
+    expect(personOnlyVerdict(argv, ctx)).toEqual({ deny: false });
+  });
+});
+
+/**
+ * A git configuration or remote write on the same line as a push or a gh write (REQ-FLOW-134): the push is judged
+ * against the configuration as it stood before the line, which the line has already changed.
+ */
+describe("a push or a gh write on a line that also changes the git configuration", () => {
+  const ORIGIN = { defaultBranches: ["trunk"], currentBranch: "feat/x", tags: [], originRepo: "github.com/acme/app", runs: ["remote-write"] as PersonOnlyRuleId[] };
+  const MOVED = "A write on a line that also moves a git remote, a URL rewrite or an include";
+  const CHANGED = "A push on a line that also changes the git configuration a push reads";
+
+  // Red on 091d999b: each push or gh write was judged against the configuration before the line, so it ran.
+  it.each([
+    ["a remote URL changed", "git remote set-url origin https://github.com/other/repo.git && git push origin feat/x"],
+    ["a remote added", "git remote add up https://github.com/other/repo.git; git push origin feat/x"],
+    ["a push URL written by config", "git config remote.origin.pushurl https://github.com/other/repo.git && git push origin feat/x"],
+    ["a URL rewrite written", "git config --global url.https://github.com/other/.pushInsteadOf https://github.com/acme/ && git push origin feat/x"],
+    ["an include written", "git config include.path ../more.gitconfig && git push origin feat/x"],
+    ["a conditional include written", "git config includeIf.onbranch:feat/x.path ../more.gitconfig && git push origin feat/x"],
+    ["the configuration opened in an editor", "git config --edit && git push origin feat/x"],
+    ["a config call whose words the line cannot show", "git config \"$K\" \"$V\" && git push origin feat/x"],
+    ["a gh write naming no repository", "git remote set-url origin https://github.com/other/repo.git && gh pr create --title t --body b"],
+    ["a gh api write naming the origin", "git config url.https://github.com/other/.insteadOf https://github.com/acme/ && gh api repos/acme/app/issues -f title=t"],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, ORIGIN), command).toMatchObject({ deny: true, rule: "outside-write", ask: true, act: MOVED });
+  });
+
+  it("runs each part alone: the remote write runs as the context runs it, the push and the gh write run", () => {
+    expect(personOnlyVerdict("git remote set-url origin https://github.com/other/repo.git", ORIGIN)).toEqual({ deny: false, runs: ["remote-write"] });
+    expect(personOnlyVerdict("git push origin feat/x", ORIGIN)).toEqual({ deny: false });
+    expect(personOnlyVerdict("gh pr create --title t --body b", ORIGIN)).toEqual({ deny: false });
+    expect(personOnlyVerdict("gh api repos/acme/app/issues -f title=t", ORIGIN)).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["the push mode written", "git config push.default matching && git push origin feat/x"],
+    ["a branch's merge written", "git config branch.feat/x.merge refs/heads/main; git push"],
+    ["submodule recursion written", "git config submodule.recurse true && git push origin feat/x"],
+    ["a push section removed", "git config --remove-section push && git push origin feat/x"],
+  ])("asks naming the default-branch rule for %s", (_, command) => {
+    expect(personOnlyVerdict(command, ORIGIN), command).toMatchObject({ deny: true, rule: "push-default", ask: true, act: CHANGED });
+  });
+
+  it("names a deploying branch first for a push after a push-configuration write", () => {
+    expect(personOnlyVerdict("git config push.default matching && git push origin feat/x", { ...ORIGIN, deployingBranches: ["production"] })).toMatchObject({
+      rule: "push-deploying", act: CHANGED,
+    });
+  });
+
+  it("runs a push-configuration write alone, and a push beside a configuration read", () => {
+    expect(personOnlyVerdict("git config push.default matching", ORIGIN)).toEqual({ deny: false });
+    expect(personOnlyVerdict("git config --get push.default && git push origin feat/x", ORIGIN)).toEqual({ deny: false });
+    expect(personOnlyVerdict("git config user.name x && git push origin feat/x", ORIGIN)).toEqual({ deny: false });
+  });
+
+  it("asks for a push whose -c pair names an include, which may move a remote", () => {
+    expect(personOnlyVerdict("git -c include.path=../more.gitconfig push origin feat/x", ORIGIN)).toMatchObject({ deny: true, rule: "outside-write" });
+  });
+});
