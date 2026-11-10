@@ -4420,6 +4420,14 @@ so the next run counts the 18 as moved. No `## Expected` block, B / A, claim, fl
 roster count moves, so the carried tallies and the recomputed census below hold. The dated citations
 above stay as they were. No eval run is made with this change.
 
+**The deleted-row take-out stays through the 1.19.0 run, 2026-11-10.** The 2026-11-09 paragraph above
+says the route of record's take-out retires with the driver's next pin. Read on every case of the set
+at the 1.19.0 candidate, it finds no row to take out, since no note names one, so it changes no grade.
+The driver's pin for the 1.19.0 run keeps it unchanged, so the run that measures the release does not
+also move the grade path, and that run's `RESULTS.md` § 10a reads that nothing was dropped. It retires
+at the driver's first pin after the 1.19.0 tag. No case, row, threshold, scoring rule or count moves.
+No eval run is made with this change.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
