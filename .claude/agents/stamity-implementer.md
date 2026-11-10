@@ -52,10 +52,10 @@ interfaces, so the unit is buildable without reconstructing the plan.
   typecheck, and before the behavior lands, it shows at least one held test failing on an
   assertion, not only on a missing type. With no held tests,
   a result with no test delta and no stated reason is incomplete. A `docs`, `config` or
-  `records` unit adds no test and says `no new test: <class>`.
+  `records` unit adds no test and says `no new test: <class>`. A `tests` unit is its own tests-only work: it has no held tests, and the tests it writes are its test delta.
 - **Test-first when the criterion is expressible as a failing test.** Write it, watch it
   fail for the expected reason, then make it pass. A test that has never been red proves
-  the suite runs, not that the behavior works.
+  the suite runs, not that the behavior works. A unit whose criterion is behavior unchanged shows its tests bite instead of failing first: a characterization unit 0 shows each pin red on an assertion under a scratch change to the pinned behavior, then reverts that change, and adds a seam only behind pins it has proven; a behavior-preserving transforming unit holds unit 0's pins where the plan has a unit 0, else the test paths the plan's behavioral-invariants table names under `Verified by`, runs them unchanged before and after its change, `gate held --expect` green both times, and adds no test of its own unless its criteria add behavior. A behavior-preserving transforming unit with no test path to hold (no unit 0, and `Verified by` cells that name only commands) never calls `gate held` with no paths: it records `- <UTC> no held tests: <unit> commands`, and its evidence is each named command run green before and after its change, each with its exit code on the record. A behavior-preserving transforming unit whose invariants mix sources (any two of unit 0's pins, `Verified by` test paths and `Verified by` commands) holds the union, unit 0's pins and every `Verified by` test path, and runs every `Verified by` command green before and after its change, each with its exit code on the record; the orchestrator writes the `held:` and `no held tests` lines, never the builder.
 - **Mocks are justified inline.** A mock, fake, or stub carries a comment naming why the
   real dependency is unusable at this level. Unjustified mocking is how a suite goes green
   against nothing.
@@ -73,7 +73,7 @@ interfaces, so the unit is buildable without reconstructing the plan.
 A dispatch in this mode carries the unit's criteria and interfaces, never another builder's
 code, and the pass reads no file the unit's builder wrote. It writes the tests those criteria call for, runs them, and shows each one fails for
 the expected reason; a typecheck failure on an interface not yet built is an expected
-reason. It returns the test paths and writes no product code; its report is
+reason. A unit whose criterion is behavior unchanged shows each one bites instead, as the Testing rules above say. It returns the test paths and writes no product code; its report is
 `<unit>-tests-implementer-r<N>.md`. A builder that finds a held test wrong returns
 `BLOCKED_DEPENDENCY` naming it, and a fresh tests-only spawn answers the dispute. That spawn
 too reads no file the builder wrote: it decides from the criteria, the interfaces, the

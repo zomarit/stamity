@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.18.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-11-10T00:55:50.217Z",
+  "updatedAt": "2026-11-10T02:05:47.488Z",
   "tools": [
     "claude"
   ],
@@ -85,7 +85,7 @@
       "adapter": "claude",
       "artifactId": "implementer",
       "artifactType": "agent",
-      "contentHash": "5dcee3df688455f35dee5065ff882a13c372a3ae64119d990f90cee00ac82888",
+      "contentHash": "954406a0506afb7b90b4f8df5512a350322f09fce774af17e1aeca132dee041b",
       "path": ".claude/agents/stamity-implementer.md"
     },
     {
@@ -106,7 +106,7 @@
       "adapter": "claude",
       "artifactId": "reviewer",
       "artifactType": "agent",
-      "contentHash": "211d75449cac921749541bd41e4c204e01e865fbb0202c31e2634152d657772e",
+      "contentHash": "9fa15dfa68fc7eca1755034a6c2320a04d131cd9993b26e0c23d6957a09186db",
       "path": ".claude/agents/stamity-reviewer.md"
     },
     {
@@ -155,7 +155,7 @@
       "adapter": "claude",
       "artifactId": "cmd-plan",
       "artifactType": "command",
-      "contentHash": "24050b3fb0c5d32a8db54f1350cc3aca673b8e14061659ef8ada01434c0c90f5",
+      "contentHash": "e14b2a7db0ab05c3a16ad4e954615cdcb6d9a79a3da95c5b427de8fb025a0c31",
       "path": ".claude/commands/st-plan.md"
     },
     {
@@ -190,7 +190,7 @@
       "adapter": "claude",
       "artifactId": "cmd-work",
       "artifactType": "command",
-      "contentHash": "b2341cd38eb4b3b10177775d4dc49c5edcf010df9179684f476a27ef3f53ae56",
+      "contentHash": "8944ace3ec1e6d2c3f71c5680566133076902e7aa619af9495b2c6e3ea4a0395",
       "path": ".claude/commands/st-work.md"
     },
     {
@@ -581,6 +581,13 @@
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
+      "contentHash": "29a93ce210d71bd185e95e1f951df64cbde741a68aeecf011ce3cb11d23c12de",
+      "path": ".claude/skills/st-verify/references/characterization.md"
+    },
+    {
+      "adapter": "claude",
+      "artifactId": "verify",
+      "artifactType": "skill",
       "contentHash": "dae121ef7399c041d78db0253b8cb2ce5d9290b904156b24079c0a5d7e9e3e9f",
       "path": ".claude/skills/st-verify/references/enhancability.md"
     },
@@ -630,7 +637,7 @@
       "adapter": "claude",
       "artifactId": "verify",
       "artifactType": "skill",
-      "contentHash": "55ec48ee05d08f6391e4e2a1070d2a7174c5884efec86767121bd27eba529867",
+      "contentHash": "7878303ffe27e1e5ac63fcb5c2666312722b75e9891c50eb49e26dbdf92f8adf",
       "path": ".claude/skills/st-verify/references/testability.md"
     },
     {

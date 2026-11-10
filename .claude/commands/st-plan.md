@@ -112,7 +112,7 @@ is recorded in the artifact with the default that was assumed.
 
 **Convention alignment.** Each unit cites the reference file (`path:line`) whose pattern it
 follows for structure, state handling, error shape, data access, and test layout. A unit that
-diverges states why in one line — divergence is a recorded decision, not an accident.
+diverges states why in one line — divergence is a recorded decision, not an accident. An existing path a unit touches with no test gets unit 0 first, per `st-verify`'s `references/characterization.md`.
 
 **Model-backed features.** A feature that calls a model carries an eval unit: an offline eval set,
 a pass threshold, and the failure classes the threshold gates. The `ai-evals` rule holds the
@@ -158,7 +158,7 @@ stated reason, and it is the acceptance evidence the executing run proves green.
 **Phase 0 test scaffolding.** Every `uncovered` invariant becomes unit 0: characterization tests
 pinning current behavior before one transformation lands. Every transforming unit declares
 `depends_on: [unit-0]`. A refactor plan holding uncovered invariants with no unit 0 does not leave
-the plan-lint gate.
+the plan-lint gate. Unit 0 follows the recipe in `st-verify`'s `references/characterization.md`.
 
 **Every phase green.** Each unit leaves the verification gates passing on its own; no unit borrows
 green from a later one. Sequence to that rule and state the verification command per unit — a
@@ -201,7 +201,7 @@ Record `approach: incremental | direct because <deciding input>` in the artifact
 
 | Phase | Goal | Rollback |
 |---|---|---|
-| 0 Preparation | coverage over affected paths, version pinned, baseline captured | revert prep commits; no product behavior has moved yet |
+| 0 Preparation | coverage over affected paths (an untested one pinned per `st-verify`'s `references/characterization.md`), version pinned, baseline captured | revert prep commits; no product behavior has moved yet |
 | 1 Non-breaking | additive changes valid on both versions | revert the additive commit; both versions still build |
 | 2 Consumers | migrate call sites in reviewable batches | per-batch revert behind the compatibility layer |
 | 3 Cleanup | remove compatibility layer, old version, dead flags | last reversible point, recorded before cleanup starts |
