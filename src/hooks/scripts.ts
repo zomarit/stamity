@@ -419,7 +419,11 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // lines (copilot, generated), past both rows, because the Git Bash reading now runs for Claude's Bash tool alone and
   // the refusal's fix names the checkout with forward slashes on Windows outside PowerShell.
   // 349,390 + 394 = 349,784 bytes; 7,207 + 2 = 7,209 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 349_784, lines: 7_209 },
+  // Moved again 2026-11-10 by plan 024's s-skill-guard (REQ-FLOW-180), integrated without the p-private-repos base, by
+  // what was measured: 351,461 bytes / 7,238 lines (copilot, generated), past both rows, because the verdict now reads
+  // `stamity skill add` and a `skill` line whose words it cannot show, under the ask-class `skill-fetch` rule.
+  // 349,784 + 1,677 = 351,461 bytes; 7,209 + 29 = 7,238 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 351_461, lines: 7_238 },
 };
 
 /** One generated script, ready for an adapter to place and register. */

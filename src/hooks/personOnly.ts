@@ -94,6 +94,7 @@ export type PersonOnlyRuleId =
   | "autonomy-loosen"
   | "land-approved"
   | "learn-accept"
+  | "skill-fetch"
   | "line-too-long"
   | "outside-write"
   | "remote-write";
@@ -197,6 +198,14 @@ export const PERSON_ONLY_RULES: readonly PersonOnlyRule[] = [
   {
     id: "learn-accept",
     act: "taking a run's proposed learning live (`stamity learn accept`, or a line whose words the guard cannot read, which may be it)",
+    ask: true,
+  },
+  // REQ-FLOW-180: a skill fetched from a source lands on a held path and is read by every later session, so its fetch
+  // is an attended planning act: it asks on the main thread and is refused for a sub-agent, unattended and while nobody
+  // is watching, as every ask is. Read in `skillFetchVerdict`.
+  {
+    id: "skill-fetch",
+    act: "fetching a skill from a source into the repository (`stamity skill add`, or a `skill` line whose words the guard cannot read, which may be it): an attended planning act, never a build's",
     ask: true,
   },
   {
@@ -1917,7 +1926,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   // The ask-class rules (REQ-FLOW-102): any other rule refuses (REQ-FLOW-124), so a rule missing here never asks.
   const ASK_RULES = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection",
     "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "learn-accept", "outside-write",
-    "remote-write"]);
+    "remote-write", "skill-fetch"]);
   // Every act the line holds (v0a): each segment, each call `--next` joins, each path, flag, body field and GraphQL
   // entry; a refuse-class one decides the verdict, so a deletion never rides an approval.
   const acts: { deny: true; rule: PersonOnlyRuleId; act: string; reason: string; ask: boolean }[] = [];
@@ -3355,6 +3364,34 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     }
   }
 
+  /**
+   * `skill-fetch` (REQ-FLOW-180): `stamity skill add` fetches text every later session reads onto a held path, so it is
+   * an attended planning act and never a build's. On a command running this package (`packageArgs`, each manager
+   * reading too) or one whose program the reading cannot settle, a `skill` word with `add` after it asks; so does a
+   * `skill` word followed by a word the line does not show whole, and an `add` word after one, either of which may
+   * complete the verb: fail-closed. A word an option takes counts too, so `skill list --tag add` asks, which costs one
+   * click. The ask is the guard's like any other: refused for a sub-agent, unattended and while nobody is watching.
+   */
+  function skillFetchVerdict(cmd: string[]): void {
+    const unsettled = unread.get(cmd)?.[0] === true;
+    for (const args of unsettled ? [cmd.slice(1)] : [packageArgs(cmd), ...addedArgs(cmd)]) {
+      if (args === null) continue;
+      const at = args.indexOf("skill");
+      const past = at === -1 ? [] : args.slice(at + 1);
+      if (past.includes("add")) {
+        deny("skill-fetch", "Fetching a skill into the repository (`stamity skill add`)");
+        continue;
+      }
+      // `hidesWords` reads a tail of `cmd`, so the words before `add` are read off the marks at their own offsets.
+      const add = args.indexOf("add");
+      const offset = cmd.length - args.length;
+      const hiddenBefore = add !== -1 && (fed.has(cmd) || args.slice(0, add).some((_, index) => anyMark.get(cmd)?.[offset + index] === true));
+      if ((at !== -1 && hidesWords(cmd, past)) || hiddenBefore) {
+        deny("skill-fetch", "A `stamity skill add` line whose words the guard cannot read");
+      }
+    }
+  }
+
   function loosenVerdict(cmd: string[]): void {
     // On the PowerShell tool, a variable alone, which prints its value, and an assignment (`$x = …`, `$env:X += …`) are
     // no command; a group or substitution in a value is read apart. A POSIX shell runs `$x`'s value there, so elsewhere
@@ -3589,6 +3626,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
   // The loosen reading last, so a line holding another act names that one first.
   for (const cmd of read) {
     landApprovedVerdict(cmd);
+    skillFetchVerdict(cmd);
     loosenVerdict(cmd);
     acceptHiddenVerdict(cmd);
   }

@@ -600,3 +600,147 @@ describe.skipIf(!gitAvailable)("listCopiedSkills and removeSkill", () => {
     expect(await readdir(join(fx.root, ".stamity", "overrides", "skills"))).toEqual(["mine"]);
   });
 });
+
+/**
+ * s-skill-guard, amended 2026-11-09 (skills lens r2): Codex reads `agents/openai.yaml` beside a `SKILL.md`, and a
+ * client may honour what it declares: tool dependencies, or keys this engine cannot read as harmless. Until Codex's docs
+ * say otherwise the check fails closed: only the display keys and the implicit-invocation policy pass from a source that
+ * does not allow scripts; any other declaration is refused there, and named as a grant where the source allows scripts.
+ */
+describe.skipIf(!gitAvailable)("addSkill — the Codex companion file", () => {
+  const DEPENDENCIES = [
+    "dependencies:",
+    "  tools:",
+    '    - type: "mcp"',
+    '      value: "docs"',
+    '      url: "https://docs.example.test/mcp"',
+    "",
+  ].join("\n");
+  const DISPLAY = ["interface:", '  display_name: "House style"', '  short_description: "Writes in the house style"', "policy:", "  allow_implicit_invocation: false", ""].join("\n");
+
+  it("refuses a companion declaring dependencies from a source that does not allow scripts, naming the key", async () => {
+    const fx = await fixture({ ...SKILL_FILES, "house-style/agents/openai.yaml": DEPENDENCIES });
+
+    const error = await refusal(fx, () => addSkill(request(fx)));
+
+    expect(error.code).toBe("VALIDATION_ERROR");
+    expect(error.message).toContain("house-style/agents/openai.yaml declares");
+    expect(error.message).toContain("dependencies:");
+    expect(error.message).toContain("does not allow scripts");
+  });
+
+  it("refuses a top-level key it cannot read as harmless, failing closed", async () => {
+    const fx = await fixture({ ...SKILL_FILES, "house-style/agents/openai.yaml": `${DISPLAY}tools:\n  - shell\n` });
+
+    expect((await refusal(fx, () => addSkill(request(fx)))).message).toContain('tools: ["shell"]');
+  });
+
+  it("refuses a key it cannot read as harmless inside a known section, failing closed", async () => {
+    const fx = await fixture({ ...SKILL_FILES, "house-style/agents/openai.yaml": "policy:\n  allow_implicit_invocation: false\n  sandbox: danger-full-access\n" });
+
+    expect((await refusal(fx, () => addSkill(request(fx)))).message).toContain('policy.sandbox: "danger-full-access"');
+  });
+
+  it("refuses a companion spelled in another case, which a case-insensitive disk reads as the same file", async () => {
+    const fx = await fixture({ ...SKILL_FILES, "house-style/Agents/OpenAI.yml": DEPENDENCIES });
+
+    expect((await refusal(fx, () => addSkill(request(fx)))).message).toContain("house-style/Agents/OpenAI.yml declares");
+  });
+
+  it("refuses a companion that does not read as one YAML map", async () => {
+    const fx = await fixture({ ...SKILL_FILES, "house-style/agents/openai.yaml": "policy: {}\npolicy: {}\n" });
+
+    expect((await refusal(fx, () => addSkill(request(fx)))).message).toContain("does not read as one YAML map");
+  });
+
+  it("copies a companion holding only the display keys and the invocation policy, with no grant", async () => {
+    const fx = await fixture({ ...SKILL_FILES, "house-style/agents/openai.yaml": DISPLAY });
+
+    const added = await addSkill(request(fx));
+
+    expect(added.written).toBe(true);
+    expect(added.grants).toEqual([]);
+    expect(added.origin.files.map((file) => file.path)).toContain("agents/openai.yaml");
+  });
+
+  it("copies a companion declaring dependencies from a source that allows scripts, and returns it as a grant", async () => {
+    const fx = await fixture({ ...SKILL_FILES, "house-style/agents/openai.yaml": DEPENDENCIES }, { allowScripts: true });
+
+    const added = await addSkill(request(fx));
+
+    expect(added.written).toBe(true);
+    expect(added.grants).toEqual([`agents/openai.yaml dependencies: ${JSON.stringify({ tools: [{ type: "mcp", value: "docs", url: "https://docs.example.test/mcp" }] })}`]);
+  });
+});
+
+/**
+ * s-skill-guard, amended 2026-11-09 (s-skills-content lens r1): a lane is a linked worktree, and the switch and the
+ * unattended run record sit in the main checkout. Run from a lane, `skill add` reads both there too, not only in its own
+ * folder. Real git makes the main checkout and its lane; the source is the same local fixture.
+ */
+describe.skipIf(!gitAvailable)("addSkill — run from a lane", () => {
+  async function lane(fx: Fixture): Promise<{ main: string; lane: string }> {
+    const base = dirname(fx.root);
+    const main = join(base, "main");
+    const laneDir = join(base, "lane");
+    await mkdir(main);
+    await mustGit(main, "init", "--quiet", "--initial-branch", "main");
+    await writeFile(join(main, "main.txt"), "main\n");
+    await mustGit(main, "add", "main.txt");
+    await mustGit(main, ...IDENTITY, "commit", "--quiet", "-m", "main");
+    await mustGit(main, "worktree", "add", "--quiet", "-b", "lane/x", laneDir);
+    return { main, lane: laneDir };
+  }
+
+  async function laneRefusal(fx: Fixture, root: string): Promise<EngineError> {
+    const thrown = await addSkill(request(fx, { root })).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(thrown).toBeInstanceOf(EngineError);
+    expect(await readdir(fx.tempParent)).toEqual([]);
+    expect(await readdir(root)).not.toContain(".stamity");
+    return thrown as EngineError;
+  }
+
+  it("refuses while the main checkout's away marker is present", async () => {
+    const fx = await fixture(SKILL_FILES);
+    const { main, lane: root } = await lane(fx);
+    await mkdir(join(main, ".stamity"));
+    await writeFile(join(main, ".stamity", "away.json"), "{}\n");
+
+    const error = await laneRefusal(fx, root);
+
+    expect(error.code).toBe("VALIDATION_ERROR");
+    expect(error.message).toContain("nobody is watching the main checkout");
+    expect(error.message).toContain(".stamity/away.json is present");
+  });
+
+  it("refuses while an in-progress run record in the main checkout reads Mode: unattended, naming it", async () => {
+    const fx = await fixture(SKILL_FILES);
+    const { main, lane: root } = await lane(fx);
+    await mkdir(join(main, ".stamity", "runs", "2026-11-09_night"), { recursive: true });
+    await writeFile(join(main, ".stamity", "runs", "2026-11-09_night", "record.md"), "# Run 2026-11-09_night\n\nStatus: in progress\nMode: unattended\n");
+
+    const error = await laneRefusal(fx, root);
+
+    expect(error.message).toContain("the main checkout's run is unattended");
+    expect(error.message).toContain(".stamity/runs/2026-11-09_night/record.md");
+  });
+
+  it("copies into the lane when the main checkout is attended and has no marker", async () => {
+    const fx = await fixture(SKILL_FILES);
+    const { main, lane: root } = await lane(fx);
+    // A run that ended unattended, and one attended in progress: neither holds the lane.
+    await mkdir(join(main, ".stamity", "runs", "2026-11-08_night"), { recursive: true });
+    await writeFile(join(main, ".stamity", "runs", "2026-11-08_night", "record.md"), "# Run\n\nStatus: done\nMode: unattended\n");
+    await mkdir(join(main, ".stamity", "runs", "2026-11-09_day"), { recursive: true });
+    await writeFile(join(main, ".stamity", "runs", "2026-11-09_day", "record.md"), "# Run\n\nStatus: in progress\nMode: attended\n");
+
+    const added = await addSkill(request(fx, { root }));
+
+    expect(added.written).toBe(true);
+    expect(await readFile(join(root, ".stamity", "overrides", "skills", "house-style", "SKILL.md"), "utf8")).toBe(SKILL_MD);
+    expect(await readdir(main)).not.toContain("house-style");
+  });
+});

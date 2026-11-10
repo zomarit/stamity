@@ -5797,6 +5797,105 @@ describe("check — legacy-files", () => {
 });
 
 /**
+ * `copied-skills` (REQ-FLOW-180, s-skill-guard): each skill `stamity skill add` copied in is re-hashed against its
+ * origin record, and a copy whose files moved is a warn row; the row never fetches. Present only with an origin record,
+ * so no other setup's report moves. The copy and its record are written here as `skill add` writes them: the row reads
+ * files, so no fetch is needed to set one up.
+ */
+describe("check — copied-skills", () => {
+  const SKILL = [
+    "---",
+    "id: house-style",
+    "type: skill",
+    "description: Writes in the house style when someone drafts prose for this repository.",
+    "tags: [writing]",
+    "load: on-demand",
+    "obsolete_when: the house style ships in the client",
+    "---",
+    "",
+    "# House style",
+    "",
+  ].join("\n");
+  const VOICE = "# Voice\n\nPlain words.\n";
+  const COPY = ".stamity/overrides/skills/house-style";
+  const RECORD = ".stamity/skills/house-style.origin.json";
+  const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
+  const origin = (): string =>
+    JSON.stringify({
+      name: "house-style",
+      source: { id: "house", repo: "https://skills.example.test/acme/skills" },
+      version: "v1.0.0",
+      commit: "a".repeat(40),
+      aggregateSha256: "b".repeat(64),
+      files: [
+        { path: "SKILL.md", sha256: sha(SKILL), bytes: Buffer.byteLength(SKILL) },
+        { path: "references/voice.md", sha256: sha(VOICE), bytes: Buffer.byteLength(VOICE) },
+      ],
+      scripts: [],
+      engineVersion: "1.19.0-test",
+      fetchedAt: "2026-11-09T12:00:00.000Z",
+    });
+  const copied = { [`${COPY}/SKILL.md`]: SKILL, [`${COPY}/references/voice.md`]: VOICE, [RECORD]: origin() };
+
+  it("adds no row without an origin record, a copy a person wrote among it", async () => {
+    // Before the sync, as the copy below is, so the drift gate reads the override projected.
+    const root = await seedRepo(getRepo(), { repoFiles: { [`${COPY}/SKILL.md`]: SKILL } });
+
+    const { doc } = await runJson(root);
+
+    expect(doc.doctor.map((entry) => entry.id)).not.toContain("copied-skills");
+  });
+
+  it("passes a copy that still matches its origin record, beside the release-boundary rows", async () => {
+    const root = await seedRepo(getRepo(), { repoFiles: copied });
+
+    const { doc } = await runJson(root);
+
+    expect(row(doc, "copied-skills")).toEqual({
+      id: "copied-skills",
+      status: "pass",
+      detail: "1 copied skill(s) still match their origin records under .stamity/skills/",
+    });
+    const ids = doc.doctor.map((entry) => entry.id);
+    expect(ids.indexOf("copied-skills")).toBe(ids.indexOf("legacy-files") + 1);
+  });
+
+  it("warns on a copy with one changed byte and one added file, naming each", async () => {
+    // Copied before the sync, edited after it: the edit is what the row reads.
+    const root = await seedRepo(getRepo(), {
+      repoFiles: copied,
+      files: { [`${COPY}/references/voice.md`]: VOICE.replace("Plain", "plain"), [`${COPY}/notes.md`]: "added\n" },
+    });
+
+    const { doc } = await runJson(root);
+
+    expect(row(doc, "copied-skills")).toEqual({
+      id: "copied-skills",
+      status: "warn",
+      detail:
+        "1 of 1 copied skill(s) no longer match their origin records, and no fetch was made: " +
+        "house-style (house v1.0.0 aaaaaaaaaaaa): changed references/voice.md, extra notes.md. " +
+        `Re-copy each with \`${npxCommand("skill remove <name>")}\` and \`${npxCommand("skill add")}\` in an attended session, ` +
+        "or keep the edit as a person's override by removing its origin record.",
+    });
+  });
+
+  it("warns on an origin record whose copy is gone, and on one that does not read", async () => {
+    const root = await seedRepo(getRepo(), {
+      files: { [RECORD]: origin(), ".stamity/skills/broken.origin.json": "{" },
+    });
+
+    const { doc } = await runJson(root);
+
+    const found = row(doc, "copied-skills");
+    expect(found.status).toBe("warn");
+    expect(found.detail).toContain("2 of 2 copied skill(s) no longer match");
+    expect(found.detail).toContain("broken: the origin record does not read");
+    expect(found.detail).toContain("house-style (house v1.0.0 aaaaaaaaaaaa): the copy is missing");
+  });
+});
+
+/**
  * Provenance (plan 022 file 2, unit b16-docs-pointers-batch; ledger rows build/12 and
  * review/55): the rollup counts a client's own files, never the `.gitignore` row, and
  * `check` prints no "(stamped v…)" beside the count, since no emitted file carries a stamp.

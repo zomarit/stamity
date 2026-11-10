@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
@@ -13,8 +14,11 @@ import {
   unattendedPushVerdict,
   type PersonOnlyRuleId,
 } from "../../src/hooks/personOnly.ts";
+import { PERSON_ONLY_GUARD_FILE, planCoreHookScripts } from "../../src/hooks/scripts.ts";
 import { CURATED_MCP_SERVERS, PLATFORM_MCP_SERVER } from "../../src/mcp/catalog.ts";
 import { REGISTRY_URL } from "../../src/shared/cliCall.ts";
+import { CHILD_TIMEOUT_MS } from "../support/childTimeout.ts";
+import { useTempDir } from "../support/tempDir.ts";
 
 /**
  * u6-person-only-tables (REQ-FLOW-102, REQ-FLOW-120): the person-only acts the
@@ -1009,8 +1013,10 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
 // TEST CHANGE, justified (REQ-FLOW-134, a4c): a write that reaches an outside party joins the ask class.
 // TEST CHANGE, justified (REQ-FLOW-134, review/129): a remote or URL rewrite written joins it, run on the main thread.
 // TEST CHANGE, justified (REQ-FLOW-163, review/62): a person's accept of a run's proposal joins the ask class.
+// TEST CHANGE, justified (REQ-FLOW-180, s-skill-guard): a skill fetched into the repository joins the ask class.
 const ASK_CLASS = new Set(["push-default", "push-tags", "tag", "pr-merge", "pr-ready", "release", "publish", "secrets", "protection",
-  "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "learn-accept", "outside-write", "remote-write"]);
+  "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "learn-accept", "outside-write", "remote-write",
+  "skill-fetch"]);
 
 const ZERO = "0".repeat(40);
 /** A GraphQL `updateRefs` call with one entry: its ref name and its `afterOid`. */
@@ -1173,6 +1179,8 @@ const CLASSES: readonly (readonly [command: string, rule: string, ask: boolean, 
   ["stamity run land --run x --approved", "land-approved", true],
   // TEST CHANGE, justified (REQ-FLOW-163, review/62): the accept line, ask-class.
   ["stamity learn accept --run x --proposal y --digest z", "learn-accept", true],
+  // TEST CHANGE, justified (REQ-FLOW-180, s-skill-guard): the skill fetch, ask-class.
+  [`stamity skill add house house-style --tag v1.0.0 --commit ${"a".repeat(40)}`, "skill-fetch", true],
   // review/117: a line past 65,536 characters is refused in every mode before any reading.
   [`echo ${"a".repeat(70_000)}`, "line-too-long", false],
   ["gh repo edit", "repo-irreversible", false],
@@ -1304,6 +1312,8 @@ describe("personOnlyVerdict — the deny matrix", () => {
       "land-approved",
       // TEST CHANGE, justified (REQ-FLOW-163, review/62): one more rule joins the table.
       "learn-accept",
+      // TEST CHANGE, justified (REQ-FLOW-180, s-skill-guard): one more rule joins the table, before the length cap.
+      "skill-fetch",
       // TEST CHANGE, justified (review/117): the refuse-class cap on a line too long for the guard to read joins it.
       "line-too-long",
       // TEST CHANGE, justified (REQ-FLOW-134, a4c): the ask-class write that reaches an outside party joins it.
@@ -2453,7 +2463,9 @@ describe("CLAUDE_DENY_ROWS and CLAUDE_ASK_ROWS", () => {
         // the command's prefix, and are read against the origin, which no settings row can know.
         // TEST CHANGE, justified (REQ-FLOW-134, review/129): a remote write runs on the main thread, so no row holds it.
         // TEST CHANGE, justified (REQ-FLOW-163, review/62): the accept line is the guard's alone, as the loosening is.
-        .filter((id) => !["push-default", "protection-delete", "status-write", "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "learn-accept", "line-too-long", "outside-write", "remote-write"].includes(id))
+        // TEST CHANGE, justified (REQ-FLOW-180, s-skill-guard): the skill fetch is the guard's alone too, since a
+        // settings row cannot tell a sub-agent's call or an unattended run from the person's.
+        .filter((id) => !["push-default", "protection-delete", "status-write", "admin-merge", "push-deploying", "workflow-dispatch", "autonomy-loosen", "land-approved", "learn-accept", "skill-fetch", "line-too-long", "outside-write", "remote-write"].includes(id))
         .toSorted(),
     );
   });
@@ -5204,5 +5216,112 @@ describe("a package manager's options before its subcommand, read as the manager
     const few = `npm ${"-a st ".repeat(4)}run lint`;
     expect(personOnlyVerdict(few, ON_FEATURE), few).toEqual({ deny: false });
     expect(unattendedPushVerdict(few, false, true), few).toEqual({ deny: false });
+  });
+});
+
+/**
+ * s-skill-guard (REQ-FLOW-180): a skill fetched from a source lands on a held path every later session reads, so its
+ * fetch is an attended planning act, never a build's. The verdict reads the verb on any line running this package; the
+ * guard's ask pipeline then decides its three outcomes, read below through the emitted Claude guard itself: the one
+ * block of this file that spawns a process and writes a temporary folder, since those outcomes live in the script, not
+ * in the pure verdict the rest of the file reads.
+ */
+describe("the skill fetch (REQ-FLOW-180, s-skill-guard)", () => {
+  const ADD = `skill add house house-style --tag v1.0.0 --commit ${"a".repeat(40)}`;
+
+  it.each([
+    ["the verb", `stamity ${ADD}`],
+    ["the verb through the pinned runner", `npx --no stamity ${ADD} --json`],
+    ["the verb through a pinned package", `npx -y @zomarit/stamity@1.18.0 ${ADD}`],
+    ["the verb through the package's own CLI file", `node node_modules/@zomarit/stamity/dist/cli.js ${ADD}`],
+    ["the verb after a program option", `stamity --no-color ${ADD}`],
+    ["an option between the two verb words", `stamity skill --dry-run add house house-style --tag v1 --commit ${"a".repeat(40)}`],
+    ["a dry run, which still fetches", `stamity ${ADD} --dry-run`],
+    ["the verb behind another command", `npm test && stamity ${ADD}`],
+    ["a skill line through a program the guard cannot settle", `"$CLI" ${ADD}`],
+    ["a skill line whose verb the shell fills in", 'stamity skill "$VERB" house house-style'],
+    ["an add the shell may complete into the skill verb", "stamity $GROUP add house house-style"],
+    ["a skill line under xargs", "echo add | xargs stamity skill"],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, rule: "skill-fetch", ask: true });
+  });
+
+  it.each([
+    ["the read verb", "stamity skill list"],
+    ["the remove verb", "stamity skill remove house-style"],
+    ["the read verb as JSON", "npx --no stamity skill list --json"],
+    ["a line that only names the verb", `echo 'stamity ${ADD}'`],
+    ["a commit message naming it", "git commit -m 'stamity skill add needs a pinned commit'"],
+    ["another program's skill add", "./tools/skill add house"],
+    ["the check verb, which reads drift and never fetches", "stamity check"],
+  ])("allows %s", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
+  });
+
+  // The emitted guard for Claude Code, which asks; the outcomes are the ask pipeline's, so they are read off the script.
+  const getGuardRepo = useTempDir("skill-fetch-guard");
+  const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
+
+  async function placeClaudeGuard(files: Record<string, string> = {}): Promise<string> {
+    const guard = planCoreHookScripts("../../agent-tool-policies.json", "claude", { ...CLI_PIN, personOnlyGuard: true }).find(
+      (script) => script.fileName === PERSON_ONLY_GUARD_FILE,
+    );
+    if (guard === undefined) throw new Error("the plan carried no person-only guard");
+    await getGuardRepo().seedFiles({ ".git/HEAD": "ref: refs/heads/feat/x\n", [`.stamity/generated/hooks/claude/${guard.fileName}`]: guard.content, ...files });
+    return getGuardRepo().path(".stamity", "generated", "hooks", "claude", guard.fileName);
+  }
+
+  /** The guard's answer to a Bash call, as Claude Code reads it: an ask on stdout, a refusal on exit 2. */
+  function guardSays(guard: string, extra: Record<string, unknown> = {}, env: Record<string, string> = {}): { ask: boolean; deny: boolean; reason: string } {
+    const base = { ...process.env };
+    for (const name of ["STAMITY_UNATTENDED", "STAMITY_NOBODY_WATCHING", "STAMITY_REPO_ROOT", "GH_REPO", "GH_HOST", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS"]) delete base[name];
+    const input = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: `npx --no stamity ${ADD}` }, ...extra });
+    const result = spawnSync(process.execPath, [guard], {
+      input,
+      encoding: "utf8",
+      env: { ...base, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", ...env },
+      timeout: CHILD_TIMEOUT_MS,
+    });
+    const stdout = String(result.stdout).trim();
+    if (result.status === 0 && stdout !== "") {
+      const out = JSON.parse(stdout) as { hookSpecificOutput: { permissionDecision: string; permissionDecisionReason: string } };
+      return { ask: out.hookSpecificOutput.permissionDecision === "ask", deny: false, reason: out.hookSpecificOutput.permissionDecisionReason };
+    }
+    return { ask: false, deny: result.status === 2, reason: String(result.stderr) };
+  }
+
+  it("asks on the attended main thread, naming the rule", async () => {
+    const guard = await placeClaudeGuard();
+    const said = guardSays(guard);
+    expect(said.ask).toBe(true);
+    expect(said.reason).toContain("`skill-fetch`");
+  });
+
+  it("refuses a sub-agent's call", async () => {
+    const guard = await placeClaudeGuard();
+    const said = guardSays(guard, { agent_id: "helper-1", agent_type: "stamity-implementer" });
+    expect(said).toMatchObject({ ask: false, deny: true });
+    expect(said.reason).toContain("`skill-fetch`");
+    expect(said.reason).toContain("a sub-agent runs it");
+  });
+
+  it("refuses while a run is unattended", async () => {
+    const guard = await placeClaudeGuard();
+    const said = guardSays(guard, {}, { STAMITY_UNATTENDED: "1" });
+    expect(said).toMatchObject({ ask: false, deny: true });
+    expect(said.reason).toContain("`skill-fetch`");
+    expect(said.reason).toContain("this run is unattended");
+  });
+
+  it("refuses while nobody is watching, by the switch and by the away marker", async () => {
+    const guard = await placeClaudeGuard();
+    const bySwitch = guardSays(guard, {}, { STAMITY_NOBODY_WATCHING: "1" });
+    expect(bySwitch).toMatchObject({ ask: false, deny: true });
+    expect(bySwitch.reason).toContain("`skill-fetch`");
+    expect(bySwitch.reason).toContain("nobody is watching");
+    const marked = await placeClaudeGuard({ ".stamity/away.json": "{}\n" });
+    const byMarker = guardSays(marked);
+    expect(byMarker).toMatchObject({ ask: false, deny: true });
+    expect(byMarker.reason).toContain("nobody is watching");
   });
 });

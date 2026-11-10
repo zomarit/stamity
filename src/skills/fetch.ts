@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { isPlainObject, parseYamlStrict } from "../config/parse.ts";
 import { buildContentIndex, type PackContentRoot } from "../content/catalog.ts";
 import { parseFrontmatter } from "../content/frontmatter.ts";
 import { checkUserArtifact, discoverUserContent, scanUserSkillSupportFiles, SKILL_FILE } from "../content/userContent.ts";
@@ -17,6 +18,8 @@ import {
 } from "../pack/manifest.ts";
 import { assertSafePackRelPath } from "../pack/permissions.ts";
 import { computeAggregateContentSha } from "../pack/trust.ts";
+import { isRunId, RECORD_FILE, RECORD_HEAD_READ_BYTES, RUNS_SEGMENTS, runRelPath } from "../runs/layout.ts";
+import { readRecordHead } from "../runs/resumeCard.ts";
 import { EngineError } from "../types/errors.ts";
 import { ENGINE_CONTENT_PREFIXES, STATE_DIR, stripEngineContentPrefix } from "../types/markers.ts";
 import { GIT_FETCH_TIMEOUT_MS, runGit, type GitOutcome, type WorktreeGitRunner } from "../worktree/git.ts";
@@ -63,6 +66,20 @@ const WINDOWS_DEVICE = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\..*)?$/i;
  * is held to the same trust as a script: refused unless the source allows scripts, and named when it does.
  */
 const TOOL_GRANT_KEYS: readonly string[] = ["allowed-tools"];
+
+/**
+ * Codex's companion beside a `SKILL.md` (`../emit/skillsProjection.ts`, `TOUCHPOINT_POLICY_FILE`), in either YAML
+ * extension and matched in any case, since a case-insensitive disk opens `Agents/OpenAI.yaml` as the same file. A
+ * client may honour what it declares (tool dependencies, an MCP server to start), so it is held to the same trust as a
+ * script (amended 2026-11-09, skills lens r2), and the check fails closed until Codex's docs say otherwise: only the
+ * keys below, which name how the skill is shown and whether it may be invoked implicitly, pass from a source that does
+ * not allow scripts, each with a scalar value of its kind.
+ */
+const COMPANION_PATHS: ReadonlySet<string> = new Set(["agents/openai.yaml", "agents/openai.yml"]);
+const COMPANION_KEYS: Readonly<Record<string, Readonly<Record<string, "string" | "boolean">>>> = {
+  interface: { display_name: "string", short_description: "string", icon_small: "string", icon_large: "string", brand_color: "string", default_prompt: "string" },
+  policy: { allow_implicit_invocation: "boolean" },
+};
 
 /** One file of a copied skill, as its origin record lists it. */
 interface SkillOriginFile {
@@ -190,6 +207,33 @@ async function heldSkill(name: string, packRoots: readonly PackContentRoot[]): P
 function toolGrants(skillText: string, source: string): string[] {
   const { frontmatter } = parseFrontmatter(skillText, source);
   return TOOL_GRANT_KEYS.filter((key) => Object.hasOwn(frontmatter, key)).map((key) => `${key}: ${JSON.stringify(frontmatter[key])}`);
+}
+
+/**
+ * What a Codex companion declares past the keys {@link COMPANION_KEYS} reads as harmless, each `<key path>: <value as
+ * JSON>`; a text that is not one YAML map (a duplicate key among it) is one declaration, since no reading of it is
+ * sure.
+ */
+function companionDeclarations(text: string, source: string): string[] {
+  let parsed: unknown;
+  try {
+    parsed = parseYamlStrict(text, source);
+  } catch {
+    return ["the file does not read as one YAML map"];
+  }
+  if (!isPlainObject(parsed)) return ["the file does not read as one YAML map"];
+  const found: string[] = [];
+  for (const [key, value] of Object.entries(parsed)) {
+    const known = COMPANION_KEYS[key];
+    if (known === undefined || !isPlainObject(value)) {
+      found.push(`${key}: ${JSON.stringify(value)}`);
+      continue;
+    }
+    for (const [inner, innerValue] of Object.entries(value)) {
+      if (known[inner] === undefined || typeof innerValue !== known[inner]) found.push(`${key}.${inner}: ${JSON.stringify(innerValue)}`);
+    }
+  }
+  return found;
 }
 
 /** Whether anything, a link included, sits at `path`. */
@@ -339,6 +383,18 @@ async function judge(request: AddSkillRequest, stageRoot: string, skillDir: stri
       `a person who trusts this source's scripts sets "allowScripts": true on it in .stamity/skill-sources.json`,
     );
   }
+  const companionGrants: string[] = [];
+  for (const { file, bytes } of read.filter((entry) => COMPANION_PATHS.has(entry.file.rel.toLowerCase()))) {
+    const label = `${request.name}/${file.rel}`;
+    const declared = companionDeclarations(bytes.toString("utf8"), label);
+    if (declared.length > 0 && !request.source.allowScripts) {
+      refuse(
+        `skill add refused: ${label} declares what a client may honour as a tool grant or a dependency, and the source ${request.source.id} does not allow scripts:\n${declared.map((line) => `  - ${line}`).join("\n")}`,
+        `a person who trusts this source's tools sets "allowScripts": true on it in .stamity/skill-sources.json`,
+      );
+    }
+    companionGrants.push(...declared.map((line) => `${file.rel} ${line}`));
+  }
   const files = read
     .map(({ file, bytes }) => ({ path: file.rel, sha256: sha256Hex(bytes), bytes: bytes.length }))
     .toSorted((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
@@ -376,7 +432,7 @@ async function judge(request: AddSkillRequest, stageRoot: string, skillDir: stri
   if (hits.length > 0) refuse(`skill add refused: the deny scan refused ${request.name}'s files:\n${hits.map((hit) => `  - ${hit}`).join("\n")}`);
   await scanPackBodies(packFiles);
   await syncWouldTake(request.name, stageRoot, skillText, skillLabel);
-  return { files, scripts, grants, aggregate, packIntegrity: Object.fromEntries(files.map((file) => [`skills/${request.name}/${file.path}`, file.sha256])) };
+  return { files, scripts, grants: [...grants, ...companionGrants], aggregate, packIntegrity: Object.fromEntries(files.map((file) => [`skills/${request.name}/${file.path}`, file.sha256])) };
 }
 
 /**
@@ -431,11 +487,81 @@ async function land(root: string, stagedDir: string, origin: SkillOrigin, packIn
   }
 }
 
+/** A run record's head off its first bytes, or null where no regular file sits at `path`. */
+async function recordHeadAt(path: string): Promise<ReturnType<typeof readRecordHead> | null> {
+  const entry = await lstat(path).catch((cause: NodeJS.ErrnoException) => {
+    if (cause.code === "ENOENT" || cause.code === "ENOTDIR") return null;
+    throw cause;
+  });
+  if (entry === null || !entry.isFile()) return null;
+  const handle = await open(path, "r");
+  try {
+    const { buffer, bytesRead } = await handle.read(Buffer.alloc(RECORD_HEAD_READ_BYTES), 0, RECORD_HEAD_READ_BYTES, 0);
+    return readRecordHead(buffer.toString("utf8", 0, bytesRead));
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * The main checkout of `root`'s repository where `root` is not it (a lane, a linked worktree), else null: the folder
+ * holding the git common directory, as `stamity gc` and the run clean-up find it. A root git does not open as a
+ * repository and that holds no `.git` of its own has no other checkout; one that holds a `.git` git cannot read is
+ * a fault, since it may be a lane whose main checkout is unread.
+ */
+async function otherMainCheckout(root: string, run: WorktreeGitRunner): Promise<string | null> {
+  const outcome = await run({ args: ["rev-parse", "--git-common-dir"], cwd: root });
+  if (outcome.status !== 0) {
+    if (!(await present(join(root, ".git")))) return null;
+    throw new Error(`git cannot read this checkout: ${gitSaid(outcome)}`);
+  }
+  const commonDir = resolve(root, outcome.stdout.trim());
+  if (basename(commonDir) !== ".git") return null;
+  const main = dirname(commonDir);
+  const [mainReal, rootReal] = await Promise.all([realpath(main), realpath(root)]);
+  return mainReal === rootReal ? null : main;
+}
+
+/**
+ * Why the main checkout reads as unwatched for a `skill add` run from a lane, or null (amended 2026-11-09, the lane
+ * question): the switch's marker (`.stamity/away.json`, a link among it) or an in-progress run record reading
+ * `Mode: unattended` there. The verb reads its own folder and the session's variables (`../cli/commands/skill.ts`);
+ * a lane has neither the marker nor the night's record, which sit in the main checkout. A read that fails refuses.
+ */
+async function mainCheckoutUnwatched(root: string, run: WorktreeGitRunner): Promise<string | null> {
+  let main: string | null;
+  try {
+    main = await otherMainCheckout(root, run);
+  } catch (cause) {
+    return `the main checkout of this checkout could not be found, so whether anyone watches it is unknown (${cause instanceof Error ? cause.message : String(cause)})`;
+  }
+  if (main === null) return null;
+  const marker = `${STATE_DIR}/away.json`;
+  try {
+    if (await present(join(main, ...marker.split("/")))) return `nobody is watching the main checkout ${main}: its ${marker} is present`;
+    const runsDir = join(main, ...RUNS_SEGMENTS);
+    const entries = await readdir(runsDir, { withFileTypes: true }).catch((cause: NodeJS.ErrnoException) => {
+      if (cause.code === "ENOENT" || cause.code === "ENOTDIR") return [];
+      throw cause;
+    });
+    const runs = entries.filter((entry) => entry.isDirectory() && isRunId(entry.name)).map((entry) => entry.name).toSorted();
+    const heads = await Promise.all(runs.map(async (id) => ({ id, head: await recordHeadAt(join(runsDir, id, RECORD_FILE)) })));
+    const held = heads.find(({ head }) => head?.inProgress === true && head.mode === "unattended");
+    return held === undefined ? null : `the main checkout's run is unattended: ${main}'s ${runRelPath(held.id, RECORD_FILE)} reads \`Status: in progress\` and \`Mode: unattended\``;
+  } catch (cause) {
+    return `the main checkout ${main}'s away marker or run records could not be read (${cause instanceof Error ? cause.message : String(cause)})`;
+  }
+}
+
 /**
  * Fetch, judge and copy in one skill. Throws an {@link EngineError} naming the reason on every refusal; the temporary
  * folder is removed on every exit, and nothing lands under the root unless every check passed.
  */
 export async function addSkill(request: AddSkillRequest): Promise<AddedSkill> {
+  const unwatched = await mainCheckoutUnwatched(request.root, request.run ?? runGit);
+  if (unwatched !== null) {
+    refuse(`skill add refused: ${unwatched}, and a copied skill is read by every later session before any person has looked at it.`, "add the skill in an attended session, with the main checkout attended too");
+  }
   const held = isSkillSlug(request.name) ? await heldSkill(request.name, request.packRoots ?? []) : undefined;
   const nameDefect = skillNameDefect(request.name);
   if (nameDefect !== null) refuse(`skill add refused: ${nameDefect}${held === undefined ? "" : `, and it names ${held.owner}`}.`);

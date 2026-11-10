@@ -41,6 +41,7 @@ import {
 } from "../../pack/retired.ts";
 import { UNICODE_TAG_CHARS, UNPRINTABLE_CHARS } from "../../runs/layout.ts";
 import { findPackageRoot } from "../../shared/paths.ts";
+import { listCopiedSkills, type CopiedSkill } from "../../skills/fetch.ts";
 import { gitProgramFor } from "../../shared/programPath.ts";
 import {
   describePackIntegrityFinding,
@@ -1467,6 +1468,49 @@ async function checkLegacyFiles(rootDir: string, manifest: SetupManifest | null)
 }
 
 /**
+ * `copied-skills` (REQ-FLOW-180): each skill `stamity skill add` copied in, re-hashed against its origin record under
+ * `.stamity/skills/`, as `pack-integrity` re-hashes an installed pack against its ledger. A copy whose files moved, an
+ * origin record whose copy is gone and one that does not read are each a `warn`: the edit may be a person's, and the
+ * remedy is theirs. The row never fetches, so it says nothing of the source. Present only with an origin record: an
+ * override with no record is a person's, not a copied skill, and is no row's subject here.
+ */
+async function checkCopiedSkills(rootDir: string): Promise<DoctorCheck | null> {
+  const id = "copied-skills";
+  const skills = await listCopiedSkills(rootDir);
+  if (skills.length === 0) return null;
+  const moved = skills.filter((skill) => skill.state !== "clean");
+  if (moved.length === 0) {
+    return { id, status: "pass", detail: `${skills.length} copied skill(s) still match their origin records under ${STATE_DIR}/skills/` };
+  }
+  const describe = (skill: CopiedSkill): string => {
+    if (skill.state === "record-unreadable") return `${skill.name}: the origin record does not read`;
+    // A record is read for its name and files alone, so the rest is read as text that may be missing.
+    const origin = (skill.origin ?? {}) as Partial<NonNullable<CopiedSkill["origin"]>>;
+    const from = [origin.source?.id, origin.version, typeof origin.commit === "string" ? origin.commit.slice(0, 12) : undefined]
+      .filter((part): part is string => typeof part === "string")
+      .map(sanitizeLabel)
+      .join(" ");
+    const what =
+      skill.state === "copy-missing"
+        ? "the copy is missing"
+        : [...skill.changed.map((path) => `changed ${path}`), ...skill.missing.map((path) => `missing ${path}`), ...skill.extra.map((path) => `extra ${path}`)]
+            .map(sanitizeLabel)
+            .join(", ");
+    return `${skill.name}${from === "" ? "" : ` (${from})`}: ${what}`;
+  };
+  const shown = moved.slice(0, MAX_NAMES_INLINE).map(describe);
+  const overflow = moved.length > MAX_NAMES_INLINE ? ` (and ${moved.length - MAX_NAMES_INLINE} more)` : "";
+  return {
+    id,
+    status: "warn",
+    detail:
+      `${moved.length} of ${skills.length} copied skill(s) no longer match their origin records, and no fetch was made: ` +
+      `${shown.join("; ")}${overflow}. Re-copy each with \`${packageCommand("skill remove <name>")}\` and ` +
+      `\`${packageCommand("skill add")}\` in an attended session, or keep the edit as a person's override by removing its origin record.`,
+  };
+}
+
+/**
  * Which version of the floor invariants this install's corpus carries.
  *
  * A `pass` row with no failing case of its own: the values are validated at
@@ -2565,6 +2609,7 @@ export async function runDoctor(
     packCatalog,
     movedSkills,
     legacyFiles,
+    copiedSkills,
     modelPins,
     autonomyDeploying,
     landJobWorkflows,
@@ -2583,6 +2628,7 @@ export async function runDoctor(
     ),
     guarded("moved-skills", () => checkMovedSkills(rootDir, manifest)),
     guarded("legacy-files", () => checkLegacyFiles(rootDir, manifest)),
+    guarded("copied-skills", () => checkCopiedSkills(rootDir)),
     guarded("model-pins", async () => modelPinsRow(rootDir, manifest, app.runtime.env)),
     // Through the pinned runner, as `config detect` reads the same ref.
     guarded("autonomy-deploying", () =>
@@ -2632,6 +2678,9 @@ export async function runDoctor(
     // setup writes or tracks now: beside `moved-skills`, the other release-boundary
     // leftover, and read without the plan too.
     legacyFiles,
+    // Present only with an origin record: whether a skill `skill add` copied in still matches it. The customization
+    // side again, so beside `legacy-files`; read from files, never fetched.
+    ...(copiedSkills === null ? [] : [copiedSkills]),
     // Whether a workflow deploys on a push to a branch the autonomy setting
     // lets the land verb merge into unasked. It answers about this repository,
     // and sits before `model-pins`, which `cloud-install` follows.
