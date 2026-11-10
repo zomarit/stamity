@@ -1491,6 +1491,29 @@ describe("buildSessionStartScript", () => {
     },
   );
 
+  // POSIX-ONLY (tracking: M-1 of u-banner-names-security-r1, owner: the u-banner-names unit): the Win32 naming rules
+  // forbid a backslash in a file name, so on Windows a name cannot carry escape notation and the seeding cannot
+  // create the subject.
+  it.skipIf(process.platform === "win32")(
+    "withholds a long file name whose printed cut matches the screen only once its notation is read and flattened",
+    async () => {
+      // 203 characters: the print keeps the first 199 plus "…", ending on "always". `\x01` reads as a raw control,
+      // which no row takes for the space between "must" and "always" until it is flattened; the whole name read and
+      // flattened ends "alwaysz.md" (200 characters, uncut), so only the flattened read cut matches `role-must-always`.
+      const name = `${"x".repeat(174)} the agent must\\x01alwaysz.md`;
+      await getRepo().seedFiles({ [`.stamity/learnings/${name}`]: "no frontmatter here\n" });
+      const script = await place("session-start.mjs", buildSessionStartScript());
+
+      const lines = run(script, { cwd: getRepo().dir }).stdout.split("\n");
+
+      expect(readNotation(`${name.slice(0, 199)}…`).endsWith("the agent must\u0001always…")).toBe(true);
+      expect(lines).toContainEqual(
+        expect.stringMatching(/^- skipped \(name withheld: patterns? [^)]*role-must-always[^)]*\): invalid-frontmatter$/),
+      );
+      expect(lines.join("\n")).not.toContain("must\\x01");
+    },
+  );
+
   it("prints a file name with the unprintable class removed, and withholds a name the screen matches (REQ-FLOW-021)", async () => {
     // A bidi override (U+202E) in one name and a screened phrase as another: the screen reads
     // a file's content, and the name reached the banner with only C0 controls flattened.

@@ -1504,14 +1504,12 @@ function nameId(doc) {
 }
 
 /**
- * A file name as the banner prints it, as \`learn read\` prints a skip's: C0
- * controls and DEL to spaces, the rest of the resume card's unprintable set and
- * the invisible class dropped. A name the screen matches, raw or printed, its
- * stem, notation read and printed cut read too, prints a placeholder of pattern ids.
+ * A file name as the banner prints it (\`printable\`), as \`learn read\` prints a skip's. A name the screen matches,
+ * raw or printed, its stem, notation read and printed cut read and flat too, prints a placeholder of pattern ids.
  */
 function printedName(name) {
   const copies = [name, readNotation(name)].flatMap((n) => [n, stem(n), text(n, ""), text(stem(n), "")]);
-  copies.push(...copies.slice(2, 4).map(readNotation));
+  copies.push(...copies.slice(2, 4).flatMap((c) => [(c = readNotation(c)), text(c, "")]));
   const ids = [...new Set(copies.flatMap(screenIds))].sort();
   if (ids.length === 0) return printable(name);
   return "(name withheld: " + (ids.length === 1 ? "pattern " : "patterns ") + ids.join(", ") + ")";
