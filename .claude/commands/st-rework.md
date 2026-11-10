@@ -250,7 +250,7 @@ steps a person runs. One rework-only check runs beside it, labelled so the diffe
 `R1`, every unit cites validated `file:line` evidence or is explicitly marked `unvalidated`. Apply
 `/st-plan`'s structural coverage pass and semantic coverage review at the same handoff; a
 structural pass alone does not resolve incompatible requirement and unit meanings. Whenever `L6`
-passes with any skill named, rework then runs `npx --no stamity sync` (`npx -y @zomarit/stamity@1.18.0 sync` where
+passes with any skill named, rework then runs `npx --no stamity sync` (`npx -y @zomarit/stamity@1.19.0 sync` where
 npm refuses) so every client's copy is regenerated. What `sync` wrote lands on held paths: the
 handoff's ask names those paths, and a person commits them before answering, so they are in before
 `/st-work` cuts any lane.
