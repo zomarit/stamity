@@ -364,7 +364,10 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     // TEST CHANGE, justified (s-skill-guard, REQ-FLOW-180, integrated without the p-private-repos base, 2026-11-10): both
     // rows moved again, bytes from 349,784 to 351,461 and lines from 7,209 to 7,238, the measured size of the largest copy
     // (copilot), since the verdict now reads the skill fetch verb under its own ask-class rule.
-    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 351_461, lines: 7_238 });
+    // TEST CHANGE, justified (person-only guard hardening, REQ-FLOW-102, 2026-11-10): both rows moved again, bytes from
+    // 351,461 to 353,390 and lines from 7,238 to 7,268, the measured size of the largest copy (copilot), since the push
+    // reading grew.
+    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 353_390, lines: 7_268 });
     const guards = renders.filter((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
     expect(guards).toHaveLength(TOOLS.length);
     for (const script of guards) expect(budgetViolation(script), script.tool).toBeUndefined();

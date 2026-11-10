@@ -1608,6 +1608,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		"/proc/self/fd/0"
 	]);
 	const gitEnvironment = /\bGIT_CONFIG\w*|\b(?:HOME|XDG_CONFIG_HOME)\s*=/.test(command);
+	const pushRemoteWord = () => [[ctx.pushRemote === void 0 ? "origin" : ctx.pushRemote, void 0]];
 	const pushOutside = (words, config) => {
 		const origin = ctx.originRepo;
 		if (origin === void 0) return;
@@ -1615,7 +1616,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			deny("outside-write", "A push to another repository, or to a remote the guard cannot place");
 		};
 		if (ctx.placeUnread === true || gitEnvironment || config.some((pair) => /^(?:remote|url)\./i.test(pair))) return outside();
-		const named = words.length > 0 ? words : [[ctx.pushRemote === void 0 ? "origin" : ctx.pushRemote, void 0]];
+		const named = words.length > 0 ? words : pushRemoteWord();
 		for (const [word, mark] of named) {
 			if (word === null || (mark?.kinds ?? "") !== "" || /[$`]/.test(word)) return outside();
 			if (word === "origin" && ctx.ownCheckout !== false) {
@@ -1681,12 +1682,14 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		pushVerdict(args, config, marks);
 		pushOutside(pushReach, config);
 	}
-	function pushVerdict(args, config, marks = []) {
+	function pushVerdict(args, config, marks = [], valueRead = false) {
+		const values = [];
 		let force = false;
 		let remove = false;
 		let tags = false;
 		let matching = false;
 		let repoGiven = false;
+		let stdin = false;
 		const repoWords = [];
 		const positionals = [];
 		const positionalMarks = [];
@@ -1718,6 +1721,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			if (arg.startsWith("--")) {
 				const name = (arg.split("=")[0] ?? "").toLowerCase();
 				const is = (options) => name.length > 2 && options.some((option) => option.startsWith(name));
+				if (is(["--stdin"])) stdin = true;
 				if (is([
 					"--force",
 					"--force-with-lease",
@@ -1740,6 +1744,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 					"--receive-pack",
 					"--exec"
 				]) && !arg.includes("=")) j += 1;
+				else if (!valueRead && is(["--recurse-submodules", "--remote"]) && !arg.includes("=") && j + 1 < args.length) values.push(j + 1);
 			} else if (arg.startsWith("-") && arg.length > 1) for (let c = 1; c < arg.length; c += 1) {
 				const flag = arg[c];
 				if (flag === "f") force = true;
@@ -1754,16 +1759,31 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				positionalMarks.push(marks[j]);
 			}
 		}
-		pushReach = [...repoWords, ...positionals.length > 0 ? [[positionals[0] ?? null, positionalMarks[0]]] : []];
+		if (stdin && !valueRead) {
+			if (deploying.length > 0) deny("push-deploying", "A push of refs read from its input, which may name a deploying branch");
+			deny("push-default", "A push of refs read from its input, which may name the default branch");
+		}
+		let valueReach = [];
+		if (values.length > 0) {
+			const kept = (_, at) => !values.includes(at);
+			pushVerdict(args.filter(kept), config, marks.filter(kept), true);
+			valueReach = pushReach.length > 0 ? pushReach : pushRemoteWord();
+		}
+		pushReach = [
+			...valueReach,
+			...repoWords,
+			...positionals.length > 0 ? [[positionals[0] ?? null, positionalMarks[0]]] : []
+		];
 		const named = repoGiven ? positionals : positionals.slice(1);
 		const namedMarks = repoGiven ? positionalMarks : positionalMarks.slice(1);
+		const refless = positionals.length <= 1;
 		if (!repoGiven && /[sgb]/.test(positionalMarks[0]?.kinds ?? "")) {
 			if (deploying.length > 0) deny("push-deploying", "A push whose remote word may split into refspecs the line cannot show");
 			return deny("push-default", "A push whose remote word may split into refspecs or an option the line cannot show");
 		}
 		const tagWord = named.indexOf("tag");
 		const tagNamed = tagWord !== -1 && tagWord < named.length - 1;
-		const refspecs = named.length > 0 ? named : configured;
+		const refspecs = named.length === 0 ? configured : refless ? [...named, ...configured] : named;
 		const namesTag = (side) => side !== "" && (/^(refs\/)?tags\//i.test(side) || isTagName(side.toLowerCase()));
 		if (force || refspecs.some((spec) => spec.startsWith("+"))) return deny("force-push", "A force push");
 		const deleted = refspecs.filter((spec) => spec.length > 1 && spec.startsWith(":")).map((spec) => spec.slice(1));
@@ -1785,8 +1805,9 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				if (deploying.length > 0) deny("push-deploying", "A matching push, a deploying branch among the branches it may push");
 				return deny("push-default", "A matching push, the default branch among them");
 			}
-			const mark = named.length > 0 ? namedMarks[index] : void 0;
-			if (named.length > 0 ? (mark?.kinds ?? "") !== "" : /[$`(]/.test(spec)) {
+			const lineWord = index < named.length;
+			const mark = lineWord ? namedMarks[index] : void 0;
+			if (lineWord ? (mark?.kinds ?? "") !== "" : /[$`(]/.test(spec)) {
 				const splits = /s/.test(mark?.kinds ?? "");
 				if (deploying.length > 0) deny("push-deploying", "A push whose refspec the line cannot show, which may name a deploying branch");
 				return deny("push-default", splits ? "A push whose refspec the line cannot show, which may split into more refspecs or an option" : "A push whose refspec the line cannot show (a substitution, a variable or a group)");
@@ -1807,8 +1828,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				if (hits([...defaults])) return deny("push-default", "A pattern push, the default branch among the branches it matches");
 			}
 		}
-		if (named.length === 0 && (onDeploying || matching && deploying.length > 0)) deny("push-deploying", "A push with no refspec that lands on a deploying branch");
-		if (named.length === 0 && (onDefault || matching)) return deny("push-default", "A push with no refspec that lands on the default branch");
+		if (refless && (onDeploying || matching && deploying.length > 0)) deny("push-deploying", "A push with no refspec that lands on a deploying branch");
+		if (refless && (onDefault || matching)) return deny("push-default", "A push with no refspec that lands on the default branch");
 		return null;
 	}
 	function tagVerdict(args) {

@@ -269,6 +269,16 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["git push", "push-default", ON_TRUNK],
   ["git push > /dev/null 2>&1", "push-default", ON_MAIN],
   ["git push # origin feat/x", "push-default", ON_MAIN],
+  // git takes the first positional word as the remote even beside `--repo`, which it overrides (git-push(1)): one such
+  // word leaves the push refspec-less.
+  ["git push --repo=origin origin", "push-default", ON_MAIN],
+  ["git push --repo origin origin", "push-default", ON_MAIN],
+  ["git push --rep=upstream origin", "push-default", ON_MAIN],
+  ["git -c remote.origin.push=HEAD:refs/heads/main push --repo=origin origin", "push-default"],
+  // `--recurse-submodules` takes its value as the next word: that word is neither the remote nor a refspec.
+  ["git push --recurse-submodules check origin", "push-default", ON_MAIN],
+  ["git push origin --recurse-submodules check", "push-default", ON_MAIN],
+  ["git push --recu on-demand origin", "push-default", ON_MAIN],
   // push-tags
   ["git push --tags", "push-tags"],
   ["git push origin --tags", "push-tags"],
@@ -549,6 +559,16 @@ const DENY: readonly (readonly [command: string, rule: string, ctx?: Ctx])[] = [
   ["git send-pack git@github.com:o/r.git refs/tags/v1", "push-tags"],
   ["git send-pack git@github.com:o/r.git", "push-default"],
   ["git-send-pack -f git@github.com:o/r.git feat/x", "force-push"],
+  // `git send-pack --remote` takes its value as the next word: that word is neither the destination nor a ref.
+  ["git send-pack --remote origin git@github.com:o/r.git", "push-default"],
+  ["git send-pack --rem origin git@github.com:o/r.git", "push-default"],
+  ["git send-pack --remote origin git@github.com:o/r.git main", "push-default"],
+  // `git send-pack --stdin` takes more refs from its input after the line's own: refs the line cannot show. The ALLOW
+  // table's `git send-pack git@github.com:o/r.git feat/x` is the same line without it.
+  ["git send-pack --stdin git@github.com:o/r.git feat/x", "push-default"],
+  ["git send-pack --std git@github.com:o/r.git feat/x", "push-default"],
+  ["git send-pack git@github.com:o/r.git feat/x --stdin", "push-default"],
+  ["git send-pack --stdin -f git@github.com:o/r.git feat/x", "force-push"],
   // PR #112's resolution round 4. `git symbolic-ref` (pr/70): a tag's name written or deleted, and a ref pointed at
   // the default branch, named or one the line cannot show, whatever namespace the new name is in, since a push of that
   // name sends the default branch.
@@ -735,6 +755,13 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["git push --no-force-with-lease origin feat/x"],
   ["git push --no-follow-tags origin feat/x"],
   ["git push -o ci.skip origin feat/x"],
+  // Read both ways, a named branch that is not the default still runs.
+  ["git push --repo=origin origin feat/x"],
+  ["git push --repo=origin origin feat/x", ON_MAIN],
+  ["git push --repo=origin origin"],
+  ["git push --recurse-submodules check origin feat/x"],
+  ["git push --recurse-submodules check origin feat/x", ON_MAIN],
+  ["git push origin --recurse-submodules check"],
   ["git -c push.followTags=false push origin feat/x"],
   ["git push", { defaultBranches: [], currentBranch: null, tags: [] }],
   ["git tag"],
@@ -913,6 +940,8 @@ const ALLOW: readonly (readonly [command: string, ctx?: Ctx])[] = [
   ["wget --me=GET https://api.github.com/repos/o/r/releases/1"],
   ["wget --post-d '{\"event\":\"COMMENT\"}' https://api.github.com/repos/o/r/pulls/3/reviews"],
   ["git send-pack git@github.com:o/r.git feat/x"],
+  // Read both ways, a named ref that is not the default still runs.
+  ["git send-pack --remote origin git@github.com:o/r.git feat/x"],
   // pr/23's twins: a wgetrc command that sets no method or body, a read method, and a comment-event review body.
   ["wget -e robots=off https://api.github.com/repos/o/r/releases"],
   ["wget -e method=GET https://api.github.com/repos/o/r/releases/1"],
@@ -3037,6 +3066,7 @@ describe("the deploying-branch readers (a4, review/39)", () => {
     ["a matching push", "git push origin :"],
     ["a refspec-less push under a matching push.default", "git -c push.default=matching push origin"],
     ["a send-pack with no ref", "git send-pack origin"],
+    ["a send-pack reading more refs from its input", "git send-pack --stdin origin feat/x"],
     ["a symbolic ref", "git symbolic-ref refs/heads/x refs/heads/production"],
     ["an update-ref symref command", "printf 'symref-update refs/heads/x refs/heads/release/2.0\\n' | git update-ref --stdin"],
     ["a GraphQL mergeBranch", "gh api graphql -f query='mutation { mergeBranch(input: {repositoryId: \"R\", base: \"production\", head: \"feat/x\"}) { clientMutationId } }'"],
@@ -4405,6 +4435,12 @@ describe("the outside-party readers' third round (a4c, review/120-132)", () => {
     ["a push to origin from another checkout of the same repository", "git push origin feat/x", { ownCheckout: false, remoteRepo: (): string => "github.com/acme/app" }, null],
     ["a push by --repo to another repository", "git push --repo=https://github.com/other/repo.git", {}, "outside-write"],
     ["a subtree push to another repository", "git subtree push -P d https://github.com/other/repo.git feat/x", {}, "outside-write"],
+    // `--recurse-submodules` takes the next word as its value; read without it, the push names no remote and goes to
+    // the push remote, which is read even where a remote shares the value's name.
+    ["a push whose only word is a recursion value, whose push remote is another repository's", "git push --recurse-submodules check",
+      { pushRemote: "upstream", remoteRepo: (name: string): string => (name === "check" ? "github.com/acme/app" : "github.com/up/app") }, "outside-write"],
+    ["a push whose only word is a recursion value, whose push remote is origin", "git push --recurse-submodules check",
+      { pushRemote: "origin", remoteRepo: (): string => "github.com/acme/app" }, null],
   ] as const)("reads %s", (_, command, extra, expected) => {
     expect(rule(command, { ...ORIGIN, ...extra }), command).toBe(expected);
   });

@@ -2061,6 +2061,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
    * cannot read (`ctx.placeUnread`), a word the shell fills in, a remote the configuration does not place, a push remote
    * the guard cannot tell, and a line that sets a remote or a URL through a `-c` pair or its environment.
    */
+  /** The repository a push naming none reaches: the context's push remote, `origin` where the context names none. */
+  const pushRemoteWord = (): readonly (readonly [string | null, WordMark | undefined])[] =>
+    [[ctx.pushRemote === undefined ? "origin" : ctx.pushRemote, undefined]];
   const pushOutside = (words: readonly (readonly [string | null, WordMark | undefined])[], config: readonly string[]): void => {
     const origin = ctx.originRepo;
     if (origin === undefined) return;
@@ -2068,7 +2071,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       deny("outside-write", "A push to another repository, or to a remote the guard cannot place");
     };
     if (ctx.placeUnread === true || gitEnvironment || config.some((pair) => /^(?:remote|url)\./i.test(pair))) return outside();
-    const named = words.length > 0 ? words : [[ctx.pushRemote === undefined ? "origin" : ctx.pushRemote, undefined] as const];
+    const named = words.length > 0 ? words : pushRemoteWord();
     for (const [word, mark] of named) {
       if (word === null || (mark?.kinds ?? "") !== "" || /[$`]/.test(word)) return outside();
       if (word === "origin" && ctx.ownCheckout !== false) {
@@ -2147,12 +2150,16 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     pushOutside(pushReach, config);
   }
 
-  function pushVerdict(args: string[], config: string[], marks: readonly WordMark[] = []): PersonOnlyVerdict | null {
+  function pushVerdict(args: string[], config: string[], marks: readonly WordMark[] = [], valueRead = false): PersonOnlyVerdict | null {
+    /** The words a separate `--recurse-submodules` or send-pack's `--remote` may take as its value, read once more without them. */
+    const values: number[] = [];
     let force = false;
     let remove = false;
     let tags = false;
     let matching = false;
     let repoGiven = false;
+    /** Whether the line takes more refs from its input (`git send-pack --stdin`), refs the line cannot show. */
+    let stdin = false;
     /** The `--repo` value, with its word's marks (review/130). */
     const repoWords: (readonly [string | null, WordMark | undefined])[] = [];
     const positionals: string[] = [];
@@ -2186,6 +2193,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         // name is read as each option it begins. A prefix of two options is one git refuses, so reading it as either
         // adds a denial to a line that pushes nothing, and a `--no-` form begins none of these.
         const is = (options: string[]): boolean => name.length > 2 && options.some((option) => option.startsWith(name));
+        if (is(["--stdin"])) stdin = true;
         // `--mirror` also force-updates and deletes remote refs, so it reads as a force push (v0a).
         if (is(["--force", "--force-with-lease", "--force-if-includes", "--mirror"])) force = true;
         else if (is(["--tags", "--follow-tags", "--all", "--branches"])) tags = true;
@@ -2195,6 +2203,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
           repoWords.push(arg.includes("=") ? [arg.slice(arg.indexOf("=") + 1), marks[j]] : [args[j + 1] ?? null, marks[j + 1]]);
           if (!arg.includes("=")) j += 1;
         } else if (is(["--push-option", "--receive-pack", "--exec"]) && !arg.includes("=")) j += 1;
+        // git takes `--recurse-submodules`'s value, and `git send-pack` its `--remote` value, as the next word where no
+        // `=` joins it: that word is neither the remote nor a refspec. The line is read both ways, so either reading adds
+        // denials and never lifts one.
+        else if (!valueRead && is(["--recurse-submodules", "--remote"]) && !arg.includes("=") && j + 1 < args.length) values.push(j + 1);
       } else if (arg.startsWith("-") && arg.length > 1) {
         for (let c = 1; c < arg.length; c += 1) {
           const flag = arg[c];
@@ -2210,11 +2222,28 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         positionalMarks.push(marks[j]);
       }
     }
+    // `git send-pack --stdin` pushes more refs, read from its input after the line's own: refs the line cannot show, read
+    // as a push to the default branch and to a deploying one where any is named. No return, so a refuse-class act still decides.
+    if (stdin && !valueRead) {
+      if (deploying.length > 0) deny("push-deploying", "A push of refs read from its input, which may name a deploying branch");
+      deny("push-default", "A push of refs read from its input, which may name the default branch");
+    }
+    let valueReach: typeof pushReach = [];
+    if (values.length > 0) {
+      const kept = (_: unknown, at: number): boolean => !values.includes(at);
+      pushVerdict(args.filter(kept), config, marks.filter(kept), true);
+      // Read without its value words, a push naming no repository reaches the push remote, read as `pushOutside` reads it.
+      valueReach = pushReach.length > 0 ? pushReach : pushRemoteWord();
+    }
     // The repository the push reaches (REQ-FLOW-134, review/130): the `--repo` value and the first positional word, read
     // by `pushRead` after this reader's own acts, so a branch act on the line is still the one named.
-    pushReach = [...repoWords, ...(positionals.length > 0 ? [[positionals[0] ?? null, positionalMarks[0]] as const] : [])];
+    pushReach = [...valueReach, ...repoWords, ...(positionals.length > 0 ? [[positionals[0] ?? null, positionalMarks[0]] as const] : [])];
     const named = repoGiven ? positionals : positionals.slice(1);
     const namedMarks = repoGiven ? positionalMarks : positionalMarks.slice(1);
+    // git takes the first positional word as the remote even beside `--repo`, which it then overrides (git-push(1)):
+    // with one such word the push names no refspec. Beside `--repo` it is read both ways, as a refspec and as a
+    // refspec-less push, so either reading adds denials and never lifts one.
+    const refless = positionals.length <= 1;
     // An unquoted expansion, a glob or a brace form in the remote's place may split or expand into the remote and
     // refspecs or an option the line does not show (review/69, review/87's record): it reads as a push to the default
     // branch, and to a deploying one where any is named.
@@ -2225,7 +2254,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     // git reads `tag <name>` as `refs/tags/<name>:refs/tags/<name>`, whatever the context lists.
     const tagWord = named.indexOf("tag");
     const tagNamed = tagWord !== -1 && tagWord < named.length - 1;
-    const refspecs = named.length > 0 ? named : configured;
+    const refspecs = named.length === 0 ? configured : refless ? [...named, ...configured] : named;
     // A side naming a tag (`refs/tags/…`, `tags/…`, or a bare local tag name) pushes one: git gives a bare
     // destination the source's `refs/tags/` namespace, so `v1:x` and `refs/tags/v1:x` create the remote tag `x`.
     const namesTag = (side: string): boolean =>
@@ -2259,8 +2288,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       // characters only look like an expansion (single-quoted, or an unclosed substitution, which the shell refuses)
       // is the branch it names, so the run verb's own push of such a git-legal name runs (build/4). A refspec a `-c`
       // pair supplies has no marks of its own, and its text is read as before.
-      const mark = named.length > 0 ? namedMarks[index] : undefined;
-      if (named.length > 0 ? (mark?.kinds ?? "") !== "" : /[$`(]/.test(spec)) {
+      const lineWord = index < named.length;
+      const mark = lineWord ? namedMarks[index] : undefined;
+      if (lineWord ? (mark?.kinds ?? "") !== "" : /[$`(]/.test(spec)) {
         const splits = /s/.test(mark?.kinds ?? "");
         if (deploying.length > 0) deny("push-deploying", "A push whose refspec the line cannot show, which may name a deploying branch");
         return deny(
@@ -2296,10 +2326,10 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     }
     // Keyed on the line's own refspecs: a `-c` pair only adds denials, since git applies it only to its own remote
     // or branch, which the line does not show (review/98).
-    if (named.length === 0 && (onDeploying || (matching && deploying.length > 0))) {
+    if (refless && (onDeploying || (matching && deploying.length > 0))) {
       deny("push-deploying", "A push with no refspec that lands on a deploying branch");
     }
-    if (named.length === 0 && (onDefault || matching)) {
+    if (refless && (onDefault || matching)) {
       return deny("push-default", "A push with no refspec that lands on the default branch");
     }
     return null;

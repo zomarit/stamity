@@ -57,6 +57,9 @@ read from the code and its tests.
 
 ### Security
 
+- **The person-only guard holds a push for a person in more command forms.** It reads more of the ways a command line
+  can be written, so a push it should hold for you is held in those forms too, as it is in the others. Upgrade from any
+  earlier release.
 - **The nobody-watching switch, a strict tightening.** `STAMITY_NOBODY_WATCHING` set at launch, or `stamity away on`,
   turns every ask the guard would put to you into a refusal held for you to read. Nothing that was refused runs, and
   nothing that ran stops. `SECURITY.md` states the row and what it leaves open.

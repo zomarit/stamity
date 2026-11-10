@@ -423,7 +423,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // what was measured: 351,461 bytes / 7,238 lines (copilot, generated), past both rows, because the verdict now reads
   // `stamity skill add` and a `skill` line whose words it cannot show, under the ask-class `skill-fetch` rule.
   // 349,784 + 1,677 = 351,461 bytes; 7,209 + 29 = 7,238 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 351_461, lines: 7_238 },
+  // Moved again 2026-11-10 by the person-only guard hardening (REQ-FLOW-102), by what was measured: 353,390 bytes / 7,268
+  // lines (copilot, generated), past both rows, because the push reading grew. 351,461 + 1,929 = 353,390 bytes;
+  // 7,238 + 30 = 7,268 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 353_390, lines: 7_268 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
