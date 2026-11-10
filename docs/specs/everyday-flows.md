@@ -7383,6 +7383,19 @@ agent's command line, Then the guard refuses it (REQ-FLOW-121).
     where a reports .json does not read, %s, naming it in Not done:", "writes none where a merged side branch added and deleted the ledger", "writes none where
     the ledger's history does not read, naming it in Not done:", "names a ledger write that fails in Not done:, the exit
     code unmoved", "leaves the job refusing a head with no ledger, unchanged").
+- **Amended 2026-11-10** (the 1.19.0 cut, its real cloud runs). The Limits bullet's first two sentences, "No real run has
+  proven the land job, so the whole job is `not run` until one does" and the list after it, now read as the security and
+  cloud pages say them: Real runs on Claude's cloud on 2026-11-10 ran the job's merge under `GITHUB_TOKEN`: it read the
+  evidence and the review threads, marked the run's draft ready, wrote its evidence line and merged it. The thread resolve
+  under that token, the review request and the `issue_comment` wake are still `not run` until a real run reaches them.
+  The run that landed did so with no hand step, on the CI after the run's last push. After that merge the run's issue
+  stayed open and labelled, since GitHub did not apply the body's `Closes` line to a merge the Actions token made, so a
+  person closes the issue after a land-job merge. The record of those runs is not public, so the pages carry the dated
+  result.
+  - Proof: `SECURITY.md` (The land job), `docs/security-mapping.md`, `docs/troubleshooting.md` and `docs/cloud.md` (the
+    land job's limits), `docs/factory.md` (What real runs have shown); `test/docsPages.test.ts` ("%s names the brake, the
+    lift and the job", "states the land job's real answer on Claude's cloud, dated, on both pages", "moves the hand-kept
+    text the delta changed").
 - **Proof:** `test/adapters/landWorkflow.test.ts`, `test/cli/commands/runLand.test.ts`, `test/hooks/personOnlyGuard.test.ts`.
 - **Source:** `src/adapters/landWorkflow.ts`, `src/cli/commands/runLand.ts`, `src/cli/commands/run.ts`,
   `src/hooks/personOnly.ts`.

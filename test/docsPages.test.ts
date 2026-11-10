@@ -6757,9 +6757,16 @@ describe("docs/specs/everyday-flows.md carries the bridge's delta", () => {
     expect(flat).toContain("Stamity never deploys, tags or releases itself, but a merge onto a deploying branch starts that repository's own pipeline, with nobody asked, by the person's opt-in. That is the point of auto-ship.");
     expect(flat, "the spec calls the state comment proven by a run").not.toContain("`state-comment` is proven for Codex");
     expect(flat).toContain("the full loop of request, wait, read and resolve is `not run`");
-    expect(flat).toContain(
-      "No real run has proven the land job, so the whole job is `not run` until one does.",
+    // TEST CHANGE, justified (REQ-FLOW-157, amended 2026-11-10): real runs on Claude's cloud on 2026-11-10 landed through
+    // the job, so the pages' shared limits sentence moved, and the spec dates that move in an amendment bullet rather
+    // than editing its Limits bullet in place. The pin moves from the old sentence to the amendment, which carries the
+    // pages' sentence word for word and the issue a land-job merge leaves open.
+    const job = flowed(spec.slice(spec.indexOf("### REQ-FLOW-157 "), spec.indexOf("### REQ-FLOW-158 ")));
+    expect(job).toContain("**Amended 2026-11-10** (the 1.19.0 cut, its real cloud runs).");
+    expect(job).toContain(
+      "Real runs on Claude's cloud on 2026-11-10 ran the job's merge under `GITHUB_TOKEN`: it read the evidence and the review threads, marked the run's draft ready, wrote its evidence line and merged it. The thread resolve under that token, the review request and the `issue_comment` wake are still `not run` until a real run reaches them.",
     );
+    expect(job).toContain("After that merge the run's issue stayed open and labelled");
   });
 });
 
