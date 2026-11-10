@@ -112,6 +112,11 @@ import * as runsPreflight from "../runs/preflight.ts";
 import * as runsPlanCheck from "../runs/planCheck.ts";
 import * as runsGitSurface from "../runs/gitSurface.ts";
 import * as runsHookPaths from "../runs/hookPaths.ts";
+import * as runsGc from "../runs/gc.ts";
+import * as runsRunCleanup from "../runs/runCleanup.ts";
+import * as runsMetrics from "../runs/metrics.ts";
+import * as runsPrices from "../runs/prices.ts";
+import * as runsTranscriptUsage from "../runs/transcriptUsage.ts";
 import * as runsLandEvidence from "../runs/landEvidence.ts";
 import * as runsOverview from "../runs/overview.ts";
 import * as hooksModel from "../hooks/model.ts";
@@ -127,6 +132,10 @@ import * as repoAnalyzer from "../detect/repoAnalyzer.ts";
 import * as packageManager from "../detect/packageManager.ts";
 import * as stackSupport from "../detect/stackSupport.ts";
 import * as verificationGates from "../detect/verificationGates.ts";
+import * as detectReadiness from "../detect/readiness.ts";
+import * as skillsSources from "../skills/sources.ts";
+import * as skillsScriptDetect from "../skills/scriptDetect.ts";
+import * as skillsFetch from "../skills/fetch.ts";
 import * as substitution from "../emit/substitution.ts";
 import * as monorepoPlan from "../emit/monorepoPlan.ts";
 import * as agentsMd from "../emit/agentsMd.ts";
@@ -307,6 +316,14 @@ export interface EngineRegistry {
     readonly overview: typeof runsOverview;
     /** The hook files and declared scripts a commit's hook declarations name (review/175, build/2). */
     readonly hookPaths: typeof runsHookPaths;
+    /** What `stamity gc` previews and removes: aged runs, reports, branches, tracking refs and lanes. */
+    readonly gc: typeof runsGc;
+    /** A finished run's lanes and branch, removed after its merge. */
+    readonly runCleanup: typeof runsRunCleanup;
+    /** A run's measured cost and counts, from its ledger and the sessions' token use. */
+    readonly metrics: typeof runsMetrics;
+    readonly prices: typeof runsPrices;
+    readonly transcriptUsage: typeof runsTranscriptUsage;
   };
   readonly hooks: {
     readonly model: typeof hooksModel;
@@ -334,6 +351,14 @@ export interface EngineRegistry {
     readonly packageManager: typeof packageManager;
     readonly stackSupport: typeof stackSupport;
     readonly verificationGates: typeof verificationGates;
+    /** Whether a repository is ready for an unattended run (`stamity ready`). */
+    readonly readiness: typeof detectReadiness;
+  };
+  /** Skills fetched from another repository into this one. */
+  readonly skills: {
+    readonly sources: typeof skillsSources;
+    readonly scriptDetect: typeof skillsScriptDetect;
+    readonly fetch: typeof skillsFetch;
   };
   readonly emit: {
     readonly substitution: typeof substitution;
@@ -543,6 +568,11 @@ export function createEngine(): EngineRegistry {
       landEvidence: runsLandEvidence,
       overview: runsOverview,
       hookPaths: runsHookPaths,
+      gc: runsGc,
+      runCleanup: runsRunCleanup,
+      metrics: runsMetrics,
+      prices: runsPrices,
+      transcriptUsage: runsTranscriptUsage,
     },
     hooks: { model: hooksModel, portableRunner, userHooks, scripts: hookScripts, personOnly: hookPersonOnly },
     session: { detect: sessionDetect },
@@ -552,7 +582,9 @@ export function createEngine(): EngineRegistry {
       packageManager,
       stackSupport,
       verificationGates,
+      readiness: detectReadiness,
     },
+    skills: { sources: skillsSources, scriptDetect: skillsScriptDetect, fetch: skillsFetch },
     emit: {
       substitution,
       monorepoPlan,
