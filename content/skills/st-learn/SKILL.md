@@ -58,6 +58,8 @@ ${STAMITY:CLI} learn capture \
   --title "cache warmup order" \
   --summary "<one index line>" \
   --confidence medium \
+  --review-by <YYYY-MM-DD> \
+  --validated-against "<command, test or path>" \
   --body-file <path>          # or pipe the body on stdin
 ```
 
@@ -76,9 +78,10 @@ writes nothing, which is the cheap way to find out whether a body will pass.
   session either confirms it or retires it.
 
 Put what backs the rating inside `## Why` — the command that was run, the file
-that was read, the date it held. The capture reports an advisory when a review
-horizon and a validation reference are absent; that advisory is the reminder to
-state both facts in the body.
+that was read, the date it held. Pass `--review-by` with the date the finding
+should be checked again and `--validated-against` with the command, test or
+path that showed it: both land in the head, and the engine judges both values.
+Without them the capture reports an advisory for each.
 
 ### A refused capture
 

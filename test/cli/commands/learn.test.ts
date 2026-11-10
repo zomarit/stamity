@@ -5,7 +5,7 @@ import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { draftLearning, learnCommand } from "../../../src/cli/commands/learn.ts";
 import { runCommand } from "../../../src/cli/commands/run.ts";
-import { composeFrontmatter } from "../../../src/content/frontmatter.ts";
+import { composeFrontmatter, parseFrontmatter } from "../../../src/content/frontmatter.ts";
 import { scanNormalized } from "../../../src/denyscan/denyScan.ts";
 import { loadValidatedLearnings } from "../../../src/learnings/store.ts";
 import {
@@ -280,6 +280,36 @@ describe("draftLearning", () => {
 
   it("leaves an empty body empty rather than inventing a placeholder", () => {
     expect(draftLearning({ ...base(), body: "   \n\n  " }).body).toBe("");
+  });
+
+  // REQ-FLOW-163: with neither trust flag, the head a capture writes is the one 1.19.0 wrote, byte for byte.
+  it("writes neither trust field when the input carries none", () => {
+    const draft = draftLearning(base());
+
+    expect(draft.frontmatter["reviewBy"]).toBeUndefined();
+    expect(draft.frontmatter["validatedAgainst"]).toBeUndefined();
+    expect(composeFrontmatter(draft.frontmatter, draft.body)).toBe(
+      [
+        "---",
+        "id: cache-warmup-order",
+        "title: cache warmup order",
+        "date: 2026-01-01",
+        "confidence: medium",
+        "summary: Warm the cache after the registry is populated.",
+        "---",
+        "",
+        BODY.trim(),
+        "",
+      ].join("\n"),
+    );
+  });
+
+  // REQ-FLOW-163: both trust fields land in the head, after the summary, verbatim: the engine judges the values.
+  it("adds both trust fields after the summary, verbatim, when the input carries them", () => {
+    const draft = draftLearning({ ...base(), reviewBy: "2099-01-01", validatedAgainst: "npm test -- cache" });
+
+    expect(Object.keys(draft.frontmatter)).toEqual(["id", "title", "date", "confidence", "summary", "reviewBy", "validatedAgainst"]);
+    expect(draft.frontmatter).toMatchObject({ reviewBy: "2099-01-01", validatedAgainst: "npm test -- cache" });
   });
 
   function base(): Parameters<typeof draftLearning>[0] {
@@ -1949,6 +1979,136 @@ describe("learn — the flags of propose and accept", () => {
 
     expect(result.stdout).toContain("accept");
     for (const flag of ["--propose", "--run", "--proposal", "--digest"]) expect(result.stdout).toContain(flag);
+  });
+});
+
+// REQ-FLOW-163: a capture sets the two trust fields from its command line, so a note needs no hand edit to pass the
+// write gates' advisories. The command parses no value: every verdict on one is the engine's.
+describe("learn capture --review-by and --validated-against (REQ-FLOW-163)", () => {
+  /** Far past any clock this suite runs under, so no review-horizon advisory fires. */
+  const REVIEW_BY = "2099-01-01";
+  const VALIDATED_AGAINST = "npx vitest run test/cache.test.ts";
+  const TRUST_FLAGS = ["--review-by", REVIEW_BY, "--validated-against", VALIDATED_AGAINST];
+
+  it("writes both into the learning's head, which the loader reads back and the write gate finds nothing thin about", async () => {
+    const root = await seedRepo(tempDir());
+
+    const result = await capture(root, TRUST_FLAGS);
+
+    expect(result.code, result.stdout + result.stderr).toBe(0);
+    const written = (await readIfPresent(join(root, LEARNINGS_DIR, FILE_NAME))) ?? "";
+    expect(validateLearningContent(FILE_NAME, written)).toMatchObject({ valid: true, errors: [], warnings: [] });
+    const loaded = await loadValidatedLearnings({ rootDir: root });
+    expect(loaded.skips).toEqual([]);
+    expect(loaded.learnings).toHaveLength(1);
+    expect(loaded.learnings[0]?.frontmatter).toMatchObject({ reviewBy: REVIEW_BY, validatedAgainst: VALIDATED_AGAINST });
+  });
+
+  it("clears both advisories on a dry run carrying both flags, and still names both without them", async () => {
+    const root = await seedRepo(tempDir());
+    const before = await snapshot(root);
+
+    const flagged = await capture(root, ["--json", "--dry-run", ...TRUST_FLAGS]);
+    const bare = await capture(root, ["--json", "--dry-run"]);
+
+    expect(flagged.code, flagged.stdout + flagged.stderr).toBe(0);
+    expect(parseSingleDoc(flagged.stdout)["warnings"]).toEqual([]);
+    expect(bare.code).toBe(0);
+    expect(parseSingleDoc(bare.stdout)["warnings"]).toEqual([
+      expect.stringContaining("no `reviewBy` date"),
+      expect.stringContaining("no `validatedAgainst` field"),
+    ]);
+    expect(await snapshot(root)).toEqual(before);
+  });
+
+  it.each([
+    ["for real", []],
+    ["under --dry-run", ["--dry-run"]],
+  ])("exits 1 on a --review-by that is no calendar date, %s, with the engine's own message, and writes nothing", async (_name, argv) => {
+    const root = await seedRepo(tempDir());
+    const before = await snapshot(root);
+
+    const result = await capture(root, ["--json", "--review-by", "2026-13-40", "--validated-against", VALIDATED_AGAINST, ...argv]);
+
+    expect(result.code, result.stdout + result.stderr).toBe(1);
+    expect(parseSingleDoc(result.stdout)["errors"]).toEqual([
+      expect.stringContaining('`reviewBy` must be an ISO calendar date (YYYY-MM-DD), got "2026-13-40"'),
+    ]);
+    expect(await snapshot(root)).toEqual(before);
+  });
+
+  it.each([
+    ["blank", "  "],
+    ["empty", ""],
+  ])("exits 1 on a %s --validated-against, with the engine's own message, and writes nothing", async (_name, value) => {
+    const root = await seedRepo(tempDir());
+    const before = await snapshot(root);
+
+    const result = await capture(root, ["--json", "--review-by", REVIEW_BY, "--validated-against", value]);
+
+    expect(result.code, result.stdout + result.stderr).toBe(1);
+    expect(parseSingleDoc(result.stdout)["errors"]).toEqual([
+      expect.stringContaining("`validatedAgainst` must name what the learning was checked against"),
+    ]);
+    expect(await snapshot(root)).toEqual(before);
+  });
+
+  it.each([
+    ["read", ["read"]],
+    ["accept", ["accept", "--run", RUN, "--proposal", SLUG, "--digest", "0".repeat(64)]],
+  ])("exits 2 on %s carrying either flag, naming capture only, and writes nothing", async (_verb, argv) => {
+    const root = await seedRun(tempDir());
+    const before = await snapshot(root);
+
+    const review = await runLearn(root, [...argv, "--review-by", "x"]);
+    const validated = await runLearn(root, [...argv, "--validated-against", "x"]);
+
+    expect(review.code).toBe(2);
+    expect(review.stderr).toContain("--review-by applies to capture only");
+    expect(validated.code).toBe(2);
+    expect(validated.stderr).toContain("--validated-against applies to capture only");
+    expect(await snapshot(root)).toEqual(before);
+  });
+
+  it("carries both into a proposal's head, which a person's accept then takes live", async () => {
+    const root = await seedRun(tempDir());
+
+    const result = await propose(root, ["--json", ...TRUST_FLAGS]);
+
+    expect(result.code, result.stdout + result.stderr).toBe(0);
+    const doc = parseSingleDoc(result.stdout);
+    expect(doc["warnings"]).toEqual([]);
+    const head = parseFrontmatter((await readIfPresent(join(root, PROPOSAL))) ?? "", "the proposal").frontmatter;
+    expect(head).toMatchObject({ reviewBy: REVIEW_BY, validatedAgainst: VALIDATED_AGAINST });
+
+    await writeFile(join(root, MORNING), morningList(JSON.stringify({ id: "Q1", ...(doc["morning"] as Record<string, unknown>) })));
+    const accepted = await accept(root);
+    expect(accepted.code, accepted.stdout + accepted.stderr).toBe(0);
+    const loaded = await loadValidatedLearnings({ rootDir: root });
+    expect(loaded.learnings[0]?.frontmatter).toMatchObject({ reviewBy: REVIEW_BY, validatedAgainst: VALIDATED_AGAINST });
+  });
+
+  it("keeps the engine's verdict on a past --review-by: a dry-run advisory, a write, then a loader skip as expired", async () => {
+    const root = await seedRepo(tempDir());
+    const flags = ["--review-by", "2020-01-01", "--validated-against", VALIDATED_AGAINST];
+
+    const dry = await capture(root, ["--json", "--dry-run", ...flags]);
+    const real = await capture(root, flags);
+
+    expect(dry.code, dry.stdout + dry.stderr).toBe(0);
+    expect(parseSingleDoc(dry.stdout)["warnings"]).toEqual([expect.stringContaining("`reviewBy` 2020-01-01 has passed")]);
+    expect(real.code, real.stdout + real.stderr).toBe(0);
+    const loaded = await loadValidatedLearnings({ rootDir: root });
+    expect(loaded.learnings).toEqual([]);
+    expect(loaded.skips).toEqual([expect.objectContaining({ fileName: FILE_NAME, reason: "expired-review" })]);
+  });
+
+  it("lists both flags on the command's own help", async () => {
+    const result = await runLearn(process.cwd(), ["--help"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("--review-by <date>");
+    expect(result.stdout).toContain("--validated-against <text>");
   });
 });
 

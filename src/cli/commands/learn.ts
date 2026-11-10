@@ -136,6 +136,10 @@ export interface LearningDraftInput {
   date: string;
   /** The caller's body, verbatim; surrounding whitespace is normalized away. */
   body: string;
+  /** When the learning should be re-checked, verbatim: the engine judges the date. */
+  reviewBy?: string;
+  /** What the finding was checked against, verbatim: the engine refuses a blank one. */
+  validatedAgainst?: string;
 }
 
 /**
@@ -153,6 +157,9 @@ export interface LearningDraftInput {
  * integrity digest. An empty body stays empty — the store's "a learning is the
  * finding, not its frontmatter" refusal is the right answer, not a fabricated
  * placeholder.
+ *
+ * `reviewBy` and `validatedAgainst` follow the summary only when given, so a
+ * capture without them writes the same head it always did.
  */
 export function draftLearning(input: LearningDraftInput): LearningDraft {
   const slug = input.title.trim().toLowerCase().replace(/\s+/g, "-");
@@ -165,6 +172,8 @@ export function draftLearning(input: LearningDraftInput): LearningDraft {
       date: input.date,
       confidence: input.confidence,
       summary: input.summary,
+      ...(input.reviewBy === undefined ? {} : { reviewBy: input.reviewBy }),
+      ...(input.validatedAgainst === undefined ? {} : { validatedAgainst: input.validatedAgainst }),
     },
     body: body === "" ? "" : `\n${body}\n`,
   };
@@ -728,6 +737,8 @@ const CAPTURE_ONLY_FLAGS: readonly (readonly [string, string])[] = [
   ["confidence", "--confidence"],
   ["bodyFile", "--body-file"],
   ["propose", "--propose"],
+  ["reviewBy", "--review-by"],
+  ["validatedAgainst", "--validated-against"],
 ];
 
 /** `--digest <sha256>`: the full digest the morning row printed, as `run land --approved` takes the full commit. */
@@ -908,6 +919,8 @@ export const learnCommand: CommandModule = {
           .default("medium"),
       )
       .option("--body-file <path>", "capture: read the body from a file instead of stdin")
+      .option("--review-by <date>", "capture: when the learning should be re-checked (YYYY-MM-DD)")
+      .option("--validated-against <text>", "capture: the command, test or path the finding was checked against")
       .option("--body <id>", "read: print one loaded learning's body instead of the index")
       .option("--propose", "capture: run the gates and write the note to the run's folder, not to the live learnings")
       .option("--run <id>", "capture --propose, accept (required): the run whose folder holds the proposal")
@@ -939,12 +952,17 @@ export const learnCommand: CommandModule = {
     }
 
     const now = ctx.app.runtime.clock.now();
+    // Passed as given: the engine's write gates judge the date and the text, so the command parses neither.
+    const reviewBy = optionalText(opts, "reviewBy");
+    const validatedAgainst = optionalText(opts, "validatedAgainst");
     const draft = draftLearning({
       title: text(opts, "title"),
       summary: text(opts, "summary"),
       confidence: text(opts, "confidence"),
       date: isoDate(now),
       body: await resolveBody(ctx, optionalText(opts, "bodyFile")),
+      ...(reviewBy === undefined ? {} : { reviewBy }),
+      ...(validatedAgainst === undefined ? {} : { validatedAgainst }),
     });
     const document = ctx.engine.content.frontmatter.composeFrontmatter(
       draft.frontmatter,

@@ -426,7 +426,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // Moved again 2026-11-10 by the person-only guard hardening (REQ-FLOW-102), by what was measured: 353,390 bytes / 7,268
   // lines (copilot, generated), past both rows, because the push reading grew. 351,461 + 1,929 = 353,390 bytes;
   // 7,238 + 30 = 7,268 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 353_390, lines: 7_268 },
+  // Moved again 2026-11-10 by learn capture's two trust flags (REQ-FLOW-163), by what was measured: 353,434 bytes /
+  // 7,270 lines (copilot, generated), past both rows, because the accept reading's list of `learn`'s value options
+  // gains `--review-by` and `--validated-against`. 353,390 + 44 = 353,434 bytes; 7,268 + 2 = 7,270 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 353_434, lines: 7_270 },
 };
 
 /** One generated script, ready for an adapter to place and register. */

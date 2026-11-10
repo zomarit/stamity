@@ -326,6 +326,8 @@ May write when it runs, so `--dry-run` previews any change without making it.
 | `--summary <text>` | capture (required): one index line, under 200 characters | — |
 | `--confidence <level>` | capture: how much evidence backs the finding — one of `low`, `medium`, `high` | `medium` |
 | `--body-file <path>` | capture: read the body from a file instead of stdin | — |
+| `--review-by <date>` | capture: when the learning should be re-checked (YYYY-MM-DD) | — |
+| `--validated-against <text>` | capture: the command, test or path the finding was checked against | — |
 | `--body <id>` | read: print one loaded learning's body instead of the index | — |
 | `--propose` | capture: run the gates and write the note to the run's folder, not to the live learnings | — |
 | `--run <id>` | capture --propose, accept (required): the run whose folder holds the proposal | — |
