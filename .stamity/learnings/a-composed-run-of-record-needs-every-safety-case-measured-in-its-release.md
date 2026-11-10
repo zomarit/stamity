@@ -1,12 +1,12 @@
 ---
-id: a-run-of-record-is-one-composition-link-from-a-full-measure
-title: a run of record is one composition link from a full measure
-date: 2026-10-27
+id: a-composed-run-of-record-needs-every-safety-case-measured-in-its-release
+title: a composed run of record needs every safety case measured in its release
+date: 2026-11-10
 confidence: high
-summary: "the measurements page renders a composed run of record only when every safety case was measured in a run dated after the previous release, and a chain must also list them in its results file"
+summary: the measurements page renders a composed run of record only when every safety case was measured in a run dated after the previous release, and a chain must also list them in its results file
 reviewBy: 2027-02-04
-validatedAgainst: "src/cli/docs/measurements.ts readPriorRun and proveChain on branch fb/release-speed; evals/runs/2026-10-27-run-54, -run-55 and -run-57 RESULTS.md line 12 at records fe785c17"
-integrity: sha256:21a9098f7b5d62232846185dfc687c8a82ab935f9d70c2ef6ee138e2046cb6a3
+validatedAgainst: "src/cli/docs/measurements.ts readPriorRun and proveChain and test/cli/docs/measurements.test.ts at bcf4eeb9; evals/runs/2026-10-27-run-54, -run-55 and -run-57 RESULTS.md line 12 at records fe785c17"
+integrity: sha256:13051fcef7ec05cc67ab095fd1884fbd7a4e1b65bf5ea0a47dffca74983a00bd
 ---
 
 The measurements page names a run of record when that run is a full measure, composes directly with
@@ -33,7 +33,10 @@ more eval runs after a passing one, about four hours. The list replaces that cos
 `evals/SET-v7.md` ("What a release measures", 2026-11-04) states the rule.
 
 Confidence high: the refusal and its one exception are in the source, and the tests in
-`test/cli/docs/measurements.test.ts` hold each way the list can fall short.
+`test/cli/docs/measurements.test.ts` hold each way the list can fall short. The list shipped in
+1.18.0. Validated against `readPriorRun` and `proveChain` in `src/cli/docs/measurements.ts` at
+`bcf4eeb9`, and each run's `RESULTS.md` line 12 for runs 54, 55 and 57 at records `fe785c17`.
+Review horizon: 2027-02-04, or sooner if the backstop or the list's section changes.
 
 ## How to apply
 
