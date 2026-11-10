@@ -210,7 +210,7 @@ update check off, and a 60-second limit. It is started by an absolute path, foun
 every relative entry, every entry that is the working folder and every `node_modules/.bin` entry
 skipped; every other entry counts as it stands, so whatever sets that `PATH` chooses the `gh`, as
 residual (1) of the row on how git is started says for git. Beside the door, `checkpoint` and `end`
-read origin's branches and tags with `git ls-remote origin` once per pass (with `autonomy.landJob` on, an `end` that wrote its `PR:` and `Login:` lines takes a second pass), before they commit and even where
+read origin's branches and tags with `git ls-remote origin` once per pass (with `autonomy.landJob` on, an `end` that wrote its `PR:` and `Login:` lines, or the empty ledger it writes where the run has none, takes a second pass), before they commit and even where
 the push is then held, and push the run's branch to `origin`, once origin still names the
 repository `run start` pinned, with git (`src/cli/engine/gitWrite.ts::gitWrite`), under the
 operator's own git credentials, and the text a pull request carries is screened before it posts, as

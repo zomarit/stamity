@@ -172,8 +172,10 @@ import { runLand } from "./runLand.ts";
  * its text the line and the run's marker, once per `end` call, and a comment that fails is one more `notDone` line.
  *
  * **The land job's lines** (REQ-FLOW-157): with `autonomy.landJob` on, an `end` with its own pull request appends `PR: <n>`
- * and `Login: <login>` to the record and runs itself once more, so they reach the head through every check above. A failure
- * is a `notDone` line and never moves the exit code: the job then refuses for want of the lines.
+ * and `Login: <login>` to the record, writes the run's ledger as an empty file where none exists (amended 2026-11-10: a run
+ * whose reviews found nothing has none, and the job refuses a head without one), and runs itself once more, so they reach the
+ * head through every check above. An existing ledger is never written, nor one HEAD's history holds and the work tree lost.
+ * A failure is a `notDone` line and never moves the exit code: the job then refuses for want of the lines or the ledger.
  *
  * **`land`** (REQ-FLOW-132, REQ-FLOW-133) merges the run's own pull request, or fast-forwards the default branch to
  * its head, when the evidence holds, else asks or refuses; its body is `./runLand.ts`, registered here only.
@@ -1683,7 +1685,7 @@ async function runCheckpoint(ctx: CliContext, opts: Record<string, unknown>, ver
   // REQ-FLOW-157: the land job has only what the head holds, so an `end` that wrote its lines commits them through this same
   // door; the pull request's number exists only after the first push, so that takes a second pass, whose lines already stand.
   const stamped = verb === END && opts["refused"] !== true && step.pr !== null && step.pr.how !== "commented" && step.repo !== undefined
-    ? await stampLandJobLines(ctx, { cwd, recordRel, repo: step.repo, top, number: step.pr.number }, result.notDone)
+    ? await stampLandJobLines(ctx, { cwd, recordRel, ledgerRel: `${runDir}/${layout.LEDGER_FILE}`, repo: step.repo, top, number: step.pr.number }, result.notDone)
     : false;
   const noticed =
     verb === END && opts["refused"] !== true && step.pr !== null && step.repo !== undefined
@@ -1710,14 +1712,48 @@ function landJobOn(cwd: string): boolean {
 }
 
 /**
- * REQ-FLOW-157: with `autonomy.landJob` on, the record's `PR: <n>` and `Login: <login>` lines, which the job reads at the head
- * in place of the pull-request record a fresh checkout does not hold. The login is the pull request's author in the spelling
- * the review-thread query names it: REST alone, since a cloud's proxy refuses GraphQL, with REST's `[bot]` ending dropped. The
+ * REQ-FLOW-157: with `autonomy.landJob` on, what the job reads at the head and a clean run would not otherwise commit: the
+ * empty ledger {@link writeEmptyLedger} writes and the record lines {@link writeLandJobLines} writes. `true` once either was
+ * written, so the caller's second pass commits it.
+ */
+async function stampLandJobLines(ctx: CliContext, at: { cwd: string; recordRel: string; ledgerRel: string; repo: OriginRepo; top: string; number: number }, notDone: string[]): Promise<boolean> {
+  if (!landJobOn(at.cwd)) return false;
+  const ledger = await writeEmptyLedger(ctx, at, notDone);
+  const lines = await writeLandJobLines(ctx, at, notDone);
+  return ledger || lines;
+}
+
+/**
+ * REQ-FLOW-157, amended 2026-11-10: the run's ledger as an empty file where the work tree holds nothing at its path. `ledger
+ * append` with no findings writes none, so a run whose reviews found nothing had no ledger at the head, and the job, which
+ * refuses a missing one, refused a clean run. Anything at the path is left as it stands; so is a ledger HEAD's history holds
+ * and the work tree lost, since a deleted ledger is no clean one. `true` once written; failure is a `notDone` line.
+ */
+async function writeEmptyLedger(ctx: CliContext, at: { cwd: string; ledgerRel: string }, notDone: string[]): Promise<boolean> {
+  if (exists(join(at.cwd, at.ledgerRel))) return false;
+  const unwritten = (why: string): boolean => {
+    notDone.push(`empty ledger not written: ${why}, so the land job refuses this run`);
+    return false;
+  };
+  const past = await git(at.cwd, ["log", "-1", "--format=%H", "HEAD", "--", at.ledgerRel], END);
+  if (past.code !== 0) return unwritten(`the history of ${at.ledgerRel} did not read`);
+  if (past.stdout.trim() !== "") return unwritten(`${at.ledgerRel} was committed before and the work tree no longer holds it`);
+  try {
+    await ctx.engine.merge.atomicWrite.atomicWriteFile(join(at.cwd, at.ledgerRel), "", { boundaryDir: at.cwd });
+  } catch (cause) {
+    return unwritten(`${at.ledgerRel} (${cause instanceof Error ? cause.message : "the write failed"})`);
+  }
+  return true;
+}
+
+/**
+ * REQ-FLOW-157: the record's `PR: <n>` and `Login: <login>` lines, which the job reads at the head in place of the
+ * pull-request record a fresh checkout does not hold. The login is the pull request's author in the spelling the
+ * review-thread query names it: REST alone, since a cloud's proxy refuses GraphQL, with REST's `[bot]` ending dropped. The
  * job holds it against GitHub's own author, so the line can name no one else. `true` once a line was written; failure is a
  * `notDone` line, and the job then refuses for want of the lines.
  */
-async function stampLandJobLines(ctx: CliContext, at: { cwd: string; recordRel: string; repo: OriginRepo; top: string; number: number }, notDone: string[]): Promise<boolean> {
-  if (!landJobOn(at.cwd)) return false;
+async function writeLandJobLines(ctx: CliContext, at: { cwd: string; recordRel: string; repo: OriginRepo; top: string; number: number }, notDone: string[]): Promise<boolean> {
   const unwritten = (why: string): boolean => {
     notDone.push(`land job lines not written: ${why}, so the land job refuses this run`);
     return false;

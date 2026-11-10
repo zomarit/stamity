@@ -199,6 +199,14 @@ read from the code and its tests.
   among the run subcommands that need no git, and `docs/getting-started.md` lists the switch's two files and the skill
   files.
 
+### Fixed
+
+- **A clean run's `run end` commits an empty ledger for the land job.** `ledger append` with no findings writes no
+  file, so a run whose reviews found nothing had no ledger at the head, and the land job, which refuses a missing
+  one, refused a run that was otherwise clean. With `autonomy.landJob` on, `run end` on the run's own pull request
+  now writes an empty `ledger.jsonl` where none exists, beside its `PR:` and `Login:` lines, and never over one
+  that exists.
+
 ## [1.18.0] - 2026-11-09
 
 ### Upgrading from 1.17.0

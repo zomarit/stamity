@@ -2950,10 +2950,18 @@ describe("stamity run land", () => {
      * A fresh checkout of a run that ended: its record closed at the head, with the lines `run end` commits, and nothing
      * under the git directory, neither the pull-request record nor a pre-flight's surface record.
      */
+    // TEST CHANGE, justified (REQ-FLOW-157, amended 2026-11-10): `ledger` passes through to `seed`, so a case can hand the
+    // job a head with no ledger; every case that names none seeds the ledger it did before.
     async function seedJob(
-      opts: { status?: string; lines?: string; extra?: string; morning?: string; manifest?: string; mode?: "attended" | "unattended"; files?: Record<string, string> } = {},
+      opts: { status?: string; lines?: string; extra?: string; morning?: string; manifest?: string; mode?: "attended" | "unattended"; files?: Record<string, string>; ledger?: string | null } = {},
     ): Promise<Seeded> {
-      const seeded = await seed({ mode: opts.mode ?? "unattended", prRecord: false, manifest: opts.manifest ?? LAND_ON, ...(opts.files === undefined ? {} : { files: opts.files }) });
+      const seeded = await seed({
+        mode: opts.mode ?? "unattended",
+        prRecord: false,
+        manifest: opts.manifest ?? LAND_ON,
+        ...(opts.files === undefined ? {} : { files: opts.files }),
+        ...(opts.ledger === undefined ? {} : { ledger: opts.ledger }),
+      });
       const { repo, remote } = seeded;
       const closed = (await record(repo)).replace("Status: in progress", `Status: ${opts.status ?? "closed 2026-11-04"}`);
       await put(repo, `${RUN_DIR}/record.md`, `${closed}${opts.extra ?? ""}${opts.lines ?? END_LINES}`);
@@ -3758,8 +3766,10 @@ describe("stamity run land", () => {
     });
 
     describe("the lines run end commits at the head", () => {
-      async function ending(manifest: string): Promise<Seeded> {
-        const seeded = await seed({ manifest, prRecord: false });
+      // TEST CHANGE, justified (REQ-FLOW-157, amended 2026-11-10): `ledger` passes through to `seed`, `null` for a run whose
+      // reviews found nothing and so wrote no ledger; a case that names none seeds the ledger with a row, as before.
+      async function ending(manifest: string, ledger?: string | null): Promise<Seeded> {
+        const seeded = await seed({ manifest, prRecord: false, ...(ledger === undefined ? {} : { ledger }) });
         const { repo } = seeded;
         await put(repo, `${RUN_DIR}/record.md`, (await record(repo)).replace("Status: in progress", "Status: closed 2026-11-04"));
         return seeded;
@@ -3805,6 +3815,84 @@ describe("stamity run land", () => {
         expect(result.doc).toMatchObject({ pr: { number: 7, how: "existing" }, notDone: [] });
         const head = git(repo, ["rev-parse", "HEAD"]);
         expect(git(repo, ["show", `${head}:${RUN_DIR}/record.md`])).toMatch(/\nPR: 7\nLogin: runner$/);
+      });
+
+      // REQ-FLOW-157, amended 2026-11-10: a real cloud run whose review found nothing wrote no ledger, `ledger append` with
+      // no findings writing none, and the job refused a run that was otherwise clean for the ledger missing at the head.
+      describe("the ledger a clean run never wrote", () => {
+        const LEDGER = `${RUN_DIR}/ledger.jsonl`;
+
+        it("commits an empty ledger beside PR: and Login: with landJob on, and the job's evidence reads no open row", async () => {
+          const { repo, head: before, remote } = await ending(LAND_ON, null);
+
+          const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+          expect(result.code, JSON.stringify(result.doc)).toBe(0);
+          expect(result.doc).toMatchObject({ pushed: true, pr: { number: 7 }, notDone: [] });
+          const head = git(repo, ["rev-parse", "HEAD"]);
+          expect(git(repo, ["rev-list", "--count", `${before}..${head}`])).toBe("2");
+          expect(git(repo, ["ls-tree", head, "--", LEDGER])).toMatch(/^100644 blob [0-9a-f]+\t/);
+          expect(git(repo, ["cat-file", "-s", `${head}:${LEDGER}`])).toBe("0");
+          expect(git(repo, ["show", `${head}:${RUN_DIR}/record.md`])).toMatch(/\nPR: 7\nLogin: runner$/);
+          expect(git(remote, ["rev-parse", `refs/heads/${RUN_BRANCH}`])).toBe(head);
+
+          // A second end finds the ledger and the lines standing, and makes no commit.
+          expect((await run(repo, ["end", "--run", RUN, "--title", "t"])).code).toBe(0);
+          expect(git(repo, ["rev-parse", "HEAD"])).toBe(head);
+
+          const clone = join(dirname(repo), "job");
+          git(dirname(repo), ["clone", "-q", "-b", RUN_BRANCH, remote, clone]);
+          git(clone, ["remote", "set-url", "origin", "https://github.com/o/r.git"]);
+          route("GET repos/o/r/pulls/7", pull(head));
+          route(`GET repos/o/r/commits/${head}/check-runs`, { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] });
+          route(`GET repos/o/r/branches/${RUN_BRANCH}`, { commit: { sha: head } });
+          route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: `${RUN_DIR}/record.md` }, { filename: LEDGER }]);
+          gh.threads = [threadsPage([], BOT)];
+          expect((await run(clone, LANDS)).doc).toMatchObject({ outcome: "landed", pr: { number: 7, head }, evidence: { ledger: { open: [] } }, notDone: [] });
+        });
+
+        it("leaves a ledger with rows byte-identical with landJob on", async () => {
+          const { repo } = await ending(LAND_ON, `${row(`${RUN}/review/1`, "Warning", "fixed")}${row(`${RUN}/review/2`, "Minor", "open")}`);
+          const held = await readFile(join(repo, LEDGER));
+
+          const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+          expect(result.code, JSON.stringify(result.doc)).toBe(0);
+          expect(result.doc).toMatchObject({ notDone: [] });
+          expect((await readFile(join(repo, LEDGER))).equals(held)).toBe(true);
+          // The blob the head commits is the one the work tree held, byte for byte.
+          expect(git(repo, ["rev-parse", `HEAD:${LEDGER}`])).toBe(git(repo, ["hash-object", "--", LEDGER]));
+        });
+
+        it("writes no ledger with landJob off", async () => {
+          const { repo } = await ending('{"version":1}\n', null);
+
+          const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+          expect(result.code, JSON.stringify(result.doc)).toBe(0);
+          expect(existsSync(join(repo, LEDGER))).toBe(false);
+          expect(git(repo, ["ls-tree", "HEAD", "--", LEDGER])).toBe("");
+        });
+
+        it("writes none where the run's history holds a ledger the work tree lost, naming it in Not done:", async () => {
+          const { repo } = await ending(LAND_ON);
+          await rm(join(repo, LEDGER));
+
+          const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+          expect(result.doc).toMatchObject({ notDone: [`empty ledger not written: ${LEDGER} was committed before and the work tree no longer holds it, so the land job refuses this run`] });
+          expect(existsSync(join(repo, LEDGER))).toBe(false);
+          expect(git(repo, ["ls-tree", "HEAD", "--", LEDGER])).toBe("");
+        });
+
+        it("leaves the job refusing a head with no ledger, unchanged", async () => {
+          const { repo, head } = await seedJob({ ledger: null });
+
+          const result = await run(repo, LANDS);
+
+          expect(result.doc).toMatchObject({ outcome: "refused", notDone: [`the ledger at ${head} does not read: ${LEDGER} is missing from the commit`] });
+          expect(writes()).not.toContain("merge");
+        });
       });
 
       it("keeps the first pass's Not done:, so a file the scan could not read is still named once the stamp's pass has run", async () => {

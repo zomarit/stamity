@@ -7345,6 +7345,20 @@ agent's command line, Then the guard refuses it (REQ-FLOW-121).
   text after it still exits 0 as `not-a-run`.
   - Proof: `test/cli/commands/runLand.test.ts` ("lands a run whose client added a footer after the marker, and writes the
     body with one marker, last", "exits 0 and touches nothing where a heading follows the run's marker").
+- **Amended 2026-11-10** (the 1.19.0 cut). A real unattended run on Claude's cloud ran one light unit, its review approved
+  with no findings, and it closed with 0 ledger rows. `ledger append` with no findings writes no file, so the run pushed no
+  ledger, and the land job refused a run that was otherwise clean (checks green, no open thread, mergeable) because the
+  ledger was missing from the head commit. So the "As built" bullet above that `end` "commits `PR: <n>` and
+  `Login: <login>` at the head" now reads: with `autonomy.landJob` on, an `end` with its own pull request also writes the
+  run's `ledger.jsonl` as an empty file where the work tree holds nothing at that path, and commits it at the head in the
+  same pass as those lines (`writeEmptyLedger`, `src/cli/commands/run.ts`). It never writes over a ledger that exists,
+  and it writes none where the branch's history holds a ledger the work tree no longer does, since a deleted ledger is
+  not a clean one. That case, and a write that fails, is a `Not done:` line, and the exit code does not move. With
+  `autonomy.landJob` off it writes no ledger. The land job still refuses a head with no ledger, unchanged.
+  - Proof: `test/cli/commands/runLand.test.ts` ("commits an empty ledger beside PR: and Login: with landJob on, and the
+    job's evidence reads no open row", "leaves a ledger with rows byte-identical with landJob on", "writes no ledger with
+    landJob off", "writes none where the run's history holds a ledger the work tree lost, naming it in Not done:",
+    "leaves the job refusing a head with no ledger, unchanged").
 - **Proof:** `test/adapters/landWorkflow.test.ts`, `test/cli/commands/runLand.test.ts`, `test/hooks/personOnlyGuard.test.ts`.
 - **Source:** `src/adapters/landWorkflow.ts`, `src/cli/commands/runLand.ts`, `src/cli/commands/run.ts`,
   `src/hooks/personOnly.ts`.
