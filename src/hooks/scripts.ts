@@ -412,7 +412,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // lines (copilot, generated), past both rows, because the install check now caps its folders at PLACES_MAX and
   // refuses an install past the cap, keeps the folder a cd to a missing folder leaves, and reads popd.
   // 345,984 + 2,729 = 348,713 bytes; 7,155 + 48 = 7,203 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 348_713, lines: 7_203 },
+  // Moved again 2026-11-10 on the u-ci1 lane (the branch's first Windows run), by what was measured: 349,390 bytes /
+  // 7,207 lines (copilot, generated), past both rows, because on Windows the install check also reads a shell line's
+  // backslash as Git Bash does, an escape (n\pm is npm). 348,713 + 677 = 349,390 bytes; 7,203 + 4 = 7,207 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 349_390, lines: 7_207 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -4857,9 +4860,10 @@ function present(path) {
 
 /**
  * A line's words (a null where a command can follow, its operator character in marks at that index), the lines they
- * run, and its heredocs' bodies; with braces, a brace is a word's.
+ * run, and its heredocs' bodies; with braces, a brace is a word's; with escapes, a bare backslash escapes the next
+ * character, as a POSIX shell reads it (off on Windows by default, where it separates a path's parts).
  */
-function shellWords(command, braces = false) {
+function shellWords(command, braces = false, escapes = process.platform !== "win32") {
   const words = [];
   const marks = [];
   const nested = [];
@@ -4921,8 +4925,8 @@ function shellWords(command, braces = false) {
         if (command[k] === "\\" && '$\`"\\\n'.includes(command[k + 1] ?? "")) k += 1;
         word += command[k] ?? "";
       }
-    } else if (c === "\\" && process.platform !== "win32") {
-      // A backslash escapes the next character, except on Windows, where it separates a path's parts.
+    } else if (c === "\\" && escapes) {
+      // A backslash escapes the next character, except on Windows by default, where it separates a path's parts.
       if (command[k + 1] !== "\n") word = (word ?? "") + (command[k + 1] ?? "");
       k += 1;
     } else if (c === "#" && word === null) {
@@ -5259,8 +5263,8 @@ function yarnBare(tail) {
  * PLACES_MAX folders at most: one past it is dropped (cut), and an install read once one was, or naming one past it, is
  * over (review/106), so the work stays small. Returns those folders, the folders in effect at the line's end, over, cut.
  */
-function installFolders(line, start, depth = 0, cut = false) {
-  const { words, marks, nested, docs } = shellWords(line);
+function installFolders(line, start, depth = 0, cut = false, escapes = undefined) {
+  const { words, marks, nested, docs } = shellWords(line, false, escapes);
   const folders = new Set();
   const seen = new Set(start);
   let over = false;
@@ -5300,7 +5304,7 @@ function installFolders(line, start, depth = 0, cut = false) {
   const scopes = [];
   const read = (text, from, partial = cut) => {
     if (depth >= 4 || typeof text !== "string") return from;
-    const got = installFolders(text, from, depth + 1, partial);
+    const got = installFolders(text, from, depth + 1, partial, escapes);
     for (const dir of got.folders) add(dir);
     over ||= got.over;
     cut ||= got.cut;
@@ -5451,9 +5455,11 @@ function installFolders(line, start, depth = 0, cut = false) {
  * it, up to the repository's top (sign-off S54), and a workspace member at each folder above it, up to that top,
  * declaring a workspace too (sign-off S64). An install past the folders the reading holds is refused as well, since
  * where it runs is not known (review/106). Null when none of those is a link; a fault of its own is null too, so this
- * check never sends a call to the fail-closed refusal.
+ * check never sends a call to the fail-closed refusal. On Windows a shell tool's line is read twice, outside
+ * PowerShell: Git Bash, the shell it runs there, reads a backslash as an escape (n\pm is npm), where the guard's own
+ * reading takes it for a path's separator, and either reading refuses (u-ci1).
  */
-function linkedInstall(command, cwd) {
+function linkedInstall(command, cwd, pwsh = false) {
   try {
     if (!/npm|yarn|bun/i.test(command.replace(/['"\\]/g, ""))) return null;
     const top = (dir) => present(join(dir, ".git")) || dirname(dir) === dir;
@@ -5466,10 +5472,11 @@ function linkedInstall(command, cwd) {
         return false;
       }
     };
-    const got = installFolders(command, [cwd]);
+    const readings = [installFolders(command, [cwd])];
+    if (process.platform === "win32" && !pwsh) readings.push(installFolders(command, [cwd], 0, false, true));
     // Past the folders the reading holds, where an install runs is not known: refused, not guessed (review/106).
-    if (got.over) return "This install comes after more folder changes than the guard follows (" + PLACES_MAX + " folders at most), so whether it writes through a linked node_modules cannot be read. Run the install on a line of its own, after a plain cd to its folder.";
-    for (const start of got.folders) {
+    if (readings.some((got) => got.over)) return "This install comes after more folder changes than the guard follows (" + PLACES_MAX + " folders at most), so whether it writes through a linked node_modules cannot be read. Run the install on a line of its own, after a plain cd to its folder.";
+    for (const start of new Set(readings.flatMap((got) => got.folders))) {
       let dir = start;
       for (let hops = 0; hops < 64 && !present(join(dir, "node_modules")) && !present(join(dir, "package.json")) && !top(dir); hops += 1) dir = dirname(dir);
       const roots = [dir];
@@ -6013,7 +6020,7 @@ function decide() {
   // A place is a full verdict of each text: past 8 lines' worth the call is refused, not left to a timeout.
   if (command.length <= 65536 && contexts.length * texts.join("").length > 8 * 65536) throw Object.assign(new Error("readings"), { code: "MANAGER_READINGS_OVER_16" });
   // An install through a linked node_modules, refused in every mode and never asked (REQ-FLOW-178).
-  const linked = linkedInstall(command, cwd);
+  const linked = linkedInstall(command, cwd, pwsh);
   if (linked !== null) return { ask: false, reason: linked };
   for (const ctx of contexts) {
     // Set, not spread: the context's getters read git only when the verdict asks.
