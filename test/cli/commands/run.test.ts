@@ -65,8 +65,8 @@ vi.mock("../../../src/cli/engine/gitWrite.ts", async (importOriginal) => {
       // TEST CHANGE, justified (u-ci1): `run end` pushes from `git rev-parse --show-toplevel`, which git prints with `/`
       // on Windows (`C:/Users/...`), while a case keys its clone by the native path; read both as one folder, so the
       // push reaches the case's bare remote on Windows too, not github.com. On POSIX the key is the same string.
-      const key = resolve(cwd);
-      const mapped = args[0] === "ls-remote" || (args[0] === "push" && lsRemote.push.has(key)) ? lsRemote.to.get(key) : undefined;
+      const folder = resolve(cwd);
+      const mapped = args[0] === "ls-remote" || (args[0] === "push" && lsRemote.push.has(folder)) ? lsRemote.to.get(folder) : undefined;
       if (mapped === undefined) return real.gitWrite(cwd, args, opts);
       const mapping = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: `url.${mapped.remote}.insteadOf`, GIT_CONFIG_VALUE_0: mapped.url };
       const previous = Object.fromEntries(Object.keys(mapping).map((key) => [key, process.env[key]]));
