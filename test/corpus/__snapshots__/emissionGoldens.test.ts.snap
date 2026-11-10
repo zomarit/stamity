@@ -1276,13 +1276,12 @@ function nameId(doc) {
  * A file name as the banner prints it, as \`learn read\` prints a skip's: C0
  * controls and DEL to spaces, the rest of the resume card's unprintable set and
  * the invisible class dropped. A name the screen matches, raw or printed, its
- * stem included, prints as a placeholder naming the pattern ids, never the name.
+ * stem and escape notation read too, prints as a placeholder naming the pattern ids.
  */
 function printedName(name) {
-  const shown = printable(name);
-  const copies = [name, stem(name), text(shown, ""), text(stem(shown), "")];
+  const copies = [name, readNotation(name)].flatMap((n) => [n, stem(n), text(n, ""), text(stem(n), "")]);
   const ids = [...new Set(copies.flatMap(screenIds))].sort();
-  if (ids.length === 0) return shown;
+  if (ids.length === 0) return printable(name);
   return "(name withheld: " + (ids.length === 1 ? "pattern " : "patterns ") + ids.join(", ") + ")";
 }
 
@@ -2898,13 +2897,12 @@ function nameId(doc) {
  * A file name as the banner prints it, as \`learn read\` prints a skip's: C0
  * controls and DEL to spaces, the rest of the resume card's unprintable set and
  * the invisible class dropped. A name the screen matches, raw or printed, its
- * stem included, prints as a placeholder naming the pattern ids, never the name.
+ * stem and escape notation read too, prints as a placeholder naming the pattern ids.
  */
 function printedName(name) {
-  const shown = printable(name);
-  const copies = [name, stem(name), text(shown, ""), text(stem(shown), "")];
+  const copies = [name, readNotation(name)].flatMap((n) => [n, stem(n), text(n, ""), text(stem(n), "")]);
   const ids = [...new Set(copies.flatMap(screenIds))].sort();
-  if (ids.length === 0) return shown;
+  if (ids.length === 0) return printable(name);
   return "(name withheld: " + (ids.length === 1 ? "pattern " : "patterns ") + ids.join(", ") + ")";
 }
 
@@ -4524,13 +4522,12 @@ function nameId(doc) {
  * A file name as the banner prints it, as \`learn read\` prints a skip's: C0
  * controls and DEL to spaces, the rest of the resume card's unprintable set and
  * the invisible class dropped. A name the screen matches, raw or printed, its
- * stem included, prints as a placeholder naming the pattern ids, never the name.
+ * stem and escape notation read too, prints as a placeholder naming the pattern ids.
  */
 function printedName(name) {
-  const shown = printable(name);
-  const copies = [name, stem(name), text(shown, ""), text(stem(shown), "")];
+  const copies = [name, readNotation(name)].flatMap((n) => [n, stem(n), text(n, ""), text(stem(n), "")]);
   const ids = [...new Set(copies.flatMap(screenIds))].sort();
-  if (ids.length === 0) return shown;
+  if (ids.length === 0) return printable(name);
   return "(name withheld: " + (ids.length === 1 ? "pattern " : "patterns ") + ids.join(", ") + ")";
 }
 
@@ -6260,13 +6257,12 @@ function nameId(doc) {
  * A file name as the banner prints it, as \`learn read\` prints a skip's: C0
  * controls and DEL to spaces, the rest of the resume card's unprintable set and
  * the invisible class dropped. A name the screen matches, raw or printed, its
- * stem included, prints as a placeholder naming the pattern ids, never the name.
+ * stem and escape notation read too, prints as a placeholder naming the pattern ids.
  */
 function printedName(name) {
-  const shown = printable(name);
-  const copies = [name, stem(name), text(shown, ""), text(stem(shown), "")];
+  const copies = [name, readNotation(name)].flatMap((n) => [n, stem(n), text(n, ""), text(stem(n), "")]);
   const ids = [...new Set(copies.flatMap(screenIds))].sort();
-  if (ids.length === 0) return shown;
+  if (ids.length === 0) return printable(name);
   return "(name withheld: " + (ids.length === 1 ? "pattern " : "patterns ") + ids.join(", ") + ")";
 }
 

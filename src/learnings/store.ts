@@ -829,11 +829,15 @@ function lineSafe(name: string): string {
  * and cap, which can close a space run wider than a row's gap — and carried
  * stripped; a name that hits is withheld behind a placeholder naming the
  * pattern ids, never the name. {@link lineSafe} then flattens and caps it as
- * it does every name, giving the string screened here.
+ * it does every name, giving the string screened here. Both copies are
+ * screened again with the name's escape notation read ({@link readNotation}),
+ * as `screenedCopies` reads a field.
  */
 function printedName(name: string): string {
   const shown = printableText(name);
-  const ids = [...new Set([...blockedPatternIds(name), ...blockedPatternIds(lineSafe(shown))])].toSorted();
+  const read = readNotation(name);
+  const copies = [name, lineSafe(shown), read, lineSafe(printableText(read))];
+  const ids = [...new Set(copies.flatMap((copy) => blockedPatternIds(copy)))].toSorted();
   if (ids.length === 0) return shown;
   return `(name withheld: ${ids.length === 1 ? "pattern" : "patterns"} ${ids.join(", ")})`;
 }
