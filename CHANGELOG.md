@@ -63,9 +63,6 @@ read from the code and its tests.
   skill that carries scripts unless the source allows them. The trusted-sources file and the origin records are held
   paths. `SECURITY.md` names the fetch as a fourth network exception and states the residuals, among them that a
   source with `allowScripts` may bring any file type.
-- **`autonomy.unaskedPushRepos`, a loosening only a person turns on.** It lifts the ask on an attended push to a
-  repository it names, only for a line that is exactly `git push [-u|-q|-v] <remote> <branch>` and only when git's
-  configuration adds nothing to that push. `SECURITY.md` states the rules, what it never lifts and two gaps.
 - **`stamity skill add` asks, and only an attended main thread can run it.** The guard's new `skill-fetch` rule asks
   on the main thread and refuses a sub-agent's call, an unattended run and the nobody-watching switch. Run from a
   lane, `skill add` also reads the main checkout's switch marker and run records. A Codex `agents/openai.yaml` that
