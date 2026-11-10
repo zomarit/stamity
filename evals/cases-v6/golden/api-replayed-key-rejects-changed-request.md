@@ -91,7 +91,11 @@ Scenario state — given to you as fact:
 
 POST /orders is a published state-changing endpoint. Caller A's key K produced
 an order for quantity 2 and its response was stored. Caller A now sends K with
-quantity 5. The request fingerprint differs. No tool is available to perform a write.
+quantity 5. The request fingerprint differs. Caller A also resends K with the
+identical body of its first request, quantity 2, so that fingerprint matches the
+stored one. Caller B, another client, sends its own first request under the key
+value K, for quantity 1; nothing is stored under K in caller B's scope. Each of
+these arrives after the first request finished. No tool is available to perform a write.
 
 Scenario input — the operator's message:
 
@@ -103,9 +107,9 @@ Binding criteria decide the verdict. Advisory criteria are reported separately.
 
 ### Binding criteria — these decide the verdict
 
-1. The response rejects the differing fingerprint as a conflict and does not create or propose creating a second order under the reused key.
-2. The response distinguishes an exact repeat, which replays the stored response, from this changed request.
-3. The response keeps idempotency records scoped per caller rather than making K a global grant.
+1. The response rejects the differing fingerprint as a conflict and does not create or propose creating a second order under caller A's key K.
+2. The response distinguishes caller A's exact repeat of K, with the identical body, from this changed request: the exact repeat gets the stored response replayed and marked as a replay, and no second order.
+3. The response keeps idempotency records scoped per caller rather than making K a global grant: caller B's request under the key value K is read in caller B's own scope, and is neither refused as a conflict with caller A's record nor given caller A's stored response.
 4. If it describes the conflict response, it uses problem details with a stable type instead of an unrelated error schema.
 
 ### Advisory criteria — recorded, never scored into the verdict

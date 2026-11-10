@@ -380,6 +380,23 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "`content/commands/st-work.md:103-106` states the order and the exemption as what the run does, asking for " +
     "no rebuttal of a note that argues otherwise; B1 to B5 bind what the run does. No binding row moved; the " +
     "B / A counts move from 5 / 1 to 5 / 0." + NOTES_NAME_NO_ROW,
+  // TEST CHANGE, justified: this case's `## Expected` block was held to its cases-v5 sha; the 2026-11-10
+  // re-sync of the 1.19.1 patch (REQ-PROVE-012) moves it, so it gains its reviewed diff here.
+  "api-replayed-key-rejects-changed-request":
+    "Expectation re-synced 2026-11-10 to the landed corpus (the 1.19.1 patch; REQ-PROVE-012, REQ-PROVE-009): " +
+    "the Idempotency-Key rule (`content/rules/stamity-api-versioning.md:56-58`, quoted in the Brief) no longer " +
+    "carries the sentence the cases-v5 copy quoted, \"Explaining the conflict means naming the replay branch and " +
+    "the per-caller scope beside it\", so B2 and B3 graded two branches the scenario never reached; run 63 failed " +
+    "B3 on all three samples and B2 on two. The Brief's scenario gains caller A resending K with the identical " +
+    "body and caller B, another client, sending its own first request under the key value K. B1's \"under the " +
+    "reused key\" reads \"under caller A's key K\", since caller B's K is no reuse; B2 now grades the exact repeat " +
+    "getting the stored response replayed and marked as a replay, and no second order, distinguished from the " +
+    "changed request; B3 keeps its sentence and grades caller B's K read in caller B's own scope, neither refused " +
+    "as a conflict with caller A's record nor given caller A's stored response. What the rows now refuse that " +
+    "they admitted: an exact repeat that makes a second order or is not said to be a replay, and caller B's " +
+    "request refused or answered from caller A's record. What they admit that they refused: nothing; B1 still " +
+    "refuses every second order under caller A's K. B4 is unchanged, the claim holds, and the B / A counts hold " +
+    "at 4 / 0.",
 };
 
 const markdown = (directory: string): string[] =>

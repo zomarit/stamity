@@ -1,4 +1,4 @@
-# Eval set v7 — v6's scoring rule and thresholds, unchanged; cases-v6 carries v5's 78 cases, 52 with their `## Expected` block byte-identical and twenty-six moved by ten reviewed dispositions, five amendments and eleven re-syncs to the landed corpus (recorded below), plus the cases this version adds (index below), three of which left the set on 2026-10-14 with the APM and plugin routes, and one of which a successor case replaced the same day
+# Eval set v7 — v6's scoring rule and thresholds, unchanged; cases-v6 carries v5's 78 cases, 51 with their `## Expected` block byte-identical and twenty-seven moved by ten reviewed dispositions, five amendments and twelve re-syncs to the landed corpus (recorded below), plus the cases this version adds (index below), three of which left the set on 2026-10-14 with the APM and plugin routes, and one of which a successor case replaced the same day
 
 v7 changes inputs, not the rule. The scoring rule, the four metric names and their
 numbers, the run-artifact contract, the hard triggers and the non-negotiable appendix are
@@ -9,7 +9,7 @@ the artifact to the `records` branch, and on 2026-11-04 hard trigger 2 moved aga
 gained item 12, under "What a release measures". Two inputs move. The case directory is
 now `evals/cases-v6/**`; every carried case's frontmatter id, class, metric and floor tag are
 identical to `cases-v5`'s, and its `## Expected` block too unless a reviewed disposition,
-amendment or re-sync moved it (twenty-six cases, each with an `EXPECTED_MOVES` row), enforced by
+amendment or re-sync moved it (twenty-seven cases, each with an `EXPECTED_MOVES` row), enforced by
 `test/evals/successorInputs.test.ts` — that gate compares only those four frontmatter keys
 and the `## Expected` block, and eight carried cases had their `source:` range and/or Brief
 text moved with the corpus tonight (named in "What v7 adds" below), which the gate does not
@@ -46,10 +46,10 @@ artifacts still need a case or an explicit reviewed exemption.
 
 ## Versioned inputs
 
-- Current cases: `evals/cases-v6/**` (52 carried cases with their `## Expected` block
-  byte-identical to v5's, twenty-six moved by ten reviewed dispositions, five amendments and
-  eleven re-syncs to the landed corpus, three of 2026-09-30, one of 2026-10-09, two of
-  2026-10-10, two of 2026-10-12 and three of 2026-10-14; eight carried
+- Current cases: `evals/cases-v6/**` (51 carried cases with their `## Expected` block
+  byte-identical to v5's, twenty-seven moved by ten reviewed dispositions, five amendments and
+  twelve re-syncs to the landed corpus, three of 2026-09-30, one of 2026-10-09, two of
+  2026-10-10, two of 2026-10-12, three of 2026-10-14 and one of 2026-11-10; eight carried
   `source:` ranges/Briefs moved at the cutover, more by the 2026-09-15 repairs, and
   thirteen more by the 2026-09-23 orchestrator-context edits, three of those ranges again on
   2026-09-24);
@@ -4495,6 +4495,29 @@ tallies hold; the case is already among the 80 above, so that count holds. The B
 the next run counts the case as moved. No B / A, claim, floor tag, threshold or roster count moves. The
 dated citations above stay as they were. No eval run is made with this change.
 
+**`api-replayed-key-rejects-changed-request` re-synced, its scenario reaching both branches its rows
+grade, 2026-11-10 (the 1.19.1 patch; REQ-PROVE-012).** Run 63 scored the case 0 of 3, B3 failing on all
+three samples and B2 on two. The cases-v5 copy quoted a sentence of the rule that asked an explanation
+of the conflict to name the replay branch and the per-caller scope beside it; the rule no longer carries
+it, and the scenario held one caller and one changed request, so B2 and B3 graded branches the scenario
+never reached. The rule's words stay those of `content/rules/stamity-api-versioning.md:56-58`, already
+quoted, and no `source:` range or quoted block moves. The scenario gains two requests: caller A resends
+K with the identical body of its first request, and caller B, another client, sends its own first
+request under the key value K, each arriving after the first request finished; the operator's message
+does not move. Three binding rows move, and none is weakened (the rule the 2026-10-14 close-walk
+paragraph above states). B1's "under the reused key" reads "under caller A's key K", since caller B's K is no reuse; it
+still refuses every second order under caller A's key. B2 keeps its distinction and now grades the exact
+repeat getting the stored response replayed and marked as a replay, with no second order. B3 keeps its
+sentence and now grades caller B's K read in caller B's own scope, neither refused as a conflict with
+caller A's record nor given caller A's stored response. What the rows now refuse that they admitted: an
+exact repeat that makes a second order or is not said to be a replay, and caller B's request refused or
+answered from caller A's record; they admit nothing they refused. B4 is unchanged, the claim holds and
+the B / A count holds at 4 / 0. The case has a cases-v5 copy, so `EXPECTED_MOVES` gains its row, and the
+carried tallies move: 52 → 51 byte-identical, twenty-six → twenty-seven moved, eleven → twelve re-syncs,
+here and in `evals/README.md`. The case is already among the 80 above, so that count holds, and the next
+run counts it as moved. No floor tag, threshold or roster count moves. The dated citations above stay as
+they were. No eval run is made with this change.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
@@ -4511,9 +4534,9 @@ declared 2026-09-15" above lets a later candidate in the same configuration re-m
 cases whose inputs moved and carry every other case from a prior complete run. It moves no count
 on this page, and nothing in the scoring rule, the metric names or their thresholds moves with it.
 
-Recomputed against the files: 179 cases (78 carried from cases-v5, 52 of them with their `##
-Expected` block still byte-identical and twenty-six moved: ten by the dispositions above (seven of 2026-09-15, one of 2026-10-21, one of 2026-10-22 and one of 2026-11-05), five by
-the amendments of 2026-09-15, 2026-10-08, 2026-10-09 and the two of 2026-10-11, three by the 2026-09-30 re-syncs, one by the 2026-10-09 re-sync of `plan-artifact-head-and-units-shape`, two by the 2026-10-10 re-syncs of `rework-critical-deferral-record` and `rework-triage-revise-versus-defer`, two by the 2026-10-12 re-syncs of `board-write-back-four-channels` and `pr-resolve-next-step-derived-from-run-state` and three by the 2026-10-14 re-syncs of `question-shape-and-default`, `quick-next-step-derived-from-batch-state` and `rework-next-step-derived-from-run-state` — eight of the 78 also moved `source:` range and/or Brief text with the corpus,
+Recomputed against the files: 179 cases (78 carried from cases-v5, 51 of them with their `##
+Expected` block still byte-identical and twenty-seven moved: ten by the dispositions above (seven of 2026-09-15, one of 2026-10-21, one of 2026-10-22 and one of 2026-11-05), five by
+the amendments of 2026-09-15, 2026-10-08, 2026-10-09 and the two of 2026-10-11, three by the 2026-09-30 re-syncs, one by the 2026-10-09 re-sync of `plan-artifact-head-and-units-shape`, two by the 2026-10-10 re-syncs of `rework-critical-deferral-record` and `rework-triage-revise-versus-defer`, two by the 2026-10-12 re-syncs of `board-write-back-four-channels` and `pr-resolve-next-step-derived-from-run-state`, three by the 2026-10-14 re-syncs of `question-shape-and-default`, `quick-next-step-derived-from-batch-state` and `rework-next-step-derived-from-run-state` and one by the 2026-11-10 re-sync of `api-replayed-key-rejects-changed-request` — eight of the 78 also moved `source:` range and/or Brief text with the corpus,
 named above; six moved one or both again with the 2026-09-15 content repairs; thirteen moved one
 or both with the 2026-09-23 orchestrator-context edits, three of them their range again on
 2026-09-24, and thirty-seven, carried or added, moved with the close walk on 2026-10-14 — 101
