@@ -835,6 +835,14 @@ describe("reviewer — multi-lens verdict", () => {
     expect(critical).toMatch(
       /that mapping binds only a unit that had a tests-only dispatch, one with a `held:` line in `record\.md`; any other unit says `no held tests` in one line, and the row's first sentence binds it in full/i,
     );
+    // Added 2026-11-10 (plan 024 file 3 unit x-metrics-content, sign-off S87, closing its W-1): a
+    // refactor's criterion proven by a `Verified by` command has no held test (S81, S84), so the row
+    // maps it to that command's before-and-after runs on the record, in S81's and S84's words, and a
+    // criterion proven by neither is still a finding. It follows the mapping sentence it widens.
+    const commandMapping =
+      "A criterion a `Verified by` command proves maps to that command run green before and after its change, each with its exit code on the record, as a test-proven criterion maps to a held test, whether the unit has a `held:` line or a `no held tests: <unit> commands` line; a criterion proven by neither is a finding.";
+    expect(critical).toContain(commandMapping);
+    expect(critical.indexOf(commandMapping)).toBeGreaterThan(critical.indexOf("and the row's first sentence binds it in full"));
     expect(critical).toMatch(
       /- Every changed behaviour has a test that fails without the change; a defect fix carries a regression test; a deleted or weakened gating test is justified in the diff itself\. Each of the unit's criteria/,
     );

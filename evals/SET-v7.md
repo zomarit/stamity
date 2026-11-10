@@ -4272,6 +4272,16 @@ moved. No `## Expected` block, B / A, claim, floor tag, threshold or roster coun
 carried tallies and the recomputed census below hold. The dated citations above stay as they were. No
 eval run is made with this change.
 
+**Command-proven criteria in the reviewer, 2026-11-10 (the 1.19.0 release; REQ-FLOW-171).** The
+reviewer's test row gains, in place on its second line, one sentence: a criterion a `Verified by`
+command proves maps to that command's runs green before and after on the record, each with its exit
+code, and a criterion proven by neither is a finding. So no reviewer line moves, and every range holds.
+`reviewer-brief-is-diff-and-criteria` quotes that line, so its Brief re-quotes it byte-identical from
+the landed file; its range holds. The Brief is judge input, so the next run counts that one case as
+moved. No `## Expected` block, B / A, claim, floor tag, threshold or roster count moves, so the carried
+tallies and the recomputed census below hold. The dated citations above stay as they were. No eval run
+is made with this change.
+
 **Disposition notes name no retired row, 2026-11-09 (REQ-PROVE-047).** The note gave the judge the
 deleted row's old id, and that id is what was written back. All 42 notes in 36 cases now read
 `Disposition <date>: an advisory row deleted|promoted to B<n> (sha256:<12 hex>)`, each with its
