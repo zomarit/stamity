@@ -3939,6 +3939,8 @@ describe("stamity run land", () => {
           ["holds a findings fence with an underscore", "u1-reviewer-r1.md", fenced("```stamity_findings", "```"), DOES_NOT_READ],
           ["holds an empty exact block beside a fence one letter short", "u1-reviewer-r1.md", `${findings("")}${fenced("```stamity-finding", "```")}`, DOES_NOT_READ],
           ["is a diff patch whose context lines hold a near findings fence", "u1-diff-r1.patch", ` \`\`\`stamity-finding\n ${WARNING} \`\`\`\n`, DOES_NOT_READ],
+          // An operating system's own file is taken by name, and still read: a findings block in one reaches no row.
+          ["is an AppleDouble file holding a finding", "._x.md", findings(WARNING), "holds findings"],
         ])("writes none where a reports entry %s, naming it in Not done:, and the job refuses", async (_case, name, text, why) => {
           const { repo, remote } = await ending(LAND_ON, null);
           await put(repo, `${REPORTS}/${name}`, text);
@@ -4029,6 +4031,41 @@ describe("stamity run land", () => {
           expect(result.code, JSON.stringify(result.doc)).toBe(0);
           expect(result.doc).toMatchObject({ notDone: [] });
           expect(git(repo, ["cat-file", "-s", `HEAD:${LEDGER}`])).toBe("0");
+        });
+
+        // REQ-FLOW-157 (1.19.1): a real run's reports folder on macOS or Windows can hold the system's own files, which no
+        // agent wrote and which hold no finding; they no longer stop a clean run's empty ledger.
+        it("writes the empty ledger where the reports folder holds .DS_Store, Thumbs.db, desktop.ini and an AppleDouble file", async () => {
+          const { repo } = await ending(LAND_ON, null);
+          await put(repo, `${REPORTS}/u1-reviewer-r1.md`, findings(""));
+          // Binary bytes, as Finder writes them: the `Bud1` magic among NULs and bytes that are not UTF-8.
+          await writeFile(join(repo, REPORTS, ".DS_Store"), Buffer.from([0, 0, 0, 1, 0x42, 0x75, 0x64, 0x31, 0, 0, 0x10, 0, 0xff, 0xfe, 0x80]));
+          await writeFile(join(repo, REPORTS, "Thumbs.db"), Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0, 0]));
+          await writeFile(join(repo, REPORTS, "desktop.ini"), "[.ShellClassInfo]\r\nIconResource=C:\\x.ico,0\r\n");
+          await writeFile(join(repo, REPORTS, "._u1-reviewer-r1.md"), Buffer.from([0, 5, 0x16, 7, 0, 2, 0, 0, 0x4d, 0x61, 0x63, 0x20, 0x4f, 0x53, 0x20, 0x58]));
+
+          const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+          expect(result.code, JSON.stringify(result.doc)).toBe(0);
+          expect(result.doc).toMatchObject({ notDone: [] });
+          expect(git(repo, ["cat-file", "-s", `HEAD:${LEDGER}`])).toBe("0");
+        });
+
+        // REQ-FLOW-157 (1.19.1): the system's file is taken by its name only where it is a regular file the cap reads whole.
+        it.each([
+          ["a folder", async (repo: string) => mkdir(join(repo, REPORTS, ".DS_Store"))],
+          ["a link", async (repo: string) => symlink(join(repo, "a.txt"), join(repo, REPORTS, ".DS_Store"))],
+          ["over the read cap", async (repo: string) => writeFile(join(repo, REPORTS, ".DS_Store"), Buffer.alloc(1_048_577))],
+        ])("writes none where .DS_Store is %s, naming it in Not done:", async (_case, make) => {
+          const { repo } = await ending(LAND_ON, null);
+          await put(repo, `${REPORTS}/u1-reviewer-r1.md`, findings(""));
+          await make(repo);
+
+          const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+          expect(result.code, JSON.stringify(result.doc)).toBe(0);
+          expect(result.doc).toMatchObject({ notDone: [held(".DS_Store (did not read)")] });
+          expect(existsSync(join(repo, LEDGER))).toBe(false);
         });
 
         // review/191, amended (S105): a real cloud run saved its `gate held --json` result in its reports folder, the path the

@@ -1757,11 +1757,18 @@ async function writeEmptyLedger(ctx: CliContext, at: { cwd: string; ledgerRel: s
 /**
  * review/191: the entries a run's `reports/` folder holds that are not reports, by exact name: the ignore file
  * `ensureReportsIgnore` writes (`src/runs/ledgerStore.ts`), and the orchestrator's `<pass>-diff-r<N>.patch` a verdict role
- * with no git grant reads (`content/commands/st-work.md`, Verdict dispatch). Any other name that is not a report name stops
- * the empty ledger, since `ledger append --report` refuses it and so no row carries what it holds. A `.json` name is
- * {@link HELD_RESULT_NAME}'s, taken only for its text.
+ * with no git grant reads (`content/commands/st-work.md`, Verdict dispatch), and the files an operating system writes into a
+ * folder on its own (macOS's `.DS_Store` and `._<name>`, Windows's `Thumbs.db` and `desktop.ini`), which no agent wrote. A
+ * name here is still read: it must be a regular file within the cap, and a findings fence in it stops the write as in a
+ * report. Any other name that is not a report name stops the empty ledger, since `ledger append --report` refuses it and
+ * so no row carries what it holds. A `.json` name is {@link HELD_RESULT_NAME}'s, taken only for its text.
  */
-const REPORTS_NON_REPORTS: readonly RegExp[] = [/^\.gitignore$/, /^[a-z0-9][a-z0-9-]*-diff-r[1-9][0-9]*\.patch$/];
+const REPORTS_NON_REPORTS: readonly RegExp[] = [
+  /^\.gitignore$/,
+  /^[a-z0-9][a-z0-9-]*-diff-r[1-9][0-9]*\.patch$/,
+  /^(?:\.DS_Store|Thumbs\.db|desktop\.ini)$/i,
+  /^\._./,
+];
 
 /**
  * A saved `gate held --json` result, whose path the Verdict dispatch names for the reviewer (`content/commands/st-work.md`,
