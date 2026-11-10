@@ -11,7 +11,9 @@ import type {
   ModelConfig,
   EffortLevel,
   ImportMode,
+  LanguageVersion,
   ModelClass,
+  RepoInfo,
 } from "../../src/index.ts";
 import { createApp, createEngine, VERSION } from "../../src/composition/root.ts";
 import type * as PathsApi from "../../src/shared/paths.ts";
@@ -388,6 +390,11 @@ describe("public entry", () => {
     expect(choice.mode).toBe(mode);
     expect(publicApi.VALID_MODEL_CLASSES.has(modelClass)).toBe(true);
     expect(publicApi.VALID_EFFORT_LEVELS.has(effort)).toBe(true);
+    // Added 2026-11-10 (run 2026-11-09_last-before-2-0, review/66): `LanguageVersion` is reachable from `RepoInfo`'s
+    // `languageVersions`, so it is named on the public entry; this file would not typecheck without it.
+    const stated: LanguageVersion = { language: "node", version: "20.11.0", source: ".nvmrc" };
+    const versions: NonNullable<RepoInfo["languageVersions"]> = [stated];
+    expect(versions[0]?.source).toBe(".nvmrc");
   });
 });
 

@@ -106,6 +106,7 @@ export type { CatalogItem } from "./content/catalog.ts";
 export type {
   DetectedSummary,
   Framework,
+  LanguageVersion,
   PackageEntry,
   RepoInfo,
 } from "./types/detect.ts";
