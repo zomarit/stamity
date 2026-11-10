@@ -5,8 +5,8 @@ date: 2026-11-10
 confidence: high
 summary: test/composition/root.test.ts derives its registry from src/, so a new engine module fails every CI leg until src/composition/root.ts wires it or excludes it with a reason
 reviewBy: 2027-02-10
-validatedAgainst: "test/composition/root.test.ts:19-36 at bcf4eeb9 and commits 3e76d2d9 and 42aa32ee"
-integrity: sha256:6b5aa035f82522b7e597e25b148242877b71833d73fd8f0869bd636e9c5e7382
+validatedAgainst: "test/composition/root.test.ts:19-36 at bcf4eeb9, commits 3e76d2d9 and 42aa32ee, and CI run 42730516873 on PR #138"
+integrity: sha256:50283e752825718561ab848394cd2ad316083c93bf4c344487bcbe009c3708a7
 ---
 
 `test/composition/root.test.ts` derives the registry it expects from the tree: it walks `src/`,
@@ -23,8 +23,8 @@ wired `adapters.landWorkflow` into the composition root, and `42aa32ee` wired `s
 "which the derived registry check in `test/composition/root.test.ts` requires". The same log named
 one more cause, a land-workflow row test that assumed this package's own identity; `3e76d2d9` moved
 it to read the line a real sync pins from the checkout's own manifest. Each fix turned its legs
-green. At `bcf4eeb9` the whole-tree checks listed in `a-narrow-verify-run-misses-whole-tree-guards`
-are three, and this one is not among them.
+green. The same check failed again on PR #138's CI, with nine modules unwired; it is one row of
+the whole-tree checks in `a-narrow-verify-run-misses-whole-tree-guards`.
 
 Confidence high: the derivation is in the test's own header and source, and both fixes were proved
 in CI. Validated against `test/composition/root.test.ts:19-36` and commits `3e76d2d9` and `42aa32ee`
