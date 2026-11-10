@@ -65,8 +65,9 @@ set to any value but empty, `false` or `0`. A cloud's own marker means "cloud", 
   default branch included, so the land verb asks before it merges there, unless the change fits
   `autonomy.autoShip`) and `autonomy.deployingActs` to the acts that ask in every mode; `stamity
   check` warns on a workflow that deploys from a branch the list leaves out. Loosening either needs
-  the person's `--loosen`. Attended, `autonomy.unaskedPushRepos` can also lift the ask on a push that
-  names one branch on its line to a repository it names, on the main thread of Claude Code or Copilot
+  the person's `--loosen`. Attended, `autonomy.unaskedPushRepos` can also lift the ask on a line that
+  is exactly `git push [-u|-q|-v] <remote> <branch>` to a repository it names, when git's configuration
+  adds nothing to that push, on the main thread of Claude Code or Copilot
   CLI alone and never while nobody watches;
   [SECURITY.md](../SECURITY.md) states its rules.
 - **Attended, Claude Code asks for one click** on an act on the ask list that can be undone, such

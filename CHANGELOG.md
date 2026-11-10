@@ -64,7 +64,12 @@ read from the code and its tests.
   paths. `SECURITY.md` names the fetch as a fourth network exception and states the residuals, among them that a
   source with `allowScripts` may bring any file type.
 - **`autonomy.unaskedPushRepos`, a loosening only a person turns on.** It lifts the ask on an attended push to a
-  repository it names, and only within narrow rules: `SECURITY.md` states them, and what it never lifts.
+  repository it names, only for a line that is exactly `git push [-u|-q|-v] <remote> <branch>` and only when git's
+  configuration adds nothing to that push. `SECURITY.md` states the rules, what it never lifts and two gaps.
+- **`stamity skill add` asks, and only an attended main thread can run it.** The guard's new `skill-fetch` rule asks
+  on the main thread and refuses a sub-agent's call, an unattended run and the nobody-watching switch. Run from a
+  lane, `skill add` also reads the main checkout's switch marker and run records. A Codex `agents/openai.yaml` that
+  declares more than how the skill is shown is refused unless the source sets `allowScripts`.
 - **A learning's file name is screened in more readings.** The session-start banner, and `learn read` for a file it
   skips, now also screen a name with its escape notation read, and the name as the banner cuts it, read and flattened again. A name that
   matches prints as a placeholder naming the pattern ids, never the name. A fork whose scope names its own registry
@@ -97,7 +102,8 @@ read from the code and its tests.
   from a trusted source to `.stamity/overrides/skills/<name>/`, with an origin record at
   `.stamity/skills/<name>.origin.json`; `--sha256` pins the aggregate too. It refuses an unlisted source, an
   unattended session, the nobody-watching switch, a moved tag, a bundled or pack skill's name and a name already
-  copied. `skill list` re-hashes each copy against its record and names any drift, never fetching. A plan unit names
+  copied. `skill list` re-hashes each copy against its record and names any drift, never fetching, and `stamity check` warns
+  on the same drift in its `copied-skills` row. A plan unit names
   the skills it uses in a `skills` field, and a build whose skill has no clean copy stops as `BLOCKED_DEPENDENCY`
   instead of fetching. `docs/customization.md` says how.
 - **`stamity ready`** reports whether a repository is ready for unattended runs, one line per check with its evidence

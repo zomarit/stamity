@@ -5982,7 +5982,10 @@ describe("the security pages say one thing about the brake, the lift and the job
     // The marker is read on GitHub, not at the head, so the crosswalk must not say the proof is text at the head.
     const mapping = flowed(read(SECURITY_MAPPING));
     expect(mapping, "docs/security-mapping.md says again: text at the head").not.toContain("text at the head");
-    expect(mapping).toContain("the marker that ends the pull request's body, read on GitHub, and the `PR:` and `Login:` lines of the record at the head");
+    // TEST CHANGE, justified (2026-11-10, z-docs r2, ledger review/157, sign-off S99): the crosswalk said "the marker
+    // that ends the pull request's body", stricter than `src/runs/pullRequest.ts::bodyRun`, which finds the marker
+    // before a client's short footer; the pin follows the crosswalk's corrected words, as the SECURITY.md pin above did.
+    expect(mapping).toContain("the run's marker at the end of the pull request's body, before at most a client's short footer, read on GitHub, and the `PR:` and `Login:` lines of the record at the head");
     expect(flowed(read(CLOUD))).toContain("so an Actions deploy on push must not rely on this path, and a webhook or a GitHub App on the push still fires");
     expect(flowed(read(CLOUD))).toContain("A deleted state comment is not seen");
   });
