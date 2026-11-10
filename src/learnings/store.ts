@@ -831,12 +831,13 @@ function lineSafe(name: string): string {
  * pattern ids, never the name. {@link lineSafe} then flattens and caps it as
  * it does every name, giving the string screened here. Both copies are
  * screened again with the name's escape notation read ({@link readNotation}),
- * as `screenedCopies` reads a field.
+ * as `screenedCopies` reads a field, and so is the printed copy as cut, since
+ * a cut can close a row the whole read name does not (as `fitIndexLines` does).
  */
 function printedName(name: string): string {
   const shown = printableText(name);
   const read = readNotation(name);
-  const copies = [name, lineSafe(shown), read, lineSafe(printableText(read))];
+  const copies = [name, lineSafe(shown), read, lineSafe(printableText(read)), readNotation(lineSafe(shown))];
   const ids = [...new Set(copies.flatMap((copy) => blockedPatternIds(copy)))].toSorted();
   if (ids.length === 0) return shown;
   return `(name withheld: ${ids.length === 1 ? "pattern" : "patterns"} ${ids.join(", ")})`;

@@ -376,6 +376,27 @@ describe("loadValidatedLearnings", () => {
     },
   );
 
+  // POSIX-ONLY (tracking: M-1 of u-banner-names-reviewer-r1, owner: the u-banner-names unit): the Win32 naming rules
+  // forbid a backslash in a file name, so on Windows a name cannot carry escape notation and the seeding cannot
+  // create the subject.
+  it.skipIf(process.platform === "win32")(
+    "withholds a long skip file name whose printed cut matches the screen only with its escape notation read",
+    async () => {
+      // 203 characters: the print keeps the first 199 plus "…", ending on "alw\x61ys". Read, that cut names
+      // `role-must-always`; the whole name ("…ysz") and the read name cut later ("…alwaysz.md", 200) match no row.
+      const name = `${"x".repeat(174)} the agent must alw\\x61ysz.md`;
+      await getRepo().seedFiles({ [`.stamity/learnings/${name}`]: "## Why\n\nNo frontmatter block.\n" });
+
+      const raw = await loadValidatedLearnings({ rootDir: getRepo().dir, now: NOW });
+      const screened = await loadValidatedLearnings({ rootDir: getRepo().dir, now: NOW, screenPrinted: true });
+
+      expect(raw.skips.map((skip) => skip.fileName)).toEqual([name]);
+      expect(screened.skips.map((skip) => [skip.fileName, skip.reason])).toEqual([
+        ["(name withheld: pattern role-must-always)", "invalid-frontmatter"],
+      ]);
+    },
+  );
+
   it("orders newest first and cuts the budget deterministically, keeping the newest", async () => {
     // TEST CHANGE, justified: the loader orders by the declared `date` now (REQ-FLOW-021), not
     // by mtime, and every fixture shared one date, so the order fell to the name tiebreak. Each
