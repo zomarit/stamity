@@ -316,6 +316,23 @@ describe("st-unattended — before Frame (REQ-FLOW-091, REQ-FLOW-098 to REQ-FLOW
     );
   });
 
+  // Added 2026-11-10 (plan 025 file 2, unit c2-unattended-ending; REQ-FLOW-101): "the morning list" named no section, so
+  // a warning could land anywhere, a `qa` row among them; the pre-flight step itself now names the section, and the line
+  // after which each warning goes. The facts are pinned, not the sentence.
+  it("names the section each pre-flight warning goes under, after the proven line", async () => {
+    const text = await flat();
+    const start = text.indexOf("**The pre-flight is the run's first act**");
+    const end = text.indexOf("2. **The two floors load by name**");
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const step = text.slice(start, end);
+    const warnings = step.indexOf("Every pre-flight warning goes on the morning list too");
+    expect(warnings).toBeGreaterThan(-1);
+    // The section is named after the warnings' own sentence, inside the step, not only in `## The morning list`.
+    expect(step.indexOf("`## For you to check`", warnings)).toBeGreaterThan(warnings);
+    expect(step.slice(warnings)).toMatch(/\bproven line\b/);
+  });
+
   it("loads both floors by name and records them (REQ-FLOW-099)", async () => {
     const text = await flat();
     expect(text).toContain("the verdict's `floors[]`");
