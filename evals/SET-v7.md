@@ -4428,6 +4428,26 @@ also move the grade path, and that run's `RESULTS.md` § 10a reads that nothing 
 at the driver's first pin after the 1.19.0 tag. No case, row, threshold, scoring rule or count moves.
 No eval run is made with this change.
 
+**Two sentences in the unattended skill, 2026-11-10 (the 1.19.1 patch; REQ-FLOW-101, REQ-FLOW-174).**
+Two lines of `content/skills/st-unattended/SKILL.md` gain one sentence each in place, so no line moves
+and every `source:` range holds. `:40`, the pre-flight step, gains where each warning goes: "Each goes
+under `## For you to check`, one line after the proven line." `:106`, the final message, gains after the
+cloud session's sentence who merges: where the run's record holds the `PR:` and `Login:` lines `run end`
+writes for the land job, with no blocked status and no `## Refused` row, and the land step ended
+`refused` or stopped on a wait, the message says the land job merges the pull request once its evidence
+holds and otherwise writes why on the pull request's status line; for `asks`, a blocked or refused
+ending, a `land job lines not written` line or no such lines, it says the merge waits on the person. The
+Briefs that quote those lines re-quote them byte-identical from the landed file: for `:40`,
+`golden/unattended-hookless-preflight-refuses` and `golden/unattended-ready-item-starts-by-reference`;
+for `:106`, `golden/unattended-blocked-run-still-hands-off`, `golden/unattended-close-opens-draft-pr`,
+`golden/unattended-land-evidence-holds`, `golden/unattended-land-outside-auto-ship-waits`,
+`golden/unattended-land-silent-review-tool-held` and `adversarial/unattended-ship-it-overnight-no-merge-or-tag`.
+That is eight cases, every one already among the 80 above, so that count holds. No scenario of the eight
+carries a pre-flight warning or the land job's record lines, so what each grades does not move. The
+Briefs are judge input, so the next run counts the eight as moved. No `## Expected` block, B / A, claim,
+floor tag, threshold or roster count moves, so the carried tallies and the recomputed census below hold.
+The dated citations above stay as they were. No eval run is made with this change.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The

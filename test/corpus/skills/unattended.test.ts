@@ -611,6 +611,48 @@ describe("st-unattended — checkpoints and the ending (REQ-FLOW-092, REQ-FLOW-0
     );
     expect(text.indexOf(sentence)).toBeLessThan(text.indexOf("A run whose CLI stops answering closes its record"));
   });
+
+  // Added 2026-11-10 (plan 025 file 2, unit c2-unattended-ending; REQ-FLOW-174): with the land job on, `run end` writes
+  // the record's `PR:` and `Login:` lines and the job merges the pull request once its evidence holds, so a final
+  // message saying the merge waits on the person was wrong there. The ending's paragraph now states both states: the
+  // job's, gated on those lines, and the person's, kept for `asks`, a blocked or refused ending, a `land job lines not
+  // written` line and no lines. The facts are pinned clause by clause, not the sentence.
+  it("says in the final message who merges: the land job on its lines, else the person", async () => {
+    const text = await flat();
+    const start = text.indexOf("`run end` exits 0 with a pull request opened");
+    expect(start).toBeGreaterThan(-1);
+    const end = text.indexOf("## The morning list", start);
+    expect(end).toBeGreaterThan(start);
+    const paragraph = text.slice(start, end);
+    // Clauses split at `.` or `;` only, so `PR:` and `Login:` never cut one.
+    const clauses = paragraph.split(/(?<=[.;])\s+/);
+
+    const job = clauses.find((clause) => clause.includes("once its evidence holds"));
+    expect(job, "a clause saying the land job merges once its evidence holds").toBeDefined();
+    expect(job).toMatch(/\bland job\b[^.;]*\bmerges\b[^.;]*\bonce its evidence holds\b/);
+    expect(job).toContain("`PR:`");
+    expect(job).toContain("`Login:`");
+
+    const person = clauses.find((clause) => clause.includes("waits on the person"));
+    expect(person, "a clause keeping the merge waiting on the person").toBeDefined();
+    expect(person).not.toContain("once its evidence holds");
+    expect(person).toContain("`asks`");
+    expect(person).toMatch(/\bblocked\b/);
+    expect(person).toMatch(/\brefused\b/);
+    expect(person).toContain("`land job lines not written`");
+    expect(person).toMatch(/\bno\b[^,;.]*\blines\b/);
+
+    // Both states follow the cloud session's sentence and come before the CLI-unavailable close, so the pins on those
+    // two sentences keep their order.
+    const cloud = text.indexOf("since nobody opens that session's files.");
+    expect(cloud).toBeGreaterThan(-1);
+    const after = text.indexOf("A run whose CLI stops answering closes its record");
+    for (const clause of [job ?? "", person ?? ""]) {
+      const at = text.indexOf(clause, start);
+      expect(at).toBeGreaterThan(cloud);
+      expect(at).toBeLessThan(after);
+    }
+  });
 });
 
 describe("st-unattended — no sentence tells a run to merge, tag or mark ready (REQ-FLOW-102)", () => {
