@@ -3403,6 +3403,29 @@ describe("a push option word the shell fills in", () => {
     expect(personOnlyVerdict("git push -\"$F\" --delete origin feat/x", FEATURE)).toMatchObject({ deny: true, rule: "push-delete", ask: false });
   });
 
+  // Red on 18ad82de: a short cluster the shell fills in that ends on its value letter took the next word as that value,
+  // so a literal force, mirror or deletion after it was never read and the line asked.
+  it.each([
+    ["a literal force", "git push -\"$X\"o --force origin feat/x", "force-push"],
+    ["a literal mirror", "git push -u\"$X\"o --mirror origin feat/x", "force-push"],
+    ["a literal delete", "git push -\"$X\"o --delete origin feat/x", "push-delete"],
+  ])("refuses %s after a short cluster the shell fills in that ends on its value letter", (_, command, rule) => {
+    expect(personOnlyVerdict(command, FEATURE), command).toMatchObject({ deny: true, rule, ask: false });
+  });
+
+  // A pin, green before and after: the reading that takes the next word as the cluster's value is kept beside the new one.
+  it("also reads the word after such a cluster as its value, so the word after that is read as the remote", () => {
+    // A probe context no production caller passes: with the default-branch and force rules run unasked, the act left is
+    // the repository that reading names.
+    const probe = { ...FEATURE, originRepo: "github.com/acme/app", runs: ["push-default", "force-push"] as const };
+    expect(personOnlyVerdict("git push -\"$X\"o origin https://github.com/other/repo.git feat/x", probe)).toMatchObject({ deny: true, rule: "outside-write" });
+  });
+
+  // A pin, green before and after: a literal cluster ending on its value letter still takes the next word as the value.
+  it("runs a literal short cluster ending on its value letter", () => {
+    expect(personOnlyVerdict("git push -uo ci.skip origin feat/x", FEATURE)).toEqual({ deny: false });
+  });
+
   it("reads the option words on git send-pack too", () => {
     expect(personOnlyVerdict("git send-pack --\"$OPT\" origin feat/x", FEATURE)).toMatchObject({ deny: true, rule: "push-default", act: HIDDEN });
   });

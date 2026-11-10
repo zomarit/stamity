@@ -2296,7 +2296,11 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
           else if (flag === "d") remove = true;
           else if (flag === "o") {
             valueAt = c;
-            if (c === arg.length - 1) {
+            // Where the shell fills in text at or before the value letter, the next word may be the value or an option
+            // of its own: it is read as an option here and as the value in the second reading, so either adds acts.
+            if (c === arg.length - 1 && (mark?.kinds ?? "") !== "" && (mark?.first ?? -1) <= c) {
+              if (!valueRead && j + 1 < args.length) values.push(j + 1);
+            } else if (c === arg.length - 1) {
               if (splitProne(marks[j + 1])) hidden = true;
               j += 1;
             }

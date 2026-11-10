@@ -444,7 +444,11 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // Moved again 2026-11-10 by the person-only guard hardening (REQ-FLOW-178), by what was measured: 369,736 bytes /
   // 7,516 lines (copilot, generated), past both rows, because a fault in the linked-install check's own reading now
   // refuses with its own sentence. 369,374 + 362 = 369,736 bytes; 7,514 + 2 = 7,516 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 369_736, lines: 7_516 },
+  // Moved again 2026-11-10 by the person-only guard hardening (REQ-FLOW-124), by what was measured: 370,126 bytes /
+  // 7,520 lines (copilot, generated), past both rows, because a short option cluster the shell fills in that ends on
+  // its value letter now reads the next word both as an option and as that value. 369,736 + 390 = 370,126 bytes;
+  // 7,516 + 4 = 7,520 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 370_126, lines: 7_520 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
