@@ -33,7 +33,9 @@ interface Workflow {
   on: Record<string, { workflows?: string[]; types?: string[]; inputs?: unknown } | null>;
   permissions: Record<string, string>;
   concurrency?: unknown;
-  jobs: { land: { name: string; if: string; "timeout-minutes": number; concurrency: Record<string, unknown>; env: Record<string, string>; steps: Step[] } };
+  jobs: {
+    land: { name: string; if: string; "timeout-minutes": number; concurrency: Record<string, unknown>; permissions?: Record<string, string>; env: Record<string, string>; steps: Step[] };
+  };
 }
 
 function workflowOf(names: readonly string[] = ["CI"], review?: { login: string; waitMinutes: number }): { text: string; yaml: Workflow } {
@@ -62,10 +64,14 @@ describe("the land job's workflow (REQ-FLOW-157)", () => {
   });
 
   it("holds the stated triggers, rights and queue, and nothing of the review tool without one", () => {
-    const { yaml } = workflowOf(["CI", "Build"]);
+    const { text, yaml } = workflowOf(["CI", "Build"]);
     expect(Object.keys(yaml.on)).toEqual(["workflow_run", "workflow_dispatch"]);
     expect(yaml.on["workflow_run"]).toEqual({ workflows: ["CI", "Build"], types: ["completed"] });
-    expect(yaml.permissions).toEqual({ contents: "write", "pull-requests": "write", checks: "read" });
+    // TEST CHANGE, justified (REQ-FLOW-157, 1.19.1): the write rights move from the workflow to the land job, which alone
+    // also gains issues: write, so it can close the run's issue after its merge; the workflow's own token reads only.
+    expect(yaml.permissions).toEqual({ contents: "read" });
+    expect(yaml.jobs.land.permissions).toEqual({ contents: "write", "pull-requests": "write", checks: "read", issues: "write" });
+    expect(text).toContain("# issues: write closes the run's issue after the job's merge; GitHub does not apply the Closes line to this token's merge.\n");
     expect(yaml.jobs.land.if).not.toContain("issue_comment");
     expect(yaml.jobs.land["timeout-minutes"]).toBe(15);
     // The check run's name, which the brake leaves out: a name no project's own job is likely to hold.

@@ -21,6 +21,8 @@ import {
   parseEditorsPage,
   parseFileContent,
   parseFiles,
+  issueToClose,
+  parseIssue,
   parseIssueComments,
   parsePr,
   parseReactions,
@@ -408,6 +410,61 @@ describe("the answers' parsers", () => {
     const answer = { number: 7, html_url: "u", node_id: "n", state: "open", head: { ref: "r", sha: SHA }, base: { ref: "main" }, changed_files: 1 };
     expect(parsePr({ ...answer, additions: 4, deletions: 2 })).toMatchObject({ additions: 4, deletions: 2 });
     expect(parsePr(answer)).toMatchObject({ additions: null, deletions: null });
+  });
+});
+
+/**
+ * REQ-FLOW-157 (1.19.1): what the land job reads before it closes the run's issue after its merge. GitHub does not apply
+ * a body's Closes line to a merge made with the job's token, so the job closes the issue itself, and only one the
+ * contract's item, the body's Closes line and GitHub's own answer all name as the run's.
+ */
+describe("the run's issue the land job closes (REQ-FLOW-157)", () => {
+  const READY = { name: "stamity:ready" };
+
+  it.each([
+    ["an open issue with its labels", { number: 12, state: "open", labels: [READY, { name: "bug" }] }, { state: "open", pullRequest: false, labels: ["stamity:ready", "bug"] }],
+    ["a closed issue with no label", { number: 12, state: "closed", labels: [] }, { state: "closed", pullRequest: false, labels: [] }],
+    ["a pull request, which the issues read also answers", { number: 12, state: "open", labels: [READY], pull_request: { url: "https://api.github.com/repos/o/r/pulls/12" } }, { state: "open", pullRequest: true, labels: ["stamity:ready"] }],
+  ])("parseIssue reads %s", (_name, json, read) => {
+    expect(parseIssue(json)).toEqual(read);
+  });
+
+  it.each([
+    ["null", null],
+    ["a string", "open"],
+    ["an empty object", {}],
+    ["an answer with no state", { number: 12, labels: [READY] }],
+    ["an answer whose state is no string", { number: 12, state: 1, labels: [READY] }],
+  ])("parseIssue reads %s as nothing", (_name, json) => {
+    expect(parseIssue(json)).toBeNull();
+  });
+
+  const MARKER_LINE = "<!-- stamity:run 2026-10-23_overnight -->";
+  const SAYS_NOT = { leftOpen: "the body's Closes line does not name it" };
+
+  it.each([
+    ["the line just before the marker", "o/r#12", `The list.\n\nCloses o/r#12\n\n${MARKER_LINE}`, { ref: "o/r#12", number: 12 }],
+    ["the body's last line", "o/r#12", "The list.\n\nCloses o/r#12", { ref: "o/r#12", number: 12 }],
+    ["a number of three digits, the item's own case kept", "Own/Repo#405", `Closes Own/Repo#405\n\n${MARKER_LINE}`, { ref: "Own/Repo#405", number: 405 }],
+    ["no Closes line", "o/r#12", `The list.\n\n${MARKER_LINE}`, SAYS_NOT],
+    ["a Closes line naming another issue", "o/r#12", `Closes o/r#13\n\n${MARKER_LINE}`, SAYS_NOT],
+    ["a Closes line whose number only starts with the item's", "o/r#12", `Closes o/r#120\n\n${MARKER_LINE}`, SAYS_NOT],
+    ["the words inside a longer line", "o/r#12", `See: Closes o/r#12\n\n${MARKER_LINE}`, SAYS_NOT],
+    ["the line with a trailing full stop", "o/r#12", `Closes o/r#12.\n\n${MARKER_LINE}`, SAYS_NOT],
+    ["the line in another repository's name", "o/r#12", `Closes x/y#12\n\n${MARKER_LINE}`, SAYS_NOT],
+  ])("issueToClose reads %s", (_name, item, body, verdict) => {
+    expect(issueToClose({ item, body, ref: item })).toEqual(verdict);
+  });
+
+  it("issueToClose closes nothing where the contract names no item", () => {
+    expect(issueToClose({ item: undefined, body: `Closes o/r#12\n\n${MARKER_LINE}`, ref: null })).toBeNull();
+  });
+
+  it("issueToClose never names an issue to close where the item is in another repository, whatever the body says", () => {
+    // `ref` is `closingRef`'s answer, `null` for an item outside origin's repository; whether that reads as nothing or as
+    // left open the interface leaves to the build, so this pins only that no close target comes back.
+    const verdict = issueToClose({ item: "x/y#3", body: `Closes x/y#3\n\n${MARKER_LINE}`, ref: null });
+    expect(verdict === null || (typeof verdict === "object" && "leftOpen" in verdict)).toBe(true);
   });
 });
 

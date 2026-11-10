@@ -3609,6 +3609,179 @@ describe("stamity run land", () => {
       expect(lastBody()).toContain("evidence checked at");
     });
 
+    // REQ-FLOW-157 (1.19.1): GitHub does not apply a body's Closes line to a merge the job's token makes, so the job closes
+    // the run's issue itself after its merge, and only one every check names as the run's; else the land stands, and
+    // the reason is on Not done: and in one comment on the pull request.
+    describe("the run's issue after the job's merge", () => {
+      const ISSUE = "repos/o/r/issues/12";
+      const READY = { name: "stamity:ready" };
+      const GREEN_RUNS = { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] };
+      const contractOf = (item: string): string =>
+        ["run-contract: 1", `item: "${item}"`, "base: 02e040eb", "acceptance: done", "scope: { in: [src] }", 'answerer: "@maintainer"', ""].join("\n");
+      const issueJson = (over: Record<string, unknown> = {}): Record<string, unknown> => ({ number: 12, state: "open", labels: [READY], ...over });
+      /** Every read or write of an issue itself, in any repository: a comment on the pull request is not one. */
+      const issueCalls = (): string[] => kinds().filter((kind) => /^(?:GET|PATCH) repos\/[^/]+\/[^/]+\/issues\/\d+$/.test(kind));
+      const issuePatches = (): string[] => issueCalls().filter((kind) => kind.startsWith("PATCH "));
+      const comments = () => gh.calls.filter((call) => call.method === "POST" && call.path === "repos/o/r/issues/7/comments");
+      const staysOpen = (reason: string): string => `the run's issue o/r#12 stays open: ${reason}`;
+      const commentFor = (reason: string): string => `The land job merged this pull request, and the run's issue o/r#12 stays open: ${reason}. Close it by hand.\n\n${MARKER}`;
+      const NO_RIGHT = "closing it answered HTTP 403, so the land workflow's token may lack issues: write; run stamity sync to write it, then close the issue by hand";
+
+      /**
+       * The seeded run with a `contract.yml` naming `item` committed at the head, the body's Closes line naming `closes`, and
+       * GitHub answering for an open issue #12 labelled `stamity:ready`, its close and the comment.
+       */
+      async function withIssue(seeded: Seeded, item = "o/r#12", closes = "o/r#12"): Promise<Seeded> {
+        const { repo, remote } = seeded;
+        await put(repo, `${RUN_DIR}/contract.yml`, contractOf(item));
+        git(repo, ["add", "-A"]);
+        git(repo, ["commit", "-q", "-m", "contract"]);
+        git(repo, ["push", "-q", remote, `HEAD:refs/heads/${RUN_BRANCH}`]);
+        const head = git(repo, ["rev-parse", "HEAD"]);
+        route("GET repos/o/r/pulls/7", pull(head, { body: `The list.\n\nCloses ${closes}\n\n${MARKER}` }));
+        route(`GET repos/o/r/commits/${head}/check-runs`, GREEN_RUNS);
+        route(`GET repos/o/r/branches/${RUN_BRANCH}`, { commit: { sha: head } });
+        route(`GET ${ISSUE}`, issueJson());
+        route(`PATCH ${ISSUE}`, { number: 12, state: "closed" });
+        route("POST repos/o/r/issues/7/comments", { id: 901 }, 201);
+        return { ...seeded, head };
+      }
+
+      it("closes the issue the contract and the Closes line name, open and labelled stamity:ready, only after the merge answered", async () => {
+        const { repo } = await withIssue(await seedJob());
+
+        const result = await run(repo, LANDS);
+
+        expect(result.code).toBe(0);
+        expect(result.doc).toMatchObject({ outcome: "landed", issue: { ref: "o/r#12", closed: true }, notDone: [] });
+        expect(writes()).toEqual([PATCHED, "merge", `PATCH ${ISSUE}`]);
+        // The issue's read too comes after the merge: nothing about the issue happens before the merge call answered 200.
+        const order = kinds();
+        expect(order.indexOf(`GET ${ISSUE}`)).toBeGreaterThan(order.indexOf("merge"));
+        expect(gh.calls.find((call) => call.method === "PATCH" && call.path === ISSUE)?.body).toEqual({ state: "closed", state_reason: "completed" });
+        // The label stays on: the close sends nothing but the state.
+        expect(comments()).toEqual([]);
+
+        const text = await runInProcess([runCommand], ["run", ...LANDS], { cwd: repo });
+        expect(text.stdout).toContain("issue: closed o/r#12\n");
+      });
+
+      it("keeps the land when the close is refused, naming the right the token may lack in Not done: and in one comment", async () => {
+        const { repo } = await withIssue(await seedJob());
+        route(`PATCH ${ISSUE}`, { message: "Resource not accessible by integration" }, 403);
+
+        const result = await run(repo, LANDS);
+
+        expect(result.code).toBe(0);
+        expect(result.doc).toMatchObject({ outcome: "landed", issue: { ref: "o/r#12", closed: false, reason: expect.stringContaining("HTTP 403") }, notDone: [staysOpen(NO_RIGHT)] });
+        expect(comments().map((call) => (call.body as { body: string }).body)).toEqual([commentFor(NO_RIGHT)]);
+        expect(writes()).toEqual([PATCHED, "merge", `PATCH ${ISSUE}`, "POST repos/o/r/issues/7/comments"]);
+      });
+
+      it("writes nothing to an issue already closed, and says so", async () => {
+        const { repo } = await withIssue(await seedJob());
+        route(`GET ${ISSUE}`, issueJson({ state: "closed" }));
+
+        const result = await run(repo, LANDS);
+
+        expect(result.code).toBe(0);
+        expect(result.doc).toMatchObject({ outcome: "landed", issue: { ref: "o/r#12" }, notDone: [] });
+        expect(issuePatches()).toEqual([]);
+        expect(comments()).toEqual([]);
+
+        const text = await runInProcess([runCommand], ["run", ...LANDS], { cwd: repo });
+        expect(text.stdout).toContain("issue: o/r#12 was already closed\n");
+      });
+
+      it("reads and closes no issue where the contract's item is in another repository, a Closes line naming it in the body", async () => {
+        const { repo } = await withIssue(await seedJob(), "x/y#3", "x/y#3");
+        // Both answer as an issue every other check passes, so only the repository check stops a close.
+        route("GET repos/x/y/issues/3", issueJson({ number: 3 }));
+        route("GET repos/o/r/issues/3", issueJson({ number: 3 }));
+
+        const result = await run(repo, LANDS);
+
+        expect(result.code).toBe(0);
+        expect(result.doc).toMatchObject({ outcome: "landed" });
+        expect(issueCalls()).toEqual([]);
+      });
+
+      it("leaves the issue open where the body's Closes line names another issue", async () => {
+        const { repo } = await withIssue(await seedJob(), "o/r#12", "o/r#13");
+        // #13 answers as an issue every other check passes, so a close by the body's own number would show.
+        route("GET repos/o/r/issues/13", issueJson({ number: 13 }));
+        route("PATCH repos/o/r/issues/13", { number: 13, state: "closed" });
+
+        const result = await run(repo, LANDS);
+
+        expect(result.code).toBe(0);
+        expect(result.doc).toMatchObject({ outcome: "landed", issue: { ref: "o/r#12", closed: false }, notDone: [staysOpen("the body's Closes line does not name it")] });
+        expect(issuePatches()).toEqual([]);
+        expect(comments().map((call) => (call.body as { body: string }).body)).toEqual([commentFor("the body's Closes line does not name it")]);
+      });
+
+      it("leaves it open where GitHub answers the number as a pull request", async () => {
+        const { repo } = await withIssue(await seedJob());
+        route(`GET ${ISSUE}`, issueJson({ pull_request: { url: "https://api.github.com/repos/o/r/pulls/12" } }));
+
+        const result = await run(repo, LANDS);
+
+        expect(result.code).toBe(0);
+        expect(result.doc).toMatchObject({ outcome: "landed", issue: { ref: "o/r#12", closed: false }, notDone: [staysOpen("it is a pull request")] });
+        expect(issuePatches()).toEqual([]);
+        expect(comments()).toHaveLength(1);
+      });
+
+      it("leaves it open where the issue no longer carries stamity:ready", async () => {
+        const { repo } = await withIssue(await seedJob());
+        route(`GET ${ISSUE}`, issueJson({ labels: [{ name: "bug" }] }));
+
+        const result = await run(repo, LANDS);
+
+        expect(result.code).toBe(0);
+        expect(result.doc).toMatchObject({ outcome: "landed", issue: { ref: "o/r#12", closed: false }, notDone: [staysOpen("it no longer carries stamity:ready")] });
+        expect(issuePatches()).toEqual([]);
+        expect(comments()).toHaveLength(1);
+      });
+
+      // edgeCases: any status other than 200 on the read leaves the issue open, whatever the status.
+      it("leaves it open where the issue's read answers other than 200", async () => {
+        const { repo } = await withIssue(await seedJob());
+        route(`GET ${ISSUE}`, { message: "Not Found" }, 404);
+
+        const result = await run(repo, LANDS);
+
+        expect(result.code).toBe(0);
+        expect(result.doc).toMatchObject({ outcome: "landed", issue: { ref: "o/r#12", closed: false }, notDone: [staysOpen("its read answered HTTP 404")] });
+        expect(issuePatches()).toEqual([]);
+        expect(comments()).toHaveLength(1);
+      });
+
+      it("touches no issue where the merge answers 409", async () => {
+        const { repo } = await withIssue(await seedJob());
+        gh.merge = { status: 409, json: { message: "Head branch was modified" } };
+
+        const result = await run(repo, LANDS);
+
+        expect(result.doc).toMatchObject({ outcome: "refused" });
+        expect(result.doc).not.toHaveProperty("issue");
+        expect(issueCalls()).toEqual([]);
+        expect(comments()).toEqual([]);
+      });
+
+      it("touches no issue at a session's land, whose merge GitHub applies the Closes line to", async () => {
+        const { repo } = await withIssue(await seed());
+
+        const result = await run(repo, ["land", "--run", RUN]);
+
+        expect(result.code).toBe(0);
+        expect(result.doc).toMatchObject({ outcome: "landed" });
+        expect(result.doc).not.toHaveProperty("issue");
+        expect(issueCalls()).toEqual([]);
+        expect(comments()).toEqual([]);
+      });
+    });
+
     it("holds on the status line when GitHub refuses the merge, and fails only where GitHub itself failed", async () => {
       const { repo } = await seedJob();
       gh.merge = { status: 405, json: { message: "Pull Request is not mergeable" } };

@@ -20,6 +20,7 @@ import { matchGlob } from "../change/classify.ts";
 import { fromProjectRoot, PERSON_ONLY_PATHS } from "../change/personOnlyPaths.ts";
 import { matchesDeployingBranch, type ResolvedAutonomy } from "../config/autonomy.ts";
 import { parseLedgerText } from "./ledgerStore.ts";
+import { ITEM_REF_SHAPE } from "./preflight.ts";
 import { bodyRun, endsWithRunMarker, EVIDENCE_OPENING, runMarker, WAITS_OPENING } from "./pullRequest.ts";
 import { UNREAD_EDITOR, type ReviewToolFacts, type ReviewToolVerdict } from "./reviewTool.ts";
 
@@ -512,6 +513,37 @@ export function parsePr(json: unknown): LandPr | null {
     deletions: typeof deletions === "number" ? deletions : null,
     author: null,
   };
+}
+
+/**
+ * An `issues/<n>` answer's state, whether GitHub answered it as a pull request (the issues read answers both), and its
+ * label names; `null` where it names no state.
+ */
+export function parseIssue(json: unknown): { state: string; pullRequest: boolean; labels: string[] } | null {
+  const state = field(json, "state");
+  if (typeof state !== "string") return null;
+  const labels = field(json, "labels");
+  const names = (Array.isArray(labels) ? labels : []).flatMap((label) => {
+    const name = field(label, "name");
+    return typeof name === "string" ? [name] : [];
+  });
+  return { state, pullRequest: field(json, "pull_request") !== undefined, labels: names };
+}
+
+/**
+ * REQ-FLOW-157: the issue the land job may close after its merge, as the run's own text names it: `null` where the contract
+ * names no item, or one that is no issue reference; `leftOpen` with the reason where the item is in another repository or the
+ * body holds no line equal to `Closes <ref>` (a trailing carriage return allowed). `ref` is `closingRef`'s answer for the item.
+ * GitHub's own answer decides the rest.
+ */
+export function issueToClose(at: { item: string | undefined; body: string; ref: string | null }): { ref: string; number: number } | { leftOpen: string } | null {
+  if (at.item === undefined) return null;
+  if (at.ref === null) return ITEM_REF_SHAPE.test(at.item) ? { leftOpen: "it is in another repository" } : null;
+  const number = /#([1-9][0-9]*)$/.exec(at.ref)?.[1];
+  if (number === undefined) return null;
+  const wanted = `Closes ${at.ref}`;
+  if (!at.body.split("\n").some((line) => line.replace(/\r$/, "") === wanted)) return { leftOpen: "the body's Closes line does not name it" };
+  return { ref: at.ref, number: Number(number) };
 }
 
 /** What makes a pull request the run's own, read locally and from origin. */

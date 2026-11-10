@@ -14,6 +14,7 @@ import {
   closedOverAnother,
   decideLand,
   evidenceLine,
+  issueToClose,
   ledgerEvidence,
   parseBranch,
   parseBranchRules,
@@ -21,6 +22,7 @@ import {
   parseEditorsPage,
   parseFileContent,
   parseFiles,
+  parseIssue,
   parseIssueComments,
   parseMergeBase,
   parsePr,
@@ -46,7 +48,8 @@ import {
 } from "../../runs/landEvidence.ts";
 import { MORNING_EMPTY, MORNING_FILE, MORNING_REFUSED, screenOutbound } from "../../runs/morning.ts";
 import { bodyRun, endsWithRunMarker, PR_RECORD_FILE, prRecordRefusal, resolveRepo, runMarker } from "../../runs/pullRequest.ts";
-import { applyRunCleanup, planRunCleanup } from "../../runs/runCleanup.ts";
+import { applyRunCleanup, closingRef, planRunCleanup } from "../../runs/runCleanup.ts";
+import { parseRunContract } from "../../runs/runContract.ts";
 import { parseStateBlock, requestMarker, reviewToolVerdict, UNREAD_EDITOR, withoutRequestMarkers, type ReviewToolFacts, type ReviewToolVerdict } from "../../runs/reviewTool.ts";
 import { gitProgramFor } from "../../shared/programPath.ts";
 import { EngineError } from "../../types/errors.ts";
@@ -118,9 +121,10 @@ import { sanitizeLabel } from "../kit/prompts.ts";
  * since `gh` is the job's token there and a person's thread the run closed must stay unresolved whichever account reads it. The
  * record at the head must read `Status: closed` with no `(blocked:`, and neither it nor the morning list may hold a `## Refused`
  * row, the rule step 4 of the unattended ending states. The git surface is not read, since no pre-flight ran here. The job writes
- * no `land:` line, the body's evidence line standing. A cloud run cannot ask the review tool, so the job does, through the same
- * request, and a silent tool sends no event, so the job waits it out in this one call. Its markers count as the run's, in every
- * land of a setup with the job on, and no one else's do.
+ * no `land:` line, the body's evidence line standing. After its own merge it closes the run's issue ({@link closeRunIssue}).
+ * A cloud run cannot ask the review tool, so the job does, through the same request, and a silent tool sends no event, so the
+ * job waits it out in this one call. Its markers count as the run's, in every land of a setup with the job on, and no one
+ * else's do.
  *
  * **A job's exit.** 0 on every normal end, pending or held; 1 for a true failure alone, a read or a write GitHub did not answer
  * as it should, the status line's own among them, since a green job and no line would hide the hold. A read that fails into a
@@ -210,6 +214,11 @@ interface LandResult {
   approved?: { sha: string; reason: string; reasons: string[]; act: string };
   /** REQ-FLOW-176: a session's clean-up after `landed` or `already-landed`; with `--dry-run`, `removed` is what would go. */
   cleanup?: { removed: string[]; kept: { path: string; reason: string }[] };
+  /**
+   * REQ-FLOW-157: a job's merge only, where the head's contract names an issue: `closed` where it is closed now, `reason`
+   * why the job left it open, or that it was already closed.
+   */
+  issue?: { ref: string; closed: boolean; reason?: string };
   notDone: string[];
 }
 
@@ -930,6 +939,9 @@ export async function runLand(ctx: CliContext, opts: Record<string, unknown>): P
       lines.push(`act: merged #${number} at ${sha} (${method})`);
     }
     result.outcome = "landed";
+    // REQ-FLOW-157: GitHub applies no Closes line to a merge the job's token makes, so the job closes the run's issue itself,
+    // only after its own merge answered 200; never on a session's land, a fast-forward, or a pull request found merged.
+    if (job !== null && !fastForward) await closeRunIssue({ run, runDir, sha, body: pr.body, number, repo, repoPath, ghOpts }, git, result, lines);
     const how = fastForward ? "fast-forwarded" : "merged";
     if (job === null) await noteLanded(ctx, cwd, recordRel, number, sha, approval === null ? how : `${how} (approved by the person for ${approval.sha})`, result);
     if (job === null) await cleanUpRun(ctx, { top, cwd, recordRel, run, unattended }, result, lines);
@@ -1269,6 +1281,94 @@ async function ledgerAt(
     return { refused: `the work tree's ${ledgerRel} differs from the commit's: checkpoint first` };
   }
   return ledgerEvidence(shown.text);
+}
+
+/** The run folder's contract, as `./run.ts` names it; restated, since this module imports nothing from there (a runtime cycle otherwise). */
+const CONTRACT_FILE = "contract.yml";
+
+/** The label a ready issue carries; the job closes only an issue still carrying it. */
+const READY_LABEL = "stamity:ready";
+
+/** A failure's class for a `notDone` line: its code, else its kind, never its message, which may hold a machine path. */
+function failureClassOf(cause: unknown): string {
+  const code = typeof cause === "object" && cause !== null ? (cause as { code?: unknown }).code : undefined;
+  if (typeof code === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(code)) return code;
+  return cause instanceof Error && /^[A-Za-z]{1,40}$/.test(cause.name) ? cause.name : "no code";
+}
+
+/**
+ * REQ-FLOW-157: after the job's own merge answered 200, the run's issue, closed by the job, since GitHub applies no Closes
+ * line to a merge its token makes. The head's `contract.yml`, the record and the body are the run's own text, so the item is
+ * trusted only once every check holds: an issue in origin's repository, a body line equal to `Closes <ref>`, and GitHub
+ * answering it open, no pull request, still labelled `stamity:ready`. Then `PATCH` closes it as completed, the label kept.
+ * Anything short of that leaves it open: one `notDone` line with the reason and one comment on the pull request saying so.
+ * Nothing here moves the outcome or the exit code, and a failure is named by its class, never its message.
+ */
+async function closeRunIssue(
+  at: { run: string; runDir: string; sha: string; body: string; number: number; repo: { host: string; owner: string; repo: string }; repoPath: string; ghOpts: GhApiOptions },
+  git: (args: readonly string[]) => Promise<GitWriteResult>,
+  result: LandResult,
+  lines: string[],
+): Promise<void> {
+  const leaveOpen = async (ref: string, reason: string): Promise<void> => {
+    result.issue = { ref, closed: false, reason };
+    result.notDone.push(`the run's issue ${ref} stays open: ${reason}`);
+    const unposted = (why: string): void => void result.notDone.push(`the comment that the run's issue stays open was not posted to #${at.number} (${why})`);
+    const body = `The land job merged this pull request, and the run's issue ${ref} stays open: ${reason}. Close it by hand.\n\n${runMarker(at.run)}`;
+    if (!screenOutbound(body, "pr-comment").ok) {
+      unposted("the outbound screen matched it");
+      return;
+    }
+    try {
+      const posted = await ghApi({ method: "POST", path: `${at.repoPath}/issues/${at.number}/comments`, body: { body }, hostname: at.repo.host }, at.ghOpts);
+      if (posted.status !== 201) unposted(`HTTP ${posted.status}`);
+    } catch (cause) {
+      unposted(`gh failed before GitHub answered (${failureClassOf(cause)})`);
+    }
+  };
+  try {
+    const read = await regularFileAt(at.sha, `${at.runDir}/${CONTRACT_FILE}`, git);
+    // A run with no contract, or one that does not read, wrote no Closes line, so it names no issue to close.
+    if ("refused" in read) return;
+    const parsed = parseRunContract(read.text, CONTRACT_FILE);
+    if (!parsed.ok) return;
+    const { item } = parsed.contract;
+    const ref = closingRef(item, at.repo);
+    const verdict = issueToClose({ item, body: at.body, ref });
+    if (verdict === null) return;
+    if ("leftOpen" in verdict) return await leaveOpen(ref ?? item ?? "", verdict.leftOpen);
+    const issuePath = `${at.repoPath}/issues/${verdict.number}`;
+    let issue: ReturnType<typeof parseIssue>;
+    try {
+      const reply = await ghApi({ method: "GET", path: issuePath, hostname: at.repo.host }, at.ghOpts);
+      if (reply.status !== 200) return await leaveOpen(verdict.ref, `its read answered HTTP ${reply.status}`);
+      issue = parseIssue(reply.json);
+    } catch (cause) {
+      return await leaveOpen(verdict.ref, `its read failed before GitHub answered (${failureClassOf(cause)})`);
+    }
+    if (issue === null) return await leaveOpen(verdict.ref, "its read named no issue state");
+    if (issue.pullRequest) return await leaveOpen(verdict.ref, "it is a pull request");
+    if (issue.state === "closed") {
+      result.issue = { ref: verdict.ref, closed: true, reason: "it was already closed" };
+      lines.push(`issue: ${verdict.ref} was already closed`);
+      return;
+    }
+    if (issue.state !== "open") return await leaveOpen(verdict.ref, "its read named no issue state");
+    if (!issue.labels.includes(READY_LABEL)) return await leaveOpen(verdict.ref, `it no longer carries ${READY_LABEL}`);
+    let closed: GhResponse;
+    try {
+      closed = await ghApi({ method: "PATCH", path: issuePath, body: { state: "closed", state_reason: "completed" }, hostname: at.repo.host }, at.ghOpts);
+    } catch (cause) {
+      return await leaveOpen(verdict.ref, `closing it failed before GitHub answered (${failureClassOf(cause)})`);
+    }
+    if (closed.status !== 200) {
+      return await leaveOpen(verdict.ref, `closing it answered HTTP ${closed.status}, so the land workflow's token may lack issues: write; run stamity sync to write it, then close the issue by hand`);
+    }
+    result.issue = { ref: verdict.ref, closed: true };
+    lines.push(`issue: closed ${verdict.ref}`);
+  } catch (cause) {
+    result.notDone.push(`the run's issue was not checked after the merge (${failureClassOf(cause)}), so it may still be open`);
+  }
 }
 
 /**
