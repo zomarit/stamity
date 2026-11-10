@@ -487,14 +487,16 @@ describe("stamity run land", () => {
       const result = await run(repo, ["land", "--run", RUN]);
 
       expect(result.code).toBe(0);
+      // TEST CHANGE, justified (REQ-FLOW-176): a lane is named by its farm-relative name and the branch's holder by its
+      // place, so no `cleanup` value holds a machine path.
       expect(result.doc).toMatchObject({
         outcome: "landed",
         notDone: [],
         cleanup: {
-          removed: [gone],
+          removed: ["p-gone"],
           kept: [
-            { path: kept, reason: "it holds ignored files: captures/" },
-            { path: RUN_BRANCH, reason: `checked out at ${repo}` },
+            { path: "p-kept", reason: "it holds ignored files: captures/" },
+            { path: RUN_BRANCH, reason: "checked out in the main checkout" },
           ],
         },
       });
@@ -510,8 +512,37 @@ describe("stamity run land", () => {
 
       const result = await run(repo, ["land", "--run", RUN]);
 
-      expect(result.doc).toMatchObject({ outcome: "already-landed", cleanup: { removed: [gone] } });
+      // TEST CHANGE, justified (REQ-FLOW-176): the removed lane is named by its farm-relative name, not its machine path.
+      expect(result.doc).toMatchObject({ outcome: "already-landed", cleanup: { removed: ["p-after"] } });
       expect(existsSync(gone)).toBe(false);
+    });
+
+    // REQ-FLOW-176: what the clean-up names reaches a pull request's morning list and a person's terminal, so no value
+    // and no printed line holds the folder the farm sits under.
+    it("names a kept lane and the branch's holder in its JSON and its printed lines with no machine path", async () => {
+      const { repo, head } = await seed({ files: { ".gitignore": "captures/\n" } });
+      const kept = await taggedLane(repo, "p-held", RUN);
+      await mkdir(join(kept, "captures"), { recursive: true });
+      await writeFile(join(kept, "captures", "run.log"), "a capture\n");
+      const machine = [dirname(repo), fsRealpath(dirname(repo)), getRoot().dir, tmpdir(), fsRealpath(tmpdir())];
+
+      // The printed lines, from the land itself; the JSON, from the same clean-up run again on the landed pull request.
+      const home = getRoot().path("home");
+      await mkdir(home, { recursive: true });
+      for (const [key, value] of Object.entries({ HOME: home, XDG_CONFIG_HOME: home, GIT_CONFIG_NOSYSTEM: "1" })) vi.stubEnv(key, value);
+      vi.stubEnv("GH_HOST", undefined);
+      vi.stubEnv("STAMITY_UNATTENDED", undefined);
+      const printed = await runInProcess([runCommand], ["run", "land", "--run", RUN], { cwd: repo });
+      expect(printed.code).toBe(0);
+      const cleanupLines = printed.stdout.split("\n").filter((line) => line.startsWith("cleanup: "));
+      expect(cleanupLines).toEqual(["cleanup: kept p-held (it holds ignored files: captures/)", `cleanup: kept ${RUN_BRANCH} (checked out in the main checkout)`]);
+      for (const path of machine) expect(`${printed.stdout}${printed.stderr}`).not.toContain(path);
+
+      route("GET repos/o/r/pulls/7", pull(head, { state: "closed", merged: true }));
+      const result = await run(repo, ["land", "--run", RUN]);
+      expect(result.doc).toMatchObject({ outcome: "already-landed", cleanup: { removed: [], kept: [{ path: "p-held" }, { path: RUN_BRANCH }] } });
+      for (const path of machine) expect(JSON.stringify(result.doc["cleanup"])).not.toContain(path);
+      expect(existsSync(join(kept, "captures", "run.log"))).toBe(true);
     });
 
     it("cleans up nothing on a land that refuses", async () => {

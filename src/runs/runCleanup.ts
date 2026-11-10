@@ -1,4 +1,5 @@
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { realpath } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { acquireWriteLock } from "../merge/atomicWrite.ts";
 import { EngineError } from "../types/errors.ts";
 import { isInside, readWorktreeInventory } from "../worktree/cleanup.ts";
@@ -24,11 +25,17 @@ import { ITEM_REF_SHAPE } from "./preflight.ts";
  * The branch goes through `git branch -d`, never `-D`, so git's own merge test keeps work not yet merged; and not
  * while any checkout has it. A tracking ref is dropped only when `git ls-remote` shows origin lacks the branch. A
  * remote branch is never touched.
+ *
+ * **No machine path out.** What the clean-up returns reaches a pull request's morning list and a person's terminal, so
+ * a lane is named by its farm-relative name, a branch's holder by its place, and a failure by its first line with the
+ * lane's path, the farm's and the checkout's prefixes taken out.
  */
 
 /** One lane the run's receipt tags, as read before any act. */
 interface RunCleanupLane {
   readonly path: string;
+  /** The lane's name relative to the farm, `/`-joined; its base name where it reads outside the farm. */
+  readonly name: string;
   /** Ignored entries in the lane, repository-relative, less the ones its setup placed and nobody changed. */
   readonly ignored: string[];
   readonly dirty: boolean;
@@ -77,15 +84,47 @@ export function closingRef(item: string | undefined, origin: { readonly owner: s
   return owner.toLowerCase() === origin.owner.toLowerCase() && repo.toLowerCase() === origin.repo.toLowerCase() ? item : null;
 }
 
+/** The clone's main checkout, its common git directory and its farm. */
+interface Places {
+  readonly repoRoot: string;
+  readonly commonDir: string;
+  readonly farmDir: string;
+}
+
 /** The clone's main checkout, its common git directory and its farm, read from any checkout of it. */
-async function placesOf(rootDir: string, git: WorktreeGitRunner): Promise<{ repoRoot: string; commonDir: string; farmDir: string }> {
+async function placesOf(rootDir: string, git: WorktreeGitRunner): Promise<Places> {
   const top = await git({ args: ["rev-parse", "--show-toplevel"], cwd: rootDir });
-  if (top.status !== 0) throw new EngineError(`${rootDir} is not inside a git checkout, so no clean-up was read`, { code: "FS_ERROR" });
+  if (top.status !== 0) throw new EngineError("the folder the clean-up runs from is not inside a git checkout, so no clean-up was read", { code: "FS_ERROR" });
   const commonDir = await resolveGitCommonDir(git, rootDir);
   // As the worktree verbs read it: a linked checkout's common directory is the main checkout's `.git`.
   const repoRoot = basename(commonDir) === ".git" ? dirname(commonDir) : resolve(top.stdout.trim());
   const farmDir = resolveFarmDir(await readWorktreePolicy(repoRoot), repoRoot);
   return { repoRoot, commonDir, farmDir };
+}
+
+/** A lane's name relative to `farmDir`, `/`-joined; its base name where it reads outside the farm. */
+function laneName(farmDir: string, path: string): string {
+  const name = relative(resolve(farmDir), resolve(path)).split(sep).join("/");
+  return name === "" || name.startsWith("..") || isAbsolute(name) ? basename(path) : name;
+}
+
+/**
+ * A failure's first line with no machine path: the lane's path as its name, then each known folder's prefix taken out,
+ * the longest first so a farm inside the checkout goes before the checkout, and a bare folder said by its place.
+ */
+function failureLine(error: unknown, at: { readonly places: Places | null; readonly rootDir: string; readonly lane?: RunCleanupLane }): string {
+  let line = firstLine(error);
+  if (at.lane !== undefined) line = line.replaceAll(at.lane.path, at.lane.name);
+  // A tie in length keeps this order, so the main checkout reads as itself where the clean-up runs from it.
+  const folders: [string, string][] = at.places === null ? [] : [[at.places.farmDir, "the lane farm"], [at.places.commonDir, "the git directory"], [at.places.repoRoot, "the main checkout"]];
+  folders.push([at.rootDir, "the checkout the clean-up runs from"]);
+  for (const [folder, place] of folders.toSorted((a, b) => b[0].length - a[0].length)) line = line.replaceAll(`${folder}${sep}`, "").replaceAll(folder, place);
+  return line;
+}
+
+/** `path` through its links, or as given where it does not resolve, so two spellings of one folder compare equal. */
+async function real(path: string): Promise<string> {
+  return realpath(path).catch(() => resolve(path));
 }
 
 /** One line of a git read, or `null` where git answered non-zero. */
@@ -99,9 +138,9 @@ async function gitLine(git: WorktreeGitRunner, cwd: string, args: readonly strin
  * setup placed it: a link still a link, a copy whose bytes match. Throws where git cannot list them, so a lane whose
  * ignored files are unknown is never removed.
  */
-async function laneIgnored(git: WorktreeGitRunner, path: string, receipt: WorktreeReceipt): Promise<string[]> {
+async function laneIgnored(git: WorktreeGitRunner, path: string, name: string, receipt: WorktreeReceipt): Promise<string[]> {
   const listed = await git({ args: ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"], cwd: path });
-  if (listed.status !== 0) throw new EngineError(`the ignored files of ${path} could not be listed (git exited ${listed.status})`, { code: "FS_ERROR" });
+  if (listed.status !== 0) throw new EngineError(`the ignored files of lane ${name} could not be listed (git exited ${listed.status})`, { code: "FS_ERROR" });
   const placed = new Set<string>();
   for (const entry of receipt.entries) {
     // oxlint-disable-next-line no-await-in-loop -- one lstat per receipt row, a handful at most
@@ -129,26 +168,38 @@ async function laneHead(git: WorktreeGitRunner, path: string): Promise<"detached
 }
 
 /** The lane's facts read now: still the run's, dirty, its ignored entries, its HEAD; `null` where its receipt no longer names the run. */
-async function laneFacts(git: WorktreeGitRunner, path: string, run: string): Promise<RunCleanupLane | null> {
+async function laneFacts(git: WorktreeGitRunner, path: string, name: string, run: string): Promise<RunCleanupLane | null> {
   const read = await readWorktreeReceipt(await resolveWorktreeGitDir(git, path));
   if (read.receipt?.run !== run) return null;
   const head = await laneHead(git, path);
-  return { path, ignored: await laneIgnored(git, path, read.receipt), dirty: isDirty(await readDirtyCounts(git, path)), ...(head === null ? {} : { head }) };
+  return { path, name, ignored: await laneIgnored(git, path, name, read.receipt), dirty: isDirty(await readDirtyCounts(git, path)), ...(head === null ? {} : { head }) };
 }
 
 /**
  * Reads what the clean-up of `run` would act on, from the checkout at `rootDir`; writes nothing. Throws where the run
- * id, the checkout or the worktree policy does not read, so the caller reports the clean-up as not done.
+ * id, the checkout or the worktree policy does not read, so the caller reports the clean-up as not done; the thrown
+ * message holds no machine path, as every reason the clean-up gives.
  */
 export async function planRunCleanup(rootDir: string, run: string, git: WorktreeGitRunner = runGit): Promise<RunCleanupPlan> {
   if (!isRunId(run)) throw new EngineError(`${JSON.stringify(run)} is not a run id`, { code: "VALIDATION_ERROR" });
-  const { repoRoot, farmDir } = await placesOf(rootDir, git);
+  let places: Places | null = null;
+  try {
+    places = await placesOf(rootDir, git);
+    return await readPlan(rootDir, run, places, git);
+  } catch (error) {
+    throw new EngineError(failureLine(error, { places, rootDir: resolve(rootDir) }), { code: error instanceof EngineError ? error.code : "FS_ERROR" });
+  }
+}
+
+/** The plan's reads, once the checkout's places read. */
+async function readPlan(rootDir: string, run: string, places: Places, git: WorktreeGitRunner): Promise<RunCleanupPlan> {
+  const { repoRoot, farmDir } = places;
   const inventory = await readWorktreeInventory({ repoRoot, farmDir, run: git });
   const lanes: RunCleanupLane[] = [];
   for (const row of inventory.worktrees) {
     if (row.classification !== "managed" || row.receipt?.run !== run) continue;
     // oxlint-disable-next-line no-await-in-loop -- two git reads a lane; a run tags a few lanes
-    const facts = await laneFacts(git, row.entry.path, run);
+    const facts = await laneFacts(git, row.entry.path, laneName(farmDir, row.entry.path), run);
     if (facts !== null) lanes.push(facts);
   }
 
@@ -186,6 +237,17 @@ function laneKeeps(facts: RunCleanupLane, rootDir: string): string | null {
   return null;
 }
 
+/**
+ * Where a checkout holding the run's branch is, by its place: the main checkout, a lane by its farm-relative name, else
+ * another checkout. Compared through links, as git prints a checkout's path resolved.
+ */
+async function holderPlace(holder: string, places: Places): Promise<string> {
+  const [at, repoRoot, farmDir] = await Promise.all([real(holder), real(places.repoRoot), real(places.farmDir)]);
+  if (at === repoRoot) return "in the main checkout";
+  if (at !== farmDir && isInside(at, farmDir)) return `in lane ${laneName(farmDir, at)}`;
+  return "in another checkout";
+}
+
 /** The first line of a failure, for a kept row's reason. */
 function firstLine(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).split(/\r?\n/)[0] ?? "";
@@ -206,42 +268,41 @@ export async function applyRunCleanup(plan: RunCleanupPlan, opts: { readonly dry
   const keep = (path: string, reason: string): void => {
     kept.push({ path, reason });
   };
-  let places: Awaited<ReturnType<typeof placesOf>> | null = null;
+  let places: Places | null = null;
 
   for (const lane of plan.lanes) {
     const reason = laneKeeps(lane, rootDir);
     if (reason !== null) {
-      keep(lane.path, reason);
+      keep(lane.name, reason);
       continue;
     }
     if (opts.dryRun) {
-      removed.push(lane.path);
+      removed.push(lane.name);
       continue;
     }
     try {
       // oxlint-disable-next-line no-await-in-loop -- read once, at the first lane that may go
       places ??= await placesOf(rootDir, git);
-      const name = relative(resolve(places.farmDir), resolve(lane.path)).split(sep).join("/");
       // oxlint-disable-next-line no-await-in-loop -- one name lock at a time, as `worktree cleanup` takes them
-      const release = await acquireWriteLock(worktreeLockPath(places.commonDir, name), places.commonDir);
+      const release = await acquireWriteLock(worktreeLockPath(places.commonDir, lane.name), places.commonDir);
       try {
         // oxlint-disable-next-line no-await-in-loop -- the fresh read decides the removal under the same lock
-        const fresh = await laneFacts(git, lane.path, plan.run);
+        const fresh = await laneFacts(git, lane.path, lane.name, plan.run);
         const now = fresh === null ? "its receipt no longer names the run" : laneKeeps(fresh, rootDir);
         if (now !== null) {
-          keep(lane.path, now);
+          keep(lane.name, now);
           continue;
         }
         // oxlint-disable-next-line no-await-in-loop -- ordered after the fresh read, under the lock
         await removeWorktree(git, places.repoRoot, lane.path, false);
-        removed.push(lane.path);
-        acts.push(`removed lane ${name}`);
+        removed.push(lane.name);
+        acts.push(`removed lane ${lane.name}`);
       } finally {
         // oxlint-disable-next-line no-await-in-loop -- the lock goes before the next lane's is taken
         await release();
       }
     } catch (error) {
-      keep(lane.path, `the removal failed: ${firstLine(error)}`);
+      keep(lane.name, `the removal failed: ${failureLine(error, { places, rootDir, lane })}`);
     }
   }
 
@@ -252,8 +313,10 @@ export async function applyRunCleanup(plan: RunCleanupPlan, opts: { readonly dry
     try {
       const holder = merged ? (await listWorktrees(git, rootDir)).find((entry) => entry.branch === name) : undefined;
       if (!merged) keep(name, "not merged into its upstream or HEAD, so git branch -d would refuse it");
-      else if (holder !== undefined) keep(name, `checked out at ${holder.path}`);
-      else if (opts.dryRun) removed.push(name);
+      else if (holder !== undefined) {
+        places ??= await placesOf(rootDir, git);
+        keep(name, `checked out ${await holderPlace(holder.path, places)}`);
+      } else if (opts.dryRun) removed.push(name);
       else {
         const deleted = await git({ args: ["branch", "-d", name], cwd: rootDir });
         if (deleted.status === 0) {
@@ -262,7 +325,7 @@ export async function applyRunCleanup(plan: RunCleanupPlan, opts: { readonly dry
         } else keep(name, `git branch -d refused it (git exited ${deleted.status})`);
       }
     } catch (error) {
-      keep(name, `the branch was not deleted: ${firstLine(error)}`);
+      keep(name, `the branch was not deleted: ${failureLine(error, { places, rootDir })}`);
     }
   }
 
@@ -279,7 +342,7 @@ export async function applyRunCleanup(plan: RunCleanupPlan, opts: { readonly dry
         acts.push(`dropped ${ref.replace(/^refs\/remotes\//, "")}, which origin no longer has`);
       } else keep(ref, `git update-ref -d failed (git exited ${dropped.status})`);
     } catch (error) {
-      keep(ref, `the ref was not dropped: ${firstLine(error)}`);
+      keep(ref, `the ref was not dropped: ${failureLine(error, { places, rootDir })}`);
     }
   }
   return { removed, kept, acts };

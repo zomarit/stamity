@@ -213,7 +213,10 @@ interface LandResult {
   asks?: { reason: string; reasons: string[]; act: string; head: string; pending?: true };
   /** review/103, review/110: the asks outcome the person approved with --approved <sha>, where the verb landed over one. */
   approved?: { sha: string; reason: string; reasons: string[]; act: string };
-  /** REQ-FLOW-176: a session's clean-up after `landed` or `already-landed`; with `--dry-run`, `removed` is what would go. */
+  /**
+   * REQ-FLOW-176: a session's clean-up after `landed` or `already-landed`; with `--dry-run`, `removed` is what would go.
+   * A lane is named by its farm-relative name and a branch's holder by its place; no entry or reason holds a machine path.
+   */
   cleanup?: { removed: string[]; kept: { path: string; reason: string }[] };
   /**
    * REQ-FLOW-157: a job's merge only, where the head's contract names an issue: `closed` where it is closed now, `reason`

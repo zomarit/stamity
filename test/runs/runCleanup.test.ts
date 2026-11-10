@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyRunCleanup, closingRef, planRunCleanup } from "../../src/runs/runCleanup.ts";
@@ -104,11 +105,13 @@ describe("a landed run's clean-up", () => {
     const path = await lane(at, "p-one", RUN);
 
     const plan = await planRunCleanup(at.repo, RUN);
-    expect(plan).toEqual({ run: RUN, lanes: [{ path, ignored: [], dirty: false }], branch: { name: BRANCH, merged: true }, staleTracking: [] });
+    // TEST CHANGE, justified (REQ-FLOW-176): a planned lane carries its farm-relative name beside its path.
+    expect(plan).toEqual({ run: RUN, lanes: [{ path, name: "p-one", ignored: [], dirty: false }], branch: { name: BRANCH, merged: true }, staleTracking: [] });
 
     const done = await applyRunCleanup(plan, { dryRun: false, rootDir: at.repo });
 
-    expect(done).toEqual({ removed: [path, BRANCH], kept: [], acts: ["removed lane p-one", `deleted branch ${BRANCH}`] });
+    // TEST CHANGE, justified (REQ-FLOW-176): a lane is named by its farm-relative name; no value holds a machine path.
+    expect(done).toEqual({ removed: ["p-one", BRANCH], kept: [], acts: ["removed lane p-one", `deleted branch ${BRANCH}`] });
     expect(existsSync(path)).toBe(false);
     expect(git(at.repo, ["worktree", "list", "--porcelain"])).not.toContain(path);
     expect(hasRef(at.repo, `refs/heads/${BRANCH}`)).toBe(false);
@@ -129,18 +132,21 @@ describe("a landed run's clean-up", () => {
     await writeFile(join(edited, ".env"), "TOKEN_NAME=edited\n");
 
     const plan = await planRunCleanup(at.repo, RUN);
+    // TEST CHANGE, justified (REQ-FLOW-176): a planned lane carries its farm-relative name beside its path.
     expect(plan.lanes).toEqual([
-      { path: kept, ignored: ["captures/"], dirty: false },
-      { path: edited, ignored: [".env"], dirty: false },
-      { path: placed, ignored: [], dirty: false },
+      { path: kept, name: "p-capture", ignored: ["captures/"], dirty: false },
+      { path: edited, name: "p-edited", ignored: [".env"], dirty: false },
+      { path: placed, name: "p-placed", ignored: [], dirty: false },
     ]);
     const done = await applyRunCleanup(plan, { dryRun: false, rootDir: at.repo });
 
+    // TEST CHANGE, justified (REQ-FLOW-176): a lane is named by its farm-relative name; no value holds a machine path.
     expect(done.kept).toEqual([
-      { path: kept, reason: "it holds ignored files: captures/" },
-      { path: edited, reason: "it holds ignored files: .env" },
+      { path: "p-capture", reason: "it holds ignored files: captures/" },
+      { path: "p-edited", reason: "it holds ignored files: .env" },
     ]);
-    expect(done.removed).toContain(placed);
+    // TEST CHANGE, justified (REQ-FLOW-176): the removed lane is named by its farm-relative name, not its machine path.
+    expect(done.removed).toContain("p-placed");
     expect(existsSync(join(kept, "captures", "run.txt"))).toBe(true);
     expect(existsSync(join(edited, ".env"))).toBe(true);
     expect(existsSync(placed)).toBe(false);
@@ -158,10 +164,11 @@ describe("a landed run's clean-up", () => {
     expect(plan.lanes.map((entry) => entry.path).toSorted()).toEqual([dirty, inside].toSorted());
     const done = await applyRunCleanup(plan, { dryRun: false, rootDir: inside });
 
+    // TEST CHANGE, justified (REQ-FLOW-176): a lane is named by its farm-relative name; no value holds a machine path.
     expect(done.kept).toEqual(
       expect.arrayContaining([
-        { path: dirty, reason: "it holds uncommitted changes" },
-        { path: inside, reason: "the verb runs inside it" },
+        { path: "p-dirty", reason: "it holds uncommitted changes" },
+        { path: "p-inside", reason: "the verb runs inside it" },
       ]),
     );
     for (const path of [dirty, untagged, other, inside]) expect(existsSync(path)).toBe(true);
@@ -177,7 +184,8 @@ describe("a landed run's clean-up", () => {
 
     const held = await planRunCleanup(at.repo, RUN);
     expect(held.branch).toEqual({ name: BRANCH, merged: true });
-    expect((await applyRunCleanup(held, { dryRun: false, rootDir: at.repo })).kept).toEqual([{ path: BRANCH, reason: `checked out at ${at.repo}` }]);
+    // TEST CHANGE, justified (REQ-FLOW-176): the holder is named by its place, the main checkout, never by its machine path.
+    expect((await applyRunCleanup(held, { dryRun: false, rootDir: at.repo })).kept).toEqual([{ path: BRANCH, reason: "checked out in the main checkout" }]);
 
     git(at.repo, ["switch", "-q", "main"]);
     const unmerged = await planRunCleanup(at.repo, RUN);
@@ -209,7 +217,8 @@ describe("a landed run's clean-up", () => {
 
     const done = await applyRunCleanup(await planRunCleanup(at.repo, RUN), { dryRun: true, rootDir: at.repo });
 
-    expect(done).toEqual({ removed: [path, BRANCH], kept: [], acts: [] });
+    // TEST CHANGE, justified (REQ-FLOW-176): a lane that would go is named by its farm-relative name, not its machine path.
+    expect(done).toEqual({ removed: ["p-dry", BRANCH], kept: [], acts: [] });
     expect(existsSync(path)).toBe(true);
     expect(hasRef(at.repo, `refs/heads/${BRANCH}`)).toBe(true);
   });
@@ -225,10 +234,12 @@ describe("a landed run's clean-up", () => {
     const tip = git(path, ["rev-parse", "HEAD"]);
 
     const plan = await planRunCleanup(at.repo, RUN);
-    expect(plan.lanes).toEqual([{ path, ignored: [], dirty: false, head: "detached" }]);
+    // TEST CHANGE, justified (REQ-FLOW-176): a planned lane carries its farm-relative name beside its path.
+    expect(plan.lanes).toEqual([{ path, name: "p-detached", ignored: [], dirty: false, head: "detached" }]);
     const done = await applyRunCleanup(plan, { dryRun: false, rootDir: at.repo });
 
-    expect(done.kept).toEqual([{ path, reason: "its HEAD is detached, so commits only it holds would drop off every ref" }]);
+    // TEST CHANGE, justified (REQ-FLOW-176): a lane is named by its farm-relative name; no value holds a machine path.
+    expect(done.kept).toEqual([{ path: "p-detached", reason: "its HEAD is detached, so commits only it holds would drop off every ref" }]);
     expect(done.acts).toEqual([`deleted branch ${BRANCH}`]);
     expect(existsSync(path)).toBe(true);
     expect(git(path, ["rev-parse", "HEAD"])).toBe(tip);
@@ -252,7 +263,9 @@ describe("a landed run's clean-up", () => {
     expect(plan.staleTracking).toEqual([]);
     const done = await applyRunCleanup(plan, { dryRun: false, rootDir: at.repo, git: slow });
 
-    expect(done.removed).toEqual([path, BRANCH]);
+    // TEST CHANGE, justified (REQ-FLOW-176): the removed lane is named by its farm-relative name, not its machine path.
+    expect(done.removed).toEqual(["p-slow", BRANCH]);
+    expect(existsSync(path)).toBe(false);
     expect(hasRef(at.repo, TRACKING)).toBe(true);
   });
 
@@ -267,9 +280,95 @@ describe("a landed run's clean-up", () => {
     const done = await applyRunCleanup(await planRunCleanup(at.repo, RUN), { dryRun: false, rootDir: at.repo, git: failing });
 
     expect(done.acts).toEqual(["removed lane p-first"]);
-    expect(done.removed).toEqual([path]);
+    // TEST CHANGE, justified (REQ-FLOW-176): the removed lane is named by its farm-relative name, not its machine path.
+    expect(done.removed).toEqual(["p-first"]);
+    expect(existsSync(path)).toBe(false);
     expect(done.kept).toEqual([{ path: BRANCH, reason: "the branch was not deleted: git did not finish within its wall time" }]);
     expect(hasRef(at.repo, `refs/heads/${BRANCH}`)).toBe(true);
+  });
+
+  /** The machine paths no clean-up value may hold (REQ-FLOW-176): the case's folder, the suite's temp root, the system's temp folder. */
+  const machinePaths = (at: Seeded): string[] => [at.dir, getRoot().dir, tmpdir(), realpathSync(tmpdir())];
+
+  it("names a branch's holder by its place: a lane in the farm by its name, a checkout elsewhere by no path", async () => {
+    const at = await seed();
+    const holder = join(at.farm, "p-holder");
+    git(at.repo, ["worktree", "add", "-q", holder, BRANCH]);
+
+    const inLane = await applyRunCleanup(await planRunCleanup(at.repo, RUN), { dryRun: false, rootDir: at.repo });
+    expect(inLane.kept).toEqual([{ path: BRANCH, reason: "checked out in lane p-holder" }]);
+
+    git(at.repo, ["worktree", "remove", holder]);
+    git(at.repo, ["worktree", "add", "-q", join(at.dir, "elsewhere"), BRANCH]);
+    const elsewhere = await applyRunCleanup(await planRunCleanup(at.repo, RUN), { dryRun: false, rootDir: at.repo });
+    expect(elsewhere.kept).toEqual([{ path: BRANCH, reason: "checked out in another checkout" }]);
+    for (const done of [inLane, elsewhere]) for (const path of machinePaths(at)) expect(JSON.stringify(done)).not.toContain(path);
+    expect(hasRef(at.repo, `refs/heads/${BRANCH}`)).toBe(true);
+  });
+
+  it("gives a removal git refuses, its message naming the lane's path, a reason that holds no machine path", async () => {
+    const at = await seed();
+    const path = await lane(at, "p-locked", RUN);
+    const plan = await planRunCleanup(at.repo, RUN);
+    // Locked after the plan read it, so the removal itself is what git refuses, its lock reason carrying the path.
+    git(at.repo, ["worktree", "lock", "--reason", `held by a session at ${path}`, path]);
+
+    const done = await applyRunCleanup(plan, { dryRun: false, rootDir: at.repo });
+
+    expect(done.kept).toEqual([{ path: "p-locked", reason: expect.stringMatching(/^the removal failed/) }]);
+    expect(done.removed).toEqual([BRANCH]);
+    expect(done.acts).toEqual([`deleted branch ${BRANCH}`]);
+    for (const machine of machinePaths(at)) expect(JSON.stringify(done)).not.toContain(machine);
+    expect(existsSync(path)).toBe(true);
+  });
+
+  it("gives a lane whose ignored files no longer list at the fresh read a reason that holds no machine path", async () => {
+    const at = await seed();
+    const path = await lane(at, "p-unlisted", RUN);
+    let listings = 0;
+    // Mock reason: a git that lists a lane's ignored files at the plan's read and fails the same listing at the fresh
+    // read under the lock cannot be brought about with a real git without racing it.
+    const failing: WorktreeGitRunner = (invocation) => {
+      if (invocation.args[0] !== "ls-files" || invocation.cwd !== path) return runGit(invocation);
+      listings += 1;
+      return listings === 1 ? runGit(invocation) : Promise.resolve({ status: 128, stdout: "", stderr: `fatal: not a git repository: ${path}/.git` });
+    };
+
+    const done = await applyRunCleanup(await planRunCleanup(at.repo, RUN, failing), { dryRun: false, rootDir: at.repo, git: failing });
+
+    expect(listings).toBe(2);
+    expect(done.kept).toEqual([{ path: "p-unlisted", reason: expect.stringMatching(/^the removal failed/) }]);
+    for (const machine of machinePaths(at)) expect(JSON.stringify(done)).not.toContain(machine);
+    expect(existsSync(path)).toBe(true);
+  });
+
+  it("gives a lane whose checkout no longer reads at the act a reason that holds no machine path", async () => {
+    const at = await seed();
+    const path = await lane(at, "p-orphaned", RUN);
+    const plan = await planRunCleanup(at.repo, RUN);
+    const outside = getRoot().path(`not-a-checkout-${Math.random().toString(36).slice(2, 8)}`);
+    await mkdir(outside, { recursive: true });
+
+    const done = await applyRunCleanup(plan, { dryRun: false, rootDir: outside });
+
+    expect(done.kept).toEqual(expect.arrayContaining([{ path: "p-orphaned", reason: expect.stringMatching(/^the removal failed/) }]));
+    const laneRow = done.kept.find((entry) => entry.path === "p-orphaned");
+    for (const machine of [...machinePaths(at), outside]) expect(laneRow?.reason).not.toContain(machine);
+    expect(existsSync(path)).toBe(true);
+  });
+
+  it("names a lane relative to a farm the worktree policy sets outside the default place", async () => {
+    const at = await seed();
+    await mkdir(join(at.repo, ".stamity"), { recursive: true });
+    await writeFile(join(at.repo, ".stamity", "worktree.json"), `${JSON.stringify({ version: 1, farmDir: "../lanes/here" })}\n`);
+    const path = await lane({ ...at, farm: join(at.dir, "lanes", "here") }, "p-policy", RUN);
+
+    const plan = await planRunCleanup(at.repo, RUN);
+    expect(plan.lanes).toEqual([{ path, name: "p-policy", ignored: [], dirty: false }]);
+    const done = await applyRunCleanup(plan, { dryRun: false, rootDir: at.repo });
+
+    expect(done).toEqual({ removed: ["p-policy", BRANCH], kept: [], acts: ["removed lane p-policy", `deleted branch ${BRANCH}`] });
+    expect(existsSync(path)).toBe(false);
   });
 
   it("reads no branch and no lane for a run that started none", async () => {
