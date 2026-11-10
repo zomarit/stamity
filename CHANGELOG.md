@@ -31,6 +31,112 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Upgrading from 1.18.0
+
+Upgrade with `npx -y @zomarit/stamity@1.19.0 upgrade --to 1.19.0`, from a committed tree. It runs 1.19.0's `sync`
+and moves a `package.json` pin, as 1.18.0's note says. Nothing below was walked on a real upgrade yet; each item is
+read from the code and its tests.
+
+- **The first `sync` adds two `.gitignore` lines,** `.stamity/away.json` and `.stamity/away-held.jsonl`, the
+  nobody-watching switch's marker and its held list. Both are one machine's state, and the manifest records each line
+  setup adds, as it does the others.
+- **The first `sync` rewrites the always-on files.** The charter moves to invariants 1.4.0, and the
+  `communicationStyle` setting now reaches every generated always-on file as one line, where before no file read it.
+- **An install through a linked `node_modules` is refused.** In a folder whose `node_modules` is a symbolic link, the
+  guard refuses `npm ci`, `npm install`, `pnpm install`, a bare `yarn`, `bun add` and the other package-manager writes,
+  in every mode, never as an ask. The refusal names the link's target and the fix. A lane with its own `node_modules`
+  folder sees no change.
+- **A `symlink` row over a folder needs a `.gitignore` line with no trailing slash.** Git ignores a link only through a
+  rule with no slash at its end, so a `.stamity/worktree.json` row that links a folder such as `.venv` under a
+  `.venv/` rule alone, which set up a dirty lane in 1.18.0, now fails that row with exit 1, removes the link again and
+  names the line to add.
+- **The session start lists learnings by bytes.** It used to list at most 20; it now lists them, most trusted first,
+  until `learnings.indexBytes` (6,144 by default), so a repository with many short learnings sees more of them.
+
+### Security
+
+- **The nobody-watching switch, a strict tightening.** `STAMITY_NOBODY_WATCHING` set at launch, or `stamity away on`,
+  turns every ask the guard would put to you into a refusal held for you to read. Nothing that was refused runs, and
+  nothing that ran stops. `SECURITY.md` states the row and what it leaves open.
+- **Skills from a trusted source are pinned and scanned.** `stamity skill add` fetches only from a source
+  `.stamity/skill-sources.json` lists, at a pinned commit, reads every file as data, scans each one and refuses a
+  skill that carries scripts unless the source allows them. The trusted-sources file and the origin records are held
+  paths. `SECURITY.md` names the fetch as a fourth network exception and states the residuals, among them that a
+  source with `allowScripts` may bring any file type.
+- **`autonomy.unaskedPushRepos`, a loosening only a person turns on.** It lifts the ask on an attended push to a
+  repository it names, and only within narrow rules: `SECURITY.md` states them, and what it never lifts.
+- **The test-runner's report carries a token the run reads it by.** `SECURITY.md` names the residual: once the report
+  exists, a shell in the checkout can read the token.
+
+### Added
+
+- **`stamity away on | off | status`.** The switch's marker, `.stamity/away.json`. While it is on, or while
+  `STAMITY_NOBODY_WATCHING` is set to anything but empty, `0` or `false`, the guard refuses where it would ask and
+  appends one line to `.stamity/away-held.jsonl` (the time, the rule, the act and the client, never the command
+  text), and on Claude Code the question tool is refused. It is not unattended mode: push rules and the pre-flight do
+  not change. `away status` and `run overview` list the held acts.
+- **`stamity gc`** reports what local runs left on this machine (old run reports, run folders, merged local
+  `stamity/*` branches, tracking refs origin no longer has, worktree registrations and handoffs) with their sizes,
+  and writes nothing. `--apply` frees the default set; `--branches` and `--runs-older-than <days>` widen it. It
+  touches nothing outside `.stamity/` and the worktree farm, no tracked file, no open run, no dirty worktree and no
+  remote branch, and it needs git.
+- **A landed run cleans up what it started.** `run end` writes `Closes <owner>/<repo>#<n>` before the run's marker
+  when the run's contract names an issue in origin's repository, so GitHub closes the issue when the pull request
+  merges into the default branch. No real run has shown it yet, and for a merge the land job makes it is not known.
+  A session's `run land` that lands, or finds the run landed, removes the run's own clean lanes, deletes its local
+  `stamity/<run-id>` branch with `git branch -d` and drops a tracking ref origin no longer has, one `cleanup:` record
+  line each. It never forces: a lane holding changes or an ignored file its setup did not place is kept and named.
+  The land job cleans up nothing.
+- **`stamity worktree setup --run <run-id>`** names the run in the lane's receipt, which is how `run land` knows the
+  run's own lanes. A setup that places a `node_modules` link prints where to install instead.
+- **`stamity skill add | list | remove`.** `skill add <source-id> <name> --tag <tag> --commit <sha>` copies one skill
+  from a trusted source to `.stamity/overrides/skills/<name>/`, with an origin record at
+  `.stamity/skills/<name>.origin.json`; `--sha256` pins the aggregate too. It refuses an unlisted source, an
+  unattended session, the nobody-watching switch, a moved tag, a bundled or pack skill's name and a name already
+  copied. `skill list` re-hashes each copy against its record and names any drift, never fetching. A plan unit names
+  the skills it uses in a `skills` field, and a build whose skill has no clean copy stops as `BLOCKED_DEPENDENCY`
+  instead of fetching. `docs/customization.md` says how.
+- **`stamity ready`** reports whether a repository is ready for unattended runs, one line per check with its evidence
+  and a fix, reading files only. It runs none of the repository's commands, shows coverage only from a report already
+  on disk, and exits 0 on any verdict. The unattended pre-flight warns `repo-unready` on a gap and never refuses on it.
+  Detection adds Perl and C and C++, names COBOL and ABAP as older stacks, and reads the language versions a file
+  states.
+- **`stamity run metrics --run <id>`** prints a run's first numbers: wall and agent minutes, the person's minutes from
+  the record's `ask:` lines, review and fix rounds and reopened findings, and tokens and cost only from a transcript
+  `--transcript` names. Anything it cannot read is `unreported`. It writes nothing and needs no git.
+- **`stamity gate held --paths <files> [--expect <digest>]`** digests the test files a tests-only pass wrote, so every
+  Prove pass can show they did not move.
+- **Two settings for the learnings banner.** `learnings.indexBytes` (2,048 to 8,192 bytes, default 6,144) and
+  `learnings.indexLines` (no line cap unless set). The whole session-start output stays at or under 9,500
+  characters, under Claude Code's 10,000-character hook output cap, and the line that names `learn read` for the rest
+  is always kept. `learn read` prints every learning up to 262,144 bytes in all, and names any it leaves out.
+
+### Changed
+
+- **Tests are written from the criteria before the build, and held.** For a unit that classifies `product`,
+  `public-contract` or `security-sensitive`, a tests-only pass of the implementer writes its tests first, the run
+  records their digest, and neither the builder nor the fixer may edit them. A unit that only changes docs, config or
+  records adds no test and says so. Old, weakly tested code is pinned by a recipe before it changes.
+- **The close speaks in chat.** An attended close ends on a plain summary: what changed, what to check, `Not done:`,
+  one line on the gates and one on what `run land` cleaned. The proof block goes to the run record, and the review
+  tool's unfixed comments join the close's leftovers when the land refuses on them.
+- **Caution matches the real risk.** The charter says, beside invariant 1, that where no floor applies a step that
+  does not apply is skipped in one line, and only what cannot be undone, reaches people outside the repository or
+  this setup keeps for a person waits for one.
+- **A morning list may open on a short summary,** at most 10 lines and 1,000 characters before its first section,
+  and the pull-request body prints it after the title.
+- **The run's marker is found before a client's footer.** Every reader of a pull request's body, the land job's
+  first read among them, now finds the run when at most three short lines follow the marker, each a
+  "Generated by …" or "Generated with …" line or a line that is only a link. Any other text after it reads as no run.
+- **A 403 on a permission read falls back to the acting account's own right,** in `/st-pr-resolve`, `/st-board` and
+  `run contract`, which prints a `rights:` line when its pass came from that fallback.
+- **A test-runner's result reaches the run when its reply is empty.** It writes its result to one report path, and
+  the run reads that report only when its first line carries the fresh token that one brief named.
+- **The cloud pages say what the real runs showed.** `docs/factory.md` says why Cursor's cloud refuses at
+  `direct-push`, and the capability matrix names the cloud proxy's refused permission reads.
+- **`docs/getting-started.md` and `docs/troubleshooting.md` count `run metrics` with `run overview`** among the run
+  subcommands that need no git, and `docs/getting-started.md` lists the switch's two files and the skill files.
+
 ## [1.18.0] - 2026-11-09
 
 ### Upgrading from 1.17.0

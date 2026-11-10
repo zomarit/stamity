@@ -2665,7 +2665,10 @@ describe("SECURITY.md", () => {
 
     it("lists the engine's start of gh among its named network exceptions", () => {
       const network = section("## Network and data handling", "## Publishing this package");
-      expect(network).toContain("with the three exceptions named next");
+      // TEST CHANGE, justified (2026-11-10, z-docs): `stamity skill add` fetches from a trusted source and `stamity gc`
+      // reads origin with `git ls-remote`, both new in this release, so the page names a fourth network exception.
+      expect(network).toContain("with the four exceptions named next");
+      expect(network).toContain("**`stamity skill add` and `stamity gc` are the fourth exception.**");
       expect(network).toContain("`src/cli/engine/ghRunner.ts::ghApi`");
       expect(network).toContain("`gh api`");
     });
@@ -5964,7 +5967,10 @@ describe("the security pages say one thing about the brake, the lift and the job
       "a `workflow_dispatch` runs the file at the ref the dispatch names",
       // TEST CHANGE, justified: the marker is read from the pull request body on GitHub (runLand.ts), and only the
       // record's `PR:` and `Login:` lines are read at the head, so the pin moves to the wording docs/cloud.md uses.
-      "Its proof that a pull request is a run's own is text: the marker that ends the pull request's body, read on GitHub, and the `PR:` and `Login:` lines of the record at the head",
+      // TEST CHANGE, justified (2026-11-10, z-docs, ledger build/10): since c-marker-finder the job finds the run's
+      // marker before a client's short footer (src/runs/pullRequest.ts::bodyRun), so "the marker that ends the body"
+      // stated a stricter rule than the code holds; the pin follows the page's corrected sentence.
+      "Its proof that a pull request is a run's own is text: the run's marker at the end of the pull request's body, before at most such a footer, read on GitHub, and the `PR:` and `Login:` lines of the record at the head",
       "A job that merges nothing can still leave the pull request marked ready, the tool's threads resolved and an evidence line in the body",
     ]) {
       expect(security, `SECURITY.md does not state: ${limit}`).toContain(limit);

@@ -20,12 +20,13 @@ One prerequisite, and one strong recommendation.
 
 - **Node 22.22.2 or newer.** That is the only prerequisite, and the published floor.
   `stamity check` verifies it as its `node-version` row.
-- **Recommended: a git repository.** `init` proceeds without one, but four verbs need git.
+- **Recommended: a git repository.** `init` proceeds without one, but six verbs need git.
   `worktree` needs a `git` binary on PATH and refuses without one. The hidden verb `gate` reads
   every change from git: without it `gate scan` exits 1, so `/st-quick` and `/st-work` list
   `secret scan: not run` under `Not done:`. The hidden verbs `plan` and `run`, which an unattended
-  run calls, exit 1 with no git work tree, `run overview` excepted. Every other verb runs without git. Setup also writes
-  dozens of files, and git is your revert path. Run `git init` first if this directory is fresh.
+  run calls, exit 1 with no git work tree, `run overview` and `run metrics` excepted. `gc` reads
+  git's tracked list before it frees anything, and `skill add` fetches through git, so both exit 1
+  without it. Every other verb runs without git. Setup also writes dozens of files, and git is your revert path. Run `git init` first if this directory is fresh.
 
 If you skip the second one, an interactive `init` stops and asks before it writes anything. A
 `-y` or `--json` run goes ahead instead and prints a line saying the files it wrote have no
@@ -185,14 +186,17 @@ Four things, because each is about how two parts fit together rather than about 
 
 - **Which verbs need the manifest.** `sync`, `upgrade`, `check`, `config`, `workspace`, `clean`
   and `add` all read the manifest `init` wrote. `validate` runs with or without one. `learn`, `handoff` and
-  `ledger` ask only that `.stamity/` exists.
-- **Which verbs need git.** Four do. The `worktree` verbs need a `git` binary on PATH and refuse
+  `ledger` ask only that `.stamity/` exists. `away on` and `away off` act on the nearest setup at or
+  above the folder they run in, and refuse where there is none; `away status` and `ready` run with
+  or without one.
+- **Which verbs need git.** Six do. The `worktree` verbs need a `git` binary on PATH and refuse
   without one. The hidden verb `gate` reads every change from git: where git does not answer,
   `gate scan` exits 1, and `gate classify` answers `product` with the failure named. So in a
   repository with no git, `/st-quick` and `/st-work` run the full gates and list
   `secret scan: not run` under `Not done:`. The hidden verbs `plan` and `run` exit 1 with no git
-  work tree, `run overview` excepted, so an unattended run cannot start there. Every other verb runs without git. `init`,
-  `sync` and `check` read git where it is, and carry on where it is not. So do `handoff`, which
+  work tree, `run overview` and `run metrics` excepted, so an unattended run cannot start there.
+  `gc` and `skill add` exit 1 without git: `gc` reads git's tracked list before it frees anything,
+  and `skill add` fetches through git. Every other verb runs without git. `init`, `sync` and `check` read git where it is, and carry on where it is not. So do `handoff`, which
   records the branch and commit a handoff was made on and checks that branch on resume, and
   `config detect`, which reads the repository's remote to identify its platform: without git, each
   records or reports nothing for that part and carries on.
@@ -354,6 +358,10 @@ Everything the setup knows about itself lives under `.stamity/`:
 | `.stamity/client-models.json` | the model list each selected client's CLI gave for your account, which `init` and `sync` keep and `check`'s `model-pins` row reads |
 | `.stamity/preflight-canary.json` | the unattended pre-flight's proof that the hooks ran, written by the person-only shell guard |
 | `.stamity/run-ended.json` | the marker `run end --final-round` writes, which lets an unattended run's final question round through |
+| `.stamity/away.json` | the nobody-watching switch's marker, which `stamity away on` writes and `away off` removes |
+| `.stamity/away-held.jsonl` | the held list: one line per ask the guard refused while nobody was watching, with its time, rule, act and client, never the command |
+| `.stamity/skill-sources.json` | the repositories a skill may be copied in from — yours to write, and a held path; absent, none is trusted |
+| `.stamity/skills/` | one origin record per skill `stamity skill add` copied in, which `skill list` checks the copy against |
 
 ### What to commit
 
@@ -373,7 +381,7 @@ and `check` is what catches it drifting from what the engine would emit today.
 
 ### What not to commit
 
-Apart from each run's `reports/` folder, which ignores itself, six things stay out of the
+Apart from each run's `reports/` folder, which ignores itself, eight things stay out of the
 repository, and `init` and `sync` add their `.gitignore` lines for you:
 
 - `.env.mcp`, which holds MCP credentials. Its line is added once a selected MCP server needs a
@@ -392,6 +400,9 @@ repository, and `init` and `sync` add their `.gitignore` lines for you:
   checkout whose hooks wrote it.
 - `.stamity/run-ended.json`, the run-ended marker, which exempts a final round only on the
   machine that ended the run.
+- `.stamity/away.json`, the nobody-watching switch's marker. Committed, it would refuse every ask in
+  every checkout of the branch.
+- `.stamity/away-held.jsonl`, the asks the guard held while nobody was watching, one machine's list.
 
 A line your `.gitignore` already covers, with `.stamity/` or `.env*` for example, is not added
 twice. A file you committed before the line existed stays tracked: setup never touches the git index.

@@ -225,6 +225,42 @@ deny scanner redacts at source, so reading the report cannot deliver the payload
 refuses. A symlinked entry is reported as skipped. The projection copies regular files and real
 directories only, so a link is never emitted and its target is never screened.
 
+## How do you copy in a skill from a source you trust?
+
+`stamity skill add` copies one skill from another repository into your override tree, pinned and
+scanned. It copies only from a source your repository lists in `.stamity/skill-sources.json`, a file
+you write, or one a company hands out:
+
+```json
+{ "version": 1, "sources": [{ "id": "house", "repo": "https://<host>/<owner>/<repo>", "allowScripts": false }] }
+```
+
+With no file no source is trusted, and a file with any defect trusts none of its sources. Each `repo`
+is a plain `https://` URL of one repository, and each skill sits at its root as a folder named for
+the skill, with its `SKILL.md` inside. Then, in an attended session:
+
+```bash
+stamity skill add house release-notes --tag v1.2.0 --commit <the 40-hex commit the tag names>
+```
+
+The tag must name that commit, and `--sha256 <aggregate>` pins the copy's hash as well, where the
+source publishes one. The copy lands at `.stamity/overrides/skills/<name>/`, and its origin record
+(the source, the tag, the commit and a hash of every file) at `.stamity/skills/<name>.origin.json`.
+From there it is an override like any other, and the next `sync` emits it.
+
+It refuses a source the file does not list, an unattended session, the nobody-watching switch, a
+name a bundled or installed pack skill holds, and a name already copied. It also refuses a skill that
+carries scripts (a `scripts` folder, an executable file, a `#!` line or a code file such as `.sh`,
+`.py` or `.js`) or grants tools with `allowed-tools`, unless the source sets `"allowScripts": true`.
+Every file is deny-scanned before anything lands. [SECURITY.md](../SECURITY.md) says what the fetch
+does and what it leaves open.
+
+`stamity skill list` names every copied skill and whether its files still match the origin record,
+and never fetches. `stamity skill remove <name>` takes out the copy and its record. Both are held
+paths, so an unattended run never pushes them: a person lands a copied skill. A plan names the skills
+a unit uses in its `skills` field, and a build whose skill has no clean copy stops as
+`BLOCKED_DEPENDENCY` rather than fetch one.
+
 ## When does a saved override go live?
 
 The save writes one file. The per-client copies change on the next `stamity sync`, which picks

@@ -62,8 +62,10 @@ on three faults, and each one failed closed:
    a line that is only a link. Any other text after the marker still reads as no run. No real run has
    shown this yet.
 
-All three are planned for the next release. Until then, on Claude's cloud this route goes from the
-label to a draft pull request with green CI, and the pull request waits for you.
+1.19.0 changes all three: the test-runner writes its result to a report the run reads when its reply
+comes back empty, a summary before the morning list's first section parses, and the marker is found
+before a footer. No real run has shown these yet, so until one does, on Claude's cloud this route goes
+from the label to a draft pull request with green CI, and the pull request waits for you.
 
 On Cursor's cloud, on 2026-11-08, two sessions reached the pre-flight and refused at `direct-push`, and
 the run's own guard stopped a third earlier. No push has been seen there. Cursor's cloud pushes with
@@ -500,8 +502,13 @@ Nothing stops that but this wait.
 The run first checks that it may start. Then it switches to the issue's branch, writes its contract,
 opens a draft pull request and does the plan. If the evidence holds it merges, though no real run
 has merged yet, as What real runs have shown says. If not, the body says
-`merge waits on:`, with each reason, and [Cloud runs](cloud.md) has the morning walk. Nothing closes
-the issue, so close it yourself after the merge.
+`merge waits on:`, with each reason, and [Cloud runs](cloud.md) has the morning walk. When the run's
+contract names the issue as `owner/repo#<n>` in origin's repository, `run end` writes
+`Closes <owner>/<repo>#<n>` into the body, so GitHub closes the issue when the pull request merges
+into the default branch. No real run has merged yet, so that has not been seen, and for a merge the
+land job makes it is not known: check the issue after the merge, and close it yourself if it is
+still open. A merge your own session's `run land` makes then removes the run's own clean lanes and
+its local branch, as What a run leaves in [Cloud runs](cloud.md) says.
 
 ## The same steps locally
 
@@ -516,6 +523,14 @@ Then add the label as in Step 10. A label starts nothing on your machine, so you
 a session on the default branch and send the start prompt from Step 7. Keep the machine awake and the
 session open. Your client's own permission prompts still appear, and one can hold the run until you
 answer it, so read your client's permission settings before you leave.
+
+A session that never waits on a prompt takes two settings. For the guard, launch it with
+`STAMITY_NOBODY_WATCHING=1`, or run `stamity away on` first: every ask the guard would put to you is
+then refused and kept on the held list, and `stamity away status` shows it when you are back. For
+the client's own prompts, which no hook sees, choose a permission mode that does not prompt. Claude
+Code 2.1.322's `claude --help` lists `dontAsk` and `bypassPermissions` among its `--permission-mode`
+choices (read 2026-11-10). What each mode lets through is Claude Code's to say, and no run here has
+measured either, so read its permissions page before you choose. Cursor has settings of its own.
 
 ## When nothing fired
 
