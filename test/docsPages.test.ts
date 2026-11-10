@@ -6764,7 +6764,11 @@ describe("the land job's issue close and the lane's linked install tree, on the 
   it("states in the lane's row that a linked `node_modules` is not scanned", () => {
     const row = read(SECURITY).split("\n").find((line) => line.includes("Emptying or rewriting another checkout's installed packages")) ?? "";
     const residual = row.split(" | ").at(-1) ?? "";
-    expect(residual).toContain("`stamity worktree setup` does not scan a linked `node_modules` for files named like credentials, as it scans every other linked folder");
+    // TEST CHANGE, justified: the old words said every other linked folder is scanned, but a link met inside a scanned
+    // folder is skipped (findCredentialInSubtree); the pin now holds what is scanned and that nested-link limit.
+    expect(residual).toContain("`stamity worktree setup` scans the folder a `symlink` row names, real or linked, for files named like credentials, except `node_modules`");
+    expect(residual).toContain("the scan also skips each link it meets inside a folder, so what that link points to reaches the lane unchecked as well");
+    expect(residual).not.toContain("as it scans every other linked folder");
   });
 });
 
