@@ -587,8 +587,8 @@ export const cursorResiduePlanner: ResiduePlanner = {
         // The layout decided as the continue hook's is.
         content: buildContextOnceScript({
           layout: ctx.facts.hookScriptsRoot === undefined ? "generated" : "container",
-          // The session start's learnings budget (REQ-FLOW-179), so both banners list the same lines.
-          ...sessionIndexOptions(ctx.manifest.learnings),
+          // The session start's learnings budget and read call (REQ-FLOW-179), so both banners list the same lines.
+          ...sessionIndexOptions(ctx.manifest.learnings, cli),
         }),
         owner: { adapter: "cursor", artifactId: ARTIFACT_IDS.contextOnce, artifactType: "infra" },
       },

@@ -191,8 +191,14 @@ export interface LearningsConfig {
   indexLines?: number;
 }
 
-/** The banner's learnings byte budget: its default and the range `learnings.indexBytes` may take (REQ-FLOW-179). */
-export const LEARNINGS_INDEX_BYTES = { default: 16_384, min: 2_048, max: 131_072 } as const;
+/**
+ * The banner's learnings byte budget: its default and the range `learnings.indexBytes` may take (REQ-FLOW-179).
+ * Lowered 2026-11-10 (S75) from a default of 16,384 and a maximum of 131,072: Claude Code caps a hook's plain
+ * stdout at 10,000 characters and, past it, passes only a file path and a 2,000-character preview it does not ask
+ * the model to read (code.claude.com/docs/en/hooks.md, "JSON output", read 2026-11-10). The session start keeps its
+ * whole output under 9,500 characters, and 8,192 bytes of learning lines leave room for the rest of the banner.
+ */
+export const LEARNINGS_INDEX_BYTES = { default: 6_144, min: 2_048, max: 8_192 } as const;
 
 /** User hook wiring. Hooks are configuration, not a content class. */
 export interface HooksConfig {

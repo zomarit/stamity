@@ -14,6 +14,7 @@ import {
   scanNormalized,
 } from "../denyscan/denyScan.ts";
 import { atomicWriteFile } from "../merge/atomicWrite.ts";
+import { cliCallHint, DEFAULT_CLI_PACKAGE_NAME } from "../shared/cliCall.ts";
 import { EngineError } from "../types/errors.ts";
 import { STATE_DIR } from "../types/markers.ts";
 import {
@@ -57,11 +58,15 @@ import {
  */
 
 /**
- * Default context budget for one session-start load, set equal to the per-file
- * cap: everything inlined at session start together costs no more than a single
- * max-size learning. Curated learnings run 1-2 KB, so this admits roughly forty.
+ * Default total budget for one load, the bytes on disk of every learning it
+ * admits. Raised 2026-11-10 (S78) from the per-file cap, 65,536 bytes: learnings
+ * run 2-4 KB each, and a repository with about 80 KB of them had its older ones
+ * skipped `over-size` by `stamity learn read`, the one command that prints them
+ * all. 262,144 bytes admits roughly a hundred. The session-start banner does not
+ * load through this budget; its own is `learnings.indexBytes`. A file still left
+ * out past it is named on its own index line with the total it passed.
  */
-export const DEFAULT_MAX_TOTAL_LEARNINGS_BYTES = MAX_LEARNING_FILE_BYTES;
+export const DEFAULT_MAX_TOTAL_LEARNINGS_BYTES = 262_144;
 
 /** Bounded read fan-out — a learnings directory is small by design, not by guarantee. */
 const READ_CONCURRENCY = 8;
@@ -253,6 +258,12 @@ export interface LoaderSkip {
    * every other reason: a review horizon or a digest is not a screen hit.
    */
   patternIds?: string[];
+  /**
+   * The total budget an `over-size` skip passed, in bytes: set only when the
+   * file fit the per-file cap and was left out by the load's total, so the index
+   * can say why. Absent on every other skip, a per-file `over-size` among them.
+   */
+  totalBudget?: number;
 }
 
 export interface LoaderResult {
@@ -352,6 +363,7 @@ export async function loadValidatedLearnings(
         detail:
           `${result.bytes} bytes would pass the ${budget} byte session budget ` +
           `(${totalBytes} bytes already loaded).`,
+        totalBudget: budget,
       });
       continue;
     }
@@ -581,12 +593,31 @@ export interface FormatLearningsIndexOptions {
   indexBytes?: number;
   /** Learning lines the index lists at most, beside {@link indexBytes}: the banner's `learnings.indexLines`. */
   indexLines?: number;
+  /**
+   * How the overflow line names `learn read`: {@link cliCallHint}'s sentence for the setup's package and version,
+   * as the banner's copy is handed it. Absent, {@link DEFAULT_LEARN_READ_CALL}, the hook builder's own default.
+   */
+  readCall?: string;
 }
 
-/** The line that closes a cut index: the count left out and the verb that prints them all (REQ-FLOW-179). */
-export function learningsOverflowLine(rest: number): string {
-  return `- … and ${rest} more learning${rest === 1 ? "" : "s"} not listed; \`stamity learn read\` prints them all.`;
+/**
+ * The `learn read` call an index names when its caller names none: the canonical package at the unstamped version
+ * `0.0.0`, the version an unstamped emission pins. The session-start builder's default is spelled the same way;
+ * every emitted banner is handed the setup's own call instead.
+ */
+const DEFAULT_LEARN_READ_CALL = cliCallHint(DEFAULT_CLI_PACKAGE_NAME, "0.0.0", "learn read");
+
+/** The line that closes a cut index: the count left out and the call that prints them all (REQ-FLOW-179). */
+function learningsOverflowLine(rest: number, readCall: string): string {
+  return `- … and ${rest} more learning${rest === 1 ? "" : "s"} not listed; to print them all, run ${readCall}.`;
 }
+
+/**
+ * What a cut first line prints when the cut text matches the read screen: a fixed placeholder, never the text. A
+ * cut can end just before the character that kept a row from matching the whole field (review/119). The hook prints
+ * the same placeholder.
+ */
+const WITHHELD_CUT_LINE = "- (a learning line withheld: cut to the byte budget, it matched the read screen)";
 
 /** The order rank of a printed confidence: high, medium, low, then anything else. */
 const CONFIDENCE_RANK: Readonly<Record<string, number>> = { high: 0, medium: 1, low: 2 };
@@ -597,7 +628,8 @@ const CONFIDENCE_RANK: Readonly<Record<string, number>> = { high: 0, medium: 1, 
  * that does not fit ends the list, as the loader's budget ends its set: a list
  * that backfilled a shorter line would depend on lengths nobody predicts. A first
  * line longer than the whole budget is listed cut to it, ending `…`, so a budget
- * never lists nothing while a learning loaded.
+ * never lists nothing while a learning loaded. The cut line is screened again, as
+ * printed; a hit prints {@link WITHHELD_CUT_LINE} in its place.
  */
 function fitIndexLines(lines: readonly string[], maxBytes: number | undefined, maxLines: number | undefined): string[] {
   const shown: string[] = [];
@@ -606,7 +638,10 @@ function fitIndexLines(lines: readonly string[], maxBytes: number | undefined, m
     if (maxLines !== undefined && shown.length >= maxLines) break;
     const cost = Buffer.byteLength(line, "utf8") + (shown.length > 0 ? 1 : 0);
     if (maxBytes !== undefined && used + cost > maxBytes) {
-      if (shown.length === 0) shown.push(clipLine(line, maxBytes));
+      if (shown.length === 0) {
+        const cut = clipLine(line, maxBytes);
+        shown.push(blockedPatternIds(cut).length > 0 ? WITHHELD_CUT_LINE : cut);
+      }
       break;
     }
     shown.push(line);
@@ -722,12 +757,17 @@ export function formatLearningsIndex(result: LoaderResult, opts: FormatLearnings
   const ranked = rows.map((row) => row.line);
   const listed = fitIndexLines(ranked, opts.indexBytes, opts.indexLines);
   lines.push(...listed);
-  if (listed.length < ranked.length) lines.push(learningsOverflowLine(ranked.length - listed.length));
+  if (listed.length < ranked.length) {
+    lines.push(learningsOverflowLine(ranked.length - listed.length, opts.readCall ?? DEFAULT_LEARN_READ_CALL));
+  }
 
-  for (const entry of entries.skips) {
+  for (const [index, entry] of entries.skips.entries()) {
     const named = opts.patternIds === true && entry.patternIds.length > 0;
     const ids = named ? ` (patterns: ${entry.patternIds.join(", ")})` : "";
-    lines.push(`- skipped ${entry.fileName}: ${entry.reason}${ids}`);
+    // A learning the load's total left out says so (S78): it is not a bad file, and nothing else would print it.
+    const budget = result.skips[index]?.totalBudget;
+    const why = budget === undefined ? "" : ` (past the ${budget}-byte total one read loads; newer learnings came first)`;
+    lines.push(`- skipped ${entry.fileName}: ${entry.reason}${ids}${why}`);
   }
 
   const header =

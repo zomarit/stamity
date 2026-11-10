@@ -12,7 +12,11 @@ import {
   scanForDeniedPatterns,
 } from "../../src/denyscan/denyScan.ts";
 import { computeHandoffIntegrity } from "../../src/handoffs/validation.ts";
+import { ADAPTER_REGISTRY } from "../../src/adapters/registry.ts";
+import { CURSOR_CONTEXT_ONCE_HOOK_PATH } from "../../src/adapters/cursor.ts";
 import { HOOKS_GENERATED_DIR } from "../../src/emit/hooksInfra.ts";
+import { composeEmissionPlanner } from "../../src/emit/planner.ts";
+import { createManifest } from "../../src/manifest/manifest.ts";
 import { CLAUDE_HOOKS_DIR, CLIENT_HOOK_GUARANTEES } from "../../src/hooks/model.ts";
 import {
   buildConfigTamperNoticeScript,
@@ -70,6 +74,18 @@ import { makeTempDir, useTempDir } from "../support/tempDir.ts";
  * under test are the same in a renamed fork.
  */
 const CLI_PIN = { packageName: "@zomarit/stamity", version: "1.0.0-golden" };
+
+/**
+ * How a banner built with no read call names `learn read` (S74): the installed form, then the pinned fallback at the
+ * unstamped version, never a bare `stamity` alone. Spelled out so the test pins the sentence.
+ */
+const DEFAULT_READ_CALL =
+  "`stamity learn read` where the CLI is installed, else `npx -y @zomarit/stamity@0.0.0 learn read`, which needs the npm registry";
+
+/** The line that closes a cut learnings list, as both twins print it. */
+function overflowLine(rest: number, readCall: string = DEFAULT_READ_CALL): string {
+  return `- … and ${rest} more learning${rest === 1 ? "" : "s"} not listed; to print them all, run ${readCall}.`;
+}
 
 /**
  * Real temp directories and real child processes: the deliverable here is a
@@ -609,8 +625,10 @@ describe("buildSessionStartScript", () => {
     expect(printed.split("\n").filter((line) => line.startsWith("- [")).length).toBe(1);
     // TEST CHANGE, justified (l-banner, REQ-FLOW-179): the line accounting for the learnings left out now names
     // the verb that prints them all; `maxIndexLines` caps the learning lines alone, and the skip and handoff
-    // sections keep the default cap, which the pin below still reads.
-    expect(printed).toContain("- … and 2 more learnings not listed; `stamity learn read` prints them all.");
+    // sections keep the default cap, which the pin below still reads. TEST CHANGE, justified (l-banner fix round 1,
+    // S74): the line now names the read call as the installed form plus the pinned fallback, since a bare
+    // `stamity` is not on PATH in the documented npx setup.
+    expect(printed).toContain(overflowLine(2));
     expect(buildSessionStartScript()).toContain(`const MAX_ITEM_LINES = ${DEFAULT_MAX_INDEX_LINES};`);
   });
 
@@ -732,7 +750,7 @@ describe("buildSessionStartScript", () => {
 
   it("lists all 22 learnings inside the default byte budget, as the engine lists them", async () => {
     // TEST CHANGE, justified (l-banner, REQ-FLOW-179): re-pinned from "counts each twin's own printed section once
-    // the hook's cap cuts the list". The banner caps learnings by bytes now (16,384 by default), not at 20 lines, so
+    // the hook's cap cuts the list". The banner caps learnings by bytes now (6,144 by default since S75), not at 20 lines, so
     // the 22 learnings that used to be cut at 20 all print, and the two twins print one section, byte for byte.
     const files: Record<string, string> = {};
     for (let n = 1; n <= 22; n += 1) {
@@ -772,10 +790,9 @@ describe("buildSessionStartScript", () => {
     expect(listed.length).toBeGreaterThan(1);
     expect(listed.length).toBeLessThan(22);
     expect(Buffer.byteLength(listed.join("\n"), "utf8")).toBeLessThanOrEqual(LEARNINGS_INDEX_BYTES.min);
-    expect(section).toEqual([
-      ...listed,
-      `- … and ${22 - listed.length} more learnings not listed; \`stamity learn read\` prints them all.`,
-    ]);
+    // TEST CHANGE, justified (l-banner fix round 1, S74): the overflow line names the installed form and the pinned
+    // fallback, not a bare `stamity learn read`.
+    expect(section).toEqual([...listed, overflowLine(22 - listed.length)]);
     // The hook and the engine agree line for line, the header's byte figure included.
     expect(lines.slice(0, 1 + section.length)).toEqual(budgeted);
     // With no budget the engine lists every learning, as `learn read` prints them.
@@ -798,7 +815,8 @@ describe("buildSessionStartScript", () => {
     }).split("\n");
 
     expect(lines.filter((line) => line.startsWith("- ["))).toHaveLength(3);
-    expect(lines).toContain("- … and 2 more learnings not listed; `stamity learn read` prints them all.");
+    // TEST CHANGE, justified (l-banner fix round 1, S74): the overflow line's read call, as above.
+    expect(lines).toContain(overflowLine(2));
     expect(lines.slice(0, engine.length)).toEqual(engine);
   });
 
@@ -856,7 +874,8 @@ describe("buildSessionStartScript", () => {
     // Cut on a character boundary, as close to the budget as a three-byte character allows.
     expect(Buffer.byteLength(section[0] ?? "", "utf8")).toBeLessThanOrEqual(LEARNINGS_INDEX_BYTES.min);
     expect(Buffer.byteLength(section[0] ?? "", "utf8")).toBeGreaterThan(LEARNINGS_INDEX_BYTES.min - 3);
-    expect(section[1]).toBe("- … and 1 more learning not listed; `stamity learn read` prints them all.");
+    // TEST CHANGE, justified (l-banner fix round 1, S74): the overflow line's read call, as above.
+    expect(section[1]).toBe(overflowLine(1));
   });
 
   it("bakes the manifest's learnings budget into every session-start copy the plan renders", () => {
@@ -872,12 +891,171 @@ describe("buildSessionStartScript", () => {
     const unset = plain.find((script) => script.event === "session_start" && script.content.includes("INDEX_BYTES"));
     expect(unset?.content).toContain(`const INDEX_BYTES = ${LEARNINGS_INDEX_BYTES.default};`);
     expect(unset?.content).toContain("const INDEX_LINES = null;");
-    expect(sessionIndexOptions({ indexBytes: 4_096 })).toEqual({ indexBytes: 4_096 });
-    expect(sessionIndexOptions(undefined)).toEqual({});
+    // TEST CHANGE, justified (l-banner fix round 1, S74): the options now carry the read call the overflow line
+    // names, built for the setup's package and version, so the two pins below gain it.
+    const readCall = cliCallHint(CLI_PIN.packageName, CLI_PIN.version, "learn read");
+    expect(start?.content).toContain(`const READ_CALL = ${JSON.stringify(readCall)};`);
+    expect(sessionIndexOptions({ indexBytes: 4_096 }, CLI_PIN)).toEqual({ indexBytes: 4_096, readCall });
+    expect(sessionIndexOptions(undefined, CLI_PIN)).toEqual({ readCall });
+    // A fork's scope registry is an https URL, so the session start's call leaves it out and stays network-free.
+    const fork = { packageName: "@acme/stamity", version: "2.0.0", registry: "https://npm.acme.example/" };
+    expect(sessionIndexOptions(undefined, fork).readCall).not.toMatch(/https?/);
+    expect(sessionIndexOptions(undefined, { ...fork, npmChannel: false }).readCall).toContain("npx --no @acme/stamity@2.0.0 learn read");
   });
 
-  it("refuses a byte budget outside 2,048 to 131,072", () => {
-    for (const indexBytes of [0, 2_047, 131_073, 4_096.5, Number.NaN]) {
+  it("names the read call the way the other hook lines do, never a bare stamity, in Claude's and Cursor's copies", async () => {
+    const files: Record<string, string> = {};
+    for (let n = 1; n <= 30; n += 1) {
+      const id = `note-${String(n).padStart(2, "0")}`;
+      files[`.stamity/learnings/${id}.md`] = learning({ id });
+    }
+    await getRepo().seedFiles(files);
+    const readCall = cliCallHint(CLI_PIN.packageName, CLI_PIN.version, "learn read");
+    const start = sessionStartOf(
+      planCoreHookScripts(`../${POLICY_FILE}`, "claude", { ...CLI_PIN, learnings: { indexBytes: LEARNINGS_INDEX_BYTES.min } }),
+    );
+    const script = await place("session-start.mjs", start);
+
+    const lines = run(script, { cwd: getRepo().dir }).stdout.split("\n");
+    const overflow = lines.find((line) => line.startsWith("- … and ")) ?? "";
+    const listed = lines.filter((line) => line.startsWith("- [")).length;
+
+    expect(readCall).toBe(
+      "`stamity learn read` where the CLI is installed, else `npx -y @zomarit/stamity@1.0.0-golden learn read`, which needs the npm registry",
+    );
+    expect(overflow).toBe(overflowLine(30 - listed, readCall));
+    // The engine twin, handed the same call, prints the same line.
+    const engine = formatLearningsIndex(await loadValidatedLearnings({ rootDir: getRepo().dir }), {
+      indexBytes: LEARNINGS_INDEX_BYTES.min,
+      readCall,
+    }).split("\n");
+    expect(lines.slice(0, engine.length)).toEqual(engine);
+  });
+
+  it("carries a manifest's non-default indexBytes into the emitted Claude copy and Cursor's context-once copy", async () => {
+    // Through the whole planner, as sync emits it: the manifest → planHooksInfra → planCoreHookScripts hop and the
+    // Cursor adapter's own context-once copy, each of which drops the setting if its spread is lost (M-2).
+    const base = createManifest({
+      tools: ["claude", "cursor"],
+      selection: { items: { agent: [], skill: [], rule: [], command: [] } },
+      generatorVersion: "0.0.0-test",
+      now: new Date("2026-08-17T00:00:00.000Z"),
+    });
+    const manifest = { ...base, learnings: { indexBytes: 4_096 } };
+    const plan = await composeEmissionPlanner(ADAPTER_REGISTRY).plan({
+      rootDir: getRepo().dir,
+      manifest,
+      engineVersion: "0.0.0-test",
+      facts: { monorepoPackages: [] },
+    });
+    const claude = plan.find((row) => row.path === `${CLAUDE_HOOKS_DIR}/stamity-session-start.mjs`);
+    const once = plan.find((row) => row.path === CURSOR_CONTEXT_ONCE_HOOK_PATH);
+    const readCall = cliCallHint("@zomarit/stamity", "0.0.0-test", "learn read");
+
+    for (const [name, row] of [["claude", claude], ["cursor context-once", once]] as const) {
+      expect(row, name).toBeDefined();
+      expect(row?.content, name).toContain("const INDEX_BYTES = 4096;");
+      expect(row?.content, name).toContain(`const READ_CALL = ${JSON.stringify(readCall)};`);
+    }
+  });
+
+  it("keeps the whole banner under 9,500 characters, learning lines first, the overflow line kept", async () => {
+    // S75: Claude Code keeps 10,000 characters of a hook's stdout and passes only a preview past it. Sixty learnings
+    // of about 200 bytes fill the 8,192-byte budget, and forty refused handoffs with long names add about 4,500
+    // characters more, so the banner would pass 9,500 without the cap.
+    const files: Record<string, string> = {};
+    for (let n = 1; n <= 60; n += 1) {
+      const id = `note-${String(n).padStart(2, "0")}`;
+      files[`.stamity/learnings/${id}.md`] = learning({ id, summary: `Note ${n} — ${"keep the queue lock first. ".repeat(6)}`.trim() });
+    }
+    for (let n = 1; n <= 40; n += 1) {
+      files[`.stamity/handoffs/${"h".repeat(180)}-${String(n).padStart(2, "0")}.md`] = "not a handoff\n";
+    }
+    await getRepo().seedFiles(files);
+    const capped = await place("session-start.mjs", buildSessionStartScript({ indexBytes: LEARNINGS_INDEX_BYTES.max }));
+
+    const stdout = run(capped, { cwd: getRepo().dir }).stdout;
+    const lines = stdout.split("\n");
+    const listed = lines.filter((line) => line.startsWith("- [")).length;
+    // The lines the byte budget alone holds, as the engine twin (no output cap) lists them.
+    const budgeted = formatLearningsIndex(await loadValidatedLearnings({ rootDir: getRepo().dir }), {
+      indexBytes: LEARNINGS_INDEX_BYTES.max,
+    })
+      .split("\n")
+      .filter((line) => line.startsWith("- [")).length;
+
+    expect(stdout.length).toBeLessThanOrEqual(9_500);
+    expect(lines).toContain(overflowLine(60 - listed));
+    // The cap, not the byte budget, cut these: the budget holds more lines than the banner printed.
+    expect(listed).toBeGreaterThan(0);
+    expect(listed).toBeLessThan(budgeted);
+    // Learning lines went first: the refused handoffs still print their full default section.
+    expect(lines.filter((line) => line.startsWith("- skipped hhh")).length).toBe(DEFAULT_MAX_INDEX_LINES);
+    // The header's byte figure counts the lines it printed.
+    const section = lines.slice(1, lines.findIndex((line) => line.startsWith("Handoffs: ")));
+    expect(lines[0]).toContain(` ${Buffer.byteLength(section.join("\n"), "utf8")} bytes in this index `);
+  });
+
+  it("trims the other sections' tails, counting what it left out, once no learning line is left", async () => {
+    // Every learning line gone is not enough here: twenty skip lines of about 230 characters and twenty active
+    // handoffs of about 400 pass 9,500 on their own, so the cap shortens the skips next and names what it left out.
+    const files: Record<string, string> = {};
+    for (let n = 1; n <= 3; n += 1) {
+      files[`.stamity/learnings/note-${n}.md`] = learning({ id: `note-${n}` });
+    }
+    for (let n = 1; n <= 60; n += 1) {
+      files[`.stamity/learnings/${"s".repeat(180)}-${String(n).padStart(2, "0")}.md`] = "not a learning\n";
+    }
+    const summary = "Finish the caller extraction and move the old module ".repeat(4).slice(0, 200).trim();
+    for (let n = 1; n <= 20; n += 1) {
+      const id = `${"h".repeat(140)}-${String(n).padStart(2, "0")}`;
+      files[`.stamity/handoffs/${id}.md`] = handoff({ id, summary });
+    }
+    await getRepo().seedFiles(files);
+    const script = await place("session-start.mjs", buildSessionStartScript());
+
+    const stdout = run(script, { cwd: getRepo().dir }).stdout;
+    const lines = stdout.split("\n");
+
+    expect(stdout.length).toBeLessThanOrEqual(9_500);
+    expect(lines.filter((line) => line.startsWith("- ["))).toEqual([]);
+    expect(lines).toContain(overflowLine(3));
+    const skips = lines.filter((line) => line.startsWith("- skipped sss")).length;
+    expect(skips).toBeLessThan(DEFAULT_MAX_INDEX_LINES);
+    expect(lines).toContain(`- … and ${60 - skips} more skipped files not listed.`);
+    // The handoffs, trimmed after the skips, still print in full.
+    expect(lines.filter((line) => line.startsWith("- hhh")).length).toBe(20);
+  });
+
+  it("re-screens a cut first line and prints a fixed placeholder when the cut matches, as the engine does", async () => {
+    // review/119: a row ending in \b passes a whole field when a word character follows the match, and a cut that
+    // drops that character prints text the row refuses. The id, confidence and summary are 200 three-byte characters
+    // each, so the line reaches its file name at byte 1,812; the name then puts the end of a `role-must-always` match
+    // at byte 2,045, the last byte a 2,048-byte cut keeps before its "…", with the "z" that kept it from matching next.
+    const wide = "€".repeat(200);
+    const name = `${"€".repeat(70)}x the agent must alwaysz.md`;
+    await getRepo().seedFiles({
+      [`.stamity/learnings/${name}`]: learning({ id: wide, confidence: wide, summary: wide }),
+    });
+    const placeholder = "- (a learning line withheld: cut to the byte budget, it matched the read screen)";
+    const script = await place("session-start.mjs", buildSessionStartScript({ indexBytes: LEARNINGS_INDEX_BYTES.min }));
+    const unbudgeted = await place("unbudgeted.mjs", buildSessionStartScript({ indexBytes: LEARNINGS_INDEX_BYTES.max }));
+
+    const lines = run(script, { cwd: getRepo().dir }).stdout.split("\n");
+    const full = run(unbudgeted, { cwd: getRepo().dir }).stdout.split("\n");
+
+    // The whole line passes the screen and prints at the larger budget, so the cut alone makes the match.
+    expect(full[0]).toMatch(/^Learnings: 1 loaded, 0 skipped, /);
+    expect(full.some((line) => line.includes("must alwaysz.md)"))).toBe(true);
+    expect(lines[0]).toMatch(/^Learnings: 1 loaded, 0 skipped, /);
+    expect(lines[1]).toBe(placeholder);
+    expect(lines.some((line) => line.includes("must always"))).toBe(false);
+  });
+
+  it("refuses a byte budget outside 2,048 to 8,192", () => {
+    // TEST CHANGE, justified (l-banner fix round 1, S75): the maximum fell from 131,072 to 8,192 so the banner fits
+    // Claude Code's 10,000-character hook-output cap; 8,193 is now the first value past it.
+    for (const indexBytes of [0, 2_047, 8_193, 131_073, 4_096.5, Number.NaN]) {
       expect(() => buildSessionStartScript({ indexBytes }), `${indexBytes}`).toThrow(/indexBytes must be a whole number/);
     }
     expect(() => buildSessionStartScript({ indexBytes: LEARNINGS_INDEX_BYTES.max })).not.toThrow();

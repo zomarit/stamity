@@ -59,7 +59,7 @@ import {
   UNPRINTABLE_CHARS,
   USAGE_REVIEW_PATTERN,
 } from "../runs/layout.ts";
-import { cliCallHint, pinnedCliCall } from "../shared/cliCall.ts";
+import { cliCallHint, DEFAULT_CLI_PACKAGE_NAME, pinnedCliCall } from "../shared/cliCall.ts";
 import { MATCH_SESSIONS_SOURCE, SESSION_MARKERS, type SessionMarkerRow } from "../session/detect.ts";
 import {
   CLAUDE_HOOKS_DIR,
@@ -944,6 +944,12 @@ export interface SessionStartScriptOptions {
    */
   indexBytes?: number;
   /**
+   * How the learnings overflow line names `learn read`: {@link cliCallHint}'s sentence, the installed form and the
+   * pinned fallback together, as {@link sessionIndexOptions} builds it for the setup. Absent, the canonical package
+   * at the unstamped version `0.0.0` (the engine twin's default, spelled the same way). Embedded as a JSON string.
+   */
+  readCall?: string;
+  /**
    * Where this copy will sit ({@link HookScriptLayout}). Defaults to
    * `generated`, the layout this repository emits; `planCoreHookScripts` passes
    * the one emission chose.
@@ -987,6 +993,22 @@ const CLOUD_SESSIONS: readonly (SessionMarkerRow & { name: string; lines: readon
   (row) => Object.assign({}, row, SESSION_TEXT[row.kind]),
 );
 
+/** The `learn read` call a banner built with none names: `formatLearningsIndex`'s default, spelled the same way. */
+const DEFAULT_LEARN_READ_CALL = cliCallHint(DEFAULT_CLI_PACKAGE_NAME, "0.0.0", "learn read");
+
+/** The fixed line a cut first learning line prints when the cut matches the screen: the engine twin's, word for word. */
+const WITHHELD_CUT_LINE = "- (a learning line withheld: cut to the byte budget, it matched the read screen)";
+
+/**
+ * Characters the whole banner prints at most, the closing newline included (S75, 2026-11-10). Claude Code caps a
+ * hook's plain stdout at 10,000 characters and past it passes only a file path and a 2,000-character preview, which
+ * it does not ask the model to read (code.claude.com/docs/en/hooks.md, "JSON output", read 2026-11-10); the cap
+ * holds on startup, resume and compact. 500 under it leaves room for the client's own framing and for Cursor's
+ * context-once copy, which adds its managed line after the cap. Counted in UTF-16 code units, never fewer than the
+ * characters the client counts.
+ */
+const SESSION_OUTPUT_CHARS = 9_500;
+
 /**
  * The session index's source, shared by the session start and Cursor's
  * context-once script ({@link buildContextOnceScript}), so both read through one
@@ -1016,6 +1038,8 @@ function sessionIndexSource(opts: SessionStartScriptOptions): { head: string; in
 const MAX_ITEM_LINES = ${DEFAULT_MAX_INDEX_LINES};
 const INDEX_BYTES = ${indexBytes};
 const INDEX_LINES = ${json(learningLines)};
+const READ_CALL = ${json(opts.readCall ?? DEFAULT_LEARN_READ_CALL)};
+const OUTPUT_CHARS = ${SESSION_OUTPUT_CHARS};
 const MAX_LEARNING_BYTES = ${MAX_LEARNING_FILE_BYTES};
 const MAX_HANDOFF_BYTES = ${MAX_HANDOFF_FILE_BYTES};
 const MAX_FIELD_CHARS = ${MAX_LEARNING_SUMMARY_LENGTH};
@@ -1289,10 +1313,10 @@ function stem(name) {
   return name.slice(0, -3);
 }
 
-/** Appends at most MAX_ITEM_LINES items, then one line accounting for the rest. */
-function append(out, items, noun) {
-  for (const item of items.slice(0, MAX_ITEM_LINES)) out.push(item);
-  const rest = items.length - MAX_ITEM_LINES;
+/** Appends at most \`keep\` items (MAX_ITEM_LINES by default), then one line accounting for the rest. */
+function append(out, items, noun, keep = MAX_ITEM_LINES) {
+  for (const item of items.slice(0, keep)) out.push(item);
+  const rest = items.length - keep;
   if (rest > 0) {
     out.push("- … and " + rest + " more " + noun + (rest === 1 ? "" : "s") + " not listed.");
   }
@@ -1323,7 +1347,7 @@ function fit(lines) {
   return shown;
 }
 
-/** A line cut on a character boundary so it and its closing "…" take at most \`max\` bytes. */
+/** A line cut to \`max\` bytes with its "…"; a cut the screen matches prints a fixed line. */
 function clip(line, max) {
   let out = "";
   let used = Buffer.byteLength("…", "utf8");
@@ -1333,7 +1357,7 @@ function clip(line, max) {
     out += char;
     used += size;
   }
-  return out + "…";
+  return screenIds(out + "…").length > 0 ? ${json(WITHHELD_CUT_LINE)} : out + "…";
 }
 
 const learningsDir = join(STATE_ROOT, "learnings");
@@ -1382,11 +1406,8 @@ const handoffs = handoffDocs
   // Soonest expiry first: the entry that goes stale next is the one to resume.
   .sort((a, b) => Date.parse(a.expires) - Date.parse(b.expires) || (a.id < b.id ? -1 : 1));
 
-function render() {
-  if (learnings.length === 0 && handoffDocs.length === 0) {
-    return ["stamity: no learnings and no resumable handoffs in this repo yet."];
-  }
-
+/** The banner, \`tail\` last, within OUTPUT_CHARS; learning lines go first. */
+function render(tail) {
   const bytes = loaded.reduce((total, doc) => total + doc.size, 0);
   // The file name is payload too: it is attacker-chosen on any file that
   // reached the directory, and it is concatenated into a line an agent reads.
@@ -1417,34 +1438,52 @@ function render() {
         (a.reviewBy === b.reviewBy ? 0 : a.reviewBy === "" ? 1 : b.reviewBy === "" ? -1 : a.reviewBy < b.reviewBy ? -1 : 1),
     )
     .map((row) => row.line);
-  const section = fit(ranked);
-  const rest = ranked.length - section.length;
-  if (rest > 0) {
-    section.push("- … and " + rest + " more learning" + (rest === 1 ? "" : "s") + " not listed; \`stamity learn read\` prints them all.");
+  const fitted = fit(ranked);
+  const skips = skipped.map(skipLine);
+  const refused = refusedHandoffs.map(skipLine);
+  const active = handoffs.map((entry) => {
+    const origin = entry.from === "" ? "" : "from " + entry.from + ", ";
+    return "- " + entry.id + " — " + entry.summary + " (" + origin + "expires " + entry.expires + ")";
+  });
+  const keep = { learnings: fitted.length, skips: Math.min(skips.length, MAX_ITEM_LINES), refused: Math.min(refused.length, MAX_ITEM_LINES), active: Math.min(active.length, MAX_ITEM_LINES), tail: tail.length };
+  const compose = () => {
+    if (learnings.length === 0 && handoffDocs.length === 0) return withTail(["stamity: no learnings and no resumable handoffs in this repo yet."], tail, keep.tail);
+    const section = fitted.slice(0, keep.learnings);
+    const rest = ranked.length - section.length;
+    if (rest > 0) {
+      section.push("- … and " + rest + " more learning" + (rest === 1 ? "" : "s") + " not listed; to print them all, run " + READ_CALL + ".");
+    }
+    append(section, skips, "skipped file", keep.skips);
+    // Two figures: the bytes of the lines printed below, which is what this banner
+    // costs, and the loaded files' bytes on disk.
+    const out = [
+      "Learnings: " + loaded.length + " loaded, " + skipped.length + " skipped, " +
+        Buffer.byteLength(section.join("\\n"), "utf8") + " bytes in this index (" + bytes + " bytes on disk).",
+      ...section,
+    ];
+    out.push(
+      "Handoffs: " + handoffs.length + " active, " + refusedHandoffs.length + " skipped.",
+    );
+    append(out, active, "handoff", keep.active);
+    append(out, refused, "skipped file", keep.refused);
+    return withTail(out, tail, keep.tail);
+  };
+  // Over OUTPUT_CHARS, each part in turn loses lines from its end, each loss counted.
+  let out = compose();
+  for (const part of ["learnings", "skips", "refused", "active", "tail"]) {
+    while (out.reduce((total, line) => total + line.length + 1, 0) > OUTPUT_CHARS && keep[part] > 0) {
+      keep[part] -= 1;
+      out = compose();
+    }
   }
-  append(section, skipped.map(skipLine), "skipped file");
-  // Two figures: the bytes of the lines printed below, which is what this banner
-  // costs, and the loaded files' bytes on disk.
-  const out = [
-    "Learnings: " + loaded.length + " loaded, " + skipped.length + " skipped, " +
-      Buffer.byteLength(section.join("\\n"), "utf8") + " bytes in this index (" + bytes + " bytes on disk).",
-    ...section,
-  ];
-
-  out.push(
-    "Handoffs: " + handoffs.length + " active, " + refusedHandoffs.length + " skipped.",
-  );
-  append(
-    out,
-    handoffs.map((entry) => {
-      const origin = entry.from === "" ? "" : "from " + entry.from + ", ";
-      return "- " + entry.id + " — " + entry.summary + " (" + origin + "expires " + entry.expires + ")";
-    }),
-    "handoff",
-  );
-  append(out, refusedHandoffs.map(skipLine), "skipped file");
-
   return out;
+}
+
+/** \`out\`, the first \`keep\` lines of \`tail\`, then one line counting any left out. */
+function withTail(out, tail, keep) {
+  const cut = tail.length - keep;
+  if (cut <= 0) return [...out, ...tail];
+  return [...out, ...tail.slice(0, keep), "- … and " + cut + " more session and card line" + (cut === 1 ? "" : "s") + " not printed (banner cap " + OUTPUT_CHARS + " characters)."];
 }
 
 /** One skip line: the file by name, the reason by id. The span is never echoed. */
@@ -1679,7 +1718,10 @@ function recordMainSession(payload) {
  * then name) and listed until the byte budget, then one line names
  * `stamity learn read` for the rest (REQ-FLOW-179); skips and handoffs each stop
  * at MAX_ITEM_LINES. Past either the banner prints fewer lines than the engine's
- * full index, and each header's byte figure counts its own printed lines.
+ * full index, and each header's byte figure counts its own printed lines. The
+ * whole banner, session and card lines included, stays within
+ * {@link SESSION_OUTPUT_CHARS} (S75): learning lines go first, then each other
+ * section's tail, and every part that loses lines prints how many.
  * What the script re-implements is the READ SCREEN, not the validator:
  * size, injection, integrity and the review horizon each decide whether a file
  * may be named, and each of them is a reason to distrust bytes that are
@@ -1782,14 +1824,15 @@ recordMainSession(PAYLOAD);`
 // Written once, then the process ends on its own. \`process.exit\` would race
 // the write: stdout is asynchronous when it is a pipe on macOS and the BSDs,
 // which is exactly how a client runs a hook.
-const lines = render();
 // Before the card, so the card stays everything after the last blank line.
+const tail = [];
 const session = sessionLines(process.env);
-if (session.length > 0) lines.push("", ...session);
+if (session.length > 0) tail.push("", ...session);
 if (SOURCE === "compact" || SOURCE === "resume" || SOURCE === "startup") {
   const card = resumeCardLines(repoRoot(), STATE_ROOT, NOW, SOURCE === "startup");
-  if (card !== null) lines.push("", ...card);
+  if (card !== null) tail.push("", ...card);
 }
+const lines = render(tail);
 process.stdout.write(lines.join("\\n") + "\\n");
 `;
 }
@@ -1897,10 +1940,8 @@ ${READ_FIELD}
 function sessionIndex() {
 ${source.index}
 
-const lines = render();
 const session = sessionLines(process.env);
-if (session.length > 0) lines.push("", ...session);
-return lines;
+return render(session.length > 0 ? ["", ...session] : []);
 }
 
 /** One GET of the runtime key over the socket: its status and at most 256 characters of body, or null when unread. */
@@ -6241,7 +6282,7 @@ export function planCoreHookScripts(
   return [
     {
       fileName: SESSION_START_FILE,
-      content: buildSessionStartScript({ layout, tool, ...sessionIndexOptions(opts.learnings) }),
+      content: buildSessionStartScript({ layout, tool, ...sessionIndexOptions(opts.learnings, opts) }),
       event: "session_start",
     },
     {
@@ -6267,15 +6308,27 @@ export function planCoreHookScripts(
 
 /**
  * The session index options a manifest's `learnings` block names (REQ-FLOW-179): its byte budget and its line cap,
- * each left out when unset so the builders' defaults apply. Shared by {@link planCoreHookScripts} and the Cursor
- * adapter's context-once copy, so both banners read one setting.
+ * each left out when unset so the builders' defaults apply, and the `learn read` call its overflow line names for
+ * `cli`, the setup's package and version. Shared by {@link planCoreHookScripts} and the Cursor adapter's context-once
+ * copy, so both banners read one setting and name one call.
+ *
+ * The call is {@link cliCallHint}'s sentence without the scope registry a fork may name: that registry is an https
+ * URL, and the session start stays free of network words under a plain grep (the reason its screen drops the
+ * network rows). A fork's pinned fallback then resolves where npm's own configuration names the scope's registry.
  */
 export function sessionIndexOptions(
   learnings: { indexBytes?: number; indexLines?: number } | undefined,
-): Pick<SessionStartScriptOptions, "indexBytes" | "maxIndexLines"> {
+  cli: { packageName: string; version: string; npmChannel?: boolean },
+): Pick<SessionStartScriptOptions, "indexBytes" | "maxIndexLines" | "readCall"> {
   return {
     ...(learnings?.indexBytes === undefined ? {} : { indexBytes: learnings.indexBytes }),
     ...(learnings?.indexLines === undefined ? {} : { maxIndexLines: learnings.indexLines }),
+    readCall: cliCallHint(
+      cli.packageName,
+      cli.version,
+      "learn read",
+      cli.npmChannel === undefined ? {} : { npmChannel: cli.npmChannel },
+    ),
   };
 }
 

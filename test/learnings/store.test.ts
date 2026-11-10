@@ -50,6 +50,15 @@ const BODY = [
   "Warm the cache in the bootstrap step; first paint drops from 400ms to 30ms.",
 ].join("\n");
 
+/** How an index built with no read call names `learn read` (S74), spelled out so the test pins the sentence. */
+const DEFAULT_READ_CALL =
+  "`stamity learn read` where the CLI is installed, else `npx -y @zomarit/stamity@0.0.0 learn read`, which needs the npm registry";
+
+/** The line that closes a cut learnings list, as both twins print it. */
+function overflowLine(rest: number, readCall: string = DEFAULT_READ_CALL): string {
+  return `- … and ${rest} more learning${rest === 1 ? "" : "s"} not listed; to print them all, run ${readCall}.`;
+}
+
 const FIELDS = {
   id: "cache-warmup-order",
   date: "2026-08-12",
@@ -370,11 +379,56 @@ describe("loadValidatedLearnings", () => {
 
     expect(fileNames(cut)).toEqual(["newest-note.md", "middle-note.md"]);
     expect(cut.totalBytes).toBe(budget);
+    // TEST CHANGE, justified (l-banner fix round 1, S78): a skip the total left out now carries the total it passed,
+    // so the index can say why; the reason and the detail are unchanged.
     expect(cut.skips).toEqual([
-      { fileName: "oldest-note.md", reason: "over-size", detail: expect.any(String) },
+      { fileName: "oldest-note.md", reason: "over-size", detail: expect.any(String), totalBudget: budget },
     ]);
     // Deterministic: the cut is a function of the corpus and the budget.
     expect(await load({ maxTotalBytes: budget })).toEqual(cut);
+  });
+
+  it("loads a set past the old 65,536-byte total in full under the default budget", async () => {
+    // S78: about 80 KB of learnings, the size this repository reaches, used to lose its older ones as `over-size`.
+    const body = `${BODY}\n\n${"The queue lock is taken before the cache lock, so the two never wait on each other. ".repeat(40)}`;
+    await Promise.all(
+      Array.from({ length: 24 }, (_, n) =>
+        seedPersisted(`note-${String(n + 1).padStart(2, "0")}.md`, { id: `note-${String(n + 1).padStart(2, "0")}` }, body),
+      ),
+    );
+
+    const result = await load();
+    const index = formatLearningsIndex(result, { now: NOW, patternIds: true }).split("\n");
+
+    expect(result.totalBytes).toBeGreaterThan(65_536);
+    expect(result.totalBytes).toBeLessThanOrEqual(DEFAULT_MAX_TOTAL_LEARNINGS_BYTES);
+    expect(DEFAULT_MAX_TOTAL_LEARNINGS_BYTES).toBe(262_144);
+    expect(result.skips).toEqual([]);
+    expect(index.filter((line) => line.startsWith("- [high] note-"))).toHaveLength(24);
+  });
+
+  it("names each learning the total leaves out on its own line, with the total it passed", async () => {
+    // Past the new total too: five files of about 60 KB are 300 KB, so the oldest ones are left out, and `learn read`
+    // (the index with pattern ids on) says which and why rather than dropping them silently.
+    const body = `${BODY}\n\n${"The queue lock is taken before the cache lock, so the two never wait on each other. ".repeat(700)}`;
+    await Promise.all(
+      [1, 2, 3, 4, 5].map((n) => seedPersisted(`big-${n}.md`, { id: `big-${n}`, date: `2026-08-0${n}` }, body)),
+    );
+
+    const result = await load();
+    const index = formatLearningsIndex(result, { now: NOW, patternIds: true }).split("\n");
+    const left = result.skips.map((entry) => entry.fileName);
+
+    expect(result.totalBytes).toBeLessThanOrEqual(DEFAULT_MAX_TOTAL_LEARNINGS_BYTES);
+    expect(left.length).toBeGreaterThan(0);
+    // Newest first: the oldest dates are the ones left out.
+    expect(left).toContain("big-1.md");
+    expect(result.learnings.length + left.length).toBe(5);
+    for (const fileName of left) {
+      expect(index).toContain(
+        `- skipped ${fileName}: over-size (past the 262144-byte total one read loads; newer learnings came first)`,
+      );
+    }
   });
 
   it("does not backfill a smaller learning past the first overflow", async () => {
@@ -559,20 +613,50 @@ describe("formatLearningsIndex", () => {
 
     const cut = formatLearningsIndex(result, { now: NOW, indexBytes }).split("\n");
 
-    expect(cut.slice(1)).toEqual([
-      ...full.slice(1, 3),
-      "- … and 4 more learnings not listed; `stamity learn read` prints them all.",
-    ]);
+    // TEST CHANGE, justified (l-banner fix round 1, S74): the overflow line names the installed form and the pinned
+    // fallback, never a bare `stamity`, which the documented npx setup does not put on PATH.
+    expect(cut.slice(1)).toEqual([...full.slice(1, 3), overflowLine(4)]);
     expect(cut[0]).toBe(
       `Learnings: 6 loaded, 0 skipped, ${Buffer.byteLength(cut.slice(1).join("\n"), "utf8")} bytes in this index ` +
         `(${result.totalBytes} bytes on disk).`,
     );
     expect(formatLearningsIndex(result, { now: NOW, indexLines: 5 }).split("\n").slice(1)).toEqual([
       ...full.slice(1, 6),
-      "- … and 1 more learning not listed; `stamity learn read` prints them all.",
+      overflowLine(1),
     ]);
     // No budget, every learning: what `learn read` prints.
     expect(full).toHaveLength(7);
+    // A caller's read call, a fork's say, replaces the default in the line.
+    const fork = "`stamity learn read` where the CLI is installed, else `npx -y @acme/stamity@2.0.0 learn read`, which needs the npm registry";
+    expect(formatLearningsIndex(result, { now: NOW, indexLines: 5, readCall: fork }).split("\n").at(-1)).toBe(
+      overflowLine(1, fork),
+    );
+  });
+
+  it("prints a fixed placeholder for a cut first line that matches the read screen, never the cut text", () => {
+    // review/119: the whole summary passes, because a word character follows the end of a `role-must-always`
+    // match; the 2,048-byte cut drops it. "- [high] wide — " is 18 bytes, 609 three-byte characters take it to
+    // 1,845, and 200 ASCII bytes more end the match at byte 2,045, the last one the cut keeps before its "…".
+    const summary = `${"€".repeat(609)}${"x".repeat(178)} the agent must alwaysz and more.`;
+    const result: LoaderResult = {
+      learnings: [
+        { fileName: "wide.md", frontmatter: { id: "wide", confidence: "high", summary }, body: "", integrityOk: true },
+        { fileName: "next.md", frontmatter: { id: "next", confidence: "high", summary: "Short." }, body: "", integrityOk: true },
+      ],
+      skips: [],
+      totalBytes: 0,
+    };
+
+    const whole = formatLearningsIndex(result, { now: NOW }).split("\n");
+    const lines = formatLearningsIndex(result, { now: NOW, indexBytes: 2_048 }).split("\n");
+
+    expect(Buffer.byteLength(whole[1] ?? "", "utf8")).toBeGreaterThan(2_048);
+    expect(whole[1]).toContain("must alwaysz");
+    expect(lines).toEqual([
+      expect.stringMatching(/^Learnings: 2 loaded, 0 skipped, /),
+      "- (a learning line withheld: cut to the byte budget, it matched the read screen)",
+      overflowLine(1),
+    ]);
   });
 
   it("cuts a first line longer than the budget to it, never listing none", () => {
@@ -595,7 +679,8 @@ describe("formatLearningsIndex", () => {
     expect(lines[1]?.endsWith("…")).toBe(true);
     expect(Buffer.byteLength(lines[1] ?? "", "utf8")).toBeLessThanOrEqual(2_048);
     expect(Buffer.byteLength(lines[1] ?? "", "utf8")).toBeGreaterThan(2_048 - 3);
-    expect(lines[2]).toBe("- … and 1 more learning not listed; `stamity learn read` prints them all.");
+    // TEST CHANGE, justified (l-banner fix round 1, S74): the overflow line's read call, as above.
+    expect(lines[2]).toBe(overflowLine(1));
   });
 });
 
@@ -608,23 +693,27 @@ describe("the banner budget settings (REQ-FLOW-179)", () => {
   const indexErrors = (learnings: unknown): string[] =>
     collectManifestErrors({ ...UNSET_PROBE, learnings }).filter((error) => error.includes("learnings.index"));
 
-  it("resolves learnings.indexBytes to 16,384 and learnings.indexLines to none when unset", () => {
+  it("resolves learnings.indexBytes to 6,144 and learnings.indexLines to none when unset", () => {
+    // TEST CHANGE, justified (l-banner fix round 1, S75): the default fell from 16,384 to 6,144 so the banner stays
+    // inside Claude Code's 10,000-character hook-output cap.
     expect(spec("learnings.indexBytes").read(UNSET_PROBE)).toBeNull();
     expect(spec("learnings.indexBytes").resolve(UNSET_PROBE)).toBe(String(LEARNINGS_INDEX_BYTES.default));
-    expect(LEARNINGS_INDEX_BYTES.default).toBe(16_384);
+    expect(LEARNINGS_INDEX_BYTES.default).toBe(6_144);
     expect(spec("learnings.indexLines").resolve(UNSET_PROBE)).toBe("none");
     const set = { ...UNSET_PROBE, learnings: { indexBytes: 4_096, indexLines: 12 } };
     expect(spec("learnings.indexBytes").resolve(set)).toBe("4096");
     expect(spec("learnings.indexLines").read(set)).toBe("12");
   });
 
-  it("refuses a byte budget outside 2,048 to 131,072 and a line cap below one", () => {
+  it("refuses a byte budget outside 2,048 to 8,192 and a line cap below one", () => {
+    // TEST CHANGE, justified (l-banner fix round 1, S75): the maximum fell from 131,072 to 8,192, as above.
     expect(indexErrors({ indexBytes: 2_048, indexLines: 1 })).toEqual([]);
-    expect(indexErrors({ indexBytes: 131_072 })).toEqual([]);
+    expect(indexErrors({ indexBytes: 8_192 })).toEqual([]);
     expect(indexErrors({ indexBytes: 2_047 })).toEqual([
-      "`learnings.indexBytes` must be a whole number from 2048 to 131072",
+      "`learnings.indexBytes` must be a whole number from 2048 to 8192",
     ]);
-    expect(indexErrors({ indexBytes: 131_073 })).toHaveLength(1);
+    expect(indexErrors({ indexBytes: 8_193 })).toHaveLength(1);
+    expect(indexErrors({ indexBytes: 131_072 })).toHaveLength(1);
     expect(indexErrors({ indexBytes: 4_096.5 })).toHaveLength(1);
     expect(indexErrors({ indexLines: 0 })).toEqual(["`learnings.indexLines` must be a positive integer"]);
   });
