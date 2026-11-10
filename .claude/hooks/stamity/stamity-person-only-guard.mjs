@@ -1516,7 +1516,8 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		"land-approved",
 		"learn-accept",
 		"outside-write",
-		"remote-write"
+		"remote-write",
+		"skill-fetch"
 	]);
 	const acts = [];
 	const ran = [];
@@ -2645,6 +2646,22 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		if (args[run] === "run" && mayLand(cmd, args, run)) deny("land-approved", "A `stamity run land` line whose words the guard cannot read, which may carry `--approved`");
 		if (args.includes("learn") || args.includes("accept") || (unsettled ? args.some((_, at) => verbal(at)) : verbal(first))) deny("learn-accept", "A line whose words the guard cannot read, which may be `learn accept`");
 	}
+	function skillFetchVerdict(cmd) {
+		const unsettled = unread.get(cmd)?.[0] === true;
+		for (const args of unsettled ? [cmd.slice(1)] : [packageArgs(cmd), ...addedArgs(cmd)]) {
+			if (args === null) continue;
+			const at = args.indexOf("skill");
+			const past = at === -1 ? [] : args.slice(at + 1);
+			if (past.includes("add")) {
+				deny("skill-fetch", "Fetching a skill into the repository (`stamity skill add`)");
+				continue;
+			}
+			const add = args.indexOf("add");
+			const offset = cmd.length - args.length;
+			const hiddenBefore = add !== -1 && (fed.has(cmd) || args.slice(0, add).some((_, index) => anyMark.get(cmd)?.[offset + index] === true));
+			if (at !== -1 && hidesWords(cmd, past) || hiddenBefore) deny("skill-fetch", "A `stamity skill add` line whose words the guard cannot read");
+		}
+	}
 	function loosenVerdict(cmd) {
 		if (ctx.powershell === true && (cmd[0] ?? "").startsWith("$") && (cmd.length === 1 || /^[-+*/%]?=$/.test(cmd[1] ?? "") || /^\$(?:\{[^}]*\}|[\w:]+)[-+*/%]?=/.test(cmd[0] ?? ""))) return;
 		const unsure = unread.get(cmd) ?? [];
@@ -2807,6 +2824,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	if (cutShort.size > 0) deny("push-default", "A call behind a wrapper's shortened option, whose program the line does not settle");
 	for (const cmd of read) {
 		landApprovedVerdict(cmd);
+		skillFetchVerdict(cmd);
 		loosenVerdict(cmd);
 		acceptHiddenVerdict(cmd);
 	}
