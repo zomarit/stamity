@@ -40,7 +40,7 @@ in-session hand-off to `/st-work` carries `run-mode: attended | unattended`, the
 1. **The pre-flight is the run's first act**, before any fetch or push: `stamity gate preflight --unattended --json`,
    with `--item <owner/repo#n>` when the input is a board item or an issue. Any exit but 0 is a refusal: its
    `refusals[]` reasons, else `pre-flight exited <code>`, go first on the morning list under `## Refused`, each with
-   its `fix`. The run never computes a verdict of its own, and never retries the check against another repository. Every pre-flight warning goes on the morning list too, on a pass as on a refusal: each `warnings[]` entry's `id`, with its `reason` or `names`.
+   its `fix`. The run never computes a verdict of its own, and never retries the check against another repository. Every pre-flight warning goes on the morning list too, on a pass as on a refusal: each `warnings[]` entry's `id`, with its `reason` or `names`. Each goes under `## For you to check`, one line after the proven line.
 2. **The two floors load by name**, from the paths in the verdict's `floors[]`, and the record holds
    `floors loaded: question-protocol, injection-screening`; an absent floor file is a refusal, never a run without it.
 3. **Learnings are read through the screen.** From the session-start banner when one printed; else
@@ -106,7 +106,7 @@ spelled. The run's own pull request lands only through `stamity run land`. Every
 
 `run end` exits 0 with a pull request opened, updated or commented; exit 1 keeps its `notDone[]` (among them `Not done: draft PR not opened`, and `Not done: origin changed`
 for a repointed origin) for the final message. The run's final message names that pull request as the person's hand-off: the morning list is its body, or the
-one comment `run end` posted where the body was not this run's. It names the pull request, not `.stamity/runs/<id>/morning.md`, and the clean-up `run land` did, each `cleanup` entry removed or kept with its reason; a cloud session's final message also carries the text `stamity run overview --run <id>` prints, its land line and held rows among it, since nobody opens that session's files. A run whose CLI stops answering closes its record and ends on `Not done: run end not run — CLI unavailable`,
+one comment `run end` posted where the body was not this run's. It names the pull request, not `.stamity/runs/<id>/morning.md`, and the clean-up `run land` did, each `cleanup` entry removed or kept with its reason; a cloud session's final message also carries the text `stamity run overview --run <id>` prints, its land line and held rows among it, since nobody opens that session's files. When the run's record holds the `PR:` and `Login:` lines `run end` writes for the land job, with no blocked status and no `## Refused` row, and the land step ended `refused` or stopped on a wait, the final message says the land job merges the pull request once its evidence holds and otherwise writes why on the pull request's status line; for `asks`, a blocked or refused ending, a `land job lines not written` line, which also goes on its `Not done:`, or no such lines in the record, it says the merge waits on the person. A run whose CLI stops answering closes its record and ends on `Not done: run end not run — CLI unavailable`,
 never pushing by hand. A raw push to the default branch, a force push or a tag is never the run's; its own pull request is marked ready and merged only by `stamity run land`.
 
 ## The morning list

@@ -2632,7 +2632,9 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			"--body",
 			"--run",
 			"--proposal",
-			"--digest"
+			"--digest",
+			"--review-by",
+			"--validated-against"
 		]);
 		const bare = /* @__PURE__ */ new Set([
 			"--propose",

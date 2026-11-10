@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "generatedBy": "1.19.0",
   "createdAt": "2026-08-26T06:32:43.732Z",
-  "updatedAt": "2026-11-10T09:17:29.877Z",
+  "updatedAt": "2026-11-10T22:43:07.528Z",
   "tools": [
     "claude"
   ],
@@ -141,7 +141,7 @@
       "adapter": "claude",
       "artifactId": "cmd-board",
       "artifactType": "command",
-      "contentHash": "009fbd280a28ff91f1857f0f96357ed1137ddd4d9c5947e4c5c7a1f4d03f7a3d",
+      "contentHash": "587889b79739c3f68ff1a17557061c6044694bfabea3a493f15ff5a7e5a8d9b5",
       "path": ".claude/commands/st-board.md"
     },
     {
@@ -155,7 +155,7 @@
       "adapter": "claude",
       "artifactId": "cmd-plan",
       "artifactType": "command",
-      "contentHash": "865382c039de64a18639fae0f609adc79554499c7eba4230c5a4f55d8d07aa22",
+      "contentHash": "79668ffa18ebebc3dfd18578d45bdb3f4a98011f25b8843746ed8373b79e83b6",
       "path": ".claude/commands/st-plan.md"
     },
     {
@@ -218,7 +218,7 @@
       "adapter": "claude",
       "artifactId": "stamity-person-only-guard",
       "artifactType": "infra",
-      "contentHash": "14fd0a50e0495c2a87afd1b151e61e5301fad8966b5e90931eec192447044c1e",
+      "contentHash": "450f0ed6a8dc1d39285b3374723f14b92c9f5957e85e714177390a6e20220cb0",
       "path": ".claude/hooks/stamity/stamity-person-only-guard.mjs"
     },
     {
@@ -483,7 +483,7 @@
       "adapter": "claude",
       "artifactId": "learn",
       "artifactType": "skill",
-      "contentHash": "4bcc92f82d3bf4500ffd52528d8dfe46da900c041bbd0409c955cf222985c2d6",
+      "contentHash": "a6455f98fe8a44e5d2eb28c3bca8139b6d6bccef5eb3d642d9d2de88ffd47ef6",
       "path": ".claude/skills/st-learn/SKILL.md"
     },
     {
@@ -539,7 +539,7 @@
       "adapter": "claude",
       "artifactId": "unattended",
       "artifactType": "skill",
-      "contentHash": "05b591896c2146e3ee2b618b3c9cc60d7bba139de18c6512a5a5e6513af637a6",
+      "contentHash": "a57cd15993947fe18e728b55c8aa5a8b1a568addf293f08914301c77c911f28a",
       "path": ".claude/skills/st-unattended/SKILL.md"
     },
     {
