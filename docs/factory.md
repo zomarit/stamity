@@ -355,7 +355,8 @@ every later session at that issue, and When nothing fired says what clears it, u
    or newer, as Cloud runs says. In the session of 2026-11-06 the cloud's own Node was 22.23.4, so no
    setup line was needed, but on 2026-10-19 it was 22.22.0, so an older image may refuse on
    `node-engine`. For Node, no setup line is documented. If `node-engine` refuses, put a newer Node
-   first on PATH in the setup script.
+   first on PATH in the setup script. Claude's cloud environments page, read on 2026-11-10, lists
+   Node 20, 21 and 22, with 22 on PATH, and names a PATH change, not a setup line, to pick one.
 
    Do not count on the setup script for `gh auth setup-git`. In the session of 2026-11-06 the script
    ran `gh auth setup-git || true`, and afterwards the session had no credential helper, so
@@ -487,7 +488,8 @@ jobs:
 Why a workflow, and not a repository webhook pointed at Cursor's address: GitHub signs each webhook
 delivery with its secret, in the `X-Hub-Signature-256` header, and never sends the secret itself. So
 a repository webhook cannot carry Cursor's key, and the workflow above, which sends the key as a
-header, stays the route.
+header, stays the route. GitHub's pages on creating and validating webhooks, read on 2026-11-10, name
+the `X-Hub-Signature-256` header and offer no custom header.
 
 ## Step 9: Check the land job
 

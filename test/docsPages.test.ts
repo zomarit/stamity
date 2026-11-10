@@ -6691,6 +6691,15 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
     expect(rule).toContain("GitHub's REST reference, read on 2026-11-10, lists that field with the values `always`, `pull_requests_only`, `never` and `exempt`, and no description.");
     expect(rule).not.toContain("which its reference describes as the bypass type of the account making the request");
   });
+
+  // ADDED (REQ-FLOW-170): the Node fact in Step 7 and the webhook fact in Step 8 each carry the day the vendor page was
+  // read, in a sentence of its own, so the pinned sentences beside them stay word for word.
+  it("dates the Node and webhook facts each in a sentence of its own", () => {
+    const claude = flowed(section("Step 7: Claude"));
+    expect(claude).toContain("Claude's cloud environments page, read on 2026-11-10, lists Node 20, 21 and 22, with 22 on PATH, and names a PATH change, not a setup line, to pick one.");
+    const webhook = flowed(section("Step 8: Cursor").split("### Where the issue trigger is not offered")[1] ?? "");
+    expect(webhook).toContain("GitHub's pages on creating and validating webhooks, read on 2026-11-10, name the `X-Hub-Signature-256` header and offer no custom header.");
+  });
 });
 
 // ADDED (REQ-FLOW-157, REQ-WORKTREE-019): the land job's token and the lane's one unscanned link, said where the
