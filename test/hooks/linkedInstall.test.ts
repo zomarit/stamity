@@ -471,3 +471,52 @@ describe("an install through a linked node_modules (REQ-FLOW-178)", () => {
     }
   });
 });
+
+/**
+ * A fault in the install check's own reading (REQ-FLOW-178): the guard refuses the install, as it refuses on any fault
+ * of its own, and a line naming no package manager is never read, so it runs. The emitted guard is run with its folder
+ * reader's body swapped for one that throws, since no real line is known to make that reader fault; the swap is
+ * asserted before it is run.
+ */
+describe("a fault in the linked-install check's own reading (REQ-FLOW-178)", () => {
+  const FAULT =
+    "The guard could not read whether this install writes through a linked node_modules (a fault in its own reading), so it is refused. Run the install on a line of its own, after a plain cd to its folder.";
+  const HEAD = "function installFolders(line, start, depth = 0, cut = false, escapes = undefined) {";
+
+  /** The claude guard with its folder reader throwing, placed as `placeGuard` places it; returns its path. */
+  async function placeFaulting(): Promise<string> {
+    const guard = planCoreHookScripts(POLICY, "claude", { ...CLI_PIN, personOnlyGuard: true }).find((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
+    if (guard === undefined) throw new Error("the plan carried no person-only guard");
+    expect(guard.content).toContain(HEAD);
+    const swapped = guard.content.replace(HEAD, `function installFolders() {\n  throw new Error("a fault in the folder reading");\n}\nfunction installFoldersKept(line, start, depth = 0, cut = false, escapes = undefined) {`);
+    expect(swapped).toContain('throw new Error("a fault in the folder reading")');
+    await getRepo().seedFiles({
+      ".git/HEAD": "ref: refs/heads/feat/x\n",
+      [`.stamity/generated/hooks/claude/${guard.fileName}`]: swapped,
+      "main/node_modules/left-pad/package.json": "{}\n",
+    });
+    return getRepo().path(".stamity", "generated", "hooks", "claude", guard.fileName);
+  }
+
+  // Red on 091d999b: the fault was swallowed, so the install went on to the verdicts and ran.
+  it("refuses an install through a linked node_modules with the fault sentence", async () => {
+    const guard = await placeFaulting();
+    linkInstall(getRepo().path());
+    expect(decide("claude", guard, "npm ci")).toEqual({ kind: "refuse", reason: FAULT });
+    expect(decide("claude", guard, "cd lane && pnpm install")).toEqual({ kind: "refuse", reason: FAULT });
+  });
+
+  it("runs a line that names no package manager, which the check never reads", async () => {
+    const guard = await placeFaulting();
+    linkInstall(getRepo().path());
+    for (const command of ["git status", "lockf -k /tmp/stamity-machine.lock npx vitest run test/hooks", "npx --no stamity gate classify --base HEAD"]) {
+      expect(decide("claude", guard, command), command).toEqual({ kind: "allow" });
+    }
+  });
+
+  it("gives the link sentence where the reading does not fault", async () => {
+    const guard = await placeGuard("claude");
+    const target = linkInstall(getRepo().path());
+    expect(decide("claude", guard, "npm ci")).toEqual({ kind: "refuse", reason: refusal(target) });
+  });
+});

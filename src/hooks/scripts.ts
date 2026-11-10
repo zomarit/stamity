@@ -441,7 +441,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // Moved again 2026-11-10 by the person-only guard hardening (REQ-FLOW-134), by what was measured: 369,374 bytes /
   // 7,514 lines (copilot, generated), past both rows, because the configuration reader now also reads the system file
   // of a git built with another prefix. 367,100 + 2,274 = 369,374 bytes; 7,476 + 38 = 7,514 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 369_374, lines: 7_514 },
+  // Moved again 2026-11-10 by the person-only guard hardening (REQ-FLOW-178), by what was measured: 369,736 bytes /
+  // 7,516 lines (copilot, generated), past both rows, because a fault in the linked-install check's own reading now
+  // refuses with its own sentence. 369,374 + 362 = 369,736 bytes; 7,514 + 2 = 7,516 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 369_736, lines: 7_516 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -5610,8 +5613,9 @@ function installFolders(line, start, depth = 0, cut = false, escapes = undefined
  * install starts in, it writes in the nearest folder up holding a package.json or a node_modules, as the managers find
  * it, up to the repository's top (sign-off S54), and a workspace member at each folder above it, up to that top,
  * declaring a workspace too (sign-off S64). An install past the folders the reading holds is refused as well, since
- * where it runs is not known (review/106). Null when none of those is a link; a fault of its own is null too, so this
- * check never sends a call to the fail-closed refusal. On Windows the line of Claude's Bash tool, the one payload that
+ * where it runs is not known (review/106). Null when none of those is a link, or when the line names no package
+ * manager, which is never parsed; a fault in its own reading refuses the call with its own sentence, as the guard
+ * refuses on any fault of its own. On Windows the line of Claude's Bash tool, the one payload that
  * says it runs Git Bash, is read twice: Git Bash reads a backslash as an escape (n\pm is npm), where the guard's own
  * reading takes it for a path's separator, and either reading refuses (u-ci1); every other client's line, PowerShell by
  * default there, keeps the one reading (sign-off S86). The fix names the checkout with forward slashes on Windows
@@ -5664,7 +5668,8 @@ function linkedInstall(command, cwd, pwsh = false, bash = false) {
       }
     }
   } catch {
-    // The check's own fault: the call goes on to the verdicts.
+    // The check's own fault refuses, as any fault of the guard's does; a line naming no package manager never gets here.
+    return "The guard could not read whether this install writes through a linked node_modules (a fault in its own reading), so it is refused. Run the install on a line of its own, after a plain cd to its folder.";
   }
   return null;
 }
