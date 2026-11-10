@@ -3780,6 +3780,95 @@ describe("stamity run land", () => {
         expect(issueCalls()).toEqual([]);
         expect(comments()).toEqual([]);
       });
+
+      // Signed off (1.19.1): a body written with CRLF line ends still carries the Closes line the job closes on.
+      it("closes the issue where the body's lines end in CRLF", async () => {
+        const { repo, head } = await withIssue(await seedJob());
+        route("GET repos/o/r/pulls/7", pull(head, { body: `The list.\r\n\r\nCloses o/r#12\r\n\r\n${MARKER}` }));
+
+        const result = await run(repo, LANDS);
+
+        expect(result.code).toBe(0);
+        expect(result.doc).toMatchObject({ outcome: "landed", issue: { ref: "o/r#12", closed: true }, notDone: [] });
+        expect(issuePatches()).toEqual([`PATCH ${ISSUE}`]);
+        expect(comments()).toEqual([]);
+      });
+
+      // Signed off (1.19.1): an item in another repository is left open with its own reason: no issue call, one Not done:
+      // line, and the one comment on the pull request.
+      it("leaves an item in another repository open with its own reason, in Not done: and in one comment", async () => {
+        const { repo } = await withIssue(await seedJob(), "x/y#3", "x/y#3");
+        // Both answer as an issue every other check passes, so a read or a close of either would show.
+        route("GET repos/x/y/issues/3", issueJson({ number: 3 }));
+        route("GET repos/o/r/issues/3", issueJson({ number: 3 }));
+        const reason = "it is in another repository";
+
+        const result = await run(repo, LANDS);
+
+        expect(result.code).toBe(0);
+        expect(result.doc).toMatchObject({ outcome: "landed", issue: { ref: "x/y#3", closed: false, reason }, notDone: [`the run's issue x/y#3 stays open: ${reason}`] });
+        expect(issueCalls()).toEqual([]);
+        expect(comments().map((call) => (call.body as { body: string }).body)).toEqual([
+          `The land job merged this pull request, and the run's issue x/y#3 stays open: ${reason}. Close it by hand.\n\n${MARKER}`,
+        ]);
+      });
+
+      // Signed off (1.19.1): a failure at the issue's read, its close or the comment after the merge never moves the
+      // outcome or the exit code; its Not done: line names the failure's class, never its message, which may hold a path.
+      describe("a failure after the merge", () => {
+        const MACHINE_PATH = "/home/runner/work/_tool/gh/bin/gh";
+        const MESSAGE = `spawn ${MACHINE_PATH} ENOENT`;
+        const COMMENTS = "POST repos/o/r/issues/7/comments";
+        const STEPS = { read: `GET ${ISSUE}`, close: `PATCH ${ISSUE}`, comment: COMMENTS } as const;
+        /**
+         * An answer that rejects as `gh` does when it fails to start: a code, and a message naming the machine's path.
+         * Mock reason: the stand-in's `failing` set rejects with one fixed message that names no path, and this case is
+         * about a message that does; a rejected promise as the route makes the stand-in's own `Promise.resolve` hand it back.
+         */
+        const spawnFailure = (): Answer => {
+          const failed = Promise.reject(Object.assign(new Error(MESSAGE), { code: "ENOENT" }));
+          // Marked handled here, so the suite reports no stray rejection; the verb's own await still rejects with it.
+          failed.catch(() => undefined);
+          return failed as unknown as Answer;
+        };
+        /** A `/` that starts a word: the mark of an absolute path in a line. */
+        const ABSOLUTE = /(?:^|[\s("'])\/[^\s/]/;
+
+        it.each([
+          ["the read", "thrown", "read", "ENOENT"],
+          ["the read", "non-200", "read", "HTTP 500"],
+          ["the close", "thrown", "close", "ENOENT"],
+          ["the close", "non-200", "close", "HTTP 500"],
+          ["the comment", "thrown", "comment", "ENOENT"],
+          ["the comment", "non-200", "comment", "HTTP 500"],
+        ] as const)("keeps the land and exit 0 where %s fails (%s), naming its class and no path", async (_name, how, step, failureClass) => {
+          const { repo } = await withIssue(await seedJob());
+          // The comment posts only where the issue is left open, so that step's case leaves it open on the label first.
+          if (step === "comment") route(`GET ${ISSUE}`, issueJson({ labels: [{ name: "bug" }] }));
+          if (how === "thrown") gh.routes.set(STEPS[step], spawnFailure());
+          else route(STEPS[step], { message: "Server Error" }, 500);
+
+          const result = await run(repo, LANDS);
+
+          expect(result.code).toBe(0);
+          expect(result.doc).toMatchObject({ outcome: "landed", issue: { ref: "o/r#12", closed: false } });
+          const notDone = (result.doc as { notDone: string[] }).notDone;
+          // The issue's own line where the read or the close failed; for the comment, the label's line and the comment's.
+          expect(notDone).toHaveLength(step === "comment" ? 2 : 1);
+          const failed = notDone.at(-1) ?? "";
+          expect(failed).toContain(failureClass);
+          expect(failed).toContain(step === "comment" ? "was not posted to #7" : "the run's issue o/r#12 stays open: ");
+          for (const line of notDone) {
+            expect(line).not.toContain(MESSAGE);
+            expect(line).not.toContain(MACHINE_PATH);
+            expect(line).not.toMatch(ABSOLUTE);
+          }
+          expect(JSON.stringify(result.doc)).not.toContain(MACHINE_PATH);
+          // The close was never sent where the read failed, and the comment was asked for every time the issue stayed open.
+          if (step === "read") expect(issuePatches()).toEqual([]);
+          expect(comments()).toHaveLength(1);
+        });
+      });
     });
 
     it("holds on the status line when GitHub refuses the merge, and fails only where GitHub itself failed", async () => {

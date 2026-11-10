@@ -466,6 +466,26 @@ describe("the run's issue the land job closes (REQ-FLOW-157)", () => {
     const verdict = issueToClose({ item: "x/y#3", body: `Closes x/y#3\n\n${MARKER_LINE}`, ref: null });
     expect(verdict === null || (typeof verdict === "object" && "leftOpen" in verdict)).toBe(true);
   });
+
+  // Signed off (1.19.1): a body written with CRLF line ends still names the issue; only the line's own trailing carriage
+  // return is set aside, so a line that differs in anything else is still not the Closes line.
+  it.each([
+    ["CRLF line ends, the line just before the marker", `The list.\r\n\r\nCloses o/r#12\r\n\r\n${MARKER_LINE}`, { ref: "o/r#12", number: 12 }],
+    ["the body's last line ending in a carriage return", "The list.\r\n\r\nCloses o/r#12\r", { ref: "o/r#12", number: 12 }],
+    ["a CRLF line with a space before its carriage return", `Closes o/r#12 \r\n\r\n${MARKER_LINE}`, SAYS_NOT],
+    ["a CRLF line naming another issue", `Closes o/r#13\r\n\r\n${MARKER_LINE}`, SAYS_NOT],
+  ])("issueToClose reads %s", (_name, body, verdict) => {
+    expect(issueToClose({ item: "o/r#12", body, ref: "o/r#12" })).toEqual(verdict);
+  });
+
+  // Signed off (1.19.1): an item in another repository is left open with its own reason, whatever the body says, so the
+  // job can say why it closed nothing.
+  it.each([
+    ["a Closes line naming it", `Closes x/y#3\n\n${MARKER_LINE}`],
+    ["no Closes line", `The list.\n\n${MARKER_LINE}`],
+  ])("issueToClose leaves an item in another repository open with its own reason, the body holding %s", (_name, body) => {
+    expect(issueToClose({ item: "x/y#3", body, ref: null })).toEqual({ leftOpen: "it is in another repository" });
+  });
 });
 
 describe("decideLand", () => {
