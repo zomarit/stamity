@@ -1,12 +1,19 @@
 {
   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
-  "accessDate": "2026-10-08",
+  "accessDate": "2026-11-10",
   "claude-fable-5-1": {
     "inputPerMTok": 10,
     "outputPerMTok": 50,
     "cacheWrite5mPerMTok": 12.5,
     "cacheWrite1hPerMTok": 20,
     "cacheReadPerMTok": 0.25
+  },
+  "claude-fable-5-2": {
+    "inputPerMTok": 8,
+    "outputPerMTok": 40,
+    "cacheWrite5mPerMTok": 10,
+    "cacheWrite1hPerMTok": 16,
+    "cacheReadPerMTok": 0.2
   },
   "claude-opus-5-5": {
     "inputPerMTok": 4,

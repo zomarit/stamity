@@ -101,7 +101,7 @@ describe("prospective calibration keys", () => {
     expect(() => parse(mutate())).toThrow();
   });
 
-  it("pins v2 apart from v1 on its set, its three rubrics and its claude scenario model and effort only", () => {
+  it("pins v2 apart from v1 on its set, its three rubrics and its claude scenario model and effort and its claude judge only", () => {
     const legacy = JSON.parse(read("evals/model-profiles-v1.json"));
     const current = JSON.parse(read("evals/model-profiles-v2.json"));
     // Behaviour moved, not weakened: v1 moved to SET-v7 and to rubric v7 for the default
@@ -115,9 +115,13 @@ describe("prospective calibration keys", () => {
     // Behaviour moved, not weakened: on 2026-09-26 v1's `claude` scenario effort also moved from
     // null to "high" (build/36). v2 keeps null, which the whole-scenario override below carries,
     // so the case name now names the effort as well as the model.
+    // Behaviour moved, not weakened: on 2026-11-10 (1.19.1) v1's `claude` judge moved in place from
+    // `claude-fable-5-1` to `claude-fable-5-2`. v2 keeps the judge it was written against, so its
+    // claude judge is named here as well (TEST CHANGE, justified: v2 itself does not change).
     expect(current).toEqual({ ...legacy, set: "evals/SET-v5.md", profiles: { ...legacy.profiles,
       claude: { ...legacy.profiles["claude"], rubric: "evals/rubric-v4.md",
-        scenario: { model: "claude-opus-5", reasoningEffort: null } },
+        scenario: { model: "claude-opus-5", reasoningEffort: null },
+        judge: { model: "claude-fable-5-1", reasoningEffort: null } },
       "codex-astra": { ...legacy.profiles["codex-astra"], rubric: "evals/rubric-v6.md" },
       "codex-astra-judge": { ...legacy.profiles["codex-astra-judge"], rubric: "evals/rubric-v5.md" } } });
   });

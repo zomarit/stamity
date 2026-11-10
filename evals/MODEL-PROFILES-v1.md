@@ -7,7 +7,7 @@ No profile starts a model call or changes Stamity's product-level `models.pins` 
 
 | Profile | Model under test | Judge | Rubric |
 |---|---|---|---|
-| `claude` (default) | `claude-opus-5-5` | `claude-fable-5-1` | `rubric-v7.md` |
+| `claude` (default) | `claude-opus-5-5` | `claude-fable-5-2` | `rubric-v7.md` |
 | `codex-astra` | `gpt-6-astra` | `gpt-5.6-sol` | `rubric-v7.md` |
 | `codex-astra-judge` | `gpt-5.6-sol` | `gpt-6-astra` | `rubric-v7.md` |
 
@@ -21,6 +21,9 @@ driver sends as the client's explicit `--effort high`, because runs 15-32 measur
 high (`claude-opus-5`'s client default) and `claude-opus-5-5`'s client default is medium (the
 maintainer's answer of 2026-09-26). The Claude judge's null effort means the harness default;
 it does not claim a controllable or known effort value.
+On 2026-11-10 the Claude judge moved from `claude-fable-5-1` to `claude-fable-5-2` on the
+maintainer's word; its effort stays the harness default, and the client it needs is 2.1.290 or
+newer (measured 2026-11-10).
 
 ## Selection and isolation
 

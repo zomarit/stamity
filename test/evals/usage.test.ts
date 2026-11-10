@@ -150,12 +150,25 @@ describe("usageFromCalls", () => {
     expect(cost.total).toBe(0.0343);
   });
 
+  it("prices a standard-tier Fable 5.2 judge call from the committed price list", () => {
+    const calls = [attempt("judge", "claude-fable-5-2", usage(1000, 2000, 1000, 2000, 4000))];
+    const list = JSON.parse(readFileSync("evals/price-list.json", "utf8"));
+    const cost = usageFromCalls(calls, list).listCostUsd;
+    // Fable 5.2 ($8 in, $40 out, $10 5m, $16 1h, $0.20 hits):
+    //   1000*8 + 2000*40 + 2000*10 + 1000*16 + 4000*0.2 = 124,800 micro-USD
+    expect(cost.unpriced).toEqual([]);
+    expect(cost.notListPriced).toBe(0);
+    expect(cost.byModel).toEqual({ "claude-fable-5-2": 0.1248 });
+    expect(cost.byRole).toEqual({ scenario: 0, judge: 0.1248, calibration: 0, isolation: 0 });
+  });
+
   it("keeps a committed price list that names its source, its access date and both cache-write rates", () => {
     const list = JSON.parse(readFileSync("evals/price-list.json", "utf8"));
     expect(list.source).toMatch(/^https:\/\/platform\.claude\.com\//);
     expect(list.accessDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     const models = Object.keys(list).filter(key => key !== "source" && key !== "accessDate");
-    expect(models).toEqual(expect.arrayContaining(["claude-fable-5-1", "claude-opus-5-5", "claude-opus-5"]));
+    // TEST CHANGE, justified: the 1.19.1 judge, `claude-fable-5-2`, joins the list; the old judge's row stays.
+    expect(models).toEqual(expect.arrayContaining(["claude-fable-5-1", "claude-fable-5-2", "claude-opus-5-5", "claude-opus-5"]));
     for (const model of models) {
       expect(Object.keys(list[model]).toSorted(), model).toEqual(
         ["cacheReadPerMTok", "cacheWrite1hPerMTok", "cacheWrite5mPerMTok", "inputPerMTok", "outputPerMTok"]);

@@ -87,9 +87,10 @@ golden, 16 adversarial (12 guardrail, 4 benign twins), 12 probes, with 20 carryi
 
 ## The judge is pinned to an explicit id, and its inputs are stated
 
-The default `claude` profile selects `rubric-v7.md`, judge **`claude-fable-5-1`** and model
-under test `claude-opus-5-5` from 1.10.0 (v3 declared `claude-opus-5`; the judge id has not
-moved). Every verdict role runs at an
+The default `claude` profile selects `rubric-v7.md`, judge **`claude-fable-5-2`** and model
+under test `claude-opus-5-5` from 1.10.0 (v3 declared `claude-opus-5`). The judge moved from
+`claude-fable-5-1` to `claude-fable-5-2` at 1.19.1, on 2026-11-10, its effort still the harness
+default. Every verdict role runs at an
 explicit model id — a tier alias is never sufficient — and the run records the id each agent attests rather
 than the id the harness requested. Run 1 is why: it measured an alias that resolved to a
 different model than the set declared.
@@ -105,8 +106,9 @@ The v1 profile JSON names `rubric-v7.md` for all three profiles. The prospective
 (read at tag `evals-retired-2026-10-13`), `rubric-v4.md` for `claude`, `rubric-v6.md` for
 `codex-astra`, `rubric-v5.md` for `codex-astra-judge`, and `claude-opus-5` as the `claude` scenario model, which v1 moved to
 `claude-opus-5-5` at 1.10.0. v2 also keeps a null effort (the harness default) on the `claude`
-scenario, which v1 set to `high` on 2026-09-26. Every judge, both Codex pairs and every other
-effort setting match v1.
+scenario, which v1 set to `high` on 2026-09-26, and `claude-fable-5-1` as the `claude` judge
+(`model-profiles-v2.json`), which v1 moved to `claude-fable-5-2` on 2026-11-10. Both Codex pairs
+and every other effort setting match v1.
 Both configurations require fresh contexts and calibration before scoring. Sealed input isolation is the
 default; an operator may prospectively select [session-native v2](session-native-v2.md)
 to retain the disclosed ambient baseline with the new rubric configuration.

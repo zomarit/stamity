@@ -35,6 +35,10 @@ describe("eval model profiles", () => {
     // null (the harness default) to "high" (the maintainer's answer "Pin high", build/36):
     // runs 15-32 measured the scenario at high, claude-opus-5's client default, while
     // claude-opus-5-5's client default is medium. The judge stays null (harness default).
+    // Behaviour moved, not weakened: on 2026-11-10 (1.19.1, REQ-PROVE-009) the judge model moved
+    // in place from `claude-fable-5-1` to `claude-fable-5-2` on the maintainer's word; its effort
+    // stays null (the harness default) and the scenario pair does not move. v2 keeps the old judge.
+    // TEST CHANGE, justified: the judge pin below names the moved id, as the scenario pin did at 1.10.0.
     expect(document.schemaVersion).toBe(1);
     expect(document.set).toBe(SET_FILE);
     expect(document.defaultProfile).toBe("claude");
@@ -42,8 +46,18 @@ describe("eval model profiles", () => {
       harness: "claude-code",
       rubric: RUBRIC_FILE,
       scenario: { model: "claude-opus-5-5", reasoningEffort: "high" },
-      judge: { model: "claude-fable-5-1", reasoningEffort: null },
+      judge: { model: "claude-fable-5-2", reasoningEffort: null },
     });
+  });
+
+  it("names in the profile document's table the same two models each profile's JSON declares", () => {
+    const table = readRepoFile("evals/MODEL-PROFILES-v1.md");
+    const rows = [...table.matchAll(/^\| `([^`]+)`(?: \(default\))? \| `([^`]+)` \| `([^`]+)` \| `[^`]+` \|$/gm)];
+    expect(rows.map(row => row[1])).toEqual(profiles.map(([name]) => name));
+    for (const [, name, scenario, judge] of rows) {
+      const profile = document.profiles[name!];
+      expect({ scenario, judge }, name).toEqual({ scenario: profile?.scenario.model, judge: profile?.judge.model });
+    }
   });
 
   it("supports Astra in either role with a distinct Codex model in the other role", () => {
