@@ -91,7 +91,7 @@ request open, each reason a `held` row (`merge waits on: <reasons>`, or `merge w
 [...]
 
 **Leftovers line.** The close adds `- <UTC> leftovers: shown=<n> real=<a> fixed=<f> scheduled=<s> dropped=<d> accepted=<k> notes=<p|unknown> changed=<c>`,
-a line of its own in the record's Proof block, never directly above a table (n = f + s + d, k ≤ d, a ≤ n; a `decision-waiting` append and a kept inbox row count in s; unattended, d = k = c = 0).
+a line of its own in the record's Proof block, never directly above a table (n = f + s + d, k ≤ d, a ≤ n; a `decision-waiting` append and a kept inbox row count in s; unattended, d = k = c = 0). [...]
 ```
 
 Scenario state — the run so far, given to you as fact:

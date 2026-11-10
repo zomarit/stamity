@@ -4261,6 +4261,17 @@ No quoted sentence changes, and the Briefs hold. No `## Expected` block, B / A, 
 threshold or roster count moves, so the carried tallies and the recomputed census below hold. The
 dated citations above stay as they were. No eval run is made with this change.
 
+**The ask and metrics lines in `/st-work`, 2026-11-10 (the 1.19.0 release; REQ-FLOW-183, REQ-CTX-019).**
+The Proof block's usage paragraph gains the `ask:` line on its last line, and the leftovers
+paragraph's last line gains the `metrics:` line the close copies from `stamity run metrics`; the Build
+checks paragraph gains, in place, the rule for a refactor whose invariants mix sources. So no
+`/st-work` line moves, and every range holds. `unattended-close-keeps-real-defects` quotes the
+leftovers line whole, so its Brief now closes that line on a `[...]` after the leftovers sentence, its
+words unchanged; its range holds. The Brief is judge input, so the next run counts that one case as
+moved. No `## Expected` block, B / A, claim, floor tag, threshold or roster count moves, so the
+carried tallies and the recomputed census below hold. The dated citations above stay as they were. No
+eval run is made with this change.
+
 **Disposition notes name no retired row, 2026-11-09 (REQ-PROVE-047).** The note gave the judge the
 deleted row's old id, and that id is what was written back. All 42 notes in 36 cases now read
 `Disposition <date>: an advisory row deleted|promoted to B<n> (sha256:<12 hex>)`, each with its

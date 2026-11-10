@@ -140,6 +140,17 @@ const PROPOSAL_WAITS = "a learning this run proposed is not listed here: the mor
 const LAND_LINE = /^- \S+ land: (#[0-9]+ [0-9a-f]{40,64} (?:merged|fast-forwarded)(?: \(approved by the person for [0-9a-f]{40,64}\))?)[ \t]*$/;
 /** A usage line, `- <UTC> usage: <phase> minutes=<n> tokens=<n | unreported> (<client>)`. */
 const USAGE_LINE = /^- \S+ usage: .*\bminutes=(\S+) tokens=(\S+)/;
+/**
+ * The proof block's metrics line, `- <UTC> metrics: wall=<m> agent=<m> person=<m|unreported> rounds=<n> fixes=<n>
+ * reopened=<n|unreported> tokens=<n|unreported> cost=<usd|unreported> (<scope>)`, the last line `stamity run metrics`
+ * prints, copied by the close (REQ-FLOW-183). Each value is a number or `unreported`, so no other text reads as one.
+ */
+const METRICS_VALUE = String.raw`(?:[0-9]+(?:\.[0-9]+)?|unreported)`;
+const METRICS_LINE = new RegExp(
+  String.raw`^- \S+ metrics: (${["wall", "agent", "person", "rounds", "fixes", "reopened", "tokens", "cost"].map((key) => `${key}=${METRICS_VALUE}`).join(" ")})(?:[ \t]|$)`,
+);
+/** What the metrics line's tokens and cost cover, in `run metrics`' own words, as `/st-work` has the close write it. */
+const METRICS_SCOPE = "tokens and cost: the transcript given only, not sub-agents' transcripts; cost an estimate at list rates, not a bill";
 /** A choice line, `- <UTC> choice: <unit> tried | dropped | reverted <approach> — <pointer>`. */
 const CHOICE_LINE = /^- \S+ choice: (.+)$/;
 /** A default, wherever in its line a run wrote it, with or without bold. */
@@ -238,6 +249,14 @@ function usageLine(lines: readonly string[]): string {
   return `usage: minutes=${summed(rows.map((row) => row.minutes))} tokens=${summed(rows.map((row) => row.tokens))} (usage lines: ${rows.length})`;
 }
 
+/** The numbers of the record's last metrics line, the same `run metrics` printed; with none, the verb that prints them. */
+function metricsLine(run: string, lines: readonly string[]): string {
+  const numbers = captured(lines, METRICS_LINE).at(-1);
+  return numbers === undefined
+    ? `metrics: no readable metrics line in the record yet; stamity run metrics --run ${run} prints them`
+    : `metrics: ${numbers} (the record's metrics line; ${METRICS_SCOPE})`;
+}
+
 /** What the record says of the land, as the record's word; with no line, what the page cannot say. */
 function landLine(lines: readonly string[]): string {
   const land = captured(lines, LAND_LINE).at(-1);
@@ -280,7 +299,7 @@ export function overviewFrom(input: OverviewInput): string {
         ...(blast.length === 0 ? [] : ["blast radius:", ...blast.map(quoted)]),
       ],
     ],
-    ["How", [...gatesLines(lines), fromLedger("rounds", roundsLine), fromLedger("findings", findingsLine), usageLine(lines)]],
+    ["How", [...gatesLines(lines), fromLedger("rounds", roundsLine), fromLedger("findings", findingsLine), usageLine(lines), metricsLine(input.run, lines)]],
     ["Why", [...listed("defaults", captured(lines, DEFAULT_LINE)), ...listed("choices", captured(lines, CHOICE_LINE))]],
     ["Only you can do", [...humanOnly(input), ...heldRows(input, lines)]],
   ];

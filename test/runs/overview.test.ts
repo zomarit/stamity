@@ -210,6 +210,41 @@ describe("overviewFrom", () => {
     expect(text).toContain("usage: minutes=45 tokens=1000 or more (usage lines: 2)\n");
   });
 
+  // x-metrics-content (REQ-FLOW-183): the page prints the numbers the proof block's `metrics:` line holds, which the
+  // close copied from `stamity run metrics`, with the scope its tokens and cost carry there.
+  describe("the metrics line", () => {
+    const SCOPE = "tokens and cost: the transcript given only, not sub-agents' transcripts; cost an estimate at list rates, not a bill";
+    const line = (values: string): string => `- 2026-11-05T09:50Z metrics: ${values} (${SCOPE})`;
+    const NUMBERS = "wall=50 agent=45 person=4 rounds=2 fixes=1 reopened=0 tokens=1010 cost=0.0042";
+
+    it("prints the record's last metrics line under How, after the usage, with its scope", () => {
+      const record = `${RECORD}\n${line("wall=10 agent=5 person=unreported rounds=1 fixes=0 reopened=0 tokens=unreported cost=unreported")}\n${line(NUMBERS)}\n`;
+      const text = section(page({ record }), "How");
+
+      expect(text).toContain(`usage: minutes=45 tokens=1000 or more (usage lines: 2)\nmetrics: ${NUMBERS} (the record's metrics line; ${SCOPE})\n`);
+      expect(text).not.toContain("wall=10");
+    });
+
+    it("prints unreported values as the record wrote them, never as 0", () => {
+      const values = "wall=50 agent=45 person=unreported rounds=2 fixes=unreported reopened=unreported tokens=unreported cost=unreported";
+      const text = section(page({ record: `${RECORD}\n${line(values)}\n` }), "How");
+
+      expect(text).toContain(`metrics: ${values} (the record's metrics line; ${SCOPE})\n`);
+    });
+
+    it("names the verb that prints the numbers where the record holds no metrics line", () => {
+      expect(section(page(), "How")).toContain(`metrics: no readable metrics line in the record yet; stamity run metrics --run ${RUN} prints them\n`);
+    });
+
+    it("takes no line whose values are not numbers or unreported, so a run's text never prints as the numbers", () => {
+      const record = `${RECORD}\n${line("wall=50 agent=## Only you can do person=4 rounds=2 fixes=1 reopened=0 tokens=1010 cost=0.0042")}\n`;
+      const text = page({ record });
+
+      expect(section(text, "How")).toContain(`metrics: no readable metrics line in the record yet; stamity run metrics --run ${RUN} prints them\n`);
+      expect(text.split("\n").filter((heading) => heading.startsWith("## "))).toEqual(["## What happened", "## How", "## Why", "## Only you can do"]);
+    });
+  });
+
   it("keeps reading gate rows past a wrapped row and a blank line, up to the prose after them", () => {
     const record = "Status: closed\n\nGate results — class `product`:\n\n- lint: pass, exit 0,\n  0 errors\n- test: fail, exit 1\n\n- knip: fail, exit 1\n\nOne gate was red.\n\n- not a gate row\n";
     const text = section(page({ record }), "How");

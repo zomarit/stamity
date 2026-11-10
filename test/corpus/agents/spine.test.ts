@@ -77,6 +77,15 @@ const BEHAVIOR_UNCHANGED =
 const NO_HELD_COMMANDS =
   "A behavior-preserving transforming unit with no test path to hold (no unit 0, and `Verified by` cells that name only commands) never calls `gate held` with no paths: it records `- <UTC> no held tests: <unit> commands`, and its evidence is each named command run green before and after its change, each with its exit code on the record.";
 
+/**
+ * The mixed-source refactor rule (plan 024 file 3 unit x-metrics-content, sign-off S84, review/136 from
+ * x-recipe's closure re-review), after `NO_HELD_COMMANDS` in the implementer's Testing rules and in the
+ * same words in `/st-work`'s Build checks, pinned in test/corpus/commands/work.test.ts. S79's and S81's
+ * sentences each take one source, so a refactor whose invariants draw on two held only one of them.
+ */
+const MIXED_SOURCES =
+  "A behavior-preserving transforming unit whose invariants mix sources (any two of unit 0's pins, `Verified by` test paths and `Verified by` commands) holds the union, unit 0's pins and every `Verified by` test path, and runs every `Verified by` command green before and after its change, each with its exit code on the record; the orchestrator writes the `held:` and `no held tests` lines, never the builder.";
+
 /** The status enum every sub-agent returns, inlined in every body. */
 const STATUS_ENUMS: readonly string[] = [
   "DONE",
@@ -598,6 +607,11 @@ describe("implementer — single unit, single writer", () => {
     // only by commands has no test path to hold, so it records the commands green before and after
     // instead of calling `gate held` with no paths.
     expect(testing).toContain(NO_HELD_COMMANDS);
+    // Added 2026-11-10 (x-metrics-content, sign-off S84, review/136): a refactor whose invariants mix
+    // sources holds every test source and runs every command, and the record lines stay the
+    // orchestrator's, since the builder writes only its file list and its report.
+    expect(testing).toContain(MIXED_SOURCES);
+    expect(testing.indexOf(MIXED_SOURCES)).toBeGreaterThan(testing.indexOf(NO_HELD_COMMANDS));
   });
 
   it("writes held tests from the criteria alone in a tests-only dispatch", async () => {

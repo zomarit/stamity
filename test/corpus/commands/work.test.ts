@@ -9,6 +9,8 @@ import {
   MIN_MAX_REVIEW_ITERATIONS,
 } from "../../../src/roster/reviewCaps.ts";
 import { SPECIALIST_TRIGGER_TABLE } from "../../../src/roster/triggers.ts";
+import { metricsFrom, metricsText } from "../../../src/runs/metrics.ts";
+import { transcriptUsageFromText } from "../../../src/runs/transcriptUsage.ts";
 import { CONTENT_PREFIX } from "../../../src/types/markers.ts";
 import {
   assertDenyClean,
@@ -1866,8 +1868,16 @@ describe("/st-work — Prove", () => {
     // this one. The leftovers-line paragraph now stands between the two, so the slice ends where
     // that paragraph opens. What is asserted is unchanged and no looser: the usage paragraph is
     // this one sentence, byte for byte, and no word of it moved.
+    //
+    // TEST CHANGE, justified (2026-11-10, plan 024 file 3, unit x-metrics-content; REQ-FLOW-183,
+    // REQ-CTX-019): the paragraph was the usage sentence alone. It now also names the `ask:` line,
+    // which `stamity run metrics` sums into the person's minutes; it is appended the same way, as
+    // each ask closes, so it shares this paragraph and names no place inside the proof block either.
+    // The usage sentence is unchanged byte for byte, and the paragraph is still exactly what is pinned.
+    const ask =
+      "As each ask closes, answered or taken by its default, append `- <UTC> ask: <phase|qa|close> asked=<UTC> answered=<UTC|none> questions=<n>` the same way, `answered=none` where no answer came; a run that asked nothing writes no `ask:` line.";
     const paragraph = proof.slice(at, proof.indexOf("**Leftovers line.**")).trim();
-    expect(paragraph).toBe(usage);
+    expect(paragraph).toBe(`${usage} ${ask}`);
     // Below the cut: the paragraph costs nothing a resumed run re-attaches.
     expect(raw.indexOf("**Usage lines.**")).toBeGreaterThan(raw.indexOf("\n### Specialist pass\n"));
     expect(raw.indexOf("**Usage lines.**")).toBeGreaterThan(REATTACH_BUDGET_CHARS);
@@ -1893,7 +1903,11 @@ describe("/st-work — Prove", () => {
     const at = proof.indexOf(leftovers);
     expect(at).toBeGreaterThan(proof.indexOf("**Usage lines.**"));
     expect(at).toBeLessThan(proof.indexOf("Cite native platform artifacts"));
-    expect(proof.slice(at, proof.indexOf("Cite native platform artifacts")).trim()).toBe(leftovers);
+    // TEST CHANGE, justified (2026-11-10, plan 024 file 3, unit x-metrics-content; REQ-FLOW-183):
+    // the slice ended at "Cite native platform artifacts". The metrics line's sentences now follow
+    // this one, beside it on its last line, so the slice ends where they open. What is asserted is
+    // no looser: the leftovers text is the one sentence, byte for byte.
+    expect(proof.slice(at, proof.indexOf("**Metrics line.**")).trim()).toBe(leftovers);
     // One blank line and two lines, and the paragraph itself sits above no table.
     const lines = raw.split("\n");
     const first = lines.findIndex((line) => line.startsWith("**Leftovers line.**"));
@@ -1907,6 +1921,55 @@ describe("/st-work — Prove", () => {
     // Below the cut: the paragraph costs nothing a resumed run re-attaches.
     expect(raw.indexOf("**Leftovers line.**")).toBeGreaterThan(raw.indexOf("\n### Specialist pass\n"));
     expect(raw.indexOf("**Leftovers line.**")).toBeGreaterThan(REATTACH_BUDGET_CHARS);
+  });
+
+  // Added 2026-11-10 (plan 024 file 3, unit x-metrics-content; REQ-FLOW-183, REQ-CTX-019): the close
+  // copies `stamity run metrics`' last line into the Proof block, beside the leftovers line, and the
+  // line names what its tokens and cost cover in `run metrics`' own words (x-run-metrics review r2
+  // note): a sub-agent's counts sit in its own transcript, and list rates are no bill. The verb's own
+  // output is read here from a fixture, so the scope words and the line's keys cannot drift apart.
+  it("names the metrics line the close copies from run metrics, with its tokens and cost scope (REQ-FLOW-183)", async () => {
+    const raw = (await workFile).raw;
+    const proof = collapse(section(await body(), "### Proof block"));
+    const scope = "tokens and cost: the transcript given only, not sub-agents' transcripts; cost an estimate at list rates, not a bill";
+    const metrics =
+      `**Metrics line.** Beside it the close adds \`- <UTC> metrics: wall=<m> agent=<m> person=<m|unreported> rounds=<n> fixes=<n> reopened=<n|unreported> tokens=<n|unreported> cost=<usd|unreported> (${scope})\`, the last line \`stamity run metrics --run <run-id>\` prints, run with \`--transcript <path>\` where the client names the session's transcript, then that scope as \`run metrics\` prints it; a value it cannot read stays \`unreported\`, never 0, and the line is one of its own in the Proof block, never directly above a table.`;
+    expect(proof).toContain(metrics);
+    // After the leftovers sentence, before the citation paragraph, and nothing else between.
+    const at = proof.indexOf(metrics);
+    expect(at).toBeGreaterThan(proof.indexOf("**Leftovers line.**"));
+    expect(proof.slice(at, proof.indexOf("Cite native platform artifacts")).trim()).toBe(metrics);
+    // The template's keys are the ones `run metrics` prints, in its order, on its last line.
+    const record = [
+      "- 2026-11-05T09:00Z usage: build minutes=40 tokens=unreported (Claude Code)",
+      "- 2026-11-05T09:30Z usage: review r2 minutes=5 tokens=unreported (Claude Code)",
+      "- 2026-11-05T09:45Z ask: qa asked=2026-11-05T09:40Z answered=2026-11-05T09:44Z questions=1",
+    ].join("\n");
+    const transcript = JSON.stringify({
+      type: "assistant",
+      timestamp: "2026-11-05T09:10:00.000Z",
+      message: { id: "msg_a", model: "claude-opus-5-5", usage: { input_tokens: 1000, output_tokens: 10 } },
+    });
+    const printed = metricsText(
+      metricsFrom({ run: "2026-11-05_sample", record, ledger: [], reports: [], transcript: { path: "session.jsonl", read: { ok: true, usage: transcriptUsageFromText(transcript) } } }),
+    );
+    const last = printed.at(-1) ?? "";
+    expect(last).toMatch(/^metrics: wall=45 agent=45 person=4 rounds=2 fixes=0 reopened=0 tokens=1010 cost=[0-9.]+$/);
+    const keys = (line: string): string[] => [...line.matchAll(/ ([a-z]+)=/g)].map((match) => match[1] ?? "");
+    expect(keys(metrics.slice(metrics.indexOf("metrics: wall="), metrics.indexOf(` (${scope})`)))).toEqual(keys(last));
+    // The scope is the verb's: its tokens line and its cost line say the same words.
+    expect(printed.find((line) => line.startsWith("tokens: "))).toContain("the transcript given only, not sub-agents' transcripts");
+    expect(printed.find((line) => line.startsWith("cost: "))).toContain("an estimate at list rates, not a bill, for the transcript given only, not sub-agents' transcripts");
+    // Below the cut: the paragraph costs nothing a resumed run re-attaches.
+    expect(raw.indexOf("**Metrics line.**")).toBeGreaterThan(raw.indexOf("\n### Specialist pass\n"));
+    expect(raw.indexOf("**Metrics line.**")).toBeGreaterThan(REATTACH_BUDGET_CHARS);
+    // It shares the leftovers paragraph's last line, so the body spends no line of the cap pinned
+    // above, and that paragraph still sits above no table.
+    const lines = raw.split("\n");
+    const labelLine = lines.findIndex((line) => line.includes("**Metrics line.**"));
+    expect(lines[labelLine - 1]?.startsWith("**Leftovers line.**")).toBe(true);
+    expect(lines[labelLine + 1]).toBe("");
+    expect(lines[labelLine + 2]?.startsWith("|")).toBe(false);
   });
 
   it("closes the run with the proof block over a write-ahead ledger", async () => {
@@ -2499,6 +2562,25 @@ describe("/st-work — dispatch contract", () => {
       const fallback = "That fallback is keyed only to `gate` refusing `held`, never to a missing path list.";
       expect(text).toContain(fallback);
       expect(text.indexOf(fallback)).toBeGreaterThan(text.indexOf("With no `gate held` (an older CLI:"));
+    });
+
+    // Added 2026-11-10 (plan 024 file 3 unit x-metrics-content, sign-off S84, review/136 from x-recipe's
+    // closure re-review): S79's sentence takes unit 0's pins or the `Verified by` tests, and S81's
+    // takes commands only when no test path exists, so a refactor whose invariants draw on two
+    // sources held one and left the other unproven. It now holds the union and runs every command,
+    // and the record lines are the orchestrator's, never the builder's.
+    it("holds every test source and runs every command of a refactor whose invariants mix sources, in the implementer's words (S84)", async () => {
+      const text = await checks();
+      const rule =
+        "A behavior-preserving transforming unit whose invariants mix sources (any two of unit 0's pins, `Verified by` test paths and `Verified by` commands) holds the union, unit 0's pins and every `Verified by` test path, and runs every `Verified by` command green before and after its change, each with its exit code on the record; the orchestrator writes the `held:` and `no held tests` lines, never the builder.";
+      expect(text).toContain(rule);
+      const implementer = collapse(section((await corpusFile("agents/stamity-implementer.md")).parsed.body, "## Testing rules"));
+      expect(implementer).toContain(rule);
+      // It follows the single-source sentences it widens, and comes before Prove reads the held paths.
+      const noHeld = "it records `- <UTC> no held tests: <unit> commands`";
+      expect(text.indexOf(rule)).toBeGreaterThan(text.indexOf(noHeld));
+      expect(text.indexOf(rule)).toBeLessThan(text.indexOf("Every Prove pass, and every pass after a fix, runs `stamity gate held"));
+      expect(implementer.indexOf(rule)).toBeGreaterThan(implementer.indexOf(noHeld));
     });
 
     it("checks the held digest at every Prove pass and after every fix, a mismatch red (REQ-FLOW-171)", async () => {
