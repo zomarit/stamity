@@ -1065,6 +1065,18 @@ describe("REQ-FLOW-182 the root files detection reads", () => {
     const info = await analyzeRepo(root);
     expect(info.monorepoPackages).toEqual([{ name: "@acme/tool", path: "packages/tool" }]);
   });
+
+  it("calls a repository whose only stack is a legacy one brownfield", async () => {
+    const cobol = await analyze({ "PAYROLL.cbl": "       IDENTIFICATION DIVISION.\n" });
+    expect(cobol.languages).toEqual([]);
+    expect(cobol.existingTools).toEqual([]);
+    expect(cobol.legacyStacks).toEqual(["cobol"]);
+    expect(isGreenfield(cobol)).toBe(false);
+
+    const abap = await analyze({ "abaplint.json": "{}\n" });
+    expect(abap.legacyStacks).toEqual(["abap"]);
+    expect(isGreenfield(abap)).toBe(false);
+  });
 });
 
 describe("isGreenfield", () => {
@@ -1085,6 +1097,12 @@ describe("isGreenfield", () => {
     ["a detected language", { languages: ["typescript"], existingTools: [] }, false],
     ["an agent-tool surface on disk", { languages: [], existingTools: ["cursor"] }, false],
     ["this engine's own state, which never reaches existingTools", { languages: [], existingTools: [] }, true],
+    // ADDED rows (REQ-FLOW-182); rows 1-4 are unchanged in input and
+    // expectation, and those four carry no `legacyStacks`, the 1.18 shape,
+    // which must read as before. A stack found only in `legacyStacks` is a
+    // live codebase, never "a fresh repo".
+    ["a legacy stack and nothing else", { languages: [], existingTools: [], legacyStacks: ["cobol"] }, false],
+    ["an empty legacyStacks list", { languages: [], existingTools: [], legacyStacks: [] }, true],
   ])("is %s → %s", (_case, info, expected) => {
     expect(isGreenfield(info)).toBe(expected);
   });

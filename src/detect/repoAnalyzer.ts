@@ -487,8 +487,10 @@ export async function analyzeRepo(rootDir: string): Promise<RepoInfo> {
 }
 
 /**
- * Whether the repository is greenfield: no language identified and no agent
- * tool's configuration on disk.
+ * Whether the repository is greenfield: no language identified, no legacy stack
+ * found, and no agent tool's configuration on disk. A stack found only in
+ * `legacyStacks` is a live codebase, so it is never greenfield; an input with no
+ * `legacyStacks` field (the 1.18 shape) reads as before.
  *
  * One predicate, one definition. The classification decides how much a first
  * run may assume, and two call sites drifting apart on what "greenfield" means
@@ -521,8 +523,10 @@ export async function analyzeRepo(rootDir: string): Promise<RepoInfo> {
  * it instead of re-deriving it, which spans `src/cli/commands/init/apply.ts`,
  * `src/cli/commands/sync/engine.ts` and the manifest schema.
  */
-export function isGreenfield(info: Pick<RepoInfo, "languages" | "existingTools">): boolean {
-  return info.languages.length === 0 && info.existingTools.length === 0;
+export function isGreenfield(
+  info: Pick<RepoInfo, "languages" | "existingTools"> & Partial<Pick<RepoInfo, "legacyStacks">>,
+): boolean {
+  return info.languages.length === 0 && info.existingTools.length === 0 && (info.legacyStacks ?? []).length === 0;
 }
 
 /**
