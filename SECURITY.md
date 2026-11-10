@@ -1100,26 +1100,34 @@ so where it says which edition each id belongs to.
 
 ## What is still open
 
-Three advisories stand, one Dependabot alert each (read live on 2026-11-05, with `npm audit` over
-both lockfiles that day). Each is held by a package this repository does not control:
+Three advisories still name packages in the lockfiles, one Dependabot alert each (read live on
+2026-11-05, with `npm audit` over both lockfiles that day). On 2026-11-10 all three alerts were
+dismissed on GitHub with the reason "vulnerable code is not actually used", after an audit found
+none of the three reachable in what users run. No parent package had moved to a patched range that
+day, and the three are read again when one moves. Each is held by a package this repository does
+not control:
 
 - `glob` 9.0.0 to 14.0.1 (GHSA-3g3m-2fjr-6pw4, medium, a filesystem walk that goes on after its
   `AbortSignal` fires), alert #51, patched in 14.0.2. It is in the root lockfile at 13.0.6, through
   `sigstore`, `make-fetch-happen` and `cacache`, and the latest `cacache`, 21.0.1, still asks for
-  `^13.0.0`. The code path is not reached: `cacache` calls `glob` only in `rm.all` and `verify`, and
-  `make-fetch-happen` calls neither.
+  `^13.0.0`. The code path is not reached: no caller passes an `AbortSignal`, `cacache` calls `glob`
+  only in `rm.all` and `verify`, which nothing calls, and `@sigstore/sign` never turns on
+  `make-fetch-happen`'s cache.
 - `minimatch` 7.0.0 to 11.0.0 (GHSA-g3hv-75wg-m249, medium, denial of service through a pattern that
   amplifies), alert #52, patched in 11.0.1. It is in the root lockfile at 10.2.6, through `eslint`,
   `glob` and `@tufjs/models`, and the latest `@tufjs/models`, 5.0.2, still asks for `^10.2.6`. The
   code path is not reached in the published CLI: `eslint` is a development tool that ships in no
   package, the `glob` route is the one above, and `@tufjs/models` matches a pattern only for a
   target the top level of the TUF metadata does not hold. `sigstore` asks for one target,
-  `trusted_root.json`, and that level held it when read on 2026-11-05. The head of
-  `src/pack/sigstoreVerifier.ts` names the mirror that serves this metadata.
+  `trusted_root.json`, and that level held it when read on 2026-11-05. Where `@tufjs/models` does
+  match, its one call (`dist/role.js`) takes one path segment at a time, from signed TUF metadata,
+  at the default `optimizationLevel` of 1. The head of `src/pack/sigstoreVerifier.ts` names the
+  mirror that serves this metadata.
 - `deepmerge` 4.2.0 and later (GHSA-gcqx-w48m-w2h4, low, prototype poisoning of a merged object),
   alert #54, with no patched version. It is in the site's build only, through `@svgr/webpack` in
   `website/package-lock.json`, at 4.3.1: the docs site's lockfile ships in no package, so the
-  published CLI does not reach it.
+  published CLI does not reach it, and in that build `@svgr/plugin-svgo` 8.1.0, which declares it,
+  never loads it.
 
 The root `package.json` carries no override for `glob` or `minimatch`.
 
