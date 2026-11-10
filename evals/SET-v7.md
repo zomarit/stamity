@@ -4545,6 +4545,15 @@ the floor tags, the thresholds and the 219 non-negotiable rows hold. Both case f
 the 80 above, so that count holds; each moves, so under the incremental rule each re-measures. No eval
 run is made with this change.
 
+**The deleted-row take-out retired, 2026-11-10 (the 1.19.1 patch; REQ-PROVE-047).** The paragraph above
+on the take-out through the 1.19.0 run retires it at the driver's first pin after the 1.19.0 tag. From
+that pin on, the route of record takes no deleted row out of a judge's output: a scoring judge's output
+reaches `parseGrade` as it does on the public route, and `RESULTS.md` carries no § 10a. Runs 58 to 63
+keep the § 10a they recorded. No grade changes, since no disposition note names a row (the 2026-11-09
+paragraph above), so the take-out found none to take out. The dated paragraphs of 2026-11-06,
+2026-11-09 and the take-out's through the 1.19.0 run stay as they were. No case, row, threshold,
+scoring rule or count moves. No eval run is made with this change.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
