@@ -6,12 +6,12 @@ title: Measurements
 
 # Measurements
 
-What this repository can prove about its own output, as of 2026-11-05 — the newest
+What this repository can prove about its own output, as of 2026-11-09 — the newest
 closed run record's date, which is what this page is stamped with rather than the day it was
 rendered. Every number below is computed from a committed artifact, so a claim here can be
 checked rather than believed.
 
-The merge-ready figures are rendered from [`evals/measurements/merge-ready-2026-11-09.json`](https://github.com/zomarit/stamity/blob/records/evals/measurements/merge-ready-2026-11-09.json), the frozen
+The merge-ready figures are rendered from [`evals/measurements/merge-ready-2026-11-10.json`](https://github.com/zomarit/stamity/blob/records/evals/measurements/merge-ready-2026-11-10.json), the frozen
 measurement this page pins; the snapshots live on the `records` branch. A release moves the
 figures in three steps (the release checklist's record-currency line): `node scripts/merge-ready-rate.mjs --write`
 freezes a new snapshot, `node scripts/records.mjs commit -m <message>` publishes it, and the pin
@@ -129,10 +129,11 @@ the number is: an exclusion nobody can see is a number nobody can check.
 - `2026-10-25_autonomy-distribution-02` — no proof block
 - `2026-11-04_factory-bridge` — gates in prose only — no gate row carries a pass or fail
 - `2026-11-05_factory-bridge-02` — gates in prose only — no gate row carries a pass or fail
+- `2026-11-09_last-before-2-0` — gates in prose only — no gate row carries a pass or fail
 
 ### What the number is limited by, stated rather than tuned away
 
-52 run directories are outside the measure and every one of them is named
+53 run directories are outside the measure and every one of them is named
 above. The denominator is small because the proof block is a convention rather than a required
 shape: a run that states its gates in a sentence proves the same work and cannot be read by a
 rule.
