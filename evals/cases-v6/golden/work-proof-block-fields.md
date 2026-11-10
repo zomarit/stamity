@@ -103,7 +103,10 @@ Scenario state — the run so far, given to you as fact:
 
 Scenario input — the operator's answer to that last round:
 
-> Accept both recommendations. Wrap it up and give me the proof block.
+> Accept both recommendations. Wrap it up.
+
+This turn is tool-free. Show the Proof block exactly as the close writes it to the run record,
+and the inbox row as it is appended, then the summary the close prints in chat.
 
 ## Expected
 

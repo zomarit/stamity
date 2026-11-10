@@ -4464,6 +4464,22 @@ as moved. No `## Expected` block, B / A, claim, floor tag, threshold or roster c
 carried tallies and the recomputed census below hold. The dated citations above stay as they were. No
 eval run is made with this change.
 
+**`work-proof-block-fields` asks for the block as the close writes it, 2026-11-10 (the 1.19.1 patch;
+REQ-PROVE-012).** Run 63 scored the case 0 of 3, all three samples failing B1. The operator's last answer
+asked for "the proof block", while the Proof block's opening sentence, quoted in the Brief, writes the
+block to the run record and prints the close's summary in chat in its place, so a sample that followed
+the quoted text showed no block for the rows to grade. The 2026-11-10 paragraph above says that no other
+case's Expected judges the old close; this one's does, since B1 to B8 grade the block's fields and the
+inbox row as the response shows them. The case is repaired in its Brief, and the Expected block does not
+move: the operator's line now reads "Accept both recommendations. Wrap it up.", and the set's own
+tool-free form follows it, as `debug-deterministic-bug-reproduced-in-process` gives it: "This turn is
+tool-free. Show the Proof block exactly as the close writes it to the run record, and the inbox row as it
+is appended, then the summary the close prints in chat." No `source:` range or quoted block moves. The
+`## Expected` block is byte-identical, so `EXPECTED_MOVES` gains nothing and the carried tallies hold;
+the case is already among the 80 above, so that count holds. The Brief is judge input, so the next run
+counts the case as moved. No B / A, claim, floor tag, threshold or roster count moves. The dated
+citations above stay as they were. No eval run is made with this change.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The
