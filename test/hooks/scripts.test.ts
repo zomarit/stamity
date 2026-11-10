@@ -959,6 +959,71 @@ describe("buildSessionStartScript", () => {
     }
   });
 
+  it("names the pinned npx -y fallback only for the public registry's package, and a scope-registry fork only calls that fetch nothing (S83)", async () => {
+    // review/133: the session start does not carry a fork's scope registry (an https URL), and without it `npx -y`
+    // on the fork's scoped name asks the public registry, where anyone may hold that name and version.
+    const base = createManifest({
+      tools: ["claude", "cursor"],
+      selection: { items: { agent: [], skill: [], rule: [], command: [] } },
+      generatorVersion: "0.0.0-test",
+      now: new Date("2026-08-17T00:00:00.000Z"),
+    });
+    const manifest = { ...base, learnings: { indexBytes: LEARNINGS_INDEX_BYTES.min } };
+    const planWith = (identity: { packageName?: string; npmChannel?: boolean; npmRegistry?: string }) =>
+      composeEmissionPlanner(ADAPTER_REGISTRY).plan({
+        rootDir: getRepo().dir,
+        manifest,
+        engineVersion: "0.0.0-test",
+        facts: { monorepoPackages: [] },
+        ...identity,
+      });
+    const forkCall = "`stamity learn read` where the CLI is installed, else `npx --no @acme/stamity@0.0.0-test learn read`";
+    const publicCall =
+      "`stamity learn read` where the CLI is installed, else `npx -y @zomarit/stamity@0.0.0-test learn read`, which needs the npm registry";
+    const plans = [
+      [await planWith({ packageName: "@acme/stamity", npmChannel: true, npmRegistry: "https://npm.acme.example" }), forkCall],
+      [await planWith({}), publicCall],
+    ] as const;
+
+    expect(forkCall).not.toMatch(/npx -y|registry|https?/);
+    for (const [plan, named] of plans) {
+      for (const path of [`${CLAUDE_HOOKS_DIR}/stamity-session-start.mjs`, CURSOR_CONTEXT_ONCE_HOOK_PATH]) {
+        expect(plan.find((row) => row.path === path)?.content, path).toContain(`const READ_CALL = ${JSON.stringify(named)};`);
+      }
+      // The session start reaches for no network (Cursor's context-once copy has its own reader, so it is not held here).
+      expect(plan.find((row) => row.path === `${CLAUDE_HOOKS_DIR}/stamity-session-start.mjs`)?.content).not.toMatch(/https?/i);
+    }
+
+    // Run: the fork's banner names the installed copy and `npx --no`, no registry, and the engine twin handed the
+    // same call prints the same lines.
+    const files: Record<string, string> = {};
+    for (let n = 1; n <= 30; n += 1) {
+      const id = `note-${String(n).padStart(2, "0")}`;
+      files[`.stamity/learnings/${id}.md`] = learning({ id });
+    }
+    await getRepo().seedFiles(files);
+    const fork = { ...CLI_PIN, packageName: "@acme/stamity", npmChannel: true, registry: "https://npm.acme.example" };
+    const readCall = sessionIndexOptions(undefined, fork).readCall ?? "";
+    const start = sessionStartOf(
+      planCoreHookScripts(`../${POLICY_FILE}`, "claude", { ...fork, learnings: { indexBytes: LEARNINGS_INDEX_BYTES.min } }),
+    );
+    const script = await place("session-start.mjs", start);
+
+    const lines = run(script, { cwd: getRepo().dir }).stdout.split("\n");
+    const overflow = lines.find((line) => line.startsWith("- … and ")) ?? "";
+    const listed = lines.filter((line) => line.startsWith("- [")).length;
+    const engine = formatLearningsIndex(await loadValidatedLearnings({ rootDir: getRepo().dir }), {
+      indexBytes: LEARNINGS_INDEX_BYTES.min,
+      readCall,
+    }).split("\n");
+
+    expect(readCall).toBe("`stamity learn read` where the CLI is installed, else `npx --no @acme/stamity@1.0.0-golden learn read`");
+    expect(overflow).toBe(overflowLine(30 - listed, readCall));
+    expect(overflow).not.toMatch(/npx -y|registry|https?/);
+    expect(lines.slice(0, engine.length)).toEqual(engine);
+    expect(start).not.toMatch(/https?|curl|wget|fetch/i);
+  });
+
   it("keeps the whole banner under 9,500 characters, learning lines first, the overflow line kept", async () => {
     // S75: Claude Code keeps 10,000 characters of a hook's stdout and passes only a preview past it. Sixty learnings
     // of about 200 bytes fill the 8,192-byte budget, and forty refused handoffs with long names add about 4,500
@@ -1051,6 +1116,35 @@ describe("buildSessionStartScript", () => {
     expect(lines[1]).toBe(placeholder);
     expect(lines.some((line) => line.includes("must always"))).toBe(false);
   });
+
+  // POSIX-ONLY (tracking: review/134, owner: the l-banner unit): only the file name reaches a 2,048-byte cut (each
+  // field before it prints at most 200 characters), and the Win32 naming rules forbid a backslash in a file name,
+  // so on Windows escape notation cannot reach the cut and the seeding cannot create the subject.
+  it.skipIf(process.platform === "win32")(
+    "re-screens a cut first line with its escape notation read, as the field screen reads a field",
+    async () => {
+      // The case above with `\x61` for one "a": neither the whole name nor the cut matches as printed, and the cut
+      // read as its notation names matches `role-must-always`. 69 "€" end "alw\x61ys" at byte 2,045; the "z" after
+      // it is the byte the cut drops.
+      const wide = "€".repeat(200);
+      const name = `${"€".repeat(69)}x the agent must alw\\x61ysz.md`;
+      await getRepo().seedFiles({
+        [`.stamity/learnings/${name}`]: learning({ id: wide, confidence: wide, summary: wide }),
+      });
+      const placeholder = "- (a learning line withheld: cut to the byte budget, it matched the read screen)";
+      const script = await place("session-start.mjs", buildSessionStartScript({ indexBytes: LEARNINGS_INDEX_BYTES.min }));
+      const unbudgeted = await place("unbudgeted.mjs", buildSessionStartScript({ indexBytes: LEARNINGS_INDEX_BYTES.max }));
+
+      const lines = run(script, { cwd: getRepo().dir }).stdout.split("\n");
+      const full = run(unbudgeted, { cwd: getRepo().dir }).stdout.split("\n");
+
+      expect(full.some((line) => line.includes("must alw\\x61ysz.md)"))).toBe(true);
+      expect(readNotation("the agent must alw\\x61ys…")).toBe("the agent must always…");
+      expect(lines[0]).toMatch(/^Learnings: 1 loaded, 0 skipped, /);
+      expect(lines[1]).toBe(placeholder);
+      expect(lines.some((line) => line.includes("must alw"))).toBe(false);
+    },
+  );
 
   it("refuses a byte budget outside 2,048 to 8,192", () => {
     // TEST CHANGE, justified (l-banner fix round 1, S75): the maximum fell from 131,072 to 8,192 so the banner fits

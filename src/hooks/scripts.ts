@@ -1326,10 +1326,8 @@ function append(out, items, noun, keep = MAX_ITEM_LINES) {
 const CONFIDENCE_RANK = { high: 0, medium: 1, low: 2 };
 
 /**
- * The learning lines the banner lists, in order, within INDEX_BYTES (joined by
- * newlines) and INDEX_LINES: \`fitIndexLines\` in the engine's store, line for
- * line. The first line that does not fit ends the list; a first line longer than
- * the whole budget is listed cut to it, so the budget never lists nothing.
+ * The lines listed within INDEX_BYTES (joined by newlines) and INDEX_LINES, as the engine's \`fitIndexLines\` lists
+ * them: the first line that does not fit ends the list; a first line past the budget is listed cut.
  */
 function fit(lines) {
   const shown = [];
@@ -1347,7 +1345,7 @@ function fit(lines) {
   return shown;
 }
 
-/** A line cut to \`max\` bytes with its "…"; a cut the screen matches prints a fixed line. */
+/** A line cut to \`max\` bytes with its "…"; one the screen matches, notation read too, prints a fixed line. */
 function clip(line, max) {
   let out = "";
   let used = Buffer.byteLength("…", "utf8");
@@ -1357,7 +1355,9 @@ function clip(line, max) {
     out += char;
     used += size;
   }
-  return screenIds(out + "…").length > 0 ? ${json(WITHHELD_CUT_LINE)} : out + "…";
+  out += "…";
+  const read = readNotation(out);
+  return [out, read, printable(read).replace(/\\s+/g, " ")].some(screened) ? ${json(WITHHELD_CUT_LINE)} : out;
 }
 
 const learningsDir = join(STATE_ROOT, "learnings");
@@ -6312,23 +6312,21 @@ export function planCoreHookScripts(
  * `cli`, the setup's package and version. Shared by {@link planCoreHookScripts} and the Cursor adapter's context-once
  * copy, so both banners read one setting and name one call.
  *
- * The call is {@link cliCallHint}'s sentence without the scope registry a fork may name: that registry is an https
- * URL, and the session start stays free of network words under a plain grep (the reason its screen drops the
- * network rows). A fork's pinned fallback then resolves where npm's own configuration names the scope's registry.
+ * The call is {@link cliCallHint}'s sentence. The pinned `npx -y` fallback is named only for a package the public
+ * registry serves: no scope registry in `cli` and an npm channel. A fork whose scope names its own registry gets only
+ * the calls that fetch nothing, the installed copy and `npx --no` (S83, review/133). Its registry is an https URL the
+ * session start does not carry, since the session start stays free of network words under a plain grep (the reason
+ * its screen drops the network rows), and without it npx would ask the public registry, where anyone may hold the name.
  */
 export function sessionIndexOptions(
   learnings: { indexBytes?: number; indexLines?: number } | undefined,
-  cli: { packageName: string; version: string; npmChannel?: boolean },
+  cli: { packageName: string; version: string; npmChannel?: boolean; registry?: string },
 ): Pick<SessionStartScriptOptions, "indexBytes" | "maxIndexLines" | "readCall"> {
+  const fetchesNothing = cli.npmChannel === false || cli.registry !== undefined;
   return {
     ...(learnings?.indexBytes === undefined ? {} : { indexBytes: learnings.indexBytes }),
     ...(learnings?.indexLines === undefined ? {} : { maxIndexLines: learnings.indexLines }),
-    readCall: cliCallHint(
-      cli.packageName,
-      cli.version,
-      "learn read",
-      cli.npmChannel === undefined ? {} : { npmChannel: cli.npmChannel },
-    ),
+    readCall: cliCallHint(cli.packageName, cli.version, "learn read", fetchesNothing ? { npmChannel: false } : {}),
   };
 }
 

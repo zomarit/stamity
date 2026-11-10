@@ -24,6 +24,7 @@ import {
   MAX_LEARNING_SUMMARY_LENGTH,
   orderingDay,
   printableText,
+  readNotation,
   resolveLearningsCaps,
   reviewDueSoon,
   sanitizeLearningsContent,
@@ -629,7 +630,7 @@ const CONFIDENCE_RANK: Readonly<Record<string, number>> = { high: 0, medium: 1, 
  * that backfilled a shorter line would depend on lengths nobody predicts. A first
  * line longer than the whole budget is listed cut to it, ending `…`, so a budget
  * never lists nothing while a learning loaded. The cut line is screened again, as
- * printed; a hit prints {@link WITHHELD_CUT_LINE} in its place.
+ * printed and with its escape notation read; a hit prints {@link WITHHELD_CUT_LINE} in its place.
  */
 function fitIndexLines(lines: readonly string[], maxBytes: number | undefined, maxLines: number | undefined): string[] {
   const shown: string[] = [];
@@ -640,7 +641,10 @@ function fitIndexLines(lines: readonly string[], maxBytes: number | undefined, m
     if (maxBytes !== undefined && used + cost > maxBytes) {
       if (shown.length === 0) {
         const cut = clipLine(line, maxBytes);
-        shown.push(blockedPatternIds(cut).length > 0 ? WITHHELD_CUT_LINE : cut);
+        // As printed, then with its escape notation read and printed, as `screenedCopies` reads a field (review/134).
+        const read = readNotation(cut);
+        const copies = [cut, read, printableText(read).replace(/\s+/g, " ")];
+        shown.push(copies.some((copy) => blockedPatternIds(copy).length > 0) ? WITHHELD_CUT_LINE : cut);
       }
       break;
     }

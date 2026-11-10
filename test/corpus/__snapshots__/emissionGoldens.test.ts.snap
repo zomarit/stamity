@@ -1096,10 +1096,8 @@ function append(out, items, noun, keep = MAX_ITEM_LINES) {
 const CONFIDENCE_RANK = { high: 0, medium: 1, low: 2 };
 
 /**
- * The learning lines the banner lists, in order, within INDEX_BYTES (joined by
- * newlines) and INDEX_LINES: \`fitIndexLines\` in the engine's store, line for
- * line. The first line that does not fit ends the list; a first line longer than
- * the whole budget is listed cut to it, so the budget never lists nothing.
+ * The lines listed within INDEX_BYTES (joined by newlines) and INDEX_LINES, as the engine's \`fitIndexLines\` lists
+ * them: the first line that does not fit ends the list; a first line past the budget is listed cut.
  */
 function fit(lines) {
   const shown = [];
@@ -1117,7 +1115,7 @@ function fit(lines) {
   return shown;
 }
 
-/** A line cut to \`max\` bytes with its "…"; a cut the screen matches prints a fixed line. */
+/** A line cut to \`max\` bytes with its "…"; one the screen matches, notation read too, prints a fixed line. */
 function clip(line, max) {
   let out = "";
   let used = Buffer.byteLength("…", "utf8");
@@ -1127,7 +1125,9 @@ function clip(line, max) {
     out += char;
     used += size;
   }
-  return screenIds(out + "…").length > 0 ? "- (a learning line withheld: cut to the byte budget, it matched the read screen)" : out + "…";
+  out += "…";
+  const read = readNotation(out);
+  return [out, read, printable(read).replace(/\\s+/g, " ")].some(screened) ? "- (a learning line withheld: cut to the byte budget, it matched the read screen)" : out;
 }
 
 const learningsDir = join(STATE_ROOT, "learnings");
@@ -2718,10 +2718,8 @@ function append(out, items, noun, keep = MAX_ITEM_LINES) {
 const CONFIDENCE_RANK = { high: 0, medium: 1, low: 2 };
 
 /**
- * The learning lines the banner lists, in order, within INDEX_BYTES (joined by
- * newlines) and INDEX_LINES: \`fitIndexLines\` in the engine's store, line for
- * line. The first line that does not fit ends the list; a first line longer than
- * the whole budget is listed cut to it, so the budget never lists nothing.
+ * The lines listed within INDEX_BYTES (joined by newlines) and INDEX_LINES, as the engine's \`fitIndexLines\` lists
+ * them: the first line that does not fit ends the list; a first line past the budget is listed cut.
  */
 function fit(lines) {
   const shown = [];
@@ -2739,7 +2737,7 @@ function fit(lines) {
   return shown;
 }
 
-/** A line cut to \`max\` bytes with its "…"; a cut the screen matches prints a fixed line. */
+/** A line cut to \`max\` bytes with its "…"; one the screen matches, notation read too, prints a fixed line. */
 function clip(line, max) {
   let out = "";
   let used = Buffer.byteLength("…", "utf8");
@@ -2749,7 +2747,9 @@ function clip(line, max) {
     out += char;
     used += size;
   }
-  return screenIds(out + "…").length > 0 ? "- (a learning line withheld: cut to the byte budget, it matched the read screen)" : out + "…";
+  out += "…";
+  const read = readNotation(out);
+  return [out, read, printable(read).replace(/\\s+/g, " ")].some(screened) ? "- (a learning line withheld: cut to the byte budget, it matched the read screen)" : out;
 }
 
 const learningsDir = join(STATE_ROOT, "learnings");
@@ -4344,10 +4344,8 @@ function append(out, items, noun, keep = MAX_ITEM_LINES) {
 const CONFIDENCE_RANK = { high: 0, medium: 1, low: 2 };
 
 /**
- * The learning lines the banner lists, in order, within INDEX_BYTES (joined by
- * newlines) and INDEX_LINES: \`fitIndexLines\` in the engine's store, line for
- * line. The first line that does not fit ends the list; a first line longer than
- * the whole budget is listed cut to it, so the budget never lists nothing.
+ * The lines listed within INDEX_BYTES (joined by newlines) and INDEX_LINES, as the engine's \`fitIndexLines\` lists
+ * them: the first line that does not fit ends the list; a first line past the budget is listed cut.
  */
 function fit(lines) {
   const shown = [];
@@ -4365,7 +4363,7 @@ function fit(lines) {
   return shown;
 }
 
-/** A line cut to \`max\` bytes with its "…"; a cut the screen matches prints a fixed line. */
+/** A line cut to \`max\` bytes with its "…"; one the screen matches, notation read too, prints a fixed line. */
 function clip(line, max) {
   let out = "";
   let used = Buffer.byteLength("…", "utf8");
@@ -4375,7 +4373,9 @@ function clip(line, max) {
     out += char;
     used += size;
   }
-  return screenIds(out + "…").length > 0 ? "- (a learning line withheld: cut to the byte budget, it matched the read screen)" : out + "…";
+  out += "…";
+  const read = readNotation(out);
+  return [out, read, printable(read).replace(/\\s+/g, " ")].some(screened) ? "- (a learning line withheld: cut to the byte budget, it matched the read screen)" : out;
 }
 
 const learningsDir = join(STATE_ROOT, "learnings");
@@ -6080,10 +6080,8 @@ function append(out, items, noun, keep = MAX_ITEM_LINES) {
 const CONFIDENCE_RANK = { high: 0, medium: 1, low: 2 };
 
 /**
- * The learning lines the banner lists, in order, within INDEX_BYTES (joined by
- * newlines) and INDEX_LINES: \`fitIndexLines\` in the engine's store, line for
- * line. The first line that does not fit ends the list; a first line longer than
- * the whole budget is listed cut to it, so the budget never lists nothing.
+ * The lines listed within INDEX_BYTES (joined by newlines) and INDEX_LINES, as the engine's \`fitIndexLines\` lists
+ * them: the first line that does not fit ends the list; a first line past the budget is listed cut.
  */
 function fit(lines) {
   const shown = [];
@@ -6101,7 +6099,7 @@ function fit(lines) {
   return shown;
 }
 
-/** A line cut to \`max\` bytes with its "…"; a cut the screen matches prints a fixed line. */
+/** A line cut to \`max\` bytes with its "…"; one the screen matches, notation read too, prints a fixed line. */
 function clip(line, max) {
   let out = "";
   let used = Buffer.byteLength("…", "utf8");
@@ -6111,7 +6109,9 @@ function clip(line, max) {
     out += char;
     used += size;
   }
-  return screenIds(out + "…").length > 0 ? "- (a learning line withheld: cut to the byte budget, it matched the read screen)" : out + "…";
+  out += "…";
+  const read = readNotation(out);
+  return [out, read, printable(read).replace(/\\s+/g, " ")].some(screened) ? "- (a learning line withheld: cut to the byte budget, it matched the read screen)" : out;
 }
 
 const learningsDir = join(STATE_ROOT, "learnings");

@@ -659,6 +659,31 @@ describe("formatLearningsIndex", () => {
     ]);
   });
 
+  it("withholds a cut first line that matches only once its escape notation is read, as the field screen reads it", () => {
+    // review/134: the case above with `\x61` for one "a". Neither the whole summary nor the cut matches as printed;
+    // the cut read as its notation names matches `role-must-always`. 175 ASCII bytes end "alw\x61ys" at byte 2,045,
+    // and the "z" after it is the byte the cut drops.
+    const summary = `${"€".repeat(609)}${"x".repeat(175)} the agent must alw\\x61ysz and more.`;
+    const result: LoaderResult = {
+      learnings: [
+        { fileName: "wide.md", frontmatter: { id: "wide", confidence: "high", summary }, body: "", integrityOk: true },
+        { fileName: "next.md", frontmatter: { id: "next", confidence: "high", summary: "Short." }, body: "", integrityOk: true },
+      ],
+      skips: [],
+      totalBytes: 0,
+    };
+
+    const whole = formatLearningsIndex(result, { now: NOW }).split("\n");
+    const lines = formatLearningsIndex(result, { now: NOW, indexBytes: 2_048 }).split("\n");
+
+    expect(whole[1]).toContain("must alw\\x61ysz");
+    expect(lines).toEqual([
+      expect.stringMatching(/^Learnings: 2 loaded, 0 skipped, /),
+      "- (a learning line withheld: cut to the byte budget, it matched the read screen)",
+      overflowLine(1),
+    ]);
+  });
+
   it("cuts a first line longer than the budget to it, never listing none", () => {
     // A built loader result, not a file: no learning the schema passes has a line past 2,048 bytes, and the
     // hook (which runs no schema) can meet one; this pins the engine's half of that cut on the same rule.
