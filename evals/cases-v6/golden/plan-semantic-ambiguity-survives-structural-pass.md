@@ -96,7 +96,7 @@ Sections, in order:
 | `edgeCases` | at least one, with its expected behavior |
 | `depends_on` | unit ids, or `none` |
 | `verify` | the command that proves this unit green |
-| `threat` | for a unit whose files `stamity gate classify --base HEAD --paths <its files>` places `security-sensitive`: its trust boundary, what it trusts, one abuse case and the check that stops it, in at most five lines; absent otherwise |
+| `threat` | for a unit whose files `stamity gate classify --base HEAD --paths <its files>` places `security-sensitive`: its trust boundary, what it trusts, one abuse case and the check that stops it, in at most five lines. A unit outside that class has no `threat` row at all: the table leaves it out, unlike `skills`, which reads `none`. |
 | `skills` | the skills the unit's build uses, each `<name> · <source-id> · <version> · <commit>` with the full 40-hex commit its origin record holds, from a source `.stamity/skill-sources.json` lists; `none` when it uses none, and a plan whose units all read `none` names no skill anywhere else |
 
 **Running the CLI.** Every `stamity <verb>` call in this file runs as `npx --no stamity <verb>`, which runs an installed copy — a `stamity` bin the project's own `package.json` declares, one in `node_modules/.bin` here or in a parent folder, or a global one — and never downloads a package; where npm refuses because no copy is installed, the call runs as `${STAMITY:CLI} <verb>`, the version this setup was generated with. Never `@latest`, and never `stamity <verb>` typed bare at the shell.

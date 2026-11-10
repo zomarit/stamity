@@ -4448,6 +4448,22 @@ Briefs are judge input, so the next run counts the eight as moved. No `## Expect
 floor tag, threshold or roster count moves, so the carried tallies and the recomputed census below hold.
 The dated citations above stay as they were. No eval run is made with this change.
 
+**The plan table's `threat` row restated, 2026-11-10 (the 1.19.1 patch; REQ-FLOW-067, REQ-PROVE-012).**
+Run 63 scored `plan-security-unit-carries-threat-note` 1 of 3, both misses on B5, which refuses a
+`threat` row on the `docs` unit; the 2026-10-09 paragraph above left the corpus line they lean on as
+it was. The line is now restated in place, so no line of `content/commands/st-plan.md` moves and every `source:`
+range holds. `:358`'s "in at most five lines; absent otherwise" now reads "in at most five lines. A unit
+outside that class has no `threat` row at all: the table leaves it out, unlike `skills`, which reads
+`none`." The Briefs that quote that line re-quote it byte-identical from the landed file:
+`golden/plan-security-unit-carries-threat-note`, `golden/plan-artifact-head-and-units-shape` and
+`golden/plan-semantic-ambiguity-survives-structural-pass`. That is three cases, every one already among
+the 80 above, so that count holds. `plan-security-unit-carries-threat-note` B5 already refuses the row
+for a unit outside the class, and `plan-artifact-head-and-units-shape` B6 passes the row present or
+absent, so what each grades does not move. The Briefs are judge input, so the next run counts the three
+as moved. No `## Expected` block, B / A, claim, floor tag, threshold or roster count moves, so the
+carried tallies and the recomputed census below hold. The dated citations above stay as they were. No
+eval run is made with this change.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The

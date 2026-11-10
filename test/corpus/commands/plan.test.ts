@@ -659,7 +659,13 @@ describe("/st-plan — plan artifact shape", () => {
     expect(threat).toMatch(
       phrase("its trust boundary, what it trusts, one abuse case and the check that stops it"),
     );
-    expect(threat).toMatch(phrase("in at most five lines; absent otherwise"));
+    // TEST CHANGE, justified (2026-11-10, REQ-FLOW-067): "absent otherwise" was read as a row that reads
+    // `none`, as `skills` does, so the cell now says a unit outside the class has no `threat` row at all
+    // and names `skills` as the row that reads `none`. The five-line cap for a security-sensitive unit
+    // stays; the pin holds the rule's facts, not the sentence's exact words.
+    expect(threat).toMatch(phrase("in at most five lines"));
+    expect(threat).toMatch(/\boutside\b[^|]*\bclass\b[^|]*\bno `threat` row at all\b/i);
+    expect(threat).toMatch(/`skills`[^|]*\breads `none`/i);
   });
 
   it("defines the CLI shorthand right after the unit table, before the Risks section", () => {
