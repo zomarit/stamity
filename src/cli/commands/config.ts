@@ -67,6 +67,7 @@ import {
   AUTONOMY_MODES,
   COPILOT_SETUP_STEPS_MODES,
   DEPLOYING_ACTS,
+  LEARNINGS_INDEX_BYTES,
   RULE_DELIVERIES,
   type AutonomyConfig,
   type AutonomyMode,
@@ -875,6 +876,29 @@ export const KEY_SPECS: readonly ConfigKeySpec[] = [
     apply: (draft, raw) => {
       // Number() over parseInt(): "12abc" must be refused, not silently read as 12.
       draft.learnings = { ...draft.learnings, maxCount: Number(raw) };
+    },
+  },
+  {
+    key: "learnings.indexBytes",
+    hint:
+      `a whole number of bytes from ${LEARNINGS_INDEX_BYTES.min} to ${LEARNINGS_INDEX_BYTES.max} — the session ` +
+      "start lists learnings, most trusted first, until this many bytes, then names `stamity learn read` for the rest",
+    read: (manifest) =>
+      manifest.learnings?.indexBytes === undefined ? null : String(manifest.learnings.indexBytes),
+    resolve: (manifest) => String(manifest.learnings?.indexBytes ?? LEARNINGS_INDEX_BYTES.default),
+    apply: (draft, raw) => {
+      // Number() over parseInt(), the learnings.maxCount precedent; the range is the schema's call.
+      draft.learnings = { ...draft.learnings, indexBytes: Number(raw) };
+    },
+  },
+  {
+    key: "learnings.indexLines",
+    hint: "a positive integer — the most learning lines the session start lists, beside the byte budget",
+    read: (manifest) =>
+      manifest.learnings?.indexLines === undefined ? null : String(manifest.learnings.indexLines),
+    resolve: (manifest) => (manifest.learnings?.indexLines === undefined ? NONE : String(manifest.learnings.indexLines)),
+    apply: (draft, raw) => {
+      draft.learnings = { ...draft.learnings, indexLines: Number(raw) };
     },
   },
   {

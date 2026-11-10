@@ -320,7 +320,7 @@ export interface HooksPlanContext {
   /** Absolute repository root the outputs will be written under. */
   rootDir: string;
   /** The manifest driving selection — tools and user-hook wiring are read here. */
-  manifest: Pick<SetupManifest, "tools" | "hooks" | "autonomy">;
+  manifest: Pick<SetupManifest, "tools" | "hooks" | "autonomy" | "learnings">;
   /**
    * The engine version — the version the core scripts' CLI hint pins
    * (`npx -y <packageName>@<engineVersion> check`), as the `${STAMITY:CLI}`
@@ -514,6 +514,8 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
   const engine = await packageJsonOf(dirname(fileURLToPath(import.meta.url)), true);
   const packageBins = engine.bins;
   const ownRepository = engine.name !== "" && (await packageJsonOf(ctx.rootDir, false)).name === engine.name;
+  // The banner's learnings budget (REQ-FLOW-179), baked into every session-start copy.
+  const learnings = ctx.manifest.learnings ?? {};
   const scripts: PlannedHookScript[] = [];
   const rowsByTool = new Map<Tool, HookInterchange[]>();
   for (const tool of tools) {
@@ -526,8 +528,8 @@ export async function planHooksInfra(ctx: HooksPlanContext): Promise<CoreHooksPl
     const copy = tool === "claude" && ctx.hookScriptsRoot === undefined ? CLAUDE_COPY_PLACEMENT : undefined;
     const run =
       copy === undefined
-        ? planCoreHookScripts(policiesPathFor(ctx.hookScriptsRoot), tool, { ...cliCallContextOf(ctx), personOnlyGuard: true, autonomy, packageBins, ownRepository })
-        : planCoreHookScripts(copy.policiesPath, tool, { ...cliCallContextOf(ctx), personOnlyGuard: true, layout: copy.layout, autonomy, packageBins, ownRepository });
+        ? planCoreHookScripts(policiesPathFor(ctx.hookScriptsRoot), tool, { ...cliCallContextOf(ctx), personOnlyGuard: true, autonomy, packageBins, ownRepository, learnings })
+        : planCoreHookScripts(copy.policiesPath, tool, { ...cliCallContextOf(ctx), personOnlyGuard: true, layout: copy.layout, autonomy, packageBins, ownRepository, learnings });
     for (const script of run) {
       const path = copy === undefined ? `${HOOKS_GENERATED_DIR}/${tool}/${script.fileName}` : `${copy.dir}/${script.fileName}`;
       scripts.push({ path, content: script.content, tool });

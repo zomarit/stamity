@@ -29,7 +29,7 @@ import {
   toCopilotToolsFrontmatter,
 } from "../tools/translator.ts";
 import type { Tool } from "../types/core.ts";
-import type { AutonomousAct, AutonomyMode, AutoShipConfig, DeployingAct, LandJobConfig, ReviewToolConfig } from "../types/manifest.ts";
+import { LEARNINGS_INDEX_BYTES, type AutonomousAct, type AutonomyMode, type AutoShipConfig, type DeployingAct, type LandJobConfig, type ReviewToolConfig } from "../types/manifest.ts";
 import { EngineError } from "../types/errors.ts";
 import { CONTENT_PREFIX, GENERATED_SCRIPT_LINT_DIRECTIVE, HOOKS_ACTIVE_ENV, STATE_DIR } from "../types/markers.ts";
 import {
@@ -931,8 +931,18 @@ const READ_FIELD = `function field(payload, names) {
 export interface SessionStartScriptOptions {
   /** Repo-relative state directory. Defaults to the engine's own. */
   stateDir?: string;
-  /** Item lines per section before the rest collapse into one line. */
+  /**
+   * Learning lines the banner lists at most, beside {@link indexBytes} — the
+   * manifest's `learnings.indexLines` (REQ-FLOW-179). Absent, no line cap. The
+   * skip and handoff sections keep {@link DEFAULT_MAX_INDEX_LINES} each.
+   */
   maxIndexLines?: number;
+  /**
+   * Bytes of learning lines the banner lists, ranked, before one line names
+   * `stamity learn read` for the rest — the manifest's `learnings.indexBytes`,
+   * within {@link LEARNINGS_INDEX_BYTES}; absent, its default.
+   */
+  indexBytes?: number;
   /**
    * Where this copy will sit ({@link HookScriptLayout}). Defaults to
    * `generated`, the layout this repository emits; `planCoreHookScripts` passes
@@ -987,7 +997,15 @@ const CLOUD_SESSIONS: readonly (SessionMarkerRow & { name: string; lines: readon
  */
 function sessionIndexSource(opts: SessionStartScriptOptions): { head: string; index: string } {
   const segments = repoRelativeSegments(opts.stateDir ?? STATE_DIR, "stateDir");
-  const maxLines = positiveInteger(opts.maxIndexLines ?? DEFAULT_MAX_INDEX_LINES, "maxIndexLines");
+  const learningLines = opts.maxIndexLines === undefined ? null : positiveInteger(opts.maxIndexLines, "maxIndexLines");
+  const indexBytes = opts.indexBytes ?? LEARNINGS_INDEX_BYTES.default;
+  if (!Number.isInteger(indexBytes) || indexBytes < LEARNINGS_INDEX_BYTES.min || indexBytes > LEARNINGS_INDEX_BYTES.max) {
+    throw new EngineError(
+      `indexBytes must be a whole number of bytes from ${LEARNINGS_INDEX_BYTES.min} to ${LEARNINGS_INDEX_BYTES.max} ` +
+        `(got ${JSON.stringify(indexBytes)}).`,
+      { code: "VALIDATION_ERROR" },
+    );
+  }
   const layout = opts.layout ?? "generated";
   const screen = SESSION_START_SCREEN.map(
     (entry) =>
@@ -995,7 +1013,9 @@ function sessionIndexSource(opts: SessionStartScriptOptions): { head: string; in
   ).join("\n");
   return {
     head: `const STATE_SEGMENTS = ${json(segments)};
-const MAX_ITEM_LINES = ${maxLines};
+const MAX_ITEM_LINES = ${DEFAULT_MAX_INDEX_LINES};
+const INDEX_BYTES = ${indexBytes};
+const INDEX_LINES = ${json(learningLines)};
 const MAX_LEARNING_BYTES = ${MAX_LEARNING_FILE_BYTES};
 const MAX_HANDOFF_BYTES = ${MAX_HANDOFF_FILE_BYTES};
 const MAX_FIELD_CHARS = ${MAX_LEARNING_SUMMARY_LENGTH};
@@ -1278,6 +1298,44 @@ function append(out, items, noun) {
   }
 }
 
+/** The order rank of a printed confidence: high, medium, low, then anything else. */
+const CONFIDENCE_RANK = { high: 0, medium: 1, low: 2 };
+
+/**
+ * The learning lines the banner lists, in order, within INDEX_BYTES (joined by
+ * newlines) and INDEX_LINES: \`fitIndexLines\` in the engine's store, line for
+ * line. The first line that does not fit ends the list; a first line longer than
+ * the whole budget is listed cut to it, so the budget never lists nothing.
+ */
+function fit(lines) {
+  const shown = [];
+  let used = 0;
+  for (const line of lines) {
+    if (INDEX_LINES !== null && shown.length >= INDEX_LINES) break;
+    const cost = Buffer.byteLength(line, "utf8") + (shown.length > 0 ? 1 : 0);
+    if (used + cost > INDEX_BYTES) {
+      if (shown.length === 0) shown.push(clip(line, INDEX_BYTES));
+      break;
+    }
+    shown.push(line);
+    used += cost;
+  }
+  return shown;
+}
+
+/** A line cut on a character boundary so it and its closing "…" take at most \`max\` bytes. */
+function clip(line, max) {
+  let out = "";
+  let used = Buffer.byteLength("…", "utf8");
+  for (const char of line) {
+    const size = Buffer.byteLength(char, "utf8");
+    if (used + size > max) break;
+    out += char;
+    used += size;
+  }
+  return out + "…";
+}
+
 const learningsDir = join(STATE_ROOT, "learnings");
 const learnings = listMarkdown(learningsDir)
   .map((name) => inspect(learningsDir, name, MAX_LEARNING_BYTES, false, LEARNING_FIELDS))
@@ -1334,10 +1392,8 @@ function render() {
   // reached the directory, and it is concatenated into a line an agent reads.
   const ids = loaded.map((doc) => text(doc.head.id, nameId(doc)));
   const duplicated = new Set(ids.filter((id, index) => ids.indexOf(id) !== index));
-  const section = [];
-  append(
-    section,
-    loaded.map((doc, index) => {
+  const ranked = loaded
+    .map((doc, index) => {
       const id = ids[index];
       const confidence = text(doc.head.confidence, "unrated");
       const summary = text(doc.head.summary, "(no summary)");
@@ -1347,10 +1403,25 @@ function render() {
         Date.parse(doc.head.reviewBy + "T00:00:00Z") <= NOW + REVIEW_WARNING_DAYS * 86400000
           ? " [review due " + text(doc.head.reviewBy, "") + "]"
           : "";
-      return "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag + due;
-    }),
-    "learning",
-  );
+      return {
+        rank: Object.hasOwn(CONFIDENCE_RANK, confidence) ? CONFIDENCE_RANK[confidence] : 3,
+        reviewBy: text(doc.head.reviewBy, ""),
+        line: "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag + due,
+      };
+    })
+    // Ranked as \`formatLearningsIndex\` ranks (REQ-FLOW-179): confidence, then the soonest review, none
+    // last. Stable, so the date-then-name order above decides the rest.
+    .sort(
+      (a, b) =>
+        a.rank - b.rank ||
+        (a.reviewBy === b.reviewBy ? 0 : a.reviewBy === "" ? 1 : b.reviewBy === "" ? -1 : a.reviewBy < b.reviewBy ? -1 : 1),
+    )
+    .map((row) => row.line);
+  const section = fit(ranked);
+  const rest = ranked.length - section.length;
+  if (rest > 0) {
+    section.push("- … and " + rest + " more learning" + (rest === 1 ? "" : "s") + " not listed; \`stamity learn read\` prints them all.");
+  }
   append(section, skipped.map(skipLine), "skipped file");
   // Two figures: the bytes of the lines printed below, which is what this banner
   // costs, and the loaded files' bytes on disk.
@@ -1604,7 +1675,10 @@ function recordMainSession(payload) {
  * The index format mirrors the engine's own (`formatLearningsIndex`,
  * `buildHandoffIndex`) line for line, because the two render the same corpus
  * and an operator reading a session banner should not have to learn a second
- * shape. Past MAX_ITEM_LINES the banner prints fewer lines than the engine's
+ * shape. Learnings are ranked (confidence, then the soonest review, then date,
+ * then name) and listed until the byte budget, then one line names
+ * `stamity learn read` for the rest (REQ-FLOW-179); skips and handoffs each stop
+ * at MAX_ITEM_LINES. Past either the banner prints fewer lines than the engine's
  * full index, and each header's byte figure counts its own printed lines.
  * What the script re-implements is the READ SCREEN, not the validator:
  * size, injection, integrity and the review horizon each decide whether a file
@@ -6138,6 +6212,8 @@ export function planCoreHookScripts(
     autonomy?: GuardAutonomy;
     packageBins?: readonly string[];
     ownRepository?: boolean;
+    /** The manifest's `learnings.indexBytes` and `learnings.indexLines`, which the session start bakes (REQ-FLOW-179). */
+    learnings?: { indexBytes?: number; indexLines?: number };
   },
 ): GeneratedHookScript[] {
   const layout = opts.layout ?? layoutFor(policiesJsonPath);
@@ -6165,7 +6241,7 @@ export function planCoreHookScripts(
   return [
     {
       fileName: SESSION_START_FILE,
-      content: buildSessionStartScript({ layout, tool }),
+      content: buildSessionStartScript({ layout, tool, ...sessionIndexOptions(opts.learnings) }),
       event: "session_start",
     },
     {
@@ -6187,6 +6263,20 @@ export function planCoreHookScripts(
     },
     ...guard,
   ];
+}
+
+/**
+ * The session index options a manifest's `learnings` block names (REQ-FLOW-179): its byte budget and its line cap,
+ * each left out when unset so the builders' defaults apply. Shared by {@link planCoreHookScripts} and the Cursor
+ * adapter's context-once copy, so both banners read one setting.
+ */
+export function sessionIndexOptions(
+  learnings: { indexBytes?: number; indexLines?: number } | undefined,
+): Pick<SessionStartScriptOptions, "indexBytes" | "maxIndexLines"> {
+  return {
+    ...(learnings?.indexBytes === undefined ? {} : { indexBytes: learnings.indexBytes }),
+    ...(learnings?.indexLines === undefined ? {} : { maxIndexLines: learnings.indexLines }),
+  };
 }
 
 /**

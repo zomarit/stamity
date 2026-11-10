@@ -671,6 +671,8 @@ import { fileURLToPath } from "node:url";
 
 const STATE_SEGMENTS = [".stamity"];
 const MAX_ITEM_LINES = 20;
+const INDEX_BYTES = 16384;
+const INDEX_LINES = null;
 const MAX_LEARNING_BYTES = 65536;
 const MAX_HANDOFF_BYTES = 61440;
 const MAX_FIELD_CHARS = 200;
@@ -1088,6 +1090,44 @@ function append(out, items, noun) {
   }
 }
 
+/** The order rank of a printed confidence: high, medium, low, then anything else. */
+const CONFIDENCE_RANK = { high: 0, medium: 1, low: 2 };
+
+/**
+ * The learning lines the banner lists, in order, within INDEX_BYTES (joined by
+ * newlines) and INDEX_LINES: \`fitIndexLines\` in the engine's store, line for
+ * line. The first line that does not fit ends the list; a first line longer than
+ * the whole budget is listed cut to it, so the budget never lists nothing.
+ */
+function fit(lines) {
+  const shown = [];
+  let used = 0;
+  for (const line of lines) {
+    if (INDEX_LINES !== null && shown.length >= INDEX_LINES) break;
+    const cost = Buffer.byteLength(line, "utf8") + (shown.length > 0 ? 1 : 0);
+    if (used + cost > INDEX_BYTES) {
+      if (shown.length === 0) shown.push(clip(line, INDEX_BYTES));
+      break;
+    }
+    shown.push(line);
+    used += cost;
+  }
+  return shown;
+}
+
+/** A line cut on a character boundary so it and its closing "…" take at most \`max\` bytes. */
+function clip(line, max) {
+  let out = "";
+  let used = Buffer.byteLength("…", "utf8");
+  for (const char of line) {
+    const size = Buffer.byteLength(char, "utf8");
+    if (used + size > max) break;
+    out += char;
+    used += size;
+  }
+  return out + "…";
+}
+
 const learningsDir = join(STATE_ROOT, "learnings");
 const learnings = listMarkdown(learningsDir)
   .map((name) => inspect(learningsDir, name, MAX_LEARNING_BYTES, false, LEARNING_FIELDS))
@@ -1144,10 +1184,8 @@ function render() {
   // reached the directory, and it is concatenated into a line an agent reads.
   const ids = loaded.map((doc) => text(doc.head.id, nameId(doc)));
   const duplicated = new Set(ids.filter((id, index) => ids.indexOf(id) !== index));
-  const section = [];
-  append(
-    section,
-    loaded.map((doc, index) => {
+  const ranked = loaded
+    .map((doc, index) => {
       const id = ids[index];
       const confidence = text(doc.head.confidence, "unrated");
       const summary = text(doc.head.summary, "(no summary)");
@@ -1157,10 +1195,25 @@ function render() {
         Date.parse(doc.head.reviewBy + "T00:00:00Z") <= NOW + REVIEW_WARNING_DAYS * 86400000
           ? " [review due " + text(doc.head.reviewBy, "") + "]"
           : "";
-      return "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag + due;
-    }),
-    "learning",
-  );
+      return {
+        rank: Object.hasOwn(CONFIDENCE_RANK, confidence) ? CONFIDENCE_RANK[confidence] : 3,
+        reviewBy: text(doc.head.reviewBy, ""),
+        line: "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag + due,
+      };
+    })
+    // Ranked as \`formatLearningsIndex\` ranks (REQ-FLOW-179): confidence, then the soonest review, none
+    // last. Stable, so the date-then-name order above decides the rest.
+    .sort(
+      (a, b) =>
+        a.rank - b.rank ||
+        (a.reviewBy === b.reviewBy ? 0 : a.reviewBy === "" ? 1 : b.reviewBy === "" ? -1 : a.reviewBy < b.reviewBy ? -1 : 1),
+    )
+    .map((row) => row.line);
+  const section = fit(ranked);
+  const rest = ranked.length - section.length;
+  if (rest > 0) {
+    section.push("- … and " + rest + " more learning" + (rest === 1 ? "" : "s") + " not listed; \`stamity learn read\` prints them all.");
+  }
   append(section, skipped.map(skipLine), "skipped file");
   // Two figures: the bytes of the lines printed below, which is what this banner
   // costs, and the loaded files' bytes on disk.
@@ -2222,6 +2275,8 @@ import { fileURLToPath } from "node:url";
 
 const STATE_SEGMENTS = [".stamity"];
 const MAX_ITEM_LINES = 20;
+const INDEX_BYTES = 16384;
+const INDEX_LINES = null;
 const MAX_LEARNING_BYTES = 65536;
 const MAX_HANDOFF_BYTES = 61440;
 const MAX_FIELD_CHARS = 200;
@@ -2639,6 +2694,44 @@ function append(out, items, noun) {
   }
 }
 
+/** The order rank of a printed confidence: high, medium, low, then anything else. */
+const CONFIDENCE_RANK = { high: 0, medium: 1, low: 2 };
+
+/**
+ * The learning lines the banner lists, in order, within INDEX_BYTES (joined by
+ * newlines) and INDEX_LINES: \`fitIndexLines\` in the engine's store, line for
+ * line. The first line that does not fit ends the list; a first line longer than
+ * the whole budget is listed cut to it, so the budget never lists nothing.
+ */
+function fit(lines) {
+  const shown = [];
+  let used = 0;
+  for (const line of lines) {
+    if (INDEX_LINES !== null && shown.length >= INDEX_LINES) break;
+    const cost = Buffer.byteLength(line, "utf8") + (shown.length > 0 ? 1 : 0);
+    if (used + cost > INDEX_BYTES) {
+      if (shown.length === 0) shown.push(clip(line, INDEX_BYTES));
+      break;
+    }
+    shown.push(line);
+    used += cost;
+  }
+  return shown;
+}
+
+/** A line cut on a character boundary so it and its closing "…" take at most \`max\` bytes. */
+function clip(line, max) {
+  let out = "";
+  let used = Buffer.byteLength("…", "utf8");
+  for (const char of line) {
+    const size = Buffer.byteLength(char, "utf8");
+    if (used + size > max) break;
+    out += char;
+    used += size;
+  }
+  return out + "…";
+}
+
 const learningsDir = join(STATE_ROOT, "learnings");
 const learnings = listMarkdown(learningsDir)
   .map((name) => inspect(learningsDir, name, MAX_LEARNING_BYTES, false, LEARNING_FIELDS))
@@ -2695,10 +2788,8 @@ function render() {
   // reached the directory, and it is concatenated into a line an agent reads.
   const ids = loaded.map((doc) => text(doc.head.id, nameId(doc)));
   const duplicated = new Set(ids.filter((id, index) => ids.indexOf(id) !== index));
-  const section = [];
-  append(
-    section,
-    loaded.map((doc, index) => {
+  const ranked = loaded
+    .map((doc, index) => {
       const id = ids[index];
       const confidence = text(doc.head.confidence, "unrated");
       const summary = text(doc.head.summary, "(no summary)");
@@ -2708,10 +2799,25 @@ function render() {
         Date.parse(doc.head.reviewBy + "T00:00:00Z") <= NOW + REVIEW_WARNING_DAYS * 86400000
           ? " [review due " + text(doc.head.reviewBy, "") + "]"
           : "";
-      return "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag + due;
-    }),
-    "learning",
-  );
+      return {
+        rank: Object.hasOwn(CONFIDENCE_RANK, confidence) ? CONFIDENCE_RANK[confidence] : 3,
+        reviewBy: text(doc.head.reviewBy, ""),
+        line: "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag + due,
+      };
+    })
+    // Ranked as \`formatLearningsIndex\` ranks (REQ-FLOW-179): confidence, then the soonest review, none
+    // last. Stable, so the date-then-name order above decides the rest.
+    .sort(
+      (a, b) =>
+        a.rank - b.rank ||
+        (a.reviewBy === b.reviewBy ? 0 : a.reviewBy === "" ? 1 : b.reviewBy === "" ? -1 : a.reviewBy < b.reviewBy ? -1 : 1),
+    )
+    .map((row) => row.line);
+  const section = fit(ranked);
+  const rest = ranked.length - section.length;
+  if (rest > 0) {
+    section.push("- … and " + rest + " more learning" + (rest === 1 ? "" : "s") + " not listed; \`stamity learn read\` prints them all.");
+  }
   append(section, skipped.map(skipLine), "skipped file");
   // Two figures: the bytes of the lines printed below, which is what this banner
   // costs, and the loaded files' bytes on disk.
@@ -3777,6 +3883,8 @@ import { fileURLToPath } from "node:url";
 
 const STATE_SEGMENTS = [".stamity"];
 const MAX_ITEM_LINES = 20;
+const INDEX_BYTES = 16384;
+const INDEX_LINES = null;
 const MAX_LEARNING_BYTES = 65536;
 const MAX_HANDOFF_BYTES = 61440;
 const MAX_FIELD_CHARS = 200;
@@ -4194,6 +4302,44 @@ function append(out, items, noun) {
   }
 }
 
+/** The order rank of a printed confidence: high, medium, low, then anything else. */
+const CONFIDENCE_RANK = { high: 0, medium: 1, low: 2 };
+
+/**
+ * The learning lines the banner lists, in order, within INDEX_BYTES (joined by
+ * newlines) and INDEX_LINES: \`fitIndexLines\` in the engine's store, line for
+ * line. The first line that does not fit ends the list; a first line longer than
+ * the whole budget is listed cut to it, so the budget never lists nothing.
+ */
+function fit(lines) {
+  const shown = [];
+  let used = 0;
+  for (const line of lines) {
+    if (INDEX_LINES !== null && shown.length >= INDEX_LINES) break;
+    const cost = Buffer.byteLength(line, "utf8") + (shown.length > 0 ? 1 : 0);
+    if (used + cost > INDEX_BYTES) {
+      if (shown.length === 0) shown.push(clip(line, INDEX_BYTES));
+      break;
+    }
+    shown.push(line);
+    used += cost;
+  }
+  return shown;
+}
+
+/** A line cut on a character boundary so it and its closing "…" take at most \`max\` bytes. */
+function clip(line, max) {
+  let out = "";
+  let used = Buffer.byteLength("…", "utf8");
+  for (const char of line) {
+    const size = Buffer.byteLength(char, "utf8");
+    if (used + size > max) break;
+    out += char;
+    used += size;
+  }
+  return out + "…";
+}
+
 const learningsDir = join(STATE_ROOT, "learnings");
 const learnings = listMarkdown(learningsDir)
   .map((name) => inspect(learningsDir, name, MAX_LEARNING_BYTES, false, LEARNING_FIELDS))
@@ -4250,10 +4396,8 @@ function render() {
   // reached the directory, and it is concatenated into a line an agent reads.
   const ids = loaded.map((doc) => text(doc.head.id, nameId(doc)));
   const duplicated = new Set(ids.filter((id, index) => ids.indexOf(id) !== index));
-  const section = [];
-  append(
-    section,
-    loaded.map((doc, index) => {
+  const ranked = loaded
+    .map((doc, index) => {
       const id = ids[index];
       const confidence = text(doc.head.confidence, "unrated");
       const summary = text(doc.head.summary, "(no summary)");
@@ -4263,10 +4407,25 @@ function render() {
         Date.parse(doc.head.reviewBy + "T00:00:00Z") <= NOW + REVIEW_WARNING_DAYS * 86400000
           ? " [review due " + text(doc.head.reviewBy, "") + "]"
           : "";
-      return "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag + due;
-    }),
-    "learning",
-  );
+      return {
+        rank: Object.hasOwn(CONFIDENCE_RANK, confidence) ? CONFIDENCE_RANK[confidence] : 3,
+        reviewBy: text(doc.head.reviewBy, ""),
+        line: "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag + due,
+      };
+    })
+    // Ranked as \`formatLearningsIndex\` ranks (REQ-FLOW-179): confidence, then the soonest review, none
+    // last. Stable, so the date-then-name order above decides the rest.
+    .sort(
+      (a, b) =>
+        a.rank - b.rank ||
+        (a.reviewBy === b.reviewBy ? 0 : a.reviewBy === "" ? 1 : b.reviewBy === "" ? -1 : a.reviewBy < b.reviewBy ? -1 : 1),
+    )
+    .map((row) => row.line);
+  const section = fit(ranked);
+  const rest = ranked.length - section.length;
+  if (rest > 0) {
+    section.push("- … and " + rest + " more learning" + (rest === 1 ? "" : "s") + " not listed; \`stamity learn read\` prints them all.");
+  }
   append(section, skipped.map(skipLine), "skipped file");
   // Two figures: the bytes of the lines printed below, which is what this banner
   // costs, and the loaded files' bytes on disk.
@@ -5442,6 +5601,8 @@ import { fileURLToPath } from "node:url";
 
 const STATE_SEGMENTS = [".stamity"];
 const MAX_ITEM_LINES = 20;
+const INDEX_BYTES = 16384;
+const INDEX_LINES = null;
 const MAX_LEARNING_BYTES = 65536;
 const MAX_HANDOFF_BYTES = 61440;
 const MAX_FIELD_CHARS = 200;
@@ -5859,6 +6020,44 @@ function append(out, items, noun) {
   }
 }
 
+/** The order rank of a printed confidence: high, medium, low, then anything else. */
+const CONFIDENCE_RANK = { high: 0, medium: 1, low: 2 };
+
+/**
+ * The learning lines the banner lists, in order, within INDEX_BYTES (joined by
+ * newlines) and INDEX_LINES: \`fitIndexLines\` in the engine's store, line for
+ * line. The first line that does not fit ends the list; a first line longer than
+ * the whole budget is listed cut to it, so the budget never lists nothing.
+ */
+function fit(lines) {
+  const shown = [];
+  let used = 0;
+  for (const line of lines) {
+    if (INDEX_LINES !== null && shown.length >= INDEX_LINES) break;
+    const cost = Buffer.byteLength(line, "utf8") + (shown.length > 0 ? 1 : 0);
+    if (used + cost > INDEX_BYTES) {
+      if (shown.length === 0) shown.push(clip(line, INDEX_BYTES));
+      break;
+    }
+    shown.push(line);
+    used += cost;
+  }
+  return shown;
+}
+
+/** A line cut on a character boundary so it and its closing "…" take at most \`max\` bytes. */
+function clip(line, max) {
+  let out = "";
+  let used = Buffer.byteLength("…", "utf8");
+  for (const char of line) {
+    const size = Buffer.byteLength(char, "utf8");
+    if (used + size > max) break;
+    out += char;
+    used += size;
+  }
+  return out + "…";
+}
+
 const learningsDir = join(STATE_ROOT, "learnings");
 const learnings = listMarkdown(learningsDir)
   .map((name) => inspect(learningsDir, name, MAX_LEARNING_BYTES, false, LEARNING_FIELDS))
@@ -5915,10 +6114,8 @@ function render() {
   // reached the directory, and it is concatenated into a line an agent reads.
   const ids = loaded.map((doc) => text(doc.head.id, nameId(doc)));
   const duplicated = new Set(ids.filter((id, index) => ids.indexOf(id) !== index));
-  const section = [];
-  append(
-    section,
-    loaded.map((doc, index) => {
+  const ranked = loaded
+    .map((doc, index) => {
       const id = ids[index];
       const confidence = text(doc.head.confidence, "unrated");
       const summary = text(doc.head.summary, "(no summary)");
@@ -5928,10 +6125,25 @@ function render() {
         Date.parse(doc.head.reviewBy + "T00:00:00Z") <= NOW + REVIEW_WARNING_DAYS * 86400000
           ? " [review due " + text(doc.head.reviewBy, "") + "]"
           : "";
-      return "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag + due;
-    }),
-    "learning",
-  );
+      return {
+        rank: Object.hasOwn(CONFIDENCE_RANK, confidence) ? CONFIDENCE_RANK[confidence] : 3,
+        reviewBy: text(doc.head.reviewBy, ""),
+        line: "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag + due,
+      };
+    })
+    // Ranked as \`formatLearningsIndex\` ranks (REQ-FLOW-179): confidence, then the soonest review, none
+    // last. Stable, so the date-then-name order above decides the rest.
+    .sort(
+      (a, b) =>
+        a.rank - b.rank ||
+        (a.reviewBy === b.reviewBy ? 0 : a.reviewBy === "" ? 1 : b.reviewBy === "" ? -1 : a.reviewBy < b.reviewBy ? -1 : 1),
+    )
+    .map((row) => row.line);
+  const section = fit(ranked);
+  const rest = ranked.length - section.length;
+  if (rest > 0) {
+    section.push("- … and " + rest + " more learning" + (rest === 1 ? "" : "s") + " not listed; \`stamity learn read\` prints them all.");
+  }
   append(section, skipped.map(skipLine), "skipped file");
   // Two figures: the bytes of the lines printed below, which is what this banner
   // costs, and the loaded files' bytes on disk.

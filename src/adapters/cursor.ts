@@ -43,6 +43,7 @@ import {
   CURSOR_CONTINUE_FILE,
   IDENTITY_FREE_PRE_TOOL_USE_PAYLOADS,
   PERSON_ONLY_GUARD_FILE,
+  sessionIndexOptions,
 } from "../hooks/scripts.ts";
 import {
   grantableFootprint,
@@ -584,7 +585,11 @@ export const cursorResiduePlanner: ResiduePlanner = {
       {
         path: CURSOR_CONTEXT_ONCE_HOOK_PATH,
         // The layout decided as the continue hook's is.
-        content: buildContextOnceScript({ layout: ctx.facts.hookScriptsRoot === undefined ? "generated" : "container" }),
+        content: buildContextOnceScript({
+          layout: ctx.facts.hookScriptsRoot === undefined ? "generated" : "container",
+          // The session start's learnings budget (REQ-FLOW-179), so both banners list the same lines.
+          ...sessionIndexOptions(ctx.manifest.learnings),
+        }),
         owner: { adapter: "cursor", artifactId: ARTIFACT_IDS.contextOnce, artifactType: "infra" },
       },
       {

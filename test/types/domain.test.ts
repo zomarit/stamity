@@ -271,7 +271,9 @@ describe("SetupManifest", () => {
       protocolVersion?: string;
       ownServers?: McpOwnServer[];
     }>();
-    expectTypeOf<LearningsConfig>().toEqualTypeOf<{ maxCount?: number }>();
+    // TEST CHANGE, justified (l-banner, REQ-FLOW-179): the banner's byte budget and line cap join the learnings
+    // bag as two optional keys, so the exact pin gains them.
+    expectTypeOf<LearningsConfig>().toEqualTypeOf<{ maxCount?: number; indexBytes?: number; indexLines?: number }>();
     expectTypeOf<HooksConfig>().toEqualTypeOf<{ userHooksDir?: string }>();
   });
 

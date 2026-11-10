@@ -18,6 +18,10 @@ import {
   MAX_LEARNING_FILE_BYTES,
   verifyLearningIntegrity,
 } from "../../src/learnings/validation.ts";
+import { KEY_SPECS } from "../../src/cli/commands/config.ts";
+import { UNSET_PROBE } from "../../src/cli/docs/configReference.ts";
+import { collectManifestErrors } from "../../src/manifest/manifest.ts";
+import { LEARNINGS_INDEX_BYTES } from "../../src/types/manifest.ts";
 import { useTempDir } from "../support/tempDir.ts";
 
 /**
@@ -523,5 +527,105 @@ describe("formatLearningsIndex", () => {
     expect(index).toContain("(soon-note.md) [review due 2026-08-22]");
     expect(index).toContain("(later-note.md)");
     expect(index).not.toContain("(later-note.md) [review due");
+  });
+
+  it("ranks by confidence, then the soonest review, then the loader's date-then-name order (REQ-FLOW-179)", async () => {
+    await seedPersisted("low-new.md", { id: "low-new", confidence: "low", date: "2026-08-10" });
+    await seedPersisted("medium-old.md", { id: "medium-old", confidence: "medium", date: "2026-06-01" });
+    await seedPersisted("high-b.md", { id: "high-b", date: "2026-07-01" });
+    await seedPersisted("high-a.md", { id: "high-a", date: "2026-07-01" });
+    await seedPersisted("high-due.md", { id: "high-due", date: "2026-05-01", reviewBy: "2098-01-01" });
+    await seedPersisted("high-new.md", { id: "high-new", date: "2026-08-01" });
+
+    const result = await load();
+    const order = formatLearningsIndex(result, { now: NOW })
+      .split("\n")
+      .slice(1)
+      .map((line) => /^- \[\w+\] (\S+)/.exec(line)?.[1]);
+
+    // The loader's own order is the date's, newest first; the index re-ranks it.
+    expect(fileNames(result)[0]).toBe("low-new.md");
+    expect(order).toEqual(["high-due", "high-new", "high-a", "high-b", "medium-old", "low-new"]);
+  });
+
+  it("lists learnings within indexBytes and indexLines, then one line naming `stamity learn read`", async () => {
+    await Promise.all(
+      [1, 2, 3, 4, 5, 6].map((n) => seedPersisted(`note-${n}.md`, { id: `note-${n}`, date: `2026-08-0${n}` })),
+    );
+    const result = await load();
+    const full = formatLearningsIndex(result, { now: NOW }).split("\n");
+    // A budget that holds two lines and their newline, one byte short of a third.
+    const indexBytes = Buffer.byteLength(full.slice(1, 4).join("\n"), "utf8") - 1;
+
+    const cut = formatLearningsIndex(result, { now: NOW, indexBytes }).split("\n");
+
+    expect(cut.slice(1)).toEqual([
+      ...full.slice(1, 3),
+      "- … and 4 more learnings not listed; `stamity learn read` prints them all.",
+    ]);
+    expect(cut[0]).toBe(
+      `Learnings: 6 loaded, 0 skipped, ${Buffer.byteLength(cut.slice(1).join("\n"), "utf8")} bytes in this index ` +
+        `(${result.totalBytes} bytes on disk).`,
+    );
+    expect(formatLearningsIndex(result, { now: NOW, indexLines: 5 }).split("\n").slice(1)).toEqual([
+      ...full.slice(1, 6),
+      "- … and 1 more learning not listed; `stamity learn read` prints them all.",
+    ]);
+    // No budget, every learning: what `learn read` prints.
+    expect(full).toHaveLength(7);
+  });
+
+  it("cuts a first line longer than the budget to it, never listing none", () => {
+    // A built loader result, not a file: no learning the schema passes has a line past 2,048 bytes, and the
+    // hook (which runs no schema) can meet one; this pins the engine's half of that cut on the same rule.
+    const wide = "€".repeat(800);
+    const result: LoaderResult = {
+      learnings: [
+        { fileName: "wide.md", frontmatter: { id: "wide", confidence: "high", summary: wide }, body: "", integrityOk: true },
+        { fileName: "next.md", frontmatter: { id: "next", confidence: "high", summary: "Short." }, body: "", integrityOk: true },
+      ],
+      skips: [],
+      totalBytes: 0,
+    };
+
+    const lines = formatLearningsIndex(result, { now: NOW, indexBytes: 2_048 }).split("\n");
+
+    expect(lines).toHaveLength(3);
+    expect(lines[1]?.startsWith(`- [high] wide — ${"€".repeat(10)}`)).toBe(true);
+    expect(lines[1]?.endsWith("…")).toBe(true);
+    expect(Buffer.byteLength(lines[1] ?? "", "utf8")).toBeLessThanOrEqual(2_048);
+    expect(Buffer.byteLength(lines[1] ?? "", "utf8")).toBeGreaterThan(2_048 - 3);
+    expect(lines[2]).toBe("- … and 1 more learning not listed; `stamity learn read` prints them all.");
+  });
+});
+
+describe("the banner budget settings (REQ-FLOW-179)", () => {
+  const spec = (key: string) => {
+    const found = KEY_SPECS.find((row) => row.key === key);
+    if (found === undefined) throw new Error(`no config key ${key}`);
+    return found;
+  };
+  const indexErrors = (learnings: unknown): string[] =>
+    collectManifestErrors({ ...UNSET_PROBE, learnings }).filter((error) => error.includes("learnings.index"));
+
+  it("resolves learnings.indexBytes to 16,384 and learnings.indexLines to none when unset", () => {
+    expect(spec("learnings.indexBytes").read(UNSET_PROBE)).toBeNull();
+    expect(spec("learnings.indexBytes").resolve(UNSET_PROBE)).toBe(String(LEARNINGS_INDEX_BYTES.default));
+    expect(LEARNINGS_INDEX_BYTES.default).toBe(16_384);
+    expect(spec("learnings.indexLines").resolve(UNSET_PROBE)).toBe("none");
+    const set = { ...UNSET_PROBE, learnings: { indexBytes: 4_096, indexLines: 12 } };
+    expect(spec("learnings.indexBytes").resolve(set)).toBe("4096");
+    expect(spec("learnings.indexLines").read(set)).toBe("12");
+  });
+
+  it("refuses a byte budget outside 2,048 to 131,072 and a line cap below one", () => {
+    expect(indexErrors({ indexBytes: 2_048, indexLines: 1 })).toEqual([]);
+    expect(indexErrors({ indexBytes: 131_072 })).toEqual([]);
+    expect(indexErrors({ indexBytes: 2_047 })).toEqual([
+      "`learnings.indexBytes` must be a whole number from 2048 to 131072",
+    ]);
+    expect(indexErrors({ indexBytes: 131_073 })).toHaveLength(1);
+    expect(indexErrors({ indexBytes: 4_096.5 })).toHaveLength(1);
+    expect(indexErrors({ indexLines: 0 })).toEqual(["`learnings.indexLines` must be a positive integer"]);
   });
 });

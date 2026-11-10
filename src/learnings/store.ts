@@ -572,6 +572,60 @@ export interface FormatLearningsIndexOptions {
    * reader with no hook has no other way to learn which rows fired.
    */
   patternIds?: boolean;
+  /**
+   * Bytes of learning lines, joined by newlines, the index lists before one
+   * line names `stamity learn read` for the rest (REQ-FLOW-179): the banner's
+   * `learnings.indexBytes`. Absent, every learning is listed, as `learn read`
+   * lists them.
+   */
+  indexBytes?: number;
+  /** Learning lines the index lists at most, beside {@link indexBytes}: the banner's `learnings.indexLines`. */
+  indexLines?: number;
+}
+
+/** The line that closes a cut index: the count left out and the verb that prints them all (REQ-FLOW-179). */
+export function learningsOverflowLine(rest: number): string {
+  return `- … and ${rest} more learning${rest === 1 ? "" : "s"} not listed; \`stamity learn read\` prints them all.`;
+}
+
+/** The order rank of a printed confidence: high, medium, low, then anything else. */
+const CONFIDENCE_RANK: Readonly<Record<string, number>> = { high: 0, medium: 1, low: 2 };
+
+/**
+ * The learning lines an index lists, in order, within a byte and a line budget
+ * (REQ-FLOW-179), the session-start hook's `fit()` line for line. The first line
+ * that does not fit ends the list, as the loader's budget ends its set: a list
+ * that backfilled a shorter line would depend on lengths nobody predicts. A first
+ * line longer than the whole budget is listed cut to it, ending `…`, so a budget
+ * never lists nothing while a learning loaded.
+ */
+function fitIndexLines(lines: readonly string[], maxBytes: number | undefined, maxLines: number | undefined): string[] {
+  const shown: string[] = [];
+  let used = 0;
+  for (const line of lines) {
+    if (maxLines !== undefined && shown.length >= maxLines) break;
+    const cost = Buffer.byteLength(line, "utf8") + (shown.length > 0 ? 1 : 0);
+    if (maxBytes !== undefined && used + cost > maxBytes) {
+      if (shown.length === 0) shown.push(clipLine(line, maxBytes));
+      break;
+    }
+    shown.push(line);
+    used += cost;
+  }
+  return shown;
+}
+
+/** A line cut on a character boundary so it and its closing `…` take at most `maxBytes` bytes. */
+function clipLine(line: string, maxBytes: number): string {
+  let out = "";
+  let used = Buffer.byteLength("…", "utf8");
+  for (const char of line) {
+    const size = Buffer.byteLength(char, "utf8");
+    if (used + size > maxBytes) break;
+    out += char;
+    used += size;
+  }
+  return `${out}…`;
 }
 
 /** One loaded learning as the index names it: no body, no other head field. */
@@ -622,8 +676,9 @@ export function learningsIndexEntries(result: LoaderResult): {
  * The count line carries two byte figures: the bytes of the index lines printed
  * under it — what this index costs to inline, which is what an operator reading
  * the banner is judging — and, beside it, the loaded files' bytes on disk. The
- * session-start hook prints the same shape; past its line cap it prints fewer
+ * session-start hook prints the same shape; past its byte budget it prints fewer
  * lines than this full index, and each figure counts its own printed lines.
+ * Given the same `indexBytes` and `indexLines`, the two print the same lines.
  *
  * A learning whose `reviewBy` falls inside the warning window
  * (`REVIEW_WARNING_DAYS`) is marked `[review due <date>]`, so the re-verify
@@ -632,7 +687,9 @@ export function learningsIndexEntries(result: LoaderResult): {
  * Bodies never appear here, and neither does a skip's `detail`. This string is
  * written into a model's opening context, so it carries the parts a reader needs
  * to decide what to open — never the text a gate just refused. Deterministic for
- * a given result and clock: the order is the loader's, which is the corpus order.
+ * a given result and clock: learnings rank by confidence (high, medium, low,
+ * then the rest), then the soonest `reviewBy`, then the loader's order (newest
+ * declared date, then name); skips keep the loader's order.
  *
  * A repeated `id` across two files is flagged rather than collapsed. The file is
  * the unit of the corpus, so both load; the flag is what tells the operator two
@@ -644,13 +701,28 @@ export function formatLearningsIndex(result: LoaderResult, opts: FormatLearnings
   const entries = learningsIndexEntries(result);
 
   const duplicates = duplicateIds(result.learnings);
-  for (const [index, learning] of result.learnings.entries()) {
+  const rows = result.learnings.map((learning, index) => {
     const { id, confidence, summary } = entries.learnings[index]!;
     const flag = duplicates.has(id) ? " [duplicate id]" : "";
     const reviewBy = fieldText(learning.frontmatter, REVIEW_BY_FIELD);
     const due = reviewBy !== undefined && reviewDueSoon(reviewBy, now) ? ` [review due ${reviewBy}]` : "";
-    lines.push(`- [${confidence}] ${id} — ${summary} (${learning.fileName})${flag}${due}`);
-  }
+    return {
+      rank: Object.hasOwn(CONFIDENCE_RANK, confidence) ? CONFIDENCE_RANK[confidence]! : 3,
+      reviewBy: reviewBy ?? "",
+      line: `- [${confidence}] ${id} — ${summary} (${learning.fileName})${flag}${due}`,
+    };
+  });
+  // Ranked (REQ-FLOW-179): confidence, then the soonest review, with none last. The sort is stable,
+  // so the loader's order — newest declared date, then name — decides the rest, as in the hook.
+  rows.sort(
+    (a, b) =>
+      a.rank - b.rank ||
+      (a.reviewBy === b.reviewBy ? 0 : a.reviewBy === "" ? 1 : b.reviewBy === "" ? -1 : a.reviewBy < b.reviewBy ? -1 : 1),
+  );
+  const ranked = rows.map((row) => row.line);
+  const listed = fitIndexLines(ranked, opts.indexBytes, opts.indexLines);
+  lines.push(...listed);
+  if (listed.length < ranked.length) lines.push(learningsOverflowLine(ranked.length - listed.length));
 
   for (const entry of entries.skips) {
     const named = opts.patternIds === true && entry.patternIds.length > 0;

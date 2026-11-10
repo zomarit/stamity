@@ -48,6 +48,8 @@ clients your own manifest selects.
 | `ruleDelivery` | one of always-on \| on-demand | `on-demand` |
 | `communicationStyle` | one of plain \| technical | `plain` |
 | `learnings.maxCount` | a positive integer | `150` |
+| `learnings.indexBytes` | a whole number of bytes from 2048 to 131072 — the session start lists learnings, most trusted first, until this many bytes, then names `stamity learn read` for the rest | `16384` |
+| `learnings.indexLines` | a positive integer — the most learning lines the session start lists, beside the byte budget | `none` |
 | `hooks.userHooksDir` | a repo-relative directory path | `none` |
 | `mcp.servers` | a comma-separated list of server ids this repo can resolve — curated, supplied by an installed pack, or held in a row of mcp.ownServers | `none` |
 | `mcp.protocolVersion` | an MCP protocol revision string | `none` |

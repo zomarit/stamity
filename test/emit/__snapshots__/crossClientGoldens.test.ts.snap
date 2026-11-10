@@ -2083,6 +2083,8 @@ import { fileURLToPath } from "node:url";
 
 const STATE_SEGMENTS = [".stamity"];
 const MAX_ITEM_LINES = 20;
+const INDEX_BYTES = 16384;
+const INDEX_LINES = null;
 const MAX_LEARNING_BYTES = 65536;
 const MAX_HANDOFF_BYTES = 61440;
 const MAX_FIELD_CHARS = 200;
@@ -2500,6 +2502,44 @@ function append(out, items, noun) {
   }
 }
 
+/** The order rank of a printed confidence: high, medium, low, then anything else. */
+const CONFIDENCE_RANK = { high: 0, medium: 1, low: 2 };
+
+/**
+ * The learning lines the banner lists, in order, within INDEX_BYTES (joined by
+ * newlines) and INDEX_LINES: \`fitIndexLines\` in the engine's store, line for
+ * line. The first line that does not fit ends the list; a first line longer than
+ * the whole budget is listed cut to it, so the budget never lists nothing.
+ */
+function fit(lines) {
+  const shown = [];
+  let used = 0;
+  for (const line of lines) {
+    if (INDEX_LINES !== null && shown.length >= INDEX_LINES) break;
+    const cost = Buffer.byteLength(line, "utf8") + (shown.length > 0 ? 1 : 0);
+    if (used + cost > INDEX_BYTES) {
+      if (shown.length === 0) shown.push(clip(line, INDEX_BYTES));
+      break;
+    }
+    shown.push(line);
+    used += cost;
+  }
+  return shown;
+}
+
+/** A line cut on a character boundary so it and its closing "…" take at most \`max\` bytes. */
+function clip(line, max) {
+  let out = "";
+  let used = Buffer.byteLength("…", "utf8");
+  for (const char of line) {
+    const size = Buffer.byteLength(char, "utf8");
+    if (used + size > max) break;
+    out += char;
+    used += size;
+  }
+  return out + "…";
+}
+
 const learningsDir = join(STATE_ROOT, "learnings");
 const learnings = listMarkdown(learningsDir)
   .map((name) => inspect(learningsDir, name, MAX_LEARNING_BYTES, false, LEARNING_FIELDS))
@@ -2556,10 +2596,8 @@ function render() {
   // reached the directory, and it is concatenated into a line an agent reads.
   const ids = loaded.map((doc) => text(doc.head.id, nameId(doc)));
   const duplicated = new Set(ids.filter((id, index) => ids.indexOf(id) !== index));
-  const section = [];
-  append(
-    section,
-    loaded.map((doc, index) => {
+  const ranked = loaded
+    .map((doc, index) => {
       const id = ids[index];
       const confidence = text(doc.head.confidence, "unrated");
       const summary = text(doc.head.summary, "(no summary)");
@@ -2569,10 +2607,25 @@ function render() {
         Date.parse(doc.head.reviewBy + "T00:00:00Z") <= NOW + REVIEW_WARNING_DAYS * 86400000
           ? " [review due " + text(doc.head.reviewBy, "") + "]"
           : "";
-      return "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag + due;
-    }),
-    "learning",
-  );
+      return {
+        rank: Object.hasOwn(CONFIDENCE_RANK, confidence) ? CONFIDENCE_RANK[confidence] : 3,
+        reviewBy: text(doc.head.reviewBy, ""),
+        line: "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag + due,
+      };
+    })
+    // Ranked as \`formatLearningsIndex\` ranks (REQ-FLOW-179): confidence, then the soonest review, none
+    // last. Stable, so the date-then-name order above decides the rest.
+    .sort(
+      (a, b) =>
+        a.rank - b.rank ||
+        (a.reviewBy === b.reviewBy ? 0 : a.reviewBy === "" ? 1 : b.reviewBy === "" ? -1 : a.reviewBy < b.reviewBy ? -1 : 1),
+    )
+    .map((row) => row.line);
+  const section = fit(ranked);
+  const rest = ranked.length - section.length;
+  if (rest > 0) {
+    section.push("- … and " + rest + " more learning" + (rest === 1 ? "" : "s") + " not listed; \`stamity learn read\` prints them all.");
+  }
   append(section, skipped.map(skipLine), "skipped file");
   // Two figures: the bytes of the lines printed below, which is what this banner
   // costs, and the loaded files' bytes on disk.
@@ -5247,7 +5300,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".claude/hooks/stamity/stamity-person-only-guard.mjs": "ca07ecec1904ed1eb232295651b2a09f3fdb92f76cb7cbd2d93b87f41bd5c348 347034 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
-  ".claude/hooks/stamity/stamity-session-start.mjs": "0b524eb04048f7cf864619d8015c85370ccdc77496c3a17deb3a28062e46a624 54898 bytes",
+  ".claude/hooks/stamity/stamity-session-start.mjs": "b54fcb85ffd1235f25db5b03cbae1c8b94c6eb819965dda38908d96efaa046f9 56947 bytes",
   ".claude/hooks/stamity/stamity-unattended-ask-gate.mjs": "82ced47434e44a8722b28b7237f3a83f6d7e5569f1fbf6d5aeccb4102bd46d78 11205 bytes",
   ".claude/rules/stamity-api-versioning.md": "33cf64f53d78b3900d6cc9b17da8fbb8928845905da3483ce8d83f65999aceda 4849 bytes",
   ".claude/rules/stamity-contract-census.md": "b28259931c7f72a65ef8a252a57bf689f82b4ab3305563415c8d4d1685762532 3884 bytes",
@@ -5370,20 +5423,20 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "3a284ce3dc480b6c0398d182e876df18a11c17d393c89ba336492f84bfd325f1 347126 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "8480d3a6fe6ea5fe1cad1c683ecbb07f3999cbdb411ae7dff7a1ec09eb207068 20937 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "58b28eb031ccc9c208a595c76060449c57dfb9473560232dd8d754900ee75835 54911 bytes",
+  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "5e7aa9e3fe9f5f33cc64a31f182ed7b64a8732db84ddf0a9d2c1daa2927ff00a 56960 bytes",
   ".stamity/generated/hooks/copilot/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
   ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "2a03f904befc69ddeb3784e241738b47cf89062d5897ed572752bbbdc9cefd80 349785 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "bd89a0ddd9dc95e9769ae5fc71c01f4fc29ecc4a5086615c21fab492427559f4 23308 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "f1f623d5ee0653d4252cc07da18b85c0be4466c80cb300fd393d8bbbf0cdfa16 59714 bytes",
+  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "536be0f1cd2785909ef19dbd31e88278ac4537b4d4822081999674570c2e444d 61763 bytes",
   ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "67b9f425d2598ba303758aaef668ef196a68ade40d40bc576fbae5cb2a0bcc92 34885 bytes",
+  ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "4f47e6817e53d4d2d51be78d9e41c0014c0443d110c26a309f5d7d11b71b16c8 36934 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
   ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "197464392cbc1392968713b6195b68e7ccd87db053ba54ed63fc610b9f35d31c 347163 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "513a8e4c2631670fffed73a96be46542fea82d8e1719a5d26da0a872699277c6 20938 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "58b28eb031ccc9c208a595c76060449c57dfb9473560232dd8d754900ee75835 54911 bytes",
+  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "5e7aa9e3fe9f5f33cc64a31f182ed7b64a8732db84ddf0a9d2c1daa2927ff00a 56960 bytes",
   ".stamity/generated/models/claude.json": "d8b019734f996874130a675b78705669a3a4f121ed8a4e692c913206897bc280 697 bytes",
   ".stamity/generated/models/codex.json": "bd85ba11fdb0504946c2922d8e9b7f753b64a8085f122cf2aa51fc3e527d685a 833 bytes",
   ".stamity/generated/models/copilot.json": "36ce250308ef6f7089ea863a303c2993ed4d87fe606d76ba83706e7cd0fb3bb1 964 bytes",
@@ -5392,7 +5445,7 @@ exports[`emitted tree for all-four > matches the tree digest golden > all-four t
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "0c1390eb1c8b22ab0e0ffc46f8fa4689a1ddc49c8baecd577065c85ebb928873 95433 bytes",
+  ".stamity/manifest.json": "b56742a43e4438960a3332d5bc5719921012bfc62deb95bcfde24ba1323f6936 95433 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "12ef100ce80fd3f564bd79c4edb889cc8894eb17cca43d6d388557fba5548c6c 6908 bytes",
@@ -7496,6 +7549,8 @@ import { fileURLToPath } from "node:url";
 
 const STATE_SEGMENTS = [".stamity"];
 const MAX_ITEM_LINES = 20;
+const INDEX_BYTES = 16384;
+const INDEX_LINES = null;
 const MAX_LEARNING_BYTES = 65536;
 const MAX_HANDOFF_BYTES = 61440;
 const MAX_FIELD_CHARS = 200;
@@ -7913,6 +7968,44 @@ function append(out, items, noun) {
   }
 }
 
+/** The order rank of a printed confidence: high, medium, low, then anything else. */
+const CONFIDENCE_RANK = { high: 0, medium: 1, low: 2 };
+
+/**
+ * The learning lines the banner lists, in order, within INDEX_BYTES (joined by
+ * newlines) and INDEX_LINES: \`fitIndexLines\` in the engine's store, line for
+ * line. The first line that does not fit ends the list; a first line longer than
+ * the whole budget is listed cut to it, so the budget never lists nothing.
+ */
+function fit(lines) {
+  const shown = [];
+  let used = 0;
+  for (const line of lines) {
+    if (INDEX_LINES !== null && shown.length >= INDEX_LINES) break;
+    const cost = Buffer.byteLength(line, "utf8") + (shown.length > 0 ? 1 : 0);
+    if (used + cost > INDEX_BYTES) {
+      if (shown.length === 0) shown.push(clip(line, INDEX_BYTES));
+      break;
+    }
+    shown.push(line);
+    used += cost;
+  }
+  return shown;
+}
+
+/** A line cut on a character boundary so it and its closing "…" take at most \`max\` bytes. */
+function clip(line, max) {
+  let out = "";
+  let used = Buffer.byteLength("…", "utf8");
+  for (const char of line) {
+    const size = Buffer.byteLength(char, "utf8");
+    if (used + size > max) break;
+    out += char;
+    used += size;
+  }
+  return out + "…";
+}
+
 const learningsDir = join(STATE_ROOT, "learnings");
 const learnings = listMarkdown(learningsDir)
   .map((name) => inspect(learningsDir, name, MAX_LEARNING_BYTES, false, LEARNING_FIELDS))
@@ -7969,10 +8062,8 @@ function render() {
   // reached the directory, and it is concatenated into a line an agent reads.
   const ids = loaded.map((doc) => text(doc.head.id, nameId(doc)));
   const duplicated = new Set(ids.filter((id, index) => ids.indexOf(id) !== index));
-  const section = [];
-  append(
-    section,
-    loaded.map((doc, index) => {
+  const ranked = loaded
+    .map((doc, index) => {
       const id = ids[index];
       const confidence = text(doc.head.confidence, "unrated");
       const summary = text(doc.head.summary, "(no summary)");
@@ -7982,10 +8073,25 @@ function render() {
         Date.parse(doc.head.reviewBy + "T00:00:00Z") <= NOW + REVIEW_WARNING_DAYS * 86400000
           ? " [review due " + text(doc.head.reviewBy, "") + "]"
           : "";
-      return "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag + due;
-    }),
-    "learning",
-  );
+      return {
+        rank: Object.hasOwn(CONFIDENCE_RANK, confidence) ? CONFIDENCE_RANK[confidence] : 3,
+        reviewBy: text(doc.head.reviewBy, ""),
+        line: "- [" + confidence + "] " + id + " — " + summary + " (" + fileName(doc) + ")" + flag + due,
+      };
+    })
+    // Ranked as \`formatLearningsIndex\` ranks (REQ-FLOW-179): confidence, then the soonest review, none
+    // last. Stable, so the date-then-name order above decides the rest.
+    .sort(
+      (a, b) =>
+        a.rank - b.rank ||
+        (a.reviewBy === b.reviewBy ? 0 : a.reviewBy === "" ? 1 : b.reviewBy === "" ? -1 : a.reviewBy < b.reviewBy ? -1 : 1),
+    )
+    .map((row) => row.line);
+  const section = fit(ranked);
+  const rest = ranked.length - section.length;
+  if (rest > 0) {
+    section.push("- … and " + rest + " more learning" + (rest === 1 ? "" : "s") + " not listed; \`stamity learn read\` prints them all.");
+  }
   append(section, skipped.map(skipLine), "skipped file");
   // Two figures: the bytes of the lines printed below, which is what this banner
   // costs, and the loaded files' bytes on disk.
@@ -9315,7 +9421,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".claude/hooks/stamity/stamity-person-only-guard.mjs": "ca07ecec1904ed1eb232295651b2a09f3fdb92f76cb7cbd2d93b87f41bd5c348 347034 bytes",
   ".claude/hooks/stamity/stamity-pre-tool-use-guard.mjs": "752f24a46db0da9f933bcb313a00ef8f6b12b8a655241b9257e40f64d9776965 20816 bytes",
   ".claude/hooks/stamity/stamity-review-gate.mjs": "a410def5d44fde83869b3c2c98db318d470b68a54101e1b20eddfb026f8077b1 51137 bytes",
-  ".claude/hooks/stamity/stamity-session-start.mjs": "0b524eb04048f7cf864619d8015c85370ccdc77496c3a17deb3a28062e46a624 54898 bytes",
+  ".claude/hooks/stamity/stamity-session-start.mjs": "b54fcb85ffd1235f25db5b03cbae1c8b94c6eb819965dda38908d96efaa046f9 56947 bytes",
   ".claude/hooks/stamity/stamity-unattended-ask-gate.mjs": "82ced47434e44a8722b28b7237f3a83f6d7e5569f1fbf6d5aeccb4102bd46d78 11205 bytes",
   ".claude/rules/stamity-api-versioning.md": "33cf64f53d78b3900d6cc9b17da8fbb8928845905da3483ce8d83f65999aceda 4849 bytes",
   ".claude/rules/stamity-contract-census.md": "b28259931c7f72a65ef8a252a57bf689f82b4ab3305563415c8d4d1685762532 3884 bytes",
@@ -9369,7 +9475,7 @@ exports[`emitted tree for claude > matches the tree digest golden > claude tree 
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "9a42f4c98beefed546f462a3f644426f3ef4ce789e74a7a77b8a0c3411d45ad0 28947 bytes",
+  ".stamity/manifest.json": "dc639f98043b8f006ff6ff2a5a800589aab34e6326062a70497c0c4b05e15d3a 28947 bytes",
   "AGENTS.md": "dd629383cdbc63baef7b069ec3273b5e49578fe4b11bf4a314a2e6b705c5adf1 6042 bytes",
   "CLAUDE.md": "697c902a89fcffe97474d8ca71b309c303c3989f9c87dbbf2c6fb12d12e95bc4 55 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -10265,13 +10371,13 @@ exports[`emitted tree for codex > matches the tree digest golden > codex tree di
   ".stamity/generated/hooks/codex/stamity-person-only-guard.mjs": "3a284ce3dc480b6c0398d182e876df18a11c17d393c89ba336492f84bfd325f1 347126 bytes",
   ".stamity/generated/hooks/codex/stamity-portable-hook.mjs": "8480d3a6fe6ea5fe1cad1c683ecbb07f3999cbdb411ae7dff7a1ec09eb207068 20937 bytes",
   ".stamity/generated/hooks/codex/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "58b28eb031ccc9c208a595c76060449c57dfb9473560232dd8d754900ee75835 54911 bytes",
+  ".stamity/generated/hooks/codex/stamity-session-start.mjs": "5e7aa9e3fe9f5f33cc64a31f182ed7b64a8732db84ddf0a9d2c1daa2927ff00a 56960 bytes",
   ".stamity/generated/models/codex.json": "bd85ba11fdb0504946c2922d8e9b7f753b64a8085f122cf2aa51fc3e527d685a 833 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "960a33669312f8b01721d6890974f57c81045d8b317fbcf555a3ae61d54a0c95 23099 bytes",
+  ".stamity/manifest.json": "de8a0447cdd5670abe41042b0f5b3827978e439e84201068a7d901ff85610fc6 23099 bytes",
   "AGENTS.md": "dd629383cdbc63baef7b069ec3273b5e49578fe4b11bf4a314a2e6b705c5adf1 6042 bytes",
   "AGENTS.override.md": "bb14d7eed7f931c77cb4167ebdc0f994019f78e69e6b7b7430dcf2a544760af9 26442 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
@@ -10631,13 +10737,13 @@ exports[`emitted tree for copilot > matches the tree digest golden > copilot tre
   ".stamity/generated/hooks/copilot/stamity-person-only-guard.mjs": "2a03f904befc69ddeb3784e241738b47cf89062d5897ed572752bbbdc9cefd80 349785 bytes",
   ".stamity/generated/hooks/copilot/stamity-portable-hook.mjs": "bd89a0ddd9dc95e9769ae5fc71c01f4fc29ecc4a5086615c21fab492427559f4 23308 bytes",
   ".stamity/generated/hooks/copilot/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "f1f623d5ee0653d4252cc07da18b85c0be4466c80cb300fd393d8bbbf0cdfa16 59714 bytes",
+  ".stamity/generated/hooks/copilot/stamity-session-start.mjs": "536be0f1cd2785909ef19dbd31e88278ac4537b4d4822081999674570c2e444d 61763 bytes",
   ".stamity/generated/models/copilot.json": "36ce250308ef6f7089ea863a303c2993ed4d87fe606d76ba83706e7cd0fb3bb1 964 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "86348f191e73b980cc21fa4482de88de319de3c9e8c713eb11317330d86f9345 21204 bytes",
+  ".stamity/manifest.json": "62d0196847a4501e6fa055f094806ab614afb8e4d9df47068ff612c8f489dd3d 21204 bytes",
   ".stamity/mcp/copilot-repo-settings.env": "313ea98994ba40a494cb3c45abb9268555fa4095e97c0519b1fd2bdbd9dca538 796 bytes",
   ".vscode/mcp.json": "f5d43a4963bee58187aa6905497eebf6ed65fefac6ffc962dc50363601b04276 664 bytes",
   "AGENTS.md": "dd629383cdbc63baef7b069ec3273b5e49578fe4b11bf4a314a2e6b705c5adf1 6042 bytes",
@@ -11257,19 +11363,19 @@ exports[`emitted tree for cursor > matches the tree digest golden > cursor tree 
   ".gitignore": "3edfccb19961302a3a2097d76e76138bf8f1b0bfdad0f076c52052028d7441b3 248 bytes",
   ".stamity/generated/agent-tool-policies.json": "a5f71ee1879714dbc8486652bf549c23c851fd4beaa4564d26f6607fefcd9ed7 4941 bytes",
   ".stamity/generated/hooks/cursor/stamity-config-tamper-notice.mjs": "baab363c359189d51d57fd5d28921437df2b4fed95993820ac209f2f1f8b3bc7 2637 bytes",
-  ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "67b9f425d2598ba303758aaef668ef196a68ade40d40bc576fbae5cb2a0bcc92 34885 bytes",
+  ".stamity/generated/hooks/cursor/stamity-context-once.mjs": "4f47e6817e53d4d2d51be78d9e41c0014c0443d110c26a309f5d7d11b71b16c8 36934 bytes",
   ".stamity/generated/hooks/cursor/stamity-cursor-continue.mjs": "08bc51855553f4104a80fbe1ea94ba36a95173e005846467e4af5c643bb26a60 9500 bytes",
   ".stamity/generated/hooks/cursor/stamity-model-pins.mjs": "fc71eb522ff67fd73ff00820d0e59495bca188d2e30fc9a26ce85e89fff6fdd5 3813 bytes",
   ".stamity/generated/hooks/cursor/stamity-person-only-guard.mjs": "197464392cbc1392968713b6195b68e7ccd87db053ba54ed63fc610b9f35d31c 347163 bytes",
   ".stamity/generated/hooks/cursor/stamity-portable-hook.mjs": "513a8e4c2631670fffed73a96be46542fea82d8e1719a5d26da0a872699277c6 20938 bytes",
   ".stamity/generated/hooks/cursor/stamity-pre-tool-use-guard.mjs": "003c68296234c03d71ac66870914df2998ecd2f08f1346c89f5b4b13d969a650 10654 bytes",
-  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "58b28eb031ccc9c208a595c76060449c57dfb9473560232dd8d754900ee75835 54911 bytes",
+  ".stamity/generated/hooks/cursor/stamity-session-start.mjs": "5e7aa9e3fe9f5f33cc64a31f182ed7b64a8732db84ddf0a9d2c1daa2927ff00a 56960 bytes",
   ".stamity/generated/models/cursor.json": "6e108834236741075e1d082bba6be814bc0bf04642622c860a6b7e43c348bdbd 601 bytes",
   ".stamity/handoffs/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
   ".stamity/hooks/guard.mjs": "d546961614a68d141d3a4e14ca29064b4b620c5779e38f3cf32f2abed20ae879 16 bytes",
   ".stamity/hooks/hooks.json": "3daced56e888871eaac7d2b79bb40a9d3db483c08398ea4fcf89d66ea559ce0a 192 bytes",
   ".stamity/learnings/.gitkeep": "7c2a23ae9c9a41ff49e3f81d3f732c3d3defa53ebd85dd948e8186b98501bd47 191 bytes",
-  ".stamity/manifest.json": "eb7e54f7a649988a58a4274e430fbfc32c09901f4ab95fdf20bdb75128159fde 22758 bytes",
+  ".stamity/manifest.json": "65d1868b28017a39cd64eda6762f9ddc32c2281c6739ad186a64a18c14a0d6f9 22758 bytes",
   "AGENTS.md": "12ef100ce80fd3f564bd79c4edb889cc8894eb17cca43d6d388557fba5548c6c 6908 bytes",
   "eslint.config.js": "d7076912d1c9786ca76231a2a77cef475b7fafbe4950a8ecc430af171422993c 19 bytes",
   "package.json": "a90d1eac4a374849be3cc3ebc4909e8922ae2b750a29a8db687a698e055ea547 337 bytes",

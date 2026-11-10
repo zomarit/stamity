@@ -26,6 +26,7 @@ import {
   REVIEW_GATE_FILE,
   REVIEW_GATE_STATE_FILE,
   SESSION_START_SCREEN_PATTERN_IDS,
+  sessionIndexOptions,
   type GeneratedHookScript,
   type ReviewGateScriptOptions,
 } from "../../src/hooks/scripts.ts";
@@ -56,6 +57,7 @@ import {
   type AgentToolPolicy,
 } from "../../src/tools/allowlist.ts";
 import { TOOLS } from "../../src/types/core.ts";
+import { LEARNINGS_INDEX_BYTES } from "../../src/types/manifest.ts";
 import { EngineError } from "../../src/types/errors.ts";
 import { REVIEW_GATE_LOCK_SUFFIX, REVIEW_GATE_TEMP_INFIX } from "../../src/types/markers.ts";
 import { CHILD_TIMEOUT_MS, throwOnChildTimeout } from "../support/childTimeout.ts";
@@ -605,7 +607,10 @@ describe("buildSessionStartScript", () => {
     const printed = run(script, { cwd: getRepo().dir }).stdout;
 
     expect(printed.split("\n").filter((line) => line.startsWith("- [")).length).toBe(1);
-    expect(printed).toContain("- … and 2 more learnings not listed.");
+    // TEST CHANGE, justified (l-banner, REQ-FLOW-179): the line accounting for the learnings left out now names
+    // the verb that prints them all; `maxIndexLines` caps the learning lines alone, and the skip and handoff
+    // sections keep the default cap, which the pin below still reads.
+    expect(printed).toContain("- … and 2 more learnings not listed; `stamity learn read` prints them all.");
     expect(buildSessionStartScript()).toContain(`const MAX_ITEM_LINES = ${DEFAULT_MAX_INDEX_LINES};`);
   });
 
@@ -725,7 +730,10 @@ describe("buildSessionStartScript", () => {
     expect(lines.slice(0, 1 + section.length).join("\n")).toBe(engine);
   });
 
-  it("counts each twin's own printed section once the hook's cap cuts the list", async () => {
+  it("lists all 22 learnings inside the default byte budget, as the engine lists them", async () => {
+    // TEST CHANGE, justified (l-banner, REQ-FLOW-179): re-pinned from "counts each twin's own printed section once
+    // the hook's cap cuts the list". The banner caps learnings by bytes now (16,384 by default), not at 20 lines, so
+    // the 22 learnings that used to be cut at 20 all print, and the two twins print one section, byte for byte.
     const files: Record<string, string> = {};
     for (let n = 1; n <= 22; n += 1) {
       const id = `note-${String(n).padStart(2, "0")}`;
@@ -737,19 +745,142 @@ describe("buildSessionStartScript", () => {
     const lines = run(script, { cwd: getRepo().dir }).stdout.split("\n");
     const section = lines.slice(1, lines.indexOf("Handoffs: 0 active, 0 skipped."));
     const engine = formatLearningsIndex(await loadValidatedLearnings({ rootDir: getRepo().dir })).split("\n");
-    const engineSection = engine.slice(1);
 
-    // The hook prints 20 lines and the line accounting for the rest; the engine lists all 22.
-    expect(section).toHaveLength(DEFAULT_MAX_INDEX_LINES + 1);
-    expect(section.at(-1)).toBe("- … and 2 more learnings not listed.");
-    expect(engineSection).toHaveLength(22);
-    // ledger review/125: the 20 lines the hook prints are the engine's first 20, line for line.
-    expect(section.slice(0, DEFAULT_MAX_INDEX_LINES)).toEqual(engineSection.slice(0, DEFAULT_MAX_INDEX_LINES));
-    const hookBytes = Buffer.byteLength(section.join("\n"), "utf8");
-    const engineBytes = Buffer.byteLength(engineSection.join("\n"), "utf8");
-    expect(lines[0]).toMatch(new RegExp(`^Learnings: 22 loaded, 0 skipped, ${hookBytes} bytes in this index `));
-    expect(engine[0]).toMatch(new RegExp(`^Learnings: 22 loaded, 0 skipped, ${engineBytes} bytes in this index `));
-    expect(hookBytes).not.toBe(engineBytes);
+    expect(section).toHaveLength(22);
+    expect(section.some((line) => line.startsWith("- … and"))).toBe(false);
+    expect(Buffer.byteLength(section.join("\n"), "utf8")).toBeLessThan(LEARNINGS_INDEX_BYTES.default);
+    expect(lines.slice(0, 1 + section.length)).toEqual(engine);
+    expect(lines[0]).toMatch(/^Learnings: 22 loaded, 0 skipped, /);
+  });
+
+  it("lists fewer under a 2,048-byte budget and names the read verb, line for line with the engine", async () => {
+    const files: Record<string, string> = {};
+    for (let n = 1; n <= 22; n += 1) {
+      const id = `note-${String(n).padStart(2, "0")}`;
+      files[`.stamity/learnings/${id}.md`] = learning({ id });
+    }
+    await getRepo().seedFiles(files);
+    const script = await place("session-start.mjs", buildSessionStartScript({ indexBytes: LEARNINGS_INDEX_BYTES.min }));
+
+    const lines = run(script, { cwd: getRepo().dir }).stdout.split("\n");
+    const section = lines.slice(1, lines.indexOf("Handoffs: 0 active, 0 skipped."));
+    const listed = section.filter((line) => line.startsWith("- ["));
+    const loaded = await loadValidatedLearnings({ rootDir: getRepo().dir });
+    const budgeted = formatLearningsIndex(loaded, { indexBytes: LEARNINGS_INDEX_BYTES.min }).split("\n");
+
+    // Each line is about 140 bytes, so a 2,048-byte budget holds more than one and fewer than 22.
+    expect(listed.length).toBeGreaterThan(1);
+    expect(listed.length).toBeLessThan(22);
+    expect(Buffer.byteLength(listed.join("\n"), "utf8")).toBeLessThanOrEqual(LEARNINGS_INDEX_BYTES.min);
+    expect(section).toEqual([
+      ...listed,
+      `- … and ${22 - listed.length} more learnings not listed; \`stamity learn read\` prints them all.`,
+    ]);
+    // The hook and the engine agree line for line, the header's byte figure included.
+    expect(lines.slice(0, 1 + section.length)).toEqual(budgeted);
+    // With no budget the engine lists every learning, as `learn read` prints them.
+    expect(formatLearningsIndex(loaded).split("\n").slice(1)).toHaveLength(22);
+  });
+
+  it("caps the learning lines at indexLines when it is set, beside the byte budget", async () => {
+    const files: Record<string, string> = {};
+    for (let n = 1; n <= 5; n += 1) {
+      const id = `note-${String(n).padStart(2, "0")}`;
+      files[`.stamity/learnings/${id}.md`] = learning({ id });
+    }
+    await getRepo().seedFiles(files);
+    const script = await place("session-start.mjs", buildSessionStartScript({ maxIndexLines: 3 }));
+
+    const lines = run(script, { cwd: getRepo().dir }).stdout.split("\n");
+    const engine = formatLearningsIndex(await loadValidatedLearnings({ rootDir: getRepo().dir }), {
+      indexBytes: LEARNINGS_INDEX_BYTES.default,
+      indexLines: 3,
+    }).split("\n");
+
+    expect(lines.filter((line) => line.startsWith("- ["))).toHaveLength(3);
+    expect(lines).toContain("- … and 2 more learnings not listed; `stamity learn read` prints them all.");
+    expect(lines.slice(0, engine.length)).toEqual(engine);
+  });
+
+  it("ranks by confidence, then the soonest review, then the newest date, then the name", async () => {
+    await getRepo().seedFiles({
+      // Newest of all, but low: it ranks last.
+      ".stamity/learnings/low-new.md": learning({ id: "low-new", confidence: "low", date: "2026-09-30" }),
+      ".stamity/learnings/medium-old.md": learning({ id: "medium-old", confidence: "medium", date: "2026-07-01" }),
+      // Two highs on one date and one review: the name decides.
+      ".stamity/learnings/high-b.md": learning({ id: "high-b", date: "2026-08-01" }),
+      ".stamity/learnings/high-a.md": learning({ id: "high-a", date: "2026-08-01" }),
+      // A high on an older date that is due sooner ranks above the later-reviewed highs.
+      ".stamity/learnings/high-due.md": learning({ id: "high-due", date: "2026-06-01", reviewBy: "2098-01-01" }),
+      // A newer high on the same review as the pair: the date puts it first among them.
+      ".stamity/learnings/high-new.md": learning({ id: "high-new", date: "2026-09-01" }),
+    });
+    const script = await place("session-start.mjs", buildSessionStartScript());
+
+    const lines = run(script, { cwd: getRepo().dir }).stdout.split("\n");
+    const order = lines.filter((line) => line.startsWith("- [")).map((line) => /^- \[\w+\] (\S+)/.exec(line)?.[1]);
+    const engine = formatLearningsIndex(await loadValidatedLearnings({ rootDir: getRepo().dir }));
+
+    expect(order).toEqual(["high-due", "high-new", "high-a", "high-b", "medium-old", "low-new"]);
+    expect(lines.slice(0, lines.indexOf("Handoffs: 0 active, 0 skipped.")).join("\n")).toBe(engine);
+  });
+
+  it("still lists a learning whose one line is larger than the budget, cut to it", async () => {
+    // A learning the engine's schema passes cannot reach 2,048 bytes in one line (ASCII slugs, a 200-character
+    // summary), so the case is a hand-written file the hook still lists: its id, confidence and summary are 200
+    // three-byte characters each (1,800 bytes), its file name 80 more (240), and its review falls due (24): about
+    // 2,080 bytes. Neither ranks by confidence, so the sooner review puts the wide one first. The engine's twin of this cut
+    // is pinned in test/learnings/store.test.ts on a built loader result.
+    const wide = "€".repeat(200);
+    await getRepo().seedFiles({
+      [`.stamity/learnings/${"€".repeat(80)}.md`]: learning({
+        id: wide,
+        confidence: wide,
+        summary: wide,
+        reviewBy: dayFromNow(5),
+      }),
+      ".stamity/learnings/small.md": learning({ id: "small", confidence: "unrated" }),
+    });
+    const script = await place("session-start.mjs", buildSessionStartScript({ indexBytes: LEARNINGS_INDEX_BYTES.min }));
+    const unbudgeted = await place("unbudgeted.mjs", buildSessionStartScript({ indexBytes: LEARNINGS_INDEX_BYTES.max }));
+
+    const lines = run(script, { cwd: getRepo().dir }).stdout.split("\n");
+    const section = lines.slice(1, lines.indexOf("Handoffs: 0 active, 0 skipped."));
+    const full = run(unbudgeted, { cwd: getRepo().dir }).stdout.split("\n").find((line) => line.includes(wide)) ?? "";
+
+    // The fixture's line really is past the smallest budget.
+    expect(Buffer.byteLength(full, "utf8")).toBeGreaterThan(LEARNINGS_INDEX_BYTES.min);
+    expect(section).toHaveLength(2);
+    expect(section[0]?.endsWith("…")).toBe(true);
+    expect(full.startsWith((section[0] ?? "").slice(0, -1))).toBe(true);
+    // Cut on a character boundary, as close to the budget as a three-byte character allows.
+    expect(Buffer.byteLength(section[0] ?? "", "utf8")).toBeLessThanOrEqual(LEARNINGS_INDEX_BYTES.min);
+    expect(Buffer.byteLength(section[0] ?? "", "utf8")).toBeGreaterThan(LEARNINGS_INDEX_BYTES.min - 3);
+    expect(section[1]).toBe("- … and 1 more learning not listed; `stamity learn read` prints them all.");
+  });
+
+  it("bakes the manifest's learnings budget into every session-start copy the plan renders", () => {
+    const planned = planCoreHookScripts("../../agent-tool-policies.json", "claude", {
+      ...CLI_PIN,
+      learnings: { indexBytes: 4_096, indexLines: 7 },
+    });
+    const start = planned.find((script) => script.event === "session_start" && script.content.includes("INDEX_BYTES"));
+
+    expect(start?.content).toContain("const INDEX_BYTES = 4096;");
+    expect(start?.content).toContain("const INDEX_LINES = 7;");
+    const plain = planCoreHookScripts("../../agent-tool-policies.json", "claude", CLI_PIN);
+    const unset = plain.find((script) => script.event === "session_start" && script.content.includes("INDEX_BYTES"));
+    expect(unset?.content).toContain(`const INDEX_BYTES = ${LEARNINGS_INDEX_BYTES.default};`);
+    expect(unset?.content).toContain("const INDEX_LINES = null;");
+    expect(sessionIndexOptions({ indexBytes: 4_096 })).toEqual({ indexBytes: 4_096 });
+    expect(sessionIndexOptions(undefined)).toEqual({});
+  });
+
+  it("refuses a byte budget outside 2,048 to 131,072", () => {
+    for (const indexBytes of [0, 2_047, 131_073, 4_096.5, Number.NaN]) {
+      expect(() => buildSessionStartScript({ indexBytes }), `${indexBytes}`).toThrow(/indexBytes must be a whole number/);
+    }
+    expect(() => buildSessionStartScript({ indexBytes: LEARNINGS_INDEX_BYTES.max })).not.toThrow();
   });
 
   it("keeps a hostile field to one bounded index line", async () => {

@@ -39,6 +39,7 @@ import {
   COPILOT_SETUP_STEPS_DEFAULT,
   COPILOT_SETUP_STEPS_MODES,
   DEPLOYING_ACTS,
+  LEARNINGS_INDEX_BYTES,
   MANIFEST_FILE,
   MANIFEST_VERSION,
   PACK_OWNER_PREFIX,
@@ -1184,6 +1185,22 @@ export function collectManifestErrors(data: unknown): string[] {
       (!Number.isInteger(data.learnings.maxCount) || (data.learnings.maxCount as number) < 1)
     ) {
       errors.push("`learnings.maxCount` must be a positive integer");
+    }
+    if (isPlainObject(data.learnings)) {
+      const { indexBytes, indexLines } = data.learnings;
+      if (
+        indexBytes !== undefined &&
+        (!Number.isInteger(indexBytes) ||
+          (indexBytes as number) < LEARNINGS_INDEX_BYTES.min ||
+          (indexBytes as number) > LEARNINGS_INDEX_BYTES.max)
+      ) {
+        errors.push(
+          `\`learnings.indexBytes\` must be a whole number from ${LEARNINGS_INDEX_BYTES.min} to ${LEARNINGS_INDEX_BYTES.max}`,
+        );
+      }
+      if (indexLines !== undefined && (!Number.isInteger(indexLines) || (indexLines as number) < 1)) {
+        errors.push("`learnings.indexLines` must be a positive integer");
+      }
     }
   }
   if (data.hooks !== undefined) {

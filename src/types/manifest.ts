@@ -181,7 +181,18 @@ export interface McpConfig {
 export interface LearningsConfig {
   /** Cap on active learnings files. */
   maxCount?: number;
+  /**
+   * Bytes of learning lines the session-start banner lists before it names
+   * `stamity learn read` for the rest (REQ-FLOW-179), within
+   * {@link LEARNINGS_INDEX_BYTES}; absent, its default.
+   */
+  indexBytes?: number;
+  /** Learning lines the banner lists at most, beside the byte budget; absent, no line cap. */
+  indexLines?: number;
 }
+
+/** The banner's learnings byte budget: its default and the range `learnings.indexBytes` may take (REQ-FLOW-179). */
+export const LEARNINGS_INDEX_BYTES = { default: 16_384, min: 2_048, max: 131_072 } as const;
 
 /** User hook wiring. Hooks are configuration, not a content class. */
 export interface HooksConfig {
