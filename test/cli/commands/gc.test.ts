@@ -1,5 +1,5 @@
 import { lstat, mkdir, readFile, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { formatBytes, gcCommand } from "../../../src/cli/commands/gc.ts";
 import { archiveHandoff, writeHandoff } from "../../../src/handoffs/store.ts";
@@ -42,6 +42,9 @@ async function mustGit(cwd: string, ...args: string[]): Promise<string> {
   }
   return outcome.stdout;
 }
+
+/** TEST CHANGE, justified (u-ci1): a native path as git prints it, with `/` between its parts on every platform. */
+const gitPath = (path: string): string => path.split(sep).join("/");
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -237,7 +240,9 @@ describe.skipIf(!gitAvailable)("gc engine — the preview writes nothing and rep
     expect(await exists(join(fixture.oldRun, "reports", "old-r1.md"))).toBe(true);
     expect(await exists(join(fixture.newRun, "reports", "aged-r1.md"))).toBe(true);
     expect(await mustGit(fixture.root, "for-each-ref", "--format=%(refname)")).toBe(before);
-    expect(await mustGit(fixture.root, "worktree", "list", "--porcelain")).toContain(join(fixture.farm, "gone"));
+    // TEST CHANGE, justified (u-ci1): git prints a worktree path with `/` on every platform (`C:/Users/...` on Windows),
+    // so the path is compared in git's spelling; on POSIX it is the same string as before.
+    expect(await mustGit(fixture.root, "worktree", "list", "--porcelain")).toContain(gitPath(join(fixture.farm, "gone")));
   });
 
   it("reads an absent .stamity/runs as no runs, not as a failure", async () => {
@@ -286,7 +291,8 @@ describe.skipIf(!gitAvailable)("gc engine — apply frees the default set and ke
     // The dirty tree stands with its edit; the gone registration is pruned; the outside lane stays registered.
     expect(await readFile(join(fixture.farm, "dirty", "fixture-readme.txt"), "utf8")).toBe("edited\n");
     const list = await mustGit(fixture.root, "worktree", "list", "--porcelain");
-    expect(list).not.toContain(join(fixture.farm, "gone"));
+    // TEST CHANGE, justified (u-ci1): in git's spelling, so on Windows the absence is read against a path git could print.
+    expect(list).not.toContain(gitPath(join(fixture.farm, "gone")));
     expect(list).toContain("outside-lane");
     // The stale tracking ref is gone, the live one stays, origin's branch stays, and no local branch moved.
     const refs = await mustGit(fixture.root, "for-each-ref", "--format=%(refname)");
