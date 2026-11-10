@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-11-10
+
 ### Upgrading from 1.18.0
 
 Upgrade with `npx -y @zomarit/stamity@1.19.0 upgrade --to 1.19.0`, from a committed tree. It runs 1.19.0's `sync`
@@ -3892,7 +3894,8 @@ as its item below says.
   emission (Claude, Cursor, Copilot, and Codex); the first-party packs; and the documentation
   site.
 
-[Unreleased]: https://github.com/zomarit/stamity/compare/v1.18.0...HEAD
+[Unreleased]: https://github.com/zomarit/stamity/compare/v1.19.0...HEAD
+[1.19.0]: https://github.com/zomarit/stamity/compare/v1.18.0...v1.19.0
 [1.18.0]: https://github.com/zomarit/stamity/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/zomarit/stamity/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/zomarit/stamity/compare/v1.15.0...v1.16.0
