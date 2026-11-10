@@ -36,6 +36,13 @@ function refusal(target: string): string {
   return `This install would write through node_modules here, which is a link to ${target}, another checkout's install. Run it in that checkout (cd ${checkout} first, or give the install an absolute --prefix ${checkout}), or remove the link (the link only) and install here.`;
 }
 
+/**
+ * The refusal past the folders the check follows (review/106): where the install runs is not known, so it is refused,
+ * in a real folder as much as a linked one. 32 is the guard's place cap, GUARD_PLACES_MAX.
+ */
+const TOO_MANY_FOLDERS =
+  "This install comes after more folder changes than the guard follows (32 folders at most), so whether it writes through a linked node_modules cannot be read. Run the install on a line of its own, after a plain cd to its folder.";
+
 /** The guard for one client where emission writes it, in a repository on `feat/x`; returns its path. */
 async function placeGuard(tool: Tool, files: Record<string, string> = {}): Promise<string> {
   const guard = planCoreHookScripts(POLICY, tool, { ...CLI_PIN, personOnlyGuard: true }).find((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
@@ -331,6 +338,57 @@ describe("an install through a linked node_modules (REQ-FLOW-178)", () => {
     expect(decide("claude", guard, 'cd "$MAIN" && npm ci', {}, "lane")).toEqual({ kind: "refuse", reason: refusal(target) });
     expect(decide("claude", guard, 'npm --prefix "$MAIN" ci', {}, "lane")).toEqual({ kind: "refuse", reason: refusal(target) });
     expect(decide("claude", guard, 'cd "$LANE" && npm ci')).toEqual({ kind: "allow" });
+  });
+
+  it("bounds the folders a line puts in play, and refuses an install past the bound within the child's time limit (review/106)", async () => {
+    const guard = await placeGuard("claude", { "node_modules/.keep": "" });
+    const target = linkInstall(getRepo().path("lane"));
+    // Each cd after || doubles the folders the install may start from: twenty would be over a million with no bound.
+    // The time limit is the child's own (CHILD_TIMEOUT_MS): a guard still walking at it has no status, and decide()
+    // fails the case on that, so no clock is read here.
+    const steps = (n: number): string => Array.from({ length: n }, (_, i) => ` || cd d${i}`).join("");
+    for (const cwd of ["lane", undefined]) {
+      expect(decide("claude", guard, `true${steps(20)}; npm ci`, {}, cwd), String(cwd)).toEqual({ kind: "refuse", reason: TOO_MANY_FOLDERS });
+    }
+    // So is an install naming more folders than the bound itself.
+    const prefixes = Array.from({ length: 40 }, (_, i) => ` --prefix p${i}`).join("");
+    expect(decide("claude", guard, `npm ci${prefixes}`)).toEqual({ kind: "refuse", reason: TOO_MANY_FOLDERS });
+    // Non-degenerate, one fact away: under the bound the same shape reads each folder (refused through the lane's link,
+    // allowed in the real root), and past it a line that installs nothing runs.
+    expect(decide("claude", guard, `true${steps(4)}; npm ci`, {}, "lane")).toEqual({ kind: "refuse", reason: refusal(target) });
+    expect(decide("claude", guard, `true${steps(4)}; npm ci`)).toEqual({ kind: "allow" });
+    expect(decide("claude", guard, `true${steps(20)}; npm test`, {}, "lane")).toEqual({ kind: "allow" });
+  });
+
+  it("keeps the folder a cd to a missing folder fails to leave (review/107)", async () => {
+    const guard = await placeGuard("claude", { "node_modules/.keep": "" });
+    const target = linkInstall(getRepo().path("lane"));
+    const main = getRepo().path("main");
+    const gone = getRepo().path("gone");
+    // From the linked lane, a cd to a folder that is not there fails, so an install after ;, a newline or || runs in the
+    // lane; so does one after a cd that || skips once the command before it failed.
+    for (const command of [`cd ${gone}; npm ci`, `cd ${gone}\nnpm ci`, `cd ${gone} || npm ci`, `cd ${gone} && true; npm ci`, `false && cd ${main} || npm ci`]) {
+      expect(decide("claude", guard, command, {}, "lane"), command).toEqual({ kind: "refuse", reason: refusal(target) });
+    }
+    // Non-degenerate: a cd to a folder that is there holds, and after && a failed cd runs nothing more.
+    for (const command of [`cd ${main}; npm ci`, `cd ${main}\nnpm ci`, `cd ${main} || true; npm ci`, `mkdir -p ${gone} && cd ${gone} && npm ci`]) {
+      expect(decide("claude", guard, command, {}, "lane"), command).toEqual({ kind: "allow" });
+    }
+  });
+
+  it("puts the folder a pushd left back in play at popd (review/108)", async () => {
+    const guard = await placeGuard("claude", { "node_modules/.keep": "" });
+    const target = linkInstall(getRepo().path("lane"));
+    const main = getRepo().path("main");
+    // From the linked lane, popd (or a bare pushd, which swaps) goes back to the lane, where the install writes.
+    for (const command of [`pushd ${main} && npm ci && popd && npm ci`, `Push-Location ${main}; npm ci; Pop-Location; npm ci`, `pushd ${main} && pushd && npm ci`]) {
+      expect(decide("claude", guard, command, {}, "lane"), command).toEqual({ kind: "refuse", reason: refusal(target) });
+    }
+    expect(decide("claude", guard, `pushd lane && pushd ${main} && popd && npm ci`)).toEqual({ kind: "refuse", reason: refusal(target) });
+    // Non-degenerate: an install while the pushd holds runs in main.
+    for (const command of [`pushd ${main} && npm ci && popd`, `pushd ${main} && npm ci`]) {
+      expect(decide("claude", guard, command, {}, "lane"), command).toEqual({ kind: "allow" });
+    }
   });
 
   it.skipIf(NO_DANGLING)("refuses through a dangling link, naming where it points", async () => {

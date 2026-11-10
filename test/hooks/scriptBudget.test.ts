@@ -352,7 +352,10 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     // TEST CHANGE, justified (d-npm-ci-guard fix round 1, sign-off S64, 2026-11-09): both rows moved again, bytes from
     // 345,411 to 345,984 and lines from 7,142 to 7,155, the measured size of the largest copy (copilot), since a
     // workspace member's install is now checked at its workspace root too.
-    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 345_984, lines: 7_155 });
+    // TEST CHANGE, justified (d-npm-ci-guard fix round 3, review/106-108, 2026-11-09): both rows moved again, bytes from
+    // 345,984 to 348,713 and lines from 7,155 to 7,203, the measured size of the largest copy (copilot), since the
+    // install check now caps its folders and refuses past the cap, keeps a failed cd's folder, and reads popd.
+    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 348_713, lines: 7_203 });
     const guards = renders.filter((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
     expect(guards).toHaveLength(TOOLS.length);
     for (const script of guards) expect(budgetViolation(script), script.tool).toBeUndefined();
