@@ -945,7 +945,8 @@ export interface SessionStartScriptOptions {
   indexBytes?: number;
   /**
    * How the learnings overflow line names `learn read`: {@link cliCallHint}'s sentence, the installed form and the
-   * pinned fallback together, as {@link sessionIndexOptions} builds it for the setup. Absent, the canonical package
+   * pinned fallback together, or the installed form alone for a scope-registry fork, as {@link sessionIndexOptions}
+   * builds it for the setup. Absent, the canonical package
    * at the unstamped version `0.0.0` (the engine twin's default, spelled the same way). Embedded as a JSON string.
    */
   readCall?: string;
@@ -6313,20 +6314,23 @@ export function planCoreHookScripts(
  * copy, so both banners read one setting and name one call.
  *
  * The call is {@link cliCallHint}'s sentence. The pinned `npx -y` fallback is named only for a package the public
- * registry serves: no scope registry in `cli` and an npm channel. A fork whose scope names its own registry gets only
- * the calls that fetch nothing, the installed copy and `npx --no` (S83, review/133). Its registry is an https URL the
- * session start does not carry, since the session start stays free of network words under a plain grep (the reason
- * its screen drops the network rows), and without it npx would ask the public registry, where anyone may hold the name.
+ * registry serves: no scope registry in `cli` and an npm channel; with no npm channel it is `npx --no`. A fork whose
+ * scope names its own registry gets only the installed copy, with no `npx` form at all (S91, after S83 and
+ * review/133). Its registry is an https URL the session start does not carry, since the session start stays free of
+ * network words under a plain grep (the reason its screen drops the network rows), and without it npx, even
+ * `npx --no`, may ask the public registry about the name, where anyone may hold it.
  */
 export function sessionIndexOptions(
   learnings: { indexBytes?: number; indexLines?: number } | undefined,
   cli: { packageName: string; version: string; npmChannel?: boolean; registry?: string },
 ): Pick<SessionStartScriptOptions, "indexBytes" | "maxIndexLines" | "readCall"> {
-  const fetchesNothing = cli.npmChannel === false || cli.registry !== undefined;
   return {
     ...(learnings?.indexBytes === undefined ? {} : { indexBytes: learnings.indexBytes }),
     ...(learnings?.indexLines === undefined ? {} : { maxIndexLines: learnings.indexLines }),
-    readCall: cliCallHint(cli.packageName, cli.version, "learn read", fetchesNothing ? { npmChannel: false } : {}),
+    readCall:
+      cli.registry === undefined
+        ? cliCallHint(cli.packageName, cli.version, "learn read", cli.npmChannel === false ? { npmChannel: false } : {})
+        : "`stamity learn read` where the CLI is installed",
   };
 }
 

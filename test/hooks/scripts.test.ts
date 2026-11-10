@@ -900,7 +900,13 @@ describe("buildSessionStartScript", () => {
     // A fork's scope registry is an https URL, so the session start's call leaves it out and stays network-free.
     const fork = { packageName: "@acme/stamity", version: "2.0.0", registry: "https://npm.acme.example/" };
     expect(sessionIndexOptions(undefined, fork).readCall).not.toMatch(/https?/);
-    expect(sessionIndexOptions(undefined, { ...fork, npmChannel: false }).readCall).toContain("npx --no @acme/stamity@2.0.0 learn read");
+    // TEST CHANGE, justified (S91): `npx --no` may still ask the public registry about a scope-registry fork's name,
+    // so such a fork's call now names the installed copy alone; `npx --no` stays for a setup with no npm channel and
+    // no scope registry, pinned on the second line.
+    expect(sessionIndexOptions(undefined, { ...fork, npmChannel: false }).readCall).toBe("`stamity learn read` where the CLI is installed");
+    expect(sessionIndexOptions(undefined, { ...CLI_PIN, packageName: "@acme/stamity", npmChannel: false }).readCall).toContain(
+      `npx --no @acme/stamity@${CLI_PIN.version} learn read`,
+    );
   });
 
   it("names the read call the way the other hook lines do, never a bare stamity, in Claude's and Cursor's copies", async () => {
@@ -962,6 +968,9 @@ describe("buildSessionStartScript", () => {
   it("names the pinned npx -y fallback only for the public registry's package, and a scope-registry fork only calls that fetch nothing (S83)", async () => {
     // review/133: the session start does not carry a fork's scope registry (an https URL), and without it `npx -y`
     // on the fork's scoped name asks the public registry, where anyone may hold that name and version.
+    // TEST CHANGE, justified (S91): `npx --no` may still ask the public registry for the fork's name, so the fork's
+    // call names the installed copy alone, with no `npx` form; the two fork pins below move to it and gain `npx`
+    // in the refused set. The public package's pinned `npx -y` call is unchanged.
     const base = createManifest({
       tools: ["claude", "cursor"],
       selection: { items: { agent: [], skill: [], rule: [], command: [] } },
@@ -977,7 +986,7 @@ describe("buildSessionStartScript", () => {
         facts: { monorepoPackages: [] },
         ...identity,
       });
-    const forkCall = "`stamity learn read` where the CLI is installed, else `npx --no @acme/stamity@0.0.0-test learn read`";
+    const forkCall = "`stamity learn read` where the CLI is installed";
     const publicCall =
       "`stamity learn read` where the CLI is installed, else `npx -y @zomarit/stamity@0.0.0-test learn read`, which needs the npm registry";
     const plans = [
@@ -985,7 +994,7 @@ describe("buildSessionStartScript", () => {
       [await planWith({}), publicCall],
     ] as const;
 
-    expect(forkCall).not.toMatch(/npx -y|registry|https?/);
+    expect(forkCall).not.toMatch(/npx|registry|https?/);
     for (const [plan, named] of plans) {
       for (const path of [`${CLAUDE_HOOKS_DIR}/stamity-session-start.mjs`, CURSOR_CONTEXT_ONCE_HOOK_PATH]) {
         expect(plan.find((row) => row.path === path)?.content, path).toContain(`const READ_CALL = ${JSON.stringify(named)};`);
@@ -994,7 +1003,7 @@ describe("buildSessionStartScript", () => {
       expect(plan.find((row) => row.path === `${CLAUDE_HOOKS_DIR}/stamity-session-start.mjs`)?.content).not.toMatch(/https?/i);
     }
 
-    // Run: the fork's banner names the installed copy and `npx --no`, no registry, and the engine twin handed the
+    // Run: the fork's banner names the installed copy alone, no npx and no registry, and the engine twin handed the
     // same call prints the same lines.
     const files: Record<string, string> = {};
     for (let n = 1; n <= 30; n += 1) {
@@ -1017,9 +1026,9 @@ describe("buildSessionStartScript", () => {
       readCall,
     }).split("\n");
 
-    expect(readCall).toBe("`stamity learn read` where the CLI is installed, else `npx --no @acme/stamity@1.0.0-golden learn read`");
+    expect(readCall).toBe("`stamity learn read` where the CLI is installed");
     expect(overflow).toBe(overflowLine(30 - listed, readCall));
-    expect(overflow).not.toMatch(/npx -y|registry|https?/);
+    expect(overflow).not.toMatch(/npx|registry|https?/);
     expect(lines.slice(0, engine.length)).toEqual(engine);
     expect(start).not.toMatch(/https?|curl|wget|fetch/i);
   });
