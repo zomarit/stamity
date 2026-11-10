@@ -370,7 +370,11 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     // TEST CHANGE, justified (learn capture's trust flags, REQ-FLOW-163, 2026-11-10): both rows moved again, bytes from
     // 353,390 to 353,434 and lines from 7,268 to 7,270, the measured size of the largest copy (copilot), since the accept
     // reading's list of `learn`'s value options gains `--review-by` and `--validated-against`.
-    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 353_434, lines: 7_270 });
+    // TEST CHANGE, justified (person-only guard hardening, REQ-FLOW-102 and REQ-FLOW-124, 2026-11-10): both rows moved
+    // again, bytes from 353,390 to 355,322 and lines from 7,268 to 7,302, the measured size of the largest copy
+    // (copilot), since the push reading now reads any word the shell fills in at the remote's place and in an option
+    // word, and no longer returns before the force and deletion reads.
+    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 355_322, lines: 7_302 });
     const guards = renders.filter((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
     expect(guards).toHaveLength(TOOLS.length);
     for (const script of guards) expect(budgetViolation(script), script.tool).toBeUndefined();

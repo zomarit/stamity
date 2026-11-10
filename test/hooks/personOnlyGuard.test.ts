@@ -3396,3 +3396,52 @@ describe("a remote's HEAD ref written, on every client (b14b, review/163)", () =
     }
   });
 });
+
+describe("a push whose remote or option word the shell fills in, with the origin placed", () => {
+  const ORIGIN_CONFIG = '[remote "origin"]\n\turl = https://github.com/acme/app.git\n';
+  const REMOTE = "A push whose remote word the line cannot show, which may be an option";
+  const HIDDEN = "A push holding an option word the line cannot show, which may be any push option";
+  const asHelper = (command: string): string => JSON.stringify({ ...JSON.parse(payload("claude", command)), agent_id: "a1" });
+  const subAgent = (act: string): string =>
+    `${act} is a person-only act (\`push-default\`) and a sub-agent runs it: the act is the person's, so only the main thread may ask for it (REQ-FLOW-102). Give the person the exact command.`;
+
+  // Red on 091d999b: the remote word asked as a push to another repository, and the option word ran with no ask.
+  it.each([
+    ["a remote word", 'git push "$R" feat/x', REMOTE],
+    ["an option word", 'git push --"$OPT" origin feat/x', HIDDEN],
+  ])("asks naming the default-branch rule for %s on the main thread, and refuses it for a sub-agent", async (_, command, act) => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN_CONFIG });
+    expect(decide("claude", guard, command), command).toEqual(expectedAttended("claude", { act, rule: "push-default", ask: true }));
+    const helper = clientDecision("claude", run(guard, asHelper(command)), `helper: ${command}`);
+    expect(helper, `helper: ${command}`).toEqual({ deny: true, reason: expect.stringContaining(subAgent(act)) });
+    // One fact away: the same push with a literal remote and options runs.
+    expect(decide("claude", guard, "git push -u origin feat/x")).toEqual({ deny: false });
+  });
+
+  // A pin, green before and after: the lines the maintainers' own runs rely on still run, on the main thread and for a
+  // sub-agent, and the run verbs' own push line is not held.
+  it("runs the everyday lines a run relies on", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN_CONFIG });
+    const lines = [
+      "npx --no stamity gate classify --base HEAD --paths src/a.ts",
+      "git push -u origin feat/x",
+      "git push origin HEAD:refs/heads/feat/x",
+      "gh pr create -R acme/app --draft --title t --body b",
+      "gh pr edit 3 -R acme/app --body b",
+      "gh pr comment 3 -R acme/app --body b",
+      'git -C lane commit -s -m "fix: a change"',
+      "lockf -k /tmp/stamity-machine.lock npx vitest run test/hooks",
+    ];
+    for (const command of lines) {
+      expect(decide("claude", guard, command), command).toEqual({ deny: false });
+      expect(clientDecision("claude", run(guard, asHelper(command)), `helper: ${command}`), `helper: ${command}`).toEqual({ deny: false });
+    }
+  });
+
+  it("refuses a literal force beside a split-prone remote word on the main thread", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN_CONFIG });
+    const decision = decide("claude", guard, "git push --force $R feat/x");
+    expect(decision).toMatchObject({ deny: true, reason: expect.stringContaining("(`force-push`)") });
+    expect(decision).not.toHaveProperty("ask");
+  });
+});

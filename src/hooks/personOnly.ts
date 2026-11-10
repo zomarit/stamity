@@ -2160,6 +2160,12 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     let repoGiven = false;
     /** Whether the line takes more refs from its input (`git send-pack --stdin`), refs the line cannot show. */
     let stdin = false;
+    /**
+     * Whether an option word holds text the shell fills in where git reads the option's name or letters, or a value
+     * that may split into more words: either may be any push option, a force or a deletion among them.
+     */
+    let hidden = false;
+    const splitProne = (mark: WordMark | undefined): boolean => /[sgbp]/.test(mark?.kinds ?? "");
     /** The `--repo` value, with its word's marks (review/130). */
     const repoWords: (readonly [string | null, WordMark | undefined])[] = [];
     const positionals: string[] = [];
@@ -2189,6 +2195,9 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       }
       if (arg.startsWith("--")) {
         const name = (arg.split("=")[0] ?? "").toLowerCase();
+        // Text the shell fills in at or before the `=` may be any option's name; a value after it that may split may add one.
+        const eq = arg.indexOf("=");
+        if ((marks[j]?.kinds ?? "") !== "" && (eq === -1 || (marks[j]?.first ?? -1) <= eq || splitProne(marks[j]))) hidden = true;
         // git reads an option's unique prefix as the option (`--force-w`, `--del`, `--rep=`, pr/9): a
         // name is read as each option it begins. A prefix of two options is one git refuses, so reading it as either
         // adds a denial to a line that pushes nothing, and a `--no-` form begins none of these.
@@ -2201,26 +2210,47 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
         else if (is(["--repo"])) {
           repoGiven = true;
           repoWords.push(arg.includes("=") ? [arg.slice(arg.indexOf("=") + 1), marks[j]] : [args[j + 1] ?? null, marks[j + 1]]);
-          if (!arg.includes("=")) j += 1;
-        } else if (is(["--push-option", "--receive-pack", "--exec"]) && !arg.includes("=")) j += 1;
+          if (!arg.includes("=")) {
+            if (splitProne(marks[j + 1])) hidden = true;
+            j += 1;
+          }
+        } else if (is(["--push-option", "--receive-pack", "--exec"]) && !arg.includes("=")) {
+          if (splitProne(marks[j + 1])) hidden = true;
+          j += 1;
+        }
         // git takes `--recurse-submodules`'s value, and `git send-pack` its `--remote` value, as the next word where no
         // `=` joins it: that word is neither the remote nor a refspec. The line is read both ways, so either reading adds
         // denials and never lifts one.
         else if (!valueRead && is(["--recurse-submodules", "--remote"]) && !arg.includes("=") && j + 1 < args.length) values.push(j + 1);
       } else if (arg.startsWith("-") && arg.length > 1) {
+        // The letter that takes a value (`o`): text the shell fills in at or before it may be any option's letters.
+        const mark = marks[j];
+        let valueAt = arg.length;
         for (let c = 1; c < arg.length; c += 1) {
           const flag = arg[c];
           if (flag === "f") force = true;
           else if (flag === "d") remove = true;
           else if (flag === "o") {
-            if (c === arg.length - 1) j += 1;
+            valueAt = c;
+            if (c === arg.length - 1) {
+              if (splitProne(marks[j + 1])) hidden = true;
+              j += 1;
+            }
             break;
           }
         }
+        if ((mark?.kinds ?? "") !== "" && ((mark?.first ?? -1) <= valueAt || splitProne(mark))) hidden = true;
       } else {
         positionals.push(arg);
         positionalMarks.push(marks[j]);
       }
+    }
+    // An option word the line cannot show may be any push option: read as a push to the default branch, and to a
+    // deploying one where any is named. No return, so a refuse-class act on the line still decides.
+    if (hidden && !valueRead) {
+      const what = "A push holding an option word the line cannot show, which may be any push option";
+      if (deploying.length > 0) deny("push-deploying", what);
+      deny("push-default", what);
     }
     // `git send-pack --stdin` pushes more refs, read from its input after the line's own: refs the line cannot show, read
     // as a push to the default branch and to a deploying one where any is named. No return, so a refuse-class act still decides.
@@ -2244,12 +2274,21 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     // with one such word the push names no refspec. Beside `--repo` it is read both ways, as a refspec and as a
     // refspec-less push, so either reading adds denials and never lifts one.
     const refless = positionals.length <= 1;
-    // An unquoted expansion, a glob or a brace form in the remote's place may split or expand into the remote and
-    // refspecs or an option the line does not show (review/69, review/87's record): it reads as a push to the default
-    // branch, and to a deploying one where any is named.
-    if (!repoGiven && /[sgb]/.test(positionalMarks[0]?.kinds ?? "")) {
-      if (deploying.length > 0) deny("push-deploying", "A push whose remote word may split into refspecs the line cannot show");
-      return deny("push-default", "A push whose remote word may split into refspecs or an option the line cannot show");
+    // Any text the shell fills in, in the remote's place, may be an option git reads, its next word then the remote; an
+    // unquoted expansion, a glob, a brace form or a PowerShell group may also split into the remote and refspecs. Either
+    // reads as a push to the default branch, and to a deploying one where any is named. No return, so the force,
+    // deletion and tag reads below still record, and a refuse-class act on the line still decides.
+    const remoteMark = repoGiven ? "" : (positionalMarks[0]?.kinds ?? "");
+    if (remoteMark !== "") {
+      const splits = /[sgbp]/.test(remoteMark);
+      if (deploying.length > 0) {
+        deny("push-deploying", splits
+          ? "A push whose remote word may split into refspecs the line cannot show"
+          : "A push whose remote word the line cannot show, which may be an option");
+      }
+      deny("push-default", splits
+        ? "A push whose remote word may split into refspecs or an option the line cannot show"
+        : "A push whose remote word the line cannot show, which may be an option");
     }
     // git reads `tag <name>` as `refs/tags/<name>:refs/tags/<name>`, whatever the context lists.
     const tagWord = named.indexOf("tag");

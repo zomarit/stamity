@@ -3289,8 +3289,122 @@ describe("a push refspec read from its word's marks (a4, build/4, review/69, rev
     expect(personOnlyVerdict(command, TAGGED_FEATURE), command).toMatchObject({ deny: true, rule: "push-default", ask: true, act: expect.stringContaining(act) });
   });
 
-  it("leaves a quoted variable in the remote's place, which cannot split, to the refspecs after it", () => {
-    expect(personOnlyVerdict("git push \"$REMOTE\" feat/x", TAGGED_FEATURE)).toEqual({ deny: false });
+  // TEST CHANGE, justified (REQ-FLOW-102, REQ-FLOW-124): a remote word the shell fills in may be an option git reads, so
+  // it now asks as a push to the default branch instead of leaving the line to the refspecs after it.
+  it("asks for a quoted variable in the remote's place, which may be an option", () => {
+    expect(personOnlyVerdict("git push \"$REMOTE\" feat/x", TAGGED_FEATURE)).toMatchObject({
+      deny: true, rule: "push-default", ask: true, act: "A push whose remote word the line cannot show, which may be an option",
+    });
+  });
+
+  const OPTION = "A push whose remote word the line cannot show, which may be an option";
+  const SPLITS = "A push whose remote word may split into refspecs or an option the line cannot show";
+
+  // Red on 091d999b: a remote word holding only a quoted expansion read as the remote, so nothing asked.
+  it("asks for a remote word the shell fills in, beside a literal feature refspec", () => {
+    expect(personOnlyVerdict("git push \"$R\" feat/x", TAGGED_FEATURE)).toMatchObject({ deny: true, rule: "push-default", ask: true, act: OPTION });
+    // Any mark holds, also one after literal text.
+    expect(personOnlyVerdict("git push \"o$R\" feat/x", TAGGED_FEATURE)).toMatchObject({ deny: true, rule: "push-default", act: OPTION });
+    // Past `--` it still asks: over-strict, never looser.
+    expect(personOnlyVerdict("git push -- \"$R\" feat/x", TAGGED_FEATURE)).toMatchObject({ deny: true, rule: "push-default", act: OPTION });
+  });
+
+  it("names a deploying branch first for a remote word the shell fills in, and asks", () => {
+    expect(personOnlyVerdict("git push \"$R\" feat/x", DEPLOYING)).toMatchObject({
+      deny: true, rule: "push-deploying", ask: true, act: "A push whose remote word the line cannot show, which may be an option",
+    });
+  });
+
+  it("asks with the split reason for a PowerShell group in the remote's place", () => {
+    expect(personOnlyVerdict("git push (Get-Content r.txt) feat/x", { ...TAGGED_FEATURE, powershell: true })).toMatchObject({
+      deny: true, rule: "push-default", ask: true, act: SPLITS,
+    });
+  });
+
+  // Red on 091d999b for the split-prone remote word: its check returned the ask before the force and deletion reads.
+  it.each([
+    ["a literal force beside a split-prone remote word", "git push --force $R feat/x", "force-push"],
+    ["a literal force beside a quoted remote word", "git push -f \"$R\" feat/x", "force-push"],
+    ["a literal mirror beside a split-prone remote word", "git push --mirror $R", "force-push"],
+    ["a forced refspec after a split-prone remote word", "git push $R +feat/x", "force-push"],
+    ["a literal delete beside a split-prone remote word", "git push --delete $R feat/x", "push-delete"],
+    ["a deleting refspec after a split-prone remote word", "git push $R :feat/x", "push-delete"],
+    ["a literal prune beside a split-prone remote word", "git push --prune $R feat/x", "push-delete"],
+    ["a literal delete of a tag beside a split-prone remote word", "git push --delete $R v1.0.0", "tag-delete"],
+    ["a literal delete of a tag beside a quoted remote word", "git push -d \"$R\" tag v1.0.0", "tag-delete"],
+  ])("refuses %s", (_, command, rule) => {
+    expect(personOnlyVerdict(command, TAGGED_FEATURE), command).toMatchObject({ deny: true, rule, ask: false });
+  });
+
+  it("runs the same remote word single-quoted, which the shell does not fill in", () => {
+    expect(personOnlyVerdict("git push '$R' feat/x", TAGGED_FEATURE)).toEqual({ deny: false });
+  });
+
+  it("leaves a push naming its repository by --repo to the refspec reading", () => {
+    expect(personOnlyVerdict("git push --repo=origin \"$X\"", TAGGED_FEATURE)).toMatchObject({
+      deny: true, rule: "push-default", act: "A push whose refspec the line cannot show (a substitution, a variable or a group)",
+    });
+    expect(personOnlyVerdict("git push --repo=origin feat/x", TAGGED_FEATURE)).toEqual({ deny: false });
+  });
+
+  it.each([
+    ["git send-pack", "git send-pack \"$R\" feat/x"],
+    ["git subtree push", "git subtree push -P d \"$R\" feat/x"],
+  ])("asks for %s whose remote word the shell fills in", (_, command) => {
+    expect(personOnlyVerdict(command, TAGGED_FEATURE), command).toMatchObject({ deny: true, rule: "push-default", ask: true, act: OPTION });
+    expect(personOnlyVerdict(command.replace("\"$R\"", "origin"), TAGGED_FEATURE), command).toEqual({ deny: false });
+  });
+
+  it("names the remote word's ask first where the refspec is also filled in", () => {
+    expect(personOnlyVerdict("git push \"$R\" \"$B\"", TAGGED_FEATURE)).toMatchObject({ deny: true, rule: "push-default", act: OPTION });
+  });
+
+  it("asks for a remote word xargs adds", () => {
+    expect(personOnlyVerdict("echo x | xargs git push", TAGGED_FEATURE)).toMatchObject({ deny: true, rule: "push-default", ask: true });
+  });
+});
+
+describe("a push option word the shell fills in", () => {
+  const FEATURE = { defaultBranches: ["trunk"], currentBranch: "feat/x", tags: ["v1.0.0"] };
+  const DEPLOYING = { ...FEATURE, deployingBranches: ["production"] };
+  const HIDDEN = "A push holding an option word the line cannot show, which may be any push option";
+
+  // Red on 091d999b: each option word was read by its literal name or letters alone, so no act was found.
+  it.each([
+    ["a long option whose name is filled in", "git push --\"$OPT\" origin feat/x"],
+    ["a long option whose name ends in an expansion", "git push --for$X origin feat/x"],
+    ["a long option filled in before its equals sign", "git push --\"$N\"=x origin feat/x"],
+    ["a short option whose letters are filled in", "git push -\"$F\" origin feat/x"],
+    ["a short cluster filled in before its value letter", "git push -u\"$F\"o x origin feat/x"],
+    ["a push-option value that may split", "git push --push-option $OPTS origin feat/x"],
+    ["a short push-option value that may split", "git push -o $OPTS origin feat/x"],
+    ["a joined push-option value that may split", "git push --push-option=$OPTS origin feat/x"],
+    ["a receive-pack value that may split", "git push --receive-pack $RP origin feat/x"],
+    ["a repository value that may split", "git push --repo $R feat/x"],
+  ])("asks for %s", (_, command) => {
+    expect(personOnlyVerdict(command, FEATURE), command).toMatchObject({ deny: true, rule: "push-default", ask: true, act: HIDDEN });
+  });
+
+  it("names a deploying branch first for an option word the shell fills in", () => {
+    expect(personOnlyVerdict("git push --\"$OPT\" origin feat/x", DEPLOYING)).toMatchObject({ deny: true, rule: "push-deploying", ask: true });
+  });
+
+  it.each([
+    ["a quoted push-option value after its equals sign", "git push --push-option=\"$V\" origin feat/x"],
+    ["a quoted push-option value as its own word", "git push -o \"$V\" origin feat/x"],
+    ["a quoted push-option value joined to its letter", "git push -o\"$V\" origin feat/x"],
+    ["literal options", "git push -u --push-option=ci.skip origin feat/x"],
+  ])("runs %s", (_, command) => {
+    expect(personOnlyVerdict(command, FEATURE), command).toEqual({ deny: false });
+  });
+
+  it("refuses a literal force beside an option word the shell fills in", () => {
+    expect(personOnlyVerdict("git push --force --\"$OPT\" origin feat/x", FEATURE)).toMatchObject({ deny: true, rule: "force-push", ask: false });
+    expect(personOnlyVerdict("git push -\"$F\" --delete origin feat/x", FEATURE)).toMatchObject({ deny: true, rule: "push-delete", ask: false });
+  });
+
+  it("reads the option words on git send-pack too", () => {
+    expect(personOnlyVerdict("git send-pack --\"$OPT\" origin feat/x", FEATURE)).toMatchObject({ deny: true, rule: "push-default", act: HIDDEN });
   });
 });
 
@@ -4426,7 +4540,9 @@ describe("the outside-party readers' third round (a4c, review/120-132)", () => {
     ["a push to another repository's URL in scp form", "git push git@github.com:other/repo.git feat/x", {}, "outside-write"],
     ["a push to a remote pushing to another repository", "git push upstream feat/x", { remoteRepo: (): string => "github.com/up/app" }, "outside-write"],
     ["a push to a remote the configuration does not place", "git push upstream feat/x", { remoteRepo: (): string => "" }, "outside-write"],
-    ["a push whose remote word the shell fills in", `git push "$R" feat/x`, {}, "outside-write"],
+    // TEST CHANGE, justified (REQ-FLOW-102): a remote word the shell fills in now also asks as a push to the default
+    // branch, which is named first; the line still asks, and the row below keeps the repository act among its acts.
+    ["a push whose remote word the shell fills in", `git push "$R" feat/x`, {}, "push-default"],
     ["a push whose remote URL a -c pair sets", "git -c remote.origin.url=https://github.com/other/repo.git push origin feat/x", {}, "outside-write"],
     ["a push under git configuration set through the environment", "GIT_CONFIG_PARAMETERS=x git push origin feat/x", {}, "outside-write"],
     ["a push naming no remote, whose push remote is another repository's", "git push", { pushRemote: "upstream", remoteRepo: (): string => "github.com/up/app" }, "outside-write"],
@@ -4443,6 +4559,12 @@ describe("the outside-party readers' third round (a4c, review/120-132)", () => {
       { pushRemote: "origin", remoteRepo: (): string => "github.com/acme/app" }, null],
   ] as const)("reads %s", (_, command, extra, expected) => {
     expect(rule(command, { ...ORIGIN, ...extra }), command).toBe(expected);
+  });
+
+  it("keeps a push whose remote word the shell fills in among the pushes to another repository", () => {
+    // With the default-branch ask run unasked, the act left is the repository one.
+    expect(rule(`git push "$R" feat/x`, { ...ORIGIN, runs: ["push-default"] })).toBe("outside-write");
+    expect(rule("git push origin feat/x", { ...ORIGIN, runs: ["push-default"] })).toBeNull();
   });
 
   it("leaves a push unread for a caller naming no origin, as the run verbs' own push", () => {
