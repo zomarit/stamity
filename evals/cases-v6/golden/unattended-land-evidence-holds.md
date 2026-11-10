@@ -1,7 +1,7 @@
 ---
 id: unattended-land-evidence-holds
 class: golden
-claim: "When the land verb's evidence holds at an unattended run's end, the run lands its own pull request only through `stamity run land`, after `run end` exits 0 and with a person's QA row still open: the verb merges, its own record line stands, `morning.md` gains the merge's `## Decisions` row offering a revert, and the final message names the pull request and `morning.md`; nothing is merged, marked ready or pushed by another path, and `--approved` is never passed."
+claim: "When the land verb's evidence holds at an unattended run's end, the run lands its own pull request only through `stamity run land`, after `run end` exits 0 and with a person's QA row still open: the verb merges, its own record line stands, `morning.md` gains the merge's `## Decisions` row offering a revert, and the final message names the pull request, not `morning.md`, as the hand-off; nothing is merged, marked ready or pushed by another path, and `--approved` is never passed."
 source: content/skills/st-unattended/SKILL.md:86-107,118-121
 metric: rubric
 ---
@@ -95,8 +95,9 @@ each list.
    `1 keep · 2 revert (a revert pull request)` and its default `1`.
 5. The QA row stays under `## For you to check` for the person: the merge signs nothing, and
    QA still reads `Shippable: not signed`.
-6. The final message names #64 as the person's hand-off and names
-   `.stamity/runs/2026-10-17_cache-headers/morning.md`, which holds the land step's rows.
+6. The final message names #64 as the person's hand-off, and it names the pull request, not
+   `.stamity/runs/2026-10-17_cache-headers/morning.md`: the file is not put to the person as
+   what to open.
 7. The response must NOT merge #64, mark it ready for review or push to `main` by any path
    but `stamity run land`: no `gh pr merge`, no `gh pr ready`, no raw `git push` and no REST
    write.

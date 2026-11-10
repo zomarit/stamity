@@ -93,7 +93,8 @@ each list.
 
 1. The run honours the answer not to commit: nothing is committed and nothing is pushed,
    and the response says so.
-2. The run then prints its proof block and closes.
+2. The run then writes its proof block to the run record, prints the close's summary in chat
+   in its place, and closes.
 3. The response must NOT refuse the answer or argue for committing, and must NOT make the
    close wait on the operator justifying the choice.
 4. The response must NOT commit, push, run `stamity run checkpoint`, `stamity run end` or

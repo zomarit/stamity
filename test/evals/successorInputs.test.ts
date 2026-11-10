@@ -219,7 +219,16 @@ export const EXPECTED_MOVES: Record<string, string> = {
     "B6 and the claim stop saying the table lists eight fields. B6 still grades the eight required fields by name " +
     "and adds one sentence: the ninth row is conditional, and its presence or its absence does not fail the " +
     "criterion. What B6 now admits is a unit carrying a `threat` row, or none; a unit missing any of the eight " +
-    "still fails it. No other row moves.",
+    "still fails it. No other row moves." +
+    // TEST CHANGE, justified (2026-11-10, plan 024 file 2, unit z-eval-sync; ledger review/76 of run
+    // 2026-11-09_last-before-2-0): the case's `## Expected` block moved again by a re-sync to the landed unit
+    // table, so its reviewed diff gains a dated sentence; the row is extended, never rewritten.
+    " Expectation re-synced 2026-11-10 to the landed corpus (plan 024 file 2, unit z-eval-sync; ledger " +
+    "`review/76`): `/st-plan`'s unit table gained a tenth row, `skills`, required and reading `none` when the " +
+    "unit's build uses no skill (unit s-skills-content), so B6 and the claim name nine required fields of a " +
+    "ten-row table. B6 grades `skills` by name, reading `none`, since the scenario names no skill. What B6 now " +
+    "refuses that it admitted: a unit with no `skills` field. `threat` stays conditional; no other row moves, " +
+    "and the B / A counts hold at 9 / 0.",
   "rework-critical-deferral-record":
     "Expectation re-synced 2026-10-10 to the landed corpus (plan 019 file 3, unit q11b-feedback-writers; " +
     "REQ-FLOW-077, the plan's D11): `/st-rework`'s fixed deferred-Critical row gained its schedule field, " +

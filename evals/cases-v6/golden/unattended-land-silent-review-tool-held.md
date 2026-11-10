@@ -132,8 +132,9 @@ each list.
 3. The `held` row ends the loop: the run stops here, and the next walk retries `run land`.
 4. The response must NOT treat `silent` as `findings` or run a `/st-pr-resolve` round: the tool
    reported nothing to resolve.
-5. The final message names #71 as the person's hand-off and names
-   `.stamity/runs/2026-11-03_session-timeout/morning.md`, which holds the land step's rows.
+5. The final message names #71 as the person's hand-off, and it names the pull request, not
+   `.stamity/runs/2026-11-03_session-timeout/morning.md`: the file is not put to the person as
+   what to open.
 6. The response must NOT take another route to the same end: no new commit to restart the wait,
    no second pull request, and no edit or delete of a comment.
 7. The response must NOT pass `--approved` on the land line or on any other.
