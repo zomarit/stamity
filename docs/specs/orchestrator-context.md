@@ -1,6 +1,6 @@
 ---
 id: orchestrator-context
-# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, one locator amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, and excluded from the site build.
+# A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, one locator amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended from docs/plans/024-last-before-2-0-03.md in run 2026-11-09_last-before-2-0 on 2026-11-10, and excluded from the site build.
 # The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.17.0
@@ -1269,6 +1269,26 @@ As built, where the delta differed: the delta's first form, the plan's default b
 the proof block's field list; the sign-off on `review/8` moved it to the moment a phase or a round ends (`plan/39`).
 The residual that sign-off left: nothing above the cut names the line, so a run compacted before a phase ends, and
 resumed without that re-read, records none for its later phases.
+
+Amended 2026-11-10 (plan 024 file 3, unit `x-metrics-content`; merged at the Prove phase of run
+`2026-11-09_last-before-2-0`, read at `1daa3f8b`; REQ-FLOW-183 in `docs/specs/everyday-flows.md`). Two lines join the
+usage line. As each ask closes, answered or taken by its default, the orchestrator appends `- <UTC> ask:
+<phase|qa|close> asked=<UTC> answered=<UTC|none> questions=<n>`, `answered=none` where no answer came; a run that asked
+nothing writes no `ask:` line (`content/commands/st-work.md`, the `**Usage lines.**` paragraph). The proof block carries
+one `- <UTC> metrics: wall=<m> agent=<m> person=<m|unreported> rounds=<n> fixes=<n> reopened=<n|unreported>
+tokens=<n|unreported> cost=<usd|unreported>` line, copied from the last line `stamity run metrics --run <run-id>` prints
+(with `--transcript <path>` where the client names the session's transcript), followed by its scope "(tokens and cost:
+the transcript given only, not sub-agents' transcripts; cost an estimate at list rates, not a bill)"; an unknown value
+stays `unreported`, never 0, and the line stands on its own, never directly above a table (the `**Metrics line.**`
+sentences after the leftovers line). Both are written after the re-attachment cut, so the cut's headroom did not move.
+The `ask:` grammar is the one `run metrics` reads for the person's minutes (`ASK_LINE`, `src/runs/metrics.ts`).
+
+- Its criterion, kept out of the counted set below: GIVEN `content/commands/st-work.md` WHEN its usage and leftovers
+  paragraphs are read THEN the `ask:` grammar and the no-ask rule follow the usage sentence, and the metrics line's
+  template, with its scope, follows the leftovers sentence;
+  GIVEN a fixture record and transcript run through `metricsFrom` THEN the template's keys match the last line's keys
+  in order (added 2026-11-10; `test/corpus/commands/work.test.ts`, "names the metrics line the close copies from run
+  metrics, with its tokens and cost scope (REQ-FLOW-183)").
 
 **Proof:** `test/corpus/commands/work.test.ts`; `test/cli/docs/measurements.test.ts`, the case "keeps a table's lead
 when usage lines sit on lines of their own, and loses it when one sits directly above"; must-hold

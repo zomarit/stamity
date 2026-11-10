@@ -1,6 +1,6 @@
 ---
 id: worktree-lane
-# A design document, authored outside the spec command, amended from docs/plans/013-optimization-sweep-02.md on 2026-09-30, amended in run 2026-10-11_release-1-14-0 on 2026-10-12, one citation re-pointed in run 2026-10-14_cli-native on 2026-10-14, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18 and 2026-10-20, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/013-optimization-sweep-02.md on 2026-09-30, amended in run 2026-10-11_release-1-14-0 on 2026-10-12, one citation re-pointed in run 2026-10-14_cli-native on 2026-10-14, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18 and 2026-10-20, amended from docs/plans/024-last-before-2-0-02.md in run 2026-11-09_last-before-2-0 on 2026-11-09 and 2026-11-10, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.16.0
 obsolete_when: the managed worktree lane ships and the CLI reference plus the working-with page carry its behaviour, or a decision cuts the surface
@@ -32,6 +32,11 @@ refusal and skip of the pre-flight's hooks canary and the run-ended marker, and
 its second, `docs/plans/021-cloud-runs-02.md` (pull request #113), those of
 Cursor's context-once folder, each with its criteria. Both shipped with 1.16.0,
 which set `status: shipped-with-1.16.0`; it read `shipped-with-1.1.0` before.
+
+REQ-WORKTREE-019 comes from plan 024's second file, `docs/plans/024-last-before-2-0-02.md`, in run
+`2026-11-09_last-before-2-0`: its linked-install half was written on 2026-11-09 by the unit `d-symlink-policy`, and its
+receipt half, with its criteria, was merged on 2026-11-10 at that run's Prove phase from the unit `d-receipt-run-tag`,
+read against the integration head `1daa3f8b`. None of it has shipped yet.
 
 ## Intent
 
@@ -1305,6 +1310,21 @@ receipt's `run` tag is stated with its own change.
   outside every checkout, is placed and named the same way; cleanup removes the
   link and never its target.
 - The policy format is unchanged.
+- **The receipt names its run** (amended 2026-11-10, unit `d-receipt-run-tag`).
+  `stamity worktree setup <name> --run <run-id>` writes `"run": "<run-id>"` into
+  the receipt at version 1; with no `--run` the receipt carries no `run` key
+  (`WorktreeReceipt.run`, `src/worktree/receipt.ts`; `--run`,
+  `src/cli/commands/worktree.ts`). The value must pass `isRunId`
+  (`YYYY-MM-DD_<slug>`), else `planWorktreeSetup` refuses with
+  `VALIDATION_ERROR` as its first step, before it asks git anything, so neither
+  a dry run nor a real run creates a tree or a branch for a bad id
+  (`WorktreeSetupPlanOptions.runId`, `src/worktree/setup.ts`). A stored `run`
+  that is absent or not a run id reads as no tag and the receipt stays readable,
+  its rows keeping their teardown authority. An older engine drops the unknown
+  key and reads a tagged receipt as untagged; cleanup treats a tagged lane as
+  an untagged one. A landed run's clean-up removes only clean lanes tied to the
+  run by this tag, never forced (REQ-FLOW-176 in
+  `docs/specs/everyday-flows.md`).
 
 **Rationale.** A slash-only rule left every linked lane showing `?? node_modules`,
 and an absent row under that rule was refused for a dirt it could never cause.
@@ -1318,7 +1338,7 @@ checkout of the repository, not to the lane.
 
 ## Acceptance criteria
 
-One set per requirement. Ninety-five criteria; each is machine-checkable unless
+One set per requirement. One hundred criteria; each is machine-checkable unless
 tagged otherwise. (The count read "forty-seven" while the list held sixty-six,
 and the riders of the build rounds then took it to eighty-seven: a hand-kept
 number over a list several rounds have appended to. Restated here against the
@@ -1330,7 +1350,9 @@ REQ-WORKTREE-003 having moved no number, and the four added 2026-10-12 under
 REQ-WORKTREE-001 take it to ninety-two. Amended 2026-10-20 (run
 `2026-10-18_cloud-runs-2`, ledger `build/105`): it read "Ninety-two" while the
 list held ninety-five, the three criteria plan 021 added under REQ-WORKTREE-003
-having moved no number.)
+having moved no number. Amended 2026-11-10 (run `2026-11-09_last-before-2-0`):
+it read "Ninety-five"; the five criteria added under REQ-WORKTREE-019 take it to
+one hundred.)
 
 **REQ-WORKTREE-001**
 
@@ -1716,6 +1738,26 @@ having moved no number.)
   names exists in the CLI reference table.
   *(judgment: reviewer — prose accuracy is not machine-checkable; the two
   assertions above cover the mechanical half.)*
+
+**REQ-WORKTREE-019** (added 2026-11-10)
+
+- GIVEN a policy whose `symlink` row places `node_modules` under a slash-only
+  ignore rule WHEN setup runs THEN the lane is clean at creation or the row
+  fails naming the rule with no trailing slash; GIVEN an absent row under that
+  rule THEN it is admitted. *(test: `test/worktree/engine.test.ts`)*
+- GIVEN a linked `node_modules` WHEN setup runs THEN its tree is not scanned for
+  credential basenames, the notice names the link's target, and cleanup removes
+  the link and leaves the target intact. *(test: `test/worktree/engine.test.ts`)*
+- GIVEN `setup <name> --run <run-id>` THEN the receipt carries the run at
+  version 1; GIVEN no `--run` THEN it carries no `run` key. *(test:
+  `test/worktree/receipt.test.ts`, `test/cli/commands/worktree.test.ts`)*
+- GIVEN a `--run` that is not a run id THEN setup exits 1 naming `--run`, on a
+  dry run too, and no farm entry or branch exists. *(test:
+  `test/cli/commands/worktree.test.ts`)*
+- GIVEN a stored `run` that is not a run id THEN the receipt reads as untagged
+  with its rows; GIVEN cleanup of a tagged lane THEN it behaves as for an
+  untagged one. *(test: `test/worktree/receipt.test.ts`,
+  `test/cli/commands/worktree.test.ts`)*
 
 ## Non-goals for v1
 

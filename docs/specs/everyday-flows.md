@@ -1,6 +1,6 @@
 ---
 id: everyday-flows
-# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended at the 1.17.0 release cut on 2026-10-27, amended from docs/plans/023-factory-bridge-01.md in run 2026-11-04_factory-bridge on 2026-11-05, amended from docs/plans/023-factory-bridge-02.md in run 2026-11-05_factory-bridge-02 on 2026-11-05 and 2026-11-06, amended from the real cloud runs of 2026-11-06 and 2026-11-08 on 2026-11-08, amended on 2026-11-09 to correct the count of real-run sessions on each cloud and the cloud proxy wording `SECURITY.md` now holds, and excluded from the site build.
+# A design document, authored from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, merged at the Prove phase of run 2026-09-30_optimization-sweep, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended from docs/plans/016-fork-distribution-00.md at the Prove phase of run 2026-10-07_security-fixes on 2026-10-07, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, amended in run 2026-10-12_board-writes on 2026-10-12, one citation re-pointed in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended at the 1.17.0 release cut on 2026-10-27, amended from docs/plans/023-factory-bridge-01.md in run 2026-11-04_factory-bridge on 2026-11-05, amended from docs/plans/023-factory-bridge-02.md in run 2026-11-05_factory-bridge-02 on 2026-11-05 and 2026-11-06, amended from the real cloud runs of 2026-11-06 and 2026-11-08 on 2026-11-08, amended on 2026-11-09 to correct the count of real-run sessions on each cloud and the cloud proxy wording `SECURITY.md` now holds, amended from docs/plans/024-last-before-2-0-01.md, -02.md and -03.md in run 2026-11-09_last-before-2-0 on 2026-11-10, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
 status: shipped-with-1.18.0
 obsolete_when: every requirement below is pinned by a test or an eval case that names its id and the command reference carries it, or a decision row cuts the surface
@@ -219,6 +219,23 @@ symbol, and a content file by its lines. A ledger id in that text (`review/10`, 
 run is named beside it. Each amendment is a dated bullet, so the older text it reads over stands as the record. The
 delta's REQ-FLOW-165 and its REQ-FLOW-132 entry belong to the unit `clone-land`, which is held until a real run meets
 it, so neither is merged. The rest shipped with 1.18.0.
+
+REQ-FLOW-166 to REQ-FLOW-184, and the text dated 2026-11-10 under REQ-FLOW-009, REQ-FLOW-014, REQ-FLOW-065,
+REQ-FLOW-080, REQ-FLOW-087, REQ-FLOW-094, REQ-FLOW-101, REQ-FLOW-102, REQ-FLOW-128, REQ-FLOW-130, REQ-FLOW-143,
+REQ-FLOW-157, REQ-FLOW-158 and REQ-FLOW-161, come from the spec deltas of
+`docs/plans/024-last-before-2-0-01.md`, `-02.md` and `-03.md` (plan 024, the three files of run
+`2026-11-09_last-before-2-0`), with every amendment their unit cells carry and every sign-off of that run's record
+that moved a requirement (S-numbers below are that record's). Each entry was read with the spec delta its unit's
+implementer and fixer reports declared and walked to the code at `1daa3f8b`, the integration head that holds every
+shipping code unit; it was merged once at that run's Prove phase. The same deltas amend REQ-WORKTREE-019 in
+`docs/specs/worktree-lane.md`, add REQ-PROVE-047 to `docs/specs/prove-behavior-and-value.md` and amend REQ-CTX-019 in
+`docs/specs/orchestrator-context.md`. Where a delta entry and the code differ, the text states the code, and a line
+headed "As built" says what moved. It cites code by file and symbol and a content file by its quoted words, since
+several units joined text to existing lines. A ledger id in that text (`review/58`, `build/40`) is that run's own. Each
+amendment is a dated bullet, so the older text it reads over stands as the record, save one: REQ-FLOW-158's 2026-11-08
+bullet was edited in place (ledger `build/11`), and its 2026-11-10 bullet quotes the words it replaced. REQ-FLOW-181
+was planned and not delivered: its unit stayed out of 1.19.0 (S103), so its section says so and states no behaviour.
+None of this text has shipped yet.
 
 ## Intent
 
@@ -440,6 +457,15 @@ Step 3 has two routes, and the first response names the one taken and the fact t
   (`:87-90`; `review/37`). The step-2 probes run on the in-process route only when the failing test alone cannot
   separate the hypotheses (`:63-64`).
 - **Evidence (before):** step 3 stopped for the user every time.
+- **Amended 2026-11-10** (plan 024 file 1, unit `k-debug-verify` and its fix round, `review/10`; REQ-FLOW-173). The
+  entry above reads over: in-process comes first whenever the repository can drive the defect. The in-process route
+  takes an input the report or the code gives, where the run states that input, the expected output and the actual
+  output, and the test gate is runnable. The user route is "anything else, among them" that test not failing so on both
+  runs, a report with no input and no code path reaching the defect, or a defect needing the user's environment, data,
+  device, account, network, traffic or timing (`content/commands/st-debug.md`, step 3 **Reproduce.**). The two-runs rule
+  and "never another in-process round" are unchanged.
+  - Proof: `test/corpus/commands/lightTrio.test.ts` (the step-3 route pins); the re-quoted case
+    `debug-deterministic-bug-reproduced-in-process`.
 - **Proof:** `test/corpus/commands/lightTrio.test.ts`; census `debug-no-reproduction-blocks` and the floor
   `debug-root-cause-before-fix`; must-hold `debug-next-step-derived-from-run-state`; new case
   `debug-deterministic-bug-reproduced-in-process`; QA.
@@ -525,6 +551,13 @@ written, the exit code read from the tool, and a long command waited on in the f
   flattening; and every fenced block under `content/` whose info string is `sh`, `bash`, `shell` or `console` is free of
   the non-portable constructs. Prose is not scanned, because the paragraph itself names the banned constructs
   (`test/corpus/agents/shellDiscipline.test.ts:5-21`, `:63-64`).
+- **Amended 2026-11-10** (plan 024 file 1, unit `k-shell-rule`; REQ-FLOW-173). The paragraph states one general rule in
+  place of a closed list: nothing may hide or replace a gate's own exit code; each command runs once, as written, and its
+  exit code is read from the tool result, never from a wrapper, a pipe, a second run or a printed status, the forms it
+  names (`pipefail`, `echo $?`, a pipe into `tail`) being examples. The calibration and `sleep` sentences and the fence
+  lint are unchanged, and the paragraph keeps its 8 lines in all four bodies (`content/agents/stamity-test-runner.md`,
+  `stamity-implementer.md`, `stamity-fixer.md`, `stamity-researcher.md`, `## Shell`).
+  - Proof: `test/corpus/agents/shellDiscipline.test.ts` (`SHELL_PARAGRAPH`).
 - **Proof:** `test/corpus/agents/shellDiscipline.test.ts`.
 
 ### REQ-FLOW-015 — A byte-identical tree cites its earlier gate result; the final tree is always gated
@@ -3079,6 +3112,13 @@ rounds.
   not a verdict" rule are unchanged (`content/commands/st-quick.md:86-91`, the sentence at `:88`).
   - Proof: `test/corpus/commands/lightTrio.test.ts` ("has the refusal of a small security-sensitive item state that
     the row has no size floor").
+- **Amended 2026-11-10** (plan 024 file 1, unit `k-multipart-quick`; ledger `review/27`, the plan's delta for this id;
+  REQ-FLOW-173). The 2026-10-20 bullet no longer holds: the case-shaped sentence at `content/commands/st-quick.md:88` is
+  deleted, so a small security-sensitive refusal no longer states that the row has no size floor. The row still has
+  no size floor, and the floor text around the deleted sentence stays in place (`:86-88`); the general multi-part line
+  of REQ-FLOW-173 carries the rest.
+  - Proof: `test/corpus/commands/lightTrio.test.ts` ("keeps the no-size-floor paragraph's floor text and drops the
+    case-shaped sentence").
 - **Proof:** `test/change/classify.test.ts`, `test/cli/commands/gate.test.ts`, `test/roster/roster.test.ts`,
   `test/corpus/agents/specialists.test.ts`, `test/corpus/commands/work.test.ts`,
   `test/corpus/commands/lightTrio.test.ts`; QA.
@@ -3983,6 +4023,19 @@ read `:48-50`). The close walk and its other criteria are unchanged.
   opening paragraph for plain words, stated confidence and a no said first", which pins the 95 lines),
   `test/content/invariantsVersion.test.ts` ("hashes the invariants block to the version that ratified it").
 
+- **Amended 2026-11-10** (plan 024 file 1, units `k-protocol` with its fix round, `review/1`, and `k-work-close`; sign-offs
+  S12, S38; REQ-FLOW-174). The print the walk holds back is the run's closing report: the protocol reads "The run's
+  closing report (its summary, or a flow's proof block) prints after the last answer, and nothing prints after it."
+  (`content/rules/stamity-question-protocol.md`, Close walk). `/st-work` no longer prints its proof block: it is
+  "written to the run record after the close walk's last answer; chat prints the close's summary in its place, with
+  nothing after it" (`content/commands/st-work.md`, `### Proof block`). So this section's "the summary or proof block
+  prints after the last answer" reads, for `/st-work`, as the chat summary REQ-FLOW-174 states, and a flow that still
+  closes on its proof block (`/st-rework`, `/st-pr-resolve`) prints that last. The walk's rounds and defaults are
+  unchanged.
+  - Proof: `test/corpus/rules/protocol.test.ts` ("walks every leftover through the question tool and prints the summary
+    last"), `test/corpus/commands/work.test.ts` ("writes the proof block to the record after the close walk's last
+    answer, the summary last in chat (REQ-FLOW-080)").
+
 ### REQ-FLOW-081 — The run proves a row before it asks the person
 
 Added 2026-10-15 (plan 020 file 3, unit `f7-prove-before-asking` and its fix rounds; the delta's amended text from
@@ -4247,6 +4300,12 @@ The text names the session by what the agent observes, never by client.
   intermediate fix round had added: the landed code reads no remote configuration (the design signed off at that
   round's security lens, `review/39` to `review/42`, and `review/58`). The board's paging and 403 readings are beyond
   the delta (`review/16`, `review/17`, `review/32`).
+- **Amended 2026-11-10** (plan 024 file 1, unit `c-permission-403`; REQ-FLOW-169). The `/st-board` bullet's "a 403 on
+  the permission read alone is a failed write check" reads: a 403 on the permission read, and no other failure, takes the
+  Access check's fallback, `gh api repos/<owner>/<repo> --jq .permissions.push`, the acting account's own right, and the
+  write check passes only when that reads `true`, so a missing value fails it as `false` does
+  (`content/commands/st-board.md:225`, the GitHub row; the choice is the run record's of 2026-11-09T18:03:12Z).
+  - Proof: `test/corpus/commands/board.test.ts` (the REQ-BOARD-007 GitHub-row and REQ-FLOW-087 REST-only pins).
 - **Proof:** `test/corpus/commands/board.test.ts` ("works a REST-only session in REST forms and refuses a Projects board
   there (REQ-FLOW-087)"), `test/corpus/commands/feedbackPair.test.ts` ("takes the REST forms in a REST-only session,
   named by what the agent observes (REQ-FLOW-087)" and "fetches a REST-only head by number, refuses a fork head, and
@@ -4738,6 +4797,20 @@ calls held; `Not done:`. A section with no rows reads `none` (`content/skills/st
   `failed:`, or `yours because:` on a refused act's row, and keeps `do:` and the act whole.
   - Proof: `test/corpus/skills/unattended.test.ts` ("parses list rows in that grammar as held, outside the QA cap, and
     refuses one past the question cap (REQ-FLOW-094, REQ-FLOW-162)").
+- **Amended 2026-11-10** (plan 024 file 1, unit `c-morning-lead`; plan 024 file 2, units `k-unattended-text` and
+  `d-run-cleanup`). Given plain lines outside a fence between the list's title and its first section, Then they parse as
+  the list's summary (`MorningParse`'s optional `lead`), trimmed of blank edge lines; blank lines alone are no summary,
+  and an older list with none parses to the same object as before. A summary past 10 non-blank lines or 1,000
+  characters (`LEAD_MAX_LINES`, `LEAD_MAX_CHARS`) refuses the list with one problem naming both limits, and a fence
+  before the first section is still refused, also when a control character hides it, since each line is tested as the
+  body prints it. The body prints the summary after the title, each line cleaned as every body line is, and it sits in
+  the head `fitBody` counts in its fixed part, so a cut body keeps it whole; a list for another run prints none
+  (`parseMorning`, `prBodyFrom`, `src/runs/morning.ts`). The skill says a short summary may follow the title, at most 10
+  lines (`content/skills/st-unattended/SKILL.md`, the morning list's paragraph). The body also carries a closing keyword
+  before the marker where the run's item is an issue in origin's repository (REQ-FLOW-176).
+  - Proof: `test/runs/morning.test.ts` ("the summary before the first section (c-morning-lead, REQ-FLOW-094)"),
+    `test/corpus/skills/unattended.test.ts` ("lets a short summary follow the morning list's title, within the parser's
+    caps").
 - **Proof:** `test/runs/morning.test.ts`, `test/runs/prerequisites.test.ts`, `test/corpus/skills/unattended.test.ts`
   ("st-unattended — the morning list and the walk").
 
@@ -4931,6 +5004,21 @@ egress, token-shaped variable names (names only) and missing review state; with 
   - Proof: `test/runs/preflight.test.ts` (the describes "runPreflight — input-author where the permission read answers
     403", "personRight" and "runPreflight — the replies a real Claude cloud session gave on 2026-11-06"),
     `test/cli/commands/gatePreflight.test.ts` (the describe "--item where the permission read answers 403").
+- **Amended 2026-11-10** (plan 024 file 3, unit `x-preflight-warn`; sign-offs S52, S61, S63). Given a pre-flight whose
+  repository reads unready, Then it warns `repo-unready` with the reason `the ready report finds gaps: <ids>; run stamity
+  ready`; the warning never refuses and never moves `ok`, since it sits outside `refusals` (`WarningId`,
+  `PreflightDeps.readiness` and `runPreflight`, `src/runs/preflight.ts`). The verb fills it from REQ-FLOW-182's report
+  (`readinessGaps`, `src/cli/commands/gate.ts`): `analyzeRepo`, `readReadinessFiles`, then `assessReadiness` with the
+  charter gates and the land job's workflow names passed as `not-checked`, because the pre-flight does not run those
+  checks, so they never warn (S61). It keeps each `gap` row and each `unknown` row from a check that ran (S52), by id,
+  and never reads `ready`. The setup's pin and commit are read as `stamity ready` reads them (`git ls-files`, then
+  `git ls-tree HEAD`), so a committed setup does not warn on `setup-pinned` (`setupRead`). A readiness read that throws
+  gives no warning and no refusal. The unattended skill copies every pre-flight warning to the morning list, on a pass
+  as on a refusal, each `warnings[]` entry's `id` with its `reason` or `names` (`content/skills/st-unattended/SKILL.md`,
+  the pre-flight step).
+  - Proof: `test/runs/preflight.test.ts` ("runPreflight — repo-unready"), `test/cli/commands/gatePreflight.test.ts`
+    ("repo-unready, from the ready report"), `test/corpus/skills/unattended.test.ts` ("puts every pre-flight warning on
+    the morning list, a pass's too").
 - **Proof:** `test/runs/preflight.test.ts`, `test/cli/commands/gatePreflight.test.ts`,
   `test/hooks/personOnlyGuard.test.ts` (the canary), `test/mcp/env.test.ts`, `test/cli/commands/init.test.ts` and
   `test/cli/commands/initPanel.test.ts` (the canary's ignore entry).
@@ -5201,6 +5289,14 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
     SECURITY.md and the mapping page"), `test/cli/commands/runCheckpoint.test.ts` ("holds a bare option value and a bare
     argument word naming a file Base: lacks, the run adding both (review/196, review/199)"). No test runs a bare word
     the resolver refuses.
+- **Amended 2026-11-10** (plan 024 file 2, unit `s-skill-guard` and its fix rounds; REQ-FLOW-180). The ask-class rules the
+  2026-10-25 bullet lists gain `skill-fetch`: `stamity skill add`, or a `skill` line whose words the guard cannot read,
+  which may be it, asks on an attended main thread and, as every ask does, is refused for a sub-agent, unattended and
+  while nobody is watching (`PERSON_ONLY_RULES`, `ASK_RULES` and `skillFetchVerdict`, `src/hooks/personOnly.ts`). The
+  copy it writes and its origin record sit on held paths (`.stamity/overrides/**`, `.stamity/skills/**`, beside
+  `.stamity/skill-sources.json`; `PERSON_ONLY_PATHS`, `src/change/personOnlyPaths.ts`).
+  - Proof: `test/hooks/personOnly.test.ts` (the `ASK_CLASS` set and the describe "the skill fetch (REQ-FLOW-180,
+    s-skill-guard)"), `test/change/personOnlyPaths.test.ts`.
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`, `test/change/personOnlyPaths.test.ts`,
   `test/cli/commands/runCheckpoint.test.ts` (the held patch; the refused push, "refuses the push when a commit it would
   send changes a held path, rewriting no history"), `test/adapters/claude.test.ts`,
@@ -6240,6 +6336,17 @@ unattended, the declared default is the reversible one, so nothing deploys or se
 - **As built:** trigger 3 reads "deleting data, dropping a column, renaming a public identifier, a deploy, a message
   sent outside the repository (the run's own pull request aside), rewriting shared history", in its two lines
   (`content/rules/stamity-question-protocol.md:26-27`).
+- **Amended 2026-11-10** (plan 024 file 1, unit `k-protocol`). Trigger 3 is "Irreversible or outward action" and reads,
+  on the same two lines: "an act that cannot be undone or that reaches people outside the repository: a release users
+  receive, a message sent outside it (the run's own pull request aside), deleting data, dropping a column, renaming a
+  public identifier, rewriting shared history. A force push stays the person's, even on a yes."
+  (`content/rules/stamity-question-protocol.md:26-27`). "A deploy" no longer stands alone, so a deploy to the
+  repository's own throwaway environment is not this trigger and a release users receive is. The sentence above and
+  its as-built quote stand as the 2026-10-21 record. As built: the general rule comes first and one example list
+  follows, ending "rewriting shared history.", so the force-push pin in `test/corpus/skills/unattended.test.ts` holds.
+  - Proof: `test/corpus/rules/protocol.test.ts` ("asks for an act that cannot be undone or reaches people outside, a
+    release named, a bare deploy not (REQ-FLOW-128)", the earlier proof's test renamed, and "enumerates five triggers
+    as a numbered list").
 - **Proof:** `test/corpus/rules/protocol.test.ts` ("names a deploy and an outside message, the run's own pull request
   aside, in trigger 3 (REQ-FLOW-128)", and the hashed ranges unchanged), `test/corpus/skills/unattended.test.ts`.
 
@@ -6295,6 +6402,14 @@ paragraph lies outside the invariants block, which moves for invariant 5 alone.
   said first", which also holds the line outside the invariants block, the three trims and the 95 lines; "keeps every
   template line at or under 117 characters"); the seven eval cases quoting the charter re-pointed their ranges with
   their quotes unchanged (`evals/SET-v7.md`).
+- **Amended 2026-11-10** (plan 024 file 1, unit `k-charter` and its fix round; REQ-FLOW-173, REQ-FLOW-174). The plain-words
+  sentence is no longer literal template text: the opening line's first sentence is `${STAMITY:COMMUNICATION_STYLE}`,
+  which renders that sentence byte for byte for `communicationStyle: plain`, for no value and for any value outside the
+  enum (`renderCommunicationStyle`, `src/emit/substitution.ts`). The charter is now 99 lines: invariant 1 and the
+  Conditional layer each gained two (REQ-FLOW-173), and `ALWAYS_ON_BUDGET_LINES` rose with a dated reason in place of a
+  rewrap, which would have moved Brief-quoted lines (`src/content/charter.ts`).
+  - Proof: `test/content/charter.test.ts` (the opening-paragraph pin reads the token and asserts the rendered default),
+    `test/emit/substitution.test.ts` ("communication-style substitution").
 - **Source:** `content/charter/stamity-charter.md`.
 
 ### REQ-FLOW-131 — The run verbs re-check git's configuration against the pre-flight
@@ -6808,6 +6923,20 @@ message names the file and the pull request.
 - **Proof:** `test/corpus/commands/work.test.ts`, `test/corpus/skills/unattended.test.ts`; the cases
   `unattended-land-evidence-holds` and `unattended-close-opens-draft-pr`.
 - **Source:** `content/commands/st-work.md`, `content/skills/st-unattended/SKILL.md`.
+- **Amended 2026-11-10** (plan 024 file 1, unit `k-work-close`; plan 024 file 2, unit `k-unattended-text`; sign-off S38;
+  REQ-FLOW-174). Every close still writes the file in the REQ-FLOW-094 shape, its `## Decisions` and held rows as above,
+  and the pull request body is still the one `run checkpoint` wrote plus the land verb's line. The file is now "the
+  record and the pull request's source, never named to the person as something to read", so "The final message names
+  the file and the pull request" reads: an attended close's final message is the plain chat summary built from
+  `stamity run overview --run <run-id> --json`, the pull request in it where there is one (`content/commands/st-work.md`,
+  the QA checkpoint's close); an unattended close's "names the pull request, not `.stamity/runs/<id>/morning.md`, and
+  the clean-up `run land` did" (`content/skills/st-unattended/SKILL.md`). The proof block goes to the run record, not
+  chat (REQ-FLOW-080's bullet of this date).
+  - Proof: `test/corpus/commands/work.test.ts` ("writes the summary list at every close, each act run without asking a
+    Decisions row (REQ-FLOW-143)", which pins that the close no longer says "the final message names that file and the
+    pull request", and "ends on a plain chat summary built from run overview, Not done: kept in it (REQ-FLOW-174)"),
+    `test/corpus/skills/unattended.test.ts` ("runs the land step after run end exits 0, and holds every reason it does
+    not land").
 
 ### REQ-FLOW-144 — The flows land the run's own pull request only through the land verb
 
@@ -7211,6 +7340,12 @@ agent's command line, Then the guard refuses it (REQ-FLOW-121).
   "Restrict updates" rule refuses the job, and it is never given a bypass. A required check outside `landJob.workflows`
   finishes with nothing to wake the job, so every required workflow should be named. A watched workflow that was renamed
   stops the job with no other sign than `check`'s `land-job-workflows` row, which warns and never fails.
+- **Amended 2026-11-10** (plan 024 file 1, unit `c-marker-finder`). "It reads the run from the marker ending the body"
+  reads: it reads the run by REQ-FLOW-168, the last marker whose id is a run id with at most a client's footer-shaped
+  tail after it (`bodyRun`, `src/runs/pullRequest.ts`, the job's first read in `src/cli/commands/runLand.ts`); any other
+  text after it still exits 0 as `not-a-run`.
+  - Proof: `test/cli/commands/runLand.test.ts` ("lands a run whose client added a footer after the marker, and writes the
+    body with one marker, last", "exits 0 and touches nothing where a heading follows the run's marker").
 - **Proof:** `test/adapters/landWorkflow.test.ts`, `test/cli/commands/runLand.test.ts`, `test/hooks/personOnlyGuard.test.ts`.
 - **Source:** `src/adapters/landWorkflow.ts`, `src/cli/commands/runLand.ts`, `src/cli/commands/run.ts`,
   `src/hooks/personOnly.ts`.
@@ -7236,11 +7371,11 @@ the run refuses to start.
   real runs have shown" and Steps 8 and 9). A label has now started a run on each cloud, on a scratch repository, one
   session each, and neither run reached a merged pull request. On Claude's cloud, on 2026-11-06, the label started the
   task and the run reached a draft pull request with green CI. A hand start of the land job then answered `not-a-run`:
-  job mode reads the run from a marker that must end the pull request's body (REQ-FLOW-157), and Claude's cloud adds its
-  own footer after that marker. On Cursor's cloud, on 2026-11-08, the label started the agent and the run refused at the
-  pre-flight's `direct-push` check: the origin URL and git's URL rewrites there carried Cursor's own login, so the push
-  could not be tied to `gh`'s identity. No setup is known that passes. That is what one session on each cloud showed, not
-  a promise from either vendor.
+  job mode then read the run from a marker that had to end the pull request's body (REQ-FLOW-157), and Claude's cloud
+  adds its own footer after that marker. On Cursor's cloud, on 2026-11-08, the label started the agent and the run refused
+  at the pre-flight's `direct-push` check: the origin URL and git's URL rewrites there carried Cursor's own login, so the
+  push could not be tied to `gh`'s identity. That is what one session on each cloud showed, not a promise from either
+  vendor.
 - **Amended 2026-11-09** (read against `docs/factory.md`, its section "What real runs have shown"). The 2026-11-08
   bullet above stays as the record, but its count does not stand for Claude's route: "one session each" and "one
   session on each cloud" undercount it. On 2026-11-06 the label started Claude's task in several sessions, not one. The
@@ -7249,6 +7384,21 @@ the run refuses to start.
   that the bullet above describes. Cursor's count is wrong too: on 2026-11-08 the label started three Cursor sessions.
   Two ran the pre-flight and refused at `direct-push`. In the third, the run's own guard refused the git clean-up lines
   before the pre-flight. None of the three pushed. Neither route has merged a pull request in a real run.
+- **Amended 2026-11-10** (plan 024 file 1, units `c-marker-finder` and `c-cloud-docs`; ledger `build/11`; REQ-FLOW-168,
+  REQ-FLOW-170). The 2026-11-08 bullet was edited in place on this date. Before, it read "job mode reads the run from a
+  marker that must end the pull request's body (REQ-FLOW-157)" and closed its Cursor sentence with "No setup is known
+  that passes."; after, the first is in the past tense, as that session's fault, and the second is dropped. Why: the
+  land job now finds the run's marker before at most a client's short footer. It takes the last marker whose id is a run
+  id when every non-blank line after it is a generator line or a link-only line, at most 3 lines and 300 characters, with
+  no comment, `stamity:` word, heading, fence or status line; any other text after it reads as no run (`bodyRun`,
+  `isPlainTail`, `GENERATOR_LINE`, `LINK_LINE`, `src/runs/pullRequest.ts`; REQ-FLOW-168). No real run has shown that
+  yet. Cursor's refusal is by design, not an unknown setup: Cursor's cloud pushes with its own login, written into
+  origin's URL and `~/.gitconfig`, and the pre-flight never ties a login carried in a URL to `gh`'s account, so it
+  refuses `direct-push` there (`docs/factory.md`, `docs/cloud.md`).
+  - Proof: `test/runs/pullRequest.test.ts` ("bodyRun and endsWithRunMarker (REQ-FLOW-168)", "takes a footer of generator
+    lines and link-only lines, in both forms Claude Code writes"), `test/cli/commands/runLand.test.ts` ("lands a run whose
+    client added a footer after the marker, and writes the body with one marker, last"), `test/docsPages.test.ts` (the
+    `CURSOR_REFUSAL` pins).
 - **Proof:** `test/corpus/skills/unattended.test.ts`, `test/docsPages.test.ts` ("states the task owner's limit on Claude's
   cloud, dated to the session that read it"); the eval cases are written and not run.
 - **Source:** `content/skills/st-unattended/references/cloud.md`, `src/hooks/model.ts`.
@@ -7337,6 +7487,17 @@ human-only list, and writes nothing (`runOverview`, `src/cli/commands/run.ts`; `
 - **Limits:** units and rounds come from report names on ledger rows, so a unit or a round with no findings leaves no
   row, and the page says "named in the ledger" and "with findings" (`build/17`). A line in the exact `land:` form still
   prints, labelled as the record's word.
+- **Amended 2026-11-10** (plan 024 file 1, unit `n-away-verb` and its fix rounds, sign-off S59; plan 024 file 3, unit
+  `x-metrics-content`). `## Only you can do` also prints, after the morning list's rows, each act the guard held while
+  nobody watched (REQ-FLOW-166) as `held while nobody watched: <act> (<rule>, <at>)`, but only the lines whose `at` falls
+  at or after the run opened: the earliest record line carrying a full UTC stamp on or after the run id's date, else
+  00:00 UTC that day. Older lines are counted on one line naming `stamity away status`; a line whose time does not read
+  is shown and marked so. The held list is read from the folder the verb runs in, its last 1 MiB, each field cleaned
+  before a line is built, and a list past that read names how many oldest lines it left out (`OverviewInput.held`,
+  `parseHeldList`, `heldUnreadLine`, `src/runs/overview.ts`; `readHeldList`, `src/cli/commands/away.ts`). `## How`
+  prints the record's last `metrics:` line whose eight values are each a number or `unreported`, with its scope; with
+  none it names `stamity run metrics --run <run>` (REQ-FLOW-183; `metricsLine`, `src/runs/overview.ts`).
+  - Proof: `test/runs/overview.test.ts` (the held-list cases and the describe "the metrics line").
 - **Proof:** `test/runs/overview.test.ts`, `test/cli/docs/cliReference.test.ts`.
 - **Source:** `src/runs/overview.ts`, `src/cli/commands/run.ts`.
 
@@ -7424,6 +7585,596 @@ workflow for it. The route reads `not run`, and no release waits on it.
 - **Limits:** the section rests on a read of GitHub's pages, which disagree on which repositories qualify, and on weak
   reports that an assigned agent does not always start. No test pins it.
 - **Source:** `docs/cloud.md`.
+
+### REQ-FLOW-166 — With nobody watching, every ask is refused and held for the morning
+
+Added 2026-11-10 (plan 024 file 1, units `n-switch-guard` and `n-away-verb` with their fix rounds; plan 024 file 2,
+unit `k-unattended-text`; sign-offs S1, S23, S25, S59).
+
+Given `STAMITY_NOBODY_WATCHING` set to anything but `""`, `0` or `false` (any case, spaces trimmed), or anything at
+`.stamity/away.json` (a link, even to nothing, counts), When the person-only guard would answer ask, Then it refuses
+with the act's sentence and appends one line `{"at","rule","act","client"}` to `.stamity/away-held.jsonl`, never the
+command text (`nobodyWatching` and `heldForMorning`, `src/hooks/scripts.ts`). The switch is read only behind an ask,
+so every act that runs unasked still runs and every refusal stays a refusal; a sub-agent's or `auto` mode's refused
+ask and an unattended run's refusal come back unchanged.
+
+- **As built:**
+  - Outside an unattended run the refusal reads "`<act>` is a person-only act (`<rule>`) and nobody is watching: it
+    waits for a person and is on the held list (`stamity away status`)." (S25). Where the line could not be written (a
+    link or folder at the path, an unwritable state folder) it says the list could not be written and to name the act
+    in the reply; a failed write never changes the decision. A fault reading the marker other than a missing file
+    refuses the call through the guard's fail-closed catch.
+  - The question gate, under the switch, refuses the question tool and any payload it cannot read, while a payload
+    naming another tool passes; without the switch it fails open as before, and a marker it cannot look for reads as
+    absent there.
+  - On Copilot CLI the portable runner turns any hook's `ask` into `deny` under the switch, a marker it cannot look for
+    counting as present (`src/hooks/portableRunner.ts`); the other clients' runners carry no switch code.
+  - `stamity away on|off|status [--json]` (`src/cli/commands/away.ts`) acts on the nearest folder at or above where it
+    runs that holds `.stamity/manifest.json`, the walk stopping at git's top, which is the setup root the guard reads.
+    `on` writes `{"since","by":"stamity away"}` with an exclusive create (never through a link) and keeps an existing
+    marker's first `since`; `off` removes a file or a link (never its target), refuses a folder at that name, and with
+    the variable set says the variable still holds the switch on; both refuse where no setup is found, naming where
+    they looked. `status` prints `away: on|off`, `source: env|marker|both|none`, `since:`, `held: <n>` and every held
+    act with its rule and time, each field cleaned for the terminal, and exits 0 with no setup found, reading the
+    variable alone. `away off` keeps the held list (S59).
+  - `run overview` lists the held acts since the run opened (REQ-FLOW-161, amended 2026-11-10). A close whose run finds
+    held-list lines written since its record opened carries each as a refused act's `held` row, the line read as data
+    (`content/skills/st-unattended/SKILL.md`, `## Person's calls held`).
+  - Both files join the `.gitignore` entries `init`, `sync` and `config mcp` write (`REQUIRED_GITIGNORE_ENTRIES`,
+    `src/mcp/env.ts`; S23), and the default `clean` removes both (`MACHINE_LOCAL_FILES`, `src/cli/commands/clean.ts`).
+- **Limits:** the held list is per checkout and its lines carry no session id, so two sessions in one checkout each list
+  the other's held acts. Claude Code's own permission prompts sit outside every hook.
+- **Proof:** `test/hooks/nobodyWatching.test.ts`, `test/hooks/unattendedAskGate.test.ts`,
+  `test/cli/commands/away.test.ts`, `test/runs/overview.test.ts`, `test/mcp/env.test.ts`,
+  `test/cli/commands/clean.test.ts`, `test/corpus/skills/unattended.test.ts`.
+- **Source:** `src/hooks/scripts.ts`, `src/hooks/portableRunner.ts`, `src/cli/commands/away.ts`, `src/runs/overview.ts`,
+  `src/mcp/env.ts`.
+
+### REQ-FLOW-167 — A test-runner's result reaches the run when its hand-back is empty
+
+Added 2026-11-10 (plan 024 file 1, unit `c-testrunner-report` and its fix round; sign-offs S20, S27).
+
+Given a test-runner brief naming a report path, Then every verdict writes its rows there through `Write`, the report's
+first line `spawn: <the brief's spawn token>` (`content/agents/stamity-test-runner.md`). Each brief names a fresh
+random token made for that spawn alone, new on every retry, held only in the orchestrator's context and that brief,
+never written to the run record or any file a builder's shell can read first. An empty or unreadable return is read
+from its report only if its first line is `spawn: <that exact token>`; else each gate reads `unknown` and the failure
+ladder runs (`content/commands/st-work.md`, the Return contract's Never-digested bullet).
+
+- **As built:** the test-runner keeps `allow: ["read","execute"]` and gains `writePaths:
+  verdictReportWritePaths("test-runner")`, `.stamity/runs/*/reports/*-test-runner-r*.md`; the pattern bounds the
+  `Write` tool only, never a shell (`src/roster/agentPolicies.ts`).
+- **Limits** (`SECURITY.md`, S27): once the report exists its first line is on disk, so a steered builder shell in a
+  parallel lane could read the token and overwrite the report; it is read as a pass only when the runner's own
+  hand-back is also empty.
+- **Proof:** `test/roster/agentPolicies.test.ts`, `test/corpus/agents/executionReturns.test.ts` ("reads the report only
+  under this spawn's token, else every gate is unknown"), `test/hooks/scripts.test.ts`.
+- **Source:** `src/roster/agentPolicies.ts`, `content/agents/stamity-test-runner.md`, `content/commands/st-work.md`.
+
+### REQ-FLOW-168 — The run marker is found before a client's footer
+
+Added 2026-11-10 (plan 024 file 1, unit `c-marker-finder` and its fix round; sign-off S17).
+
+Given a pull-request body, Then the run is the last `<!-- stamity:run <id> -->` whose id passes `isRunId`, kept only when
+every non-blank line after it is footer-shaped: a generator line (an optional mark, "Generated by" or "Generated with",
+then one `http(s)` link or at most four plain words) or a line that is only a link; at most 3 such lines and 300
+characters, and no `<!--`, `stamity:`, heading, fence or status-line opening (`bodyRun`, `isPlainTail`,
+`GENERATOR_LINE`, `LINK_LINE`, `endsWithRunMarker`, `src/runs/pullRequest.ts`). Given any other text after the marker,
+however short (`Closes #42`, a note, a heading, a second marker), Then it reads as no run.
+
+- **As built:** all six readers go through it: the land job's first read, the land's lookup (`recordedNumber`), the
+  own-check (`ownPr`), the status-line write (`withStatusLine`, which keeps the text before the marker and writes
+  before + line + marker, so a footer is dropped and the marker is last, once) and the draft refresh
+  (`ensureDraftPr`). `BODY_MARKER` is gone. `EVIDENCE_OPENING` and `WAITS_OPENING` moved to `pullRequest.ts`, values
+  unchanged. A footer of another shape (a `Co-Authored-By:` line, italics) reads as no run, the fail-closed choice.
+- **Proof:** `test/runs/pullRequest.test.ts` ("bodyRun and endsWithRunMarker (REQ-FLOW-168)", "takes a footer of
+  generator lines and link-only lines, in both forms Claude Code writes", "reads a short note a person wrote after the
+  marker as no run, however short"), `test/runs/landEvidence.test.ts`, `test/cli/commands/runLand.test.ts`.
+- **Source:** `src/runs/pullRequest.ts`, `src/runs/landEvidence.ts`, `src/cli/commands/runLand.ts`.
+
+### REQ-FLOW-169 — A 403 on the permission read falls back to the acting account's own right
+
+Added 2026-11-10 (plan 024 file 1, units `c-permission-403` and `c-contract-rights`).
+
+Given an HTTP 403 on the permission read, and no other failure, in `/st-pr-resolve` or for a text author in
+`/st-board`, Then the author's right is read only when `gh api user --jq .login` names that author, ignoring case, from
+`gh api repos/{owner}/{repo} --jq .permissions` (`admin` true → `admin`, `push` true → `write`, else `read`); any
+other author stays `unknown` (none, on the board) (`content/commands/st-pr-resolve.md`, the permission step;
+`content/commands/st-board.md`, the author rule). The board's write check takes the same fallback (REQ-FLOW-087,
+amended 2026-11-10). Given a `run contract` pass where a person's right came from that fallback, Then the text output
+prints one line per such person, the label's last actor first, then the author: `rights: <who> <login> has
+<admin|write> on <repo>, the account's own rights, read from the repository because the permission read answered HTTP
+403`, and the JSON carries `rightsFallback: string[]` with the same sentences, present only when not empty; a
+permission read answering 200 adds neither (`rightGap`, `proofGaps`, `finish`, `src/cli/commands/runContract.ts`).
+
+- **As built:** each note passes `sanitizeLabel`; a refused contract prints no `rights:` line, its reason naming the
+  cause. The prose's mapping matches the CLI's `ownRight` (`src/runs/preflight.ts`).
+- **Proof:** `test/corpus/commands/feedbackPair.test.ts`, `test/corpus/commands/board.test.ts`,
+  `test/cli/commands/runContract.test.ts` ("takes the account's own right, and says so …", "says so for the one person
+  the fallback proved, under --dry-run too, and not for one the permission read proved").
+- **Source:** `content/commands/st-pr-resolve.md`, `content/commands/st-board.md`, `src/cli/commands/runContract.ts`.
+
+### REQ-FLOW-170 — The cloud pages state what the real runs showed
+
+Added 2026-11-10 (plan 024 file 1, units `c-matrix-row` and `c-cloud-docs`).
+
+Given the capability matrix's Cloud sessions table, Then a `claude` "Permission reads" row, `not documented`, names the
+403s on `collaborators/<login>/permission`, `collaborators` and `user/memberships/orgs/<org>` and the 404 on
+`branches/<default>/protection` that the 2026-11-06 real run saw, says the own-rights fallback covers the permission
+read only and the other refused reads may stop a first run at `direct-push`, cites `docs/factory.md`, and prints no
+session-start line (`CLIENT_CLOUD_FACTS`, `src/hooks/model.ts`; `docs/capability-matrix.md`, regenerated). Given
+`docs/factory.md` and `docs/cloud.md`, Then they say Cursor's cloud refuses at `direct-push` by design (REQ-FLOW-158,
+amended 2026-11-10); that GitHub signs a webhook delivery with `X-Hub-Signature-256` and never sends the secret, so a
+repository webhook cannot carry Cursor's key; that on Claude's cloud `gh` needs no setup line and no Node line is
+documented; that the pre-flight counts only `never` and `pull_requests_only` as a binding `current_user_can_bypass`,
+the answer for an administrator not yet measured; and that the land job finds the marker before a footer, which no real
+run has shown yet.
+
+- **Limits:** the webhook and Node facts were not re-read from the vendors' pages in that unit and carry no read date;
+  the row's `not documented` rests on the plan's reading of the cloud-environments page.
+- **Proof:** `test/emit/capabilityMatrix.test.ts` ("names the permission reads Claude's proxy refused in a real run,
+  citing a public record (REQ-FLOW-170)"), `test/docsPages.test.ts` (the `CURSOR_REFUSAL` pins and the webhook, Step 2
+  and Step 7 case), `test/runs/preflight.test.ts` ("a push URL carrying an access token is unknown with the credentials
+  evidence, the plain URL passes (Cursor's cloud)").
+- **Source:** `src/hooks/model.ts`, `docs/factory.md`, `docs/cloud.md`.
+
+### REQ-FLOW-171 — Tests are written from the criteria before the build, and held
+
+Added 2026-11-10 (plan 024 file 1, units `t-gate-held`, `t-tests-only`, `t-fixer-reviewer` and `t-work-proof` with their
+fix rounds; plan 024 file 3, units `x-recipe` and `x-metrics-content`; sign-offs S11, S15, S21, S56, S57, S71, S76, S79,
+S81, S84, S87).
+
+Given a unit whose files `stamity gate classify --base HEAD --paths <its files>` places `product`, `public-contract` or
+`security-sensitive` (a classify that fails counts as `product`), When it builds, Then a tests-only implementer spawn
+writes its tests from the unit's criteria and interfaces alone, shows each red for the expected reason and returns the
+paths (report `<unit>-tests-implementer-r<N>.md`); the run records `- <UTC> held: <unit> <digest> <path>=<sha256> …`
+from `stamity gate held --paths … --json`; the builder spawn names the held paths; and every Prove pass, and every
+pass after a fix, runs `gate held --expect` against the unit's first `held:` line, a mismatch or any exit but 0 being a
+red gate (`content/commands/st-work.md`, Proof block **Build checks.**). Given a builder or a fixer that judges a held
+test wrong, Then it returns `BLOCKED_DEPENDENCY` naming it and a fresh tests-only spawn, given the dispute text and never
+the code, decides; its new digest goes on a new `held:` line citing that spawn's report, and Prove uses a later line only
+when it cites such a report (S71). Neither builder nor fixer edits, deletes or skips a held test
+(`content/agents/stamity-implementer.md`, Testing rules and `## Tests-only dispatch`; `content/agents/stamity-fixer.md`,
+**Held tests are off-limits.**).
+
+- **`stamity gate held --paths <files...> [--expect <digest>] [--json]`** (`runHeld`, `src/cli/commands/gate.ts`): paths
+  read from the project root; the digest is `sha256:` over the project root's prefix below git's top, then the sorted,
+  deduplicated, normalised paths each framed with its length and its bytes (`-` for an empty file), with each file's own
+  `sha256` listed beside it. JSON `{subcommand:"held", root, digest, paths[{path,sha256}], expect}`, plus `reason` on
+  exit 1; `ok` is the envelope's. Exit 0 with no `--expect` and every file read, or on a match; 1 on a mismatch, a missing
+  file, a link on the file or on a folder above it (never followed, `sha256: null`), a file over 16 MiB, or a directory
+  outside a work tree (`digest: null`); 2 on no `--paths`, an absolute or climbing path, or a malformed `--expect`.
+  Writes nothing.
+- **The reviewer** writes, from the unit's criteria alone, what would prove each one before it reads the diff; each
+  criterion maps to a held test that the Prove pass's `--expect` result, which it reads and never runs, shows unchanged
+  (S56: the Verdict dispatch names that result's path, and a `held-test result not handed in` finding goes to the
+  orchestrator, never a fixer). A criterion a `Verified by` command proves maps to that command run green before and
+  after, each exit code on the record (S87). A unit with no held tests says so in one line and binds the row's first
+  sentence in full (S57) (`content/agents/stamity-reviewer.md`, the Critical test row and "Reading the change").
+- **Behaviour unchanged** (S76, S79, S81, S84): such a unit shows its tests bite instead of failing first. A
+  characterization unit 0 shows each pin red under a scratch change, then reverts it; a behaviour-preserving transforming
+  unit holds unit 0's pins, or the tests its plan's invariants name under `Verified by`, runs them unchanged and green
+  before and after, and adds no test of its own; with only `Verified by` commands it records `no held tests: <unit>
+  commands` and runs each command green before and after with its exit code; a mixed refactor holds the union and runs
+  every command; the orchestrator writes the `held:` and `no held tests` lines, never the builder.
+- **Older CLI:** with no `gate held` (no `gate` verb, or a `gate` that rejects `held` with exit 2), `git hash-object`
+  before and at each Prove pass is recorded as `held: <unit> by hand`. The Prove pass's test-runner brief carries the held
+  paths, and a held path left out is a red gate.
+- **Limits:** the record lines are a flow's text; no engine parser reads them. In this repository's lanes `gate
+  classify` did not run (no installed CLI), so units took the `product` default.
+- **Proof:** `test/cli/commands/gateHeld.test.ts`, `test/corpus/agents/spine.test.ts` ("writes held tests from the
+  criteria alone in a tests-only dispatch", "leaves held tests as written and returns a dispute instead", "reads the
+  criteria before the diff and maps each one to an unchanged held test"), `test/corpus/commands/work.test.ts` (the
+  describe "held tests at Build and Prove", and the S76 and S84 cases).
+- **Source:** `src/cli/commands/gate.ts`, `content/commands/st-work.md`, `content/agents/stamity-implementer.md`,
+  `content/agents/stamity-fixer.md`, `content/agents/stamity-reviewer.md`.
+
+### REQ-FLOW-172 — No new test for text, docs or config
+
+Added 2026-11-10 (plan 024 file 1, units `t-tests-only` and `t-work-proof`).
+
+Given a unit classed `docs`, `config` or `records`, Then it adds no test and its result says `no new test: <class>`; the
+run skips the tests-only spawn in one line, `- <UTC> no new test: <unit> <class>`, with no `held:` line. A `tests` unit
+is its own tests-only work: it skips the spawn as `- <UTC> no tests-only spawn: <unit> tests`, has no `held:` line, and
+the tests it writes are its test delta. A unit mixing a code file and a doc takes the stronger class.
+
+- **Proof:** `test/corpus/agents/spine.test.ts` ("ships tests with the change and protects gating tests"),
+  `test/corpus/commands/work.test.ts` ("held tests at Build and Prove").
+- **Source:** `content/agents/stamity-implementer.md`, `content/commands/st-work.md`.
+
+### REQ-FLOW-173 — Caution matches the real risk
+
+Added 2026-11-10 (plan 024 file 1, units `k-charter`, `k-multipart-quick`, `k-shell-rule`, `k-security-gate`,
+`k-debug-verify` and `k-work-close` with their fix rounds; sign-offs S16, S18, S26, S28, S30).
+
+Given the charter, Then invariant 1 ends: "Where no floor applies, caution matches the real risk: a step that does not
+apply is skipped in one line, and only what cannot be undone, reaches people outside the repository, or this setup keeps
+for a person waits for one." (invariants 1.4.0, MINOR, `docs/doctrine.md`'s 1.4.0 row), and the Conditional layer adds
+"A rule with several parts holds only when every part that applies to the work holds; naming some of them is not
+applying it." (`content/charter/stamity-charter.md`).
+
+- **The parts it carries, as built:**
+  - `stamity-ai-evals` Floor item 3: a failing case is repaired at the rule it tests, never only the sentence, value or
+    example the case quotes; a repair whose words echo the case's input or prompt is fitted to the case, so it is
+    rewritten as the rule and checked against a sibling case; the expected output or rubric does not move to meet the fix
+    (S30, in the general words a user's eval set has), with a Gates bullet to match. The case-shaped sentences in
+    `stamity-ai-evals`, `stamity-api-versioning` and `st-quick` (REQ-FLOW-065, amended 2026-11-10) are deleted.
+  - `/st-quick`'s message follows the repository's commit style, read from its contributing guide or recent history, a
+    conventional subject where none is found; a batch carries one body line per item (`content/commands/st-quick.md`).
+  - The verify rows `maint-duplication`, `maint-dependency-lag`, `scale-pagination` and `scale-pool-config` read the
+    limit the repository declares; with none, the measured value is evidence and the row `not-applicable`, citing the
+    absent limit; `scale-pagination` is then judged on its 100% half alone
+    (`content/skills/st-verify/references/maintainability.md`, `scalability.md`; S18).
+  - A debug run reproduces in process first (REQ-FLOW-009, amended 2026-11-10); nothing hides a gate's exit code
+    (REQ-FLOW-014, amended 2026-11-10).
+  - The reviewer's production-only row fires on a capability the change adds or exposes that must stay out of
+    production, a seed or reset command shipped with the code among them, not on a one-off operator script that does
+    not ship with the code (`content/agents/stamity-reviewer.md`; S16); the rule's floor item is byte-identical.
+  - `/st-work`'s QA checkpoint marks any step that does not apply not applicable in one line and continues, with no
+    refusal, invariant language or warning.
+- **Limits:** the cut's eval run measures whether removing the case-shaped sentences brings their failures back;
+  `test/corpus/skills/verifyRestTools.test.ts` pins the four rows' wording, not a run.
+- **Proof:** `test/content/invariantsVersion.test.ts`, `test/content/charter.test.ts` ("states the multi-part rule in the
+  conditional layer and the caution sentence in invariant 1"), `test/corpus/commands/lightTrio.test.ts` (the describe
+  "rules — repairs restate the rule, not the case (REQ-FLOW-173)" and "follows the repository's commit style and differs
+  from work by contract"), `test/corpus/skills/verifyRestTools.test.ts`, `test/corpus/rules/security.test.ts`,
+  `test/corpus/agents/shellDiscipline.test.ts`, `test/corpus/commands/work.test.ts`.
+- **Source:** `content/charter/stamity-charter.md`, `content/rules/stamity-ai-evals.md`,
+  `content/rules/stamity-api-versioning.md`, `content/commands/st-quick.md`, `content/agents/stamity-reviewer.md`.
+
+### REQ-FLOW-174 — The close speaks in chat
+
+Added 2026-11-10 (plan 024 file 1, units `k-protocol`, `k-work-close` and `k-charter`; plan 024 file 2, unit
+`k-unattended-text`; sign-offs S12, S38).
+
+Given an attended close, Then `morning.md` is still written as the record and the pull request's source, never named to
+the person as something to read, and the final message is a plain chat summary built from `stamity run overview --run
+<run-id> --json`: what changed, what to check, `Not done:` with every open gap, one line on the gates, one on what
+`run land` cleaned (its JSON's `cleanup`) and what `stamity gc --json` would free (a preview), and the pull request,
+left out where there is none. The proof block is written to the run record after the walk's last answer; chat prints
+the summary in its place with nothing after it, and the body stays as `run checkpoint` wrote it (S38;
+`content/commands/st-work.md`, the close). The question protocol's walk prints the run's closing report last, "its
+summary, or a flow's proof block" (`content/rules/stamity-question-protocol.md`, Close walk; S12 words it for every
+flow's closing report; `review/1`). An unattended
+close's final message names the pull request, not `morning.md`, and the clean-up `run land` did; a cloud session's
+also carries the text `stamity run overview` prints (`content/skills/st-unattended/SKILL.md`). Given
+`communicationStyle`, Then every generated always-on file renders it at the charter's plain-words line
+(`${STAMITY:COMMUNICATION_STYLE}`): `technical` renders "Communication style=technical: use precise domain terminology and
+lead with implementation detail."; `plain`, unset or a value outside the enum renders the plain-words sentence
+(`renderCommunicationStyle` and `detectionContextFromManifest`, `src/emit/substitution.ts`; `communicationStyleDirective`,
+`src/types/core.ts`, re-exported from `src/manifest/manifest.ts`).
+
+- **As built, where the delta differed:** the cell sent the proof block to the pull request body too; the attended body is
+  fixed text from `run checkpoint`, so it goes to the run record only (S38; REQ-FLOW-143). The "not consumed" disclaimers
+  are gone (`src/cli/docs/configReference.ts`).
+- **Proof:** `test/corpus/commands/work.test.ts` ("ends on a plain chat summary built from run overview, Not done: kept in
+  it (REQ-FLOW-174)"), `test/corpus/rules/protocol.test.ts`, `test/corpus/commands/lightTrio.test.ts`,
+  `test/emit/substitution.test.ts` ("the communication style reaches every always-on file (REQ-FLOW-174)"),
+  `test/corpus/skills/unattended.test.ts`.
+- **Source:** `content/commands/st-work.md`, `content/rules/stamity-question-protocol.md`,
+  `content/skills/st-unattended/SKILL.md`, `src/emit/substitution.ts`, `src/types/core.ts`.
+
+### REQ-FLOW-175 — The close walk lists every leftover with a plain reason
+
+Added 2026-11-10 (plan 024 file 1, units `k-protocol` and `k-work-close` with its three fix rounds; sign-offs S39, S40).
+
+Given the close walk, Then it opens with two plain lines saying what it holds, each leftover carries its reason in one
+plain line, and the review tool's unfixed comments on the run's pull request are a leftover source
+(`content/rules/stamity-question-protocol.md`, Close walk; `content/commands/st-work.md`, the leftover pointer). Given a
+`refused` land whose JSON reads `evidence.review.state` as `findings`, `silent` or `spent`, never `clean` or `waiting`,
+Then the close walks that tool's own comments on the pull request not marked resolved as leftovers, each put as fix now,
+schedule (with a place) or drop with a one-line plain reason, in one round after the land, the only round the close adds
+there; a thread someone else opened is never walked as the tool's and stays a held row; the answers take effect as the
+walk's do, fixes first; with no response the leftovers' unattended rule applies (`content/commands/st-work.md`, the land
+step).
+
+- **As built, where the delta differed:** the trigger is the verdict the land verb writes (`ReviewToolState`,
+  `src/runs/reviewTool.ts`), not a reason's wording, so a person's open thread never sends the tool's cleared threads to
+  the walk (`review/58`). The protocol names no per-leftover choices, since its walk also covers undecided questions.
+- **Proof:** `test/corpus/rules/protocol.test.ts` ("walks the review tool's unfixed comments too, opening with two plain
+  lines and a one-line reason each (REQ-FLOW-174, REQ-FLOW-175)"), `test/corpus/commands/work.test.ts` (the land-step
+  test and the leftover pointer pin).
+- **Source:** `content/rules/stamity-question-protocol.md`, `content/commands/st-work.md`.
+
+### REQ-FLOW-176 — A landed run cleans up what it started
+
+Added 2026-11-10 (plan 024 file 2, unit `d-run-cleanup` and its fix round; sign-off S5).
+
+Given `run end` on a run whose contract's item is an issue in origin's repository, Then the body carries
+`Closes <owner>/<repo>#<n>` just before the run marker, in the body made from `morning.md` and in the fixed body alike;
+an item in another repository gets none, and a bare `#<n>` gets none and one `notDone` line saying so (`closesFor`,
+`src/cli/commands/run.ts`; `closingRef`, `src/runs/runCleanup.ts`; `isClosingRef` and the `closes` option of `prBodyFrom`
+and `withBlastRadius`, `src/runs/morning.ts`). Given a session `run land` that lands or finds the run landed, with no job,
+Then after `noteLanded` it removes the run's own lanes, deletes the local `stamity/<run-id>` branch and drops a tracking
+ref origin no longer has, one `- <UTC> cleanup: <act>` record line per act, and its JSON gains
+`cleanup: { removed, kept[{path, reason}] }` (`planRunCleanup`, `applyRunCleanup`, `src/runs/runCleanup.ts`; `cleanUpRun`,
+`src/cli/commands/runLand.ts`).
+
+- **As built:**
+  - A lane is the run's when the farm inventory reads it `managed` and its receipt's `run` names this run
+    (REQ-WORKTREE-019). It stays when the verb runs inside it, it is dirty, its HEAD is detached or holds a commit no
+    branch or origin ref contains, or it holds an ignored file, receipt rows still as setup placed them aside; each kept
+    lane names its reason. Removal re-reads the lane under its name lock, then `git worktree remove`, never forced.
+  - The branch goes with `git branch -d` only when merged by git's own test and checked out nowhere, never `-D`; the
+    tracking ref with `git update-ref -d` only when `git ls-remote origin` answered with no such branch, a failed or
+    timed-out read keeping it. No remote branch is touched. A failure is one `notDone` line and the landing stands.
+  - Record lines name a lane by its farm-relative name; the JSON names its path.
+- **Limits:** whether a merge by the land job's token closes the issue through the keyword is unproven until the cut's
+  real run (plan 024 file 2, Risks).
+- **Proof:** `test/runs/runCleanup.test.ts`, `test/cli/commands/runLand.test.ts`, `test/runs/morning.test.ts`,
+  `test/cli/commands/run.test.ts` (the describe "stamity run end's closing line").
+- **Source:** `src/runs/runCleanup.ts`, `src/cli/commands/runLand.ts`, `src/runs/morning.ts`, `src/cli/commands/run.ts`.
+
+### REQ-FLOW-177 — `stamity gc` reports and frees disk
+
+Added 2026-11-10 (plan 024 file 2, unit `d-gc` and its fix round; sign-offs S31, S33).
+
+Given `stamity gc [--apply] [--reports-older-than <days>] [--runs-older-than <days>] [--branches] [--json]`, Then by
+default it previews and writes nothing, reporting run folders, report files past the age (default 30 days, by file
+mtime), merged local `stamity/*` branches, stale `refs/remotes/origin/stamity/*` refs, worktrees and handoffs, with
+sizes, and every path `--apply` would free; `--dry-run` holds a run to a preview beside `--apply`. Given `--apply`, Then
+it frees old reports, archived handoffs past retention, gone worktree registrations inside the farm, and tracking refs
+origin no longer has; `--branches` adds merged `stamity/*` branches checked out nowhere, with `git branch -d`;
+`--runs-older-than` frees the untracked or ignored files of run folders older than N days by the run id's date
+(`planGc`, `applyGc`, `src/runs/gc.ts`; `src/cli/commands/gc.ts`).
+
+- **As built:**
+  - It acts only under the main checkout's `.stamity/` (found through git's common directory) and the farm, never on a
+    tracked file, a remote branch, a dirty worktree or anything through a link: each file is re-checked as a regular
+    file in a folder whose real path is still the one under `.stamity/` before it goes, so a file or folder swapped for a
+    link after the preview is kept. The prune runs only when every gone registration is inside the farm.
+  - A run whose `record.md` head does not read a `closed` status keeps its whole folder (S33). The handoff sweep acts on
+    the previewed list and does not run where `.stamity/handoffs` or its archive is a link. A git refusal to list
+    branches, refs or status is a kept row, never an empty list.
+  - JSON: `dryRun`, `runs[{run,bytes,reportsBytes,ageDays,tracked,open}]`, `reports`, `branches`, `staleTracking`,
+    `worktrees`, `handoffs`, `freed{bytes,paths}`, and `kept[{path,reason}]` and `failed[{path,reason}]`; exit 1 when an
+    act failed. It is advertised (S31).
+- **Limits:** a squash-merged or rebased run branch is never an ancestor, so `--branches` keeps it; offline, a preview
+  can wait up to the 60-second fetch limit on `git ls-remote`.
+- **Proof:** `test/cli/commands/gc.test.ts`, `test/cli/docs/cliReference.test.ts` ("documents `gc` after `clean` …",
+  "documents `gc` as advertised, not plumbing").
+- **Source:** `src/runs/gc.ts`, `src/cli/commands/gc.ts`.
+
+### REQ-FLOW-178 — An install through a linked `node_modules` is refused
+
+Added 2026-11-10 (plan 024 file 2, unit `d-npm-ci-guard`, its fix rounds and its cap-round fixer; sign-offs S2, S47,
+S54, S64; the CI fix pass `u-ci1` with S85, S86).
+
+Given a shell line running a package-manager verb that writes into `node_modules` (npm, pnpm, yarn or bun: install, add,
+remove, update, link, dedupe, prune, rebuild and their aliases, a bare `yarn` with options alone after it, `npm audit …
+fix`), When the folder the install writes in has a `node_modules` that is a symbolic link, Then the person-only guard
+refuses in every mode, never asking and never through the held list: "This install would write through node_modules
+here, which is a link to <target>, another checkout's install. Run it in that checkout (cd <checkout> first, or give the
+install an absolute --prefix <checkout>), or remove the link (the link only) and install here." (`linkedInstall` and
+`installFolders`, `src/hooks/scripts.ts`; called from the guard's `decide()` after the place cap).
+
+- **As built:**
+  - The folder is read in the line's order: a `cd` moves it for what follows, only where it surely holds; elsewhere
+    (a pipe or background segment, a block or brace group, a `cd` after `||`, one behind another command of its chain)
+    the old folder stays beside the new one. A subshell, `$(…)` and backticks restore it at their end; `env -C` moves its
+    own command only; `--prefix`, `-C`, `--dir` and `--cwd` send the write to that folder. A `cd` to a path that is not a
+    folder may fail, so the list's first folder comes back at its end and at a `||`. `popd` puts back every folder a
+    `pushd` on the line left.
+  - From each folder the check walks up to the nearest folder holding a `package.json` or a `node_modules`, stopping at
+    the repository top or the filesystem root, then on up adding every folder that declares a workspace
+    (`pnpm-workspace.yaml`, or a `package.json` of at most 1 MiB with a `workspaces` key); a link at any of them refuses.
+  - The verbs are read behind wrappers (their number and value arguments skipped), `sh -c`, `eval`, `env -S`, `npx -c`,
+    runner lines (`npm exec -- npm ci`), quoted or escaped program names, `$(…)` and heredoc bodies. Forms that write
+    nothing run: `-h`, `--help`, `-v`, `--version`, `npm … --dry-run`, a global install; `yarn --dry-run` stays refused,
+    because yarn 1 installs anyway.
+  - Past `PLACES_MAX` (32) folders, an install read after the cut is refused with its own sentence: "This install comes
+    after more folder changes than the guard follows (32 folders at most), so whether it writes through a linked
+    node_modules cannot be read. Run the install on a line of its own, after a plain cd to its folder." A line past the
+    cap that installs nothing is not refused by this check.
+  - A folder held in a variable (`cd "$LANE" && npm ci`) cannot be read, so the install is checked against the folder
+    the line starts from. On Windows, Claude's `Bash` line is read twice, the second time as Git Bash reads a backslash,
+    and either reading refuses; the fix names the checkout with forward slashes there (S85, S86).
+  - Every fault of the check is caught and lets the call go on to the verdicts; nothing reaches the fail-closed path. It
+    is not a `PERSON_ONLY_RULES` row.
+- **Limits:** a `case` pattern's `)` inside a subshell restores the folder early; `pushd lane && npm test && popd && npm
+  ci` run in a real root is refused (the safe side); a `cd` into a folder that exists but cannot be entered reads as
+  holding.
+- **Proof:** `test/hooks/linkedInstall.test.ts` (each case runs the emitted guard as a child process against a real
+  link: "reads the line in order …", "walks up to the folder holding the package.json, as the managers do", "checks a
+  workspace member's install at its workspace root too", "bounds the folders a line puts in play …", "keeps the folder a
+  cd to a missing folder fails to leave", "puts the folder a pushd left back in play at popd"),
+  `test/hooks/scriptBudget.test.ts`.
+- **Source:** `src/hooks/scripts.ts`.
+
+### REQ-FLOW-179 — The learnings index lists every learning within a byte budget
+
+Added 2026-11-10 (plan 024 file 2, units `l-banner` with its fix rounds and `l-lessons-move`; the pass
+`u-banner-names`; sign-offs S72, S74, S75, S78, S80, S83, S88, S89, S91).
+
+Given learnings, Then the session-start banner lists them ranked (confidence high, medium, low, then any other; then the
+soonest `reviewBy`, none last; then the newest declared date; then the name) until `learnings.indexBytes`, the listed
+lines joined by newlines (default 6,144, from 2,048 to 8,192; `LEARNINGS_INDEX_BYTES`, `src/types/manifest.ts`), and
+prints `- … and N more learnings not listed; to print them all, run <call>.` for the rest. `learnings.indexLines`, a
+positive integer, caps learning lines only when set. The whole session-start output stays at or under 9,500 characters:
+learning lines are trimmed first and the overflow line always kept, then the other sections' tails, each naming what it
+left out (S75). `formatLearningsIndex` (`src/learnings/store.ts`) lists the same lines in the same order.
+
+- **As built:**
+  - `<call>` is built once for both banners (`sessionIndexOptions`, `src/hooks/scripts.ts`): `stamity learn read` where
+    the CLI is installed, else the pinned `npx -y <package>@<version>` form for a package from the public registry;
+    `npx --no` for a setup with no npm channel and no scope registry; and for a setup whose scope names its own registry,
+    the installed copy alone (S74, S83, S91).
+  - A first line larger than the budget prints cut on a character boundary, ending `…`, never dropped; the cut line is
+    screened again as printed, its escape notation read, and a hit prints one fixed withheld line. A file name is
+    screened the same way, its printed cut included (S88).
+  - `learn read` prints every learning up to a 262,144-byte total and names on its own line each it leaves out
+    (`DEFAULT_MAX_TOTAL_LEARNINGS_BYTES`, `LoaderSkip.totalBudget`; S78). Skips and handoffs keep a 20-line cap each.
+  - The repository's general lessons moved into `.stamity/learnings/`, worded with no private name (S80, S89).
+- **Limits:** the engine twin has no output cap, so past 9,500 characters the hook can list fewer learnings than `learn
+  read` at the same budget. Cursor's own hook-output cap was not checked.
+- **Proof:** `test/hooks/scripts.test.ts` ("lists all 22 learnings inside the default byte budget, as the engine lists
+  them", "keeps the whole banner under 9,500 characters, learning lines first, the overflow line kept", "names the pinned
+  npx -y fallback only for the public registry's package, …"), `test/learnings/store.test.ts`,
+  `test/emit/noBareCliCall.test.ts`, `test/types/domain.test.ts`.
+- **Source:** `src/hooks/scripts.ts`, `src/learnings/store.ts`, `src/types/manifest.ts`, `src/manifest/manifest.ts`,
+  `src/cli/commands/config.ts`.
+
+### REQ-FLOW-180 — A plan names a skill from a trusted source, pinned and scanned
+
+Added 2026-11-10 (plan 024 file 2, units `s-sources-detect`, `s-skill-verb` (one lane, S24), `s-skill-guard` and
+`s-skills-content` with their fix rounds; sign-offs S3, S24, S32, S34, S36, S41, S49, S50, S60, S68, S69, S100).
+
+Given `.stamity/skill-sources.json` `{ "version": 1, "sources": [{ "id", "repo", "allowScripts" }] }`, a held path read
+strictly (any defect, an unknown field, a duplicate or non-slug id, a `repo` that is not `https://<host>/<owner>/<repo>`,
+trusts no source; absent means none trusted; `allowScripts` false when absent), When `stamity skill add <source-id>
+<name> --tag <tag> --commit <40-hex> [--sha256 <aggregate>]` runs attended, Then the skill is fetched at that commit into
+a bare repository in a new temporary folder outside the checkout, removed on every exit; the tag must peel to the
+commit; every file is checked and scanned; and the copy lands under `.stamity/overrides/skills/<name>/` with an origin
+record `.stamity/skills/<name>.origin.json` (`readSkillSources`, `src/skills/sources.ts`; `addSkill`,
+`src/skills/fetch.ts`; `src/cli/commands/skill.ts`).
+
+- **As built:**
+  - Nothing fetched runs: no checkout, no hooks, `transfer.fsckObjects` on, each blob read raw. A link or a nested
+    repository refuses before any byte lands; paths are checked, caps hold before a blob is read, and the aggregate is
+    compared with `--sha256`. `SKILL.md` passes the artifact gate, every support file the block deny-scan, every file
+    the pack body scan.
+  - A skill carrying scripts (a `scripts` folder in any case, a mode other than `100644`, a `#!` first line, or one of
+    25 code extensions; `carriesScripts`, `src/skills/scriptDetect.ts`), a `SKILL.md` head granting `allowed-tools`
+    (S36), or an `agents/openai.yaml` holding any key past its display keys and `policy.allow_implicit_invocation` is
+    refused unless the source allows scripts, and named as a grant when it does. A name with an engine prefix, a
+    bundled skill's (S34) or an installed pack's (S41), a short commit, an existing copy or record, are refused.
+  - The flag is `--tag`, since `--version` is the root flag (S32). `skill list` reads each copy as `clean`, `drifted`,
+    `copy-missing` or `record-unreadable`; `skill remove <name>` needs an origin record.
+  - `skill add` refuses while nobody is watching, in an unattended session, and, run from a linked worktree, when the
+    main checkout holds the away marker or an in-progress `Mode: unattended` record, or cannot be found. The guard's
+    `skill-fetch` rule asks on an attended main thread and refuses for a sub-agent, unattended and under the switch, a
+    `skill` line whose words it cannot show reading the same (`skillFetchVerdict`, `src/hooks/personOnly.ts`).
+  - `check` reports a copied skill whose files moved from its origin record as a `warn` row `copied-skills`, present only
+    when a record exists, and never fetches; a record listing a path outside its copy reads unreadable. `sync` does not
+    report it: no unit built that (S100) (`checkCopiedSkills`, `src/cli/commands/check.ts`).
+  - In the flows: a plan unit's `skills` field reads `<name> · <source-id> · <version> · <commit>` or `none`; lint row L6
+    blocks the write until each named skill reads `clean` at its commit in `stamity skill list --json`. The attended plan
+    run itself copies a skill not yet listed, never a sub-agent, then runs `stamity sync`, and a person commits the copy;
+    a listed copy that is not clean is never re-added or removed, the run returning `BLOCKED_DEPENDENCY` naming the
+    remove-then-add steps (S49, S50, S60). `/st-rework` runs L6 and copies nothing (S68). `/st-work`'s intake checks each
+    entry and, attended or unattended, that each named skill's client copies read clean in `stamity check` and are
+    committed, else `BLOCKED_DEPENDENCY` before any lane (S69); the pointer dispatch hands `skills` read-only; a unit
+    whose skill has no clean copy is `BLOCKED_DEPENDENCY` and nothing is fetched at Build
+    (`content/commands/st-plan.md`, `st-work.md`, `st-rework.md`; `content/agents/stamity-implementer.md`).
+- **Limits** (`SECURITY.md`): a source with `allowScripts` may bring any file type; a GitLab subgroup source is refused;
+  a shallow fetch downloads the whole commit's tree before the skill folder's caps apply. A folder link inside a skill
+  copy is followed by `check` (`review/173`, open).
+- **Proof:** `test/skills/sources.test.ts`, `test/skills/scriptDetect.test.ts`, `test/skills/fetch.test.ts`,
+  `test/cli/commands/skill.test.ts`, `test/hooks/personOnly.test.ts` (the block "the skill fetch (REQ-FLOW-180,
+  s-skill-guard)"), `test/cli/commands/check.test.ts` ("check — copied-skills"), `test/change/personOnlyPaths.test.ts`,
+  `test/corpus/commands/plan.test.ts` ("/st-plan — named skills (REQ-FLOW-180)"), `test/corpus/commands/work.test.ts`,
+  `test/corpus/commands/feedbackPair.test.ts`.
+- **Source:** `src/skills/sources.ts`, `src/skills/scriptDetect.ts`, `src/skills/fetch.ts`, `src/cli/commands/skill.ts`,
+  `src/hooks/personOnly.ts`, `src/cli/commands/check.ts`, `src/change/personOnlyPaths.ts`.
+
+### REQ-FLOW-181 — A named repository's pushes run unasked (planned, not shipped)
+
+Added 2026-11-10 as planned only (plan 024 file 2, unit `p-private-repos`; sign-off S103).
+
+Not delivered in 1.19.0. The plan's delta proposed `autonomy.unaskedPushRepos`, a setting that would lift the
+default-branch and outside-write asks for a push that reads plainly as going to a named repository. Its unit stayed out
+after its cap round: the closing checks found places where the guard reads git configuration unlike git (URL rewrites in
+the system files, escapes and continuations, system files of unlisted git builds), so a push could still reach an
+unlisted repository, and a setting that loosens a person-only rule with known ways to do that is not shipped. Its lane
+is left clean at `0d3767e6`; the findings (`review/175` to `review/177`, `fix/9`) are deferred. No code on `1daa3f8b`
+reads the key, so no behaviour is stated here. The recommendation recorded with S103: redesign so the lift takes the push
+target and configuration from git itself, or drop the setting.
+
+### REQ-FLOW-182 — A ready report reads whether a repository is ready for unattended runs
+
+Added 2026-11-10 (plan 024 file 3, units `x-lang-table`, `x-ready-core` and `x-ready-verb` (one lane, S53) with their fix
+rounds; sign-offs S10, S43 to S46, S51, S63).
+
+Given `stamity ready [--json] [--path <dir>]`, Then it prints one line per check, `<id>  <state>  <evidence>  (fix: …)`,
+each `ready`, `gap`, `not-checked` or `unknown`, for `test-framework`, `gates-resolve`, `ci-provider`, `pr-workflow`,
+`land-job-workflows`, `lockfile`, `setup-pinned`, `tests-class`, `coverage` and `branch-rule`; then `languages:` with any
+versions a file states, `legacy:` when any, `coverage: <pct>% from <file>` only when a report on disk was read, and a
+closing `verdict:` line. It runs no command of the repository and exits 0 on any verdict, 1 when the root cannot be
+read, 2 when `--path` names a file (`assessReadiness`, `readReadinessFiles`, `src/detect/readiness.ts`;
+`src/cli/commands/ready.ts`).
+
+- **As built:**
+  - `ready` is true when no row is `gap` or `unknown`, and a `not-checked` row a caller asked for (gates or the land
+    job) keeps it false (S63). `branch-rule` is always `not-checked`, its fix `stamity gate preflight --unattended
+    --dry-run`; no coverage report on disk reads `not-checked` (S51). `pr-workflow` counts a foreign workflow whose `on:`
+    holds `pull_request`; a non-GitHub provider is a `gap`.
+  - Coverage is the first report present of `coverage/coverage-summary.json`, `coverage/lcov.info`, `coverage.xml`,
+    `target/site/jacoco/jacoco.xml` and `build/reports/jacoco/test/jacocoTestReport.xml`, totals only. Every read is
+    `lstat`-checked, re-checked on its handle and capped (workflows 1 MB each within a 16 MiB total, 200 files; the class
+    file 1 MB; coverage 5 MB), and a failure reads `absent` or `unknown`, never a throw.
+  - The one process it starts is git, to read whether the setup is committed: `git ls-files`, then `git ls-tree HEAD`
+    for `.stamity/manifest.json`, so a staged manifest is a `setup-pinned` gap. `docs/factory.md` Step 1 runs it before
+    `init`.
+  - Detection gains `perl` (`cpanfile`, `Makefile.PL`, `Build.PL`, `dist.ini`; gates `prove -lr t`, `perlcritic .`) and
+    `cpp` (`CMakeLists.txt`, `meson.build`, `conanfile.txt`, `vcpkg.json`, `configure.ac`; test `ctest --test-dir build
+    --no-tests=error` only with a root `CMakeLists.txt`, else unresolved; no lint; ranked last so another language
+    keeps its gates; S44, S45). `RepoInfo.legacyStacks` names `cobol` (a root `.cbl`, `.cob` or `.cpy`, any case) and
+    `abap` (`.abapgit.xml`, `abaplint.json`), never as a language or a charter gate; `RepoInfo.languageVersions` reads
+    the root version files, each failure giving no entry; the persisted manifest schema does not move
+    (`src/detect/repoAnalyzer.ts`, `stackSupport.ts`, `verificationGates.ts`, `src/types/detect.ts`).
+- **Limits:** root-only probing misses COBOL and C/C++ kept in subfolders; a COBOL- or ABAP-only repository still reads
+  as greenfield to `init` (`isGreenfield`, open).
+- **Proof:** `test/detect/readiness.test.ts`, `test/cli/commands/ready.test.ts`, `test/detect/repoAnalyzer.test.ts`,
+  `test/detect/stackSupport.test.ts`, `test/detect/verificationGates.test.ts`, `test/cli/surface.e2e.test.ts`,
+  `test/docsPages.test.ts`.
+- **Source:** `src/detect/readiness.ts`, `src/cli/commands/ready.ts`, `src/detect/repoAnalyzer.ts`.
+
+### REQ-FLOW-183 — Each shipped item has first numbers
+
+Added 2026-11-10 (plan 024 file 3, units `x-ledger-reopens`, `x-run-metrics` and `x-metrics-content` with their fix
+rounds; sign-offs S42, S65 to S67).
+
+Given `stamity run metrics --run <id> [--transcript <path>] [--json]`, Then it prints wall minutes (the record's first to
+last stamped line), agent minutes (the sum of the `usage:` lines' minutes), the person's minutes (the sum of the `ask:`
+lines' answered minus asked; none reads `unreported`, not 0), review rounds (the highest `review rN`), fix rounds (each
+unit's highest `<unit>-fixer-r<N>.md` in the run's `reports/` folder, summed; S67), reopened findings (the ledger's
+`reopens`), findings by state, and tokens and cost only from the transcript named. Every value it cannot know reads
+`unreported`, and its last line is the proof block's `metrics:` line. It writes nothing and calls neither git nor
+GitHub; each failed read is named under `unread` with exit 0, a bad run id exits 1 and a usage error 2
+(`src/runs/metrics.ts`; `runMetrics`, `src/cli/commands/run.ts`).
+
+- **As built:**
+  - The transcript reader takes only `message.id`, `message.model` and the counts under `message.usage`, keeping the
+    largest of each per message id, and returns numbers and model ids only, never text (`src/runs/transcriptUsage.ts`).
+  - Cost comes from a bundled table of list rates with its read date (`src/runs/prices.ts`); a model not in it or a
+    non-standard speed reads cost `unreported`. The tokens and cost lines, the JSON's `scope` and the `--transcript` help
+    say they cover the transcript given only, not sub-agents' transcripts, and a cost is an estimate at list rates, not
+    a bill (S66).
+  - A stamp that is no real date reads `unreported`; a `usage:` line is read in one linear pass.
+  - A ledger row carries an optional `reopens`, a non-negative integer that `ledger close` raises by 1 on each closure
+    leaving the row `open` (`not-fixed`, `regressed`, `rejection-overturned`); a row without it reads 0 and a later
+    close keeps it (`reopenCount`, `applyClosures`, `src/runs/ledgerStore.ts`).
+  - `/st-work` writes the `ask:` record line as each ask closes and copies the `metrics:` line into the proof block
+    (REQ-CTX-019 in `docs/specs/orchestrator-context.md`); `run overview` prints it (REQ-FLOW-161, amended 2026-11-10).
+- **Limits:** minutes are the run's clock, written by the agent, labelled so; a fixer round that left no report is not
+  counted; the price table ages.
+- **Proof:** `test/runs/metrics.test.ts`, `test/runs/transcriptUsage.test.ts`, `test/runs/ledgerStore.test.ts`,
+  `test/corpus/commands/work.test.ts` ("names the metrics line the close copies from run metrics, with its tokens and
+  cost scope (REQ-FLOW-183)"), `test/runs/overview.test.ts`.
+- **Source:** `src/runs/metrics.ts`, `src/runs/transcriptUsage.ts`, `src/runs/prices.ts`, `src/runs/ledgerStore.ts`,
+  `src/cli/commands/run.ts`.
+
+### REQ-FLOW-184 — Old, weakly tested code is pinned before it changes
+
+Added 2026-11-10 (plan 024 file 3, unit `x-recipe` and its fix rounds; sign-offs S70, S73, S76, S77, S79, S81).
+
+Given a refactor, migration or feature plan touching an existing path with no test, Then unit 0 follows the
+characterization recipe (`content/skills/st-verify/references/characterization.md`, `load: reference`): when it applies;
+find the seams; record what the code does today, each test named `pins current: …`, with injected clock, randomness and
+environment and golden files read in full; prove each pin bites by changing one line and seeing red, unit 0's red-first
+evidence; flag odd behaviour as a finding, never fix it in unit 0; commit unit 0 green before any change, every later
+unit that touches a pinned path naming it in `depends_on`.
+
+- **As built:** the pointers sit in `/st-plan`'s Refactor Phase 0, Feature's Convention alignment (S73) and the Migration
+  Phase 0 skeleton (S77), and in `/st-work`'s Phase 1 ("Untested code: unit 0 per `st-verify`'s
+  `characterization.md`."), joined to existing lines so no eval range moved. The recipe's pins are the one exception to
+  `test-oracle-independence`, which `content/skills/st-verify/references/testability.md` names too. How a
+  behaviour-unchanged unit proves itself is REQ-FLOW-171's.
+- **Proof:** `test/corpus/commands/plan.test.ts` (the describe "/st-plan — the characterization recipe
+  (REQ-FLOW-184)"), `test/corpus/commands/work.test.ts`, `test/emit/skillsProjection.test.ts`,
+  `test/corpus/invariants.test.ts`.
+- **Source:** `content/skills/st-verify/references/characterization.md`, `content/commands/st-plan.md`,
+  `content/commands/st-work.md`.
 
 ## Acceptance criteria
 
@@ -9197,6 +9948,206 @@ above.
   Stamity emits no workflow, that the route reads `not run`, and that it holds no release; GIVEN `src/adapters/copilot.ts`
   THEN it emits no workflow that starts the agent.
 
+**REQ-FLOW-166** (added 2026-11-10)
+
+- GIVEN `STAMITY_NOBODY_WATCHING=1`, or a file, an empty file or a dangling link at `.stamity/away.json`, WHEN an
+  ask-class act reaches the guard on any client THEN it is refused naming the act and its rule, and the held list gains
+  exactly one `{at, rule, act, client}` line with no command text; GIVEN `""`, `0`, `false` or `" FALSE "` THEN the ask
+  returns. GIVEN the switch THEN calls that run unasked, or are refused in every mode, answer byte for byte as without it,
+  and nothing is held. GIVEN a link or a folder at the held path, or an unwritable state folder, THEN the call still
+  refuses and the sentence does not claim the list. *(test: `test/hooks/nobodyWatching.test.ts`)*
+- GIVEN the switch WHEN the question tool is called, or the payload does not read, THEN the gate refuses; GIVEN a payload
+  naming another tool THEN it passes; GIVEN no switch THEN an unreadable record fails open as before. *(test:
+  `test/hooks/unattendedAskGate.test.ts`)*
+- GIVEN `away on` then `status` THEN it reads on, source `marker`; GIVEN `on` twice THEN the first `since` stays; GIVEN
+  `off` THEN the marker goes and the held list stays; GIVEN a folder at the marker's name THEN `off` refuses; GIVEN a
+  setup below git's top WHEN `on` runs from beneath it THEN the marker lands where that setup's emitted guard reads it and
+  the guard refuses; GIVEN no setup at or above the folder THEN `on` and `off` exit 1 and `status` exits 0 reading the
+  variable alone. *(test: `test/cli/commands/away.test.ts`)*
+- GIVEN the default `clean` THEN both away files are removed. *(test: `test/cli/commands/clean.test.ts`)*
+
+**REQ-FLOW-167** (added 2026-11-10)
+
+- GIVEN the roster THEN the report-write carriers are the verdict roles plus the test-runner, whose pattern reaches no
+  other role's reports, and its `allow` holds no `edit`; GIVEN the guard THEN it admits the test-runner's `Write` to its
+  own pattern and refuses `*-reviewer-r1.md` as `WRITE_PATH_DENIED`. *(test: `test/roster/agentPolicies.test.ts`,
+  `test/hooks/scripts.test.ts`)*
+- GIVEN `/st-work`'s Return contract THEN it names a fresh random token per spawn, new on retry, kept out of the record,
+  and reads an empty return's report only under `spawn: <that exact token>`, else every gate `unknown`. *(corpus:
+  `test/corpus/agents/executionReturns.test.ts`)*
+
+**REQ-FLOW-168** (added 2026-11-10)
+
+- GIVEN a body ending in the marker and "Generated by Claude Code", the linked form, a bare or bracketed link, or a
+  generator line plus a link line THEN every reader finds the run; GIVEN `Closes #42`, a task-list item, a note, a heading,
+  a comment, a fence, a status line, a second marker or a mix of a footer line and a note THEN it reads as no run; GIVEN
+  three footer lines and 300 characters THEN it passes, four lines or 301 characters THEN it fails, CRLF read as LF;
+  GIVEN two valid markers THEN the last counts. *(test: `test/runs/pullRequest.test.ts`)*
+- GIVEN a footer body THEN the job passes `not-a-run`, `withStatusLine` leaves one marker, last, and the draft refresh
+  replaces the body; GIVEN a note after the marker THEN the refresh comments and replaces nothing. *(test:
+  `test/cli/commands/runLand.test.ts`, `test/runs/landEvidence.test.ts`, `test/runs/pullRequest.test.ts`)*
+
+**REQ-FLOW-169** (added 2026-11-10)
+
+- GIVEN `/st-pr-resolve`'s permission step THEN it reads the 403 fallback only for `gh`'s own login, ignoring case, and
+  on no other failure, and leaves any other author `unknown`; GIVEN `/st-board` THEN its write check passes on the
+  fallback only when `permissions.push` reads `true`, and a text author other than `gh`'s login stays none. *(corpus:
+  `test/corpus/commands/feedbackPair.test.ts`, `test/corpus/commands/board.test.ts`)*
+- GIVEN a contract whose author and labeler passed through the fallback THEN two `rights:` lines print, labeler first,
+  and `rightsFallback` holds both; GIVEN a 200 permission read THEN neither appears; GIVEN `--dry-run` THEN the same.
+  *(test: `test/cli/commands/runContract.test.ts`)*
+
+**REQ-FLOW-170** (added 2026-11-10)
+
+- GIVEN the regenerated matrix THEN the `claude` "Permission reads" row is `not documented`, names the four reads and
+  their codes and the fallback's reach, has no session-start line, runs dated 2026-11-06, and cites `docs/factory.md` with
+  no local or private path. *(test: `test/emit/capabilityMatrix.test.ts`)*
+- `judgment: reviewer` · GIVEN `docs/factory.md` and `docs/cloud.md` THEN they carry the by-design Cursor sentence, the
+  webhook signing fact, Claude's `gh` and Node lines, the `current_user_can_bypass` reading, and no claim that a real run
+  has landed through the footer rule. *(test: `test/docsPages.test.ts`)*
+
+**REQ-FLOW-171** (added 2026-11-10)
+
+- GIVEN the same files in any order THEN `gate held` gives the same digest; GIVEN one changed byte with `--expect` the old
+  digest THEN exit 1 naming the file's new hash; GIVEN a missing file or a link on the file or a folder above it THEN
+  `sha256: null` and exit 1; GIVEN no `--paths`, an absolute path or `..` THEN exit 2; GIVEN a hold taken from one project
+  root and checked from another THEN exit 1; GIVEN a directory outside a work tree THEN exit 1 with `digest: null`.
+  *(test: `test/cli/commands/gateHeld.test.ts`)*
+- GIVEN `/st-work`'s Build checks THEN they pin, in order, the tests-only spawn, the `held:` line grammar, the builder
+  naming the held paths, `--expect` at every Prove pass against the first `held:` line, the dispute route citing the
+  spawn's report, the by-hand fallback and the behaviour-unchanged sentences; GIVEN the implementer, fixer and reviewer
+  THEN each carries its held-test sentence word for word. *(corpus: `test/corpus/commands/work.test.ts`,
+  `test/corpus/agents/spine.test.ts`)*
+
+**REQ-FLOW-172** (added 2026-11-10)
+
+- GIVEN a `docs`, `config` or `records` unit THEN the implementer says `no new test: <class>` and the run writes
+  `no new test: <unit> <class>` with no `held:` line; GIVEN a `tests` unit THEN `no tests-only spawn: <unit> tests`.
+  *(corpus: `test/corpus/agents/spine.test.ts`, `test/corpus/commands/work.test.ts`)*
+
+**REQ-FLOW-173** (added 2026-11-10)
+
+- GIVEN the charter THEN invariant 1 ends with the caution sentence, the Conditional layer carries the multi-part line,
+  the invariants read 1.4.0 with its hash row, and every template line is at most 117 characters. *(test:
+  `test/content/charter.test.ts`, `test/content/invariantsVersion.test.ts`)*
+- GIVEN the ai-evals rule THEN Floor item 3 and its Gates bullet are present and the deleted case-shaped sentences are
+  absent; GIVEN `/st-quick` THEN its commit sentence follows the repository's style. *(corpus:
+  `test/corpus/commands/lightTrio.test.ts`)*
+- GIVEN the four verify rows THEN each reads the repository's declared limit and carries no old fixed floor. *(corpus:
+  `test/corpus/skills/verifyRestTools.test.ts`)*
+- GIVEN the reviewer's production-only row THEN a shipped seed or reset command is inside it and a one-off operator
+  script that does not ship is not. *(corpus: `test/corpus/rules/security.test.ts`)*
+
+**REQ-FLOW-174** (added 2026-11-10)
+
+- GIVEN `/st-work`'s close THEN the summary sentence names what changed, what to check, `Not done:`, the gates, the
+  clean-up and the pull request, comes after the `morning.md` write, never names `stamity gc --apply`, and the proof block
+  goes to the record. *(corpus: `test/corpus/commands/work.test.ts`)*
+- GIVEN `communicationStyle: technical` THEN `AGENTS.md` and `AGENTS.override.md` render its directive with no raw token;
+  GIVEN `plain`, unset or a forged value THEN the plain-words sentence. *(test: `test/emit/substitution.test.ts`)*
+
+**REQ-FLOW-175** (added 2026-11-10)
+
+- GIVEN the question protocol's walk THEN the review tool's unfixed comments are a source, the walk opens with two plain
+  lines and each leftover has a one-line reason; GIVEN `/st-work`'s land step THEN the walk sentence is keyed to
+  `evidence.review.state` `findings`, `silent` or `spent` on a `refused` land, keeps another's thread a held row, and
+  sits after the held-row sentence and before the `asks` question. *(corpus: `test/corpus/rules/protocol.test.ts`,
+  `test/corpus/commands/work.test.ts`)*
+
+**REQ-FLOW-176** (added 2026-11-10)
+
+- GIVEN a landed run's tagged clean lane and merged branch THEN the lane is removed, the branch deleted and one
+  `cleanup:` line written per act; GIVEN a lane with an ignored capture, an edited placed copy, a dirty tree, a detached
+  HEAD holding an unreachable commit, or the verb running inside it THEN it is kept with its reason; GIVEN an unmerged or
+  checked-out branch THEN it is kept; GIVEN origin still holding the branch, or `ls-remote` failing, THEN the tracking ref
+  stays; GIVEN job mode or a refused land THEN nothing is cleaned. *(test: `test/runs/runCleanup.test.ts`,
+  `test/cli/commands/runLand.test.ts`)*
+- GIVEN `run end` with an item in origin's repository THEN `Closes <owner>/<repo>#<n>` sits just before the marker; GIVEN
+  another repository's item THEN none; GIVEN a bare `#<n>` THEN none and one `notDone` line. *(test:
+  `test/cli/commands/run.test.ts`, `test/runs/morning.test.ts`)*
+
+**REQ-FLOW-177** (added 2026-11-10)
+
+- GIVEN a preview THEN nothing is written and sizes print; GIVEN `--apply` THEN an old report, a gone farm registration
+  and a stale ref go while a new report, a tracked file, a link, an outside file, a dirty tree and origin's branch stay;
+  GIVEN an open run THEN its folder stays whole; GIVEN a file or folder swapped for a link after the preview THEN it is
+  kept; GIVEN a linked handoff archive THEN the sweep does not run; GIVEN a git refusal to list refs THEN a kept row.
+  *(test: `test/cli/commands/gc.test.ts`)*
+
+**REQ-FLOW-178** (added 2026-11-10)
+
+- GIVEN a lane whose `node_modules` is a link WHEN any writing verb of npm, pnpm, yarn or bun runs there, directly, behind
+  a wrapper, through `sh -c`, `env -S`, `npx -c`, a runner, a quoted name or `$(…)` THEN the guard refuses with the exact
+  sentence naming the realpath, in every mode, and holds nothing; GIVEN a real folder or no `node_modules` THEN it runs;
+  GIVEN `npm test`, `npm audit`, help, version, a global install or `npm … --dry-run` THEN it runs. *(test:
+  `test/hooks/linkedInstall.test.ts`)*
+- GIVEN `cd <main> && npm ci` from a lane THEN it runs; GIVEN `cd lane/src && npm ci` THEN refused; GIVEN a workspace
+  member below a linked root THEN refused; GIVEN more than 32 folders before an install THEN the cap sentence, within the
+  child's time limit; GIVEN `cd <missing>; npm ci` in a lane THEN refused; GIVEN `pushd <main> && npm ci && popd && npm
+  ci` from a lane THEN refused. *(test: `test/hooks/linkedInstall.test.ts`)*
+
+**REQ-FLOW-179** (added 2026-11-10)
+
+- GIVEN 22 learnings at the default budget THEN all print, line for line with the engine; GIVEN a 2,048-byte budget THEN
+  fewer lines and the overflow line; GIVEN learnings that would push the output past 9,500 characters THEN learning lines
+  go first and the overflow line stays; GIVEN a first line over the budget THEN it prints cut, and a cut that matches the
+  screen prints the withheld line. *(test: `test/hooks/scripts.test.ts`, `test/learnings/store.test.ts`)*
+- GIVEN a fork whose scope names its own registry THEN the read call names the installed copy alone and no `npx`; GIVEN
+  the public package THEN the pinned `npx -y` form. *(test: `test/hooks/scripts.test.ts`, `test/emit/noBareCliCall.test.ts`)*
+- GIVEN about 300 KB of learnings THEN `learn read` names each file the 262,144-byte total leaves out. *(test:
+  `test/learnings/store.test.ts`)*
+
+**REQ-FLOW-180** (added 2026-11-10)
+
+- GIVEN a local bare source listed in the sources file THEN `skill add` copies the skill and writes the origin record;
+  GIVEN an unlisted source, a moved tag, a link, a deny-scan hit, a script, `allowed-tools`, a non-display key in
+  `agents/openai.yaml`, a bundled or pack skill's name, or a short commit THEN it refuses naming the reason; GIVEN an
+  unattended session, the switch on, or a lane whose main checkout is unwatched THEN it refuses; on every exit the
+  temporary folder is gone. *(test: `test/skills/fetch.test.ts`, `test/cli/commands/skill.test.ts`,
+  `test/skills/sources.test.ts`, `test/skills/scriptDetect.test.ts`)*
+- GIVEN `skill add` on an attended main thread THEN the guard asks naming `skill-fetch`; for a sub-agent, unattended or
+  under the switch THEN it refuses. *(test: `test/hooks/personOnly.test.ts`)*
+- GIVEN a copied skill with one changed byte and one added file THEN `check`'s `copied-skills` row warns naming both;
+  GIVEN a clean copy THEN it passes; GIVEN no origin record THEN no row. *(test: `test/cli/commands/check.test.ts`)*
+- GIVEN `/st-plan` THEN the `skills` row, L6, the Skill copy with its `sync` and the return row are pinned; GIVEN
+  `/st-work` THEN the intake check and the read-only dispatch; GIVEN `/st-rework` THEN L6 with no copy. *(corpus:
+  `test/corpus/commands/plan.test.ts`, `test/corpus/commands/work.test.ts`, `test/corpus/commands/feedbackPair.test.ts`)*
+
+**REQ-FLOW-181** (added 2026-11-10, planned)
+
+- `judgment: reviewer` · GIVEN `1daa3f8b` THEN no code under `src/` reads `autonomy.unaskedPushRepos`; the requirement
+  carries no behavioural criterion until a redesign lands.
+
+**REQ-FLOW-182** (added 2026-11-10)
+
+- GIVEN each check THEN one fixture reads it `ready` and one `gap`, save `coverage` (no report reads `not-checked`) and
+  `branch-rule` (always `not-checked`); GIVEN each coverage format THEN its totals read, and over 5 MB the Cobertura and
+  JaCoCo totals still read while lcov reads `unknown`; GIVEN any input THEN no child process starts in the assessment.
+  *(test: `test/detect/readiness.test.ts`)*
+- GIVEN a gap fixture THEN `stamity ready` exits 0 with its gaps; GIVEN a committed setup THEN `ready: true`; GIVEN a
+  staged but uncommitted manifest THEN a `setup-pinned` gap; GIVEN an unreadable root THEN exit 1; GIVEN a file `--path`
+  THEN exit 2. *(test: `test/cli/commands/ready.test.ts`)*
+- GIVEN each perl or cpp indicator alone THEN that language; GIVEN a COBOL or ABAP file THEN `legacyStacks` and no charter
+  gate; GIVEN each version source THEN its version, and a malformed one none. *(test: `test/detect/repoAnalyzer.test.ts`,
+  `test/detect/verificationGates.test.ts`)*
+
+**REQ-FLOW-183** (added 2026-11-10)
+
+- GIVEN a fixture record, ledger, reports folder and transcript THEN wall, agent, person, rounds, fix rounds, reopened,
+  tokens by the largest count per message id and cost print, and the last line is the `metrics:` line; GIVEN no transcript
+  THEN tokens and cost `unreported`; GIVEN no `ask:` line THEN person `unreported`; GIVEN a stamp that is no real date THEN
+  wall `unreported`; GIVEN any run THEN no message text appears and the tree is unchanged. *(test:
+  `test/runs/metrics.test.ts`, `test/runs/transcriptUsage.test.ts`)*
+- GIVEN a `regressed` closure THEN `reopens: 1`, a second 2; GIVEN an older row THEN 0; GIVEN a later `fixed` close THEN
+  the count stays. *(test: `test/runs/ledgerStore.test.ts`)*
+
+**REQ-FLOW-184** (added 2026-11-10)
+
+- GIVEN `/st-plan` THEN Refactor Phase 0, Feature's Convention alignment and Migration Phase 0 point at the recipe; GIVEN
+  `/st-work` THEN Phase 1 does; GIVEN the recipe THEN it is a `load: reference` file holding every step, the red-first
+  bite and the `depends_on` rule. *(corpus: `test/corpus/commands/plan.test.ts`, `test/corpus/commands/work.test.ts`,
+  `test/corpus/invariants.test.ts`)*
+
 ## References
 
 - `docs/plans/013-optimization-sweep-01.md` — the measures and the method that found these items.
@@ -9360,6 +10311,24 @@ above.
 - `test` (added 2026-11-05): `test/mcp/ownServers.test.ts`, `test/workspace/ownServers.test.ts`,
   `test/cli/commands/configMcp.test.ts`, `test/runs/overview.test.ts`, `test/cli/commands/learn.test.ts`, and the suites
   each requirement names.
+- `docs/plans/024-last-before-2-0-01.md`, `-02.md` and `-03.md`, with `.stamity/runs/2026-11-09_last-before-2-0/` (its
+  record, ledger and units' reports) — the spec deltas, the cells' amendments and the sign-offs the text dated 2026-11-10
+  merges (REQ-FLOW-166 to REQ-FLOW-184, REQ-FLOW-181 as planned only; REQ-FLOW-009, REQ-FLOW-014, REQ-FLOW-065,
+  REQ-FLOW-087, REQ-FLOW-094, REQ-FLOW-101, REQ-FLOW-128, REQ-FLOW-130, REQ-FLOW-157, REQ-FLOW-158 and REQ-FLOW-161
+  amended), added 2026-11-10; its REQ-WORKTREE, REQ-PROVE and REQ-CTX ids in the specs that own them.
+- `source` (added 2026-11-10): `src/hooks/scripts.ts` (`nobodyWatching`, `heldForMorning`, `linkedInstall`,
+  `installFolders`, `sessionIndexOptions`), `src/hooks/personOnly.ts` (`skillFetchVerdict`), `src/cli/commands/away.ts`,
+  `src/runs/pullRequest.ts` (`bodyRun`), `src/cli/commands/runContract.ts`, `src/cli/commands/gate.ts` (`runHeld`,
+  `readinessGaps`), `src/emit/substitution.ts`, `src/runs/runCleanup.ts`, `src/runs/gc.ts`, `src/learnings/store.ts`,
+  `src/skills/sources.ts`, `src/skills/scriptDetect.ts`, `src/skills/fetch.ts`, `src/cli/commands/skill.ts`,
+  `src/cli/commands/check.ts` (`checkCopiedSkills`), `src/detect/readiness.ts`, `src/cli/commands/ready.ts`,
+  `src/runs/metrics.ts`, `src/runs/transcriptUsage.ts`, `src/runs/prices.ts`, `src/runs/ledgerStore.ts` (`reopenCount`),
+  `content/skills/st-verify/references/characterization.md`.
+- `test` (added 2026-11-10): `test/hooks/nobodyWatching.test.ts`, `test/hooks/linkedInstall.test.ts`,
+  `test/cli/commands/away.test.ts`, `test/cli/commands/gateHeld.test.ts`, `test/runs/runCleanup.test.ts`,
+  `test/cli/commands/gc.test.ts`, `test/skills/fetch.test.ts`, `test/cli/commands/skill.test.ts`,
+  `test/detect/readiness.test.ts`, `test/cli/commands/ready.test.ts`, `test/runs/metrics.test.ts`,
+  `test/runs/transcriptUsage.test.ts`, `test/runs/ledgerStore.test.ts`, and the suites each requirement names.
 
 ## Risks
 

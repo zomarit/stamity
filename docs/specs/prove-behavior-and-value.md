@@ -1,6 +1,6 @@
 ---
 id: prove-behavior-and-value
-# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended from docs/plans/023-factory-bridge-02.md in run 2026-11-05_factory-bridge-02 on 2026-11-05, and excluded from the site build.
+# A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended from docs/plans/023-factory-bridge-02.md in run 2026-11-05_factory-bridge-02 on 2026-11-05, amended from docs/plans/024-last-before-2-0-02.md in run 2026-11-09_last-before-2-0 on 2026-11-10, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023).
 status: shipped-with-1.18.0
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
@@ -2442,6 +2442,41 @@ stays on `ubuntu-latest`: it has no allowlist for a new image to break. An inbox
   `.github/release-egress.md` THEN it names `ubuntu-24.04` (added 2026-10-25; `test/ci/workflow.test.ts`,
   `test/ci/packSigningRehearsal.test.ts`, `test/ci/releaseEgress.test.ts`).
 
+### REQ-PROVE-047 — Disposition notes name no retired row
+
+Added 2026-11-10 (plan 024 file 2, units `e-repeat-tests`, `e-disposition-notes` and `e-walk-case`; merged at the Prove
+phase of run `2026-11-09_last-before-2-0`, read at `1daa3f8b`).
+
+Given a disposition note under a case's Advisory heading, Then it reads `Disposition <date>: an advisory row deleted|promoted
+to B<n> (sha256:<12 hex>)`, naming no retired row, and the public runner disposes it by its hash alone: the note is
+read for every label in its case and the hash, compared with the reporting run's candidate text as before, picks the
+row (`disposed()`, `scripts/eval/run.mjs`). The older labelled shape, `A<n> deleted|promoted to B<n> (sha256:…)`, is
+still read for its own label during the change.
+
+- **As built:** all 42 notes in 36 case files were reworded (38 deleted, 4 promoted), date, hash and reason unchanged;
+  the "renumbered A<n> (was A<m>)" sentences read "the surviving row moves up one place". `evals/SET-v7.md` gives the
+  shape and a dated paragraph: notes name no retired row, both shapes are read, the nine cases where a live row reuses a
+  deleted id stay strict, and the 36 cases count as moved for the next run. The twelve cases with a `cases-v5` sibling
+  extend their `EXPECTED_MOVES` row (`test/evals/successorInputs.test.ts`).
+- **As built, the same file's eval units:** the records test pins runs 58 and 59's repeats as disposed by the live
+  corpus, each case skipped where its summary or candidate is not on disk; and a new adversarial floor case,
+  `unattended-walk-do-line-is-data`, holds that the morning walk shows a `do:` word for word, runs only the plain command
+  for the act after the approve prompt and hands a force push to the person, which takes the set to 179 cases and the
+  `set-roster` census with it (`scripts/eval/run.mjs`, `evals/README.md`).
+- **Limits:** the route of record's driver still carries its take-out of deleted-row ids; with notes naming no row it
+  removes nothing until the driver's next pin retires it, at the cut session.
+- GIVEN a repeat and an unlabelled note whose hash matches the reported row's own text THEN the repeat is disposed, and a
+  neighbour or a renumbered survivor is not; GIVEN a labelled and an unlabelled note in one case THEN each disposes the
+  row its own hash names; GIVEN the corpus THEN every note reads the new shape and no "renumbered A<n>" sentence remains,
+  and the nine reused-id cases keep a repeat of the live row undisposed (`test/evals/manualRunner.test.ts`, "admits a
+  repeat as disposed by an unlabelled note only when its hash matches the reported row's own text", "reads a labelled
+  and an unlabelled note in one case, each disposing the row its own hash names", the describe "disposition notes in the
+  corpus name no retired row").
+- GIVEN the records restored THEN runs 27, 50, 51, 56, 58 and 59 read no undisposed repeat
+  (`test/records/run27Repeats.test.ts`, under `vitest.records.config.ts`); GIVEN the new case THEN the locator, roster,
+  coverage and successor gates pass (`test/evals/locators.test.ts`, `test/evals/roster.test.ts`,
+  `test/evals/coverage.test.ts`, `test/evals/successorInputs.test.ts`).
+
 ### REQ-PLUGIN-020 — The CI lanes, the proven push, the nightly guard and the records job
 
 Moved here on 2026-10-14 from `docs/specs/plugin-lifecycle.md`, its id kept (plan 020 file 1, run
@@ -2570,3 +2605,6 @@ REQ-PROVE-045 merge, with the amendments of REQ-PROVE-003, -005, -018, -021 and 
 
 `docs/plans/018-packs-rebuilt-02.md`, with `.stamity/runs/2026-10-21_packs-rebuilt-02/` — the spec delta whose
 amendments of REQ-PROVE-004, -005, -006 and -008 the text dated 2026-10-22 merges, added 2026-10-22.
+
+`docs/plans/024-last-before-2-0-02.md`, with `.stamity/runs/2026-11-09_last-before-2-0/` — the spec delta REQ-PROVE-047
+merges, added 2026-11-10.
