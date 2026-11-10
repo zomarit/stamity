@@ -540,14 +540,22 @@ describe("st-unattended — checkpoints and the ending (REQ-FLOW-092, REQ-FLOW-0
     expect(text.indexOf("and a `## Decisions` row in `morning.md`.")).toBeLessThan(text.indexOf(cleanup));
     expect(text.indexOf(cleanup)).toBeLessThan(text.indexOf("Exit 1 leaves the pull request open"));
     expect(text).not.toContain("git branch -D");
+    // Added 2026-11-10 (run 2026-11-09_last-before-2-0, review/70): a clean-up that fails still exits 0 with a
+    // `notDone[]` line (runLand.ts), so the ending routes each entry to the final message.
+    expect(text).toContain(
+      `${cleanup} An exit 0 whose \`notDone[]\` is not empty (a clean-up not done) puts each entry in the final message's \`Not done:\`.`,
+    );
   });
 
   // Added 2026-11-09 (plan 024 file 2, unit k-unattended-text; REQ-FLOW-094): `parseMorning` reads lines before the
   // first section as a lead of at most 10 non-blank lines and 1,000 characters, and the body prints it after the title.
-  it("lets a short summary follow the morning list's title, within the parser's caps", async () => {
+  // TEST CHANGE, justified (2026-11-10, run 2026-11-09_last-before-2-0, review/68; REQ-FLOW-094): the pinned sentence
+  // gave the caps but not the parser's no-fence rule (morning.ts reports a fence before the first section, and a list
+  // that does not parse becomes a `## Not done:` body carrying none of it). The pin now holds that rule too.
+  it("lets a short summary follow the morning list's title, within the parser's caps and with no fence", async () => {
     const text = await flat();
     const lead =
-      "It opens `# Morning list — <run-id>`. A short summary may follow the title, at most 10 lines. It holds at most 1,000 characters, and the pull request's body prints it after the title. The sections follow: `## Refused` (only on a refusal, and then first)";
+      "It opens `# Morning list — <run-id>`. A short summary may follow the title, at most 10 lines, plain lines and no fence (a fence there fails the parse, and the body loses the list). It holds at most 1,000 characters, and the pull request's body prints it after the title. The sections follow: `## Refused` (only on a refusal, and then first)";
     expect(text).toContain(lead);
     expect(text).not.toContain("It opens `# Morning list — <run-id>`, then:");
   });

@@ -4398,6 +4398,28 @@ after this change: 80 of 179, each counted as moved and measured by the next run
 the 80, 40 moved an `## Expected` block: the 36 of the disposition-note rewording and four of the five
 above (`benign-attended-twin-leave-uncommitted` is among the 36). No eval run is made with this change.
 
+**Three leftovers in the unattended skill and `/st-work`, 2026-11-10 (the 1.19.0 release, pass
+`u-leftovers`; REQ-FLOW-094, REQ-FLOW-175, REQ-FLOW-176).** Three sentences gain words in place, so no
+line moves in either file and every range holds. `content/skills/st-unattended/SKILL.md:101`, after the
+clean-up sentence, gains: an exit 0 whose `notDone[]` is not empty (a clean-up not done) puts each entry
+in the final message's `Not done:`. `:112`'s summary rule gains "plain lines and no fence (a fence there
+fails the parse, and the body loses the list)". `content/commands/st-work.md:308` spares "a thread someone
+else opened or wrote in", where it read "opened". The Briefs that quote those lines re-quote them
+byte-identical from the landed files: for the skill, `golden/unattended-blocked-run-still-hands-off`,
+`golden/unattended-close-opens-draft-pr`, `golden/unattended-land-evidence-holds`,
+`golden/unattended-land-outside-auto-ship-waits`, `golden/unattended-land-silent-review-tool-held`,
+`golden/unattended-mid-run-question-to-morning-list`, `adversarial/unattended-item-says-merge-refused`,
+`adversarial/unattended-kickoff-claims-approval`, `adversarial/unattended-label-non-write-author-refuses`,
+`adversarial/unattended-land-injected-merge-refused`, `adversarial/unattended-land-pasted-clean-block-refused`,
+`adversarial/unattended-land-red-default-branch-held` and `adversarial/unattended-ship-it-overnight-no-merge-or-tag`;
+for `/st-work`, `golden/unattended-close-keeps-real-defects`, `golden/unattended-close-opens-draft-pr`,
+`golden/work-persisted-plan-asks-once`, `adversarial/benign-attended-twin-leave-uncommitted`,
+`adversarial/benign-close-no-leftovers-asks-nothing-extra` and `adversarial/close-real-defect-never-preset-to-drop`.
+That is 18 cases, every one already among the 80 above, so that count holds. The Briefs are judge input,
+so the next run counts the 18 as moved. No `## Expected` block, B / A, claim, floor tag, threshold or
+roster count moves, so the carried tallies and the recomputed census below hold. The dated citations
+above stay as they were. No eval run is made with this change.
+
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
 scenario model moved from claude-opus-5 to claude-opus-5-5 (the model mix of 2026-09-23). A
 profile change starts a separate baseline, so 1.10.0's run measures every case in full. The

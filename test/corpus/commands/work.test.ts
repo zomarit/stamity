@@ -1602,8 +1602,11 @@ describe("/st-work — Prove", () => {
     expect(qa).not.toContain(
       "When a `refused` outcome's reasons include the review tool's findings or unresolved review threads",
     );
+    // TEST CHANGE, justified (2026-11-10, run 2026-11-09_last-before-2-0, review/59; REQ-FLOW-175): the sentence spared
+    // only threads someone else opened, while `toolThreadIds` (`src/runs/landEvidence.ts`) drops a tool-opened thread a
+    // person joined; the pin now holds "opened or wrote in", so a thread a teammate answered is not walked as the tool's.
     const reviewComments =
-      "Only when a `refused` land's JSON reads `evidence.review.state` as `findings`, `silent` or `spent`, never `clean` or `waiting`, does the close walk that tool's own comments on the pull request not marked resolved as leftovers, each put as fix now, schedule (with a place) or drop with a one-line plain reason, in one round after the land, the only round the close adds there; a thread someone else opened is never walked as the tool's and stays a held row; the answers take effect as the walk's do, fixes first; with no response, the leftovers' unattended rule applies.";
+      "Only when a `refused` land's JSON reads `evidence.review.state` as `findings`, `silent` or `spent`, never `clean` or `waiting`, does the close walk that tool's own comments on the pull request not marked resolved as leftovers, each put as fix now, schedule (with a place) or drop with a one-line plain reason, in one round after the land, the only round the close adds there; a thread someone else opened or wrote in is never walked as the tool's and stays a held row; the answers take effect as the walk's do, fixes first; with no response, the leftovers' unattended rule applies.";
     expect(qa).toContain(reviewComments);
     // After the held-row sentence that covers a `refused` exit, before the `asks` question.
     expect(qa.indexOf(reviewComments)).toBeGreaterThan(qa.indexOf("or `merge waits on: the land call returned nothing`)."));

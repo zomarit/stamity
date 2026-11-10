@@ -45,7 +45,7 @@ Governing text — the same file, "The morning list" (its first paragraph):
 ## The morning list
 
 `.stamity/runs/<run-id>/morning.md` is the pull request body's source; `run end` regenerates the body from it, after
-its own scan, ending `<!-- stamity:run <run-id> -->`. It opens `# Morning list — <run-id>`. A short summary may follow the title, at most 10 lines. It holds at most 1,000 characters, and the pull request's body prints it after the title. The sections follow: `## Refused` (only
+its own scan, ending `<!-- stamity:run <run-id> -->`. It opens `# Morning list — <run-id>`. A short summary may follow the title, at most 10 lines, plain lines and no fence (a fence there fails the parse, and the body loses the list). It holds at most 1,000 characters, and the pull request's body prints it after the title. The sections follow: `## Refused` (only
 on a refusal, and then first), `## For you to check`, `## Decisions`, `## Prerequisites`, `## Person's calls held`,
 `## Not done:`, `## How to answer`, and a fenced `stamity-morning` block holding one JSON object a line, its keys
 `id` (`Q<n>`), `kind` (`qa`, `decision`, `prerequisite` or `held`), `question`, `options` (2 to 9 strings),
