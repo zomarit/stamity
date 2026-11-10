@@ -3526,6 +3526,18 @@ describe("a push read against the push configuration in git's files", () => {
     expect(decide("claude", guard, "git push")).toEqual({ deny: false });
   });
 
+  // Red before the union: the push setting of no in a conditional include git may not read hid the every-command one.
+  it("asks for a push where the files turn submodule recursion on, though an include whatever its condition turns the push setting off", async () => {
+    const guard = await placeGuard("claude", {
+      ".git/config": `${ORIGIN}[submodule]\n\trecurse = true\n[includeIf "gitdir:/nowhere/"]\n\tpath = ../off.gitconfig\n`,
+      "off.gitconfig": "[push]\n\trecurseSubmodules = no\n",
+    });
+    expect(decide("claude", guard, "git push -u origin feat/x")).toMatchObject({ deny: true, ask: true, reason: expect.stringContaining(ruleSaid("outside-write")) });
+    // One fact away: with recursion off for every command, the same push runs.
+    await getRepo().seedFiles({ ".git/config": `${ORIGIN}[submodule]\n\trecurse = false\n[includeIf "gitdir:/nowhere/"]\n\tpath = ../off.gitconfig\n` });
+    expect(decide("claude", guard, "git push -u origin feat/x")).toEqual({ deny: false });
+  });
+
   it("refuses a refless push to a remote whose section holds a bare mirror key", async () => {
     const guard = await placeGuard("claude", { ".git/config": `${ORIGIN}\tmirror\n` });
     const decision = decide("claude", guard, "git push");

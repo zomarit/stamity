@@ -2350,12 +2350,17 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     const modes = valuesOf("push.default");
     if (modes.includes("matching")) matching = true;
     if (modes.includes("upstream") || modes.includes("tracking")) configured.push(...merges);
-    // Submodule recursion (REQ-FLOW-134): the line's option over every setting, `push.recurseSubmodules` over
-    // `submodule.recurse`, each the line's over the files'. A push that recurses also pushes each changed submodule to
-    // its own remote, other repositories, on branches the line does not show.
+    // Submodule recursion (REQ-FLOW-134): the line's option over every setting; then a `push.recurseSubmodules` pair on
+    // the line, which git reads after the files, beside the line's `submodule.recurse` pairs; else every value of both
+    // keys, the line's and the files', counted together, since the files read include some git may not read. A push
+    // that recurses also pushes each changed submodule to its own remote, other repositories, on branches the line does
+    // not show.
     const recurses = (given: readonly string[]): boolean => given.some((value) => !["check", "no", "false", "off", "0", ""].includes(value));
-    const pushRecursion = valuesOf("push.recursesubmodules");
-    if (!valueRead && recurses(recursion.length > 0 ? recursion : pushRecursion.length > 0 ? pushRecursion : valuesOf("submodule.recurse"))) {
+    const lineRecursion = lineValues.get("submodule.recurse") ?? [];
+    const linePush = lineValues.get("push.recursesubmodules");
+    const given = recursion.length > 0 ? recursion : linePush !== undefined ? [...linePush, ...lineRecursion]
+      : [...lineRecursion, ...(fileValues.get("push.recursesubmodules") ?? []), ...(fileValues.get("submodule.recurse") ?? [])];
+    if (!valueRead && recurses(given)) {
       if (ctx.originRepo !== undefined) deny("outside-write", "A push that also pushes submodules, to repositories the line does not show");
       const what = "A push that also pushes submodules, whose branches the line does not show";
       if (deploying.length > 0) deny("push-deploying", what);

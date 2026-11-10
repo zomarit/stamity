@@ -5662,6 +5662,14 @@ describe("a push that also pushes submodules", () => {
     ["a -c pair for every command", "git -c submodule.recurse=true push origin feat/x", {}],
     ["the files' push setting", "git push origin feat/x", { pushConfig: () => ["push.recursesubmodules=on-demand"] }],
     ["the files' setting for every command", "git push origin feat/x", { pushConfig: () => ["submodule.recurse=true"] }],
+    // TEST CHANGE, justified (REQ-FLOW-134): moved from the run rows. The files' values of both keys now count together,
+    // since a file the guard reads beyond git's own (an include whatever its condition) may hold the off value.
+    ["the files' every-command setting beside their push setting of no", "git push origin feat/x", { pushConfig: () => ["push.recursesubmodules=no", "submodule.recurse=true"] }],
+    // Red before the union: the files' push value of no hid the line's every-command pair, which git reads last.
+    ["the line's every-command pair beside the files' push setting of no", "git -c submodule.recurse=true push origin feat/x", { pushConfig: () => ["push.recursesubmodules=no"] }],
+    ["the line's every-command pair beside its own push pair of no", "git -c push.recurseSubmodules=no -c submodule.recurse=true push origin feat/x", {}],
+    // A pin, asking before and after: the line's off pair for every command does not lift the files' push setting.
+    ["the line's every-command pair of off beside the files' push setting", "git -c submodule.recurse=false push origin feat/x", { pushConfig: () => ["push.recursesubmodules=on-demand"] }],
   ])("asks for %s", (_, command, extra) => {
     expect(personOnlyVerdict(command, { ...ORIGIN, ...extra }), command).toMatchObject({ deny: true, rule: "outside-write", ask: true, act: OUTSIDE });
   });
@@ -5677,7 +5685,6 @@ describe("a push that also pushes submodules", () => {
     ["the no value", "git push --recurse-submodules=no origin feat/x", {}],
     ["the negated option over the files' setting", "git push --no-recurse-submodules origin feat/x", { pushConfig: () => ["push.recursesubmodules=on-demand"] }],
     ["the line's push setting over the files' every-command one", "git -c push.recurseSubmodules=no push origin feat/x", { pushConfig: () => ["submodule.recurse=true"] }],
-    ["the files' push setting over their every-command one", "git push origin feat/x", { pushConfig: () => ["push.recursesubmodules=no", "submodule.recurse=true"] }],
   ])("runs %s", (_, command, extra) => {
     expect(personOnlyVerdict(command, { ...ORIGIN, ...extra }), command).toEqual({ deny: false });
   });
