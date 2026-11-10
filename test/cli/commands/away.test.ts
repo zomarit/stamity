@@ -6,6 +6,7 @@ import { awayCommand } from "../../../src/cli/commands/away.ts";
 import { CLAUDE_HOOKS_DIR } from "../../../src/hooks/model.ts";
 import { PERSON_ONLY_GUARD_FILE, planCoreHookScripts } from "../../../src/hooks/scripts.ts";
 import { CHILD_TIMEOUT_MS } from "../../support/childTimeout.ts";
+import { canonical } from "../../support/identity.ts";
 import { runInProcess } from "../../support/inProcess.ts";
 import { seedGitRepo } from "../../support/repoFixtures.ts";
 import { useTempDir } from "../../support/tempDir.ts";
@@ -325,8 +326,10 @@ describe("stamity away", () => {
 
     /** The real person-only guard for Claude Code, placed in `setup` where emission writes it; returns its path. */
     function placeGuard(setup: string): string {
+      // TEST CHANGE, justified (u-ci1): the package name is read from this checkout's manifest, not spelled, so a renamed
+      // fork runs this case unedited (test/ci/forkIdentity.test.ts); the guard's away marker does not depend on the name.
       const guard = planCoreHookScripts("../../agent-tool-policies.json", "claude", {
-        packageName: "@zomarit/stamity",
+        packageName: canonical().name,
         version: "1.0.0-golden",
         personOnlyGuard: true,
         layout: "claude",
