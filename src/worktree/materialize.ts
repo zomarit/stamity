@@ -450,9 +450,17 @@ async function placeSymlink(
   // The SOURCE is checked, not the destination: a link whose target does not
   // exist is a dangling link in a fresh worktree, which reports as materialized
   // and works for nobody. The destination is still left to the syscall.
+  // [REQ-WORKTREE-019] A source that is itself a link to a directory exposes
+  // that directory's whole subtree, so it is scanned as a real folder would be.
+  // The followed `stat` decides it; a rejection (a broken link, a cycle) reads
+  // as not a directory and the row links as before. `ENOENT` below stays on the
+  // `lstat`, so only a source that is truly missing reads as absent.
   let sourceIsDirectory: boolean;
   try {
-    sourceIsDirectory = (await lstat(source)).isDirectory();
+    const entry = await lstat(source);
+    sourceIsDirectory =
+      entry.isDirectory() ||
+      (entry.isSymbolicLink() && (await stat(source).then((s) => s.isDirectory(), () => false)));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return {

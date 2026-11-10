@@ -450,6 +450,127 @@ describe("worktree materialization — symlink (REQ-WORKTREE-005, REQ-WORKTREE-0
   });
 });
 
+// [REQ-WORKTREE-019] A `symlink` row whose SOURCE is itself a link to a
+// directory exposes that directory's whole subtree exactly as a real folder
+// would, so the credential scan must walk the folder the link points to. The
+// links are made with the `"dir"` type so Windows creates a directory link;
+// POSIX ignores the type.
+describe("worktree materialization — a symlink row whose source is a linked directory (REQ-WORKTREE-019)", () => {
+  it("refuses a linked directory whose target holds a known credential, naming it under the row's path", async () => {
+    const fix = await fixture();
+    await mkdir(join(fix.sourceRoot, "state-real"), { recursive: true });
+    await writeFile(join(fix.sourceRoot, "state-real", "a.json"), '{"a":1}', "utf8");
+    await writeFile(join(fix.sourceRoot, "state-real", ".env.mcp"), SECRET_BODY, "utf8");
+    await symlink(join(fix.sourceRoot, "state-real"), join(fix.sourceRoot, "state"), "dir");
+
+    const result = await materializeEntry(
+      request({ relPath: "state", strategy: "symlink" }),
+      options(fix, { isKnownCredential: isKnownCredentialPath }),
+    );
+
+    expect(result.outcome).toBe("failed");
+    expect(result.reason).toContain("state/.env.mcp");
+    await expect(lstat(join(fix.worktreeRoot, "state"))).rejects.toThrow();
+  });
+
+  it("refuses a linked directory whose target lies outside the source root", async () => {
+    const fix = await fixture();
+    const outside = join(getRoot().dir, "outside-state");
+    await mkdir(outside, { recursive: true });
+    await writeFile(join(outside, ".env.mcp"), SECRET_BODY, "utf8");
+    await symlink(outside, join(fix.sourceRoot, "state"), "dir");
+
+    const result = await materializeEntry(
+      request({ relPath: "state", strategy: "symlink" }),
+      options(fix, { isKnownCredential: isKnownCredentialPath }),
+    );
+
+    expect(result.outcome).toBe("failed");
+    expect(result.reason).toContain("state/.env.mcp");
+    await expect(lstat(join(fix.worktreeRoot, "state"))).rejects.toThrow();
+  });
+
+  it("still links a linked `node_modules` whose target holds a credential basename (the install-tree exemption)", async () => {
+    const fix = await fixture();
+    await mkdir(join(fix.sourceRoot, "modules-real", "pkg"), { recursive: true });
+    await writeFile(join(fix.sourceRoot, "modules-real", "pkg", ".env.mcp"), SECRET_BODY, "utf8");
+    await symlink(join(fix.sourceRoot, "modules-real"), join(fix.sourceRoot, "node_modules"), "dir");
+
+    const result = await materializeEntry(
+      request({ relPath: "node_modules", strategy: "symlink" }),
+      options(fix, { isKnownCredential: isKnownCredentialPath }),
+    );
+
+    expect(result.outcome).toBe("materialized");
+    expect((await lstat(join(fix.worktreeRoot, "node_modules"))).isSymbolicLink()).toBe(true);
+  });
+
+  it("links a broken directory link as today, with nothing to scan", async () => {
+    const fix = await fixture();
+    await symlink(join(fix.sourceRoot, "missing-cfg"), join(fix.sourceRoot, "cfg"), "dir");
+
+    const result = await materializeEntry(
+      request({ relPath: "cfg", strategy: "symlink" }),
+      options(fix, { isKnownCredential: isKnownCredentialPath }),
+    );
+
+    expect(result.outcome).toBe("materialized");
+    expect((await lstat(join(fix.worktreeRoot, "cfg"))).isSymbolicLink()).toBe(true);
+  });
+
+  it("links a source that is a link to a file, with no subtree scan", async () => {
+    const fix = await fixture();
+    await writeFile(join(fix.sourceRoot, "real.txt"), "plain\n", "utf8");
+    await symlink(join(fix.sourceRoot, "real.txt"), join(fix.sourceRoot, "one.txt"), "file");
+
+    const result = await materializeEntry(
+      request({ relPath: "one.txt", strategy: "symlink" }),
+      options(fix, { isKnownCredential: isKnownCredentialPath }),
+    );
+
+    expect(result.outcome).toBe("materialized");
+    expect(await readlink(join(fix.worktreeRoot, "one.txt"))).toBe(join(fix.sourceRoot, "one.txt"));
+  });
+
+  it("links a link cycle as today: the followed stat rejects, which reads as not a directory", async () => {
+    const fix = await fixture();
+    await symlink(join(fix.sourceRoot, "loop-b"), join(fix.sourceRoot, "loop-a"), "dir");
+    await symlink(join(fix.sourceRoot, "loop-a"), join(fix.sourceRoot, "loop-b"), "dir");
+
+    const result = await materializeEntry(
+      request({ relPath: "loop-a", strategy: "symlink" }),
+      options(fix, { isKnownCredential: isKnownCredentialPath }),
+    );
+
+    expect(result.outcome).toBe("materialized");
+  });
+
+  // Guarded like the suite's other permission cases (`CAN_TEST_PERMISSIONS`):
+  // root and Windows do not enforce a directory's mode.
+  it.skipIf(!CAN_TEST_PERMISSIONS)(
+    "links a linked directory whose target cannot be read, as a real unreadable folder is linked",
+    async () => {
+      const fix = await fixture();
+      const target = join(fix.sourceRoot, "locked-real");
+      await mkdir(target, { recursive: true });
+      await writeFile(join(target, ".env.mcp"), SECRET_BODY, "utf8");
+      await symlink(target, join(fix.sourceRoot, "locked"), "dir");
+      await chmod(target, 0o000);
+
+      try {
+        const result = await materializeEntry(
+          request({ relPath: "locked", strategy: "symlink" }),
+          options(fix, { isKnownCredential: isKnownCredentialPath }),
+        );
+
+        expect(result.outcome).toBe("materialized");
+      } finally {
+        await chmod(target, 0o755);
+      }
+    },
+  );
+});
+
 describe("worktree materialization — a directory row covers its subtree (REQ-WORKTREE-003)", () => {
   it("expands a copied directory into one row per file, each with its own digest", async () => {
     const fix = await fixture();
