@@ -490,8 +490,9 @@ remote the repository already had, by `worktree setup`. The third is the startup
 fixed query to the npm registry, at most once a day. The fourth is `gh`, which the unattended
 pre-flight and the run verbs start under the operator's own `gh` login, at the host the
 repository's `origin` names. A land job makes the same calls under its workflow's token. `gh api` goes to REST paths in a closed alphabet, never a URL.
-`run land` alone adds five fixed calls built from checked parts: the merge
-(`PUT …/pulls/<n>/merge`) and four constant GraphQL documents. `run end` adds one more, a review
+`run land` alone adds six fixed calls built from checked parts: the merge
+(`PUT …/pulls/<n>/merge`), four constant GraphQL documents and, in a land job after its own merge,
+the close of the run's issue (`PATCH …/issues/<n>`) with one constant body. `run end` adds one more, a review
 request that names reviewers and carries no text. The fifth is the run verbs'
 `git ls-remote origin`, which `run checkpoint` and `run end` run once before they commit, even where
 the push is then held, `run start` runs, in either mode, when it continues a run whose branch the

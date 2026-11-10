@@ -230,14 +230,17 @@ changed files, the head's check runs, the default branch's rules and protection,
 default branch holds, the check runs on that branch's tip, and for `--fast-forward` the compare of the two commits.
 Under `autonomy.autoShip` it also reads the compare of the tip and the head and the class file at the
 tip, and under `autonomy.reviewTool` the pull request's comments, reviews and reactions. Beside them it makes
-five GitHub calls the door itself still refuses, each on a fixed path built from checked parts:
+six GitHub calls the door itself still refuses, each on a fixed path built from checked parts:
 the merge (`PUT …/pulls/<n>/merge` with the head commit, sent only when `mergeable_state` is
 `clean`, so it never passes the branch's rules as an admin), one constant review-thread query,
 which also names the login the verb trusts and the pull request's author in the same spelling,
-one constant ready-for-review mutation, one constant read of who last edited each comment, and one
-constant mutation resolving a review thread, each by its id (`src/cli/engine/ghRunner.ts::ghMergePull`,
+one constant ready-for-review mutation, one constant read of who last edited each comment, one
+constant mutation resolving a review thread, each by its id, and, in the land job alone after its
+own merge, the close of the run's issue (`PATCH …/issues/<n>` with one constant body, `state: closed`
+and `state_reason: completed`) (`src/cli/engine/ghRunner.ts::ghMergePull`,
 `src/cli/engine/ghRunner.ts::ghReviewThreads`, `src/cli/engine/ghRunner.ts::ghMarkReady`,
-`src/cli/engine/ghRunner.ts::ghCommentEditors`, `src/cli/engine/ghRunner.ts::ghResolveReviewThread`). Its
+`src/cli/engine/ghRunner.ts::ghCommentEditors`, `src/cli/engine/ghRunner.ts::ghResolveReviewThread`,
+`src/cli/engine/ghRunner.ts::ghCloseIssue`). Its
 writes through the door are the status line its row above names, in the pull request's body, and,
 under `autonomy.reviewTool`, the comment that asks the tool for a review. The land job makes the same
 calls under the token its workflow gives it, and reads origin's tip over REST. Every

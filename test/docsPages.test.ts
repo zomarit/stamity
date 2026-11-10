@@ -6109,14 +6109,20 @@ describe("the security pages say one thing about the brake, the lift and the job
     expect(flat).toContain("or when the next commit lands on the default branch");
   });
 
-  it("names the review request beside the door, and the five fixed calls of the land verb, on both pages", () => {
+  // TEST CHANGE, justified: the land job's issue close (`ghCloseIssue`, `PATCH …/issues/<n>` with one constant body) is a
+  // sixth fixed call the door refuses, so both pages now count six and name it; the old count of five is held out.
+  it("names the review request beside the door, and the six fixed calls of the land verb, on both pages", () => {
     const security = flowed(read(SECURITY));
     expect(security).toContain("Also beside the door, the first `run end` with a pull request sends one review request");
     expect(security).toContain("`src/cli/engine/ghRunner.ts::ghRequestReview`");
-    expect(security).toContain("five GitHub calls the door itself still refuses");
+    expect(security).toContain("six GitHub calls the door itself still refuses");
+    expect(security).toContain("the close of the run's issue (`PATCH …/issues/<n>` with one constant body");
+    expect(security).toContain("`src/cli/engine/ghRunner.ts::ghCloseIssue`");
     expect(security, "the page still counts three").not.toContain("three GitHub calls the door");
+    expect(security, "the page still counts five").not.toContain("five GitHub calls the door");
     const mapping = flowed(read(SECURITY_MAPPING));
-    expect(mapping).toContain("`run land` alone adds five fixed calls built from checked parts: the merge (`PUT …/pulls/<n>/merge`) and four constant GraphQL documents");
+    expect(mapping).toContain("`run land` alone adds six fixed calls built from checked parts: the merge (`PUT …/pulls/<n>/merge`), four constant GraphQL documents and, in a land job after its own merge, the close of the run's issue (`PATCH …/issues/<n>`) with one constant body");
+    expect(mapping, "the page still counts five").not.toContain("adds five fixed calls");
     // The fixed calls are the runner's own: a fifth document would make both pages short by one.
     const runner = read("src/cli/engine/ghRunner.ts");
     expect(/const GRAPHQL_DOCUMENTS[^=]*= new Set\(\[([^\]]*)\]/.exec(runner)?.[1]?.split(",").length).toBe(4);
