@@ -8081,7 +8081,7 @@ and a batch of one unit has no peer; either skips the step and records the skip 
 
 One implementer per unit, parallel across disjoint units, single writer per file, under the
 \`implementer\` agent file's Unit contract, Testing rules and Gates; a mis-scoped unit returns
-BLOCKED_* rather than improvising scope. A \`skills\` entry with no clean copy at its commit is BLOCKED_DEPENDENCY, never fetched: \`stamity skill add\` is a planning act, not a build act.
+BLOCKED_* rather than improvising scope. A \`skills\` entry with no clean copy at its commit is BLOCKED_DEPENDENCY, never fetched: \`stamity skill add\` is a planning act, not a build act. Build checks (Proof block) run first.
 
 ## Dispatch contract
 
@@ -8412,6 +8412,8 @@ and \`Base:\` from it. When \`Mode:\` reads \`unattended\`, invoke the \`st-unat
 \`--resume <run-id>\` of any run whose record reads \`Mode: unattended\`, and on \`/st-work\` run on the branch of such a run whose record
 is closed, invoke \`st-unattended\` by name and follow its \`## The morning walk\`, which \`STAMITY_UNATTENDED\` alone does not stop:
 \`--unattended\`, \`run-mode: unattended\` or a chain's next file makes a start on that branch unattended instead, never a \`--resume\`.
+
+**Build checks.** Before any lane is cut, attended or unattended, the per-client copies of each skill a unit names are current, \`stamity check\` reading clean for them; else the unit is BLOCKED_DEPENDENCY naming \`stamity sync\` and a commit of what it wrote. A unit whose files \`stamity gate classify --base HEAD --paths <its files>\` places \`product\`, \`public-contract\` or \`security-sensitive\` (a classify that does not run, exits non-zero or names a failed read counts as \`product\`) first gets a tests-only implementer spawn given its criteria and interfaces only, its report \`<unit>-tests-implementer-r<N>.md\`; then \`stamity gate held --paths <the test paths it returns> --json\` runs, and its result is recorded as \`- <UTC> held: <unit> <digest> <path>=<sha256> …\`, each path with its own hash so a mismatch names the changed file; a null digest outside a work tree is a red gate, as is any exit other than 0. Then the builder spawn names the held paths. A \`docs\`, \`config\` or \`records\` unit skips the spawn in one line, \`- <UTC> no new test: <unit> <class>\`, and has no \`held:\` line. Every Prove pass, and every pass after a fix, runs \`stamity gate held --paths <the held paths> --expect <the digest> --json\` among its gates, the paths and the digest from the unit's newest \`held:\` line; a mismatch is a red gate. The test-runner's result names the held files as run; a held file it does not name is a red gate. The Verdict dispatch names the path of that \`--expect\` result for the reviewer to read; a \`held-test result not handed in\` finding goes to the orchestrator, which runs the check and hands it in, never to a fixer. A builder's or a fixer's BLOCKED_DEPENDENCY on a held test goes to a fresh tests-only spawn with the dispute text, never the code, and its new digest is recorded on a new \`held:\` line. With no \`gate\` verb (an older CLI), \`git hash-object <the held paths>\` runs before the builder spawn, recorded as \`- <UTC> held: <unit> by hand <path>=<blob> …\`, and again at every Prove pass, where a changed blob is a red gate.
 
 ### Side effects
 

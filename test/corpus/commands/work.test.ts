@@ -455,13 +455,19 @@ describe("/st-work — body skeleton", () => {
   // intake's failure outcome (", else BLOCKED_DEPENDENCY here, before any lane is cut", 54) and
   // the pointer dispatch's ", read-only to the builder" (26), each joined to its line, so the
   // line budget did not move.
-  it("leaves room under both budgets: 135 characters before the cut, 15 lines under the cap", async () => {
+  // Moved 2026-11-10 (plan 024 file 1 unit t-work-proof, REQ-FLOW-171, REQ-FLOW-172), 135 to 97
+  // characters and 15 to 13 lines: Build's pointer to the Build checks (" Build checks (Proof
+  // block) run first.", 38 characters, joined to Build's last line) and the Build checks paragraph
+  // itself, one line and its blank, at the Proof block's end below the cut, which the held tests and
+  // the intake's skill-copy check (S69) needed. The rest of the paragraph costs no re-attached text,
+  // and the pin drops by exactly what was spent, so x-recipe's Research sentence keeps its room (S70).
+  it("leaves room under both budgets: 97 characters before the cut, 13 lines under the cap", async () => {
     const file = await workFile;
     const cut = file.raw.indexOf("\n### Specialist pass\n");
     expect(cut).toBeGreaterThan(-1);
-    expect(REATTACH_BUDGET_CHARS - cut).toBeGreaterThanOrEqual(135);
+    expect(REATTACH_BUDGET_CHARS - cut).toBeGreaterThanOrEqual(97);
     const bodyLines = file.parsed.body.replace(/\r?\n$/, "").split(/\r?\n/).length;
-    expect(BODY_LINE_CAP - bodyLines).toBeGreaterThanOrEqual(15);
+    expect(BODY_LINE_CAP - bodyLines).toBeGreaterThanOrEqual(13);
   });
 });
 
@@ -2368,6 +2374,118 @@ describe("/st-work — dispatch contract", () => {
     expect(implementer).toContain(
       "The cell's `skills` are read-only to the builder: a copy missing or not `clean` in this lane returns `BLOCKED_DEPENDENCY` naming the skill, and the builder never runs `stamity skill add` or fetches a skill any other way.",
     );
+  });
+
+  // Added 2026-11-10 (plan 024 file 1 unit t-work-proof, REQ-FLOW-171, REQ-FLOW-172; sign-offs S15,
+  // S21, S56, S57, S69): a code unit's tests are written from its criteria by a tests-only spawn and
+  // held by digest before its builder runs, and every Prove pass checks the digest. The steps sit in
+  // one Proof block paragraph below the re-attachment cut, beside the other record lines, and Build
+  // carries a pointer to it, so they spend 38 characters of the re-attached text and two body lines.
+  describe("held tests at Build and Prove", () => {
+    const CHECKS = "**Build checks.**";
+
+    async function checks(): Promise<string> {
+      const proof = collapse(section(await body(), "### Proof block"));
+      const at = proof.indexOf(CHECKS);
+      expect(at, "the Build checks paragraph is in the Proof block").toBeGreaterThan(-1);
+      return proof.slice(at);
+    }
+
+    it("points Build at the checks that run first", async () => {
+      const build = collapse(section(await body(), "## Phase 3 — Build"));
+      // The skills line s-skills-content pinned stays, word for word, and the pointer follows it.
+      const skills =
+        "A `skills` entry with no clean copy at its commit is BLOCKED_DEPENDENCY, never fetched: `stamity skill add` is a planning act, not a build act.";
+      expect(build).toContain(`${skills} Build checks (Proof block) run first.`);
+    });
+
+    it("checks each named skill's client copies before any lane is cut, attended or unattended (S69, review/109)", async () => {
+      expect(await checks()).toContain(
+        "**Build checks.** Before any lane is cut, attended or unattended, the per-client copies of each skill a unit names are current, `stamity check` reading clean for them; else the unit is BLOCKED_DEPENDENCY naming `stamity sync` and a commit of what it wrote.",
+      );
+    });
+
+    it("holds a code unit's tests from a tests-only spawn before its builder, one hash per path (REQ-FLOW-171, S15, S21)", async () => {
+      const text = await checks();
+      const classify =
+        "A unit whose files `stamity gate classify --base HEAD --paths <its files>` places `product`, `public-contract` or `security-sensitive` (a classify that does not run, exits non-zero or names a failed read counts as `product`) first gets a tests-only implementer spawn given its criteria and interfaces only, its report `<unit>-tests-implementer-r<N>.md`;";
+      const held =
+        "then `stamity gate held --paths <the test paths it returns> --json` runs, and its result is recorded as `- <UTC> held: <unit> <digest> <path>=<sha256> …`, each path with its own hash so a mismatch names the changed file; a null digest outside a work tree is a red gate, as is any exit other than 0.";
+      const builder = "Then the builder spawn names the held paths.";
+      for (const sentence of [classify, held, builder]) expect(text).toContain(sentence);
+      // In that order: the tests are held before the builder is spawned.
+      expect(text.indexOf(classify)).toBeLessThan(text.indexOf(held));
+      expect(text.indexOf(held)).toBeLessThan(text.indexOf(builder));
+      // The class is the classifier's, never one the unit states: the same three classes the implementer builds against.
+      const implementer = collapse(section((await corpusFile("agents/stamity-implementer.md")).parsed.body, "## Testing rules"));
+      expect(implementer).toContain(
+        "A `product`, `public-contract` or `security-sensitive` unit builds against the held tests a tests-only dispatch wrote",
+      );
+      const tests = collapse(section((await corpusFile("agents/stamity-implementer.md")).parsed.body, "## Tests-only dispatch"));
+      expect(tests).toContain("`<unit>-tests-implementer-r<N>.md`");
+    });
+
+    it("skips the tests-only spawn for a docs, config or records unit in one line that is no held line (REQ-FLOW-172, S57)", async () => {
+      const text = await checks();
+      const skip = "A `docs`, `config` or `records` unit skips the spawn in one line, `- <UTC> no new test: <unit> <class>`, and has no `held:` line.";
+      expect(text).toContain(skip);
+      // The reviewer reads a `held:` line as a unit that had a tests-only dispatch, so the skip line never carries one.
+      const line = "- <UTC> no new test: <unit> <class>";
+      expect(line).not.toContain("held:");
+      const reviewer = collapse((await corpusFile("agents/stamity-reviewer.md")).parsed.body);
+      expect(reviewer).toContain("one with a `held:` line in `record.md`; any other unit says `no held tests` in one line");
+      // The implementer's own result says the same words for the class.
+      const implementer = collapse((await corpusFile("agents/stamity-implementer.md")).parsed.body);
+      expect(implementer).toContain("unit adds no test and says `no new test: <class>`");
+    });
+
+    it("checks the held digest at every Prove pass and after every fix, a mismatch red (REQ-FLOW-171)", async () => {
+      const text = await checks();
+      const expectStep =
+        "Every Prove pass, and every pass after a fix, runs `stamity gate held --paths <the held paths> --expect <the digest> --json` among its gates, the paths and the digest from the unit's newest `held:` line; a mismatch is a red gate.";
+      const ran = "The test-runner's result names the held files as run; a held file it does not name is a red gate.";
+      expect(text).toContain(expectStep);
+      expect(text).toContain(ran);
+      // The fixer's own rule reads a changed held test the same way.
+      const fixer = collapse((await corpusFile("agents/stamity-fixer.md")).parsed.body);
+      expect(fixer).toContain("the next Prove pass's `gate held --expect` reads any change to it as a red gate");
+    });
+
+    it("hands the reviewer the --expect result's path and sends a missing one to the orchestrator, never a fixer (S56)", async () => {
+      const text = await checks();
+      expect(text).toContain(
+        "The Verdict dispatch names the path of that `--expect` result for the reviewer to read; a `held-test result not handed in` finding goes to the orchestrator, which runs the check and hands it in, never to a fixer.",
+      );
+      // The finding's name is the reviewer's own, so the route matches what the reviewer raises.
+      const reviewer = collapse((await corpusFile("agents/stamity-reviewer.md")).parsed.body);
+      expect(reviewer).toContain("`held-test result not handed in`");
+      expect(reviewer).toContain("for a unit with held tests the path of its `gate held --expect` result");
+    });
+
+    it("sends a held-test dispute to a fresh tests-only spawn, never the code, and records its new digest (REQ-FLOW-171)", async () => {
+      expect(await checks()).toContain(
+        "A builder's or a fixer's BLOCKED_DEPENDENCY on a held test goes to a fresh tests-only spawn with the dispute text, never the code, and its new digest is recorded on a new `held:` line.",
+      );
+    });
+
+    it("holds the tests by hand with an older CLI that has no gate verb", async () => {
+      expect(await checks()).toContain(
+        "With no `gate` verb (an older CLI), `git hash-object <the held paths>` runs before the builder spawn, recorded as `- <UTC> held: <unit> by hand <path>=<blob> …`, and again at every Prove pass, where a changed blob is a red gate.",
+      );
+    });
+
+    it("keeps the paragraph one line below the cut, at the Proof block's end, above no table", async () => {
+      const raw = (await workFile).raw;
+      const lines = raw.split("\n");
+      const first = lines.findIndex((line) => line.startsWith(CHECKS));
+      expect(first).toBeGreaterThan(-1);
+      expect(lines.filter((line) => line.includes(CHECKS))).toHaveLength(1);
+      expect(lines[first - 1]).toBe("");
+      expect(lines[first + 1]).toBe("");
+      expect(lines[first + 2]).toBe("### Side effects");
+      expect(raw.indexOf(CHECKS)).toBeGreaterThan(raw.indexOf("\n### Specialist pass\n"));
+      expect(raw.indexOf(CHECKS)).toBeGreaterThan(REATTACH_BUDGET_CHARS);
+    });
   });
 
   it("defines how a `stamity <verb>` call runs before the first one, with a by-hand ledger fallback (REQ-FLOW-002, REQ-FLOW-003)", async () => {
