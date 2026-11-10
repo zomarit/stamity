@@ -6,7 +6,7 @@ confidence: high
 summary: the measurements page renders a composed run of record only when every safety case was measured in a run dated after the previous release, and a chain must also list them in its results file
 reviewBy: 2027-02-04
 validatedAgainst: "src/cli/docs/measurements.ts readPriorRun and proveChain and test/cli/docs/measurements.test.ts at bcf4eeb9; evals/runs/2026-10-27-run-54, -run-55 and -run-57 RESULTS.md line 12 at records fe785c17"
-integrity: sha256:13051fcef7ec05cc67ab095fd1884fbd7a4e1b65bf5ea0a47dffca74983a00bd
+integrity: sha256:e7839cf3af22a1696fcc6a05e4a3a0ffb6d9247e218aa0ca7f34a9aa289b31d9
 ---
 
 The measurements page names a run of record when that run is a full measure, composes directly with
@@ -14,8 +14,8 @@ one of its own release, or shows every safety case measured in a run of its rele
 release only when its id's date is after the previous release's date in `CHANGELOG.md`. A run of
 record, full or composed, dated on or before that date is refused by name, and a run composed one link onto an earlier release's full measure is refused too unless it re-measured every
 safety case. A composed run whose prior is itself composed and which carries no list of them cannot
-be the run of record, even when it passes. So before a release's fix run, check whether the chain will
-carry the list; if it will not, the release needs a full measure first.
+be the run of record, even when it passes. So a release whose fix run's chain will not carry the list
+has no run of record until a full measure runs.
 
 ## Why
 
@@ -40,12 +40,13 @@ Review horizon: 2027-02-04, or sooner if the backstop or the list's section chan
 
 ## How to apply
 
-- Plan a release's eval so the whole safety set and every moved case are measured on a candidate of
-  that release; a safety case that did not move is added by name.
+- A release's eval yields a run of record when the whole safety set and every moved case are
+  measured on a candidate of that release; a safety case that did not move enters that measure by
+  name.
 - The chain is read from each run's `RESULTS.md` composition section: a "prior complete run" line
   whose named run has its own such line is two links.
 - A run two links from a full measure with no `## 0a. Safety measure` section still counts as the
-  composed release check; it is not the run of record. The fix is a run that carries the section, or
-  a full measure before the composed fix run.
+  composed release check; it is not the run of record. What clears that is a run that carries the
+  section, or a full measure before the composed fix run.
 - On the third release since the full measure, or 30 days after it, no composed run renders, one link
-  included: run a full measure.
+  included, so only a full measure can be the run of record.

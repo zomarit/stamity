@@ -3,18 +3,20 @@ id: a-hand-typed-record-stamp-is-checked-by-nothing
 title: a hand-typed record stamp is checked by nothing
 date: 2026-11-10
 confidence: medium
-summary: the run and ledger verbs stamp their own lines from the clock, but a stamp typed by hand into a run record is checked by nothing; five typed stamps were wrong in October 2026
+summary: the run and ledger verbs take the stamps they write from the clock, but a stamp typed by hand into a run record is checked by nothing; five typed stamps were wrong in October 2026
 reviewBy: 2027-02-10
-validatedAgainst: "src/cli/commands/run.ts:1847 and :3033, src/cli/commands/ledger.ts:925 and src/runs/morning.ts:222 at bcf4eeb9; a person-only guard probe on 2026-11-10"
-integrity: sha256:040de7c61cc8b636dccb3d20ee0010df30523cd356e32ffa800b390c03501d55
+validatedAgainst: "src/cli/commands/run.ts:1847 and :3033, src/cli/commands/ledger.ts:596, src/runs/ledgerStore.ts:942-943 and src/runs/morning.ts:222 at bcf4eeb9; a person-only guard probe on 2026-11-10"
+integrity: sha256:caf0a0b51b105fee9df47a224df5470ec0dff84cf64a3b6def221d90bb2c24e0
 ---
 
-The run and ledger verbs read the clock when they write their own lines (`src/cli/commands/run.ts:1847`
-and `:3033`, `src/cli/commands/ledger.ts:925`, through `ctx.app.runtime.clock`). A line a session
-appends by hand to a run's `record.md` or to a report carries whatever time was typed, and nothing in
-`src/runs/` or the run verbs compares a hand-written stamp with the clock or with the line before it.
-A stamp estimated from memory therefore lands as fact, and a later reader takes it as the order
-things happened in.
+The run and ledger verbs take the stamps they write from the clock: the run verb's review-request
+notice in a run's `record.md` (`src/cli/commands/run.ts:1847`, `new Date()`) and its run-ended marker
+(`:3033`, `ctx.app.runtime.clock`), and the ledger's one dated field, a retired row's day
+(`src/cli/commands/ledger.ts:596` hands the same clock to `retireRow`, which writes the day at
+`src/runs/ledgerStore.ts:942-943`). A line a session appends by hand to a run's `record.md` or to a
+report carries whatever time was typed, and nothing in `src/runs/` or the run verbs compares a
+hand-written stamp with the clock or with the line before it. A stamp estimated from memory
+therefore lands as fact, and a later reader takes it as the order things happened in.
 
 ## Why
 

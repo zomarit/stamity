@@ -6,7 +6,7 @@ confidence: high
 summary: macOS pgrep and pkill read options only before the pattern, so a later -n or -U becomes one more pattern; a Linux-style pkill on 2026-09-23 signalled every app on the machine
 reviewBy: 2027-02-10
 validatedAgainst: "list-only pgrep runs on macOS 27.2 on 2026-11-10, options after and before the pattern"
-integrity: sha256:308c7c80d8bd18f228c2a40089f82a7d0dd770aa31cbd77ee9281cb02f6db417
+integrity: sha256:30dec98f1560d3975fcb04472b3392efbc93b4127c59867f2feda1d75788be42
 ---
 
 On macOS (BSD) `pgrep` and `pkill` stop reading options at the first operand, so options written
@@ -29,7 +29,6 @@ the `pgrep` check above. Review horizon: retire if the lanes stop running on mac
 
 ## How to apply
 
-A hung command a session started is stopped by its process id, or by the tool's own task stop; the
-test fixtures do the same (`test/hooks/portableRunner.test.ts` kills its hook by process id). Where a
-pattern search cannot be avoided, every option goes before the pattern, and `pgrep -lf` shows the
-match before anything is signalled.
+A hung command a session started is stopped by its process id, or by the tool's own task stop.
+Where a pattern search cannot be avoided, every option goes before the pattern, and `pgrep -lf`
+shows the match before anything is signalled.
