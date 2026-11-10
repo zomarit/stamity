@@ -3548,17 +3548,61 @@ describe("a push read against the push configuration in git's files", () => {
   });
 
   // Red on 091d999b: each value was read as a plain one, or its continuation hid the line after it.
+  // TEST CHANGE, justified (REQ-FLOW-134): the reader now decodes values by git's own grammar, so the rows git decodes
+  // to a plain value (an escape git knows, a quote inside a value, a comment mark inside quotes or with no blank before
+  // it, an escaped include path) left this list for the decoding rows below, each with a neighbour that asks; the rows
+  // git refuses to decode joined it, and every row left here still asks.
   it.each([
     // git joins the next line to the value, so the push URL after it is origin's, not the second section's.
     ["a value continued onto the next line", `${ORIGIN}\tfetch = +refs/heads/*:refs/remotes/origin/*\\\n[remote "spare"]\n\tpushurl = https://github.com/other/repo.git\n`],
-    ["a value holding an escape", '[remote "origin"]\n\turl = "https://github.com/acme/app.git\\t"\n'],
-    ["a value holding a quote inside it", '[remote "origin"]\n\turl = https://github.com/"acme"/app.git\n'],
-    ["a comment mark inside a quoted value", '[remote "origin"]\n\turl = "https://github.com/acme/app.git ;x"\n'],
-    ["a comment mark git cuts with no blank before it", `${ORIGIN}\tpush = refs/heads/feat/x:refs/heads/feat/x;refs/heads/main\n`],
-    ["an include path holding an escape", `${ORIGIN}[include]\n\tpath = "../a\\\\b.gitconfig"\n`],
+    ["a value holding an escape git does not know", '[remote "origin"]\n\turl = https://github.com/acme/app.git\\q\n'],
+    ["a value whose quote is never closed", '[remote "origin"]\n\turl = "https://github.com/acme/app.git\n'],
     ["an include path git expands from its install", `${ORIGIN}[include]\n\tpath = %(prefix)/etc/more.gitconfig\n`],
   ])("asks for a push to origin where the repository's file holds %s", async (_, config) => {
     const guard = await placeGuard("claude", { ".git/config": config });
+    expect(decide("claude", guard, "git push -u origin feat/x")).toMatchObject({ deny: true, ask: true });
+  });
+
+  // Red before the decoder: each form below made the whole reading partial, so every push asked on such a machine.
+  it("reads an include path git wrote with an escaped backslash, as git does, on every host", async () => {
+    // One backslash in the decoded path: a separator on Windows, a name's character elsewhere, and the seeded file sits
+    // at the same place either way.
+    const config = `${ORIGIN}[include]\n\tpath = sub\\\\inc.gitconfig\n`;
+    const guard = await placeGuard("claude", { ".git/config": config, ".git/sub\\inc.gitconfig": "[credential]\n\thelper = store\n" });
+    expect(decide("claude", guard, "git push -u origin feat/x")).toEqual({ deny: false });
+    // One fact away: the included file moves origin, and the same push asks.
+    await getRepo().seedFiles({ ".git/sub\\inc.gitconfig": '[remote "origin"]\n\tpushurl = https://github.com/other/repo.git\n' });
+    expect(decide("claude", guard, "git push -u origin feat/x")).toMatchObject({ deny: true, ask: true, reason: expect.stringContaining(ruleSaid("outside-write")) });
+  });
+
+  it("runs a push beside a value continued onto the next line in a section the guard does not read", async () => {
+    const guard = await placeGuard("claude", { ".git/config": `${ORIGIN}[alias]\n\tlg = log \\\n\t\t--oneline --graph\n\tst = status\n` });
+    expect(decide("claude", guard, "git push -u origin feat/x")).toEqual({ deny: false });
+    // One fact away: the line after the continued one holds a push URL, and the reader sees it as git does.
+    await getRepo().seedFiles({ ".git/config": `[alias]\n\tlg = log \\\n\t\t--oneline\n${ORIGIN}\tpushurl = https://github.com/other/repo.git\n` });
+    expect(decide("claude", guard, "git push -u origin feat/x")).toMatchObject({ deny: true, ask: true });
+  });
+
+  it.each([
+    ["a quote inside it", '[remote "origin"]\n\turl = https://github.com/"acme"/app.git\n'],
+    ["an escaped quote and backslash in a quoted value of a key the guard does not read", `${ORIGIN}[branch "feat/x"]\n\tdescription = "a \\"b\\" \\\\ c"\n`],
+  ])("runs a push to origin where a value holds %s, decoded as git does", async (_, config) => {
+    const guard = await placeGuard("claude", { ".git/config": config });
+    expect(decide("claude", guard, "git push -u origin feat/x")).toEqual({ deny: false });
+  });
+
+  it("cuts a refmap at a comment mark git cuts at, with no blank before it, and reads what is left", async () => {
+    const guard = await placeGuard("claude", { ".git/config": `${ORIGIN}\tpush = refs/heads/feat/x:refs/heads/feat/x;refs/heads/main\n` });
+    expect(decide("claude", guard, "git push origin feat/x")).toEqual({ deny: false });
+    // One fact away: what is left before the mark lands on the default branch, and the same push asks.
+    await getRepo().seedFiles({ ".git/config": `${ORIGIN}\tpush = refs/heads/feat/x:refs/heads/main;refs/heads/feat/x\n` });
+    expect(decide("claude", guard, "git push origin feat/x")).toMatchObject({ deny: true, ask: true, reason: expect.stringContaining(ruleSaid("push-default")) });
+  });
+
+  it("reads a push URL inside quotes up to its closing quote, past a comment mark inside them", async () => {
+    const guard = await placeGuard("claude", { ".git/config": `${ORIGIN}\tpushurl = "https://github.com/acme/app.git" ; the origin\n` });
+    expect(decide("claude", guard, "git push -u origin feat/x")).toEqual({ deny: false });
+    await getRepo().seedFiles({ ".git/config": `${ORIGIN}\tpushurl = "https://github.com/other/repo.git;x"\n` });
     expect(decide("claude", guard, "git push -u origin feat/x")).toMatchObject({ deny: true, ask: true });
   });
 

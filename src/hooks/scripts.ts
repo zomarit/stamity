@@ -458,7 +458,11 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // Moved again 2026-11-11 by the person-only guard hardening (REQ-FLOW-134), by what was measured: 372,232 bytes /
   // 7,563 lines (copilot, generated), past both rows, because a push on a line that also moves a branch's upstream is
   // now read against that move. 370,561 + 1,671 = 372,232 bytes; 7,525 + 38 = 7,563 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 372_232, lines: 7_563 },
+  // Moved again 2026-11-11 by the person-only guard hardening (REQ-FLOW-134), by what was measured: 372,778 bytes /
+  // 7,595 lines (copilot, generated), past both rows, because the configuration reader now decodes each value by git's
+  // own grammar, a continued value joined, where it read such a value as partial. 372,232 + 546 = 372,778 bytes;
+  // 7,563 + 32 = 7,595 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 372_778, lines: 7_595 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -4457,9 +4461,9 @@ const GUARD_GIT_REWRITES_MAX = 256;
  * link that cannot be resolved, a file it cannot read, a bound passed, an included file setting a remote, URL-rewrite or
  * branch-remote key (its condition is not read; an included push key is read, which only adds denials), configuration
  * the hook's environment sets (GIT_CONFIG_COUNT, GIT_CONFIG_PARAMETERS), more than REWRITES_MAX URL rewrite rules, a
- * line ending in an odd run of backslashes (git joins the next line to it), or a value of a key it reads that it does
- * not decode as git does (an escape, a quote inside it, a comment mark git cuts at or one inside a quoted span, an
- * include path starting %().
+ * value git itself refuses (an escape other than \\ \" \n \t \b, or a quote left open), or an include path starting %(.
+ * Every value is decoded by git's grammar (configValue): blanks cut at both ends, an unquoted # or ; starting a comment,
+ * quotes holding blanks and comment marks, those escapes, and a backslash ending a line joining the next one to it.
  *
  * `ghDefaultOf`:
  * Where a gh call naming no repository lands from a place (REQ-FLOW-134): GH_REPO in the hook's environment, else the
@@ -5739,6 +5743,42 @@ function configFiles(dirs) {
   return files;
 }
 
+/**
+ * A value as git's config reader decodes it, from text on lines[at]: blanks cut at both ends, an unquoted # or ;
+ * starting a comment, quotes holding blanks and comment marks, the escapes \\ \" \n \t \b, and a backslash ending a
+ * line joining the next. value is null where git refuses the file: another escape, or a quote left open.
+ */
+function configValue(lines, at, text) {
+  let value = "";
+  let quoted = false;
+  let cut = -1;
+  for (let i = 0; ; ) {
+    if (i >= text.length) return { value: quoted ? null : cut === -1 ? value : value.slice(0, cut), at };
+    const c = text[i++];
+    if (!quoted && /[ \t\v\f\r]/.test(c)) {
+      if (cut === -1) cut = value.length;
+      if (value !== "") value += c;
+      continue;
+    }
+    if (!quoted && (c === "#" || c === ";")) return { value: cut === -1 ? value : value.slice(0, cut), at };
+    cut = -1;
+    if (c === "\\") {
+      if (i >= text.length) {
+        if (at + 1 < lines.length) {
+          at += 1;
+          text = lines[at];
+          i = 0;
+        }
+        continue;
+      }
+      const escaped = { "\\": "\\", '"': '"', n: "\n", t: "\t", b: "\b" }[text[i++]];
+      if (escaped === undefined) return { value: null, at };
+      value += escaped;
+    } else if (c === '"') quoted = !quoted;
+    else value += c;
+  }
+}
+
 /** What git's merged configuration says about remotes: see GUARD_GIT_INCLUDE_DEPTH_MAX in the engine. */
 function configOf(dirs) {
   const remotes = new Map();
@@ -5778,7 +5818,9 @@ function configOf(dirs) {
     }
     let kind = "";
     let sub = null;
-    for (const line of text.split(/\r?\n/)) {
+    const lines = text.split(/\r?\n/);
+    for (let at = 0; at < lines.length; at += 1) {
+      const line = lines[at];
       // Each pattern here is linear in the line: no two adjacent runs can share a character (the hook's timeout).
       const head = /^\s*\[\s*([A-Za-z][\w.-]*)\s*(?:"((?:[^"\\]|\\.)*)"\s*)?\]/.exec(line);
       if (head !== null) {
@@ -5791,22 +5833,16 @@ function configOf(dirs) {
       const pair = /^\s*([A-Za-z][\w-]*)\s*=(.*)$/.exec(line) ?? /^\s*([A-Za-z][\w-]*)\s*(?:[#;].*)?$/.exec(line);
       if (pair === null) continue;
       const key = pair[1].toLowerCase();
-      const raw = pair[2] ?? "";
       const bare = pair[2] === undefined;
-      const value = bare ? "true" : raw.replace(/\s[#;].*$/, "").trim().replace(/^"([\s\S]*)"$/, "$1");
+      // The value as git decodes it, in any section, joined with the lines a backslash continues it onto, so a key or a
+      // section head after it is where git puts it. A value git refuses, and an include path git expands from its
+      // install, make the reading partial.
+      const decoded = bare ? { value: "true", at } : configValue(lines, at, pair[2]);
+      at = decoded.at;
+      if (decoded.value === null) partial = true;
+      const value = decoded.value ?? "";
       const including = (kind === "include" || kind === "includeif") && key === "path";
-      const used = including || (kind === "remote" && ["url", "pushurl", "push", "mirror", "gh-resolved", "pushdefault"].includes(key)) ||
-        (kind === "url" && (key === "insteadof" || key === "pushinsteadof")) || (kind === "branch" && ["remote", "pushremote", "merge"].includes(key)) ||
-        (kind === "push" && ["default", "followtags", "recursesubmodules"].includes(key)) || (kind === "submodule" && sub === null && key === "recurse");
-      // An odd run of backslashes ending a line joins the next line to its value, in any section, so a key or a section
-      // head after it is not where this reading puts it.
-      let end = raw.length;
-      while (end > 0 && /\s/.test(raw[end - 1])) end -= 1;
-      let slashes = 0;
-      while (slashes < end && raw[end - 1 - slashes] === "\\") slashes += 1;
-      // A value of a key the guard reads that this reading does not decode as git does: an escape, a quote inside it, a
-      // comment mark git cuts at or one inside a quoted span, an include path git expands. Either makes the reading partial.
-      if (slashes % 2 === 1 || (used && (raw.includes("\\") || /["#;]/.test(value) || /"[^"]*[#;]/.test(raw) || (including && value.startsWith("%("))))) partial = true;
+      if (including && value.startsWith("%(")) partial = true;
       if (including) {
         if (bare) continue;
         // A ~user/ path names another account's home, which this reading does not place.
