@@ -592,8 +592,13 @@ by `src/config/autonomy.ts::unaskedPushRepoEntry`, and the lift is made in
 the outside-write check that places where a push goes among them, reads one system file only: the file
 `GIT_CONFIG_SYSTEM` names, else `/etc/gitconfig`. A remote or a URL rewrite set in another system file,
 such as Homebrew's, is not seen there, so a push can reach a repository other than the one the guard
-places it at. And Git for Windows reads its system file from its own install folder, which is not on
-the lift's list, so a push key set only there is not read and the lift can still run that push unasked.
+places it at. And the lift reads only four system files: `/etc/gitconfig`,
+`/opt/homebrew/etc/gitconfig`, `/usr/local/etc/gitconfig` and the file `GIT_CONFIG_SYSTEM` names. A git
+build whose system file sits anywhere else reads a file the lift never reads. Git for Windows, which
+keeps it under its own install folder, is one, and Apple's Command Line Tools git is likely another,
+though that was not checked. A `push.followTags` or a remote's `mirror` set only in such a file is not seen,
+so a lifted `git push <remote> <branch>` to a listed repository can then also push tags, or mirror,
+with no ask.
 
 What stays open is named here, as accepted risk:
 
