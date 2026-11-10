@@ -1,11 +1,12 @@
 import type { Dirent } from "node:fs";
-import { readFile, readdir, realpath, stat } from "node:fs/promises";
+import { readdir, realpath, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { isPlainObject, parseYamlStrict } from "../config/parse.ts";
 import type { Framework, LanguageVersion, PackageEntry, RepoInfo } from "../types/detect.ts";
 import { EngineError } from "../types/errors.ts";
 import { STATE_DIR } from "../types/markers.ts";
 import type { DetectedSummary } from "../types/detect.ts";
+import { DETECT_READ_MAX_BYTES, readHead } from "./boundedRead.ts";
 import { detectPackageManager } from "./packageManager.ts";
 
 /**
@@ -1266,8 +1267,14 @@ async function readDirEntries(path: string): Promise<Dirent[]> {
   return probe<Dirent[]>(() => readdir(path, { withFileTypes: true }), []);
 }
 
+/**
+ * A root file's text, or null when it is absent, unreadable, not a regular file
+ * (a link, a FIFO, a folder) or over {@link DETECT_READ_MAX_BYTES}: a refused
+ * file reads as absent, never as a cut-off text.
+ */
 async function readText(path: string): Promise<string | null> {
-  return probe<string | null>(() => readFile(path, "utf8"), null);
+  const read = await readHead(path, DETECT_READ_MAX_BYTES);
+  return read === null || read.truncated ? null : read.text;
 }
 
 /** A JSON file as an object, or null when it is absent, unreadable, or not valid JSON. */

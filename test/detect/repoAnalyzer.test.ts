@@ -1,6 +1,9 @@
-import { mkdir, symlink } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { closeSync, constants as fsConstants, openSync } from "node:fs";
+import { mkdir, symlink, writeFile } from "node:fs/promises";
 import type * as NodeFsPromises from "node:fs/promises";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { COPILOT_SETUP_STEPS_PATH } from "../../src/adapters/copilot.ts";
 import {
@@ -914,6 +917,153 @@ describe("toolchain probes", () => {
 
     const none = await seedRepo({ "src/index.ts": "" });
     await expect(detectDataArtifacts(none)).resolves.toBe(false);
+  });
+});
+
+/**
+ * Gives every reader blocked opening `fifo` an end of file: a writer that opens
+ * and closes at once. Sync calls on purpose: a reader blocked in `open()` holds
+ * a thread of the pool an async `open` would queue behind. `ENXIO` means no
+ * reader has it open right now, which is the state this helper is driving to.
+ */
+function releaseFifoReaders(fifo: string): void {
+  try {
+    closeSync(openSync(fifo, fsConstants.O_WRONLY | fsConstants.O_NONBLOCK));
+  } catch {
+    // No reader on the other end at this instant; the caller's loop tries again.
+  }
+}
+
+/**
+ * Makes `name` a FIFO at the root of a fresh repository and analyses it.
+ * `finishedAlone` says whether the analysis settled within 5 s with no writer
+ * on the other end. After that, any reader still waiting is freed, so a
+ * failing run ends on the caller's assertion rather than on the case's timeout
+ * with a pool thread still held.
+ */
+async function analyzeBesideFifo(name: string): Promise<{ finishedAlone: boolean; info: RepoInfo }> {
+  const root = await seedRepo();
+  const fifo = join(root, name);
+  const made = spawnSync("mkfifo", [fifo], { encoding: "utf8", timeout: 10_000 });
+  expect(made.status, made.stderr).toBe(0);
+
+  let settled = false;
+  const isSettled = (): boolean => settled;
+  const analysis = analyzeRepo(root).finally(() => {
+    settled = true;
+  });
+  const finishedAlone = await Promise.race([analysis.then(() => true), sleep(5_000, false)]);
+  for (let tries = 0; !isSettled() && tries < 400; tries += 1) {
+    releaseFifoReaders(fifo);
+    // eslint-disable-next-line no-await-in-loop -- each release waits for the readers it freed to move on
+    await sleep(25);
+  }
+  return { finishedAlone, info: await analysis };
+}
+
+/**
+ * REQ-FLOW-182: a root file detection reads, when it is a link, not a regular
+ * file, or over 1 MiB, reads as absent, and the analysis still finishes. Each
+ * case beside a control seeded as a regular file, so the assertion tells the
+ * refused read from a probe that never looked.
+ */
+describe("REQ-FLOW-182 the root files detection reads", () => {
+  const RUFF_PYPROJECT = '[project]\nname = "app"\n\n[tool.ruff]\nline-length = 100\n';
+  const SCRIPTED_MANIFEST = json({ name: "app", scripts: { test: "vitest run", lint: "eslint ." } });
+
+  it("reads a linked pyproject.toml as absent, while python is still found by its presence", async () => {
+    const control = await analyze({ "pyproject.toml": RUFF_PYPROJECT });
+    expect(control.linters).toContain("ruff");
+
+    const root = await seedRepo();
+    const target = getRepo().path(`outside-pyproject-${caseCounter}.toml`);
+    await writeFile(target, RUFF_PYPROJECT);
+    await symlink(target, join(root, "pyproject.toml"), "file");
+
+    const info = await analyzeRepo(root);
+    expect(info.linters).not.toContain("ruff");
+    expect(info.languages).toContain("python");
+  });
+
+  it("reads a linked package.json as absent, so it gives no scripts and no javascript", async () => {
+    const control = await analyze({ "package.json": SCRIPTED_MANIFEST });
+    expect(control.packageScripts).toEqual(["test", "lint"]);
+    expect(control.languages).toContain("javascript");
+
+    const root = await seedRepo();
+    const target = getRepo().path(`outside-package-${caseCounter}.json`);
+    await writeFile(target, SCRIPTED_MANIFEST);
+    await symlink(target, join(root, "package.json"), "file");
+
+    const info = await analyzeRepo(root);
+    expect(info.packageScripts).toBeUndefined();
+    expect(info.languages).not.toContain("javascript");
+  });
+
+  it("reads a valid package.json over 1 MiB as absent, and one just under it as before", async () => {
+    const manifest = (padding: number): string =>
+      json({ name: "app", description: "x".repeat(padding), scripts: { test: "vitest run" } });
+    const under = manifest(1_000_000);
+    const over = manifest(1_048_576);
+    expect(Buffer.byteLength(under)).toBeLessThan(1_048_576);
+    expect(Buffer.byteLength(over)).toBeGreaterThan(1_048_576);
+
+    const read = await analyze({ "package.json": under });
+    expect(read.packageScripts).toEqual(["test"]);
+    expect(read.languages).toContain("javascript");
+
+    const refused = await analyze({ "package.json": over });
+    expect(refused.packageScripts).toBeUndefined();
+    expect(refused.languages).not.toContain("javascript");
+  });
+
+  it("returns with no node signal when package.json is a directory", async () => {
+    // Behaviour that must not change: a directory never read as a manifest.
+    const info = await analyze({ "package.json/README.md": "# not a manifest\n" });
+
+    expect(info.packageScripts).toBeUndefined();
+    expect(info.packageManager).toBeUndefined();
+    expect(info.languages).not.toContain("javascript");
+    expect(info.languages).not.toContain("typescript");
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "reads a FIFO at pyproject.toml as absent, and finishes with no writer on the other end",
+    async () => {
+      const { finishedAlone, info } = await analyzeBesideFifo("pyproject.toml");
+
+      expect(finishedAlone).toBe(true);
+      expect(info.languages).toContain("python");
+      expect(info.linters).toEqual([]);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "reads a FIFO at package.json as absent, and finishes with no writer on the other end",
+    async () => {
+      // Every reader of this path, the package-manager pin's included, must
+      // refuse it before opening: one that waits is enough to hang the analysis.
+      const { finishedAlone, info } = await analyzeBesideFifo("package.json");
+
+      expect(finishedAlone).toBe(true);
+      expect(info.packageScripts).toBeUndefined();
+      expect(info.packageManager).toBeUndefined();
+      expect(info.languages).not.toContain("javascript");
+    },
+  );
+
+  it("still lists a workspace package reached through a linked folder", async () => {
+    // Behaviour that must not change: only the read file itself must be
+    // regular; the folder above it may be a link (the workspace walk's contract).
+    const root = await seedRepo({
+      "package.json": json({ name: "root", workspaces: ["packages/*"] }),
+      "external/tool/package.json": json({ name: "@acme/tool" }),
+      "packages/.keep": "",
+    });
+    await symlink(join(root, "external", "tool"), join(root, "packages", "tool"), "dir");
+
+    const info = await analyzeRepo(root);
+    expect(info.monorepoPackages).toEqual([{ name: "@acme/tool", path: "packages/tool" }]);
   });
 });
 

@@ -1,6 +1,7 @@
-import { readFile, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { isPlainObject } from "../config/parse.ts";
+import { DETECT_READ_MAX_BYTES, readHead } from "./boundedRead.ts";
 
 /**
  * Which package manager a repository runs on.
@@ -113,15 +114,15 @@ async function isFile(path: string): Promise<boolean> {
   }
 }
 
-/** Root manifest as an object, or null when it is absent, unreadable, or not valid JSON. */
+/**
+ * Root manifest as an object, or null when it is absent, unreadable, not a
+ * regular file (a link, a FIFO, a folder), over {@link DETECT_READ_MAX_BYTES},
+ * or not valid JSON.
+ */
 async function readManifest(path: string): Promise<Record<string, unknown> | null> {
-  let raw: string;
-  try {
-    raw = await readFile(path, "utf8");
-  } catch (error) {
-    if (typeof (error as NodeJS.ErrnoException).code === "string") return null;
-    throw error;
-  }
+  const read = await readHead(path, DETECT_READ_MAX_BYTES);
+  if (read === null || read.truncated) return null;
+  const raw = read.text;
   try {
     const parsed: unknown = JSON.parse(raw);
     return isPlainObject(parsed) ? parsed : null;

@@ -1,3 +1,5 @@
+import { mkdir, symlink, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   detectPackageManager,
@@ -126,6 +128,49 @@ describe("detectPackageManager", () => {
       name: "npm",
       lockfile: null,
       fromPackageJsonField: false,
+    });
+  });
+});
+
+/**
+ * REQ-FLOW-182: the root manifest this module reads is read like every other
+ * root file detection reads. A link, or a file over 1 MiB, reads as absent, so
+ * the lockfile alone names the manager. Each pin names `pnpm` beside a
+ * `yarn.lock`, so a pin that was read and one that was refused give different
+ * answers.
+ */
+describe("REQ-FLOW-182 the root manifest detectPackageManager reads", () => {
+  const PINNED = json({ name: "app", packageManager: "pnpm@9.0.0" });
+  const LOCKFILE_ONLY: PackageManagerInfo = { name: "yarn", lockfile: "yarn.lock", fromPackageJsonField: false };
+
+  it("reads a linked package.json as absent, so the lockfile alone decides", async () => {
+    const repo = getRepo();
+    const root = repo.path("root");
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, "yarn.lock"), "");
+    const target = repo.path("outside-package.json");
+    await writeFile(target, PINNED);
+    await symlink(target, join(root, "package.json"), "file");
+
+    await expect(detectPackageManager(root)).resolves.toEqual(LOCKFILE_ONLY);
+  });
+
+  it("reads a valid package.json over 1 MiB as absent, so the lockfile alone decides", async () => {
+    const over = json({ name: "app", description: "x".repeat(1_048_576), packageManager: "pnpm@9.0.0" });
+    expect(Buffer.byteLength(over)).toBeGreaterThan(1_048_576);
+
+    await expect(detect({ "package.json": over, "yarn.lock": "" })).resolves.toEqual(LOCKFILE_ONLY);
+  });
+
+  it("reads a regular package.json under the cap as before, so its pin decides", async () => {
+    // Behaviour that must not change: the cap refuses only what is over it.
+    const under = json({ name: "app", description: "x".repeat(1_000_000), packageManager: "pnpm@9.0.0" });
+    expect(Buffer.byteLength(under)).toBeLessThan(1_048_576);
+
+    await expect(detect({ "package.json": under, "yarn.lock": "" })).resolves.toEqual({
+      name: "pnpm",
+      lockfile: "yarn.lock",
+      fromPackageJsonField: true,
     });
   });
 });

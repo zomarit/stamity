@@ -281,6 +281,11 @@ const PLAN_MAP: Readonly<Record<string, PlanEntry>> = {
   // engine and in the CLI, so it sits with the other shared leaves, below all
   // of them.
   "src/shared/programPath.ts": { unit: "s3-program-path", wave: 1 },
+  // TEST CHANGE, justified (REQ-FLOW-182): a new file needs its row. The bounded
+  // regular-file reads, Node built-ins only, left the wave-4 ready report so the
+  // wave-2 repository and package-manager readers can read through them too; both
+  // waves read it, so it sits with the other leaves at wave 1.
+  "src/detect/boundedRead.ts": { unit: "b1-detect-readers", wave: 1 },
   "src/denyscan/denyScan.ts": { unit: "p1-04", wave: 1 },
   "src/mcp/secretScan.ts": { unit: "p1-05", wave: 1 },
   "src/roster/triggers.ts": { unit: "p1-06", wave: 1 },

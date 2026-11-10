@@ -133,6 +133,7 @@ import * as packageManager from "../detect/packageManager.ts";
 import * as stackSupport from "../detect/stackSupport.ts";
 import * as verificationGates from "../detect/verificationGates.ts";
 import * as detectReadiness from "../detect/readiness.ts";
+import * as boundedRead from "../detect/boundedRead.ts";
 import * as skillsSources from "../skills/sources.ts";
 import * as skillsScriptDetect from "../skills/scriptDetect.ts";
 import * as skillsFetch from "../skills/fetch.ts";
@@ -353,6 +354,8 @@ export interface EngineRegistry {
     readonly verificationGates: typeof verificationGates;
     /** Whether a repository is ready for an unattended run (`stamity ready`). */
     readonly readiness: typeof detectReadiness;
+    /** Capped reads of a regular file, shared by the readers above. */
+    readonly boundedRead: typeof boundedRead;
   };
   /** Skills fetched from another repository into this one. */
   readonly skills: {
@@ -583,6 +586,7 @@ export function createEngine(): EngineRegistry {
       stackSupport,
       verificationGates,
       readiness: detectReadiness,
+      boundedRead,
     },
     skills: { sources: skillsSources, scriptDetect: skillsScriptDetect, fetch: skillsFetch },
     emit: {
