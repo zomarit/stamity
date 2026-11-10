@@ -2,7 +2,7 @@
 id: worktree-lane
 # A design document, authored outside the spec command, amended from docs/plans/013-optimization-sweep-02.md on 2026-09-30, amended in run 2026-10-11_release-1-14-0 on 2026-10-12, one citation re-pointed in run 2026-10-14_cli-native on 2026-10-14, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18 and 2026-10-20, amended from docs/plans/024-last-before-2-0-02.md in run 2026-11-09_last-before-2-0 on 2026-11-09 and 2026-11-10, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
-status: shipped-with-1.16.0
+status: shipped-with-1.19.0
 obsolete_when: the managed worktree lane ships and the CLI reference plus the working-with page carry its behaviour, or a decision cuts the surface
 ---
 # The managed worktree lane
@@ -36,7 +36,7 @@ which set `status: shipped-with-1.16.0`; it read `shipped-with-1.1.0` before.
 REQ-WORKTREE-019 comes from plan 024's second file, `docs/plans/024-last-before-2-0-02.md`, in run
 `2026-11-09_last-before-2-0`: its linked-install half was written on 2026-11-09 by the unit `d-symlink-policy`, and its
 receipt half, with its criteria, was merged on 2026-11-10 at that run's Prove phase from the unit `d-receipt-run-tag`,
-read against the integration head `1daa3f8b`. None of it has shipped yet.
+read against the integration head `1daa3f8b`. It shipped with 1.19.0, which set `status: shipped-with-1.19.0`.
 
 ## Intent
 

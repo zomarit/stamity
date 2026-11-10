@@ -3,7 +3,7 @@ id: orchestrator-context
 # A design document, authored from docs/plans/009-orchestrator-context-economy-01.md on 2026-09-23, amended from docs/plans/010-enterprise-release-01.md and docs/plans/011-replay-v2.md on 2026-09-26 and from docs/plans/010-enterprise-release-02.md and docs/plans/011-replay-v2.md's R5 on 2026-09-27 and from docs/plans/011-replay-v2-02.md on 2026-09-28, amended on 2026-09-29 by the maintainer's decision to retire the replay, amended from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-10_next-tier on 2026-10-10, its citations re-pointed in run 2026-10-12_board-writes on 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, one locator amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended from docs/plans/024-last-before-2-0-03.md in run 2026-11-09_last-before-2-0 on 2026-11-10, and excluded from the site build.
 # The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023 in docs/specs/prove-behavior-and-value.md). A path of the run layout a consuming repository writes, such as `.stamity/runs/<run-id>/`, is the product's and is not one of them.
-status: shipped-with-1.17.0
+status: shipped-with-1.19.0
 obsolete_when: every supported client hands a parent a sub-agent's full report by reference and restores a running flow's state after a compaction on its own, or a decision row cuts the surface
 ---
 # Orchestrator context economy
@@ -120,6 +120,10 @@ One locator in REQ-CTX-012's paragraph of 2026-10-16 was amended on 2026-10-26 b
 (`docs/plans/022-autonomy-distribution-02.md`, run `2026-10-25_autonomy-distribution-02`, unit `b14c-land-batch`),
 merged by that run's pass `spec2` and read at `1fe7d915`; the requirement's text and the criterion count do not move.
 It reached `main` through pull request #128 and shipped with 1.17.0, which set `status: shipped-with-1.17.0`.
+
+The paragraph dated 2026-11-10 under REQ-CTX-019, with its criterion, comes from plan 024 file 3, unit
+`x-metrics-content` (run `2026-11-09_last-before-2-0`), merged at that run's Prove phase and read at `1daa3f8b`. It
+shipped with 1.19.0, which set `status: shipped-with-1.19.0`.
 
 The replay's files were deleted on 2026-09-30; every path below reads at tag `replay-frozen-2026-09-30`.
 
