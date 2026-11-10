@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -599,6 +600,31 @@ describe.skipIf(!gitAvailable)("listCopiedSkills and removeSkill", () => {
     expect(await listCopiedSkills(root)).toEqual([
       { name: "climb", origin: null, state: "record-unreadable", changed: [], missing: [], extra: [] },
       { name: "slash", origin: null, state: "record-unreadable", changed: [], missing: [], extra: [] },
+    ]);
+  });
+
+  it("reads a file reached through a folder link inside the copy as changed, never reading it or telling it absent", async () => {
+    const root = getTemp().dir;
+    const copy = join(root, ".stamity", "overrides", "skills", "linked");
+    await mkdir(join(root, ".stamity", "skills"), { recursive: true });
+    await mkdir(copy, { recursive: true });
+    await writeFile(join(copy, "SKILL.md"), SKILL_MD);
+    // The outside file's hash matches its record line: a read through the link would report it the same, so clean.
+    const outsideDir = join(root, "outside");
+    await mkdir(outsideDir, { recursive: true });
+    await writeFile(join(outsideDir, "voice.md"), VOICE_MD);
+    await symlink(outsideDir, join(copy, "references"), "junction");
+    const hash = (text: string): string => createHash("sha256").update(text).digest("hex");
+    const files = [
+      { path: "SKILL.md", sha256: hash(SKILL_MD), bytes: Buffer.byteLength(SKILL_MD) },
+      { path: "references/voice.md", sha256: hash(VOICE_MD), bytes: Buffer.byteLength(VOICE_MD) },
+      // Absent outside: a read past the link would report it missing, which tells what is there and what is not.
+      { path: "references/absent.md", sha256: "0".repeat(64), bytes: 8 },
+    ];
+    await writeFile(join(root, ".stamity", "skills", "linked.origin.json"), JSON.stringify({ name: "linked", files }));
+
+    expect(await listCopiedSkills(root)).toMatchObject([
+      { name: "linked", state: "drifted", changed: ["references/voice.md", "references/absent.md"], missing: [] },
     ]);
   });
 

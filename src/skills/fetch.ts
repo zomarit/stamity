@@ -698,13 +698,29 @@ async function driftOf(root: string, name: string, origin: SkillOrigin | null): 
   const copyEntry = await lstat(copy).catch(() => null);
   if (copyEntry === null || !copyEntry.isDirectory()) return { name, origin, state: "copy-missing", ...none };
   const listed = new Set(origin.files.map((file) => file.path));
+  const realCopy = await realpath(copy).catch(() => null);
   const results = await Promise.all(
     origin.files.map(async (file) => {
-      const path = join(copy, ...file.path.split("/"));
+      const segments = file.path.split("/");
+      const path = join(copy, ...segments);
+      // A folder link committed inside the copy could lead outside it. Each folder on the way is checked before the
+      // file, so nothing past a link is looked at: not read, and not even told present or absent.
+      for (let depth = 1; depth < segments.length; depth += 1) {
+        // oxlint-disable-next-line no-await-in-loop -- each folder is checked before the next one under it
+        const folder = await lstat(join(copy, ...segments.slice(0, depth))).catch(() => null);
+        if (folder === null) return { path: file.path, state: "missing" as const };
+        if (!folder.isDirectory()) return { path: file.path, state: "changed" as const };
+      }
       const entry = await lstat(path).catch(() => null);
       if (entry === null) return { path: file.path, state: "missing" as const };
       if (!entry.isFile()) return { path: file.path, state: "changed" as const };
-      return { path: file.path, state: sha256Hex(await readFile(path)) === file.sha256 ? ("same" as const) : ("changed" as const) };
+      const real = await realpath(path).catch(() => null);
+      if (real === null || realCopy === null) return { path: file.path, state: "changed" as const };
+      const rel = relative(realCopy, real);
+      if (rel === "" || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+        return { path: file.path, state: "changed" as const };
+      }
+      return { path: file.path, state: sha256Hex(await readFile(real)) === file.sha256 ? ("same" as const) : ("changed" as const) };
     }),
   );
   const changed = results.filter((result) => result.state === "changed").map((result) => result.path);
