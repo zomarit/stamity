@@ -661,8 +661,10 @@ describe("the .gitignore entries' census (decision E1)", () => {
     CONTEXT_ONCE_DIR: ["hooks/scripts.ts"],
     CONTEXT_ONCE_GITIGNORE_ENTRY: [],
     CLIENT_MODELS_CACHE_FILE: ["cli/engine/clientModels.ts"],
-    // n-switch-guard (REQ-FLOW-166): the guard writes the held list; the marker's writer, `stamity away`, is a later unit.
-    AWAY_MARKER_FILE: [],
+    // n-switch-guard (REQ-FLOW-166): the guard writes the held list.
+    // TEST CHANGE, justified (u-ci1): the later unit landed; `stamity away on` writes the marker, and
+    // GITIGNORE_ENTRY_WHEN already answers for it on any client ("the away marker by the CLI").
+    AWAY_MARKER_FILE: ["cli/commands/away.ts"],
     AWAY_HELD_FILE: ["hooks/scripts.ts"],
   };
   /** Files that name a constant without writing its target: the definitions, readers, the panel's reasons, the worktree policy's refusal, clean's deletions. */
@@ -677,6 +679,8 @@ describe("the .gitignore entries' census (decision E1)", () => {
     "hooks/scripts.ts",
     // Reads the away marker under its own local name (the two hook modules share a wave).
     "hooks/portableRunner.ts",
+    // TEST CHANGE, justified (u-ci1): `stamity away status` reads the held list the guard writes; it writes none.
+    "cli/commands/away.ts",
     "worktree/policy.ts",
   ]);
 
