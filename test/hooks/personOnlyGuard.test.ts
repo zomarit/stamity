@@ -14,7 +14,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { gitignoreLine } from "../../src/cli/commands/init/panel.ts";
@@ -3536,5 +3536,60 @@ describe("a push read against the push configuration in git's files", () => {
       expect(decide("claude", guard, command), command).toEqual({ deny: false });
       expect(clientDecision("claude", run(guard, asHelper(command)), `helper: ${command}`), `helper: ${command}`).toEqual({ deny: false });
     }
+  });
+});
+
+/**
+ * The system configuration file of a git built with another prefix (REQ-FLOW-134): the guard reads each place such a
+ * build keeps it, as an included file, whatever GIT_CONFIG_NOSYSTEM says (every run here sets it), so a remote or URL
+ * key in one makes the reading partial. No git is run, by the test or by the guard: a file named git is only looked at.
+ */
+describe("the system configuration files of other git builds", () => {
+  const ORIGIN = '[remote "origin"]\n\turl = https://github.com/acme/app.git\n';
+  const REWRITE = '[url "https://github.com/other/"]\n\tpushInsteadOf = https://github.com/acme/\n';
+  const CREDENTIAL = "[credential]\n\thelper = osxkeychain\n";
+  const CANDIDATES =
+    'const SYSTEM_GITCONFIG_CANDIDATES = ["/etc/gitconfig", "/opt/homebrew/etc/gitconfig", "/usr/local/etc/gitconfig", ' +
+    '"/home/linuxbrew/.linuxbrew/etc/gitconfig", "/Library/Developer/CommandLineTools/usr/share/git-core/gitconfig", ' +
+    '"/Applications/Xcode.app/Contents/Developer/usr/share/git-core/gitconfig"];';
+  /** The claude guard with its candidate line swapped for `paths`, the swap asserted first; returns its path. */
+  async function placeSwapped(paths: readonly string[], files: Record<string, string>): Promise<string> {
+    const guard = planCoreHookScripts(POLICY, "claude", { ...CLI_PIN, personOnlyGuard: true }).find((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
+    if (guard === undefined) throw new Error("the plan carried no person-only guard");
+    expect(guard.content).toContain(`\n${CANDIDATES}\n`);
+    const swapped = guard.content.replace(CANDIDATES, `const SYSTEM_GITCONFIG_CANDIDATES = ${JSON.stringify(paths)};`);
+    expect(swapped).not.toBe(guard.content);
+    await getRepo().seedFiles({ ".git/HEAD": "ref: refs/heads/feat/x\n", [`.stamity/generated/hooks/claude/${guard.fileName}`]: swapped, ...files });
+    return getRepo().path(".stamity", "generated", "hooks", "claude", guard.fileName);
+  }
+
+  it("names every place a known git build keeps its system file, on one line", async () => {
+    const guard = await placeGuard("claude");
+    expect(readFileSync(guard, "utf8").split("\n")).toContain(CANDIDATES);
+  });
+
+  // Red on 091d999b: only GIT_CONFIG_SYSTEM or /etc/gitconfig was read, and not at all under GIT_CONFIG_NOSYSTEM.
+  it("asks for a push to origin where a candidate system file rewrites origin's push URL, and runs it beside a credential section alone", async () => {
+    const guard = await placeSwapped([getRepo().path("prefix", "etc", "gitconfig")], { ".git/config": ORIGIN, "prefix/etc/gitconfig": REWRITE });
+    expect(decide("claude", guard, "git push -u origin feat/x")).toMatchObject({ deny: true, ask: true, reason: expect.stringContaining("(`outside-write`)") });
+    await getRepo().seedFiles({ "prefix/etc/gitconfig": CREDENTIAL });
+    expect(decide("claude", guard, "git push -u origin feat/x")).toEqual({ deny: false });
+  });
+
+  it("asks for a push to origin where the folder beside the first git on PATH holds a system file moving origin", async () => {
+    const guard = await placeSwapped([], {
+      ".git/config": ORIGIN,
+      // A regular file named git, never run: only its place is read.
+      "tool/bin/git": "not a program\n",
+      "tool/bin/git.exe": "not a program\n",
+      "tool/etc/gitconfig": '[remote "origin"]\n\tpushurl = https://github.com/other/repo.git\n',
+      "bare/etc/gitconfig": '[remote "origin"]\n\tpushurl = https://github.com/other/repo.git\n',
+    });
+    const path = (entry: string): Record<string, string> => ({ PATH: `${getRepo().path(entry, "bin")}${delimiter}${process.env.PATH ?? ""}` });
+    expect(decide("claude", guard, "git push -u origin feat/x", path("tool"))).toMatchObject({ deny: true, ask: true, reason: expect.stringContaining("(`outside-write`)") });
+    // One fact away: an entry holding no git names no system file, and the same push runs.
+    expect(decide("claude", guard, "git push -u origin feat/x", path("bare"))).toEqual({ deny: false });
+    await getRepo().seedFiles({ "tool/etc/gitconfig": CREDENTIAL });
+    expect(decide("claude", guard, "git push -u origin feat/x", path("tool"))).toEqual({ deny: false });
   });
 });

@@ -438,7 +438,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // push configuration, submodule recursion and a configuration write on the same line, and the configuration reader
   // collects the push keys and reads a value it cannot decode as partial. 355,322 + 11,778 = 367,100 bytes;
   // 7,302 + 174 = 7,476 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 367_100, lines: 7_476 },
+  // Moved again 2026-11-10 by the person-only guard hardening (REQ-FLOW-134), by what was measured: 369,374 bytes /
+  // 7,514 lines (copilot, generated), past both rows, because the configuration reader now also reads the system file
+  // of a git built with another prefix. 367,100 + 2,274 = 369,374 bytes; 7,476 + 38 = 7,514 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 369_374, lines: 7_514 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -4413,6 +4416,16 @@ const GUARD_GIT_REWRITES_MAX = 256;
  * (GIT_CONFIG_SYSTEM, else /etc/gitconfig) unless GIT_CONFIG_NOSYSTEM is on, the global ones (GIT_CONFIG_GLOBAL, else
  * the XDG file and ~/.gitconfig), then the repository's common config and the worktree's own.
  *
+ * `SYSTEM_GITCONFIG_CANDIDATES` and `systemConfigCandidates`:
+ * The system file a git built with another prefix reads (REQ-FLOW-134): /etc/gitconfig, Homebrew's on Apple silicon and
+ * Intel, Linuxbrew's, Apple's bundled files under the Command Line Tools and Xcode, then <HOMEBREW_PREFIX>/etc/gitconfig,
+ * <CONDA_PREFIX>/etc/gitconfig and <home>/etc/gitconfig, on Windows <ProgramFiles>\Git\etc\gitconfig and
+ * <ProgramData>\Git\config, then, for each of the first 64 PATH entries holding a regular file named git (git.exe on
+ * Windows), <entry>/../etc/gitconfig and the same two levels up from that file's real path. Deduplicated by resolved
+ * path, at most 24; files are only looked at and read, no process is started. configOf reads every candidate it has not
+ * already read as an included file, whatever GIT_CONFIG_NOSYSTEM and GIT_CONFIG_SYSTEM say, so a remote, URL-rewrite or
+ * branch-remote key in one makes the reading partial. A prefix none of them names is not read.
+ *
  * `configOf`:
  * What git's merged configuration says about remotes (REQ-FLOW-134, review/128): per remote its first url and pushurl
  * and its gh-resolved marker, per branch its remote and pushRemote, remote.pushDefault, and every url.<base>.insteadOf
@@ -5656,6 +5669,39 @@ function linkedInstall(command, cwd, pwsh = false, bash = false) {
   return null;
 }
 
+/** The places a git build other than one at /usr keeps its system configuration file: see GUARD_GIT_INCLUDE_DEPTH_MAX in the engine. */
+const SYSTEM_GITCONFIG_CANDIDATES = ["/etc/gitconfig", "/opt/homebrew/etc/gitconfig", "/usr/local/etc/gitconfig", "/home/linuxbrew/.linuxbrew/etc/gitconfig", "/Library/Developer/CommandLineTools/usr/share/git-core/gitconfig", "/Applications/Xcode.app/Contents/Developer/usr/share/git-core/gitconfig"];
+let systemCandidates;
+/** Each candidate system file, by resolved path, at most 24, found once per call: see GUARD_GIT_INCLUDE_DEPTH_MAX in the engine. */
+function systemConfigCandidates() {
+  if (systemCandidates !== undefined) return systemCandidates;
+  const env = process.env;
+  const windows = process.platform === "win32";
+  const home = env.HOME ?? env.USERPROFILE ?? "";
+  const found = [...SYSTEM_GITCONFIG_CANDIDATES];
+  for (const prefix of [env.HOMEBREW_PREFIX, env.CONDA_PREFIX, home]) if (prefix) found.push(join(prefix, "etc", "gitconfig"));
+  if (windows) {
+    if (env.ProgramFiles) found.push(join(env.ProgramFiles, "Git", "etc", "gitconfig"));
+    if (env.ProgramData) found.push(join(env.ProgramData, "Git", "config"));
+  }
+  // The folder each git on PATH was built for: a regular file named git is only looked at, never run.
+  for (const entry of String(env.PATH ?? env.Path ?? "").split(windows ? ";" : ":").slice(0, 64)) {
+    if (entry === "") continue;
+    for (const name of windows ? ["git.exe", "git"] : ["git"]) {
+      const file = join(entry, name);
+      try {
+        if (!statSync(file).isFile()) continue;
+        found.push(join(entry, "..", "etc", "gitconfig"));
+        found.push(join(dirname(dirname(realpathSync(file))), "etc", "gitconfig"));
+      } catch {
+        // Absent or unreadable: no build there to name.
+      }
+    }
+  }
+  systemCandidates = [...new Set(found.map((path) => resolve(path)))].slice(0, 24);
+  return systemCandidates;
+}
+
 /** The configuration files git merges for a git dir: see GUARD_GIT_INCLUDE_DEPTH_MAX in the engine. */
 function configFiles(dirs) {
   const env = process.env;
@@ -5781,7 +5827,12 @@ function configOf(dirs) {
       } else if (kind === "submodule" && sub === null && key === "recurse") recurse.push("submodule.recurse=" + value);
     }
   };
-  for (const path of configFiles(dirs)) readFile(path, 0, false);
+  const merged = configFiles(dirs);
+  for (const path of merged) readFile(path, 0, false);
+  // Every candidate system file not already read, as an included file, whatever GIT_CONFIG_NOSYSTEM says: a remote or
+  // URL key in one makes the reading partial.
+  const read = new Set(merged.map((path) => resolve(path)));
+  for (const path of systemConfigCandidates()) if (!read.has(path)) readFile(path, 0, true);
   // Each URL looked up scans every rewrite rule, so past REWRITES_MAX of them the reading is partial: the lookups stay
   // bounded by the remotes read times that ceiling (the hook's timeout).
   if (rewrites.length > REWRITES_MAX) partial = true;

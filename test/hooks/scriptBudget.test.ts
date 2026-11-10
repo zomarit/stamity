@@ -378,7 +378,10 @@ describe("hook script budgets (REQ-CTX-016)", () => {
     // again, bytes from 355,322 to 367,100 and lines from 7,302 to 7,476, the measured size of the largest copy
     // (copilot), since the push reading now reads the place's own push configuration, submodule recursion and a
     // configuration write on the same line.
-    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 367_100, lines: 7_476 });
+    // TEST CHANGE, justified (person-only guard hardening, REQ-FLOW-134, 2026-11-10): both rows moved again, bytes from
+    // 367,100 to 369,374 and lines from 7,476 to 7,514, the measured size of the largest copy (copilot), since the
+    // configuration reader now also reads the system file of a git built with another prefix.
+    expect(HOOK_SCRIPT_BUDGETS[PERSON_ONLY_GUARD_FILE]).toEqual({ bytes: 369_374, lines: 7_514 });
     const guards = renders.filter((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
     expect(guards).toHaveLength(TOOLS.length);
     for (const script of guards) expect(budgetViolation(script), script.tool).toBeUndefined();
