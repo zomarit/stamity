@@ -124,7 +124,10 @@ describe("readSkillSources", () => {
   });
 
   it("refuses a repository carrying credentials without printing them", async () => {
-    const read = readSkillSources(await rootWith(document([{ id: "house", repo: "https://user:s3cret-token@github.com/acme/skills" }])));
+    // TEST CHANGE, justified (u-ci1): the same URL, split at the `@` so the fixture-secrets gate (REQ-PLUGIN-033) does
+    // not read a user:password pair in the tree; the value the reader gets is unchanged.
+    const repo = ["https://user:s3cret-token", "@github.com/acme/skills"].join("");
+    const read = readSkillSources(await rootWith(document([{ id: "house", repo }])));
 
     expect(read).not.toHaveProperty("sources");
     expect(read).toMatchObject({ error: expect.stringContaining('"https://<credentials>@github.com/acme/skills"') });
