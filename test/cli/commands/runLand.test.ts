@@ -10,6 +10,8 @@ import { runCommand } from "../../../src/cli/commands/run.ts";
 import { LAND_CLOCK } from "../../../src/cli/commands/runLand.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
 import type * as GhRunnerModule from "../../../src/cli/engine/ghRunner.ts";
+// The stand-in below, never the real door: imported only to pin that it refuses what the real one refuses.
+import { ghApi } from "../../../src/cli/engine/ghRunner.ts";
 import type * as ChangeRangeModule from "../../../src/cli/engine/changeRange.ts";
 import type * as AtomicWriteModule from "../../../src/merge/atomicWrite.ts";
 import type * as FsModule from "node:fs";
@@ -82,49 +84,83 @@ function next<T>(answer: T | T[]): T {
 // Mocked: the real runner starts `gh`, which calls GitHub over the network under the machine's login; a unit test can
 // reach neither. Each call is recorded and answered from the routes above.
 // TEST CHANGE, justified (review/95): the real environment filter passes through; only the calls that reach gh are stood in for.
-vi.mock("../../../src/cli/engine/ghRunner.ts", async (importOriginal) => ({
-  withoutVersionChoice: (await importOriginal<typeof GhRunnerModule>()).withoutVersionChoice,
-  ghApi: (request: { method: string; path: string; body?: unknown }, opts?: { program?: string; cwd?: string; env?: Record<string, string | undefined> }) => {
-    const path = request.path.replace(/^\//, "").replace(/\?.*$/, "");
-    gh.calls.push({ kind: "api", method: request.method, path, query: /\?(.*)$/.exec(request.path)?.[1], body: request.body, program: opts?.program, cwd: opts?.cwd, env: Object.keys(opts?.env ?? {}) });
-    // Mock reason (review/95): no version manager is installed for the suite; this program reads a version file from
-    // its working folder as a shim does, so the case sees whether the run's folder reaches one.
-    if (gh.probe !== null) {
-      const walk = 'd=$(pwd -P); while :; do cat "$d/.tool-versions" 2>/dev/null; [ "$d" = / ] && break; d=$(dirname "$d"); done; true';
-      gh.probe.push(execFileSync("/bin/sh", ["-c", walk], { cwd: opts?.cwd, encoding: "utf8" }));
-    }
-    if (gh.failing.has(`${request.method} ${path}`)) return Promise.reject(new Error("gh failed"));
-    const answer = gh.routes.get(`${request.method} ${path}`);
-    return Promise.resolve(answer === undefined ? { status: 404, json: { message: "Not Found" } } : next(answer));
-  },
-  ghMergePull: (request: Record<string, unknown>, opts?: { program?: string }) => {
-    gh.calls.push({ kind: "merge", body: request, program: opts?.program });
-    return Promise.resolve(gh.merge);
-  },
-  ghReviewThreads: (_request: unknown, opts?: { program?: string }) => {
-    gh.calls.push({ kind: "threads", program: opts?.program });
-    return Promise.resolve({ status: 200, json: next(gh.threads) });
-  },
-  ghCommentEditors: (_request: unknown, opts?: { program?: string }) => {
-    gh.calls.push({ kind: "editors", program: opts?.program });
-    return gh.editorsRefused ? Promise.reject(new Error("gh failed")) : Promise.resolve({ status: 200, json: next(gh.editors) });
-  },
-  ghResolveReviewThread: (request: { id: string }, opts?: { program?: string }) => {
-    gh.calls.push({ kind: "resolve", body: request.id, program: opts?.program });
-    const pr = gh.routes.get("GET repos/o/r/pulls/7");
-    const json = (Array.isArray(pr) ? pr[0] : pr)?.json as object;
-    if (gh.afterResolve.length > 0) gh.routes.set("GET repos/o/r/pulls/7", gh.afterResolve.map((fields) => ({ status: 200, json: { ...json, ...fields } })));
-    return gh.resolve === null ? Promise.reject(new Error("gh failed")) : Promise.resolve(gh.resolve);
-  },
-  ghMarkReady: (request: { id: string }, opts?: { program?: string }) => {
-    gh.calls.push({ kind: "ready", body: request, program: opts?.program });
-    const pr = gh.routes.get(`GET repos/o/r/pulls/7`);
-    const json = (Array.isArray(pr) ? pr[0] : pr)?.json as object;
-    gh.routes.set("GET repos/o/r/pulls/7", gh.afterReady.map((state) => ({ status: 200, json: { ...json, draft: false, mergeable_state: state, ...gh.afterReadyPr } })));
-    return Promise.resolve({ status: 200, json: { data: { markPullRequestReadyForReview: { pullRequest: { isDraft: false } } } } });
-  },
-  ghProgramPath: () => gh.program,
-}));
+// TEST CHANGE, justified (REQ-FLOW-157, a2-land-closes-issue): the stand-in for `ghApi` accepted a write the real door
+// refuses before gh starts, so a close of the run's issue sent through it passed here and closed nothing in a real job.
+// Each write now goes through the real `ghApiArgs` check first: a refused one rejects as the real call does, reaches no
+// route, and is kept as `refused <method> <path>`, no method field, so no case reads it as a write GitHub answered. The
+// issue close is its own fixed-purpose call, `ghCloseIssue`, stood in for below on the real `ghCloseIssueArgs`.
+vi.mock("../../../src/cli/engine/ghRunner.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof GhRunnerModule>();
+  return {
+    withoutVersionChoice: actual.withoutVersionChoice,
+    ghApi: (request: { method: "GET" | "POST" | "PATCH"; path: string; body?: unknown; hostname: string }, opts?: { program?: string; cwd?: string; env?: Record<string, string | undefined> }) => {
+      const path = request.path.replace(/^\//, "").replace(/\?.*$/, "");
+      if (request.method !== "GET") {
+        try {
+          actual.ghApiArgs(request);
+        } catch (error) {
+          gh.calls.push({ kind: `refused ${request.method} ${path}`, program: opts?.program });
+          return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+        }
+      }
+      gh.calls.push({ kind: "api", method: request.method, path, query: /\?(.*)$/.exec(request.path)?.[1], body: request.body, program: opts?.program, cwd: opts?.cwd, env: Object.keys(opts?.env ?? {}) });
+      // Mock reason (review/95): no version manager is installed for the suite; this program reads a version file from
+      // its working folder as a shim does, so the case sees whether the run's folder reaches one.
+      if (gh.probe !== null) {
+        const walk = 'd=$(pwd -P); while :; do cat "$d/.tool-versions" 2>/dev/null; [ "$d" = / ] && break; d=$(dirname "$d"); done; true';
+        gh.probe.push(execFileSync("/bin/sh", ["-c", walk], { cwd: opts?.cwd, encoding: "utf8" }));
+      }
+      if (gh.failing.has(`${request.method} ${path}`)) return Promise.reject(new Error("gh failed"));
+      const answer = gh.routes.get(`${request.method} ${path}`);
+      return Promise.resolve(answer === undefined ? { status: 404, json: { message: "Not Found" } } : next(answer));
+    },
+    ghMergePull: (request: Record<string, unknown>, opts?: { program?: string }) => {
+      gh.calls.push({ kind: "merge", body: request, program: opts?.program });
+      return Promise.resolve(gh.merge);
+    },
+    // The issue close, through the runner's own argument building: a request it refuses rejects before any route, as the
+    // real call does before gh starts. Kept as `close <path>`, the path the real builder made, with the request the verb
+    // passed as its body, and answered from the route `<method> <path>` of the built vector, so a case routes it as before.
+    ghCloseIssue: (request: Parameters<typeof GhRunnerModule.ghCloseIssue>[0], opts?: { program?: string }) => {
+      let args: string[];
+      try {
+        args = actual.ghCloseIssueArgs(request);
+      } catch (error) {
+        gh.calls.push({ kind: "refused close", body: request, program: opts?.program });
+        return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+      }
+      const path = args.at(-1) ?? "";
+      const key = `${args[args.indexOf("--method") + 1] ?? ""} ${path}`;
+      gh.calls.push({ kind: `close ${path}`, path, body: request, program: opts?.program });
+      if (gh.failing.has(key)) return Promise.reject(new Error("gh failed"));
+      const answer = gh.routes.get(key);
+      return Promise.resolve(answer === undefined ? { status: 404, json: { message: "Not Found" } } : next(answer));
+    },
+    ghReviewThreads: (_request: unknown, opts?: { program?: string }) => {
+      gh.calls.push({ kind: "threads", program: opts?.program });
+      return Promise.resolve({ status: 200, json: next(gh.threads) });
+    },
+    ghCommentEditors: (_request: unknown, opts?: { program?: string }) => {
+      gh.calls.push({ kind: "editors", program: opts?.program });
+      return gh.editorsRefused ? Promise.reject(new Error("gh failed")) : Promise.resolve({ status: 200, json: next(gh.editors) });
+    },
+    ghResolveReviewThread: (request: { id: string }, opts?: { program?: string }) => {
+      gh.calls.push({ kind: "resolve", body: request.id, program: opts?.program });
+      const pr = gh.routes.get("GET repos/o/r/pulls/7");
+      const json = (Array.isArray(pr) ? pr[0] : pr)?.json as object;
+      if (gh.afterResolve.length > 0) gh.routes.set("GET repos/o/r/pulls/7", gh.afterResolve.map((fields) => ({ status: 200, json: { ...json, ...fields } })));
+      return gh.resolve === null ? Promise.reject(new Error("gh failed")) : Promise.resolve(gh.resolve);
+    },
+    ghMarkReady: (request: { id: string }, opts?: { program?: string }) => {
+      gh.calls.push({ kind: "ready", body: request, program: opts?.program });
+      const pr = gh.routes.get(`GET repos/o/r/pulls/7`);
+      const json = (Array.isArray(pr) ? pr[0] : pr)?.json as object;
+      gh.routes.set("GET repos/o/r/pulls/7", gh.afterReady.map((state) => ({ status: 200, json: { ...json, draft: false, mergeable_state: state, ...gh.afterReadyPr } })));
+      return Promise.resolve({ status: 200, json: { data: { markPullRequestReadyForReview: { pullRequest: { isDraft: false } } } } });
+    },
+    ghProgramPath: () => gh.program,
+  };
+});
 
 /**
  * Link targets a case gives a path that does not exist on disk, as `realpathSync` would read a link there.
@@ -3619,9 +3655,19 @@ describe("stamity run land", () => {
       const contractOf = (item: string): string =>
         ["run-contract: 1", `item: "${item}"`, "base: 02e040eb", "acceptance: done", "scope: { in: [src] }", 'answerer: "@maintainer"', ""].join("\n");
       const issueJson = (over: Record<string, unknown> = {}): Record<string, unknown> => ({ number: 12, state: "open", labels: [READY], ...over });
-      /** Every read or write of an issue itself, in any repository: a comment on the pull request is not one. */
-      const issueCalls = (): string[] => kinds().filter((kind) => /^(?:GET|PATCH) repos\/[^/]+\/[^/]+\/issues\/\d+$/.test(kind));
-      const issuePatches = (): string[] => issueCalls().filter((kind) => kind.startsWith("PATCH "));
+      /** The close as the stand-in keeps it: the fixed-purpose call, at the path the runner's own builder made. */
+      const CLOSED = `close ${ISSUE}`;
+      /**
+       * Every read or write of an issue itself, in any repository: a comment on the pull request is not one.
+       * TEST CHANGE, justified (REQ-FLOW-157, a2-land-closes-issue): the close is the fixed-purpose call (`close <path>`),
+       * not a `ghApi` PATCH the real door refuses; a close tried any way, the fixed call, a PATCH or a refused write to an
+       * issue, still counts, so no case that pins no close reads fewer calls than before.
+       */
+      const issueCalls = (): string[] =>
+        kinds().filter((kind) => /^(?:GET |PATCH |close |refused (?:POST|PATCH) )repos\/[^/]+\/[^/]+\/issues\/\d+$/.test(kind) || kind === "refused close");
+      const issuePatches = (): string[] => issueCalls().filter((kind) => !kind.startsWith("GET "));
+      /** The one close call the verb made, its request as passed. */
+      const closeCall = () => gh.calls.find((call) => call.kind.startsWith("close "));
       const comments = () => gh.calls.filter((call) => call.method === "POST" && call.path === "repos/o/r/issues/7/comments");
       const staysOpen = (reason: string): string => `the run's issue o/r#12 stays open: ${reason}`;
       const commentFor = (reason: string): string => `The land job merged this pull request, and the run's issue o/r#12 stays open: ${reason}. Close it by hand.\n\n${MARKER}`;
@@ -3654,16 +3700,29 @@ describe("stamity run land", () => {
 
         expect(result.code).toBe(0);
         expect(result.doc).toMatchObject({ outcome: "landed", issue: { ref: "o/r#12", closed: true }, notDone: [] });
-        expect(writes()).toEqual([PATCHED, "merge", `PATCH ${ISSUE}`]);
+        // TEST CHANGE, justified (REQ-FLOW-157, a2-land-closes-issue): the close is the fixed-purpose call, its path built by
+        // the runner's real ghCloseIssueArgs, not a ghApi PATCH, which the real door refuses before gh starts.
+        expect(writes()).toEqual([PATCHED, "merge", CLOSED]);
         // The issue's read too comes after the merge: nothing about the issue happens before the merge call answered 200.
         const order = kinds();
         expect(order.indexOf(`GET ${ISSUE}`)).toBeGreaterThan(order.indexOf("merge"));
-        expect(gh.calls.find((call) => call.method === "PATCH" && call.path === ISSUE)?.body).toEqual({ state: "closed", state_reason: "completed" });
+        expect(order.indexOf(CLOSED)).toBeGreaterThan(order.indexOf(`GET ${ISSUE}`));
+        // TEST CHANGE, justified (REQ-FLOW-157, a2-land-closes-issue): the verb hands the close only the issue's parts; its
+        // body is the runner's one constant, { state: "closed", state_reason: "completed" }, pinned in ghRunner.test.ts.
+        expect(closeCall()?.body).toEqual({ hostname: "github.com", owner: "o", repo: "r", number: 12 });
         // The label stays on: the close sends nothing but the state.
         expect(comments()).toEqual([]);
 
         const text = await runInProcess([runCommand], ["run", ...LANDS], { cwd: repo });
         expect(text.stdout).toContain("issue: closed o/r#12\n");
+      });
+
+      // The stand-in's own pin: a close sent through ghApi is refused here as the real door refuses it, before gh starts,
+      // so no case below can pass on a close that a real job would never send.
+      it("refuses a close sent through ghApi, as the real door does, and keeps it as refused", async () => {
+        await expect(ghApi({ method: "PATCH", path: ISSUE, body: { state: "closed", state_reason: "completed" }, hostname: "github.com" })).rejects.toMatchObject({ code: "GH_REFUSED" });
+        expect(kinds()).toEqual([`refused PATCH ${ISSUE}`]);
+        expect(issuePatches()).toEqual([`refused PATCH ${ISSUE}`]);
       });
 
       it("keeps the land when the close is refused, naming the right the token may lack in Not done: and in one comment", async () => {
@@ -3675,7 +3734,9 @@ describe("stamity run land", () => {
         expect(result.code).toBe(0);
         expect(result.doc).toMatchObject({ outcome: "landed", issue: { ref: "o/r#12", closed: false, reason: expect.stringContaining("HTTP 403") }, notDone: [staysOpen(NO_RIGHT)] });
         expect(comments().map((call) => (call.body as { body: string }).body)).toEqual([commentFor(NO_RIGHT)]);
-        expect(writes()).toEqual([PATCHED, "merge", `PATCH ${ISSUE}`, "POST repos/o/r/issues/7/comments"]);
+        // TEST CHANGE, justified (REQ-FLOW-157, a2-land-closes-issue): the refused close is the fixed-purpose call answering
+        // 403, not a ghApi PATCH, which the real door refuses before gh starts and so before GitHub could answer at all.
+        expect(writes()).toEqual([PATCHED, "merge", CLOSED, "POST repos/o/r/issues/7/comments"]);
       });
 
       it("writes nothing to an issue already closed, and says so", async () => {
@@ -3790,7 +3851,8 @@ describe("stamity run land", () => {
 
         expect(result.code).toBe(0);
         expect(result.doc).toMatchObject({ outcome: "landed", issue: { ref: "o/r#12", closed: true }, notDone: [] });
-        expect(issuePatches()).toEqual([`PATCH ${ISSUE}`]);
+        // TEST CHANGE, justified (REQ-FLOW-157, a2-land-closes-issue): the close is the fixed-purpose call, not a ghApi PATCH.
+        expect(issuePatches()).toEqual([CLOSED]);
         expect(comments()).toEqual([]);
       });
 
@@ -3819,6 +3881,7 @@ describe("stamity run land", () => {
         const MACHINE_PATH = "/home/runner/work/_tool/gh/bin/gh";
         const MESSAGE = `spawn ${MACHINE_PATH} ENOENT`;
         const COMMENTS = "POST repos/o/r/issues/7/comments";
+        // The close's route is the method and path of the vector the real ghCloseIssueArgs built, which the stand-in answers from.
         const STEPS = { read: `GET ${ISSUE}`, close: `PATCH ${ISSUE}`, comment: COMMENTS } as const;
         /**
          * An answer that rejects as `gh` does when it fails to start: a code, and a message naming the machine's path.
@@ -3866,6 +3929,9 @@ describe("stamity run land", () => {
           expect(JSON.stringify(result.doc)).not.toContain(MACHINE_PATH);
           // The close was never sent where the read failed, and the comment was asked for every time the issue stayed open.
           if (step === "read") expect(issuePatches()).toEqual([]);
+          // TEST CHANGE, justified (REQ-FLOW-157, a2-land-closes-issue): where the close fails, it failed as the fixed-purpose
+          // call GitHub was asked, not as a ghApi PATCH the real door refuses before gh starts.
+          if (step === "close") expect(issuePatches()).toEqual([CLOSED]);
           expect(comments()).toHaveLength(1);
         });
       });

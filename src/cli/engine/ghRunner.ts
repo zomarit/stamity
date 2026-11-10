@@ -41,7 +41,9 @@ import { HOST_NAME } from "../../runs/pullRequest.ts";
  * its one constant document, {@link ghGraphqlArgs} refusing any other). {@link ghApi} itself still
  * refuses `PUT`, every merge path and `graphql`. `stamity run end`'s notice (REQ-FLOW-156) is one more:
  * {@link ghRequestReview} (`POST …/pulls/<n>/requested_reviewers`), since a reviewer's name reaches a person and the
- * door takes any body.
+ * door takes any body. The land job's close of the run's issue (REQ-FLOW-157) is one more: {@link ghCloseIssue}
+ * (`PATCH …/issues/<n>` with one constant body), so {@link ghApi} still refuses a write to an issue itself (a comment
+ * on one is its only issue write), and no caller sets an issue's title, body, labels or state through it.
  */
 
 /** The closed method set. */
@@ -404,6 +406,32 @@ export function ghRequestReviewArgs(request: ReviewRequest): string[] {
  */
 export function ghRequestReview(request: ReviewRequest, opts: GhApiOptions = {}): Promise<GhResponse> {
   return startGh(() => ghRequestReviewArgs(request), { reviewers: request.reviewers, team_reviewers: request.teamReviewers }, opts);
+}
+
+/** One issue named by its repository and number, on the host the repository was matched on. */
+type IssueRef = { hostname: string; owner: string; repo: string; number: number };
+
+/** The whole body of {@link ghCloseIssue}: closed as completed. Nothing else of the issue is written, its labels included. */
+const ISSUE_CLOSE_BODY = Object.freeze({ state: "closed", state_reason: "completed" });
+
+/**
+ * The argument vector of {@link ghCloseIssue}: `PATCH repos/<owner>/<repo>/issues/<n>`, the body on stdin. Throws a
+ * {@link GhRefusal} for a number that is not a positive safe integer, or a host, owner or repository that fails validation.
+ */
+export function ghCloseIssueArgs(request: IssueRef): string[] {
+  if (!Number.isSafeInteger(request.number) || request.number < 1) throw refusal("gh issue close: the issue number is not a number this runner sends");
+  const refused = pullRefRefusal(request);
+  if (refused !== null) throw refusal(`gh issue close: ${refused}`);
+  const path = `repos/${request.owner}/${request.repo}/issues/${request.number}`;
+  return ["api", "--hostname", request.hostname, "--include", "--method", "PATCH", "--input", "-", path];
+}
+
+/**
+ * Close one issue as completed, with {@link ISSUE_CLOSE_BODY} as the whole body, so no text of any caller's goes with it.
+ * Out of `WRITE_PATHS` by design: this function is the one way the engine writes to an issue itself.
+ */
+export function ghCloseIssue(request: IssueRef, opts: GhApiOptions = {}): Promise<GhResponse> {
+  return startGh(() => ghCloseIssueArgs(request), ISSUE_CLOSE_BODY, opts);
 }
 
 /**

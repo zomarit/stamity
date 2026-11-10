@@ -58,6 +58,7 @@ import type { WorktreeGitRunner } from "../../worktree/git.ts";
 import { classifyRange, namePaths, type RangeFacts } from "../engine/changeRange.ts";
 import {
   ghApi,
+  ghCloseIssue,
   ghCommentEditors,
   ghMarkReady,
   ghMergePull,
@@ -1300,7 +1301,7 @@ function failureClassOf(cause: unknown): string {
  * REQ-FLOW-157: after the job's own merge answered 200, the run's issue, closed by the job, since GitHub applies no Closes
  * line to a merge its token makes. The head's `contract.yml`, the record and the body are the run's own text, so the item is
  * trusted only once every check holds: an issue in origin's repository, a body line equal to `Closes <ref>`, and GitHub
- * answering it open, no pull request, still labelled `stamity:ready`. Then `PATCH` closes it as completed, the label kept.
+ * answering it open, no pull request, still labelled `stamity:ready`. Then `ghCloseIssue` closes it as completed, the label kept.
  * Anything short of that leaves it open: one `notDone` line with the reason and one comment on the pull request saying so.
  * Nothing here moves the outcome or the exit code, and a failure is named by its class, never its message.
  */
@@ -1357,7 +1358,7 @@ async function closeRunIssue(
     if (!issue.labels.includes(READY_LABEL)) return await leaveOpen(verdict.ref, `it no longer carries ${READY_LABEL}`);
     let closed: GhResponse;
     try {
-      closed = await ghApi({ method: "PATCH", path: issuePath, body: { state: "closed", state_reason: "completed" }, hostname: at.repo.host }, at.ghOpts);
+      closed = await ghCloseIssue({ hostname: at.repo.host, owner: at.repo.owner, repo: at.repo.repo, number: verdict.number }, at.ghOpts);
     } catch (cause) {
       return await leaveOpen(verdict.ref, `closing it failed before GitHub answered (${failureClassOf(cause)})`);
     }

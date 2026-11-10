@@ -5,6 +5,8 @@ import {
   COMMENT_EDITORS_QUERY,
   ghApi,
   ghApiArgs,
+  ghCloseIssue,
+  ghCloseIssueArgs,
   ghCommentEditors,
   ghGraphqlArgs,
   ghMarkReady,
@@ -186,6 +188,77 @@ describe("the run end notice's call", () => {
   });
 });
 
+// a2-land-closes-issue (REQ-FLOW-157): the land job's close of the run's issue, one fixed-purpose call beside the door,
+// which still refuses a write to an issue.
+describe("the land job's issue close", () => {
+  const ISSUE = { hostname: HOST, owner: "acme", repo: "app", number: 12 };
+
+  /** The code `build` threw with, or `built` where it threw nothing: a refusal is `GH_REFUSED`, whatever its words. */
+  function outcomeOf(build: () => unknown): unknown {
+    try {
+      build();
+      return "built";
+    } catch (error) {
+      return (error as { code?: unknown }).code;
+    }
+  }
+
+  it("builds the close as PATCH repos/<owner>/<repo>/issues/<n> with the body on stdin, and refuses none of a valid shape", () => {
+    expect(ghCloseIssueArgs(ISSUE)).toEqual(["api", "--hostname", "github.com", "--include", "--method", "PATCH", "--input", "-", "repos/acme/app/issues/12"]);
+    expect(ghCloseIssueArgs({ hostname: "ghe.example.com", owner: "a.b_c-d", repo: "x.y", number: 1 })).toEqual([
+      "api",
+      "--hostname",
+      "ghe.example.com",
+      "--include",
+      "--method",
+      "PATCH",
+      "--input",
+      "-",
+      "repos/a.b_c-d/x.y/issues/1",
+    ]);
+  });
+
+  it("refuses a number that is not a positive integer, an owner or repository outside the shape, a dot segment and a bad host", () => {
+    const bad: Record<string, unknown>[] = [
+      { ...ISSUE, number: 0 },
+      { ...ISSUE, number: -12 },
+      { ...ISSUE, number: 1.5 },
+      { ...ISSUE, number: Number.NaN },
+      { ...ISSUE, number: Number.POSITIVE_INFINITY },
+      { ...ISSUE, number: 2 ** 53 },
+      { ...ISSUE, number: "12" },
+      { ...ISSUE, owner: "acme/x" },
+      { ...ISSUE, owner: "a b" },
+      { ...ISSUE, owner: "" },
+      { ...ISSUE, owner: "acme%2Fx" },
+      { ...ISSUE, owner: "acme\n" },
+      { ...ISSUE, repo: "app/../other" },
+      { ...ISSUE, repo: "app?state=open" },
+      { ...ISSUE, repo: "app#1" },
+      { ...ISSUE, repo: "app:1" },
+      { ...ISSUE, owner: ".." },
+      { ...ISSUE, owner: "." },
+      { ...ISSUE, repo: ".." },
+      { ...ISSUE, repo: "." },
+      { ...ISSUE, hostname: "https://github.com" },
+      { ...ISSUE, hostname: "" },
+    ];
+    for (const request of bad) {
+      expect(outcomeOf(() => ghCloseIssueArgs(request as Parameters<typeof ghCloseIssueArgs>[0])), JSON.stringify(request)).toBe("GH_REFUSED");
+    }
+  });
+
+  it("refuses a bad shape before gh starts", async () => {
+    await expect(ghCloseIssue({ ...ISSUE, number: 0 }, { env: { PATH: "" } })).rejects.toMatchObject({ code: "GH_REFUSED" });
+    await expect(ghCloseIssue({ ...ISSUE, repo: ".." }, { env: { PATH: "" } })).rejects.toMatchObject({ code: "GH_REFUSED" });
+  });
+
+  it("stays out of the door: ghApi still refuses a PATCH to an issue, so nothing but this function closes one", async () => {
+    expect(() => ghApiArgs({ method: "PATCH", path: "repos/acme/app/issues/12", body: { state: "closed", state_reason: "completed" }, hostname: HOST })).toThrow(/gh api:/);
+    await expect(ghApi({ method: "PATCH", path: "repos/acme/app/issues/12", body: { state: "closed" }, hostname: HOST }, { env: { PATH: "" } })).rejects.toMatchObject({ code: "GH_REFUSED" });
+  });
+});
+
 describe("parseGhInclude", () => {
   it("reads the status from the head's first line and the JSON after the blank line", () => {
     const stdout = 'HTTP/2.0 422 Unprocessable Entity\r\nContent-Type: application/json\r\n\r\n{"message":"Validation Failed"}';
@@ -305,6 +378,19 @@ describe("ghApi", () => {
     });
     expect(await readFile(log, "utf8")).toBe("api\n--hostname\ngithub.com\n--include\n--method\nPOST\n--input\n-\nrepos/acme/app/pulls/7/requested_reviewers\nprompt=1\n");
     expect(JSON.parse(await readFile(input, "utf8"))).toEqual({ reviewers: ["a-person"], team_reviewers: ["core"] });
+  });
+
+  it.skipIf(process.platform === "win32")("starts the issue close with its one constant body on stdin, whatever else the request carries (a2-land-closes-issue)", async () => {
+    const { bin, work, log, input } = await standIn('HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n\r\n{"number":12,"state":"closed"}', 0);
+    // Fields a caller might try to slip in: none of them is a part of the request, so none may reach the path or the body.
+    const request = { hostname: HOST, owner: "acme", repo: "app", number: 12, body: "reopened by text", state: "open", state_reason: "not_planned", labels: [], path: "repos/acme/app/git/refs" };
+
+    await expect(ghCloseIssue(request as Parameters<typeof ghCloseIssue>[0], { cwd: work, env: { PATH: bin } })).resolves.toEqual({
+      status: 200,
+      json: { number: 12, state: "closed" },
+    });
+    expect(await readFile(log, "utf8")).toBe("api\n--hostname\ngithub.com\n--include\n--method\nPATCH\n--input\n-\nrepos/acme/app/issues/12\nprompt=1\n");
+    expect(JSON.parse(await readFile(input, "utf8"))).toEqual({ state: "closed", state_reason: "completed" });
   });
 
   it.skipIf(process.platform === "win32")("starts the program it is given, not one PATH names, and refuses a relative one (review/75)", async () => {
