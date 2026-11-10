@@ -4537,9 +4537,9 @@ the appendix does not move, and each case now declares no advisory row. Neither 
 copy, so `EXPECTED_MOVES` gains no row, as for run 59's two of 2026-11-05: that table holds only
 carried cases, although the rule under "Advisory criteria do not become an appendix nobody reads" reads
 as if every disposition took one. The 51 carried blocks byte-identical and twenty-seven moved hold. The
-1.19.1 run is planned on a new judge, so a new configuration, and the repeat rule binds only runs of
-one configuration; both rows are settled all the same, since a fall back to the old judge would be
-bound by it. This was taken after run 63's scores were known. The counts move: 150 → 148 advisory
+repeat rule binds only runs of one configuration, and both rows are settled before the next run of
+run 63's configuration, whatever judge a later run uses. This was taken after run 63's scores were
+known. The counts move: 150 → 148 advisory
 criteria; both cases' B / A cells move from 9 / 1 to 9 / 0. The 1,035 binding criteria, the 179 cases,
 the floor tags, the thresholds and the 219 non-negotiable rows hold. Both case files are already among
 the 80 above, so that count holds; each moves, so under the incremental rule each re-measures. No eval

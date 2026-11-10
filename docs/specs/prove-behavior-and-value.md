@@ -2514,8 +2514,8 @@ still read for its own label during the change.
   - As built: the take-out's Limits above reads as done. A dated paragraph in `evals/SET-v7.md` ("The deleted-row
     take-out retired, 2026-11-10") says that from the driver's first pin after the 1.19.0 tag a scoring judge's output
     reaches `parseGrade` as it does on the public route and `RESULTS.md` carries no § 10a; runs 58 to 63 keep the § 10a
-    they recorded, and no grade changes, since no disposition note names a row. The driver lives outside this
-    repository, so the set's paragraph is this repository's record of it.
+    they recorded, and no grade changes, since no disposition note names a row. That paragraph is where this
+    repository records the retirement.
   - GIVEN the two cases THEN neither declares an advisory row, each note's hash equals the sha-256 of the deleted row's
     text at `5146b44b`, and the set's advisory count reads 148 with both case-index rows at 9 / 0
     (`test/evals/roster.test.ts`, `test/evals/locators.test.ts`, `test/evals/successorInputs.test.ts`).

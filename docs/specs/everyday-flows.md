@@ -8131,12 +8131,20 @@ ref origin no longer has, one `- <UTC> cleanup: <act>` record line per act, and 
   - As built: `RunCleanupLane` carries the lane's `name`, set when the clean-up is planned from the farm it read
     (`laneName`), and `removed`, `kept`, the name lock and the `removed lane` act use it. A kept branch names its holder
     by place, `checked out in the main checkout`, `checked out in lane <name>` or `checked out in another checkout`,
-    compared through links (`holderPlace`). A failure's reason, and the message of a clean-up whose plan does not read, is
-    the failure's first line with the lane's path made its name and the farm's, the git directory's and the checkouts'
-    prefixes taken out (`failureLine`, `planRunCleanup`, `src/runs/runCleanup.ts`; the `cleanup` doc comment,
-    `src/cli/commands/runLand.ts`).
-  - Limits: `failureLine` takes out only the lane's path and the folders the clean-up itself read, so a failure whose
-    first line names any other path, the git program's own among them, keeps it.
+    compared through links (`holderPlace`). A failure's reason, and the message of a clean-up whose plan does not read,
+    depends on where the failure came from (read at `c2f5bf41`). A message the clean-up built itself is kept whole. A
+    failure in reading the clean-up's places is named by the read that failed and its class, with its own words only
+    where they hold no path separator (`step`, `placesOf`). A failure the clean-up's own engine raised once its places
+    are read is its first line with the lane's path made its name and the farm's, the git directory's and the
+    checkouts' prefixes taken out, each in the spelling given and the one through its links. Any other failure, and one
+    of those whose line still shows a path, could carry a path, so it is named by its own words where they hold no path
+    separator, with its class where it has one, and otherwise by its class alone, `no class` where it has none: `git
+    could not be started (<class>)`, `git was stopped before it finished (<class>)` or `it failed with <class>; its
+    message names a path, so it is left out` (`classed`, `failureLine`, `planRunCleanup`, `src/runs/runCleanup.ts`;
+    the `cleanup` doc comment, `src/cli/commands/runLand.ts`).
+  - Limits: whether a path still shows in the engine's line is read from where it starts, a `/`, `\`, `~` or drive
+    letter at the line's front or after a space, a quote, a backtick or one of `(`, `=`, `:`, `,` and `[`; a path that
+    starts after any other character, a `<` or a `;` among them, stays in the line.
   - Proof: `test/runs/runCleanup.test.ts`, `test/cli/commands/runLand.test.ts` (the clean-up cases, a kept lane in a
     farm under a temporary folder printing no absolute path).
 - **Proof:** `test/runs/runCleanup.test.ts`, `test/cli/commands/runLand.test.ts`, `test/runs/morning.test.ts`,

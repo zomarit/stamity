@@ -40,26 +40,28 @@ Two items need a word.
   the default branch's copy, so until that merge the old copy runs the CLI version it names, which closes no issue. The
   new file gives the workflow's token read rights only and gives the `land` job its write rights, now with
   `issues: write`.
-- **A linked root file now reads as absent to detection.** A `package.json`, `pyproject.toml`, version file or
-  workspace file at the repository's root that is a symbolic link, is not a regular file, or is over 1 MiB is read as
-  missing. A linked root `package.json` gives no JavaScript, no scripts and no `packageManager` pin, so the lockfile
-  alone names the package manager; a repository whose only evidence is that link reads as greenfield; and a workspace
-  member whose own `package.json` is a link drops out of the package list. Put the file itself in place of the link to
-  keep what it said.
+- **A linked root file now reads as absent to detection.** A root file whose text detection reads, such as a manifest
+  (`package.json`, `pyproject.toml`, `Cargo.toml`), a version file (`.nvmrc`, `.python-version`) or a workspace file
+  (`pnpm-workspace.yaml`), now gives detection none of its text when it is a symbolic link, is not a regular file, or
+  is over 1 MiB. A linked root `package.json` gives no JavaScript, no scripts and no `packageManager` pin, so the
+  lockfile alone names the package manager; a repository whose only evidence is that link reads as greenfield; and a
+  workspace member whose own `package.json` is a link drops out of the package list. Put the file itself in place of
+  the link to keep what it said.
 
 ### Security
 
 - **A lane's credential scan follows a linked folder.** `stamity worktree setup` scanned a `symlink` row's folder for
   files named like credentials, but not when the row's source was itself a link to a folder. It now scans the folder
-  the link points to, wherever it lies, and refuses the row on a hit. `node_modules` stays the one folder it does not
-  scan, and a broken link or a link loop is linked as before.
+  the link points to, wherever it lies, and refuses the row on a hit. `node_modules` stays the one row it does not
+  scan, linked or real; a link the scan meets inside a folder is still skipped, so what that link points to reaches the
+  lane unchecked; and a broken link or a link loop is linked as before.
 - **`/st-board`'s write check no longer counts another account's push right.** After a 403 on the permission read,
   the fallback read `permissions.push` for whichever account `gh` was signed in as. It now counts it only when
   `gh api user --jq .login` names the acting account, ignoring case; any other answer, or none, fails the check, and
   the link stays read-only.
-- **`SECURITY.md` names the lane's one unscanned link.** The lane's row now says `stamity worktree setup` does not scan
-  a linked `node_modules` for files named like credentials, so one in the other checkout's installed packages reaches
-  the lane unchecked.
+- **`SECURITY.md` names the lane's unscanned `node_modules`.** The lane's row now says `stamity worktree setup` does
+  not scan a linked `node_modules` for files named like credentials, so one in the other checkout's installed packages
+  reaches the lane unchecked.
 
 ### Added
 
@@ -109,8 +111,8 @@ Two items need a word.
   manager's manifest reader read at most 1 MiB and refuse a link, a FIFO or a folder, so `stamity ready` and the
   unattended pre-flight finish on a FIFO and no longer read a huge file whole. A refused file reads as absent (see
   Upgrading from 1.19.0).
-- **A COBOL- or ABAP-only repository is no longer read as greenfield.** `init` reads a repository whose only stack is
-  one of those as a live codebase.
+- **A COBOL- or ABAP-only repository is no longer read as greenfield.** When `init` plans a repository whose only
+  stack is one of those, its `decisions.greenfield` is now `false`.
 - **The unattended ending says who merges.** When the run's record holds the `PR:` and `Login:` lines the land job
   reads, with no blocked status and no `## Refused` row, the final message says the land job merges the pull request
   once its evidence holds; for `asks`, a blocked or refused ending, a `land job lines not written` line, or no such
