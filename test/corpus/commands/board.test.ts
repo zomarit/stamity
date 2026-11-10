@@ -841,8 +841,12 @@ describe("st-board — platform reference table", () => {
     // missing push access". What changed about the contract: a cloud proxy answers 403 on the
     // collaborator read for an account that holds push, so a 403 now takes the Access check's
     // fallback to the repository's `permissions.push`, and only a missing push right fails it.
+    // TEST CHANGE, justified (2026-11-10, REQ-FLOW-087): this pin ended "only when that fallback
+    // reads no push right". What changed about the contract: `permissions.push` is the right of
+    // whichever account `gh` is signed in as, so the fallback also fails the check when that login
+    // is not the acting account's, and the sentence grew that clause.
     expect(cli).toContain(
-      "a 403 there on a read of the linked repository itself is reported as `not attached to this session`, never as a missing board, while a 403 on the permission read alone takes the Access check's fallback and is a failed write check naming missing push access only when that fallback reads no push right",
+      "a 403 there on a read of the linked repository itself is reported as `not attached to this session`, never as a missing board, while a 403 on the permission read alone takes the Access check's fallback and is a failed write check naming missing push access only when that fallback reads no push right, or names a login other than the acting account's",
     );
     expect(cli).not.toContain("a 403 on the permission read alone is a failed write check");
     expect(cli).not.toContain("a 403 there is reported as");
@@ -873,6 +877,26 @@ describe("st-board — platform reference table", () => {
       "in a REST-only session, `gh api 'repos/<owner>/<repo>/labels?per_page=100' --paginate --jq '.[].name'`",
     );
     expect(setup).toContain("In a REST-only session (the GitHub row) a Projects link is refused.");
+  });
+
+  // Added 2026-11-10 (REQ-FLOW-087): the 403 fallback read `permissions.push` for whichever
+  // account `gh` is signed in as, so another account's push right passed the acting account's
+  // write check. The fallback now counts only when `gh` names the acting account.
+  it("counts the 403 fallback's push right only for the acting account's own login (REQ-FLOW-087)", async () => {
+    const [, , cliCell = "", accessCell = ""] = tables(section((await board()).parsed.body, "Platform reference table"))[0]?.rows[0] ?? [];
+    const access = flat(accessCell);
+    const cli = flat(cliCell);
+
+    // The login check sits right after the push-right clause it bounds, so it binds the fallback.
+    expect(access).toContain(
+      "which passes it only when `true`, and only when `gh api user --jq .login` names the acting account (ignoring case), any other acting account failing the check",
+    );
+    // Edge case: gh signed in as `Alice` for the acting account `alice` still counts.
+    expect(access).toContain("(ignoring case)");
+    // Edge case: a rate-limit 403 stays a rate limit, ahead of both readings, after the new clause.
+    const loginEnd = cli.indexOf("or names a login other than the acting account's");
+    expect(loginEnd).toBeGreaterThan(-1);
+    expect(cli.indexOf("a 403 on any read whose message names a rate limit is reported as a rate limit, ahead of both readings")).toBeGreaterThan(loginEnd);
   });
 
   // Added 2026-10-14 (REQ-LADDER-007, plan 020 file 3 unit f4, review round 1, `review/15`): the
