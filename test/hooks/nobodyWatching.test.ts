@@ -9,9 +9,9 @@
  */
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildPortableHookRunner, PORTABLE_RUNNER_FILE } from "../../src/hooks/portableRunner.ts";
 import { GITHUB_MCP_ROWS } from "../../src/hooks/personOnly.ts";
 import {
@@ -70,13 +70,35 @@ const UNMOVED = [
   "npm unpublish",
 ] as const;
 
+/** The shipped line naming the system files other git builds keep (REQ-FLOW-134); every copy placed here swaps it. */
+const CANDIDATES_LINE =
+  'const SYSTEM_GITCONFIG_CANDIDATES = ["/etc/gitconfig", "/opt/homebrew/etc/gitconfig", "/usr/local/etc/gitconfig", ' +
+  '"/home/linuxbrew/.linuxbrew/etc/gitconfig", "/Library/Developer/CommandLineTools/usr/share/git-core/gitconfig", ' +
+  '"/Applications/Xcode.app/Contents/Developer/usr/share/git-core/gitconfig"];';
+
+/**
+ * A guard copy for a run here, its candidate system files swapped for one file under the test's temporary folder,
+ * absent unless a case writes it, the swap asserted: so no host's own system files reach a result.
+ */
+function swapCandidates(content: string): string {
+  expect(content).toContain(`\n${CANDIDATES_LINE}\n`);
+  const swapped = content.replace(CANDIDATES_LINE, () => `const SYSTEM_GITCONFIG_CANDIDATES = ${JSON.stringify([getRepo().path("system.gitconfig")])};`);
+  expect(swapped).not.toBe(content);
+  return swapped;
+}
+
+/** The variables the guard reads to find a git build's system file, by their upper-case name (Windows reads any case). */
+const HOST_PLACES = new Set(["PATH", "HOME", "USERPROFILE", "HOMEBREW_PREFIX", "CONDA_PREFIX", "PROGRAMFILES", "PROGRAMDATA"]);
+
 /** The guard for one client where emission writes it, in a repository on `feat/x`; returns its path. */
 async function placeGuard(tool: Tool, files: Record<string, string> = {}): Promise<string> {
   const guard = planCoreHookScripts(POLICY, tool, { ...CLI_PIN, personOnlyGuard: true }).find((script) => script.fileName === PERSON_ONLY_GUARD_FILE);
   if (guard === undefined) throw new Error("the plan carried no person-only guard");
   await getRepo().seedFiles({
     ".git/HEAD": "ref: refs/heads/feat/x\n",
-    [`.stamity/generated/hooks/${tool}/${guard.fileName}`]: guard.content,
+    // TEST CHANGE, justified (REQ-FLOW-134, host-free runs): the candidate system files swapped for one under the temp
+    // folder, so the host's own system files cannot move a result; every other byte is emission's.
+    [`.stamity/generated/hooks/${tool}/${guard.fileName}`]: swapCandidates(guard.content),
     ...files,
   });
   return getRepo().path(".stamity", "generated", "hooks", tool, guard.fileName);
@@ -89,15 +111,22 @@ function payload(tool: Tool, command: string, fields: Record<string, unknown> = 
   return JSON.stringify({ ...extra, tool_name: "Bash", tool_input: { command }, ...fields });
 }
 
-/** The child's environment: the test's own, less every variable the guard reads, plus the case's. */
+/**
+ * The child's environment: the test's own, less every variable the guard reads, plus the case's. TEST CHANGE, justified
+ * (REQ-FLOW-134, host-free runs): the guard reads other git builds' system files whatever GIT_CONFIG_NOSYSTEM says, so
+ * each variable that places one is pinned under the temp folder too: a PATH holding no git (the child starts by node's
+ * absolute path, and neither the guard nor the runner starts a program by name), a home folder there, and no Homebrew,
+ * conda or Windows program folder; GIT_CONFIG_SYSTEM goes with the other git variables. A case that needs one passes it.
+ */
 function hookEnv(env: Record<string, string>): NodeJS.ProcessEnv {
-  const base = { ...process.env };
-  for (const name of ["STAMITY_UNATTENDED", "STAMITY_REPO_ROOT", NOBODY_WATCHING_VARIABLE, "GH_REPO", "GH_HOST", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "XDG_CONFIG_HOME"]) {
+  const base = Object.fromEntries(Object.entries(process.env).filter(([name]) => !HOST_PLACES.has(name.toUpperCase())));
+  for (const name of ["STAMITY_UNATTENDED", "STAMITY_REPO_ROOT", NOBODY_WATCHING_VARIABLE, "GH_REPO", "GH_HOST", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_SYSTEM", "XDG_CONFIG_HOME"]) {
     delete base[name];
   }
   base.GIT_CONFIG_GLOBAL = "/dev/null";
   base.GIT_CONFIG_NOSYSTEM = "1";
-  return { ...base, ...env };
+  const home = getRepo().path("home");
+  return { ...base, PATH: getRepo().path("no-git"), HOME: home, USERPROFILE: home, ...env };
 }
 
 /** One run's whole answer: its exit, stdout and stderr. */
@@ -314,6 +343,39 @@ describe("the suite's own environment (build/5)", () => {
   it("runs every test file with the switch off, so a shell that has it on still tests the asks", () => {
     // vitest.config.ts sets it to "" in every worker; a child spawned with this env inherits it off.
     expect(process.env[NOBODY_WATCHING_VARIABLE]).toBe("");
+  });
+
+  // Red before the harness pinned them: the host's own variables named system and user files every run here read.
+  it("keeps the host's own git configuration out of every run here, and reads a system file a case names", async () => {
+    const moved = '[remote "origin"]\n\tpushurl = https://github.com/other/repo.git\n';
+    const guard = await placeGuard("claude", {
+      ".git/config": '[remote "origin"]\n\turl = https://github.com/acme/app.git\n',
+      "host/etc/gitconfig": moved,
+      "host/.gitconfig": moved,
+      "host/xdg/git/config": moved,
+      // A regular file named git, never run: only its place is read.
+      "host/bin/git": "not a program\n",
+      "host/bin/git.exe": "not a program\n",
+    });
+    expect(readFileSync(guard, "utf8")).not.toContain(CANDIDATES_LINE);
+    const host = getRepo().path("host");
+    const command = "git push -u origin feat/x";
+    for (const name of ["HOMEBREW_PREFIX", "CONDA_PREFIX", "HOME", "USERPROFILE"]) vi.stubEnv(name, host);
+    vi.stubEnv("PATH", `${getRepo().path("host", "bin")}${delimiter}${process.env.PATH ?? ""}`);
+    vi.stubEnv("XDG_CONFIG_HOME", getRepo().path("host", "xdg"));
+    vi.stubEnv("GIT_CONFIG_SYSTEM", getRepo().path("host", "etc", "gitconfig"));
+    vi.stubEnv("GIT_CONFIG_NOSYSTEM", "");
+    vi.stubEnv("GIT_CONFIG_GLOBAL", getRepo().path("host", ".gitconfig"));
+    vi.stubEnv("GIT_CONFIG_COUNT", "1");
+    try {
+      expect(said("claude", run(guard, payload("claude", command)))).toEqual({ kind: "allow" });
+      expect(said("claude", run(guard, payload("claude", command), ON))).toEqual({ kind: "allow" });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    // One fact away: the same file, named by the case itself, is read, and the push waits for a person.
+    expect(said("claude", run(guard, payload("claude", command), { ...ON, HOMEBREW_PREFIX: host })).kind).toBe("refuse");
+    expect(heldLines()).toHaveLength(1);
   });
 });
 

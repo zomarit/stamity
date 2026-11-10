@@ -1,7 +1,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runCommand } from "../../../src/cli/commands/run.ts";
@@ -95,6 +95,15 @@ const SEED_ENV = {
 function git(cwd: string, args: readonly string[]): string {
   return execFileSync("git", [...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, ...SEED_ENV } }).trim();
 }
+
+/** The shipped line naming the system files other git builds keep (REQ-FLOW-134); the guard copies placed here swap it. */
+const CANDIDATES_LINE =
+  'const SYSTEM_GITCONFIG_CANDIDATES = ["/etc/gitconfig", "/opt/homebrew/etc/gitconfig", "/usr/local/etc/gitconfig", ' +
+  '"/home/linuxbrew/.linuxbrew/etc/gitconfig", "/Library/Developer/CommandLineTools/usr/share/git-core/gitconfig", ' +
+  '"/Applications/Xcode.app/Contents/Developer/usr/share/git-core/gitconfig"];';
+
+/** The variables the guard reads to find a git build's system file, by their upper-case name (Windows reads any case). */
+const HOST_PLACES = new Set(["PATH", "HOME", "USERPROFILE", "HOMEBREW_PREFIX", "CONDA_PREFIX", "PROGRAMFILES", "PROGRAMDATA"]);
 
 const RUN = "2026-10-16_overnight";
 const RUN_BRANCH = `stamity/${RUN}`;
@@ -878,17 +887,29 @@ describe("stamity run start", () => {
      * The person-only guard's decision on `command` in `repo`, the guard emitted where the engine writes it: the
      * reason it stops the call with, an ask's or a refusal's, or null when it lets the call through.
      */
-    async function guardDenies(repo: string, command: string): Promise<string | null> {
+    async function guardDenies(repo: string, command: string, extra: Record<string, string> = {}): Promise<string | null> {
       const guard = planCoreHookScripts("../../agent-tool-policies.json", "claude", { packageName: canonical().name, version: "1.0.0-golden", personOnlyGuard: true }).find(
         (script) => script.fileName === PERSON_ONLY_GUARD_FILE,
       );
       if (guard === undefined) throw new Error("the plan carried no person-only guard");
       const dir = join(repo, ".stamity", "generated", "hooks", "claude");
       await mkdir(dir, { recursive: true });
-      await writeFile(join(dir, guard.fileName), guard.content);
-      const env = { ...process.env };
-      delete env.STAMITY_UNATTENDED;
-      delete env.STAMITY_REPO_ROOT;
+      // TEST CHANGE, justified (REQ-FLOW-134, host-free runs): the copy's candidate system files are swapped for one
+      // under the temp folder, absent unless a case writes it, so the host's own system files cannot move a result;
+      // every other byte is emission's.
+      expect(guard.content).toContain(`\n${CANDIDATES_LINE}\n`);
+      const swapped = guard.content.replace(CANDIDATES_LINE, () => `const SYSTEM_GITCONFIG_CANDIDATES = ${JSON.stringify([getRoot().path("system.gitconfig")])};`);
+      expect(swapped).not.toBe(guard.content);
+      await writeFile(join(dir, guard.fileName), swapped);
+      // TEST CHANGE, justified (REQ-FLOW-134, host-free runs): the guard reads git's merged configuration, gh's own
+      // variables and other git builds' system files, so the child gets an empty global file, no system file, none of
+      // those variables, and each variable that places a system file pinned under the temp folder: a PATH holding no
+      // git (the child starts by node's absolute path, and the guard starts no program), a home folder there, and no
+      // Homebrew, conda or Windows program folder. Every case here reads only the repository it seeds.
+      const env: NodeJS.ProcessEnv = Object.fromEntries(Object.entries(process.env).filter(([name]) => !HOST_PLACES.has(name.toUpperCase())));
+      for (const name of ["STAMITY_UNATTENDED", "STAMITY_REPO_ROOT", "GH_REPO", "GH_HOST", "GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_SYSTEM", "XDG_CONFIG_HOME"]) delete env[name];
+      const home = getRoot().path("home");
+      Object.assign(env, { GIT_CONFIG_GLOBAL: NO_GIT_CONFIG, GIT_CONFIG_NOSYSTEM: "1", PATH: getRoot().path("no-git"), HOME: home, USERPROFILE: home }, extra);
       const input = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command }, cwd: "." });
       const result = spawnSync(process.execPath, [join(dir, guard.fileName)], { input, encoding: "utf8", env, timeout: CHILD_TIMEOUT_MS }); // TEST CHANGE, justified: a time limit only, no expected value moved.
       // TEST CHANGE (v0a2, REQ-FLOW-123, REQ-FLOW-124): attended, Claude Code's guard now asks for an act that can be
@@ -914,6 +935,36 @@ describe("stamity run start", () => {
       expect(stdout).toContain("origin/HEAD: pointed at refs/remotes/origin/develop (was absent), so the shell guard counts develop as the default branch");
       expect(await guardDenies(repo, "git push origin develop")).toContain("push-default");
       expect(await guardDenies(repo, "git push origin feat/y")).toBeNull();
+    });
+
+    // Red before the harness pinned them: the guard's child read the host's own system and user git files.
+    it("keeps the host's own git configuration out of the guard's runs here, and reads a system file a case names", async () => {
+      const repo = await seedRepo();
+      const host = getRoot().path("host");
+      const moved = '[remote "origin"]\n\tpushurl = https://github.com/other/repo.git\n';
+      await mkdir(join(host, "etc"), { recursive: true });
+      await mkdir(join(host, "bin"), { recursive: true });
+      await mkdir(join(host, "xdg", "git"), { recursive: true });
+      await writeFile(join(host, "etc", "gitconfig"), moved);
+      await writeFile(join(host, ".gitconfig"), moved);
+      await writeFile(join(host, "xdg", "git", "config"), moved);
+      // A regular file named git, never run: only its place is read.
+      await writeFile(join(host, "bin", "git"), "not a program\n");
+      await writeFile(join(host, "bin", "git.exe"), "not a program\n");
+      for (const name of ["HOMEBREW_PREFIX", "CONDA_PREFIX", "HOME", "USERPROFILE"]) vi.stubEnv(name, host);
+      vi.stubEnv("PATH", `${join(host, "bin")}${delimiter}${process.env.PATH ?? ""}`);
+      vi.stubEnv("XDG_CONFIG_HOME", join(host, "xdg"));
+      vi.stubEnv("GIT_CONFIG_SYSTEM", join(host, "etc", "gitconfig"));
+      vi.stubEnv("GIT_CONFIG_NOSYSTEM", "");
+      vi.stubEnv("GIT_CONFIG_GLOBAL", join(host, ".gitconfig"));
+      vi.stubEnv("GIT_CONFIG_COUNT", "1");
+      try {
+        expect(await guardDenies(repo, "git push origin feat/y")).toBeNull();
+      } finally {
+        vi.unstubAllEnvs();
+      }
+      // One fact away: the same file, named by the case itself, is read, and the push asks.
+      expect(await guardDenies(repo, "git push origin feat/y", { HOMEBREW_PREFIX: host })).toContain("outside-write");
     });
 
     it("rewrites a stale origin/HEAD naming main to the branch REST names, on a kept branch too", async () => {
