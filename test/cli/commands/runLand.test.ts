@@ -5,7 +5,7 @@ import { appendFile, mkdir, readFile, rm, symlink, writeFile } from "node:fs/pro
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { gitSurfaceRecordPath, readRunGitSurface } from "../../../src/cli/commands/gate.ts";
+import { gateCommand, gitSurfaceRecordPath, readRunGitSurface } from "../../../src/cli/commands/gate.ts";
 import { runCommand } from "../../../src/cli/commands/run.ts";
 import { LAND_CLOCK } from "../../../src/cli/commands/runLand.ts";
 import type * as GitWriteModule from "../../../src/cli/engine/gitWrite.ts";
@@ -4008,6 +4008,84 @@ describe("stamity run land", () => {
           route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: `${RUN_DIR}/record.md` }, { filename: LEDGER }]);
           gh.threads = [threadsPage([], BOT)];
           expect((await run(clone, LANDS)).doc).toMatchObject({ outcome: "landed", pr: { number: 7, head }, evidence: { ledger: { open: [] } }, notDone: [] });
+        });
+
+        // review/191, amended (S105): a real cloud run saved its `gate held --json` result in its reports folder, the path the
+        // Verdict dispatch names for the reviewer. The text is the command's own output, so the shape cannot drift.
+        async function heldResult(repo: string, digest?: string): Promise<{ code: number; text: string }> {
+          const argv = ["gate", "held", "--paths", "a.txt", ...(digest === undefined ? [] : ["--expect", digest]), "--json"];
+          const result = await runInProcess([gateCommand], argv, { cwd: repo });
+          return { code: result.code, text: result.stdout };
+        }
+
+        it.each([
+          ["matches no expectation", undefined, 0],
+          ["names a changed held test", `sha256:${"0".repeat(64)}`, 1],
+        ])("writes the empty ledger beside a saved gate held result that %s, and the job lands", async (_case, digest, exit) => {
+          const { repo, remote } = await ending(LAND_ON, null);
+          const saved = await heldResult(repo, digest);
+          expect(saved.code).toBe(exit);
+          expect(JSON.parse(saved.text)).toMatchObject({ ok: exit === 0, command: "gate", subcommand: "held", paths: [{ path: "a.txt", sha256: expect.any(String) }] });
+          await put(repo, `${REPORTS}/.gitignore`, "*\n");
+          await put(repo, `${REPORTS}/branch-held-r1.json`, saved.text);
+          await put(repo, `${REPORTS}/u1-reviewer-r1.md`, findings(""));
+
+          const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+          expect(result.code, JSON.stringify(result.doc)).toBe(0);
+          expect(result.doc).toMatchObject({ notDone: [] });
+          const head = git(repo, ["rev-parse", "HEAD"]);
+          expect(git(repo, ["cat-file", "-s", `${head}:${LEDGER}`])).toBe("0");
+
+          const clone = join(dirname(repo), "job");
+          git(dirname(repo), ["clone", "-q", "-b", RUN_BRANCH, remote, clone]);
+          git(clone, ["remote", "set-url", "origin", "https://github.com/o/r.git"]);
+          route("GET repos/o/r/pulls/7", pull(head));
+          route(`GET repos/o/r/commits/${head}/check-runs`, { total_count: 1, check_runs: [{ id: 1, name: "test", status: "completed", conclusion: "success", app: { id: 15368 } }] });
+          route(`GET repos/o/r/branches/${RUN_BRANCH}`, { commit: { sha: head } });
+          route("GET repos/o/r/pulls/7/files", [{ filename: "a.txt" }, { filename: `${RUN_DIR}/record.md` }, { filename: LEDGER }]);
+          gh.threads = [threadsPage([], BOT)];
+          expect((await run(clone, LANDS)).doc).toMatchObject({ outcome: "landed", pr: { number: 7, head }, evidence: { ledger: { open: [] } }, notDone: [] });
+        });
+
+        const reshaped = (text: string, change: (doc: Record<string, unknown>) => void): string => {
+          const doc = JSON.parse(text) as Record<string, unknown>;
+          change(doc);
+          return `${JSON.stringify(doc)}\n`;
+        };
+        it.each([
+          ["an extra key", (text: string) => reshaped(text, (doc) => (doc["note"] = "x"))],
+          ["a findings array", (text: string) => reshaped(text, (doc) => (doc["findings"] = [JSON.parse(WARNING)]))],
+          ["a severity key", (text: string) => reshaped(text, (doc) => (doc["severity"] = "Warning"))],
+          ["an extra key on a path row", (text: string) => reshaped(text, (doc) => ((doc["paths"] as Record<string, unknown>[])[0]!["summary"] = "b is wrong"))],
+          ["a required key missing", (text: string) => reshaped(text, (doc) => delete doc["digest"])],
+          ["another command's envelope", (text: string) => reshaped(text, (doc) => (doc["command"] = "ledger"))],
+          ["bad JSON", () => "{not json\n"],
+          ["a JSON array", () => "[]\n"],
+        ])("writes none where a reports .json is not a gate held result, it holding %s, naming it in Not done:", async (_case, make) => {
+          const { repo } = await ending(LAND_ON, null);
+          await put(repo, `${REPORTS}/branch-held-r1.json`, make((await heldResult(repo)).text));
+
+          const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+          expect(result.code, JSON.stringify(result.doc)).toBe(0);
+          expect(result.doc).toMatchObject({ notDone: [held("branch-held-r1.json (not a gate held result)")] });
+          expect(existsSync(join(repo, LEDGER))).toBe(false);
+        });
+
+        it.each([
+          ["a link in its place", async (repo: string) => symlink(join(repo, "a.txt"), join(repo, REPORTS, "branch-held-r1.json"))],
+          ["over the read cap", async (repo: string) => writeFile(join(repo, REPORTS, "branch-held-r1.json"), " ".repeat(1_048_577))],
+        ])("writes none where a reports .json does not read, %s, naming it in Not done:", async (_case, make) => {
+          const { repo } = await ending(LAND_ON, null);
+          await mkdir(join(repo, REPORTS), { recursive: true });
+          await make(repo);
+
+          const result = await run(repo, ["end", "--run", RUN, "--title", "t"]);
+
+          expect(result.code, JSON.stringify(result.doc)).toBe(0);
+          expect(result.doc).toMatchObject({ notDone: [held("branch-held-r1.json (did not read)")] });
+          expect(existsSync(join(repo, LEDGER))).toBe(false);
         });
 
         // review/189: a merge whose side branch added and deleted the ledger leaves both parents without one, so git's default

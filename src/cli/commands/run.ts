@@ -26,7 +26,7 @@ import { CliFailure } from "../kit/output.ts";
 import type { CliContext, CommandModule, CommandResult } from "../kit/program.ts";
 import { sanitizeLabel } from "../kit/prompts.ts";
 import { readHeldList } from "./away.ts";
-import { gitSurfaceRecordPath, readPushed, readRunGitSurface, scanChange } from "./gate.ts";
+import { gitSurfaceRecordPath, isHeldResult, readPushed, readRunGitSurface, scanChange } from "./gate.ts";
 import { parseItemRef, runContract } from "./runContract.ts";
 import { runLand } from "./runLand.ts";
 
@@ -1758,9 +1758,16 @@ async function writeEmptyLedger(ctx: CliContext, at: { cwd: string; ledgerRel: s
  * review/191: the entries a run's `reports/` folder holds that are not reports, by exact name: the ignore file
  * `ensureReportsIgnore` writes (`src/runs/ledgerStore.ts`), and the orchestrator's `<pass>-diff-r<N>.patch` a verdict role
  * with no git grant reads (`content/commands/st-work.md`, Verdict dispatch). Any other name that is not a report name stops
- * the empty ledger, since `ledger append --report` refuses it and so no row carries what it holds.
+ * the empty ledger, since `ledger append --report` refuses it and so no row carries what it holds. A `.json` name is
+ * {@link HELD_RESULT_NAME}'s, taken only for its text.
  */
 const REPORTS_NON_REPORTS: readonly RegExp[] = [/^\.gitignore$/, /^[a-z0-9][a-z0-9-]*-diff-r[1-9][0-9]*\.patch$/];
+
+/**
+ * A saved `gate held --json` result, whose path the Verdict dispatch names for the reviewer (`content/commands/st-work.md`,
+ * Build checks): taken only where its text is that result by {@link isHeldResult}, gate's own check of its output.
+ */
+const HELD_RESULT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/;
 
 /**
  * A fence's opening or closing line, its info string group 1: three or more backticks or tildes, at any indentation, and
@@ -1772,7 +1779,7 @@ const ANY_FENCE_LINE = /^(?:[ \t>]|[-*+][ \t]|[0-9]+[.)][ \t])*(?:`{3,}|~{3,})(.
  * review/188 and review/191: why the run's reports rule out an empty ledger, or `null` where none does. With no ledger,
  * every finding the folder holds is one no row carries, so the write goes ahead only where every entry is one `ledger
  * append` would take as clean: its name a report name (`REPORT_NAME_PATTERN`, the check `--report` runs) or one of
- * {@link REPORTS_NON_REPORTS}; a regular file within the report read cap; no fence line whose info string names
+ * {@link REPORTS_NON_REPORTS}, or a `.json` that is a `gate held --json` result and nothing more; a regular file within the report read cap; no fence line whose info string names
  * `findings`, in any case or spacing, but the exact opening the append's parser takes; and, where that opening is there,
  * the block parses with that parser and holds no item. A reports folder that is not a folder, does not list, or holds
  * more entries than the cap on reads also stops it. No reports folder reads as no findings. Entries are named by file
@@ -1791,9 +1798,11 @@ function reportsHoldingFindings(ctx: CliContext, dir: string, rel: string): stri
   if (names.length > layout.REPORT_READS_MAX) return `${rel} holds over ${layout.REPORT_READS_MAX} entries, past what is read`;
   const open = layout.fenceOpenPattern(layout.FINDINGS_FENCE);
   const stop = (name: string): string | null => {
-    if (!layout.REPORT_NAME_PATTERN.test(name) && !REPORTS_NON_REPORTS.some((allowed) => allowed.test(name))) return "not a report name";
+    const heldResult = HELD_RESULT_NAME.test(name);
+    if (!heldResult && !layout.REPORT_NAME_PATTERN.test(name) && !REPORTS_NON_REPORTS.some((allowed) => allowed.test(name))) return "not a report name";
     const read = readCapped(join(dir, name), layout.REPORT_READ_MAX_BYTES);
     if (read === null || read.truncated) return "did not read";
+    if (heldResult) return isHeldResult(read.text) ? null : "not a gate held result";
     const lines = read.text.replace(/^\uFEFF/, "").split(/\r?\n/);
     const near = lines.some((line) => {
       const info = ANY_FENCE_LINE.exec(line)?.[1];

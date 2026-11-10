@@ -1991,7 +1991,7 @@ function runHeld(ctx: CliContext, opts: Record<string, unknown>): CommandResult 
         paths: keys.map((path) => ({ path: sanitizeLabel(path), sha256: null })),
         expect: expected,
         reason,
-      },
+      } satisfies HeldJson,
     };
   }
 
@@ -2025,8 +2025,67 @@ function runHeld(ctx: CliContext, opts: Record<string, unknown>): CommandResult 
   if (reason !== undefined) ctx.io.err(`held: ${reason}\n`);
   return {
     exitCode: reason === undefined ? 0 : 1,
-    json: { subcommand: HELD, digest: held, root: sanitizeLabel(root), paths: shown, expect: expected, ...(reason === undefined ? {} : { reason }) },
+    json: { subcommand: HELD, digest: held, root: sanitizeLabel(root), paths: shown, expect: expected, ...(reason === undefined ? {} : { reason }) } satisfies HeldJson,
   };
+}
+
+/** The payload `gate held --json` prints beside the envelope's `ok`, `command` and `version`, as {@link runHeld} builds it. */
+type HeldJson = {
+  subcommand: typeof HELD;
+  digest: string | null;
+  root: string | null;
+  paths: { path: string; sha256: string | null }[];
+  expect: string | null;
+  reason?: string;
+};
+
+const stringOrNull = (value: unknown): boolean => value === null || typeof value === "string";
+
+/**
+ * Each {@link HeldJson} key with its value's check, `satisfies` holding the list to the type's keys exactly, so a key
+ * added to one and not the other fails the typecheck.
+ */
+const HELD_JSON_FIELDS = {
+  subcommand: (value: unknown) => value === HELD,
+  digest: stringOrNull,
+  root: stringOrNull,
+  paths: (value: unknown) =>
+    Array.isArray(value) &&
+    value.every((row: unknown) => {
+      if (typeof row !== "object" || row === null || Array.isArray(row)) return false;
+      const keys = Object.keys(row);
+      return keys.length === 2 && keys.includes("path") && keys.includes("sha256") && typeof (row as { path: unknown }).path === "string" && stringOrNull((row as { sha256: unknown }).sha256);
+    }),
+  expect: stringOrNull,
+  reason: (value: unknown) => typeof value === "string",
+} satisfies Record<keyof HeldJson, (value: unknown) => boolean>;
+
+/** The envelope keys `runCli` prints around a command's payload under `--json`. */
+const ENVELOPE_FIELDS: Readonly<Record<string, (value: unknown) => boolean>> = {
+  ok: (value) => typeof value === "boolean",
+  command: (value) => value === "gate",
+  version: (value) => typeof value === "string",
+};
+
+/**
+ * review/191: whether `text` is one `gate held --json` result as the CLI prints it: one JSON object holding the envelope's
+ * keys and {@link HeldJson}'s, every required one present, each value its own type, and no other key at any depth. A run
+ * saves that result in its reports folder for the reviewer (`content/commands/st-work.md`, Build checks), so `run end`
+ * takes it as no report; any other text there is one.
+ */
+export function isHeldResult(text: string): boolean {
+  let value: unknown;
+  try {
+    value = JSON.parse(text.replace(/^﻿/, ""));
+  } catch {
+    return false;
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const doc = value as Record<string, unknown>;
+  const fields: Readonly<Record<string, (value: unknown) => boolean>> = { ...ENVELOPE_FIELDS, ...HELD_JSON_FIELDS };
+  const optional = new Set(["reason"]);
+  if (Object.keys(doc).some((key) => !Object.hasOwn(fields, key))) return false;
+  return Object.entries(fields).every(([key, check]) => (Object.hasOwn(doc, key) ? check(doc[key]) : optional.has(key)));
 }
 
 /** The options each subcommand takes; any other one given is a usage error, exit 2, before anything is read. */

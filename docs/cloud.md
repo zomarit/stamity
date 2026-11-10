@@ -626,7 +626,8 @@ caller of the land evidence, and it merges through the same rules, with no bypas
   `PR:` and `Login:` lines at the head so the job can read them, attended or not, and that commit starts CI again. A
   run whose reviews found nothing has no ledger, which the job refuses, so that `run end` also commits an empty ledger
   there, never over one that exists, and only where every file in the run's `reports/` folder is one `ledger append`
-  would take as clean: a report name (or the folder's `.gitignore` or a diff patch), and no findings block that holds an
+  would take as clean: a report name (or the folder's `.gitignore`, a diff patch, or a saved `gate held --json` result
+  with no other key), and no findings block that holds an
   item, does not parse, or opens with anything but the exact `stamity-findings` line. So the
   job can land an attended run that ended on `run end`. One closed through `run checkpoint --pr` alone
   has no such lines, so the job leaves it to a person.

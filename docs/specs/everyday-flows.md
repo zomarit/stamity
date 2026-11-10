@@ -7354,7 +7354,10 @@ agent's command line, Then the guard refuses it (REQ-FLOW-121).
   same pass as those lines (`writeEmptyLedger`, `src/cli/commands/run.ts`). It never writes over a ledger that exists.
   It first reads the run's `reports/` folder, and writes the ledger only where every entry there is one `ledger append`
   would take as clean (review/191): its name is a report name, by the same check `--report` runs, or is the folder's
-  `.gitignore` or an orchestrator's `<pass>-diff-r<N>.patch`; it is a regular file within the report read cap; no fence
+  `.gitignore` or an orchestrator's `<pass>-diff-r<N>.patch`, or it is a `.json` whose text is one `gate held --json`
+  result and nothing more (the result a Verdict dispatch names for the reviewer, held by `isHeldResult` in
+  `src/cli/commands/gate.ts` to the keys `gate held` prints, no other key at any depth); it is a regular file within the
+  report read cap; no fence
   in it, of backticks or tildes at any indentation or inside a blockquote or a list item, has an info string naming
   `findings` in any case or spacing unless it is the exact opening the append's parser takes; and any such exact block
   parses with that parser and holds no item. Any other entry (a misnamed `.md`, a log, a subfolder, a link), a near-miss fence, a block that does not parse or
@@ -7375,7 +7378,9 @@ agent's command line, Then the guard refuses it (REQ-FLOW-121).
     "writes none where a reports entry %s, naming it in Not done:, and the job refuses", "writes none where a
     report-named path does not read, a link in its place", "writes none where the reports folder holds a folder, naming
     each stopping entry in Not done:", "writes the empty ledger where every reports entry is one ledger append takes as
-    clean, and the job lands", "writes none where a merged side branch added and deleted the ledger", "writes none where
+    clean, and the job lands", "writes the empty ledger beside a saved gate held result that %s, and the job lands",
+    "writes none where a reports .json is not a gate held result, it holding %s, naming it in Not done:", "writes none
+    where a reports .json does not read, %s, naming it in Not done:", "writes none where a merged side branch added and deleted the ledger", "writes none where
     the ledger's history does not read, naming it in Not done:", "names a ledger write that fails in Not done:, the exit
     code unmoved", "leaves the job refusing a head with no ledger, unchanged").
 - **Proof:** `test/adapters/landWorkflow.test.ts`, `test/cli/commands/runLand.test.ts`, `test/hooks/personOnlyGuard.test.ts`.
