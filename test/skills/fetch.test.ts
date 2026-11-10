@@ -584,6 +584,24 @@ describe.skipIf(!gitAvailable)("listCopiedSkills and removeSkill", () => {
     ]);
   });
 
+  it("reads a record listing a path outside its copy as unreadable, never hashing that path", async () => {
+    const root = getTemp().dir;
+    await mkdir(join(root, ".stamity", "skills"), { recursive: true });
+    await mkdir(join(root, ".stamity", "overrides", "skills", "climb", "references"), { recursive: true });
+    await writeFile(join(root, ".stamity", "overrides", "skills", "climb", "SKILL.md"), SKILL_MD);
+    // A real file outside the copy: an unchecked read would report it `changed`, so its existence would leak.
+    await writeFile(join(root, "secret.txt"), "outside\n");
+    const outside = { path: "../../../../secret.txt", sha256: "0".repeat(64), bytes: 8 };
+    const backslash = { path: "references\\..\\..\\SKILL.md", sha256: "0".repeat(64), bytes: 8 };
+    await writeFile(join(root, ".stamity", "skills", "climb.origin.json"), JSON.stringify({ name: "climb", files: [outside] }));
+    await writeFile(join(root, ".stamity", "skills", "slash.origin.json"), JSON.stringify({ name: "slash", files: [backslash] }));
+
+    expect(await listCopiedSkills(root)).toEqual([
+      { name: "climb", origin: null, state: "record-unreadable", changed: [], missing: [], extra: [] },
+      { name: "slash", origin: null, state: "record-unreadable", changed: [], missing: [], extra: [] },
+    ]);
+  });
+
   it("removes the copy and its record, and refuses a skill with no record", async () => {
     const fx = await fixture(SKILL_FILES);
     await addSkill(request(fx));
@@ -645,6 +663,18 @@ describe.skipIf(!gitAvailable)("addSkill — the Codex companion file", () => {
     const fx = await fixture({ ...SKILL_FILES, "house-style/Agents/OpenAI.yml": DEPENDENCIES });
 
     expect((await refusal(fx, () => addSkill(request(fx)))).message).toContain("house-style/Agents/OpenAI.yml declares");
+  });
+
+  it("quotes a key or value carrying control bytes in the refusal, so no escape reaches the terminal", async () => {
+    // YAML double-quoted escapes: `\e` is ESC (C0), `\x9b` is CSI (C1), each one a terminal control.
+    const fx = await fixture({ ...SKILL_FILES, "house-style/agents/openai.yaml": '"\\e[2Jtools": 1\npolicy:\n  "\\x9b2Jinner": "\\x9b2J"\n' });
+
+    const { message } = await refusal(fx, () => addSkill(request(fx)));
+
+    expect(message).toContain('"\\u001b[2Jtools": 1');
+    expect(message).toContain('policy."\\u009b2Jinner": "\\u009b2J"');
+    // oxlint-disable-next-line no-control-regex -- the absence of control bytes IS the assertion
+    expect(message).not.toMatch(/[\u001b\u009b]/);
   });
 
   it("refuses a companion that does not read as one YAML map", async () => {
@@ -742,5 +772,52 @@ describe.skipIf(!gitAvailable)("addSkill — run from a lane", () => {
     expect(added.written).toBe(true);
     expect(await readFile(join(root, ".stamity", "overrides", "skills", "house-style", "SKILL.md"), "utf8")).toBe(SKILL_MD);
     expect(await readdir(main)).not.toContain("house-style");
+  });
+
+  /** A main checkout whose git directory sits apart (`--separate-git-dir`), its commit, and a linked worktree. */
+  async function separateLane(fx: Fixture): Promise<{ main: string; lane: string }> {
+    const base = dirname(fx.root);
+    const main = join(base, "main");
+    const laneDir = join(base, "lane");
+    await mustGit(base, "init", "--quiet", "--initial-branch", "main", "--separate-git-dir", join(base, "main-git"), main);
+    await writeFile(join(main, "main.txt"), "main\n");
+    await mustGit(main, "add", "main.txt");
+    await mustGit(main, ...IDENTITY, "commit", "--quiet", "-m", "main");
+    await mustGit(main, "worktree", "add", "--quiet", "-b", "lane/x", laneDir);
+    return { main, lane: laneDir };
+  }
+
+  it("refuses from a linked worktree of a --separate-git-dir checkout, whose main checkout git does not name", async () => {
+    const fx = await fixture(SKILL_FILES);
+    const { lane: root } = await separateLane(fx);
+
+    const error = await laneRefusal(fx, root);
+
+    expect(error.message).toContain("the main checkout of this checkout could not be found");
+    expect(error.message).toContain("not named .git");
+  });
+
+  it("refuses from a linked worktree of a bare repository, which has no main checkout", async () => {
+    const fx = await fixture(SKILL_FILES);
+    const { main } = await lane(fx);
+    const bare = join(dirname(fx.root), "bare.git");
+    const root = join(dirname(fx.root), "bare-lane");
+    await mustGit(dirname(fx.root), "clone", "--quiet", "--bare", main, bare);
+    // `runGit` will not start inside a bare repository's layout, so the worktree is made with git directly.
+    execFileSync("git", ["--git-dir", bare, "worktree", "add", "--quiet", "-b", "lane/y", root], { stdio: "ignore" });
+
+    const error = await laneRefusal(fx, root);
+
+    expect(error.message).toContain("the main checkout of this checkout could not be found");
+  });
+
+  it("copies into a --separate-git-dir checkout run from itself, which is its own main checkout", async () => {
+    const fx = await fixture(SKILL_FILES);
+    const { main } = await separateLane(fx);
+
+    const added = await addSkill(request(fx, { root: main }));
+
+    expect(added.written).toBe(true);
+    expect(await readFile(join(main, ".stamity", "overrides", "skills", "house-style", "SKILL.md"), "utf8")).toBe(SKILL_MD);
   });
 });

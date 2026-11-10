@@ -210,9 +210,23 @@ function toolGrants(skillText: string, source: string): string[] {
 }
 
 /**
+ * A fetched YAML value as JSON with every control byte escaped, so a refusal or a grant line shows it without the
+ * terminal acting on it: `JSON.stringify` escapes C0 and leaves DEL and the C1 range (a lone CSI among it) raw.
+ */
+function quotedValue(value: unknown): string {
+  // oxlint-disable-next-line no-control-regex -- escaping control bytes IS the point
+  return (JSON.stringify(value) ?? "null").replace(/[\u007f-\u009f]/g, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`);
+}
+
+/** A fetched YAML key as shown: a plain word as written, any other key quoted by {@link quotedValue}. */
+function quotedKey(key: string): string {
+  return /^[A-Za-z0-9_-]+$/.test(key) ? key : quotedValue(key);
+}
+
+/**
  * What a Codex companion declares past the keys {@link COMPANION_KEYS} reads as harmless, each `<key path>: <value as
- * JSON>`; a text that is not one YAML map (a duplicate key among it) is one declaration, since no reading of it is
- * sure.
+ * JSON>`, a key that is not a plain word quoted; a text that is not one YAML map (a duplicate key among it) is one
+ * declaration, since no reading of it is sure.
  */
 function companionDeclarations(text: string, source: string): string[] {
   let parsed: unknown;
@@ -226,11 +240,11 @@ function companionDeclarations(text: string, source: string): string[] {
   for (const [key, value] of Object.entries(parsed)) {
     const known = COMPANION_KEYS[key];
     if (known === undefined || !isPlainObject(value)) {
-      found.push(`${key}: ${JSON.stringify(value)}`);
+      found.push(`${quotedKey(key)}: ${quotedValue(value)}`);
       continue;
     }
     for (const [inner, innerValue] of Object.entries(value)) {
-      if (known[inner] === undefined || typeof innerValue !== known[inner]) found.push(`${key}.${inner}: ${JSON.stringify(innerValue)}`);
+      if (known[inner] === undefined || typeof innerValue !== known[inner]) found.push(`${key}.${quotedKey(inner)}: ${quotedValue(innerValue)}`);
     }
   }
   return found;
@@ -507,16 +521,25 @@ async function recordHeadAt(path: string): Promise<ReturnType<typeof readRecordH
  * The main checkout of `root`'s repository where `root` is not it (a lane, a linked worktree), else null: the folder
  * holding the git common directory, as `stamity gc` and the run clean-up find it. A root git does not open as a
  * repository and that holds no `.git` of its own has no other checkout; one that holds a `.git` git cannot read is
- * a fault, since it may be a lane whose main checkout is unread.
+ * a fault, since it may be a lane whose main checkout is unread. A git common directory not named `.git` (a bare
+ * repository with worktrees, a `--separate-git-dir` checkout) names no main checkout: read from the repository's own
+ * checkout that is no other checkout, and read from a linked worktree it is a fault, since the main checkout is
+ * unknown.
  */
 async function otherMainCheckout(root: string, run: WorktreeGitRunner): Promise<string | null> {
-  const outcome = await run({ args: ["rev-parse", "--git-common-dir"], cwd: root });
+  const outcome = await run({ args: ["rev-parse", "--git-dir", "--git-common-dir"], cwd: root });
   if (outcome.status !== 0) {
     if (!(await present(join(root, ".git")))) return null;
     throw new Error(`git cannot read this checkout: ${gitSaid(outcome)}`);
   }
-  const commonDir = resolve(root, outcome.stdout.trim());
-  if (basename(commonDir) !== ".git") return null;
+  const lines = outcome.stdout.split(/\r?\n/).filter((line) => line !== "");
+  if (lines.length !== 2) throw new Error(`git named no git directory for this checkout: ${gitSaid(outcome)}`);
+  const [gitDir, commonDir] = lines.map((line) => resolve(root, line)) as [string, string];
+  if (basename(commonDir) !== ".git") {
+    const [gitReal, commonReal] = await Promise.all([realpath(gitDir), realpath(commonDir)]);
+    if (gitReal === commonReal) return null;
+    throw new Error(`this is a linked worktree of a repository whose git directory is not named .git, so its main checkout cannot be found`);
+  }
   const main = dirname(commonDir);
   const [mainReal, rootReal] = await Promise.all([realpath(main), realpath(root)]);
   return mainReal === rootReal ? null : main;
@@ -652,10 +675,25 @@ async function walkCopy(dir: string, prefix = ""): Promise<string[]> {
   return nested.flat();
 }
 
-/** Re-hash one copied skill against its record; never fetches. */
+/**
+ * Whether a record's file path is one {@link readTree} would have landed: a plain relative path inside the copy, with
+ * no `..`, control or Windows-refused segment. A path that fails could name a file outside the copy.
+ */
+function recordPathLands(name: string, path: string): boolean {
+  try {
+    assertSafePackRelPath(`skills/${name}/${path}`, "the origin record");
+  } catch {
+    return false;
+  }
+  return path.split("/").every((segment) => segmentDefect(segment) === null);
+}
+
+/** Re-hash one copied skill against its record; never fetches. A record listing a path outside its copy does not read. */
 async function driftOf(root: string, name: string, origin: SkillOrigin | null): Promise<CopiedSkill> {
   const none = { changed: [], missing: [], extra: [] };
-  if (origin === null) return { name, origin, state: "record-unreadable", ...none };
+  if (origin === null || !origin.files.every((file) => recordPathLands(name, file.path))) {
+    return { name, origin: null, state: "record-unreadable", ...none };
+  }
   const copy = join(root, ...skillCopyPath(name).split("/"));
   const copyEntry = await lstat(copy).catch(() => null);
   if (copyEntry === null || !copyEntry.isDirectory()) return { name, origin, state: "copy-missing", ...none };
