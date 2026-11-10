@@ -165,8 +165,9 @@ so its commits and pull requests carry your name. If that account has admin righ
 does not pass, because the account could lift it. Step 4 has the setting for that. Cloud runs lists
 which rules count for which account.
 
-For each ruleset, GitHub's REST API answers `current_user_can_bypass`, which its reference describes
-as the bypass type of the account making the request. The pre-flight counts a ruleset as binding only
+For each ruleset, GitHub's REST API answers `current_user_can_bypass`. GitHub's REST reference, read
+on 2026-11-10, lists that field with the values `always`, `pull_requests_only`, `never` and `exempt`,
+and no description. The pre-flight counts a ruleset as binding only
 where that field reads `never` or `pull_requests_only`. Any other answer, or no field, reads as a
 bypass. On 2026-11-10, on a private scratch repository's ruleset, the field read `never` for an
 administrator's account.

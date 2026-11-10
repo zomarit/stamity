@@ -6683,6 +6683,14 @@ describe("the factory guide (REQ-FLOW-158, REQ-FLOW-159)", () => {
       for (const verb of ["run", "runLand", "runContract", "gate", "plan"]) expect(read(`src/cli/commands/${verb}.ts`), `${verb} reads the key`).not.toMatch(reader);
     });
   });
+
+  // ADDED (REQ-FLOW-170): GitHub's REST reference gives `current_user_can_bypass` no description, so the page states only
+  // what the reference lists, with its read date in a sentence of its own.
+  it("states the bypass field as GitHub's reference lists it, dated", () => {
+    const rule = flowed(section("Step 2: Block direct pushes to the default branch"));
+    expect(rule).toContain("GitHub's REST reference, read on 2026-11-10, lists that field with the values `always`, `pull_requests_only`, `never` and `exempt`, and no description.");
+    expect(rule).not.toContain("which its reference describes as the bypass type of the account making the request");
+  });
 });
 
 // ADDED (REQ-FLOW-157, REQ-WORKTREE-019): the land job's token and the lane's one unscanned link, said where the
