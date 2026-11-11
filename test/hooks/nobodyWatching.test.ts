@@ -390,6 +390,27 @@ describe("a remote write while nobody is watching", () => {
     expectHeld(heldLines()[0], ACT, RULE, "claude", command);
   });
 
+  it("refuses the main thread's remote write, naming the fault, when the away marker or the run records cannot be read, and holds nothing", async () => {
+    const guard = await placeGuard("claude", { ".git/config": ORIGIN });
+    const fault = (code: string, place: string): Said => ({
+      kind: "refuse",
+      reason: expect.stringMatching(new RegExp(`^The person-only guard could not decide this shell call \\(${code} on .*${place}\\), so it is refused \\(REQ-FLOW-102\\)\\.$`)) as unknown as string,
+    });
+    for (const command of WRITES) {
+      // Non-degenerate, and the neighbour one fact away: with every reading whole the same call runs unasked.
+      expect(said("claude", run(guard, payload("claude", command))), command).toEqual({ kind: "allow" });
+      // A fault other than a missing marker fails closed; a catch reading it as absent would run the write here.
+      expect(said("claude", run(guard, payload("claude", command), {}, markerFault())), command).toEqual(fault("EIO", "away\\.json"));
+    }
+    // The run records, read before the marker: at the ceiling every head is read, none open, and each write runs; one
+    // folder more is a fault, which refuses each spelling, the include write among them, which no later read refuses.
+    for (let n = 1; n <= 2_000; n += 1) mkdirSync(getRepo().path(".stamity", "runs", `2026-10-18_r${n}`), { recursive: true });
+    for (const command of WRITES) expect(said("claude", run(guard, payload("claude", command))), command).toEqual({ kind: "allow" });
+    mkdirSync(getRepo().path(".stamity", "runs", "2026-10-18_r2001"));
+    for (const command of WRITES) expect(said("claude", run(guard, payload("claude", command))), command).toEqual(fault("RUN_FOLDERS_OVER_2000", "runs"));
+    expect(heldLines()).toEqual([]);
+  });
+
   // A pin, green before and after: the refusals that come first are unchanged, and nothing is held for them.
   it("leaves a sub-agent's refusal and a client's that names no agent as they were, holding nothing", async () => {
     const guard = await placeGuard("claude", { ".git/config": ORIGIN });

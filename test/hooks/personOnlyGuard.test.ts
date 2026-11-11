@@ -3812,4 +3812,46 @@ describe("the system configuration files of other git builds", () => {
     await getRepo().seedFiles({ "tool/etc/gitconfig": CREDENTIAL });
     expect(decide("claude", guard, "git push -u origin feat/x", path("tool"))).toEqual({ deny: false });
   });
+
+  it("asks for a push to origin where the first git on PATH is a link into another build whose system file moves origin", async () => {
+    const guard = await placeSwapped([], {
+      ".git/config": ORIGIN,
+      // A regular file named git, never run: only its place is read. The PATH entry holds a link to it, and the folder
+      // beside that entry holds no system file, so only the build the link resolves into names one.
+      "cellar/git/2.47.0/bin/git": "not a program\n",
+      "cellar/git/2.47.0/etc/gitconfig": '[remote "origin"]\n\tpushurl = https://github.com/other/repo.git\n',
+      "links/bin/.keep": "",
+    });
+    symlinkSync(getRepo().path("cellar", "git", "2.47.0", "bin", "git"), getRepo().path("links", "bin", "git"));
+    const path = { PATH: getRepo().path("links", "bin") };
+    expect(decide("claude", guard, "git push -u origin feat/x", path)).toMatchObject({ deny: true, ask: true, reason: expect.stringContaining("(`outside-write`)") });
+    // One fact away: the same build's file holding a credential section alone, and the same push runs.
+    await getRepo().seedFiles({ "cellar/git/2.47.0/etc/gitconfig": CREDENTIAL });
+    expect(decide("claude", guard, "git push -u origin feat/x", path)).toEqual({ deny: false });
+  });
+
+  it("asks for a push to origin on Windows where Git for Windows' program-folder or shared-data system file moves origin", async () => {
+    // The guard child believes it runs on Windows: a preload sets process.platform before the guard reads it. A
+    // substitute, since a POSIX leg has no Windows to run on; the guard reads the platform only to pick the places it
+    // looks, and the Windows legs run this case on the real one.
+    const preload = getRepo().path("win32.mjs");
+    const MOVED = '[remote "origin"]\n\tpushurl = https://github.com/other/repo.git\n';
+    const guard = await placeSwapped([], {
+      ".git/config": ORIGIN,
+      "programs/Git/etc/gitconfig": MOVED,
+      "shared/Git/config": MOVED,
+      "empty/.keep": "",
+    });
+    writeFileSync(preload, 'Object.defineProperty(process, "platform", { value: "win32" });\n');
+    const windows = (places: Record<string, string>): Record<string, string> => ({ NODE_OPTIONS: `--import=${pathToFileURL(preload).href}`, ...places });
+    const empty = getRepo().path("empty");
+    const outside = { deny: true, ask: true, reason: expect.stringContaining("(`outside-write`)") };
+    expect(decide("claude", guard, "git push -u origin feat/x", windows({ ProgramFiles: getRepo().path("programs"), ProgramData: empty }))).toMatchObject(outside);
+    expect(decide("claude", guard, "git push -u origin feat/x", windows({ ProgramFiles: empty, ProgramData: getRepo().path("shared") }))).toMatchObject(outside);
+    // One fact away: both places named and holding no system file, and the same push runs.
+    expect(decide("claude", guard, "git push -u origin feat/x", windows({ ProgramFiles: empty, ProgramData: empty }))).toEqual({ deny: false });
+    // And both files holding a credential section alone: it runs.
+    await getRepo().seedFiles({ "programs/Git/etc/gitconfig": CREDENTIAL, "shared/Git/config": CREDENTIAL });
+    expect(decide("claude", guard, "git push -u origin feat/x", windows({ ProgramFiles: getRepo().path("programs"), ProgramData: getRepo().path("shared") }))).toEqual({ deny: false });
+  });
 });
