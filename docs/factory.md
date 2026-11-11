@@ -549,8 +549,9 @@ Nothing stops that but this wait.
 The run first checks that it may start. Then it switches to the issue's branch, writes its contract,
 opens a draft pull request and does the plan. If the evidence holds it merges, as a real run on
 Claude's cloud did on 2026-11-10, which What real runs have shown says. On Claude's cloud the
-session's last message then says the merge waits on a person, and the land job merges moments later,
-so look at the pull request. If the evidence does not hold, the body says
+session's last message then says the land job merges the pull request once its evidence holds, and
+otherwise writes why on the pull request's status line; the land job merges moments later, so look at
+the pull request. If the evidence does not hold, the body says
 `merge waits on:`, with each reason, and [Cloud runs](cloud.md) has the morning walk. When the run's
 contract names the issue as `owner/repo#<n>` in origin's repository, `run end` writes
 `Closes <owner>/<repo>#<n>` into the body, so GitHub closes the issue when the pull request merges

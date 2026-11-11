@@ -243,7 +243,9 @@ and `state_reason: completed`) (`src/cli/engine/ghRunner.ts::ghMergePull`,
 `src/cli/engine/ghRunner.ts::ghCloseIssue`). Its
 writes through the door are the status line its row above names, in the pull request's body, and,
 under `autonomy.reviewTool`, the comment that asks the tool for a review. The land job makes the same
-calls under the token its workflow gives it, and reads origin's tip over REST. Every
+calls under the token its workflow gives it, and reads origin's tip over REST. After its own merge it
+also reads the run's issue through the door, and where it leaves that issue open it writes one more
+comment on the pull request, saying the issue stays open and why. Every
 call goes to the host origin was matched on. All of them, reads included, start the one absolute
 `PATH` entry the verb resolved once, and that entry and the program it links to are each checked to
 lie outside the work tree and the temp folders, compared as real, normalised paths, on Windows too.
