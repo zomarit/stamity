@@ -476,7 +476,10 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // Moved again 2026-11-11 (UTC) by the person-only guard hardening (REQ-FLOW-124), by what was measured: 374,792 bytes
   // / 7,622 lines (copilot, generated), past both rows, because the files' upstream merge of a branch whose name holds
   // "=" is now spelt so the reader still finds it. 374,676 + 116 = 374,792 bytes; 7,621 + 1 = 7,622 lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 374_792, lines: 7_622 },
+  // Moved again 2026-11-11 on the release line, by what was measured: 374,836 bytes / 7,624 lines (copilot, generated),
+  // past both rows, because the person-only guard hardening and learn capture's two trust flags now stand in one guard.
+  // 374,792 + 44 = 374,836 bytes; 7,622 + 2 = 7,624 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 374_836, lines: 7_624 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
