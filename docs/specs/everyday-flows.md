@@ -7299,7 +7299,7 @@ carry the marker.
   ask, since the land posts the marker alone there, and on a pull request already merged at the head it posts nothing
   (`askTool`, `src/cli/commands/runLand.ts`; `requestTimes`, `src/runs/reviewTool.ts`). The unit moved the two sentences
   above to say so, in place: "so no request goes on a head that cannot land", and the sentence on what `rounds` counts.
-  - Proof: `test/cli/commands/runLand.test.ts` ("posts nothing on a pull request already merged at the head", "names a
+  - Proof: `test/cli/commands/runLand.reviewTool.test.ts` ("posts nothing on a pull request already merged at the head", "names a
     marker that did not post, and the findings stand with no round spent", "ends the wait and refuses where the marker
     alone did not post, with no pending ask"), `test/docsPages.test.ts`, `test/corpus/skills/unattended.test.ts`.
 - **Limits** (`SECURITY.md`): The state comment is read from real pull requests and proven only in tests: the full loop of request, wait, read and resolve is `not run`. A deleted comment leaves no last editor to read, so a state comment deleted by
@@ -7430,7 +7430,7 @@ agent's command line, Then the guard refuses it (REQ-FLOW-121).
   reads: it reads the run by REQ-FLOW-168, the last marker whose id is a run id with at most a client's footer-shaped
   tail after it (`bodyRun`, `src/runs/pullRequest.ts`, the job's first read in `src/cli/commands/runLand.ts`); any other
   text after it still exits 0 as `not-a-run`.
-  - Proof: `test/cli/commands/runLand.test.ts` ("lands a run whose client added a footer after the marker, and writes the
+  - Proof: `test/cli/commands/runLand.job.test.ts` ("lands a run whose client added a footer after the marker, and writes the
     body with one marker, last", "exits 0 and touches nothing where a heading follows the run's marker").
 - **Amended 2026-11-10** (the 1.19.0 cut). A real unattended run on Claude's cloud ran one light unit, its review approved
   with no findings, and it closed with 0 ledger rows. `ledger append` with no findings writes no file, so the run pushed no
@@ -7459,7 +7459,7 @@ agent's command line, Then the guard refuses it (REQ-FLOW-121).
   `autonomy.landJob` off it writes no ledger. The land job still refuses a head with no ledger, unchanged. Limits: a
   finding no report file holds (an append fed on stdin alone), or a ledger lost before a shallow clone's first commit,
   is not seen.
-  - Proof: `test/cli/commands/runLand.test.ts` ("commits an empty ledger beside PR: and Login: with landJob on, and the
+  - Proof: `test/cli/commands/runLand.jobEnd.test.ts` ("commits an empty ledger beside PR: and Login: with landJob on, and the
     job's evidence reads no open row", "leaves a ledger with rows byte-identical with landJob on", "writes no ledger with
     landJob off", "writes none where the run's history holds a ledger the work tree lost, naming it in Not done:",
     "writes none where a reports entry %s, naming it in Not done:, and the job refuses", "writes none where a
@@ -7501,7 +7501,7 @@ agent's command line, Then the guard refuses it (REQ-FLOW-121).
     opens with three or more backticks or tildes reads as a fence line; the fix is to quote it inline. Over this
     checkout's reports when the unit was built, the rule refused none.
   - Proof: `test/runs/blocks.test.ts` (`isNearFindingsInfo`, `nearFindingsFences`, `parseFindingsBlock`),
-    `test/cli/commands/runLand.test.ts` ("writes none where a reports entry %s, naming it in Not done:, and the job
+    `test/cli/commands/runLand.jobEnd.test.ts` ("writes none where a reports entry %s, naming it in Not done:, and the job
     refuses", its near-fence and AppleDouble rows; "writes the empty ledger where a report's exact empty block sits beside
     text, sh, json, stamity-morning and stamity-closures fences"; "writes the empty ledger where the reports folder holds
     .DS_Store, Thumbs.db, desktop.ini and an AppleDouble file"; "writes none where .DS_Store is %s, naming it in Not
@@ -7543,7 +7543,7 @@ agent's command line, Then the guard refuses it (REQ-FLOW-121).
     token without `issues: write` is not measured; any answer but 200 to the read or the close leaves the issue open. An
     open issue labelled `stamity:ready` that a steered run names in both its contract and its body's `Closes` line is
     closed too (`SECURITY.md`, the land job).
-  - Proof: `test/cli/commands/runLand.test.ts` (the describe "the run's issue after the job's merge", with "closes the
+  - Proof: `test/cli/commands/runLand.job.test.ts` (the describe "the run's issue after the job's merge", with "closes the
     issue where the body's lines end in CRLF", "leaves an item in another repository open with its own reason, in Not
     done: and in one comment" and the describe "a failure after the merge"), `test/runs/landEvidence.test.ts` (the
     describe "the run's issue the land job closes (REQ-FLOW-157)"), `test/cli/engine/ghRunner.test.ts`,
@@ -7603,7 +7603,7 @@ the run refuses to start.
   origin's URL and `~/.gitconfig`, and the pre-flight never ties a login carried in a URL to `gh`'s account, so it
   refuses `direct-push` there (`docs/factory.md`, `docs/cloud.md`).
   - Proof: `test/runs/pullRequest.test.ts` ("bodyRun and endsWithRunMarker (REQ-FLOW-168)", "takes a footer of generator
-    lines and link-only lines, in both forms Claude Code writes"), `test/cli/commands/runLand.test.ts` ("lands a run whose
+    lines and link-only lines, in both forms Claude Code writes"), `test/cli/commands/runLand.job.test.ts` ("lands a run whose
     client added a footer after the marker, and writes the body with one marker, last"), `test/docsPages.test.ts` (the
     `CURSOR_REFUSAL` pins).
 - **Proof:** `test/corpus/skills/unattended.test.ts`, `test/docsPages.test.ts` ("states the task owner's limit on Claude's
@@ -7912,9 +7912,9 @@ run.
   - Proof: `test/runs/pullRequest.test.ts` ("takes the footer Claude's web cloud writes: a rule line, then a generator
     line in one emphasis pair", "takes a rule line of any of the three marks, and a generator or link line in one
     emphasis pair of any kind", "still reads prose after a rule line, emphasised prose, a mismatched or doubled pair, or
-    four lines as no run"), `test/cli/commands/runLand.test.ts` ("lands a run whose body ends in Claude's web footer, a
-    rule line and an emphasised generator line", "takes its own pull request whose body ends in Claude's web footer, and
-    commits PR: and Login: with landJob on").
+    four lines as no run"), `test/cli/commands/runLand.job.test.ts` ("lands a run whose body ends in Claude's web footer, a
+    rule line and an emphasised generator line"), `test/cli/commands/runLand.jobEnd.test.ts` ("takes its own pull request
+    whose body ends in Claude's web footer, and commits PR: and Login: with landJob on").
 
 ### REQ-FLOW-169 — A 403 on the permission read falls back to the acting account's own right
 
@@ -8198,7 +8198,7 @@ ref origin no longer has, one `- <UTC> cleanup: <act>` record line per act, and 
   - Limits: whether a path still shows in the engine's line is read from where it starts, a `/`, `\`, `~` or drive
     letter at the line's front or after a space, a quote, a backtick or one of `(`, `=`, `:`, `,` and `[`; a path that
     starts after any other character, a `<` or a `;` among them, stays in the line.
-  - Proof: `test/runs/runCleanup.test.ts`, `test/cli/commands/runLand.test.ts` (the clean-up cases, a kept lane in a
+  - Proof: `test/runs/runCleanup.test.ts`, `test/cli/commands/runLand.cleanup.test.ts` (the clean-up cases, a kept lane in a
     farm under a temporary folder printing no absolute path).
 - **Proof:** `test/runs/runCleanup.test.ts`, `test/cli/commands/runLand.test.ts`, `test/runs/morning.test.ts`,
   `test/cli/commands/run.test.ts` (the describe "stamity run end's closing line").
