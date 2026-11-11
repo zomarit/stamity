@@ -2,7 +2,7 @@
 id: prove-behavior-and-value
 # A design document, authored outside the spec command, amended from docs/plans/010-enterprise-release-02.md on 2026-09-26 and 2026-09-28 and from docs/plans/013-optimization-sweep-02.md and -03.md on 2026-09-30 and at the 1.11.0 cut on 2026-10-01, amended at the close of run 2026-10-03_pack-engine-defects on 2026-10-06, amended in run 2026-10-07_release-1-12-0 on 2026-10-08, amended in run 2026-10-08_maintainer-tooling on 2026-10-08, amended in run 2026-10-08_product-core on 2026-10-09, amended in run 2026-10-11_release-1-14-0 on 2026-10-11 and 2026-10-12, amended in run 2026-10-13_records-branch on 2026-10-14, amended in run 2026-10-14_cli-native on 2026-10-14 and 2026-10-15, amended in run 2026-10-15_cloud-runs on 2026-10-16, amended in run 2026-10-18_cloud-runs-2 on 2026-10-18, amended in run 2026-10-20_packs-rebuilt on 2026-10-21, amended in run 2026-10-21_packs-rebuilt-02 on 2026-10-22, amended from docs/plans/022-autonomy-distribution-01.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-25, amended from docs/plans/022-autonomy-distribution-02.md in run 2026-10-25_autonomy-distribution-02 on 2026-10-26, amended from docs/plans/023-factory-bridge-02.md in run 2026-11-05_factory-bridge-02 on 2026-11-05, amended from docs/plans/024-last-before-2-0-02.md in run 2026-11-09_last-before-2-0 on 2026-11-10, amended from docs/plans/025-patch-1-19-1-02.md in run 2026-11-10_patch-1-19-1 on 2026-11-10 and 2026-11-11, and excluded from the site build.
 # The records moved to the `records` branch on 2026-10-14; every path below that names this repository's own records — under `.stamity/runs/`, `.stamity/evidence/`, `.stamity/handoffs/`, `.stamity/inbox.md`, `docs/plans/`, `evals/runs/`, `evals/measurements/` or `evals/reach/` — reads on that branch (REQ-PROVE-023).
-status: shipped-with-1.19.0
+status: shipped-with-1.19.1
 obsolete_when: the measurement page, the security mapping and the QA evidence file are all generated from live data by the engine itself, or a decision row cuts the surface
 ---
 # Prove behavior and value
@@ -137,6 +137,11 @@ The text dated 2026-11-04 under REQ-PROVE-020, REQ-PROVE-033 and REQ-PROVE-034 c
 REQ-PROVE-047, added 2026-11-10, comes from plan 024 file 2 (`docs/plans/024-last-before-2-0-02.md`, run
 `2026-11-09_last-before-2-0`), merged at that run's Prove phase and read at `1daa3f8b`. It shipped with 1.19.0, which
 set `status: shipped-with-1.19.0`.
+
+The text dated 2026-11-10 under REQ-PROVE-012 and REQ-PROVE-047 comes from plan 025 file 2
+(`docs/plans/025-patch-1-19-1-02.md`, run `2026-11-10_patch-1-19-1`), read at `51c55ac1`, and the text dated
+2026-11-11 under REQ-PROVE-009, the `claude` judge's declared effort, from the maintainer's word of that day. It shipped
+with 1.19.1, which set `status: shipped-with-1.19.1`.
 
 ## Intent
 
