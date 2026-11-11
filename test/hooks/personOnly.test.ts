@@ -3853,6 +3853,37 @@ describe("the accept line of a run's proposal (REQ-FLOW-163, review/62)", () => 
     expect(personOnlyVerdict(command, ON_FEATURE), command).toMatchObject({ deny: true, ask: true });
   });
 
+  // `learn capture`'s two newer value options: each one's value, as two words or joined by `=`, before the held verb
+  // neither stands in for the verb nor hides it, so the line asks exactly as it does with the option left out.
+  it.each([
+    ["`--review-by` and its value", "stamity learn --review-by 2027-01-01 accept --run 2026-11-05_x", "stamity learn accept --run 2026-11-05_x"],
+    ["`--review-by` joined to its value", "stamity learn --review-by=2027-01-01 accept --run 2026-11-05_x", "stamity learn accept --run 2026-11-05_x"],
+    ["`--review-by` holding the verb's word", "stamity learn --review-by accept accept --run 2026-11-05_x", "stamity learn accept --run 2026-11-05_x"],
+    ["`--review-by` joined to the verb's word", "stamity learn --review-by=accept accept --run 2026-11-05_x", "stamity learn accept --run 2026-11-05_x"],
+    ["`--validated-against` and its value", "stamity learn --validated-against test/a.test.ts accept --run 2026-11-05_x", "stamity learn accept --run 2026-11-05_x"],
+    ["`--validated-against` joined to its value", "stamity learn --validated-against=test/a.test.ts accept --run 2026-11-05_x", "stamity learn accept --run 2026-11-05_x"],
+    ["`--validated-against` holding the verb's word", "stamity learn --validated-against accept accept --run 2026-11-05_x", "stamity learn accept --run 2026-11-05_x"],
+    ["`--validated-against` joined to the verb's word", "stamity learn --validated-against=accept accept --run 2026-11-05_x", "stamity learn accept --run 2026-11-05_x"],
+    ["both, through the pinned runner", "npx --no stamity learn --review-by 2027-01-01 --validated-against=npm-test accept --run 2026-11-05_x", "npx --no stamity learn accept --run 2026-11-05_x"],
+  ])("asks for the verb after %s, as it does without the option", (_, command, without) => {
+    expect(personOnlyVerdict(without, ON_FEATURE), without).toMatchObject({ deny: true, rule: "learn-accept", ask: true });
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual(personOnlyVerdict(without, ON_FEATURE));
+  });
+
+  // The mirror: a capture carrying either option runs, even when its value is the held verb's word.
+  it.each([
+    ["`--review-by` and a date", "stamity learn capture --title a-note --summary b --review-by 2027-01-01"],
+    ["`--review-by` holding `accept`", "stamity learn capture --title a-note --summary b --review-by accept"],
+    ["`--review-by` joined to `accept`", "stamity learn capture --title a-note --summary b --review-by=accept"],
+    ["`--review-by` holding `accept` before the verb", "stamity learn --review-by accept capture --title a-note --summary b"],
+    ["`--validated-against` and a path", "stamity learn capture --title a-note --summary b --validated-against test/a.test.ts"],
+    ["`--validated-against` holding `accept`", "stamity learn capture --title a-note --summary b --validated-against accept"],
+    ["`--validated-against` joined to `accept`", "stamity learn capture --title a-note --summary b --validated-against=accept"],
+    ["`--validated-against` holding `accept` before the verb", "stamity learn --validated-against accept capture --title a-note --summary b"],
+  ])("runs a capture with %s", (_, command) => {
+    expect(personOnlyVerdict(command, ON_FEATURE), command).toEqual({ deny: false });
+  });
+
   // The guard's two lists are literals, since it carries no import: this holds them to the options `learn` declares. A
   // value option the guard missed would ask on a title, and a list row whose option stopped taking a value would let
   // `accept` run unasked.
