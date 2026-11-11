@@ -236,6 +236,11 @@ amendment is a dated bullet, so the older text it reads over stands as the recor
 delivered: its unit stayed out of 1.19.0 (S103), so its section says so and states no behaviour. The rest shipped with
 1.19.0, which set `status: shipped-with-1.19.0`.
 
+The text dated 2026-11-11 under REQ-FLOW-102, REQ-FLOW-104, REQ-FLOW-124, REQ-FLOW-134, REQ-FLOW-166 and
+REQ-FLOW-178 comes from the person-only guard's hardening in the 1.19.1 patch, each entry walked to the code of the
+release line. Where an entry and the code differ, the text states the code. It cites code by file and symbol. An
+amendment is a dated bullet, or, where the older words would now be untrue, a replacement that quotes them beside it.
+
 ## Intent
 
 The nine commands and the setup that serves them should do what a user asks, day to day: calls resolve, gates run
@@ -5332,6 +5337,20 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
   `.stamity/skill-sources.json`; `PERSON_ONLY_PATHS`, `src/change/personOnlyPaths.ts`).
   - Proof: `test/hooks/personOnly.test.ts` (the `ASK_CLASS` set and the describe "the skill fetch (REQ-FLOW-180,
     s-skill-guard)"), `test/change/personOnlyPaths.test.ts`.
+- **Amended 2026-11-11** (1.19.1). A push is read against what the place's own git configuration files set for it,
+  from the repository, global and system files and their includes: a remote's push refmap, for a push naming no refspec
+  and beside a bare source; the push mode, `matching`, and `upstream` with the checked-out branch's merge, read for every
+  branch name; a remote's mirror setting (REQ-FLOW-124); tag-following; and submodule recursion (REQ-FLOW-134). A line's
+  own `-c` value of a setting takes the place of the files' value only where git reads it as the same key: the section
+  and the setting name in any letter case, the remote's or the branch's name compared as written. A push naming a URL or
+  a path reads the remote section of that exact name, as git does. A push on a line that also sets, moves or removes a
+  branch's upstream (a branch, checkout or switch call) is read as one to a remote the guard cannot place where it names
+  no remote, and as one to the default branch where it names no refspec. A push whose remote word, or one of whose
+  option words, holds text the shell fills in is refused as a force push (REQ-FLOW-124); a refspec word the shell fills
+  in still asks (`pushVerdict` with its `readPair`, and `upstreamWrite`, `src/hooks/personOnly.ts`; `configOf` and `pushPairs`,
+  `src/hooks/scripts.ts`).
+  - Proof: `test/hooks/personOnly.test.ts` (the describe "a push read against the place's own push configuration"),
+    `test/hooks/personOnlyGuard.test.ts`.
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`, `test/change/personOnlyPaths.test.ts`,
   `test/cli/commands/runCheckpoint.test.ts` (the held patch; the refused push, "refuses the push when a commit it would
   send changes a held path, rewriting no history"), `test/adapters/claude.test.ts`,
@@ -5366,8 +5385,10 @@ watches" and names the accepted risks: runtime ingress is screened by the model,
 times out fails open; Cursor's read-only first turns run no hooks; no shell guard sees Cursor's own push; a pattern
 deny rule can be respelled; every command in Claude Code's cloud can read the environment; a run that rewrites its own
 record head escapes the unattended push rule; Codex's non-interactive mode was seen running no project hooks, where the
-pre-flight then refuses; a repository's own push configuration and a GraphQL mutation read from a file pass the shell
-guard's patterns; behind Claude Code's cloud proxy the push and the REST reads run as the platform's shared app
+pre-flight then refuses; a repository's own push configuration that a file write on the same line changes, or that a
+fetch or pull on the same line moves by setting a branch's upstream, and a GraphQL mutation read from a file pass the
+shell guard's patterns (amended 2026-11-11, 1.19.1; it read "a repository's own push configuration and a GraphQL
+mutation read from a file"); behind Claude Code's cloud proxy the push and the REST reads run as the platform's shared app
 identity; a custom repository role that can edit rules, without admin, can lift a repository ruleset the pre-flight
 counted; a custom organization role that manages rulesets lets a member who administers the repository lift an
 organization ruleset; an administrator's repository-level acts (a transfer, a rename, a default-branch change) can take
@@ -6288,6 +6309,13 @@ command stay refused.
     ask prefix has no row, since a row ending in ` :*` after a `*` matched nothing; that and every respelling no row
     names stay the hook's, a residual `SECURITY.md` names. The mid-pattern rows also refuse a line whose message holds
     the flag, the safe direction; the `gh repo sync --force` rows refuse a local forced sync too.
+- **Amended 2026-11-11** (1.19.1). A force push a repository's own push refmap marks, and a push to a remote its
+  configuration mirrors, is refused, as a literal force push is; a line pair turning a remote's mirror setting off takes
+  the place of the files' setting only where git reads it as the same key, the remote's name compared as written
+  (REQ-FLOW-102). A push word the guard cannot show, in the remote's place or as an option, is read as a force push and
+  refused, since git may read it as a force, mirror or delete option, and a force, mirror or deletion written on the same
+  line is refused and named first; a refspec word the guard cannot show still asks (REQ-FLOW-102).
+  - Proof: `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`.
 - **Proof:** `test/hooks/personOnly.test.ts` (the `CLASSES` conformance rows, and "CLAUDE_DENY_ROWS and
   CLAUDE_ASK_ROWS"), `test/adapters/claude.test.ts` (`MID_PATTERN`, each row against a line it must match and an ask
   line it must not), `test/hooks/personOnlyGuard.test.ts`.
@@ -6702,6 +6730,24 @@ asks attended, and refuses unattended and for a sub-agent (`PERSON_ONLY_RULES`, 
     extensions; a `gh` version other than 2.102.0 for the cluster table; `gh`'s own configured default host
     (`build/23`); a sub-agent writing the git configuration file directly, which is any call's on Codex and Cursor; an
     origin reached through an SSH host alias asks, fail-closed (`build/24`, a troubleshooting entry).
+- **Amended 2026-11-11** (1.19.1).
+  - The files read gain the system file of another git build where such a build keeps it, read as an included file
+    whatever `GIT_CONFIG_NOSYSTEM` says (`SYSTEM_GITCONFIG_CANDIDATES` and `systemConfigCandidates`,
+    `src/hooks/scripts.ts`). Every value is decoded by git's own grammar, a value a backslash continues joined to the
+    next line; a value git refuses (an escape it does not know, a quote left open) and an include path starting `%(`
+    make the reading partial (`configValue`).
+  - A push or a gh write on a line that also moves a remote, a URL rewrite or an include asks (`outside-write`), and a
+    push on a line that also changes a push, branch or submodule setting asks (`push-default`). A push that also pushes
+    submodules asks (`outside-write`): the line's option decides first, then a `push.recurseSubmodules` pair on the
+    line, read beside the line's `submodule.recurse` pairs; otherwise every value of both keys, from the line and the
+    files, counts together. The run verbs pin `push.recurseSubmodules=no` (`PINNED_OPTIONS`,
+    `src/cli/engine/gitWrite.ts`).
+  - `remote-write`: while a run is unattended it is refused on every client, the unattended push rule's own reason kept
+    where that rule reads the line, and while nobody is watching it is refused and held as an ask is (REQ-FLOW-166).
+  - The residuals gain a system file at a prefix none of the candidates names, and a push configuration that a file
+    write on the same line changes, or that a fetch or pull on the same line moves by setting a branch's upstream.
+  - Proof: `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`, `test/hooks/nobodyWatching.test.ts`,
+    `test/cli/engine/gitWrite.test.ts`.
 - **Proof:** `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`,
   `test/hooks/personOnlyCopilotAsk.test.ts`, `test/hooks/scriptBudget.test.ts`, `test/docsPages.test.ts` (the
   outside-party sentences of `SECURITY.md`).
@@ -7768,9 +7814,11 @@ unit `k-unattended-text`; sign-offs S1, S23, S25, S59).
 Given `STAMITY_NOBODY_WATCHING` set to anything but `""`, `0` or `false` (any case, spaces trimmed), or anything at
 `.stamity/away.json` (a link, even to nothing, counts), When the person-only guard would answer ask, Then it refuses
 with the act's sentence and appends one line `{"at","rule","act","client"}` to `.stamity/away-held.jsonl`, never the
-command text (`nobodyWatching` and `heldForMorning`, `src/hooks/scripts.ts`). The switch is read only behind an ask,
-so every act that runs unasked still runs and every refusal stays a refusal; a sub-agent's or `auto` mode's refused
-ask and an unattended run's refusal come back unchanged.
+command text (`nobodyWatching` and `heldForMorning`, `src/hooks/scripts.ts`). The switch is read behind an ask and for
+the main thread's remote write (`remote-write`, REQ-FLOW-134), which it refuses and holds as an ask; every other act
+that runs unasked still runs and every refusal stays a refusal; a sub-agent's or `auto` mode's refused ask and an
+unattended run's refusal come back unchanged. (Amended 2026-11-11, 1.19.1; it read "The switch is read only behind
+an ask, so every act that runs unasked still runs and every refusal stays a refusal".)
 
 - **As built:**
   - Outside an unattended run the refusal reads "`<act>` is a person-only act (`<rule>`) and nobody is watching: it
@@ -8215,8 +8263,12 @@ install an absolute --prefix <checkout>), or remove the link (the link only) and
   - A folder held in a variable (`cd "$LANE" && npm ci`) cannot be read, so the install is checked against the folder
     the line starts from. On Windows, Claude's `Bash` line is read twice, the second time as Git Bash reads a backslash,
     and either reading refuses; the fix names the checkout with forward slashes there (S85, S86).
-  - Every fault of the check is caught and lets the call go on to the verdicts; nothing reaches the fail-closed path. It
-    is not a `PERSON_ONLY_RULES` row.
+  - A fault in the check's own reading refuses the call with its own sentence, as the guard refuses on any fault of its
+    own: "The guard could not read whether this install writes through a linked node_modules (a fault in its own
+    reading), so it is refused. Run the install on a line of its own, after a plain cd to its folder." A line in which
+    none of `npm`, `yarn` or `bun` appears, in any letter case once quotes and backslashes are dropped, is never parsed,
+    so it never reaches that refusal. It is not a `PERSON_ONLY_RULES` row. (Amended 2026-11-11, 1.19.1; it read
+    "Every fault of the check is caught and lets the call go on to the verdicts; nothing reaches the fail-closed path.")
 - **Limits:** a `case` pattern's `)` inside a subshell restores the folder early; `pushd lane && npm test && popd && npm
   ci` run in a real root is refused (the safe side); a `cd` into a folder that exists but cannot be entered reads as
   holding.
