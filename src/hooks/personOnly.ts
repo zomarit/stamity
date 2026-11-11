@@ -2262,14 +2262,19 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     // overrides the files, so where the line sets a key its values alone count.
     const lineValues = new Map<string, string[]>();
     const fileValues = new Map<string, string[]>();
-    const SETTINGS = /^(?:push\.(?:followtags|default|recursesubmodules)|submodule\.recurse|remote\..+\.mirror)$/;
+    const SETTINGS = /^(?:push\.(?:followtags|default|recursesubmodules)|submodule\.recurse|remote\.[\s\S]+\.mirror)$/;
     const readPair = (pair: string, fromLine: boolean): void => {
       const eq = pair.indexOf("=");
-      const key = (eq === -1 ? pair : pair.slice(0, eq)).toLowerCase();
+      // As git compares a key, on the line as in the files: its section and setting name in any case, the remote's or
+      // branch's name between them as written, so a line pair takes the place of the files' own key only.
+      const text = eq === -1 ? pair : pair.slice(0, eq);
+      const first = text.indexOf(".");
+      const last = text.lastIndexOf(".");
+      const key = first === -1 ? text.toLowerCase() : text.slice(0, first).toLowerCase() + text.slice(first, last) + text.slice(last).toLowerCase();
       const value = eq === -1 ? "true" : pair.slice(eq + 1).toLowerCase();
       const taken = fromLine ? lineValues : fileValues;
       if (SETTINGS.test(key)) taken.set(key, [...(taken.get(key) ?? []), value]);
-      if (/^remote\..+\.push$/.test(key) && eq !== -1) (fromLine ? configured : mapped).push(pair.slice(eq + 1));
+      if (/^remote\.[\s\S]+\.push$/.test(key) && eq !== -1) (fromLine ? configured : mapped).push(pair.slice(eq + 1));
       if (/^branch\..+\.merge$/.test(key) && eq !== -1) (fromLine ? configured : merges).push(`HEAD:${pair.slice(eq + 1)}`);
     };
     for (const pair of config) readPair(pair, true);
@@ -2372,7 +2377,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
     }
     if (valuesOf("push.followtags").some(on)) tags = true;
     for (const key of new Set([...lineValues.keys(), ...fileValues.keys()])) {
-      if (/^remote\..+\.mirror$/.test(key) && valuesOf(key).some(on)) force = true;
+      if (/^remote\.[\s\S]+\.mirror$/.test(key) && valuesOf(key).some(on)) force = true;
     }
     // Several push modes read (an include whose condition is not read among them) count as their union.
     const modes = valuesOf("push.default");

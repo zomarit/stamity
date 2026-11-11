@@ -5619,6 +5619,31 @@ describe("a push read against the place's own push configuration", () => {
     expect(personOnlyVerdict("git -c remote.origin.mirror=false push", filesSet(["remote.origin.mirror=true"]))).toEqual({ deny: false });
   });
 
+  // Red before keys were compared as git compares them: the reader lowered the remote's name in a line pair's key too.
+  it("keeps the files' mirror setting where a line pair names the remote in another letter case, as git reads that pair", () => {
+    const ctx = filesSet(["remote.origin.mirror=true"]);
+    for (const command of ["git -c remote.ORIGIN.mirror=false push", "git -c remote.Origin.mirror=false push origin feat/x"]) {
+      expect(personOnlyVerdict(command, ctx), command).toMatchObject({ deny: true, rule: "force-push", ask: false });
+    }
+    // One fact away: git reads the section and the setting's name in any case, so this pair is the files' key.
+    expect(personOnlyVerdict("git -c REMOTE.origin.MIRROR=false push", ctx)).toEqual({ deny: false });
+    // The files' own section named in another case is a remote of that name, and a line pair spelt the same lifts it.
+    const named: Parameters<typeof personOnlyVerdict>[1] = { ...FEATURE, pushConfig: (remote) => (remote === "Origin" ? ["remote.Origin.mirror=true"] : []) };
+    expect(personOnlyVerdict("git -c remote.origin.mirror=false push Origin feat/x", named)).toMatchObject({ deny: true, rule: "force-push", ask: false });
+    expect(personOnlyVerdict("git -c remote.Origin.mirror=false push Origin feat/x", named)).toEqual({ deny: false });
+  });
+
+  // Red before: a pair whose remote name holds a line break, the files' spelling of a name no line key reaches, was dropped.
+  it("reads the mirror setting and the refmap of a remote whose name no line key can spell", () => {
+    const ctx: Parameters<typeof personOnlyVerdict>[1] = { ...FEATURE, pushConfig: (remote) => (remote === "a=b" ? ["remote.a\nb.mirror=true"] : []) };
+    expect(personOnlyVerdict("git push a=b feat/x", ctx)).toMatchObject({ deny: true, rule: "force-push", ask: false });
+    expect(personOnlyVerdict("git -c remote.a%3Db.mirror=false push a=b feat/x", ctx)).toMatchObject({ deny: true, rule: "force-push", ask: false });
+    const mapped: Parameters<typeof personOnlyVerdict>[1] = { ...FEATURE, pushConfig: (remote) => (remote === "a=b" ? ["remote.a\nb.push=refs/heads/feat/x:refs/heads/trunk"] : []) };
+    expect(personOnlyVerdict("git push a=b feat/x", mapped)).toMatchObject({ deny: true, rule: "push-default", ask: true });
+    // One fact away: the files set neither for that remote, and the same push runs.
+    expect(personOnlyVerdict("git push a=b feat/x", filesSet([]))).toEqual({ deny: false });
+  });
+
   it("asks for a push of tags where the files turn tag-following on, and lets the line turn it off", () => {
     const ctx = filesSet(["push.followtags=true"]);
     expect(personOnlyVerdict("git push origin feat/x", ctx)).toMatchObject({ deny: true, rule: "push-tags", ask: true });
@@ -5661,6 +5686,63 @@ describe("a push read against the place's own push configuration", () => {
   it("reads the files' refmap for git send-pack too", () => {
     const ctx = filesSet(["remote.origin.push=refs/heads/feat/x:refs/heads/main"]);
     expect(personOnlyVerdict("git send-pack origin feat/x", ctx)).toMatchObject({ deny: true, rule: "push-default" });
+  });
+});
+
+/**
+ * What the mirror reading above rests on, in a real git: a scratch repository under the system's temporary folder, a
+ * bare one beside it as its remote, and git's own global and system files kept out. A push that mirrors deletes the
+ * remote branch the clone does not hold, so whether that branch survives shows how git read the line's pair.
+ */
+describe("how a real git reads a line pair's key against the files' mirror setting", () => {
+  const getScratch = useTempDir("mirror-key");
+  /** A clone holding `main` only, beside a bare remote holding `main` and `spare`, its remote section mirroring. */
+  const mirrored = async (): Promise<{ git: (...words: string[]) => ReturnType<typeof spawnSync>; spareKept: () => boolean }> => {
+    const scratch = getScratch();
+    await scratch.seedFiles({ "global.gitconfig": "[gc]\n\tauto = 0\n[maintenance]\n\tauto = false\n[user]\n\tname = t\n\temail = t@example.com\n[commit]\n\tgpgsign = false\n" });
+    const kept = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")));
+    const env = { ...kept, HOME: scratch.dir, GIT_CONFIG_GLOBAL: scratch.path("global.gitconfig"), GIT_CONFIG_NOSYSTEM: "1", GIT_TERMINAL_PROMPT: "0" };
+    const at = (cwd: string) => (...words: string[]) => spawnSync("git", words, { cwd, env, encoding: "utf8", timeout: CHILD_TIMEOUT_MS });
+    const bare = scratch.path("remote.git");
+    const local = scratch.path("clone");
+    const ok = (result: ReturnType<typeof spawnSync>): void => expect(result.status, String(result.stderr)).toBe(0);
+    ok(at(scratch.dir)("init", "-q", "--bare", bare));
+    ok(at(scratch.dir)("init", "-q", local));
+    const git = at(local);
+    ok(git("checkout", "-q", "-b", "main"));
+    ok(git("commit", "-q", "--allow-empty", "-m", "seed"));
+    ok(git("push", "-q", bare, "main", "main:spare"));
+    ok(git("remote", "add", "origin", bare));
+    ok(git("config", "remote.origin.mirror", "true"));
+    ok(git("config", "push.default", "current"));
+    const spareKept = (): boolean => at(scratch.dir)("--git-dir", bare, "show-ref", "--verify", "-q", "refs/heads/spare").status === 0;
+    expect(spareKept()).toBe(true);
+    return { git, spareKept };
+  };
+
+  it("reads a pair naming the remote in another letter case as another remote's, so the push still mirrors", async () => {
+    const { git, spareKept } = await mirrored();
+    expect(git("-c", "remote.ORIGIN.mirror=false", "push", "-q", "origin").status).toBe(0);
+    expect(spareKept()).toBe(false);
+  });
+
+  it.each([
+    ["as the files spell it", "remote.origin.mirror=false"],
+    ["with the section and the setting's name in another case", "REMOTE.origin.MIRROR=false"],
+  ])("reads a pair naming the remote %s as the files' key, so the push does not mirror", async (_, pair) => {
+    const { git, spareKept } = await mirrored();
+    expect(git("-c", pair, "push", "-q", "origin").status, pair).toBe(0);
+    expect(spareKept(), pair).toBe(true);
+  });
+
+  it("reads an encoded equals sign in a pair as part of another remote's name, and refuses a key holding a line break", async () => {
+    const { git, spareKept } = await mirrored();
+    expect(git("config", "remote.a=b.url", git("config", "remote.origin.url").stdout.toString().trim()).status).toBe(0);
+    expect(git("config", "remote.a=b.mirror", "true").status).toBe(0);
+    expect(git("-c", "remote.a\nb.mirror=false", "push", "-q", "a=b").status).not.toBe(0);
+    expect(spareKept()).toBe(true);
+    expect(git("-c", "remote.a%3Db.mirror=false", "push", "-q", "a=b").status).toBe(0);
+    expect(spareKept()).toBe(false);
   });
 });
 

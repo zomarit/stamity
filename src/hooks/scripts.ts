@@ -469,7 +469,11 @@ export const HOOK_SCRIPT_BUDGETS: Readonly<Record<string, { readonly bytes: numb
   // 374,055 bytes / 7,614 lines (copilot, generated), past both rows, because the main thread's remote write is now
   // refused in an unattended run and held while nobody is watching. 373,310 + 745 = 374,055 bytes; 7,602 + 12 = 7,614
   // lines.
-  [PERSON_ONLY_GUARD_FILE]: { bytes: 374_055, lines: 7_614 },
+  // Moved again 2026-11-10 (UTC) by the person-only guard hardening (REQ-FLOW-124), by what was measured: 374,676 bytes
+  // / 7,621 lines (copilot, generated), past both rows, because the push reader now compares a key as git does, the
+  // remote's name in it kept as written, and spells a name no line key can reach so no line pair takes its place.
+  // 374,055 + 621 = 374,676 bytes; 7,614 + 7 = 7,621 lines.
+  [PERSON_ONLY_GUARD_FILE]: { bytes: 374_676, lines: 7_621 },
 };
 
 /** One generated script, ready for an adapter to place and register. */
@@ -5920,7 +5924,9 @@ function pushPairs(config, remote, branch) {
   pairs.push(...config.recurse);
   if (entry !== undefined) {
     // The pair's name part holds no "=" and is never empty, so the reader splits it where git splits a key from its value.
-    const name = remote.replace(/=/g, "%3D") || "%";
+    // A name no line key can spell (one holding "=", or none) is spelt with a line break, which git refuses in a line
+    // key, so no pair on the line takes the place of these.
+    const name = remote.replace(/=/g, "\n") || "\n";
     for (const value of entry.push) pairs.push("remote." + name + ".push=" + value);
     if (entry.mirror) pairs.push("remote." + name + ".mirror=true");
   }

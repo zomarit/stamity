@@ -3605,6 +3605,29 @@ describe("a push read against the push configuration in git's files", () => {
     expect(decide("claude", guard, "git push")).toEqual({ deny: false });
   });
 
+  // Red before keys were compared as git compares them: a line pair for the remote in another letter case lifted the refusal.
+  it("refuses a push to a remote the files mirror where a line pair turns mirror off for the name in another case", async () => {
+    const guard = await placeGuard("claude", { ".git/config": `${ORIGIN}\tmirror = true\n` });
+    const decision = decide("claude", guard, "git -c remote.ORIGIN.mirror=false push");
+    expect(decision).toMatchObject({ deny: true, reason: expect.stringContaining(ruleSaid("force-push")) });
+    expect(decision).not.toHaveProperty("ask");
+    // One fact away: the pair spelt as the files spell the remote turns mirror off, and only the line's pair asks.
+    expect(decide("claude", guard, "git -c remote.origin.mirror=false push")).toMatchObject({ deny: true, ask: true, reason: expect.stringContaining(ruleSaid("outside-write")) });
+  });
+
+  // Red before: the files' mirror setting of a remote whose name holds "=" was spelt in text a line pair can name.
+  it("refuses a push to a remote whose name holds an equals sign and whose section mirrors it, whatever a line pair says", async () => {
+    const guard = await placeGuard("claude", { ".git/config": `${ORIGIN}[remote "a=b"]\n\turl = https://github.com/acme/app.git\n\tmirror = true\n` });
+    for (const command of ["git push a=b feat/x", "git -c remote.a%3Db.mirror=false push a=b feat/x"]) {
+      const decision = decide("claude", guard, command);
+      expect(decision, command).toMatchObject({ deny: true, reason: expect.stringContaining(ruleSaid("force-push")) });
+      expect(decision, command).not.toHaveProperty("ask");
+    }
+    // One fact away: the section does not mirror, and the same pair only asks.
+    await getRepo().seedFiles({ ".git/config": `${ORIGIN}[remote "a=b"]\n\turl = https://github.com/acme/app.git\n` });
+    expect(decide("claude", guard, "git -c remote.a%3Db.mirror=false push a=b feat/x")).toMatchObject({ deny: true, ask: true });
+  });
+
   // Red on 091d999b: each value was read as a plain one, or its continuation hid the line after it.
   // TEST CHANGE, justified (REQ-FLOW-134): the reader now decodes values by git's own grammar, so the rows git decodes
   // to a plain value (an escape git knows, a quote inside a value, a comment mark inside quotes or with no blank before
