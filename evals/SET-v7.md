@@ -4571,14 +4571,15 @@ harness default. No case, Expected block, count,
 threshold or scoring rule moves. No eval run is made with this change.
 
 **Two cases quote what their rows judge, 2026-11-11 (the 1.19.1 patch; REQ-PROVE-009).** Run 65, the
-first on the new judge, failed two cases on a binding row whose words the Brief did not quote; run 63's
-judge had passed the same behaviour by inference. `work-cap-round-escalates-not-round-four` scored 0 of
-3 on B6, which binds that the escalation fixer's change is re-reviewed once "by a fresh reviewer spawn":
-the Brief quoted "Review loop" through the escape bullet, and the rule sits below it. It now quotes the
-first sentence of the re-review bullet of `content/commands/st-work.md` as it stands (`:233-235`, "Each
-re-review is a fresh reviewer spawn, never a resumed one; its brief is the Verdict dispatch's, plus the
-ledger ids and each finding's locator at HEAD, and no fixer claim."), after a `[...]` line for the
-Minor bullet, and its `source:` moves from `…:207-230` to `…:207-230,233-235`.
+first whole-set run completed on the new judge, failed two cases on a binding row whose words the Brief
+did not quote; run 63's judge had passed the same behaviour by inference.
+`work-cap-round-escalates-not-round-four` scored 0 of 3 on B6, which binds that the escalation fixer's
+change is re-reviewed once "by a fresh reviewer spawn": the Brief quoted "Review loop" through the
+escape bullet, and the rule sits below it. It now quotes the first sentence of the re-review bullet of
+`content/commands/st-work.md` as it stands (`:233-235`, "Each re-review is a fresh reviewer spawn, never
+a resumed one; its brief is the Verdict dispatch's, plus the ledger ids and each finding's locator at
+HEAD, and no fixer claim."), after a `[...]` line for the Minor bullet, and its `source:` moves from
+`…:207-230` to `…:207-230,233-235`.
 `unattended-blocked-run-still-hands-off` scored 1 of 3, both misses on B5, which binds that the response
 says `run end` pushes the record onto draft pull request #57: the Brief quoted "The ending" from its
 third step, and the sentences that say the run verbs push sit above it. It now quotes the section's
