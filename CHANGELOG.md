@@ -38,9 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Upgrade with `npx -y @zomarit/stamity@1.19.1 upgrade --to 1.19.1`, from a committed tree. Four items need a word.
 
 - **Some pushes, installs and git configuration writes that ran may now ask or be refused.** A push is now refused
-  rather than asked where the shell fills in its remote and the line gives no `--repo`, or fills in the name or letters
-  of one of the push's own options; write the remote and the options out on the line. `SECURITY.md` states what the
-  guard reads.
+  rather than asked where the shell fills in its remote and the line gives no `--repo`, fills in the name or letters
+  of one of the push's own options, or fills in text that may split such an option word into more words; write the
+  remote and the options out on the line. `SECURITY.md` states what the guard reads.
 - **A run's push no longer pushes or checks submodules.** The run verbs now pass `push.recurseSubmodules=no` to git,
   so in a repository whose git configuration asks a push to push its submodules, or to check them first,
   `run checkpoint` and `run end` push the run's branch alone. Push the submodule commits the branch names yourself,
