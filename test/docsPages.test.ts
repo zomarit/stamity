@@ -2943,7 +2943,9 @@ describe("SECURITY.md", () => {
         // attended, an act that can be undone now asks on Claude Code and is refused elsewhere, and only deletions,
         // force pushes and acts that cannot be undone stay refused everywhere, so the page's claim moves with it.
         "The merge queue's GraphQL `enqueuePullRequest` is read as a merge, so it asks or is refused as a merge does",
-        "a line nested more than four levels deep is one it cannot read (`NESTING_DEPTH`)",
+        // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's page round. The row now names the call it cannot
+        // read as one whose payload it cannot read, so the nesting limit is named as the fault it is, as the code throws it.
+        "a line nested more than four levels deep is such a fault (`NESTING_DEPTH`)",
         "a git, shell or gh alias, a gh extension (the gh forms refused unattended)",
         "a `git update-ref --stdin` text read from a file",
       ]) {
@@ -3137,7 +3139,9 @@ describe("SECURITY.md", () => {
       const guard = section("| The main thread of any session", "| An unattended run, or the text that steers one | Pushing a change");
       const residuals = section("### Cloud and unattended runs", "## Standards mapping");
       for (const claim of [
-        "A deletion, a force push or an act that cannot be undone is refused on every client, attended or not",
+        // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's page round. The row now bounds the refuse class
+        // and the deletion it keeps from an approval to the acts the guard reads, so each pin takes the row's new words.
+        "A deletion, a force push or an act that cannot be undone, as the guard reads it, is refused on every client, attended or not",
         "Attended, an act that can be undone asks on Claude Code for one click, the hook's `ask` answer, and the agent runs it on yes",
         "it is refused instead where a sub-agent runs it (any agent identity the payload names), since the act is the person's, and in Claude Code's `auto` permission mode",
         // TEST CHANGE, justified (plan 021 file 2, units w4-copilot-ask and w5-ask-pages; REQ-FLOW-123): Copilot CLI
@@ -3148,7 +3152,7 @@ describe("SECURITY.md", () => {
         "Measured on Copilot CLI 1.0.98 on 2026-10-19: the interactive client shows its hook permission dialog and waits for the person, a headless run and autopilot deny an ask",
         "Cursor 2026.10.14 ran the command despite a `beforeShellExecution` ask under `--force` (measured 2026-10-18)",
         "Codex's hooks page says an ask is parsed and not honoured",
-        "so one refuse-class act refuses the whole call and a deletion never rides an approval",
+        "so one refuse-class act it reads refuses the whole call and a deletion it reads never rides an approval",
         "is refused, never asked about",
         "`gh extension exec`",
         "`GIT_EXEC_PATH` and seven more, `SSH_ASKPASS` among them",

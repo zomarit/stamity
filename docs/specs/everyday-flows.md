@@ -5152,7 +5152,7 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
     (`PersonOnlyVerdict` and `PERSON_ONLY_RULES`, each rule carrying `ask`, `src/hooks/personOnly.ts`). Every act is
     collected — each segment, each call `--next` joins, each path of a call, each rule one REST path matches, each flag
     of one gh call, each field of one REST body, each GraphQL mutation and `updateRefs` entry — and the first
-    refuse-class act is the verdict, so a deletion never rides an approval.
+    refuse-class act is the verdict, so a deletion the guard reads never rides an approval.
   - The ask-class rules are `push-default` (with plain `gh repo sync`), `push-tags`, `tag`, `pr-merge`, `pr-ready`,
     `release`, `publish` (with `npm dist-tag add`, pnpm's and yarn's `dist-tag add` and yarn's `tag add`), `secrets`
     (a user's Codespaces secret written by REST included) and `protection`, which also reads a deployment environment's
@@ -5345,16 +5345,15 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
 - **Amended 2026-11-11** (1.19.1). A push is read against these settings of the place's own git configuration files,
   as the guard's reader parses the repository, global and system files and their includes: a remote's push refmap, for a push naming no refspec
   and beside a bare source; the push mode, `matching`, and `upstream` with the checked-out branch's merge, read for every
-  branch name; a remote's mirror setting (REQ-FLOW-124); tag-following; and submodule recursion (REQ-FLOW-134). A line's
-  own `-c` value of a setting takes the place of the files' value only where git reads it as the same key: the section
+  branch name; a remote's mirror setting (REQ-FLOW-124); tag-following; and submodule recursion (REQ-FLOW-134). A `-c`
+  value the guard reads on the line takes the place of the files' value only where git reads it as the same key: the section
   and the setting name in any letter case, the remote's or the branch's name compared as written. A push naming a URL or
   a path reads the remote section of that exact name, as git does. A push on a line that also sets, moves or removes a
   branch's upstream (a branch, checkout or switch call) is read as one to a remote the guard cannot place where it names
   no remote, and as one to the default branch where it names no refspec. A push is refused as a force push
   (REQ-FLOW-124) where the shell fills in its remote word and the line gives no `--repo`, where it fills in the name or
   letters of one of the push's own options (text at or before the option's `=` or its value letter), or where text it
-  fills in may split such an option word, or the value word the option takes, into more words; a refspec word the
-  shell fills in still asks (`pushVerdict` with its `readPair`, and `upstreamWrite`, `src/hooks/personOnly.ts`; `configOf` and `pushPairs`,
+  fills in may split such an option word into more words; a refspec word the shell fills in still asks (`pushVerdict` with its `readPair`, and `upstreamWrite`, `src/hooks/personOnly.ts`; `configOf` and `pushPairs`,
   `src/hooks/scripts.ts`).
   - Proof: `test/hooks/personOnly.test.ts` (the describe "a push read against the place's own push configuration"),
     `test/hooks/personOnlyGuard.test.ts`.
@@ -6321,7 +6320,7 @@ command stay refused.
   line pair turning a remote's mirror setting off takes the place of the files' setting only where git reads it as the
   same key, the remote's name compared as written (REQ-FLOW-102). A push word the guard cannot show in the remote's
   place, where the line gives no `--repo`, or in the name or letters of one of the push's own options, or one that may
-  split such an option word or its value, is read as a force push and refused, since git may read it as a force, mirror
+  split such an option word, is read as a force push and refused, since git may read it as a force, mirror
   or delete option, and a force, mirror or deletion written on the same line is refused and named first; a refspec word the guard cannot show still asks (REQ-FLOW-102).
   - Proof: `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`.
 - **Proof:** `test/hooks/personOnly.test.ts` (the `CLASSES` conformance rows, and "CLAUDE_DENY_ROWS and
@@ -6713,7 +6712,7 @@ asks attended, and refuses unattended and for a sub-agent (`PERSON_ONLY_RULES`, 
 `ghDefaultOf` and `originOf`, `src/hooks/scripts.ts`). A body read from a file is not read, a named residual.
 
 - **As built, beyond the delta:**
-  - The origin and `gh`'s default are read from git's merged configuration: the system, global, XDG and repository
+  - The origin and `gh`'s default are read from git's configuration files, as the guard's reader parses them: the system, global, XDG and repository
     files, `include.path` and every `includeIf` target whatever its condition, followed at most 10 levels, 64 files
     and 4 MiB, symbolic links followed at most 8, URL rewrites applied. A reading cut short makes the target
     unreadable, and so do an included file that sets a remote, URL-rewrite or branch-remote key and a line that sets
@@ -6728,10 +6727,10 @@ asks attended, and refuses unattended and for a sub-agent (`PERSON_ONLY_RULES`, 
     read; short-option clusters are read by gh 2.102.0's per-subcommand short options, an unknown letter asking
     (`review/121`–`126`, `review/135`, `review/145`, `review/146`). An issue transfer's destination and
     `gh issue develop`'s repository are targets (`review/122`, `review/123`). A push whose remote or URL names another
-    repository asks, every URL a push to `origin` reaches compared (`review/130`).
+    repository asks, every URL the guard reads for a push to `origin` compared (`review/130`).
   - A git commit message is not screened: a mention there notifies no one (`build/25`).
-  - **`remote-write`** (`review/129`, overturned at the lens's third round): a line that writes a git remote, a URL
-    rewrite or an include runs on Claude Code's and Copilot CLI's main thread and is refused for a sub-agent, and on
+  - **`remote-write`** (`review/129`, overturned at the lens's third round): a line whose `git remote` or `git config`
+    call writes a git remote, a URL rewrite or an include runs on Claude Code's and Copilot CLI's main thread and is refused for a sub-agent, and on
     Codex and Cursor in every mode, since it moves the origin later writes are held to (`PERSON_ONLY_RULES`,
     `src/hooks/personOnly.ts:198-202`; `RUNS`, `src/hooks/scripts.ts`).
   - **Residuals** (`SECURITY.md`): a body the shell fills in and one read from a file are not read; `gh` aliases and
@@ -6741,7 +6740,7 @@ asks attended, and refuses unattended and for a sub-agent (`PERSON_ONLY_RULES`, 
 - **Amended 2026-11-11** (1.19.1).
   - The files read gain the system file of another git build where such a build keeps it, read as an included file
     whatever `GIT_CONFIG_NOSYSTEM` says (`SYSTEM_GITCONFIG_CANDIDATES` and `systemConfigCandidates`,
-    `src/hooks/scripts.ts`). Every value is decoded by git's own grammar, a value a backslash continues joined to the
+    `src/hooks/scripts.ts`). Every value its reader reaches is decoded by git's own grammar, a value a backslash continues joined to the
     next line; a value git refuses (an escape it does not know, a quote left open) and an include path starting `%(`
     make the reading partial (`configValue`).
   - A push or a gh write on a line that also moves a remote, a URL rewrite or an include asks (`outside-write`), and a
