@@ -3959,7 +3959,9 @@ describe("docs/security-mapping.md", () => {
     for (const claim of [
       "a `gh` group outside gh's built-in commands (an alias or an extension) and `gh alias set` or `import`",
       "A tag includes a `git update-ref` write on `refs/tags/`, a publish includes npm's unique prefixes of `publish` and a manager run through Corepack, and the merge queue's `enqueuePullRequest` is a merge",
-      "A shell call it cannot read, a line nested more than four levels deep among them, is refused",
+      // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's page round. The mapping row follows SECURITY.md's:
+      // the call it cannot read is one whose payload it cannot read, or a fault while deciding one.
+      "A shell call whose payload it cannot read, or a fault while deciding one, a line nested more than four levels deep among them, is refused",
       "a gh alias or extension attended and a `git update-ref --stdin` text read from a file among them",
       "point `origin/HEAD` at the default branch GitHub's REST API names, refuse an unattended run when neither REST nor `origin/HEAD` names the default branch (`run start` exits 1, `checkpoint` and `end` refuse the commit)",
       "`src/cli/commands/run.ts::alignOriginHead`",
@@ -4048,7 +4050,9 @@ describe("docs/security-mapping.md", () => {
   it("states file 2's ask rule, each client's answer and the residuals as SECURITY.md does", () => {
     const flat = text.replace(/\s+/g, " ");
     for (const claim of [
-      "a deletion, a force push or an act that cannot be undone is refused on every client, attended or not, and one such act on a line refuses the whole call",
+      // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's page round. The mapping row follows SECURITY.md's:
+      // the refuse class, and the one act that refuses the whole call, are bounded to what the guard reads.
+      "a deletion, a force push or an act that cannot be undone, as the guard reads it, is refused on every client, attended or not, and one such act it reads on a line refuses the whole call",
       "attended, an act that can be undone asks on Claude Code for one click, refused where a sub-agent runs it or in Claude Code's `auto` permission mode",
       // TEST CHANGE, justified (plan 021 file 2, units w4-copilot-ask and w5-ask-pages; REQ-FLOW-123): Copilot CLI now
       // asks for the person's own agent (src/hooks/scripts.ts, attendedAsk's Copilot copy), so it leaves the list of
@@ -5853,7 +5857,9 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
     // TEST CHANGE, justified (plan 022 file 1, unit a16-security-pages, fix round 3, a4-security-r13; REQ-FLOW-134): a
     // remote write, a URL-rewrite write and an include write are one rule (src/hooks/personOnly.ts, `remoteWriteVerdict`),
     // so the mapping names all three where it lists what Cursor and Codex refuse.
-    expect(mapping).toContain("on Claude Code and Copilot CLI and never for a sub-agent, while Cursor and Codex, whose payloads name no agent, refuse them and a remote, URL-rewrite or include write in every mode");
+    // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's page round. The mapping row follows SECURITY.md's:
+    // the rule reads a `git remote` or `git config` call's write, so the pin takes the row's bounded words.
+    expect(mapping).toContain("on Claude Code and Copilot CLI and never for a sub-agent, while Cursor and Codex, whose payloads name no agent, refuse them and a `git remote` or `git config` call that writes a remote, a URL rewrite or an include in every mode");
     expect(mapping).toContain("any call's on Codex and Cursor");
     // TEST CHANGE, justified: REQ-FLOW-102 (b14b) — a remote's HEAD ref write is read as the push it steers; the mapping
     // carries b14b's sentence (b14b-fixer-r3.md) in place of the one that said no ref write was read.
