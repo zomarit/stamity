@@ -2806,7 +2806,9 @@ describe("SECURITY.md", () => {
         "`gh pr update-branch`",
         // TEST CHANGE, justified (plan 021 file 2, v0b and v0d; REQ-FLOW-121): a run verb's line is now refused unless
         // the verb stands alone on it, which the row states in place of "a `stamity run` line among them".
-        "`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`) anywhere on it, whatever program it runs, and a line that runs `stamity run start`, `checkpoint` or `end`",
+        // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's closed-list round. The row lists the forms the
+        // line-wide rule reads in place of "anywhere on it", so the pin takes the listed forms with the same verbs after.
+        "`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`), whatever program it runs, in one of these forms: an assignment before a program or after a wrapper, an operand of `export`, `declare`, `typeset`, `local` or `set`, a name `read`, `mapfile`, `readarray`, `getopts`, `for` or `printf -v` assigns, PowerShell's `$env:`, `Set-Item`, `New-Item` and `SetEnvironmentVariable` spellings, and the name written on a line that turns allexport on; and a line that runs `stamity run start`, `checkpoint` or `end`",
         "unless the verb stands alone on it as one simple command",
       ]) {
         expect(guard, `the guard's row does not state: ${claim}`).toContain(claim);
@@ -3003,7 +3005,9 @@ describe("SECURITY.md", () => {
         // TEST CHANGE, justified (plan 021 file 2, v0a, v0a2 and v0d; REQ-FLOW-102, REQ-FLOW-123, REQ-FLOW-124):
         // attended, an act that can be undone now asks on Claude Code and is refused elsewhere, and only deletions,
         // force pushes and acts that cannot be undone stay refused everywhere, so the page's claim moves with it.
-        "are read as protection writes, which ask or are refused as the classes above say, their deletions refused everywhere",
+        // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's closed-list round. "everywhere" becomes the
+        // listed case it stands for, the four clients in both modes.
+        "are read as protection writes, which ask or are refused as the classes above say, their deletions refused on each of the four clients in both modes",
         "So is an HTTP call whose method or targets the line hides (`HTTP_TARGET_HIDDEN`)",
         // MOVED 2026-10-18 (PR #112 round 4d, pr/87): the list's last item is now the curl short cluster holding `:`.
         "a curl write whose target curl's globbing would expand (`{` or `[`) unless `-g` or `--globoff` is set, a wget write reading its targets from `-i`",
@@ -3053,7 +3057,9 @@ describe("SECURITY.md", () => {
       const residuals = section("### Cloud and unattended runs", "## Standards mapping");
       for (const claim of [
         "so are the symref commands of a `git update-ref --stdin` text the line carries (`symref-create`, `symref-update`, `symref-delete`), read as `git symbolic-ref` is",
-        "a curl body counts as one in every spelling: apart, attached (`-d@<file>`, `-d'{…}'`, `-F<field>`, `-T<path>`) or as a short cluster's first value letter (`-sd@<file>`)",
+        // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's closed-list round. The spellings are the listed
+        // ones, so "every spelling" becomes "each of these spellings".
+        "a curl body counts as one in each of these spellings: apart, attached (`-d@<file>`, `-d'{…}'`, `-F<field>`, `-T<path>`) or as a short cluster's first value letter (`-sd@<file>`)",
         "(`HTTP_TARGET_HIDDEN`): a method held in a variable or a substitution (`-X \"$M\"`, `--request \"$(…)\"`, wget's `--method` or a wgetrc `method=`)",
         "a REST target held in a variable, which the guard judges as the literal word",
       ]) {
@@ -3081,7 +3087,9 @@ describe("SECURITY.md", () => {
         // TEST CHANGE, justified (plan 021 file 2, v0d; pr/91): the code reads any prefix of two or more letters of a
         // listed long option (src/hooks/personOnly.ts, httpCall's LONG), not a unique one, and real curl refuses
         // `--dat` as ambiguous, so the page states what the code does.
-        "A curl or wget long option counts from any prefix of two or more letters of a long option the guard lists, read as the first listed option it begins (`--req`, `--me`)",
+        // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's closed-list round. The row drops "any", which
+        // the closed list makes redundant; the reading it states is unchanged.
+        "A curl or wget long option counts from a prefix of two or more letters of a long option the guard lists, read as the first listed option it begins (`--req`, `--me`)",
         "gh's `-i` clustered with a method or a field (`-iXDELETE`) and its `-X=<method>` count as gh reads them",
         "attached in a short cluster too (`-sX$M`, gh's `-iX$M`), or cut from the line by an unquoted one",
         "a wget write reading its targets from `-i`, and a curl short cluster holding `:` among other letters, which starts a request where the line does not show",
@@ -3141,9 +3149,13 @@ describe("SECURITY.md", () => {
       for (const claim of [
         // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's page round. The row now bounds the refuse class
         // and the deletion it keeps from an approval to the acts the guard reads, so each pin takes the row's new words.
-        "A deletion, a force push or an act that cannot be undone, as the guard reads it, is refused on every client, attended or not",
+        // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's closed-list round. "every client" and "any agent
+        // identity" become the listed cases they stand for, the four clients and the helper fields the guard reads.
+        "A deletion, a force push or an act that cannot be undone, as the guard reads it, is refused on each of the four clients, attended or not",
         "Attended, an act that can be undone asks on Claude Code for one click, the hook's `ask` answer, and the agent runs it on yes",
-        "it is refused instead where a sub-agent runs it (any agent identity the payload names), since the act is the person's, and in Claude Code's `auto` permission mode",
+        "it is refused instead where a sub-agent runs it (a non-empty value in one of the helper fields the guard reads), since the act is the person's, and in Claude Code's `auto` permission mode",
+        // ADDED 2026-11-11, at the 1.19.1 cut's closed-list round: the row's closed-list sentence, so it cannot vanish.
+        "**Closed list.** The guard reads and refuses only what is listed here: a form, setting or spelling not listed here is not read, and the guard judges the line as it reads it without that form, setting or spelling.",
         // TEST CHANGE, justified (plan 021 file 2, units w4-copilot-ask and w5-ask-pages; REQ-FLOW-123): Copilot CLI
         // now asks for the person's own agent (src/hooks/scripts.ts, attendedAsk's Copilot copy), so the row's two
         // phrases saying it refuses for want of a calling agent move to the sentences stating the ask; the case below,
@@ -3153,7 +3165,9 @@ describe("SECURITY.md", () => {
         "Cursor 2026.10.14 ran the command despite a `beforeShellExecution` ask under `--force` (measured 2026-10-18)",
         "Codex's hooks page says an ask is parsed and not honoured",
         "so one refuse-class act it reads refuses the whole call and a deletion it reads never rides an approval",
-        "is refused, never asked about",
+        // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's closed-list round: "never" becomes "not", the
+        // same claim with no general promise in it.
+        "is refused, not asked about",
         "`gh extension exec`",
         "`GIT_EXEC_PATH` and seven more, `SSH_ASKPASS` among them",
         "unless the verb stands alone on it as one simple command",
@@ -3244,7 +3258,9 @@ describe("SECURITY.md", () => {
       for (const claim of [
         "Copilot CLI asks too, for the person's own agent alone: the call's payload must carry none of the ten helper fields the guard reads (`agentId`, `agentType` and `parentAgentId`, the three a Copilot helper's call carries, among them)",
         "its session id must be a whole line of the record Copilot's session start keeps, `stamity/copilot-main-sessions` under the repository's common git directory, outside the working tree",
-        "every call where that record is missing, unreadable, past 64 KiB or malformed, is refused, the reason saying the call could not be shown to come from the person's own agent",
+        // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's closed-list round. The refused calls are listed
+        // one by one, so the pin takes the listed case for the record's faults.
+        "a call where that record is missing, unreadable, past 64 KiB or malformed, are refused, the reason saying the call could not be shown to come from the person's own agent",
         "a helper's tool call carries `agentId`, `agentType` and `parentAgentId` and a session id of its own, and the session start fires for the main agent alone",
         "Cursor and Codex refuse it, the reason telling the agent to give the person the exact command",
         "its staff say an ask on a shell hook is enforced on no path, its hooks page says `preToolUse`'s ask is not enforced, and a hook cannot see its run mode (read 2026-10-19)",
@@ -3345,6 +3361,15 @@ describe("docs/specs/everyday-flows.md, amended for w2 and v0b's fix", () => {
     expect(proof, `${id}'s 2026-10-19 bullet does not come before its Proof line`).toBeGreaterThan(from);
     return text.slice(from, proof);
   };
+
+  // ADDED 2026-11-11, at the 1.19.1 cut's closed-list round: each spec passage that restates the guard's row carries
+  // the row's closed-list sentence once, in the same words, so it cannot vanish from one of them.
+  it("carries the guard's closed-list sentence once in each passage that restates the guard's row", () => {
+    const sentence = "**Closed list.** The guard reads and refuses only what is listed here: a form, setting or spelling not listed here is not read, and the guard judges the line as it reads it without that form, setting or spelling.";
+    for (const id of ["REQ-FLOW-102", "REQ-FLOW-124", "REQ-FLOW-134"]) {
+      expect(requirement(id).split(sentence).length - 1, `${id} does not carry the closed-list sentence once`).toBe(1);
+    }
+  });
 
   it("states w2's stale reasons, their messages and the empty reads list on REQ-FLOW-091", () => {
     const bullet = amendment("REQ-FLOW-091");
@@ -4016,7 +4041,9 @@ describe("docs/security-mapping.md", () => {
       "and so does a curl method, a letter after another value letter being that letter's value",
       // TEST CHANGE, justified (plan 021 file 2, v0d; pr/91): the code reads any prefix of two or more letters of a
       // listed long option, not a unique one, so the mapping states what the code does, as SECURITY.md does.
-      "a curl or wget long option counts from any prefix of two or more letters of a long option the guard lists, read as the first it begins, and gh's `-i` clustered with a method or a field, and its `-X=<method>`, count as gh reads them",
+      // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's closed-list round. The mapping row follows
+      // SECURITY.md's and drops "any"; the reading it states is unchanged.
+      "a curl or wget long option counts from a prefix of two or more letters of a long option the guard lists, read as the first it begins, and gh's `-i` clustered with a method or a field, and its `-X=<method>`, count as gh reads them",
       "attached in a short cluster too or cut from the line by an unquoted one",
       "a wget write reading `-i`, and a curl short cluster holding `:` among other letters",
       "a gh extension, a symref command word the line cannot show, a `git update-ref --stdin` text read from a file",
@@ -4052,7 +4079,11 @@ describe("docs/security-mapping.md", () => {
     for (const claim of [
       // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's page round. The mapping row follows SECURITY.md's:
       // the refuse class, and the one act that refuses the whole call, are bounded to what the guard reads.
-      "a deletion, a force push or an act that cannot be undone, as the guard reads it, is refused on every client, attended or not, and one such act it reads on a line refuses the whole call",
+      // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's closed-list round. "every client" becomes the four
+      // clients the row now lists, as on SECURITY.md.
+      "a deletion, a force push or an act that cannot be undone, as the guard reads it, is refused on each of the four clients, attended or not, and one such act it reads on a line refuses the whole call",
+      // ADDED 2026-11-11, at the 1.19.1 cut's closed-list round: the twin row's closed-list sentence, so it cannot vanish.
+      "**Closed list.** The guard reads and refuses only what is listed here: a form, setting or spelling not listed here is not read, and the guard judges the line as it reads it without that form, setting or spelling.",
       "attended, an act that can be undone asks on Claude Code for one click, refused where a sub-agent runs it or in Claude Code's `auto` permission mode",
       // TEST CHANGE, justified (plan 021 file 2, units w4-copilot-ask and w5-ask-pages; REQ-FLOW-123): Copilot CLI now
       // asks for the person's own agent (src/hooks/scripts.ts, attendedAsk's Copilot copy), so it leaves the list of
@@ -5744,11 +5775,14 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
       // a4: the setting, the ask list, status writes, the land line and its approval.
       "In mode `autonomous`, the default, the main thread's ready-for-review mark on the origin's own repository, a local tag and a workflow dispatch run unasked unless `autonomy.deployingActs` names them",
       "A raw ready mark stays refused while a run is unattended",
-      "A commit status or a check run is refused in every mode (`status-write`)",
-      "asks in every mode (`land-approved`), so it is refused unattended and for a sub-agent",
-      "baked into every guard copy as a `// stamity-autonomy` marker line",
+      // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's closed-list round. On the guard's row "every mode"
+      // becomes "both modes" (src/types/manifest.ts, AUTONOMY_MODES), "every guard copy" the copy written for each
+      // client, and "before any reading" names what comes first; each pin takes the row's new words.
+      "A commit status or a check run is refused in both modes (`status-write`)",
+      "asks in both modes (`land-approved`), so it is refused unattended and for a sub-agent",
+      "baked into the guard copy the engine writes for each client as a `// stamity-autonomy` marker line",
       // a5: the 64 KiB cap, the data sinks and their residuals.
-      "A command line longer than 65,536 characters is refused in every mode before any reading (`line-too-long`)",
+      "A command line longer than 65,536 characters is refused in both modes before the guard reads the line (`line-too-long`)",
       "A heredoc body the guard reads as data is not read for acts",
       "A file written this way and run later, by another call or by a line that does not name it, is not read either",
       // a4c, with the two corrections decided for it, and the host residual.
@@ -5803,9 +5837,11 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
       // the agent, so both pins move to the wording that says so.
       // TEST CHANGE, justified, 2026-11-05: the 1.18.0 cut's re-attestation says which release those rules were new in,
       // 1.17.0, since "this release" stopped being true at this cut. The pin moves with the page.
-      "while on Cursor and Codex, whose hook payloads name no agent, no call can be shown to be the main thread's, so they are refused in every mode (1.16.0 refused the ready mark and a local tag there too, and the dispatch and remote-write rules are new in 1.17.0). `stamity run land` alone on its line runs on every client",
-      "Unattended, of these acts only the raw ready mark is refused on Claude Code and Copilot CLI: a local tag and an unnamed workflow dispatch run there too, while Cursor and Codex refuse all three in every mode",
-      "is refused for a sub-agent, and on Cursor and Codex in every mode",
+      // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's closed-list round. On the guard's row "every mode"
+      // becomes "both modes" and "every client" the four clients; the three pins take the row's new words.
+      "while on Cursor and Codex, whose hook payloads name no agent, no call can be shown to be the main thread's, so they are refused in both modes (1.16.0 refused the ready mark and a local tag there too, and the dispatch and remote-write rules are new in 1.17.0). `stamity run land` alone on its line runs on each of the four clients",
+      "Unattended, of these acts only the raw ready mark is refused on Claude Code and Copilot CLI: a local tag and an unnamed workflow dispatch run there too, while Cursor and Codex refuse all three in both modes",
+      "is refused for a sub-agent, and on Cursor and Codex in both modes",
       "a local tag and a workflow dispatch the setting does not name run unasked; Cursor and Codex refuse those three in every mode",
     ]) {
       expect(flat, `SECURITY.md does not state: ${claim}`).toContain(claim);
@@ -5859,7 +5895,9 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
     // so the mapping names all three where it lists what Cursor and Codex refuse.
     // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's page round. The mapping row follows SECURITY.md's:
     // the rule reads a `git remote` or `git config` call's write, so the pin takes the row's bounded words.
-    expect(mapping).toContain("on Claude Code and Copilot CLI and never for a sub-agent, while Cursor and Codex, whose payloads name no agent, refuse them and a `git remote` or `git config` call that writes a remote, a URL rewrite or an include in every mode");
+    // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's closed-list round. "every mode" becomes "both
+    // modes", the two `autonomy.mode` values (src/types/manifest.ts, AUTONOMY_MODES).
+    expect(mapping).toContain("on Claude Code and Copilot CLI and never for a sub-agent, while Cursor and Codex, whose payloads name no agent, refuse them and a `git remote` or `git config` call that writes a remote, a URL rewrite or an include in both modes");
     expect(mapping).toContain("any call's on Codex and Cursor");
     // TEST CHANGE, justified: REQ-FLOW-102 (b14b) — a remote's HEAD ref write is read as the push it steers; the mapping
     // carries b14b's sentence (b14b-fixer-r3.md) in place of the one that said no ref write was read.
@@ -5868,7 +5906,8 @@ describe("the security pages state the autonomy model (REQ-FLOW-145)", () => {
     expect(mapping).not.toContain("Re-pointing `origin/HEAD` with a ref write, or turning it into a plain ref, is no person-only act on any client");
     // TEST CHANGE, justified (fix round 2, the lens's second wording point; REQ-FLOW-145): unattended, a tag and a
     // dispatch run on Claude Code and Copilot CLI only, so the pin carries the clients.
-    expect(mapping).toContain("and of the acts the setting runs only the raw ready mark: a local tag and an unnamed workflow dispatch run there too on Claude Code and Copilot CLI, Cursor and Codex refusing them in every mode");
+    // TEST CHANGE, justified: MOVED 2026-11-11, at the 1.19.1 cut's closed-list round: "every mode" becomes "both modes".
+    expect(mapping).toContain("and of the acts the setting runs only the raw ready mark: a local tag and an unnamed workflow dispatch run there too on Claude Code and Copilot CLI, Cursor and Codex refusing them in both modes");
     expect(flowed(read(SECURITY)), "SECURITY.md says again 1.16.0 refused every one of them").not.toContain("as 1.16.0 refused them");
     expect(mapping, "the mapping says again an unattended run refuses every person-only act").not.toContain("it refuses every person-only act on every client and also");
     expect(flowed(read(CLOUD))).toContain("Cursor and Codex refuse them in every mode, since their hook payloads name no agent");

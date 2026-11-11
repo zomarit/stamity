@@ -5083,6 +5083,8 @@ shell guard, Cursor's fail-closed `beforeShellExecution`, and Copilot's and Code
 off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPaths`, `src/change/personOnlyPaths.ts:26`,
 `:103`; `content/skills/st-unattended/SKILL.md:134-138`).
 
+- **Closed list.** The guard reads and refuses only what is listed here: a form, setting or spelling not listed here is
+  not read, and the guard judges the line as it reads it without that form, setting or spelling.
 - **As built, where the delta differed:** the patch holds a held path only where the run's change touches it in the
   work tree or the index. Where a commit the push would send (one `origin` lacks) changes a held path, or `HEAD`'s tree
   still does after the commit, `run checkpoint` and `run end` refuse the push instead: they exit 1 naming
@@ -6290,6 +6292,8 @@ package version (`npm unpublish`, `npm dist-tag rm`); force-pushes (`--force`, `
 any reading of a line or GraphQL text wins over an ask, and a hidden method or URL target, the nesting limit and no
 command stay refused.
 
+- **Closed list.** The guard reads and refuses only what is listed here: a form, setting or spelling not listed here is
+  not read, and the guard judges the line as it reads it without that form, setting or spelling.
 - **As built, beyond the delta:**
   - The refuse-class rules are `force-push`, `push-delete` and seven new ones: `tag-delete`, `release-delete`,
     `secrets-delete`, `repo-delete`, `repo-irreversible`, `protection-delete` and `unpublish` (`PERSON_ONLY_RULES`,
@@ -6711,27 +6715,31 @@ asks attended, and refuses unattended and for a sub-agent (`PERSON_ONLY_RULES`, 
 `PersonOnlyContext.originRepo` and `ghDefaultRepo`, `:257-271`; `repositoryKey`, `:434-452`; the guard's `configOf`,
 `ghDefaultOf` and `originOf`, `src/hooks/scripts.ts`). A body read from a file is not read, a named residual.
 
+- **Closed list.** The guard reads and refuses only what is listed here: a form, setting or spelling not listed here is
+  not read, and the guard judges the line as it reads it without that form, setting or spelling.
 - **As built, beyond the delta:**
   - The origin and `gh`'s default are read from git's configuration files, as the guard's reader parses them: the system, global, XDG and repository
     files, `include.path` and every `includeIf` target whatever its condition, followed at most 10 levels, 64 files
     and 4 MiB, symbolic links followed at most 8, URL rewrites applied. A reading cut short makes the target
     unreadable, and so do an included file that sets a remote, URL-rewrite or branch-remote key and a line that sets
-    `HOME`, `XDG_CONFIG_HOME` or git configuration through its environment (`configOf` and the `GUARD_GIT_*` bounds,
+    `HOME` or `XDG_CONFIG_HOME` or names one of git's configuration variables (`configOf` and the `GUARD_GIT_*` bounds,
     `src/hooks/scripts.ts`; `review/128`, `review/134`, `review/148`).
   - A GraphQL mutation whose subject is a node id the line cannot place asks, but for resolving or unresolving a review
     thread; a GraphQL call whose query the line does not show asks (`build/20`, `review/120`, `review/127`). A `curl`
     or `wget` write to the GitHub API host is read by the same rule (`build/21`). A reviewer or an assignee
     (`--reviewer`, `--add-reviewer`, `--assignee`, `--add-assignee`, the API's `reviewers` and `assignees`) other than
-    `@me` and the repository's apps is read as a person (`build/22`). Body and title keys are read at any depth; a body
-    on stdin in every spelling and a heredoc body read as data are read for mentions; a closing or reopening comment is
+    `@me` and the repository's apps is read as a person (`build/22`). Body and title keys nested in a gh field or a JSON
+    body are read; a body on stdin in the spellings `SECURITY.md` lists and a heredoc body read as data are read for
+    mentions; a closing or reopening comment is
     read; short-option clusters are read by gh 2.102.0's per-subcommand short options, an unknown letter asking
     (`review/121`–`126`, `review/135`, `review/145`, `review/146`). An issue transfer's destination and
-    `gh issue develop`'s repository are targets (`review/122`, `review/123`). A push whose remote or URL names another
-    repository asks, every URL the guard reads for a push to `origin` compared (`review/130`).
+    `gh issue develop`'s repository are targets (`review/122`, `review/123`). A push whose remote word or URL, or, for a
+    push naming neither, the push remote the configuration files name, names another repository asks, each URL the
+    guard reads for a push to `origin` compared (`review/130`).
   - A git commit message is not screened: a mention there notifies no one (`build/25`).
   - **`remote-write`** (`review/129`, overturned at the lens's third round): a line whose `git remote` or `git config`
     call writes a git remote, a URL rewrite or an include runs on Claude Code's and Copilot CLI's main thread and is refused for a sub-agent, and on
-    Codex and Cursor in every mode, since it moves the origin later writes are held to (`PERSON_ONLY_RULES`,
+    Codex and Cursor in both modes, since it moves the origin later writes are held to (`PERSON_ONLY_RULES`,
     `src/hooks/personOnly.ts:198-202`; `RUNS`, `src/hooks/scripts.ts`).
   - **Residuals** (`SECURITY.md`): a body the shell fills in and one read from a file are not read; `gh` aliases and
     extensions; a `gh` version other than 2.102.0 for the cluster table; `gh`'s own configured default host
@@ -6743,8 +6751,9 @@ asks attended, and refuses unattended and for a sub-agent (`PERSON_ONLY_RULES`, 
     `src/hooks/scripts.ts`). Every value its reader reaches is decoded by git's own grammar, a value a backslash continues joined to the
     next line; a value git refuses (an escape it does not know, a quote left open) and an include path starting `%(`
     make the reading partial (`configValue`).
-  - A push or a gh write on a line that also moves a remote, a URL rewrite or an include asks (`outside-write`), and a
-    push on a line that also changes a push, branch or submodule setting asks (`push-default`). A push that also pushes
+  - A push or a gh write on a line whose `git remote` or `git config` call also writes a remote, a URL rewrite or an
+    include, or edits the configuration, asks (`outside-write`), and a push on a line whose `git config` call also
+    writes a push, branch or submodule setting asks (`push-default`). A push that also pushes
     submodules asks (`outside-write`): the line's option decides first, then a `push.recurseSubmodules` pair on the
     line, read beside the line's `submodule.recurse` pairs; otherwise every value of both keys, from the line and the
     files, counts together. The run verbs pin `push.recurseSubmodules=no` (`PINNED_OPTIONS`,
