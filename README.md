@@ -24,7 +24,7 @@ charter, commands, agents, skills, rules, hooks and MCP wiring, shaped for the c
 
 Every figure below comes from a committed artifact, so you can check it instead of believing it.
 
-**Merge-ready rate: 7 of 19 runs, 0.368.** A run is verified merge-ready when three things hold.
+**Merge-ready rate: 8 of 20 runs, 0.400.** A run is verified merge-ready when three things hold.
 Its final gate table is all passes. Its last review verdict is an approval at or above the
 confidence gate that record states. Its findings ledger leaves no row open. Self-declared wording
 never counts. The frozen snapshot is

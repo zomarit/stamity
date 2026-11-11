@@ -20,7 +20,7 @@ snapshot is not on this page until then.
 
 ## Verified merge-ready rate
 
-**7 of 19 runs** (0.368).
+**8 of 20 runs** (0.400).
 
 The rule: verified merge-ready = the final gate table all pass, the last review verdict an approval at or above the record's stated confidence gate (0.8 when unstated), and a findings ledger with no open row; merge evidence is reported per run, never a clause; self-declared wording never counts.
 
@@ -50,6 +50,7 @@ runs to their merge, and scoring on one would measure the bookkeeping instead of
 | `2026-09-07_package-4` | none in committed artifacts |
 | `2026-09-17_plugin-lifecycle` | none in committed artifacts |
 | `2026-09-30_release-1-11-0` | released version 1.11.0 in CHANGELOG |
+| `2026-11-10_patch-1-19-1` | none in committed artifacts |
 
 ### Denominator, less the numerator
 
@@ -130,11 +131,10 @@ the number is: an exclusion nobody can see is a number nobody can check.
 - `2026-11-04_factory-bridge` — gates in prose only — no gate row carries a pass or fail
 - `2026-11-05_factory-bridge-02` — gates in prose only — no gate row carries a pass or fail
 - `2026-11-09_last-before-2-0` — gates in prose only — no gate row carries a pass or fail
-- `2026-11-10_patch-1-19-1` — gates in prose only — no gate row carries a pass or fail
 
 ### What the number is limited by, stated rather than tuned away
 
-54 run directories are outside the measure and every one of them is named
+53 run directories are outside the measure and every one of them is named
 above. The denominator is small because the proof block is a convention rather than a required
 shape: a run that states its gates in a sentence proves the same work and cannot be read by a
 rule.
