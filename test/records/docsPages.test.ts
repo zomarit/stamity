@@ -179,7 +179,14 @@ describe("the eval run of record on the hand pages", () => {
     const readRun = (path: string): string => (path === ofRecord ? composed : read(path));
     const nearest = "Run 57 alone was PASS; run 58 re-measured one case, composed with run 57.";
     expect(disclosureGaps(nearest, ofRecord, readRun)).toEqual(["hides that 2026-10-27-run-56 alone was FAIL"]);
-    const whole = `${nearest} ${collapsed(read("docs/measurements.md"))}`;
+    // TEST CHANGE, justified (2026-11-11, the 1.19.1 run of record): this case's subject is the checker
+    // over a stand-in chain, not the live page. It read run 56's disclosure off `docs/measurements.md`,
+    // which stops naming run 56 once a release makes its own full measure (1.19.1's run 65), so the
+    // sentence is fixed here as the 1.19.0 page carried it. The chain and the assertion do not move.
+    const run56 =
+      `[Run 56](${RECORDS_BLOB_URL}evals/runs/2026-10-27-run-56/RESULTS.md) alone was FAIL with the adversarial ` +
+      "guardrail hold rate not met; run 57 re-measured eight cases, composed with run 56, and carried the other 163 from it.";
+    const whole = `${nearest} ${run56}`;
     expect(disclosureGaps(whole, ofRecord, readRun)).toEqual([]);
   });
 
