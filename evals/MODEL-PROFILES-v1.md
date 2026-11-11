@@ -5,11 +5,11 @@ This extends `SET-v7.md` with explicit model choices. The machine-readable sourc
 The case roster, sealed briefs, expected criteria and thresholds remain those of `SET-v7`.
 No profile starts a model call or changes Stamity's product-level `models.pins` settings.
 
-| Profile | Model under test | Judge | Rubric |
-|---|---|---|---|
-| `claude` (default) | `claude-opus-5-5` | `claude-fable-5-2` | `rubric-v7.md` |
-| `codex-astra` | `gpt-6-astra` | `gpt-5.6-sol` | `rubric-v7.md` |
-| `codex-astra-judge` | `gpt-5.6-sol` | `gpt-6-astra` | `rubric-v7.md` |
+| Profile | Model under test | Its effort | Judge | Judge effort | Rubric |
+|---|---|---|---|---|---|
+| `claude` (default) | `claude-opus-5-5` | `high` | `claude-fable-5-2` | `high` | `rubric-v7.md` |
+| `codex-astra` | `gpt-6-astra` | `high` | `gpt-5.6-sol` | `high` | `rubric-v7.md` |
+| `codex-astra-judge` | `gpt-5.6-sol` | `high` | `gpt-6-astra` | `high` | `rubric-v7.md` |
 
 Ask the runner to **run the full eval set with profile `codex-astra`** to measure Astra,
 or select `codex-astra-judge` to have Astra grade Sol. With no profile named, `claude`
@@ -19,11 +19,14 @@ the harness checks the selected profile's availability before spending calls. Bo
 roles declare `high` reasoning effort. The Claude scenario declares `high` as well, which the run's
 driver sends as the client's explicit `--effort high`, because runs 15-32 measured the scenario at
 high (`claude-opus-5`'s client default) and `claude-opus-5-5`'s client default is medium (the
-maintainer's answer of 2026-09-26). The Claude judge's null effort means the harness default;
-it does not claim a controllable or known effort value.
+maintainer's answer of 2026-09-26).
 On 2026-11-10 the Claude judge moved from `claude-fable-5-1` to `claude-fable-5-2` on the
-maintainer's word; its effort stays the harness default, and the client it needs is 2.1.290 or
-newer (measured 2026-11-10).
+maintainer's word, and the client it needs is 2.1.290 or newer (measured 2026-11-10). From this
+version the Claude judge's effort is declared too, `high`, on the maintainer's word of 2026-11-11:
+the client's default for `claude-fable-5-2` measured `medium` (client 2.1.322, 2026-11-10), and the
+route needs the judge and the scenario to decode alike. Before that the judge declared a null
+effort. The v2 profile document keeps its null judge effort, and null keeps its meaning wherever a
+profile declares it: the harness default, with no claimed controllable or known effort value.
 
 ## Selection and isolation
 

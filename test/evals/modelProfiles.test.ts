@@ -26,7 +26,7 @@ const baseId = (id: string): string => id.replace(/\[[^\]]+\]$/, "");
 const grading = (text: string): string => text.slice(text.indexOf("## Verdict vocabulary\n"));
 
 describe("eval model profiles", () => {
-  it("keeps the Claude instrument as the default, its scenario on Opus 5.5 at high effort and its judge at the harness default", () => {
+  it("keeps the Claude instrument as the default, its scenario on Opus 5.5 and its judge on Fable 5.2, both at a declared high effort", () => {
     // Behaviour moved, not weakened: at 1.10.0 the `claude` profile's scenario model moved
     // from `claude-opus-5` to `claude-opus-5-5` (the model mix of 2026-09-23, plan 010 D4,
     // REQ-PROVE-009); the judge pin does not move. The move is in place in the v1 document,
@@ -39,6 +39,11 @@ describe("eval model profiles", () => {
     // in place from `claude-fable-5-1` to `claude-fable-5-2` on the maintainer's word; its effort
     // stays null (the harness default) and the scenario pair does not move. v2 keeps the old judge.
     // TEST CHANGE, justified: the judge pin below names the moved id, as the scenario pin did at 1.10.0.
+    // Behaviour moved, not weakened: on 2026-11-11 (1.19.1, REQ-PROVE-009) the judge's effort moved
+    // from null (the client's default) to a declared "high" on the maintainer's word, because the
+    // client's default for this judge model measured medium and the route needs the judge and the
+    // scenario to decode alike. Earlier profile versions keep their null judge effort (pinned below).
+    // TEST CHANGE, justified: the judge pin below names the declared effort; the title says so too.
     expect(document.schemaVersion).toBe(1);
     expect(document.set).toBe(SET_FILE);
     expect(document.defaultProfile).toBe("claude");
@@ -46,17 +51,30 @@ describe("eval model profiles", () => {
       harness: "claude-code",
       rubric: RUBRIC_FILE,
       scenario: { model: "claude-opus-5-5", reasoningEffort: "high" },
-      judge: { model: "claude-fable-5-2", reasoningEffort: null },
+      judge: { model: "claude-fable-5-2", reasoningEffort: "high" },
     });
   });
 
-  it("names in the profile document's table the same two models each profile's JSON declares", () => {
+  it("keeps the earlier profile version's Claude judge and its null effort, which v1 now declares", () => {
+    const earlier = JSON.parse(readRepoFile("evals/model-profiles-v2.json")) as ProfileDocument;
+    expect(earlier.profiles["claude"]?.judge).toEqual({ model: "claude-fable-5-1", reasoningEffort: null });
+    expect(document.profiles["claude"]?.judge.reasoningEffort).not.toBe(earlier.profiles["claude"]?.judge.reasoningEffort);
+  });
+
+  it("names in the profile document's table the same models and efforts each profile's JSON declares", () => {
+    // TEST CHANGE, justified: the table gains a scenario-effort and a judge-effort column (2026-11-11,
+    // the judge's effort is declared), so the row pattern reads them and each is compared with the JSON
+    // as the model cells already were; the model comparison is unchanged.
     const table = readRepoFile("evals/MODEL-PROFILES-v1.md");
-    const rows = [...table.matchAll(/^\| `([^`]+)`(?: \(default\))? \| `([^`]+)` \| `([^`]+)` \| `[^`]+` \|$/gm)];
-    expect(rows.map(row => row[1])).toEqual(profiles.map(([name]) => name));
-    for (const [, name, scenario, judge] of rows) {
+    const cell = "`([^`]+)`";
+    const row = new RegExp(`^\\| ${cell}(?: \\(default\\))? \\| ${cell} \\| ${cell} \\| ${cell} \\| ${cell} \\| \`[^\`]+\` \\|$`, "gm");
+    const rows = [...table.matchAll(row)];
+    expect(rows.map(match => match[1])).toEqual(profiles.map(([name]) => name));
+    for (const [, name, scenario, scenarioEffort, judge, judgeEffort] of rows) {
       const profile = document.profiles[name!];
-      expect({ scenario, judge }, name).toEqual({ scenario: profile?.scenario.model, judge: profile?.judge.model });
+      expect({ scenario, scenarioEffort, judge, judgeEffort }, name).toEqual({
+        scenario: profile?.scenario.model, scenarioEffort: profile?.scenario.reasoningEffort,
+        judge: profile?.judge.model, judgeEffort: profile?.judge.reasoningEffort });
     }
   });
 

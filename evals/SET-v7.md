@@ -4557,12 +4557,17 @@ scoring rule or count moves. No eval run is made with this change.
 **The claude profile's judge moved, 2026-11-10 (the 1.19.1 patch; REQ-PROVE-009).** On the maintainer's
 word, the claude profile's judge moves in place from `claude-fable-5-1` to `claude-fable-5-2`, in
 `evals/model-profiles-v1.json` and `evals/MODEL-PROFILES-v1.md`. The scenario model,
-`claude-opus-5-5` at `high`, does not move, and the judge's effort stays the harness default. The
+`claude-opus-5-5` at `high`, does not move. The judge's effort is declared, `high`, on the
+maintainer's word of 2026-11-11 (amending this paragraph in place, which first said the judge's
+effort stayed the harness default): the client's default for `claude-fable-5-2` measured `medium`
+(client 2.1.322, 2026-11-10), and the route needs the judge and the scenario to decode alike. A
+judge effort move, like a judge model move, measures the whole set and starts a new baseline. The
 route of record's client moves from 2.1.286 to 2.1.322, because 2.1.286 refuses the new model. A
 judge move and a client move each start a new configuration, so the 1.19.1 run is not composed
 with run 63, and no earlier run is its prior run for the advisory repeats: the release measures
 every case itself, three samples each, and calibration runs afresh on the new judge before any
-case is graded. The v2 profile document keeps `claude-fable-5-1`. No case, Expected block, count,
+case is graded. The v2 profile document keeps `claude-fable-5-1` and its null judge effort, the
+harness default. No case, Expected block, count,
 threshold or scoring rule moves. No eval run is made with this change.
 
 **The claude profile's scenario model moved, 2026-09-24.** At 1.10.0 the claude profile's
