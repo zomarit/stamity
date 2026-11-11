@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "runId": "2026-11-11-run-65",
+  "candidate": "2f5ce27d1ac1fa325048e48eef2d0062db9cb615",
+  "omissions": [],
+  "redactions": [
+    {
+      "file": "RESULTS.md",
+      "line": 38,
+      "exportedSha256": "278543cba2692b54f4f843901827ec37c7b71fcdb58a04039d97b720d4445b6d",
+      "publicSha256": "682fa5b498063e54c8c3c3f5a7bd33e0f6176545478af85436379407963a33dc",
+      "replaced": "the name of a local configuration folder",
+      "placeholder": "<private configuration directory>"
+    },
+    {
+      "file": "inputs.json",
+      "line": 423,
+      "exportedSha256": "9fcab5a9b8d3ba33e3467f1b6534a9c8251144f449bb6fdcd90ecee367354efa",
+      "publicSha256": "577d11ae7407e32efc239a1e6f9937e6687ba1247f4eaf6a32c23c0836f27c77",
+      "replaced": "the name of a local configuration folder",
+      "placeholder": "<private configuration directory>"
+    },
+    {
+      "file": "PROTOCOL.md",
+      "line": 40,
+      "exportedSha256": "6a41cfc0298d2889e51cf5a2056c511d0d82d720f140bfd4feefdc3a73fa5a82",
+      "publicSha256": "db9aa8bc8e4a932b1be248d64ac66432022879157c1a772d225791db5f888523",
+      "recordedSha256": "6a41cfc0298d2889e51cf5a2056c511d0d82d720f140bfd4feefdc3a73fa5a82",
+      "recordedWhere": "RESULTS.md § 1, the Protocol row, and inputs.json configuration.protocolSha256",
+      "replaced": "the name of a local configuration folder",
+      "placeholder": "<private configuration directory>"
+    }
+  ],
+  "note": "After export and before publication, the name of a local configuration folder was replaced by the placeholder the driver already uses for that folder, in three lines: RESULTS.md line 38 and inputs.json line 423 (the run's stated reason, twice) and PROTOCOL.md line 40 (the amendment that moved the folder). Nothing else in any file changed. No grade, count, score or verdict moved; summary.json and calls are as exported. Each changed file's sha256 as exported and as published is listed above; where a hash was recorded for the file (PROTOCOL.md), it is listed too, and the published copy no longer matches it for this reason alone. The configuration hash in inputs.json and RESULTS.md was computed at prepare over the private configuration, which still holds the original wording; it cannot be recomputed from the public configuration, which already masks the folder, the working directory and the client path. The private originals are kept unchanged in the private run folder."
+}
