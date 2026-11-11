@@ -3557,6 +3557,23 @@ describe("a push read against the push configuration in git's files", () => {
     expect(decide("claude", guard, "git push")).toEqual({ deny: false });
   });
 
+  // Red before: the merge pair of a branch whose name holds "=" was split at that sign, so its upstream was never read.
+  it("asks, and refuses for a sub-agent, a refless push in the upstream mode from a branch whose name holds an equals sign and merges into the default branch", async () => {
+    const files = (merge: string): Record<string, string> => ({
+      ".git/HEAD": "ref: refs/heads/a=b\n",
+      ".git/config": `${ORIGIN}[push]\n\tdefault = upstream\n[branch "a=b"]\n\tremote = origin\n\tmerge = ${merge}\n`,
+    });
+    const guard = await placeGuard("claude", files("refs/heads/main"));
+    expect(decide("claude", guard, "git push")).toMatchObject({ deny: true, ask: true, reason: expect.stringContaining(ruleSaid("push-default")) });
+    const helper = clientDecision("claude", run(guard, asHelper("git push")), "helper: git push");
+    expect(helper).toMatchObject({ deny: true, reason: expect.stringContaining(ruleSaid("push-default")) });
+    expect(helper).not.toHaveProperty("ask");
+    // One fact away: the same branch merges into itself, and the push runs on the main thread and for a sub-agent.
+    await getRepo().seedFiles(files("refs/heads/a=b"));
+    expect(decide("claude", guard, "git push")).toEqual({ deny: false });
+    expect(clientDecision("claude", run(guard, asHelper("git push")), "helper: git push")).toEqual({ deny: false });
+  });
+
   // Red before the union: the push setting of no in a conditional include git may not read hid the every-command one.
   it("asks for a push where the files turn submodule recursion on, though an include whatever its condition turns the push setting off", async () => {
     const guard = await placeGuard("claude", {

@@ -5598,6 +5598,15 @@ describe("a push read against the place's own push configuration", () => {
     expect(personOnlyVerdict("git -c push.default=upstream push", ctx)).toMatchObject({ deny: true, rule: "push-default" });
   });
 
+  // Red before: a merge pair whose branch name holds a line break, the files' spelling of a name holding "=", was dropped.
+  it("reads the upstream merge of a branch whose name no line key can spell", () => {
+    const named = { currentBranch: "a=b" };
+    const ctx = filesSet(["push.default=upstream", "branch.a\nb.merge=refs/heads/main"], named);
+    expect(personOnlyVerdict("git push", ctx)).toMatchObject({ deny: true, rule: "push-default", ask: true });
+    // One fact away: the same branch merges into itself, and the push runs.
+    expect(personOnlyVerdict("git push", filesSet(["push.default=upstream", "branch.a\nb.merge=refs/heads/a=b"], named))).toEqual({ deny: false });
+  });
+
   it("lets the line's own push.default win over the files'", () => {
     const ctx = filesSet(["push.default=upstream", "branch.feat/x.merge=refs/heads/main"]);
     expect(personOnlyVerdict("git -c push.default=simple push", ctx)).toEqual({ deny: false });

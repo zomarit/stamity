@@ -2275,7 +2275,7 @@ export function personOnlyVerdict(command: string, ctx: PersonOnlyContext): Pers
       const taken = fromLine ? lineValues : fileValues;
       if (SETTINGS.test(key)) taken.set(key, [...(taken.get(key) ?? []), value]);
       if (/^remote\.[\s\S]+\.push$/.test(key) && eq !== -1) (fromLine ? configured : mapped).push(pair.slice(eq + 1));
-      if (/^branch\..+\.merge$/.test(key) && eq !== -1) (fromLine ? configured : merges).push(`HEAD:${pair.slice(eq + 1)}`);
+      if (/^branch\.[\s\S]+\.merge$/.test(key) && eq !== -1) (fromLine ? configured : merges).push(`HEAD:${pair.slice(eq + 1)}`);
     };
     for (const pair of config) readPair(pair, true);
     /** The values the push takes for `key`: the line's where it sets the key, else the files'. */
