@@ -3846,7 +3846,32 @@ describe("the system configuration files of other git builds", () => {
     const windows = (places: Record<string, string>): Record<string, string> => ({ NODE_OPTIONS: `--import=${pathToFileURL(preload).href}`, ...places });
     const empty = getRepo().path("empty");
     const outside = { deny: true, ask: true, reason: expect.stringContaining("(`outside-write`)") };
-    expect(decide("claude", guard, "git push -u origin feat/x", windows({ ProgramFiles: getRepo().path("programs"), ProgramData: empty }))).toMatchObject(outside);
+    if (process.platform === "win32") {
+      // TEST CHANGE, justified (REQ-FLOW-134): a real Windows gives the guard child the system's own program folder
+      // whatever is passed, so here the check is that the guard looks at that folder's system file, every look recorded.
+      const recorder = getRepo().path("looked.mjs");
+      const looked = getRepo().path("looked.json");
+      writeFileSync(
+        recorder,
+        [
+          'import fs from "node:fs";',
+          'import { syncBuiltinESMExports } from "node:module";',
+          "const looked = [];",
+          "const real = fs.lstatSync;",
+          "fs.lstatSync = (...words) => { looked.push(String(words[0])); return real(...words); };",
+          "syncBuiltinESMExports();",
+          'process.on("exit", () => fs.writeFileSync(process.env.LOOKED_PATHS, JSON.stringify(looked)));',
+        ].join("\n"),
+      );
+      const host = Object.entries(process.env).find(([name]) => name.toUpperCase() === "PROGRAMFILES")?.[1] ?? "";
+      expect(host).not.toBe("");
+      const imports = `--import=${pathToFileURL(preload).href} --import=${pathToFileURL(recorder).href}`;
+      decide("claude", guard, "git push -u origin feat/x", { NODE_OPTIONS: imports, ProgramFiles: host, ProgramData: empty, LOOKED_PATHS: looked });
+      const paths = (JSON.parse(readFileSync(looked, "utf8")) as string[]).map((path) => path.toLowerCase());
+      expect(paths).toContain(join(host, "Git", "etc", "gitconfig").toLowerCase());
+    } else {
+      expect(decide("claude", guard, "git push -u origin feat/x", windows({ ProgramFiles: getRepo().path("programs"), ProgramData: empty }))).toMatchObject(outside);
+    }
     expect(decide("claude", guard, "git push -u origin feat/x", windows({ ProgramFiles: empty, ProgramData: getRepo().path("shared") }))).toMatchObject(outside);
     // One fact away: both places named and holding no system file, and the same push runs.
     expect(decide("claude", guard, "git push -u origin feat/x", windows({ ProgramFiles: empty, ProgramData: empty }))).toEqual({ deny: false });
