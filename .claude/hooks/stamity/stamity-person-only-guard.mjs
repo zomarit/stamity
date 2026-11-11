@@ -1597,6 +1597,9 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 	let lineMentions = null;
 	const fileRefs = /* @__PURE__ */ new Set();
 	const environment = /\bGH_(?:REPO|HOST)\b|\bGIT_CONFIG\w*|\b(?:HOME|XDG_CONFIG_HOME)\s*=/.test(command);
+	let remoteMoved = false;
+	let pushConfigMoved = false;
+	let upstreamMoved = false;
 	const defaultAway = () => {
 		const fallback = ctx.ghDefaultRepo;
 		return fallback === null || fallback !== void 0 && fallback !== "" && fallback !== ctx.originRepo;
@@ -1608,14 +1611,18 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		"/proc/self/fd/0"
 	]);
 	const gitEnvironment = /\bGIT_CONFIG\w*|\b(?:HOME|XDG_CONFIG_HOME)\s*=/.test(command);
-	const pushRemoteWord = () => [[ctx.pushRemote === void 0 ? "origin" : ctx.pushRemote, void 0]];
+	const pushRemoteWord = () => [[upstreamMoved ? null : ctx.pushRemote === void 0 ? "origin" : ctx.pushRemote, void 0]];
 	const pushOutside = (words, config) => {
 		const origin = ctx.originRepo;
 		if (origin === void 0) return;
 		const outside = () => {
 			deny("outside-write", "A push to another repository, or to a remote the guard cannot place");
 		};
-		if (ctx.placeUnread === true || gitEnvironment || config.some((pair) => /^(?:remote|url)\./i.test(pair))) return outside();
+		if (ctx.placeUnread === true || gitEnvironment || config.some((pair) => /^(?:remote|url|include|includeif)\./i.test(pair))) return outside();
+		if (remoteMoved) {
+			deny("outside-write", "A write on a line that also moves a git remote, a URL rewrite or an include");
+			return;
+		}
 		const named = words.length > 0 ? words : pushRemoteWord();
 		for (const [word, mark] of named) {
 			if (word === null || (mark?.kinds ?? "") !== "" || /[$`]/.test(word)) return outside();
@@ -1651,13 +1658,17 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			].includes(action)) deny("remote-write", `Writing a git remote (\`git remote ${action}\`)`);
 			return;
 		}
-		if (sub !== "config") return;
-		if (args.some((arg) => arg === "-e" || arg === "--edit")) {
-			deny("remote-write", "Editing the git configuration (`git config --edit`), which may write a remote or a URL rewrite");
-			return;
-		}
-		const keyed = args.findIndex((arg) => /^(?:remote|url|include|includeif)\.|^include(?:if)?$/i.test(arg));
-		if (keyed === -1) return;
+		const written = configWrites(sub, args, REMOTE_SECTIONS);
+		if (written === "edit") deny("remote-write", "Editing the git configuration (`git config --edit`), which may write a remote or a URL rewrite");
+		else if (written === "key") deny("remote-write", "Writing a remote or URL rewrite in the git configuration (`git config`)");
+	}
+	const REMOTE_SECTIONS = /^(?:remote|url|include|includeif)\.|^include(?:if)?$/i;
+	const PUSH_SECTIONS = /^(?:push|branch|submodule)(?:\.|$)/i;
+	function configWrites(sub, args, sections) {
+		if (sub !== "config") return null;
+		if (args.some((arg) => arg === "-e" || arg === "--edit")) return "edit";
+		const keyed = args.findIndex((arg) => sections.test(arg));
+		if (keyed === -1) return null;
 		const reads = args.some((arg) => /^--(?:get(?:-all|-regexp|-urlmatch|-color(?:bool)?)?|list|show-origin|show-scope|name-only)$/.test(arg) || arg === "-l");
 		const subcommand = args.find((arg) => !arg.startsWith("-")) ?? "";
 		const writes = args.some((arg) => /^--(?:unset(?:-all)?|add|replace-all|rename-section|remove-section)$/.test(arg)) || [
@@ -1667,7 +1678,27 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			"remove-section"
 		].includes(subcommand);
 		const value = args.slice(keyed + 1).some((arg) => !arg.startsWith("-"));
-		if (writes || !reads && !["get", "list"].includes(subcommand) && value) deny("remote-write", "Writing a remote or URL rewrite in the git configuration (`git config`)");
+		return writes || !reads && !["get", "list"].includes(subcommand) && value ? "key" : null;
+	}
+	function upstreamWrite(sub, args, shown) {
+		const options = sub === "branch" ? [
+			"--set-upstream-to",
+			"--set-upstream",
+			"--unset-upstream",
+			"--track"
+		] : sub === "checkout" ? ["--track"] : sub === "switch" ? [
+			"--track",
+			"--create",
+			"--force-create"
+		] : null;
+		if (options === null) return false;
+		if (!shown) return true;
+		const letters = sub === "branch" ? /^-[^-]*[tu]/ : sub === "checkout" ? /^-[^-]*[tbB]/ : /^-[^-]*[tcC]/;
+		const end = args.indexOf("--");
+		return args.slice(0, end === -1 ? void 0 : end).some((arg) => {
+			const name = arg.split("=")[0] ?? "";
+			return arg.startsWith("--") ? name.length > 2 && options.some((option) => option.startsWith(name)) : letters.test(arg);
+		});
 	}
 	function destination(refspec) {
 		const spec = refspec.replace(/^\+/, "");
@@ -1677,10 +1708,22 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		return dst === "" ? spec.slice(0, colon) : dst;
 	}
 	let pushReach = [];
+	let pushUnread = false;
+	let pushUnshown = null;
+	let pushRefless = false;
 	function pushRead(args, config, marks) {
 		pushReach = [];
+		pushUnread = false;
+		pushUnshown = null;
+		pushRefless = false;
 		pushVerdict(args, config, marks);
 		pushOutside(pushReach, config);
+		if (pushUnshown !== null) deny("force-push", pushUnshown);
+		const reasons = [...pushUnread ? ["A push whose git configuration the guard cannot read whole"] : [], ...pushConfigMoved || upstreamMoved && pushRefless ? ["A push on a line that also changes the git configuration a push reads"] : []];
+		for (const what of reasons) {
+			if (deploying.length > 0) deny("push-deploying", what);
+			deny("push-default", what);
+		}
 	}
 	function pushVerdict(args, config, marks = [], valueRead = false) {
 		const values = [];
@@ -1690,27 +1733,39 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		let matching = false;
 		let repoGiven = false;
 		let stdin = false;
+		let hidden = false;
+		const splitProne = (mark) => /[sgbp]/.test(mark?.kinds ?? "");
 		const repoWords = [];
 		const positionals = [];
 		const positionalMarks = [];
 		const configured = [];
-		for (const pair of config) {
+		const mapped = [];
+		const merges = [];
+		const lineValues = /* @__PURE__ */ new Map();
+		const fileValues = /* @__PURE__ */ new Map();
+		const SETTINGS = /^(?:push\.(?:followtags|default|recursesubmodules)|submodule\.recurse|remote\.[\s\S]+\.mirror)$/;
+		const readPair = (pair, fromLine) => {
 			const eq = pair.indexOf("=");
-			const key = (eq === -1 ? pair : pair.slice(0, eq)).toLowerCase();
+			const text = eq === -1 ? pair : pair.slice(0, eq);
+			const first = text.indexOf(".");
+			const last = text.lastIndexOf(".");
+			const key = first === -1 ? text.toLowerCase() : text.slice(0, first).toLowerCase() + text.slice(first, last) + text.slice(last).toLowerCase();
 			const value = eq === -1 ? "true" : pair.slice(eq + 1).toLowerCase();
-			const on = ![
-				"false",
-				"no",
-				"off",
-				"0",
-				""
-			].includes(value);
-			if (key === "push.followtags" && on) tags = true;
-			if (/^remote\..+\.mirror$/.test(key) && on) force = true;
-			if (key === "push.default" && value === "matching") matching = true;
-			if (/^remote\..+\.push$/.test(key) && eq !== -1) configured.push(pair.slice(eq + 1));
-			if (/^branch\..+\.merge$/.test(key) && eq !== -1) configured.push(`HEAD:${pair.slice(eq + 1)}`);
-		}
+			const taken = fromLine ? lineValues : fileValues;
+			if (SETTINGS.test(key)) taken.set(key, [...taken.get(key) ?? [], value]);
+			if (/^remote\.[\s\S]+\.push$/.test(key) && eq !== -1) (fromLine ? configured : mapped).push(pair.slice(eq + 1));
+			if (/^branch\.[\s\S]+\.merge$/.test(key) && eq !== -1) (fromLine ? configured : merges).push(`HEAD:${pair.slice(eq + 1)}`);
+		};
+		for (const pair of config) readPair(pair, true);
+		const valuesOf = (key) => lineValues.get(key) ?? fileValues.get(key) ?? [];
+		const on = (value) => ![
+			"false",
+			"no",
+			"off",
+			"0",
+			""
+		].includes(value);
+		const recursion = [];
 		for (let j = 0; j < args.length; j += 1) {
 			const arg = args[j] ?? "";
 			if (arg === "--") {
@@ -1720,7 +1775,13 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			}
 			if (arg.startsWith("--")) {
 				const name = (arg.split("=")[0] ?? "").toLowerCase();
+				const eq = arg.indexOf("=");
+				if ((marks[j]?.kinds ?? "") !== "" && (eq === -1 || (marks[j]?.first ?? -1) <= eq || splitProne(marks[j]))) hidden = true;
 				const is = (options) => name.length > 2 && options.some((option) => option.startsWith(name));
+				if (is(["--recurse-submodules"])) {
+					const filled = eq === -1 ? (marks[j + 1]?.kinds ?? "") !== "" : (marks[j]?.kinds ?? "") !== "" && (marks[j]?.last ?? 0) > eq;
+					recursion.push(filled ? "on" : (eq === -1 ? args[j + 1] ?? "on" : arg.slice(eq + 1)).toLowerCase());
+				} else if (name.length > 5 && "--no-recurse-submodules".startsWith(name)) recursion.push("no");
 				if (is(["--stdin"])) stdin = true;
 				if (is([
 					"--force",
@@ -1738,30 +1799,83 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 				else if (is(["--repo"])) {
 					repoGiven = true;
 					repoWords.push(arg.includes("=") ? [arg.slice(arg.indexOf("=") + 1), marks[j]] : [args[j + 1] ?? null, marks[j + 1]]);
-					if (!arg.includes("=")) j += 1;
+					if (!arg.includes("=")) {
+						if (splitProne(marks[j + 1])) hidden = true;
+						j += 1;
+					}
 				} else if (is([
 					"--push-option",
 					"--receive-pack",
 					"--exec"
-				]) && !arg.includes("=")) j += 1;
-				else if (!valueRead && is(["--recurse-submodules", "--remote"]) && !arg.includes("=") && j + 1 < args.length) values.push(j + 1);
-			} else if (arg.startsWith("-") && arg.length > 1) for (let c = 1; c < arg.length; c += 1) {
-				const flag = arg[c];
-				if (flag === "f") force = true;
-				else if (flag === "d") remove = true;
-				else if (flag === "o") {
-					if (c === arg.length - 1) j += 1;
-					break;
+				]) && !arg.includes("=")) {
+					if (splitProne(marks[j + 1])) hidden = true;
+					j += 1;
+				} else if (!valueRead && is(["--recurse-submodules", "--remote"]) && !arg.includes("=") && j + 1 < args.length) values.push(j + 1);
+			} else if (arg.startsWith("-") && arg.length > 1) {
+				const mark = marks[j];
+				let valueAt = arg.length;
+				for (let c = 1; c < arg.length; c += 1) {
+					const flag = arg[c];
+					if (flag === "f") force = true;
+					else if (flag === "d") remove = true;
+					else if (flag === "o") {
+						valueAt = c;
+						if (c === arg.length - 1 && (mark?.kinds ?? "") !== "" && (mark?.first ?? -1) <= c) {
+							if (!valueRead && j + 1 < args.length) values.push(j + 1);
+						} else if (c === arg.length - 1) {
+							if (splitProne(marks[j + 1])) hidden = true;
+							j += 1;
+						}
+						break;
+					}
 				}
-			}
-			else {
+				if ((mark?.kinds ?? "") !== "" && ((mark?.first ?? -1) <= valueAt || splitProne(mark))) hidden = true;
+			} else {
 				positionals.push(arg);
 				positionalMarks.push(marks[j]);
 			}
 		}
+		if (hidden && !valueRead) pushUnshown ??= "A push holding an option word the line cannot show (it may be a force, mirror or delete option)";
 		if (stdin && !valueRead) {
 			if (deploying.length > 0) deny("push-deploying", "A push of refs read from its input, which may name a deploying branch");
 			deny("push-default", "A push of refs read from its input, which may name the default branch");
+		}
+		if (ctx.pushConfig !== void 0) {
+			const plain = (word, mark) => word !== null && (mark?.kinds ?? "") === "" ? word : null;
+			const words = [...repoWords, ...positionals.length > 0 ? [[positionals[0] ?? null, positionalMarks[0]]] : []];
+			const remotes = words.length > 0 ? words.map(([word, mark]) => plain(word, mark)) : ctx.pushRemote === null ? [] : [ctx.pushRemote ?? "origin"];
+			if (words.length === 0 && ctx.pushRemote === null) pushUnread = true;
+			for (const remote of new Set(remotes)) {
+				const pairs = ctx.pushConfig(remote);
+				if (pairs === null) pushUnread = true;
+				else for (const pair of pairs) readPair(pair, false);
+			}
+		}
+		if (valuesOf("push.followtags").some(on)) tags = true;
+		for (const key of /* @__PURE__ */ new Set([...lineValues.keys(), ...fileValues.keys()])) if (/^remote\.[\s\S]+\.mirror$/.test(key) && valuesOf(key).some(on)) force = true;
+		const modes = valuesOf("push.default");
+		if (modes.includes("matching")) matching = true;
+		if (modes.includes("upstream") || modes.includes("tracking")) configured.push(...merges);
+		const recurses = (given) => given.some((value) => ![
+			"check",
+			"no",
+			"false",
+			"off",
+			"0",
+			""
+		].includes(value));
+		const lineRecursion = lineValues.get("submodule.recurse") ?? [];
+		const linePush = lineValues.get("push.recursesubmodules");
+		const given = recursion.length > 0 ? recursion : linePush !== void 0 ? [...linePush, ...lineRecursion] : [
+			...lineRecursion,
+			...fileValues.get("push.recursesubmodules") ?? [],
+			...fileValues.get("submodule.recurse") ?? []
+		];
+		if (!valueRead && recurses(given)) {
+			if (ctx.originRepo !== void 0) deny("outside-write", "A push that also pushes submodules, to repositories the line does not show");
+			const what = "A push that also pushes submodules, whose branches the line does not show";
+			if (deploying.length > 0) deny("push-deploying", what);
+			deny("push-default", what);
 		}
 		let valueReach = [];
 		if (values.length > 0) {
@@ -1777,13 +1891,18 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		const named = repoGiven ? positionals : positionals.slice(1);
 		const namedMarks = repoGiven ? positionalMarks : positionalMarks.slice(1);
 		const refless = positionals.length <= 1;
-		if (!repoGiven && /[sgb]/.test(positionalMarks[0]?.kinds ?? "")) {
-			if (deploying.length > 0) deny("push-deploying", "A push whose remote word may split into refspecs the line cannot show");
-			return deny("push-default", "A push whose remote word may split into refspecs or an option the line cannot show");
-		}
+		if (refless) pushRefless = true;
+		const remoteMark = repoGiven ? "" : positionalMarks[0]?.kinds ?? "";
+		if (remoteMark !== "") pushUnshown ??= /[sgbp]/.test(remoteMark) ? "A push whose remote word may split into refspecs or options the line cannot show (a force or a deletion among them)" : "A push whose remote word the line cannot show (it may be a force, mirror or delete option)";
 		const tagWord = named.indexOf("tag");
 		const tagNamed = tagWord !== -1 && tagWord < named.length - 1;
-		const refspecs = named.length === 0 ? configured : refless ? [...named, ...configured] : named;
+		const bareSource = named.some((spec) => !spec.replace(/^\+/, "").includes(":"));
+		const fileMapped = refless || bareSource ? mapped : [];
+		const refspecs = named.length === 0 ? [...configured, ...fileMapped] : refless ? [
+			...named,
+			...configured,
+			...fileMapped
+		] : [...named, ...fileMapped];
 		const namesTag = (side) => side !== "" && (/^(refs\/)?tags\//i.test(side) || isTagName(side.toLowerCase()));
 		if (force || refspecs.some((spec) => spec.startsWith("+"))) return deny("force-push", "A force push");
 		const deleted = refspecs.filter((spec) => spec.length > 1 && spec.startsWith(":")).map((spec) => spec.slice(1));
@@ -2247,6 +2366,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 			if (!gh && !graphql && keys.length === 0) return;
 			const what = gh ? "gh api" : `${line[0] ?? ""} to the GitHub API`;
 			if (gh && environment || keys.some((key) => key === "" || key !== origin) || defaulted && keys.length === 0 && defaultAway()) deny("outside-write", `A write that reaches another repository, or one the guard cannot place (\`${what}\`)`);
+			else if (gh && remoteMoved) deny("outside-write", "A write on a line that also moves a git remote, a URL rewrite or an include");
 			if (graphql) {
 				const filledKey = line.some((word, at) => {
 					if (at === 0 || !shellFilled(at)) return false;
@@ -2605,6 +2725,7 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		if (moved !== void 0 && !/^https?:\/\//i.test(cmd[moved] ?? "")) targets.push(shown(moved) ? repoKey(cmd[moved] ?? "", host) : "");
 		const what = `gh ${group} ${sub}`;
 		if (environment || targets.some((key) => key === "" || key !== origin) || targets.length === 0 && defaultAway()) deny("outside-write", `A write that reaches another repository, or one the guard cannot place (\`${what}\`)`);
+		else if (remoteMoved) deny("outside-write", "A write on a line that also moves a git remote, a URL rewrite or an include");
 		if (whole ? lineMentions ??= mentions(command, fileRefs) : prose.some((text) => mentions(text))) deny("outside-write", `A body or title naming a person (an \`@\` mention), which reaches them (\`${what}\`)`);
 		if (persons.some((value) => value === null || people(value))) deny("outside-write", `A review request or an assignee naming a person, which notifies them (\`${what}\`)`);
 	}
@@ -2763,6 +2884,25 @@ const personOnlyVerdict = function personOnlyVerdict(command, ctx) {
 		};
 		return stdinRead;
 	};
+	for (const cmd of read) {
+		if (cmd[0] !== "git") continue;
+		const { sub, args: lineArgs } = gitParts(cmd);
+		const args = fed.has(cmd) ? [...lineArgs, "$"] : lineArgs;
+		const shown = shownWords((markMap.get(cmd) ?? []).slice(cmd.length - lineArgs.length));
+		const unshown = (sub === "remote" || sub === "config") && !shown;
+		const action = args.find((arg) => !arg.startsWith("-")) ?? "";
+		if (unshown || sub === "remote" && [
+			"add",
+			"rename",
+			"set-url",
+			"remove",
+			"rm",
+			"set-head",
+			"set-branches"
+		].includes(action) || configWrites(sub, args, REMOTE_SECTIONS) !== null) remoteMoved = true;
+		if (remoteMoved || configWrites(sub, args, PUSH_SECTIONS) !== null) pushConfigMoved = true;
+		if (upstreamWrite(sub, args, shown && !fed.has(cmd))) upstreamMoved = true;
+	}
 	for (const cmd of read) {
 		const program = cmd[0] ?? "";
 		if (program === "git") {
@@ -5187,8 +5327,9 @@ function installFolders(line, start, depth = 0, cut = false, escapes = undefined
  * install starts in, it writes in the nearest folder up holding a package.json or a node_modules, as the managers find
  * it, up to the repository's top (sign-off S54), and a workspace member at each folder above it, up to that top,
  * declaring a workspace too (sign-off S64). An install past the folders the reading holds is refused as well, since
- * where it runs is not known (review/106). Null when none of those is a link; a fault of its own is null too, so this
- * check never sends a call to the fail-closed refusal. On Windows the line of Claude's Bash tool, the one payload that
+ * where it runs is not known (review/106). Null when none of those is a link, or when the line names no package
+ * manager, which is never parsed; a fault in its own reading refuses the call with its own sentence, as the guard
+ * refuses on any fault of its own. On Windows the line of Claude's Bash tool, the one payload that
  * says it runs Git Bash, is read twice: Git Bash reads a backslash as an escape (n\pm is npm), where the guard's own
  * reading takes it for a path's separator, and either reading refuses (u-ci1); every other client's line, PowerShell by
  * default there, keeps the one reading (sign-off S86). The fix names the checkout with forward slashes on Windows
@@ -5241,9 +5382,43 @@ function linkedInstall(command, cwd, pwsh = false, bash = false) {
       }
     }
   } catch {
-    // The check's own fault: the call goes on to the verdicts.
+    // The check's own fault refuses, as any fault of the guard's does; a line naming no package manager never gets here.
+    return "The guard could not read whether this install writes through a linked node_modules (a fault in its own reading), so it is refused. Run the install on a line of its own, after a plain cd to its folder.";
   }
   return null;
+}
+
+/** The places a git build other than one at /usr keeps its system configuration file: see GUARD_GIT_INCLUDE_DEPTH_MAX in the engine. */
+const SYSTEM_GITCONFIG_CANDIDATES = ["/etc/gitconfig", "/opt/homebrew/etc/gitconfig", "/usr/local/etc/gitconfig", "/home/linuxbrew/.linuxbrew/etc/gitconfig", "/Library/Developer/CommandLineTools/usr/share/git-core/gitconfig", "/Applications/Xcode.app/Contents/Developer/usr/share/git-core/gitconfig"];
+let systemCandidates;
+/** Each candidate system file, by resolved path, at most 24, found once per call: see GUARD_GIT_INCLUDE_DEPTH_MAX in the engine. */
+function systemConfigCandidates() {
+  if (systemCandidates !== undefined) return systemCandidates;
+  const env = process.env;
+  const windows = process.platform === "win32";
+  const home = env.HOME ?? env.USERPROFILE ?? "";
+  const found = [...SYSTEM_GITCONFIG_CANDIDATES];
+  for (const prefix of [env.HOMEBREW_PREFIX, env.CONDA_PREFIX, home]) if (prefix) found.push(join(prefix, "etc", "gitconfig"));
+  if (windows) {
+    if (env.ProgramFiles) found.push(join(env.ProgramFiles, "Git", "etc", "gitconfig"));
+    if (env.ProgramData) found.push(join(env.ProgramData, "Git", "config"));
+  }
+  // The folder each git on PATH was built for: a regular file named git is only looked at, never run.
+  for (const entry of String(env.PATH ?? env.Path ?? "").split(windows ? ";" : ":").slice(0, 64)) {
+    if (entry === "") continue;
+    for (const name of windows ? ["git.exe", "git"] : ["git"]) {
+      const file = join(entry, name);
+      try {
+        if (!statSync(file).isFile()) continue;
+        found.push(join(entry, "..", "etc", "gitconfig"));
+        found.push(join(dirname(dirname(realpathSync(file))), "etc", "gitconfig"));
+      } catch {
+        // Absent or unreadable: no build there to name.
+      }
+    }
+  }
+  systemCandidates = [...new Set(found.map((path) => resolve(path)))].slice(0, 24);
+  return systemCandidates;
 }
 
 /** The configuration files git merges for a git dir: see GUARD_GIT_INCLUDE_DEPTH_MAX in the engine. */
@@ -5264,12 +5439,51 @@ function configFiles(dirs) {
   return files;
 }
 
+/**
+ * A value as git's config reader decodes it, from text on lines[at]: blanks cut at both ends, an unquoted # or ;
+ * starting a comment, quotes holding blanks and comment marks, the escapes \\ \" \n \t \b, and a backslash ending a
+ * line joining the next. value is null where git refuses the file: another escape, or a quote left open.
+ */
+function configValue(lines, at, text) {
+  let value = "";
+  let quoted = false;
+  let cut = -1;
+  for (let i = 0; ; ) {
+    if (i >= text.length) return { value: quoted ? null : cut === -1 ? value : value.slice(0, cut), at };
+    const c = text[i++];
+    if (!quoted && /[ \t\v\f\r]/.test(c)) {
+      if (cut === -1) cut = value.length;
+      if (value !== "") value += c;
+      continue;
+    }
+    if (!quoted && (c === "#" || c === ";")) return { value: cut === -1 ? value : value.slice(0, cut), at };
+    cut = -1;
+    if (c === "\\") {
+      if (i >= text.length) {
+        if (at + 1 < lines.length) {
+          at += 1;
+          text = lines[at];
+          i = 0;
+        }
+        continue;
+      }
+      const escaped = { "\\": "\\", '"': '"', n: "\n", t: "\t", b: "\b" }[text[i++]];
+      if (escaped === undefined) return { value: null, at };
+      value += escaped;
+    } else if (c === '"') quoted = !quoted;
+    else value += c;
+  }
+}
+
 /** What git's merged configuration says about remotes: see GUARD_GIT_INCLUDE_DEPTH_MAX in the engine. */
 function configOf(dirs) {
   const remotes = new Map();
   const branches = new Map();
   const rewrites = [];
   let pushDefault = null;
+  const pushDefaults = [];
+  let followTags = false;
+  const recurse = [];
   let partial = (process.env.GIT_CONFIG_COUNT ?? "") !== "" || (process.env.GIT_CONFIG_PARAMETERS ?? "") !== "";
   const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
   let files = 0;
@@ -5300,7 +5514,9 @@ function configOf(dirs) {
     }
     let kind = "";
     let sub = null;
-    for (const line of text.split(/\r?\n/)) {
+    const lines = text.split(/\r?\n/);
+    for (let at = 0; at < lines.length; at += 1) {
+      const line = lines[at];
       // Each pattern here is linear in the line: no two adjacent runs can share a character (the hook's timeout).
       const head = /^\s*\[\s*([A-Za-z][\w.-]*)\s*(?:"((?:[^"\\]|\\.)*)"\s*)?\]/.exec(line);
       if (head !== null) {
@@ -5309,21 +5525,33 @@ function configOf(dirs) {
         sub = head[2] !== undefined ? head[2].replace(/\\(.)/g, "$1") : dot === -1 ? null : head[1].slice(dot + 1).toLowerCase();
         continue;
       }
-      const pair = /^\s*([A-Za-z][\w-]*)\s*=(.*)$/.exec(line);
+      // A key with no "=" is a boolean git reads as true.
+      const pair = /^\s*([A-Za-z][\w-]*)\s*=(.*)$/.exec(line) ?? /^\s*([A-Za-z][\w-]*)\s*(?:[#;].*)?$/.exec(line);
       if (pair === null) continue;
       const key = pair[1].toLowerCase();
-      const value = pair[2].replace(/\s[#;].*$/, "").trim().replace(/^"([\s\S]*)"$/, "$1");
-      if ((kind === "include" || kind === "includeif") && key === "path") {
+      const bare = pair[2] === undefined;
+      // The value as git decodes it, in any section, joined with the lines a backslash continues it onto, so a key or a
+      // section head after it is where git puts it. A value git refuses, and an include path git expands from its
+      // install, make the reading partial.
+      const decoded = bare ? { value: "true", at } : configValue(lines, at, pair[2]);
+      at = decoded.at;
+      if (decoded.value === null) partial = true;
+      const value = decoded.value ?? "";
+      const including = (kind === "include" || kind === "includeif") && key === "path";
+      if (including && value.startsWith("%(")) partial = true;
+      if (including) {
+        if (bare) continue;
         // A ~user/ path names another account's home, which this reading does not place.
         if (/^~[^/]/.test(value)) partial = true;
         else readFile(value.startsWith("~/") ? join(home, value.slice(2)) : resolve(dirname(path), value), depth + 1, true);
         continue;
       }
       if (included && (kind === "remote" || kind === "url" || (kind === "branch" && (key === "remote" || key === "pushremote")))) partial = true;
+      const on = !["false", "no", "off", "0", ""].includes(value.toLowerCase());
       if (kind === "remote" && sub === null) {
         if (key === "pushdefault") pushDefault = value;
       } else if (kind === "remote") {
-        const remote = remotes.get(sub) ?? { url: null, pushurl: null, urls: [], pushurls: [], resolved: null };
+        const remote = remotes.get(sub) ?? { url: null, pushurl: null, urls: [], pushurls: [], resolved: null, push: [], mirror: false };
         remotes.set(sub, remote);
         if (key === "url") {
           remote.url ??= value;
@@ -5333,20 +5561,61 @@ function configOf(dirs) {
           remote.pushurls.push(value);
         }
         else if (key === "gh-resolved") remote.resolved = value;
+        else if (key === "push") remote.push.push(value);
+        else if (key === "mirror" && on) remote.mirror = true;
       } else if (kind === "branch" && sub !== null) {
-        const entry = branches.get(sub) ?? {};
+        const entry = branches.get(sub) ?? { merges: [] };
         branches.set(sub, entry);
         if (key === "remote" || key === "pushremote") entry[key] = value;
+        else if (key === "merge") entry.merges.push(value);
       } else if (kind === "url" && sub !== null && (key === "insteadof" || key === "pushinsteadof")) {
         rewrites.push({ base: sub, prefix: value, push: key === "pushinsteadof" });
-      }
+      } else if (kind === "push" && sub === null) {
+        // Every value read, from every file and include: the push reader counts their union.
+        if (key === "default") pushDefaults.push(value);
+        else if (key === "followtags" && on) followTags = true;
+        else if (key === "recursesubmodules") recurse.push("push.recursesubmodules=" + value);
+      } else if (kind === "submodule" && sub === null && key === "recurse") recurse.push("submodule.recurse=" + value);
     }
   };
-  for (const path of configFiles(dirs)) readFile(path, 0, false);
+  const merged = configFiles(dirs);
+  for (const path of merged) readFile(path, 0, false);
+  // Every candidate system file not already read, as an included file, whatever GIT_CONFIG_NOSYSTEM says: a remote or
+  // URL key in one makes the reading partial.
+  const read = new Set(merged.map((path) => resolve(path)));
+  for (const path of systemConfigCandidates()) if (!read.has(path)) readFile(path, 0, true);
   // Each URL looked up scans every rewrite rule, so past REWRITES_MAX of them the reading is partial: the lookups stay
   // bounded by the remotes read times that ceiling (the hook's timeout).
   if (rewrites.length > REWRITES_MAX) partial = true;
-  return { remotes, branches, rewrites, pushDefault, partial };
+  return { remotes, branches, rewrites, pushDefault, pushDefaults, followTags, recurse, partial };
+}
+
+/**
+ * What the files set for a push to a remote, as the push reader's -c-style pairs (personOnly.ts, pushConfig): the
+ * refmaps and mirror setting of the section the exact word names (a URL or a path too), every push mode, tag-following,
+ * recursion, and the checked-out branch's merges, which the reader takes only in upstream mode. null where the
+ * configuration cannot be read whole.
+ */
+function pushPairs(config, remote, branch) {
+  if (config === null || config.partial) return null;
+  const entry = remote === null ? undefined : config.remotes.get(remote);
+  // git looks a remote up by the exact word a push names: a section named by a URL or a path that sets its own URL or
+  // push URL sends the push there, which this reading does not place.
+  if (entry !== undefined && (/[:/\\]/.test(remote) || remote === ".") && (entry.urls.length > 0 || entry.pushurls.length > 0)) return null;
+  const pairs = config.pushDefaults.map((value) => "push.default=" + value);
+  if (config.followTags) pairs.push("push.followtags=true");
+  pairs.push(...config.recurse);
+  if (entry !== undefined) {
+    // The pair's name part holds no "=" and is never empty, so the reader splits it where git splits a key from its value.
+    // A name no line key can spell (one holding "=", or none) is spelt with a line break, which git refuses in a line
+    // key, so no pair on the line takes the place of these.
+    const name = remote.replace(/=/g, "\n") || "\n";
+    for (const value of entry.push) pairs.push("remote." + name + ".push=" + value);
+    if (entry.mirror) pairs.push("remote." + name + ".mirror=true");
+  }
+  // A branch name holding "=" is spelt the same way, so the reader still finds its merge.
+  for (const value of branch === null ? [] : (config.branches.get(branch)?.merges ?? [])) pairs.push("branch." + branch.replace(/=/g, "\n") + ".merge=" + value);
+  return pairs;
 }
 
 /** A URL as git rewrites it: the longest matching insteadOf (or, for a push, pushInsteadOf) prefix replaced; null where none matches. */
@@ -5446,6 +5715,7 @@ function contextsOf(command, cwd, powershell, root) {
       return config;
     };
     const pushes = new Map();
+    const pairsRead = new Map();
     contexts.set(key, {
       currentBranch: branch !== ".invalid" ? branch : detached ? null : (defaultBranches[0] ?? "main"),
       defaultBranches,
@@ -5485,6 +5755,12 @@ function contextsOf(command, cwd, powershell, root) {
         if (merged === null || merged.partial) return null;
         const entry = branch === ".invalid" ? {} : (merged.branches.get(branch) ?? {});
         return entry.pushremote ?? merged.pushDefault ?? entry.remote ?? "origin";
+      },
+      // What the place's files set for a push to a remote (REQ-FLOW-102), read once per word; null for the top-level keys alone.
+      pushConfig(name) {
+        const at = name === null ? "" : "=" + name;
+        if (!pairsRead.has(at)) pairsRead.set(at, pushPairs(placeConfig(), name, branch === ".invalid" ? null : branch));
+        return pairsRead.get(at);
       },
       // A place the guard cannot read shows no repository, so a push from it asks; a readable other checkout has its
       // origin compared (review/130).
@@ -5830,6 +6106,18 @@ function decide() {
   if (first !== undefined) {
     const helper = helperRefusal(payload, RUN_ACTS[first] ?? "This act", first);
     if (helper !== null) return helper;
+  }
+  // A remote, URL-rewrite or include write runs on the main thread because the person sees the origin move
+  // (REQ-FLOW-134). With nobody watching no one does, and an unattended run's push goes where git then resolves origin:
+  // held, or refused, the unattended rule's own reason kept where it reads one.
+  if (ran.has("remote-write")) {
+    const act = RUN_ACTS["remote-write"];
+    const why = unattendedBy(root);
+    if (why !== null) {
+      const push = run();
+      return { ask: false, reason: (push !== undefined ? push.reason : unattendedSentence(act, "remote-write")) + " " + why };
+    }
+    if (nobodyWatching(root)) return heldForMorning({ ask: true, reason: askSentence(act, "remote-write") }, root, act, "remote-write");
   }
   // Unattended, a raw ready mark stays refused: the run's one draft pull request is marked ready only by the land
   // verb's --ready (REQ-FLOW-120).

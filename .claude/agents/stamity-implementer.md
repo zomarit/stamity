@@ -43,7 +43,7 @@ interfaces, so the unit is buildable without reconstructing the plan.
 
 - **Tests ship with the change that motivates them.** The unit's class is the one
   `npx --no stamity gate classify --base HEAD --paths <its files>` prints, or, where npm
-  refuses because no copy is installed, `npx -y @zomarit/stamity@1.19.0 gate classify --base HEAD --paths <its files>`;
+  refuses because no copy is installed, `npx -y @zomarit/stamity@1.19.1 gate classify --base HEAD --paths <its files>`;
   never one the unit states. When neither form runs, the classify exits non-zero, or its
   `reason` names a failed read, the unit counts as `product`, the classifier's own default.
   A unit mixing a code file and a doc takes the strongest class. A `product`,
