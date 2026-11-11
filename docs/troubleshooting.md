@@ -706,8 +706,10 @@ refused. Three entries carry it: the pre-tool-use guard's, the person-only guard
 `Bash|PowerShell`, and the person-only guard's on the GitHub MCP write tools, each command ending on
 the same tail. The line and a refusal never arrive together: a refusal names the agent and what it denied — a tool by name, a write
 outside its report path, or a shell command that is not read-only git — or, from the person-only
-guard, the act it refused as `… is a person-only act`, or an install it refused as
-`This install …`, and never that line, because the tail below re-raises the guard's own exit 2 in silence and prints only when the
+guard, the act it refused as `… is a person-only act`, an install it refused as
+`This install …`, or an install it refused because its own reading of the install faulted, as
+`The guard could not read whether this install …` (run that install on a line of its own, after a
+plain `cd` to its folder, as the refusal says), and never that line, because the tail below re-raises the guard's own exit 2 in silence and prints only when the
 status is neither 0 nor 2. If you see both, the emitted command is not the one this version writes —
 re-sync and compare.
 

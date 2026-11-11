@@ -5342,17 +5342,19 @@ off the pushed tree as an inert patch, listed (`PERSON_ONLY_PATHS` and `heldPath
   `.stamity/skill-sources.json`; `PERSON_ONLY_PATHS`, `src/change/personOnlyPaths.ts`).
   - Proof: `test/hooks/personOnly.test.ts` (the `ASK_CLASS` set and the describe "the skill fetch (REQ-FLOW-180,
     s-skill-guard)"), `test/change/personOnlyPaths.test.ts`.
-- **Amended 2026-11-11** (1.19.1). A push is read against what the place's own git configuration files set for it,
-  from the repository, global and system files and their includes: a remote's push refmap, for a push naming no refspec
+- **Amended 2026-11-11** (1.19.1). A push is read against these settings of the place's own git configuration files,
+  as the guard's reader parses the repository, global and system files and their includes: a remote's push refmap, for a push naming no refspec
   and beside a bare source; the push mode, `matching`, and `upstream` with the checked-out branch's merge, read for every
   branch name; a remote's mirror setting (REQ-FLOW-124); tag-following; and submodule recursion (REQ-FLOW-134). A line's
   own `-c` value of a setting takes the place of the files' value only where git reads it as the same key: the section
   and the setting name in any letter case, the remote's or the branch's name compared as written. A push naming a URL or
   a path reads the remote section of that exact name, as git does. A push on a line that also sets, moves or removes a
   branch's upstream (a branch, checkout or switch call) is read as one to a remote the guard cannot place where it names
-  no remote, and as one to the default branch where it names no refspec. A push whose remote word, or one of whose
-  option words, holds text the shell fills in is refused as a force push (REQ-FLOW-124); a refspec word the shell fills
-  in still asks (`pushVerdict` with its `readPair`, and `upstreamWrite`, `src/hooks/personOnly.ts`; `configOf` and `pushPairs`,
+  no remote, and as one to the default branch where it names no refspec. A push is refused as a force push
+  (REQ-FLOW-124) where the shell fills in its remote word and the line gives no `--repo`, where it fills in the name or
+  letters of one of the push's own options (text at or before the option's `=` or its value letter), or where text it
+  fills in may split such an option word, or the value word the option takes, into more words; a refspec word the
+  shell fills in still asks (`pushVerdict` with its `readPair`, and `upstreamWrite`, `src/hooks/personOnly.ts`; `configOf` and `pushPairs`,
   `src/hooks/scripts.ts`).
   - Proof: `test/hooks/personOnly.test.ts` (the describe "a push read against the place's own push configuration"),
     `test/hooks/personOnlyGuard.test.ts`.
@@ -6314,12 +6316,13 @@ command stay refused.
     ask prefix has no row, since a row ending in ` :*` after a `*` matched nothing; that and every respelling no row
     names stay the hook's, a residual `SECURITY.md` names. The mid-pattern rows also refuse a line whose message holds
     the flag, the safe direction; the `gh repo sync --force` rows refuse a local forced sync too.
-- **Amended 2026-11-11** (1.19.1). A force push a repository's own push refmap marks, and a push to a remote its
-  configuration mirrors, is refused, as a literal force push is; a line pair turning a remote's mirror setting off takes
-  the place of the files' setting only where git reads it as the same key, the remote's name compared as written
-  (REQ-FLOW-102). A push word the guard cannot show, in the remote's place or as an option, is read as a force push and
-  refused, since git may read it as a force, mirror or delete option, and a force, mirror or deletion written on the same
-  line is refused and named first; a refspec word the guard cannot show still asks (REQ-FLOW-102).
+- **Amended 2026-11-11** (1.19.1). A force push marked by a push refmap the guard reads from the repository's own
+  configuration, and a push to a remote whose mirror setting it reads there, is refused, as a literal force push is; a
+  line pair turning a remote's mirror setting off takes the place of the files' setting only where git reads it as the
+  same key, the remote's name compared as written (REQ-FLOW-102). A push word the guard cannot show in the remote's
+  place, where the line gives no `--repo`, or in the name or letters of one of the push's own options, or one that may
+  split such an option word or its value, is read as a force push and refused, since git may read it as a force, mirror
+  or delete option, and a force, mirror or deletion written on the same line is refused and named first; a refspec word the guard cannot show still asks (REQ-FLOW-102).
   - Proof: `test/hooks/personOnly.test.ts`, `test/hooks/personOnlyGuard.test.ts`.
 - **Proof:** `test/hooks/personOnly.test.ts` (the `CLASSES` conformance rows, and "CLAUDE_DENY_ROWS and
   CLAUDE_ASK_ROWS"), `test/adapters/claude.test.ts` (`MID_PATTERN`, each row against a line it must match and an ask

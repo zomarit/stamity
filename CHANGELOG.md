@@ -35,11 +35,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Upgrading from 1.19.0
 
-Upgrade with `npx -y @zomarit/stamity@1.19.1 upgrade --to 1.19.1`, from a committed tree. Three items need a word.
+Upgrade with `npx -y @zomarit/stamity@1.19.1 upgrade --to 1.19.1`, from a committed tree. Four items need a word.
 
-- **Some pushes, installs and git configuration writes that ran may now ask or be refused.** A push whose remote or
-  options are filled in by the shell is now refused rather than asked; write the remote and the options out on the
-  line. `SECURITY.md` states what the guard reads.
+- **Some pushes, installs and git configuration writes that ran may now ask or be refused.** A push is now refused
+  rather than asked where the shell fills in its remote and the line gives no `--repo`, or fills in the name or letters
+  of one of the push's own options; write the remote and the options out on the line. `SECURITY.md` states what the
+  guard reads.
+- **A run's push no longer pushes or checks submodules.** The run verbs now pass `push.recurseSubmodules=no` to git,
+  so in a repository whose git configuration asks a push to push its submodules, or to check them first,
+  `run checkpoint` and `run end` push the run's branch alone. Push the submodule commits the branch names yourself,
+  before the run pushes the branch.
 - **The land job's new workflow runs only from the default branch.** With `autonomy.landJob` on, run `stamity sync`
   to write the new `.github/workflows/stamity-land.yml`, commit it, and merge it into the default branch. The job runs
   the default branch's copy, so until that merge the old copy runs the CLI version it names, which closes no issue. The
@@ -57,10 +62,10 @@ Upgrade with `npx -y @zomarit/stamity@1.19.1 upgrade --to 1.19.1`, from a commit
 
 - **The person-only guard holds more pushes and writes for a person.** It reads more of what decides a push, so a push
   or write it should hold for you is held in those cases too. Upgrade from any earlier release.
-- **The guard's push reader compares a git configuration key as git does.** The section and setting name are read in
-  any letter case, and the remote's or branch's name is kept as written. A setting on the command line takes the place
-  of the files' setting only where git reads it as the same key. It reads the files' upstream of the checked-out branch
-  whatever characters its name holds.
+- **How the guard matches the push settings it reads.** The push settings the guard reads in this release are
+  matched as git matches a key: the section and setting name in any letter case, the remote's or branch's name as
+  written. A setting on the command line takes the place of the files' setting only where git reads it as the same
+  key, and the files' upstream of the checked-out branch is read whatever characters its name holds.
 - **A lane's credential scan follows a linked folder.** `stamity worktree setup` scanned a `symlink` row's folder for
   files named like credentials, but not when the row's source was itself a link to a folder. It now scans the folder
   the link points to, wherever it lies, and refuses the row on a hit. `node_modules` stays the one row it does not
