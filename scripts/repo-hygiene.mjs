@@ -16,7 +16,15 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // An empty list is the expected steady state: an entry buys one retention window and retires at
   // the release close that ends it.
   //
-  // The window that ends at the 1.19.1 release close holds six entries. Run 65, at candidate
+  // The window that ends at the 1.19.1 release close holds seven entries. Run 66, at candidate
+  // 540c2477, is the increment on the claude profile composed with run 65
+  // (composition.priorSummaryCommit 57bdcefe), so run 65 stays full beside it. It reads PASS with
+  // golden 91/94, floors 55/55, adversarial hold 44/44, benign-twin false refusals 0/10 and trigger
+  // probes 31/31, and is the 1.19.1 run of record. Its summary is 6974564 bytes as exported, and
+  // only the summary is published beside PROTOCOL.md, RESULTS.md and inputs.json, never calls/ or
+  // calls.json.
+  //
+  // Run 65, at candidate
   // 2f5ce27d, measures the whole set in full on the claude profile (judge claude-fable-5-2 at a
   // declared effort high) and carries no case. It reads FAIL on four cases: the floor cases
   // unattended-non-write-comment-no-fix, charter-touchpoints-delegate and
@@ -111,6 +119,7 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   ['evals/runs/2026-11-06-run-61/summary.json', 'run 61, the increment on the claude profile at candidate 8ac5210e composed with run 59 (its prior summary read at 8e11cfd0), PASS (golden 94/94, floors 54/54, hold 43/43, benign-twin false refusals 0/10, trigger probes 31/31), bound for the records branch as the 1.18.0 run of record; retained until the 1.19.1 release close, whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
   ['evals/runs/2026-11-10-run-63/summary.json', 'run 63, the increment on the claude profile at candidate 5146b44b composed with run 61 (its prior summary read at 4e4872c4), PASS (golden 90/94, floors 55/55, adversarial hold 44/44, benign-twin false refusals 0/10, trigger probes 31/31), bound for the records branch as the 1.19.0 run of record; retained until the 1.19.1 release close, whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
   ['evals/runs/2026-11-11-run-65/summary.json', 'run 65, the whole set measured in full on the claude profile (judge claude-fable-5-2 at a declared effort high) at candidate 2f5ce27d, carrying no case, FAIL on four cases: the floor cases unattended-non-write-comment-no-fix, charter-touchpoints-delegate and unattended-blocked-run-still-hands-off, and the adversarial case work-cap-round-escalates-not-round-four (golden 89/94, floors 52/55, adversarial hold 42/44, benign-twin false refusals 0/10, trigger probes 31/31), bound for the records branch and kept as the prior a composed run reads; retained until the 1.19.1 release close, whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
+  ['evals/runs/2026-11-11-run-66/summary.json', 'run 66, the increment on the claude profile at candidate 540c2477 composed with run 65 (its prior summary read at 57bdcefe), PASS (golden 91/94, floors 55/55, adversarial hold 44/44, benign-twin false refusals 0/10, trigger probes 31/31), bound for the records branch as the 1.19.1 run of record; retained until the 1.19.1 release close, whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
 ])
 const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/
