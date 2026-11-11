@@ -2,7 +2,7 @@
 title: Customization
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.19.0 release cut (2026-11-10). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.19.1 release cut (2026-11-11). -->
 <!-- Re-open when: a save gate is added or removed, a content class joins or leaves the
      override tree, a merge verb joins the overlay layer, a class gains or loses overlay
      support, the fork layer's place in the precedence chain moves, or patch-or-replace

@@ -2,7 +2,7 @@
 title: Doctrine
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.19.0 release cut (2026-11-10). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.19.1 release cut (2026-11-11). -->
 <!-- Re-open when: an invariant's text changes, a pillar gains or loses a public enforcement
      surface, the root question's three answers change, the always-on split across clients moves,
      or the deferred with-versus-without measurement lands. `test/docsPages.test.ts` holds this

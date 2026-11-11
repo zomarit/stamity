@@ -2,7 +2,7 @@
 title: Cloud runs
 ---
 
-<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.19.0 release cut (2026-11-10). -->
+<!-- HAND-WRITTEN PAGE — verified against the tree at the 1.19.1 release cut (2026-11-11). -->
 <!-- Re-open when: a row of `CLIENT_CLOUD_FACTS` moves, a run contract key or a pre-flight check
      changes, or a client's answer to a person-only act moves. `test/docsPages.test.ts` holds this
      page to the hand-page contract, the contract parser and that table; a vendor page that changed
