@@ -6734,8 +6734,8 @@ asks attended, and refuses unattended and for a sub-agent (`PERSON_ONLY_RULES`, 
     read; short-option clusters are read by gh 2.102.0's per-subcommand short options, an unknown letter asking
     (`review/121`–`126`, `review/135`, `review/145`, `review/146`). An issue transfer's destination and
     `gh issue develop`'s repository are targets (`review/122`, `review/123`). A push whose remote word or URL, or, for a
-    push naming neither, the push remote the configuration files name, names another repository asks, each URL the
-    guard reads for a push to `origin` compared (`review/130`).
+    push naming neither, the remote the guard reads it as going to, names another repository asks, each URL the guard
+    reads for a push to `origin` compared (`review/130`).
   - A git commit message is not screened: a mention there notifies no one (`build/25`).
   - **`remote-write`** (`review/129`, overturned at the lens's third round): a line whose `git remote` or `git config`
     call writes a git remote, a URL rewrite or an include runs on Claude Code's and Copilot CLI's main thread and is refused for a sub-agent, and on
