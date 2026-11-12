@@ -961,3 +961,98 @@ Not done:
   lands after the tag.
 - 2026-11-11T17:04:50Z leftovers: shown=29 real=27 fixed=5 scheduled=22 dropped=2 accepted=0 notes=unknown changed=0
 - 2026-11-11T17:04:50Z metrics: wall=1145 agent=292 person=unreported rounds=2 fixes=9 reopened=0 tokens=324919870 cost=unreported (tokens and cost: the transcript given only, not sub-agents' transcripts; cost an estimate at list rates, not a bill)
+
+## After the close
+
+- 2026-11-11T17:59:13Z the merge-ready snapshot and its pin (implementer, Opus 5.5, high; `reports/pin-implementer-r1.md`):
+  `0f9b85c2` (`fix(records): pin the 2026-11-11 snapshot`: the pin in `src/cli/docs/measurements.ts`, the
+  regenerated page, the README's link) and `794efc30` (`docs(measurements): the page counts the 1.19.1 run`). The
+  first snapshot left this run out as "gates in prose only": the gate table's lead-in in this record was wrapped
+  over two lines, so the measure did not read the table. The orchestrator put the lead on one line (no row
+  changed) and the snapshot was taken again: merge-ready 8 of 20 (0.400), this run in the numerator. Verify exit 0
+  on both commits: build, the docs tests (565 passed), `npm run test:records` (70 passed), lint, typecheck, the
+  leak gate, `check`.
+- 2026-11-11T17:59:13Z records: this run's record, ledger and plan, the inbox, the earlier run's ledger with its nineteen
+  retirements, plan 025's two files and `evals/measurements/merge-ready-2026-11-11.json` published,
+  `origin/records` at `4027593529c86a2884a25ccb9d0ddf1685ef20cc` (eight files; dry run exit 0, then
+  `node scripts/records.mjs commit` exit 0). No records publish follows until the tag is pushed.
+- 2026-11-11T17:59:13Z **the final tree is `794efc3076daac3d4135e90279bd9de80d5c8612`**, 84 commits on `091d999b`. Its full gate
+  (test-runner, Opus 5.5, medium; token matched; `reports/final-test-runner-r2.md`): all 14 gates exit 0 — build;
+  `sync` changing no file; pack manifests; `check`; lint; typecheck; knip; the leak gate (0 hits, 1,566 files);
+  `gate scan --base 091d999b` (no hit, 134 files, none unscanned); repo hygiene; `npm run test:records` (70
+  passed); the two golden suites (80 passed); the suite alone under the machine lock: 363 files, 22,990 passed, 0
+  failed, 19 skipped, coverage 96.55 / 90.62 / 98.75 / 97.81, no timeout and no second pass; the land suite's held
+  digest matched. The runner ran the eight short gates side by side and the held check during the suite, and said
+  so; the suite ran alone.
+- 2026-11-11T17:59:13Z pre-move checks, each by exit code: `091d999b`, `2f5ce27d` and `540c2477` are ancestors of the final tree;
+  between the two measured commits only `evals/SET-v7.md` and the two repaired case files moved among the eval's
+  inputs; since the second, only `CHANGELOG.md` and `evals/run-of-record.json`; `src/hooks` is unchanged since
+  `74fd8f4d` (hook latency and the headless ask stand) and since `1754abad` (the hands-on ask check stands);
+  `origin/main` is still `091d999b`; `origin/records` holds run 66's results and the snapshot at `40275935`.
+- 2026-11-11T17:59:13Z the pre-merge CI run on the final tree is started (the final tree plus a CI-only time limit that never
+  lands); it is the first Windows result of one new test case. `main` moves after it is green, on the
+  maintainer's word of today.
+- 2026-11-11T19:53:55Z the pre-merge CI run on the tree at `794efc30` ended red on one leg, read to its end: `check (floor)`,
+  `check (lts)` with the coverage floors, `check (windows-1)`, `cloud-container` and the pull-request checks passed;
+  `check (windows-2)` failed on one test case (13,065 passed, 1 failed, 236 skipped; no timeout). The cause was
+  named from a probe on a Windows runner, not from reading: the case's set-up cannot hold on a real Windows (a
+  variable it sets for a child process is replaced there by the system's own value), while the code under test did
+  what it says. A test defect: no product file moves.
+- 2026-11-11T19:53:55Z the fix is one tests-only commit, `bee5d375` (implementer, Opus 5.5, high): on a Windows leg the case's first
+  check now proves the same reading another way; every other leg runs the case as before, and its other three
+  checks run unchanged everywhere. Verify exit 0: the test file under the machine lock (529 passed), lint,
+  typecheck. Before the full run, the fixed case alone and then its whole file ran green on a Windows runner. A
+  verdict review approved it (Opus 5.5, high; approve, 0.85, no finding).
+- 2026-11-11T19:53:55Z **the final tree is now `bee5d3753edddf28b78a67ef5a6d90d2dbca6487`**, 85 commits on `091d999b`: the tree at
+  `794efc30` plus that one commit. Its full gate (test-runner, Opus 5.5, medium; token matched;
+  `reports/final-test-runner-r3.md`): all 14 gates exit 0, the same list as round 2; the suite alone under the
+  machine lock: 363 files, 22,990 passed, 0 failed, 19 skipped, coverage 96.55 / 90.62 / 98.74 / 97.81 (one
+  statement and one function fewer covered than in round 2 with no test count moved; the floors hold), no timeout
+  and no second pass; the land suite's held digest matched.
+- 2026-11-11T19:53:55Z pre-move checks on the new tree, each by exit code: `091d999b`, `2f5ce27d`, `540c2477` and `794efc30` are its
+  ancestors; it differs from `794efc30` in `test/hooks/personOnlyGuard.test.ts` alone, so `src/hooks` is unchanged
+  since `74fd8f4d` and `1754abad` (hook latency, the headless ask and the hands-on ask check stand) and the eval's
+  inputs have not moved; `origin/main` is still `091d999b`; `origin/records` is still `40275935`.
+- 2026-11-11T19:53:55Z the release checklist's 24-hour reads were made again on 2026-11-11 between 19:14Z and 19:16Z, each unchanged.
+- 2026-11-11T19:53:55Z the pre-merge CI run on the new tree has not started yet (a runner limit on the account, which the maintainer
+  is lifting). `main` moves after that run is green.
+- 2026-11-11T21:06:14Z the pre-merge CI run on the new tree, read to its end: `check (floor)`, `check (windows-1)`,
+  `check (windows-2)`, `cloud-container` and the pull-request checks passed. On `check (lts)` every check step
+  passed (typecheck, lint, repository hygiene, build, the suite with the coverage floors, self-consistency, the
+  dogfood check, the leak gate, knip, the site build) and its last step, the upload of the built site, failed:
+  "Failed to CreateArtifact: Failed to make request after 5 attempts", the service answering with an HTML page,
+  during a GitHub Actions outage (their status page: major outage, incident opened 2026-11-11T20:48Z). Not a test
+  result. The leg is re-run and waits in the queue.
+- 2026-11-11T21:06:14Z the maintainer's word (question tool): once GitHub is back, `main` is asked for right away, without waiting for
+  that re-run; the same leg, its upload included, runs again on `main`'s own CI and is read green before the tag.
+  Nothing public moves while Actions is down.
+- 2026-11-11T21:13:19Z GitHub's status page read "All Systems Operational" again at 2026-11-11T21:07:53Z (the incident in
+  "monitoring"). The maintainer's word (question tool): push `main`. **`main` is at
+  `bee5d3753edddf28b78a67ef5a6d90d2dbca6487`**, a fast-forward from `091d999b` (checked right before the push:
+  `origin/main` at `091d999b`, the release lane clean, the ancestry exit 0). Its push runs started: CI
+  (43101048477), Docs site (43101048326), Pack signing rehearsal (43101048282).
+- 2026-11-11T21:13:19Z pull request #139 closed by hand with a comment: its last two commits are on `main` as `fecd8ab4` and
+  `1527c79f` (the same changes, carried onto the release line), every earlier one is an ancestor of `main`
+  (`git cherry` lists no commit of the branch as missing), so it cannot read as merged.
+- 2026-11-11T21:44:11Z `main`'s push runs on `bee5d375`, each read to its end: CI (43101048477) success on every job: `check
+  (floor)`, `check (lts)`, `check (windows-1)`, `check (windows-2)`, `cloud-container`, `records`, `prove-pr`,
+  `changes`, both fork probes, `all-ci-checks`; Docs site (43101048326) success; Pack signing rehearsal
+  (43101048282) success. The pre-merge run's re-run leg ended green too, its upload included, so that run is green
+  on every leg.
+- 2026-11-11T21:44:11Z the maintainer's word (question tool): tag and push. **The annotated tag `v1.19.1` is on
+  `bee5d3753edddf28b78a67ef5a6d90d2dbca6487` and pushed**, its message carrying the one line
+  `records: 4027593529c86a2884a25ccb9d0ddf1685ef20cc` (checked first: the records branch at that commit, no publish
+  since; no `v1.19.1` anywhere; version 1.19.1; the changelog section dated 2026-11-11). The release run
+  (43105541541) started.
+- 2026-11-12T08:23:57Z the release run (43105541541): `gates and pack` success; the maintainer approved the `npm-publish`
+  deployment; "Publish to npm with provenance" success; "Verify the registry tarball" gave up after 12 tries, 10 s
+  apart, while npm was still processing (as at 1.18.0 and 1.19.0). npm served 1.19.1 from 2026-11-11T22:38Z. The
+  failed job was re-run (`gh run rerun 43105541541 --failed`); the maintainer approved it the next morning; attempt
+  2 is green on every step, the registry check and "Create GitHub release" among them.
+- 2026-11-12T08:23:57Z **1.19.1 is released.** Read back: `npm view @zomarit/stamity dist-tags` → `latest` 1.19.1 (published
+  2026-11-11T22:38:00Z); `dist.integrity` equals the sha512 of the release's `zomarit-stamity-1.19.1.tgz`;
+  `dist.attestations` carries the predicate `https://slsa.dev/provenance/v1`; the GitHub release `v1.19.1` is not a
+  draft and carries the tarball and `sbom.cdx.json`.
+- 2026-11-12T08:23:57Z the release's two security advisories are published, each with a CVE request, on the maintainer's word:
+  `GHSA-cgjf-4gwj-v8jw` (medium, 6.3; `>= 1.17.0, < 1.19.1`) and `GHSA-3mcj-4pwf-7r62` (high, 7.0;
+  `>= 1.16.0, < 1.19.1`), both patched in 1.19.1, both published 2026-11-12.
