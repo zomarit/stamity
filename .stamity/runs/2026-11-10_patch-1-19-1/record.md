@@ -1056,3 +1056,33 @@ Not done:
 - 2026-11-12T08:23:57Z the release's two security advisories are published, each with a CVE request, on the maintainer's word:
   `GHSA-cgjf-4gwj-v8jw` (medium, 6.3; `>= 1.17.0, < 1.19.1`) and `GHSA-3mcj-4pwf-7r62` (high, 7.0;
   `>= 1.16.0, < 1.19.1`), both patched in 1.19.1, both published 2026-11-12.
+- 2026-11-12T11:53:40Z the close's follow-ups, done on 2026-11-12 on the maintainer's word. **Records:** this record through the
+  release was published (`origin/records` `3dacbd12`; 95 lines added, screened, dry run exit 0).
+- 2026-11-12T11:53:40Z **the evidence archive of the release's eval runs.** The published results of runs 58, 59, 60, 61, 63, 65 and
+  66 were packed from the records commit `40275935` (the one the tag names) into seven archives on the prerelease
+  `evidence-archive-2026-11-12` (`v1.19.1` still reads as the latest release); each was downloaded back, restored and
+  compared byte for byte with that commit, and fetched once more without a login with an equal SHA256. The seven
+  summaries were then compacted on `records` beside `ARCHIVE.json` pointers at
+  `46f2969c1af7b7374b6bb3c761f14ad881339c03` (each from about 7 MB to between 94 and 214 KB; dry run exit 0, commit
+  exit 0, the records branch's own workflow green).
+- 2026-11-12T11:53:40Z **two learnings**, each through `stamity learn capture`: a dry probe of the guard under the away switch writes
+  held lines for its ask-class forms, and a Windows child process holds the system's own `ProgramFiles` whatever a
+  test passes. Review, round 1 (`reports/learnings-reviewer-r1.md`): request-changes, 0.85, one Warning (the first
+  learning said every stopped act is held; only an ask and the main thread's remote write are) and one Minor. The
+  file was captured again; round 2, a fresh reviewer (`reports/learnings-reviewer-r2.md`): approve, 0.9, both fixed.
+- 2026-11-12T11:53:40Z **the seven size exceptions retired** (implementer, Opus 5.5, high): `scripts/repo-hygiene.mjs` holds an empty
+  list again and a retirement record of today's archive; `test/ci/repoHygiene.test.ts` pins it. Review
+  (`reports/hygiene-reviewer-r1.md`): approve, 0.9, no finding.
+- 2026-11-12T11:53:40Z **pull request #144** carried both: CI green on every job at `7abffb1a` (`check (floor)`, `check (lts)` with
+  the coverage floors, `check (windows-1)`, `check (windows-2)`, `cloud-container`, both fork probes, `records`),
+  merged by rebase on the maintainer's click; **`main` is at `6185ed325af969306f2262ceed8fe4d96a444cc7`**, and its
+  push run (43212696368) is green, the tree proven by the pull request.
+- 2026-11-12T11:53:40Z **the local gate on that branch did not come out green, and this is why.** Fourteen of its fifteen rows exit 0
+  both times (`reports/learnings-test-runner-r1.md`, `reports/close-followups-test-runner-r2.md`; round 1's records
+  row failed only because the fresh lane had no restored records, the orchestrator's omission, and passes in round
+  2). The full suite failed both times while this machine ran another project's test runs: round 1, one 20-second
+  timeout per pass; round 2, on the branch's final tree with the load average between 145 and 298, 34 failures in
+  12 files: 32 timeouts and two that follow from one (a child process ended at its time limit; a clean-up refused
+  after a step that timed out). Each of the twelve files passes alone under the machine lock. So the suite's proof
+  for this tree is the pull request's CI and `main`'s push run, not a local run.
+- 2026-11-12T11:53:40Z every lane of this run is removed, each after its ignored files were listed.
