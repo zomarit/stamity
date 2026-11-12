@@ -13,64 +13,31 @@ const MAX_FILE_BYTES = 1024 * 1024
 // Exact repository-relative paths only. An exception needs its reviewable reason here,
 // never a broad extension exemption or an automatically raised size ceiling.
 const LARGE_FILE_EXCEPTIONS = new Map([
-  // An empty list is the expected steady state: an entry buys one retention window and retires at
-  // the release close that ends it.
+  // Empty, and an empty list is the expected steady state: an entry buys one retention window and
+  // retires at the release close that ends it.
   //
-  // The window that ends at the 1.19.1 release close holds seven entries. Run 66, at candidate
-  // 540c2477, is the increment on the claude profile composed with run 65
-  // (composition.priorSummaryCommit 57bdcefe), so run 65 stays full beside it. It reads PASS with
-  // golden 91/94, floors 55/55, adversarial hold 44/44, benign-twin false refusals 0/10 and trigger
-  // probes 31/31, and is the 1.19.1 run of record. Its summary is 6974564 bytes as exported, and
-  // only the summary is published beside PROTOCOL.md, RESULTS.md and inputs.json, never calls/ or
-  // calls.json.
-  //
-  // Run 65, at candidate
-  // 2f5ce27d, measures the whole set in full on the claude profile (judge claude-fable-5-2 at a
-  // declared effort high) and carries no case. It reads FAIL on four cases: the floor cases
-  // unattended-non-write-comment-no-fix, charter-touchpoints-delegate and
-  // unattended-blocked-run-still-hands-off, and the adversarial case
-  // work-cap-round-escalates-not-round-four, with golden 89/94, floors 52/55, adversarial hold
-  // 42/44, benign-twin false refusals 0/10 and trigger probes 31/31. Its summary is 6974287 bytes
-  // as exported, and only the summary is published beside PROTOCOL.md, RESULTS.md and inputs.json,
-  // never calls/ or calls.json. It is kept as the prior a composed run reads.
-  //
-  // Run 63, at candidate
-  // 5146b44b, is the increment on the claude profile composed with run 61
-  // (composition.priorSummaryCommit 4e4872c4), so run 61 stays full beside it. It reads PASS with
-  // golden 90/94, floors 55/55, adversarial hold 44/44, benign-twin false refusals 0/10 and trigger
-  // probes 31/31, and is the 1.19.0 run of record. Its summary is 7190998 bytes as exported, and
-  // only the summary is published beside PROTOCOL.md, RESULTS.md and inputs.json, never calls/ or
-  // calls.json. The four entries below it, runs 58 to 61, opened for the 1.18.0 cut and stay in
-  // this window while their files stay.
-  //
-  // Run 60 and
-  // run 61 are increments on the claude profile (scenario claude-opus-5-5 at high effort, judge
-  // claude-fable-5-1), each composed with run 59 (composition.priorSummaryCommit 8e11cfd0). Run 60,
-  // at candidate f6b93078, reads FAIL on one ungraded sample: the judge call for one sample of
-  // production-review-gatherer-not-grader ran out of attempts, and an ungraded sample counts as
-  // failing, so golden is 93/94 and floors 53/54, with hold 43/43, benign-twin false refusals 0/10
-  // and trigger probes 31/31; no behaviour failed. Run 61, at candidate 8ac5210e, reads PASS with
-  // golden 94/94, floors 54/54, hold 43/43, benign-twin false refusals 0/10 and trigger probes
-  // 31/31, and is the 1.18.0 run of record. Their summaries are 7113720 and 7129195 bytes as
-  // exported, and only the summary is published beside PROTOCOL.md, RESULTS.md and inputs.json,
-  // never calls/ or calls.json. Both go to the `records` branch, whose workflow runs this script
-  // from `main`, so the entries land on `main` first. That release close's evidence-archive step
-  // compacts both beside an ARCHIVE.json pointer and retires both entries.
-  //
-  // Run 58 and run 59, the window's other two entries, are increments on the claude profile (scenario claude-opus-5-5 at high effort, judge
-  // claude-fable-5-1), each composed with run 57 (composition.priorSummaryCommit fe785c17). Run 58,
-  // at candidate d3ee1cb1, reads FAIL on one ungraded sample: the judge call for one sample of
-  // rework-persistence-guard-holds ran out of attempts, and an ungraded sample counts as failing,
-  // so golden is 93/94 and floors 53/54, with hold 43/43, benign-twin false refusals 0/10 and
-  // trigger probes 31/31. Run 59, at candidate 4cfa3eee, reads FAIL the same way on one sample of
-  // unattended-item-says-merge-refused: golden 94/94, floors 53/54, hold 42/43, benign-twin false
-  // refusals 0/10 and trigger probes 31/31. Neither run has a graded sample that fails: no behaviour
-  // failed, and each case's other two samples pass. Their summaries are 7156210 and 7149298 bytes
-  // as exported, and only the summary is published beside PROTOCOL.md, RESULTS.md and inputs.json,
-  // never calls/ or calls.json. Both are published to the `records` branch, whose workflow runs
-  // this script from `main`, so the entries land on `main` first. Each is kept as a prior that a
-  // composition can read; that release close's evidence-archive step compacts both beside an
-  // ARCHIVE.json pointer and retires both entries.
+  // The 1.19.1 window's seven entries — run 58's to run 61's, run 63's, run 65's and run 66's
+  // public summaries, all on the claude profile, run 58 at candidate d3ee1cb1 and run 59 at
+  // candidate 4cfa3eee increments composed with run 57 (composition.priorSummaryCommit fe785c17)
+  // that read FAIL on one ungraded sample each with no behaviour failing, run 60 at candidate
+  // f6b93078 an increment that read FAIL the same way and run 61 at candidate 8ac5210e the PASS
+  // increment and 1.18.0 run of record, both composed with run 59 (composition.priorSummaryCommit
+  // 8e11cfd0), run 63 at candidate 5146b44b the PASS increment composed with run 61
+  // (composition.priorSummaryCommit 4e4872c4), the 1.19.0 run of record, run 65 at candidate
+  // 2f5ce27d the full measure that read FAIL on four cases, and run 66 at candidate 540c2477 the
+  // PASS increment composed with run 65 (composition.priorSummaryCommit 57bdcefe), the 1.19.1 run
+  // of record, all published to the `records` branch, whose workflow runs this script from `main`,
+  // so the entries sat on `main` — retired at the 1.19.1 close (2026-11-12), whose archive step
+  // compacted all seven on the `records` branch (46f2969c1af7b7374b6bb3c761f14ad881339c03) beside
+  // an ARCHIVE.json pointer into the evidence-archive-2026-11-12 release
+  // (public-2026-11-05-run-58.tar.gz, 858634 bytes, public-2026-11-05-run-59.tar.gz, 858532 bytes,
+  // public-2026-11-06-run-60.tar.gz, 865479 bytes, public-2026-11-06-run-61.tar.gz, 867806 bytes,
+  // public-2026-11-10-run-63.tar.gz, 861239 bytes, public-2026-11-11-run-65.tar.gz, 722312 bytes,
+  // and public-2026-11-11-run-66.tar.gz, 760755 bytes, packed from the records commit 40275935 and
+  // verified byte for byte): run 58 from 7156210 to 174608 bytes, run 59 from 7149298 to 175959,
+  // run 60 from 7113720 to 213764, run 61 from 7129195 to 213353, run 63 from 7190998 to 164533,
+  // run 65 from 6974287 to 94419, run 66 from 6974564 to 191263.
+  // Verify: git cat-file -s 40275935:evals/runs/2026-11-11-run-66/summary.json
   //
   // The 1.17.0 window's five entries — run 53's to run
   // 57's public summaries, all on the claude profile, run 53 at candidate 4e744644 and run 54 at
@@ -113,13 +80,6 @@ const LARGE_FILE_EXCEPTIONS = new Map([
   // An entry may precede its artifact: the map is consulted only for paths Git reports as changed
   // (the `has` below), is never iterated and never stat'd, so an entry for a path not yet in the
   // tree is inert rather than a false pass.
-  ['evals/runs/2026-11-05-run-58/summary.json', 'run 58, the increment on the claude profile at candidate d3ee1cb1 composed with run 57 (its prior summary read at fe785c17), FAIL on one ungraded sample of rework-persistence-guard-holds (golden 93/94, floors 53/54, hold 43/43, benign-twin false refusals 0/10, trigger probes 31/31) with no behaviour failing, published to the records branch, and kept as a prior that a composition can read; retained until the 1.19.1 release close, whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
-  ['evals/runs/2026-11-05-run-59/summary.json', 'run 59, the increment on the claude profile at candidate 4cfa3eee composed with run 57 (its prior summary read at fe785c17), FAIL on one ungraded sample of unattended-item-says-merge-refused (golden 94/94, floors 53/54, hold 42/43, benign-twin false refusals 0/10, trigger probes 31/31) with no behaviour failing, published to the records branch, and kept as a prior that a composition can read; retained until the 1.19.1 release close, whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
-  ['evals/runs/2026-11-06-run-60/summary.json', 'run 60, the increment on the claude profile at candidate f6b93078 composed with run 59 (its prior summary read at 8e11cfd0), FAIL on one ungraded sample of production-review-gatherer-not-grader (golden 93/94, floors 53/54, hold 43/43, benign-twin false refusals 0/10, trigger probes 31/31) with no behaviour failing, bound for the records branch; retained until the 1.19.1 release close, whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
-  ['evals/runs/2026-11-06-run-61/summary.json', 'run 61, the increment on the claude profile at candidate 8ac5210e composed with run 59 (its prior summary read at 8e11cfd0), PASS (golden 94/94, floors 54/54, hold 43/43, benign-twin false refusals 0/10, trigger probes 31/31), bound for the records branch as the 1.18.0 run of record; retained until the 1.19.1 release close, whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
-  ['evals/runs/2026-11-10-run-63/summary.json', 'run 63, the increment on the claude profile at candidate 5146b44b composed with run 61 (its prior summary read at 4e4872c4), PASS (golden 90/94, floors 55/55, adversarial hold 44/44, benign-twin false refusals 0/10, trigger probes 31/31), bound for the records branch as the 1.19.0 run of record; retained until the 1.19.1 release close, whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
-  ['evals/runs/2026-11-11-run-65/summary.json', 'run 65, the whole set measured in full on the claude profile (judge claude-fable-5-2 at a declared effort high) at candidate 2f5ce27d, carrying no case, FAIL on four cases: the floor cases unattended-non-write-comment-no-fix, charter-touchpoints-delegate and unattended-blocked-run-still-hands-off, and the adversarial case work-cap-round-escalates-not-round-four (golden 89/94, floors 52/55, adversarial hold 42/44, benign-twin false refusals 0/10, trigger probes 31/31), bound for the records branch and kept as the prior a composed run reads; retained until the 1.19.1 release close, whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
-  ['evals/runs/2026-11-11-run-66/summary.json', 'run 66, the increment on the claude profile at candidate 540c2477 composed with run 65 (its prior summary read at 57bdcefe), PASS (golden 91/94, floors 55/55, adversarial hold 44/44, benign-twin false refusals 0/10, trigger probes 31/31), bound for the records branch as the 1.19.1 run of record; retained until the 1.19.1 release close, whose evidence-archive step compacts it beside an ARCHIVE.json pointer and retires this entry'],
 ])
 const FIXTURE = /^(?:test|tests)\/fixtures\//
 const RAW_NAME = /^(?:calls|samples|requests|responses|receipts|transcripts|provider[-_](?:requests|responses))\.(?:json|jsonl)$/
